@@ -467,10 +467,14 @@ async function getOptionPromptText(category, value) {
 
 async function getUseCaseLabel(useCase) {
   const labels = {
+    'change-clothes': 'Virtual Try-On / Change Clothes',
+    'ecommerce-product': 'E-Commerce Product Photography',
     'ecommerce': 'E-Commerce Product Photography',
     'e-commerce': 'E-Commerce Product Photography',
-    'fashion-editorial': 'Fashion Editorial',
     'social-media': 'Social Media Content',
+    'fashion-editorial': 'Fashion Editorial',
+    'lifestyle-scene': 'Lifestyle Scene',
+    'before-after': 'Before/After Comparison',
     'lookbook': 'Fashion Lookbook',
     'campaign': 'Brand Campaign',
     'influencer': 'Influencer Content',
@@ -486,10 +490,14 @@ async function getUseCaseLabel(useCase) {
 
 function getUseCasePrompt(useCase) {
   const prompts = {
+    'change-clothes': 'Virtual try-on photography showing the product worn by the character model. Focus on realistic fit, natural drape, and authentic appearance.',
+    'ecommerce-product': 'E-commerce product photography with clear product visibility, professional presentation, and trustworthy appearance suitable for online shopping.',
     'ecommerce': 'E-commerce product photography with clear product visibility, professional presentation, and trustworthy appearance suitable for online shopping.',
     'e-commerce': 'E-commerce product photography with clear product visibility, professional presentation, and trustworthy appearance suitable for online shopping.',
-    'fashion-editorial': 'High-fashion editorial for magazine cover or spread. Dramatic, artistic, avant-garde styling with professional model pose and expression.',
     'social-media': 'Engaging, lifestyle-oriented content for Instagram/TikTok/Facebook. Natural, relatable vibe with eye-catching composition.',
+    'fashion-editorial': 'High-fashion editorial for magazine cover or spread. Dramatic, artistic, avant-garde styling with professional model pose and expression.',
+    'lifestyle-scene': 'Lifestyle photography showing product in real-life context. Natural setting, authentic moment, storytelling composition.',
+    'before-after': 'Before/after comparison showcase. Clear transformation, side-by-side or sequential presentation.',
     'lookbook': 'Fashion lookbook showcasing outfit coordination with professional yet accessible styling.',
     'campaign': 'Brand campaign imagery with strong visual identity, consistent styling, and high production value.',
     'influencer': 'Influencer-style content with authentic, relatable, and aspirational qualities.',

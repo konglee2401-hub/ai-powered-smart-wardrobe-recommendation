@@ -86,21 +86,38 @@ const tryGenerateWithFallbacks = async (prompt, options, availableProviders, sta
 // ==================== GENERATE IMAGES (API) ====================
 
 export const generateImages = async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const {
       prompt,
       negativePrompt = '',
       count = 1,
-      selectedModel = 'auto'
+      selectedModel = 'auto',
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit',
+      selectedOptions = '{}'
     } = req.body;
 
     console.log('🎨 Generating images...');
     console.log(`   Model: ${selectedModel}`);
+    console.log(`   Use Case: ${useCase}`);
+    console.log(`   Product Focus: ${productFocus}`);
     console.log(`   Count: ${count}`);
     console.log(`   Prompt length: ${prompt.length} chars`);
     console.log(`   Negative prompt length: ${negativePrompt.length} chars`);
     if (negativePrompt) {
       console.log(`   🚫 Negative: ${negativePrompt.substring(0, 50)}...`);
+    }
+    
+    // Parse selectedOptions if string
+    let options = {};
+    try {
+      options = typeof selectedOptions === 'string' 
+        ? JSON.parse(selectedOptions) 
+        : selectedOptions;
+    } catch (error) {
+      console.warn('Failed to parse selectedOptions', { error: error.message });
     }
 
 
@@ -270,7 +287,15 @@ export const generateImages = async (req, res) => {
         images,
         count: images.length,
         totalTime: parseFloat(totalTime),
-        provider: provider.name
+        provider: provider.name,
+        useCase,
+        productFocus,
+        metadata: {
+          model: provider.id,
+          promptLength: prompt.length,
+          negativePromptLength: negativePrompt.length,
+          selectedOptions: options
+        }
       }
     });
 

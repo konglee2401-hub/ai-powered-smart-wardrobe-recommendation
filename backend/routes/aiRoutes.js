@@ -12,6 +12,8 @@ router.get('/options/:category', optionsController.getOptionsByCategory);
 router.get('/export', aiController.exportOptions);
 router.get('/models', aiController.getAvailableModels);
 router.get('/providers', aiController.getAvailableProviders);
+router.get('/use-cases', aiController.getUseCases);
+router.get('/focus-areas', aiController.getFocusAreas);
 
 // Image analysis with fallback
 router.post('/analyze-character', upload.single('image'), aiController.analyzeCharacterImage);

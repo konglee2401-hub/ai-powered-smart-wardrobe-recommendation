@@ -461,8 +461,13 @@ async function analyzeWithFallback(imageInput, analysisType, options = {}) {
     console.log('');
   }
 
-  const prompts = {
-    character: `You are a fashion analysis AI. Analyze this image and return ONLY valid JSON in this EXACT format:
+  // Get use case from options
+  const useCase = options.useCase || 'general';
+  
+  // Determine which prompt to use based on use case and analysis type
+  let prompt;
+  if (analysisType === 'character') {
+    prompt = CONTENT_USE_CASES[useCase]?.analysisPrompts?.character || `You are a fashion analysis AI. Analyze this image and return ONLY valid JSON in this EXACT format:
 
 {
   "character": {
@@ -495,8 +500,9 @@ Rules:
 2. All fields must be present
 3. Arrays must have at least 2-3 items
 4. Be specific and descriptive
-5. Focus on visual details`,
-    clothing: `You are a fashion analysis AI. Analyze this image and return ONLY valid JSON in this EXACT format:
+5. Focus on visual details`;
+  } else if (analysisType === 'clothing') {
+    prompt = CONTENT_USE_CASES[useCase]?.analysisPrompts?.product || `You are a fashion analysis AI. Analyze this image and return ONLY valid JSON in this EXACT format:
 
 {
   "character": {
@@ -529,44 +535,8 @@ Rules:
 2. All fields must be present
 3. Arrays must have at least 2-3 items
 4. Be specific and descriptive
-5. Focus on visual details`,
-    outfit: `You are a fashion analysis AI. Analyze this image and return ONLY valid JSON in this EXACT format:
-
-{
-  "character": {
-    "name": "Unknown Character",
-    "series": "Real Person",
-    "personality": "Brief personality description",
-    "style": "minimalist, elegant, modern",
-    "colors": ["color1", "color2", "color3"],
-    "features": ["feature1", "feature2", "feature3"]
-  },
-  "product": {
-    "type": "clothing type",
-    "style": "style description",
-    "colors": ["color1", "color2"],
-    "patterns": ["pattern1", "pattern2"],
-    "occasion": "when to wear",
-    "season": "which season"
-  },
-  "settings": {
-    "scene": "scene description",
-    "lighting": "lighting type",
-    "mood": "mood description",
-    "style": "photography style",
-    "colorPalette": "color palette description"
+5. Focus on visual details`;
   }
-}
-
-Rules:
-1. Return ONLY the JSON object, no markdown, no explanations
-2. All fields must be present
-3. Arrays must have at least 2-3 items
-4. Be specific and descriptive
-5. Focus on visual details`
-  };
-
-  const prompt = prompts[analysisType] || prompts.character;
 
   for (let i = 0; i < sortedProviders.length; i++) {
     const provider = sortedProviders[i];
@@ -661,7 +631,7 @@ const analyzeProductImage = async (req, res) => {
     const result = await analyzeWithFallback(
       tempFilePath,
       'clothing',
-      req.body.options
+      { ...req.body.options, useCase: req.body.useCase }
     );
 
     // Parse analysis
@@ -727,7 +697,7 @@ const analyzeCharacterImage = async (req, res) => {
     const result = await analyzeWithFallback(
       tempFilePath,
       'character',
-      req.body.options
+      { ...req.body.options, useCase: req.body.useCase }
     );
 
     // Parse analysis
@@ -777,6 +747,209 @@ const analyzeCharacterImage = async (req, res) => {
   }
 };
 
+// ============================================
+// CONTENT USE CASES
+// ============================================
+
+const CONTENT_USE_CASES = {
+  'change-clothes': {
+    name: 'Change Clothes',
+    description: 'Put product on character model',
+    priority: 1,
+    focusAreas: ['character-pose', 'clothing-fit', 'body-proportions'],
+    analysisPrompts: {
+      character: `You are analyzing a character for virtual try-on (changing clothes).
+Extract detailed information about:
+- Face: shape, features, expression, makeup
+- Hair: style, color, length, texture
+- Body: type, pose, proportions, skin tone
+- Current clothing: style, fit, colors
+- Pose compatibility: how well the pose works for showing clothing
+- Body proportions: measurements for clothing fit
+- Skin tone: for color matching with new outfit
+- Expression: that matches product style
+
+Return JSON with ALL details.`,
+      product: `You are analyzing a clothing product for virtual try-on.
+Extract:
+- Product type: exact category (shirt, dress, pants, etc.)
+- Style: modern/vintage/casual/formal/sporty/etc
+- Colors: primary, secondary, accents
+- Material: fabric type, texture, finish
+- Fit: slim/regular/oversized/etc
+- Details: patterns, logos, embellishments
+- Season: spring/summer/fall/winter appropriate
+- Target demographic: age, gender, style preference
+- Brand vibe: luxury/casual/sporty/etc
+- Key selling points: unique features
+
+Return JSON with ALL details.`,
+    },
+  },
+  'ecommerce-product': {
+    name: 'E-commerce Product Shot',
+    description: 'Professional product photo for online store',
+    priority: 2,
+    focusAreas: ['product-details', 'clean-background', 'professional-lighting'],
+    analysisPrompts: {
+      character: `You are analyzing a model for e-commerce product photography.
+Focus on:
+- Professional pose and stance
+- Neutral expression suitable for product showcase
+- Body positioning that highlights the product
+- Overall presentation quality
+
+Return JSON with details.`,
+      product: `You are analyzing a product for e-commerce photography.
+Extract:
+- Product category and type
+- Key features to highlight
+- Material and texture details
+- Color accuracy requirements
+- Best angles for product showcase
+- Unique selling points
+
+Return JSON with ALL details.`,
+    },
+  },
+  'social-media': {
+    name: 'Social Media Post',
+    description: 'Engaging photo for social media',
+    priority: 3,
+    focusAreas: ['lifestyle-scene', 'engaging-composition', 'trendy-style'],
+    analysisPrompts: {
+      character: `You are analyzing a character for social media content.
+Focus on:
+- Engaging expression and personality
+- Trendy pose and style
+- Relatable and authentic vibe
+- Social media appeal factors
+
+Return JSON with details.`,
+      product: `You are analyzing a product for social media marketing.
+Extract:
+- Instagram-worthy features
+- Lifestyle integration potential
+- Trendy elements
+- Shareability factors
+- Target audience appeal
+
+Return JSON with ALL details.`,
+    },
+  },
+  'fashion-editorial': {
+    name: 'Fashion Editorial',
+    description: 'Artistic fashion photography',
+    priority: 4,
+    focusAreas: ['artistic-composition', 'dramatic-lighting', 'editorial-style'],
+    analysisPrompts: {
+      character: `You are analyzing a model for fashion editorial photography.
+Focus on:
+- High-fashion pose and attitude
+- Editorial-quality expression
+- Artistic body positioning
+- Avant-garde style elements
+
+Return JSON with details.`,
+      product: `You are analyzing fashion for editorial photography.
+Extract:
+- High-fashion elements
+- Artistic presentation potential
+- Editorial styling opportunities
+- Dramatic features
+- Luxury positioning
+
+Return JSON with ALL details.`,
+    },
+  },
+  'lifestyle-scene': {
+    name: 'Lifestyle Scene',
+    description: 'Product in real-life context',
+    priority: 5,
+    focusAreas: ['natural-setting', 'authentic-moment', 'storytelling'],
+    analysisPrompts: {
+      character: `You are analyzing a person for lifestyle photography.
+Focus on:
+- Natural, authentic pose
+- Relatable expression
+- Real-life scenario compatibility
+- Storytelling potential
+
+Return JSON with details.`,
+      product: `You are analyzing a product for lifestyle photography.
+Extract:
+- Real-life usage scenarios
+- Lifestyle integration
+- Natural presentation opportunities
+- Story-telling elements
+- Contextual features
+
+Return JSON with ALL details.`,
+    },
+  },
+  'before-after': {
+    name: 'Before/After Comparison',
+    description: 'Transformation showcase',
+    priority: 6,
+    focusAreas: ['side-by-side', 'clear-difference', 'transformation'],
+    analysisPrompts: {
+      character: `You are analyzing for before/after comparison.
+Focus on:
+- Consistent pose for comparison
+- Clear transformation potential
+- Matching angles and lighting
+- Comparable elements
+
+Return JSON with details.`,
+      product: `You are analyzing a product for before/after showcase.
+Extract:
+- Transformation features
+- Improvement highlights
+- Comparison points
+- Visual impact elements
+
+Return JSON with ALL details.`,
+    },
+  },
+};
+
+// ============================================
+// PRODUCT FOCUS AREAS
+// ============================================
+
+const PRODUCT_FOCUS_AREAS = {
+  'full-outfit': {
+    name: 'Full Outfit',
+    description: 'Complete clothing ensemble',
+    analysisDepth: 'comprehensive',
+  },
+  'top': {
+    name: 'Top',
+    description: 'Upper body clothing (shirts, blouses, jackets)',
+    analysisDepth: 'detailed',
+  },
+  'bottom': {
+    name: 'Bottom',
+    description: 'Lower body clothing (pants, skirts, shorts)',
+    analysisDepth: 'detailed',
+  },
+  'shoes': {
+    name: 'Shoes',
+    description: 'Footwear',
+    analysisDepth: 'focused',
+  },
+  'accessories': {
+    name: 'Accessories',
+    description: 'Bags, jewelry, hats, etc.',
+    analysisDepth: 'focused',
+  },
+  'specific-item': {
+    name: 'Specific Item',
+    description: 'Custom specific product',
+    analysisDepth: 'custom',
+  },
+};
+
 // Get available models
 const getAvailableModels = async (req, res) => {
   res.json({
@@ -792,6 +965,42 @@ const getAvailableModels = async (req, res) => {
       }))
     }
   });
+};
+
+// Get use cases
+const getUseCases = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        useCases: CONTENT_USE_CASES,
+        count: Object.keys(CONTENT_USE_CASES).length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get use cases',
+    });
+  }
+};
+
+// Get focus areas
+const getFocusAreas = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        focusAreas: PRODUCT_FOCUS_AREAS,
+        count: Object.keys(PRODUCT_FOCUS_AREAS).length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get focus areas',
+    });
+  }
 };
 
 // Get available providers with detailed info
@@ -942,6 +1151,8 @@ export {
   analyzeWithFallback,
   getAvailableModels,
   getAvailableProviders,
+  getUseCases,
+  getFocusAreas,
   getAllOptions,
   getOptionsByCategory,
   exportOptions,
@@ -958,6 +1169,8 @@ export default {
   analyzeWithFallback,
   getAvailableModels,
   getAvailableProviders,
+  getUseCases,
+  getFocusAreas,
   getAllOptions,
   getOptionsByCategory,
   exportOptions,

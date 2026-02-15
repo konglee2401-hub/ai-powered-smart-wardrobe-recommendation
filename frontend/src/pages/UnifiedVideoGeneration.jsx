@@ -24,6 +24,8 @@ export default function UnifiedVideoGeneration() {
   const [productFocus, setProductFocus] = useState('full-outfit'); // top, bottom, footwear, accessories, full-outfit
   const [preferredModel, setPreferredModel] = useState('auto');
   const [availableModels, setAvailableModels] = useState([]);
+  const [availableUseCases, setAvailableUseCases] = useState({});
+  const [availableFocusAreas, setAvailableFocusAreas] = useState({});
 
   // ==================== STATE: PHASE 2 - ANALYSIS & OPTIONS ====================
   const [characterAnalysis, setCharacterAnalysis] = useState(null);
@@ -119,6 +121,8 @@ export default function UnifiedVideoGeneration() {
     loadAvailableModels();
     loadPromptOptions();
     loadImageProviders();
+    loadUseCases();
+    loadFocusAreas();
   }, []);
 
   // ==================== AUTO-BUILD PROMPT ====================
@@ -163,6 +167,28 @@ export default function UnifiedVideoGeneration() {
       addLog(`Loaded ${response.data.data.available} analysis models`, 'success');
     } catch (error) {
       addLog('Failed to load analysis models', 'error', error.message);
+    }
+  };
+
+  const loadUseCases = async () => {
+    try {
+      const response = await axiosInstance.get(`/api/ai/use-cases`);
+      const useCases = response.data.data.useCases;
+      setAvailableUseCases(useCases);
+      addLog(`Loaded ${response.data.data.count} use cases`, 'success');
+    } catch (error) {
+      addLog('Failed to load use cases', 'error', error.message);
+    }
+  };
+
+  const loadFocusAreas = async () => {
+    try {
+      const response = await axiosInstance.get(`/api/ai/focus-areas`);
+      const focusAreas = response.data.data.focusAreas;
+      setAvailableFocusAreas(focusAreas);
+      addLog(`Loaded ${response.data.data.count} focus areas`, 'success');
+    } catch (error) {
+      addLog('Failed to load focus areas', 'error', error.message);
     }
   };
 
@@ -228,6 +254,7 @@ export default function UnifiedVideoGeneration() {
     addLog('PHASE 2: ANALYZING IMAGES', 'info');
     addLog('='.repeat(80), 'info');
     addLog(`Analysis Mode: ${analysisMode}`, 'info');
+    addLog(`Content Use Case: ${useCase}`, 'info');
     addLog(`Product Focus: ${productFocus}`, 'info');
     addLog(`Model: ${preferredModel}`, 'info');
 
@@ -238,6 +265,8 @@ export default function UnifiedVideoGeneration() {
       const characterFormData = new FormData();
       characterFormData.append('image', characterImage);
       characterFormData.append('preferredModel', preferredModel);
+      characterFormData.append('useCase', useCase);
+      characterFormData.append('productFocus', productFocus);
 
       const characterResponse = await axiosInstance.post(
         `/api/ai/analyze-character`,
@@ -258,6 +287,7 @@ export default function UnifiedVideoGeneration() {
       productFormData.append('image', productImage);
       productFormData.append('preferredModel', preferredModel);
       productFormData.append('focusArea', productFocus);
+      productFormData.append('useCase', useCase);
 
       const productResponse = await axiosInstance.post(
         `/api/ai/analyze-product`,
@@ -1108,23 +1138,49 @@ export default function UnifiedVideoGeneration() {
                         </div>
                       </div>
 
+                      {/* Content Use Case */}
+                      <div className="mt-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          🎯 Content Use Case *
+                        </label>
+                        <div className="space-y-2">
+                          {Object.entries(availableUseCases).map(([key, useCaseData]) => (
+                            <label
+                              key={key}
+                              className={`flex items-start p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                useCase === key
+                                  ? 'border-purple-500 bg-purple-50'
+                                  : 'border-gray-200 hover:border-purple-300'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="useCase"
+                                value={key}
+                                checked={useCase === key}
+                                onChange={(e) => setUseCase(e.target.value)}
+                                className="mt-1"
+                              />
+                              <div className="ml-3 flex-1">
+                                <div className="font-semibold text-gray-900">{useCaseData.name}</div>
+                                <p className="text-xs text-gray-600 mt-0.5">{useCaseData.description}</p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Product Focus */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-3">
                           👗 Product Focus Area *
                         </label>
                         <div className="space-y-2">
-                          {[
-                            { value: 'full-outfit', label: 'Full Outfit', desc: 'Analyze entire outfit', icon: '👔' },
-                            { value: 'top', label: 'Top', desc: 'Focus on shirt/jacket/blouse', icon: '👕' },
-                            { value: 'bottom', label: 'Bottom', desc: 'Focus on pants/skirt', icon: '👖' },
-                            { value: 'footwear', label: 'Footwear', desc: 'Focus on shoes/boots', icon: '👟' },
-                            { value: 'accessories', label: 'Accessories', desc: 'Focus on bags/jewelry', icon: '👜' }
-                          ].map(focus => (
+                          {Object.entries(availableFocusAreas).map(([key, focusData]) => (
                             <label
-                              key={focus.value}
+                              key={key}
                               className={`flex items-start p-3 border-2 rounded-lg cursor-pointer transition-all ${
-                                productFocus === focus.value
+                                productFocus === key
                                   ? 'border-purple-500 bg-purple-50'
                                   : 'border-gray-200 hover:border-purple-300'
                               }`}
@@ -1132,17 +1188,14 @@ export default function UnifiedVideoGeneration() {
                               <input
                                 type="radio"
                                 name="productFocus"
-                                value={focus.value}
-                                checked={productFocus === focus.value}
+                                value={key}
+                                checked={productFocus === key}
                                 onChange={(e) => setProductFocus(e.target.value)}
                                 className="mt-1"
                               />
                               <div className="ml-3 flex-1">
-                                <div className="flex items-center">
-                                  <span className="mr-2">{focus.icon}</span>
-                                  <span className="font-semibold text-gray-900">{focus.label}</span>
-                                </div>
-                                <p className="text-xs text-gray-600 mt-0.5">{focus.desc}</p>
+                                <div className="font-semibold text-gray-900">{focusData.name}</div>
+                                <p className="text-xs text-gray-600 mt-0.5">{focusData.description}</p>
                               </div>
                             </label>
                           ))}
