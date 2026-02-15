@@ -1,0 +1,191 @@
+{
+  "cookies": [
+    {
+      "name": "cdn_sec_tc",
+      "value": "2d7cff1817710589825142736ed61361a470bddb6b0f9e6ffb5c0f473f",
+      "domain": "chat.z.ai",
+      "path": "/",
+      "expires": 1771062582.640288,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "acw_tc",
+      "value": "0a0ccb0717710589825634054e4aa63760cb04c1a10cf3969986c0900d5d7e",
+      "domain": "chat.z.ai",
+      "path": "/",
+      "expires": 1771060782.640319,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_gcl_au",
+      "value": "1.1.1793735966.1771058983",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1778834983,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1222690315.1771058983",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1805619058.506003,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Host-GAPS",
+      "value": "1:uu9GY29lH3bvVCLzz1zv270gBGU6YQ:tpizNfwyJCStA5f2",
+      "domain": "accounts.google.com",
+      "path": "/",
+      "expires": 1805618998.554677,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "OTZ",
+      "value": "8479250_76_76_104100_72_446760",
+      "domain": "accounts.google.com",
+      "path": "/",
+      "expires": 1773651000,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "NID",
+      "value": "528=QgU60nXkWiT-iUw48-L_1TNhJFYjETC7D7fcCOdHjftaXQ1NzRKVQNRIMlJkOO77qUf1aDZBDV1JTWH9G7wqGzxnV7vzQdTHZJ8vCoudNjHUAY8cSRJrS0gkxirOy3wjUuHlVrdjbChk9rPvkZShOZ9Cmrfww_Pm2vUyyLmTJLkz-yp0ElkcO1DDQ9nLf-16Rh8fvJZvY9SQRlS2pQ",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1786870200.884358,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_c_WBKFRo",
+      "value": "vrzY0YkSBbsowd4XpVvmum46oPkUHKPoEIxbEFHy",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1802595063,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_nb_ioWEgULi",
+      "value": "",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "token",
+      "value": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjhmN2ZhMGEzLWU1OWYtNGE2ZC04ZWRlLTQzYTJmYmZjOTVjMyIsImVtYWlsIjoia29uZ2xlZTI0MUBvdXRsb29rLmNvbS52biJ9.Uml-kCZvE-WEbDgqOw9v3inOtfqRmuedr1y8zAgGCgF3Y8tgW9Soa0g_89KyK-ivQjKYqYQpzfjZOkDfz0tT1g",
+      "domain": "chat.z.ai",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oui-session",
+      "value": "eyJfc3RhdGVfZ29vZ2xlX2tQVHpwOXphUjNzNVp2NzJzeW9OeFkwMEpnTGFMeCI6IHsiZGF0YSI6IHsicmVkaXJlY3RfdXJpIjogImh0dHBzOi8vY2hhdC56LmFpL29hdXRoL2dvb2dsZS9jYWxsYmFjayIsICJub25jZSI6ICJvMmhRa0xJZWpreHBLaGoyN0RMdCIsICJ1cmwiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL3YyL2F1dGg/cmVzcG9uc2VfdHlwZT1jb2RlJmNsaWVudF9pZD04MDA0MjQzOTE5MjgtcXNxOTZ2YTN0cHVmcTRhamE4YTRhYmlvYm05MTBha3MuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20mcmVkaXJlY3RfdXJpPWh0dHBzJTNBJTJGJTJGY2hhdC56LmFpJTJGb2F1dGglMkZnb29nbGUlMkZjYWxsYmFjayZzY29wZT1vcGVuaWQrZW1haWwrcHJvZmlsZSZzdGF0ZT1rUFR6cDl6YVIzczVadjcyc3lvTnhZMDBKZ0xhTHgmbm9uY2U9bzJoUWtMSWVqa3hwS2hqMjdETHQifSwgImV4cCI6IDE3NzEwNjI1OTguMTkzNDkzOH19.aZA3ig.0huPVcR6dy2S0L1BqNqDdGEJdJ4",
+      "domain": "chat.z.ai",
+      "path": "/",
+      "expires": 1772268682.685145,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_Z8QTHYBHP3",
+      "value": "GS2.1.s1771058983$o1$g1$t1771059082$j36$l0$h0",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1805619082.743731,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ssxmod_itna",
+      "value": "1-YqjxnD0DBDgn3AKi7G77G2GD2GGkSYqKDzxC5iO8DuxiK08D6QDB40QuWejwWsWYi7DWr=P3BrAqNDlrxRATDCqKGfDQcA8YiGeeevW8tAqq3l7QDruPf6mz64cRk_U=MIifr7E_CdpN4xwD0aDmFWcQDN34iiDBeD5xDTDWeDGDD3DmWWDiyoD0KDj7ovs43IDYPDE7oaDGeDeOomDYveDD5DAaBPf7ox8po4DGyFkaqpQDGi6KkhczRP1FTjWihpD7v3DlPeCwGpB9ZyYi8jasZfdxoDXctDvxSopKcPumEEhU8FqjW_wGdqBYiGNZAqcAqqAKlB8=GxGANOoNtY7eY=lYG8mdDD3zGDuC6rGrqY_rBUB=XS1N=z6pBNqlvVmPPbDGiDPiIr0DzBqGYe5WqnQ_G0GqAiYAYUWq3YD",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1771060898,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ssxmod_itna2",
+      "value": "1-YqjxnD0DBDgn3AKi7G77G2GD2GGkSYqKDzxC5iO8DuxiK08D6QDB40QuWejwWsWYi7DWr=P3BrAuYDi=RDeYwSnD03eKih3FqsD0vPf3AFLFyeW=QUlDeWkHu0HYUayp=SSVntIiy8MLh_Xbd=RS_DDwMXx4q_XAuDPSbjjQQL9WDh5kq_BGh_dc_AUGETfmEt7QBXNLnu8SBW33jQ7GMn8zuTTdPrqVeraLd93LphTEe4=hrhjGhGwhwWikqKK_UFrtpLSfUDn70tSAY_RYvf7pK4eMhXU77t6LOGqOv2g=d9ndMjgjCt86E2e5e2AxWq5=DKxKlcxK2Gnc5Yl5PBd=E6c=KSrxDzXtlp31NSrj_Ov715e9pGjv4BovaY5a6VlLHf2Er5EZET1XRW6bS=LYos8uF662GGpx4O6XE2rCaA1oKOWE/A3OSXpx3vZwOSELGdsadEtu8=5hrxlOdKafxbfxYcuZLxCQOBX8OGGh098L7oqI3qsSdHUFiavnliqaYfAQabPn8B97Dj=oKchU/pxQ5YI5pRDA9ptWiR4bn2gbd6_BBD3IVmmqgBSj0SQNfe=H_HO1iL0KoET9/mNKjCnFF2SRiy5d6nlQ0cpfo7brKC=gNhnTrDAVoK03i1QoM9ctyZ9HfM15MSYkp/ja5LDbihgbDzmp3S1YYK=EvYDi4Q5xaBZq=SNyBd8q5iQYGi02iDn3C3jqn3W0qADqw8B7SGO22IAcddBfgDq=YU7wQip2332BTbz0bjV8qQm4c3exqLeY3PMiioKsigqxtGI2g_DgAvKPigwBYh8DYRL2gShXiYCUvBdSG0O5TrKANK4ECFem1nrIpcqdKmx7eCXrDxYurGxBxsDYe4504quRjQN_wDxeD",
+      "domain": ".z.ai",
+      "path": "/",
+      "expires": 1771060898,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://chat.z.ai",
+      "localStorage": [
+        {
+          "name": "_arms_session",
+          "value": "b415a9de31db4b329d353e6d7747816c-1-1771058983150-1771059088999"
+        },
+        {
+          "name": "theme",
+          "value": "light"
+        },
+        {
+          "name": "__00b204e9800998__",
+          "value": "2640898985a19c5b577024||1786610982953"
+        },
+        {
+          "name": "token",
+          "value": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjhmN2ZhMGEzLWU1OWYtNGE2ZC04ZWRlLTQzYTJmYmZjOTVjMyIsImVtYWlsIjoia29uZ2xlZTI0MUBvdXRsb29rLmNvbS52biJ9.Uml-kCZvE-WEbDgqOw9v3inOtfqRmuedr1y8zAgGCgF3Y8tgW9Soa0g_89KyK-ivQjKYqYQpzfjZOkDfz0tT1g"
+        },
+        {
+          "name": "_arms_uid",
+          "value": "uid_ii4z2ihbknq8oyin"
+        },
+        {
+          "name": "_gcl_ls",
+          "value": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"timeouts\":0,\"errors\":0,\"creationTimeMs\":1771058983203},\"expires\":1778834983203}}"
+        },
+        {
+          "name": "sidebar",
+          "value": "false"
+        },
+        {
+          "name": "_l_KPLiPs",
+          "value": "4SDBTFbqsCWQhCIhoHG2kbQhZvFO6q2ovYCfICpens"
+        },
+        {
+          "name": "locale",
+          "value": "en-US"
+        },
+        {
+          "name": "shouldSuggestModel",
+          "value": "false"
+        }
+      ]
+    }
+  ]
+}

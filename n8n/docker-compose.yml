@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # N8N Automation Server
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: smart-wardrobe-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic Auth
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=smartwardrobe2024
+      
+      # Server Config
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      
+      # Webhook Config
+      - WEBHOOK_URL=http://localhost:5678/
+      
+      # Timezone
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+      
+      # Execution Mode
+      - EXECUTIONS_PROCESS=main
+      - EXECUTIONS_MODE=regular
+      
+      # Log Level
+      - N8N_LOG_LEVEL=info
+      
+      # Environment Variables (pass to workflows)
+      - EXPRESS_API_URL=http://host.docker.internal:5000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - STABILITY_API_KEY=${STABILITY_API_KEY}
+      
+    volumes:
+      # Persistent data
+      - n8n_data:/home/node/.n8n
+      
+      # Workflows (for backup/version control)
+      - ./workflows:/home/node/.n8n/workflows
+      
+      # Shared uploads folder with Express
+      - ../backend/uploads:/uploads
+      
+    extra_hosts:
+      # Allow N8N to access host machine (Express API)
+      - "host.docker.internal:host-gateway"
+    
+    networks:
+      - smart-wardrobe-network
+
+networks:
+  smart-wardrobe-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    driver: local

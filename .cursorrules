@@ -1,0 +1,73 @@
+# Smart Wardrobe - Cursor AI Rules
+
+## Project Overview
+AI-powered wardrobe management system with outfit recommendations based on a Node.js backend and React frontend.
+
+## Tech Stack
+- Backend: Node.js, Express, MongoDB, Mongoose, JWT, Multer
+- Frontend: React 18, Vite, TailwindCSS, Zustand, React Router
+
+## Commands
+- Development (both): `npm run dev`
+- Backend only: `npm run dev:backend`  (port 5000)
+- Frontend only: `npm run dev:frontend` (port 5173)
+- Seed sample data: `npm run seed`
+- Install all deps (root + backend + frontend): `npm run install:all`
+
+## Backend Conventions
+- Use ES modules (`import` / `export`).
+- Controllers handle HTTP req/res and return `{ success, data | message }`.
+- Business logic goes into services (when they grow complex).
+- Use async/await with try/catch in all controllers.
+- Use `auth` middleware to protect private routes.
+- Keep models in `backend/models`, routes in `backend/routes`, controllers in `backend/controllers`.
+
+### Controller pattern
+// Example outline
+export const someAction = async (req, res) => {
+  try {
+    // logic
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+## Frontend Conventions
+- Functional React components with hooks.
+- Routing with React Router v6 in `App.jsx`.
+- Global state via Zustand stores in `frontend/src/stores`.
+- API calls via a shared axios instance (when introduced).
+- Styling with Tailwind utility classes.
+
+### Component pattern
+// Example outline
+export default function ComponentName() {
+  // state, effects, handlers
+  return (
+    <div className="...">
+      {/* UI */}
+    </div>
+  );
+}
+
+## API Response Format
+- Success: `{ success: true, data: ... }`
+- Error: `{ success: false, message: "..." }`
+
+## AI Assistant Guidelines (for Cursor)
+- When asked to "add feature X", implement both backend + frontend wiring if relevant.
+- When fixing a bug, first explain root cause briefly in comments, then apply a minimal fix.
+- Prefer improving existing patterns instead of introducing new ones without need.
+
+## Files to Treat as Source of Truth
+- `backend/server.js` for Express setup & routes.
+- `backend/controllers/*` for API behavior.
+- `frontend/src/App.jsx` for routing.
+- `frontend/src/pages/*` for page-level UI.
+- `frontend/src/stores/*` for global state.
+
+## Do NOT
+- Commit `.env` files (use `.env.example` as template).
+- Hard-code secrets, API keys, or connection strings.
+

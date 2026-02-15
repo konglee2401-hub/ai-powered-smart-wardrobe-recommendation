@@ -1,0 +1,254 @@
+{
+  "name": "AI Fashion Video - Complete Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-fashion-video",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "ai-fashion-video"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXPRESS_API_URL }}/api/flows/create",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "characterImage",
+              "value": "={{ $json.body.characterImage }}"
+            },
+            {
+              "name": "productImage",
+              "value": "={{ $json.body.productImage }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-flow",
+      "name": "Create Flow (Express API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXPRESS_API_URL }}/api/flows/{{ $json.flowId }}/analyze-images",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "analyze-images",
+      "name": "Analyze Images (Express API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXPRESS_API_URL }}/api/flows/{{ $json.flowId }}/build-prompt",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customPrompt",
+              "value": "={{ $json.body.options.customPrompt || 'A professional fashion photo' }}"
+            },
+            {
+              "name": "styleOptions",
+              "value": "={{ $json.body.options }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "build-prompt",
+      "name": "Build Prompt (Express API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXPRESS_API_URL }}/api/flows/{{ $json.flowId }}/generate-images",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "imageCount",
+              "value": "={{ $json.body.options.imageCount || 4 }}"
+            },
+            {
+              "name": "useGoogleLabs",
+              "value": "={{ $json.body.options.useGoogleLabs || false }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "generate-images",
+      "name": "Generate Images (Express API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.EXPRESS_API_URL }}/api/flows/{{ $json.flowId }}/generate-video",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "selectedImageIndex",
+              "value": "={{ $json.body.options.selectedImageIndex || 0 }}"
+            },
+            {
+              "name": "videoPrompt",
+              "value": "={{ $json.body.options.videoPrompt || 'Gentle movement, natural smile' }}"
+            },
+            {
+              "name": "videoModel",
+              "value": "={{ $json.body.options.videoModel || 'auto' }}"
+            },
+            {
+              "name": "cameraMovement",
+              "value": "={{ $json.body.options.cameraMovement || 'static' }}"
+            },
+            {
+              "name": "motionStyle",
+              "value": "={{ $json.body.options.motionStyle || 'moderate' }}"
+            },
+            {
+              "name": "duration",
+              "value": "={{ $json.body.options.duration || 5 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "generate-video",
+      "name": "Generate Video (Express API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Log execution details\nconst flowId = $input.item.json.flowId;\nconst step = $input.item.json.step || 'unknown';\nconst status = $input.item.json.status || 'processing';\n\nconsole.log(`[N8N] Flow ${flowId} - Step: ${step} - Status: ${status}`);\n\nreturn $input.item;"
+      },
+      "id": "logger",
+      "name": "Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create Flow (Express API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Flow (Express API)": {
+      "main": [
+        [
+          {
+            "node": "Analyze Images (Express API)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Images (Express API)": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt (Express API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt (Express API)": {
+      "main": [
+        [
+          {
+            "node": "Generate Images (Express API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Images (Express API)": {
+      "main": [
+        [
+          {
+            "node": "Generate Video (Express API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Video (Express API)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
