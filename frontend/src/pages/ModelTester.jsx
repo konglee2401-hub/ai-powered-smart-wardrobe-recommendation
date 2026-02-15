@@ -65,7 +65,7 @@ export default function ModelTester() {
     try {
       const [statusResult, modelsResult] = await Promise.all([
         getProviderStatus(),
-        axiosInstance.get(`/ai/models`).catch(() => ({ data: { success: false, data: { models: [] } } }))
+        axiosInstance.get(`/api/ai/models`).catch(() => ({ data: { success: false, data: { models: [] } } }))
       ]);
       
       setProviders(statusResult.data.providers || []);

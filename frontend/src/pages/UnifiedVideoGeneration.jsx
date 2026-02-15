@@ -157,7 +157,7 @@ export default function UnifiedVideoGeneration() {
 
   const loadAvailableModels = async () => {
     try {
-      const response = await axiosInstance.get(`/ai/models`);
+      const response = await axiosInstance.get(`/api/ai/models`);
       const models = response.data.data.models;
       setAvailableModels(models);
       addLog(`Loaded ${response.data.data.available} analysis models`, 'success');
@@ -168,7 +168,7 @@ export default function UnifiedVideoGeneration() {
 
   const loadPromptOptions = async () => {
     try {
-      const response = await axiosInstance.get(`/prompt-options`);
+      const response = await axiosInstance.get(`/api/prompt-options`);
       const options = response.data.data.options;
       setAllOptions(options);
       addLog(`Loaded ${response.data.data.total} prompt options`, 'success');
@@ -179,7 +179,7 @@ export default function UnifiedVideoGeneration() {
 
   const loadImageProviders = async () => {
     try {
-      const response = await axiosInstance.get(`/image-gen/providers`);
+      const response = await axiosInstance.get(`/api/image-gen/providers`);
       const providers = response.data.data.providers || [];
       setAvailableProviders(providers);
       addLog(`Loaded ${providers.length} image generation providers`, 'success');

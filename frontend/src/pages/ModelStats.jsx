@@ -66,7 +66,7 @@ export default function ModelStats() {
         getUsageStats(timeRange),
         getPerformanceMetrics(),
         getUsageTrend(timeRange),
-        axiosInstance.get(`/models`).catch(() => ({ data: { data: { models: [] } } }))
+        axiosInstance.get(`/api/models`).catch(() => ({ data: { data: { models: [] } } }))
       ]);
 
       setStats(statsRes.data);
