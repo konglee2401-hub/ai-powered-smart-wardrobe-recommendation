@@ -13,7 +13,7 @@ import {
   calculateSuccessRate,
   formatGenerationTime
 } from '../services/statsService';
-import axios from 'axios';
+import axiosInstance from '../services/axios';
 import { 
   TrendingUp, 
   Database, 
@@ -66,7 +66,7 @@ export default function ModelStats() {
         getUsageStats(timeRange),
         getPerformanceMetrics(),
         getUsageTrend(timeRange),
-        axios.get(`${API_BASE_URL}/models`).catch(() => ({ data: { data: { models: [] } } }))
+        axiosInstance.get(`/models`).catch(() => ({ data: { data: { models: [] } } }))
       ]);
 
       setStats(statsRes.data);

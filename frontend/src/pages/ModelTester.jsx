@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import axiosInstance from '../services/axios';
 import { API_BASE_URL } from '../config/api';
 import { 
   testProvider,
@@ -65,7 +65,7 @@ export default function ModelTester() {
     try {
       const [statusResult, modelsResult] = await Promise.all([
         getProviderStatus(),
-        axios.get(`${API_BASE_URL}/ai/models`).catch(() => ({ data: { success: false, data: { models: [] } } }))
+        axiosInstance.get(`/ai/models`).catch(() => ({ data: { success: false, data: { models: [] } } }))
       ]);
       
       setProviders(statusResult.data.providers || []);
