@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../services/axios';
 import { API_BASE_URL } from '../config/api';
-import axiosInstance from '../services/axios';
 import { 
   Upload, Wand2, Image as ImageIcon, Video, Sparkles, 
   AlertCircle, CheckCircle, Clock, ChevronRight, ChevronDown,
