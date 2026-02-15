@@ -239,8 +239,8 @@ export default function UnifiedVideoGeneration() {
       characterFormData.append('image', characterImage);
       characterFormData.append('preferredModel', preferredModel);
 
-      const characterResponse = await axios.post(
-        `${API_BASE_URL}/ai/analyze-character`,
+      const characterResponse = await axiosInstance.post(
+        `/api/ai/analyze-character`,
         characterFormData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -259,8 +259,8 @@ export default function UnifiedVideoGeneration() {
       productFormData.append('preferredModel', preferredModel);
       productFormData.append('focusArea', productFocus);
 
-      const productResponse = await axios.post(
-        `${API_BASE_URL}/ai/analyze-product`,
+      const productResponse = await axiosInstance.post(
+        `/api/ai/analyze-product`,
         productFormData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -500,7 +500,7 @@ export default function UnifiedVideoGeneration() {
     if (!characterAnalysis || !productAnalysis) return;
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/ai/build-prompt`, {
+      const response = await axiosInstance.post(`/api/ai/build-prompt`, {
         characterAnalysis,
         productAnalysis,
         mode: promptMode,
@@ -589,8 +589,8 @@ export default function UnifiedVideoGeneration() {
       if (generationMethod === 'api') {
         formData.append('selectedModel', imageProvider);
 
-        response = await axios.post(
-          `${API_BASE_URL}/image-gen/generate`,
+        response = await axiosInstance.post(
+          `/api/image-gen/generate`,
           formData,
           {
             headers: { 'Content-Type': 'multipart/form-data' },
@@ -655,7 +655,7 @@ export default function UnifiedVideoGeneration() {
         ? `${API_BASE_URL}/image-gen/generate`
         : `${API_BASE_URL}/image-gen/browser-generate`;
 
-      const response = await axios.post(endpoint, formData, {
+      const response = await axiosInstance.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 180000
       });
@@ -713,7 +713,7 @@ export default function UnifiedVideoGeneration() {
         generationTime: image.generationTime
       };
 
-      const response = await axios.post(`${API_BASE_URL}/history/images`, imageData);
+      const response = await axiosInstance.post(`/api/history/images`, imageData);
 
       setGeneratedImages(prev => {
         const updated = [...prev];
@@ -761,7 +761,7 @@ export default function UnifiedVideoGeneration() {
     addLog('🎬 Building video prompt...', 'info');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/video/build-prompt`, {
+      const response = await axiosInstance.post(`/api/video/build-prompt`, {
         characterAnalysis,
         productAnalysis,
         userSelections,
@@ -798,8 +798,8 @@ export default function UnifiedVideoGeneration() {
     addLog(`Prompt: ${videoPrompt.substring(0, 200)}...`, 'info');
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/video/generate`,
+      const response = await axiosInstance.post(
+        `/api/video/generate`,
         {
           prompt: videoPrompt,
           customPrompt: customVideoPrompt,
