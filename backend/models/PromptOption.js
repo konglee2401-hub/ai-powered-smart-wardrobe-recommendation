@@ -1,95 +1,243 @@
+/**
+ * Enhanced PromptOption Model
+ * 
+ * NEW FIELDS for Phase 1:
+ * - keywords: For AI matching
+ * - technicalDetails: Detailed specs for prompts
+ * - previewImage: UI preview
+ * - usageCount: Track usage
+ * - lastUsed: Timestamp
+ * 
+ * NEW METHODS:
+ * - incrementUsage()
+ * - searchByKeywords()
+ * - matchesKeywords()
+ */
+
 import mongoose from 'mongoose';
 
-const PromptOptionSchema = new mongoose.Schema({
-  category: {
-    type: String,
-    required: true,
-    enum: ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'useCase'],
-    index: true
-  },
+// ============================================================
+// SCHEMA DEFINITION
+// ============================================================
+
+const promptOptionSchema = new mongoose.Schema({
+  // Basic fields
   value: {
     type: String,
     required: true,
-    lowercase: true,
-    trim: true
+    unique: true,
+    index: true
   },
   label: {
     type: String,
     required: true
   },
   description: {
-    type: String
+    type: String,
+    required: true
   },
-  isAiGenerated: {
-    type: Boolean,
-    default: false
+  category: {
+    type: String,
+    required: true,
+    enum: ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle'],
+    index: true
   },
+
+  // NEW: Keywords for AI matching
+  keywords: [{
+    type: String,
+    index: true
+  }],
+
+  // NEW: Technical details for detailed prompts
+  technicalDetails: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
+  // NEW: Preview image for UI
+  previewImage: {
+    type: String,
+    default: null
+  },
+
+  // NEW: Usage tracking
   usageCount: {
+    type: Number,
+    default: 0,
+    index: true
+  },
+  lastUsed: {
+    type: Date,
+    default: null
+  },
+
+  // Metadata
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
+  sortOrder: {
     type: Number,
     default: 0
   },
-  keywords: [String],
-  metadata: {
-    addedBy: String,
-    source: String,
-    confidence: Number
+
+  // Timestamps
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
-// Indexes
-PromptOptionSchema.index({ category: 1, value: 1 }, { unique: true });
-PromptOptionSchema.index({ usageCount: -1 });
+// ============================================================
+// INDEXES
+// ============================================================
 
-// Methods
-PromptOptionSchema.methods.incrementUsage = async function() {
+// Compound indexes for efficient queries
+promptOptionSchema.index({ category: 1, isActive: 1 });
+promptOptionSchema.index({ usageCount: -1, category: 1 });
+promptOptionSchema.index({ keywords: 1, category: 1 });
+
+// ============================================================
+// INSTANCE METHODS
+// ============================================================
+
+/**
+ * Increment usage count and update lastUsed timestamp
+ */
+promptOptionSchema.methods.incrementUsage = function() {
   this.usageCount += 1;
-  await this.save();
+  this.lastUsed = new Date();
+  return this.save();
 };
 
-// Static methods
-PromptOptionSchema.statics.getByCategory = async function(category) {
-  return this.find({ category }).sort({ usageCount: -1, label: 1 });
-};
-
-PromptOptionSchema.statics.addOrUpdate = async function(category, value, label, metadata = {}) {
-  const option = await this.findOneAndUpdate(
-    { category, value },
-    {
-      $set: { label, metadata },
-      $setOnInsert: { isAiGenerated: true }
-    },
-    { upsert: true, new: true }
+/**
+ * Check if this option matches given keywords
+ */
+promptOptionSchema.methods.matchesKeywords = function(searchKeywords) {
+  if (!searchKeywords || !Array.isArray(searchKeywords)) return false;
+  
+  const optionKeywords = this.keywords || [];
+  const lowerOptionKeywords = optionKeywords.map(k => k.toLowerCase());
+  const lowerSearchKeywords = searchKeywords.map(k => k.toLowerCase());
+  
+  // Check if any search keyword matches any option keyword
+  return lowerSearchKeywords.some(searchKw => 
+    lowerOptionKeywords.some(optionKw => 
+      optionKw.includes(searchKw) || searchKw.includes(optionKw)
+    )
   );
-  
-  console.log(`✅ Added/Updated ${category}: ${label}`);
-  return option;
 };
 
-PromptOptionSchema.statics.findOrCreate = async function(category, text) {
-  // Normalize text
-  const value = text.toLowerCase().trim().replace(/\s+/g, '-');
-  const label = text.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  
-  // Check if exists
-  let option = await this.findOne({ category, value });
-  
-  if (!option) {
-    option = await this.create({
-      category,
-      value,
-      label,
-      isAiGenerated: true,
-      metadata: {
-        source: 'ai-analysis',
-        addedBy: 'system'
-      }
-    });
-    console.log(`✨ Created new ${category} option: ${label}`);
+/**
+ * Get technical details as formatted string
+ */
+promptOptionSchema.methods.getTechnicalDetailsString = function() {
+  if (!this.technicalDetails || Object.keys(this.technicalDetails).length === 0) {
+    return '';
   }
-  
-  return option;
+
+  return Object.entries(this.technicalDetails)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ');
 };
 
-export default mongoose.model('PromptOption', PromptOptionSchema);
+// ============================================================
+// STATIC METHODS
+// ============================================================
+
+/**
+ * Search options by keywords across all categories
+ */
+promptOptionSchema.statics.searchByKeywords = function(keywords, category = null) {
+  const query = {
+    isActive: true,
+    $or: [
+      { keywords: { $in: keywords } },
+      { label: { $regex: keywords.join('|'), $options: 'i' } },
+      { description: { $regex: keywords.join('|'), $options: 'i' } }
+    ]
+  };
+
+  if (category) {
+    query.category = category;
+  }
+
+  return this.find(query).sort({ usageCount: -1, label: 1 });
+};
+
+/**
+ * Get most used options by category
+ */
+promptOptionSchema.statics.getMostUsed = function(category, limit = 10) {
+  return this.find({ category, isActive: true })
+    .sort({ usageCount: -1, lastUsed: -1 })
+    .limit(limit);
+};
+
+/**
+ * Get options by category with usage stats
+ */
+promptOptionSchema.statics.getWithStats = function(category = null) {
+  const query = { isActive: true };
+  if (category) query.category = category;
+
+  return this.find(query)
+    .sort({ category: 1, sortOrder: 1, label: 1 })
+    .select('value label description category keywords usageCount lastUsed previewImage');
+};
+
+/**
+ * Bulk update usage counts
+ */
+promptOptionSchema.statics.bulkIncrementUsage = function(optionIds) {
+  return this.updateMany(
+    { _id: { $in: optionIds } },
+    [
+      {
+        $set: {
+          usageCount: { $add: ['$usageCount', 1] },
+          lastUsed: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    ]
+  );
+};
+
+// ============================================================
+// MIDDLEWARE
+// ============================================================
+
+// Update updatedAt on save
+promptOptionSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+// ============================================================
+// VIRTUALS
+// ============================================================
+
+// Virtual for usage rate (usage per day since creation)
+promptOptionSchema.virtual('usageRate').get(function() {
+  const daysSinceCreation = (Date.now() - this.createdAt) / (1000 * 60 * 60 * 24);
+  return daysSinceCreation > 0 ? this.usageCount / daysSinceCreation : 0;
+});
+
+// ============================================================
+// MODEL CREATION
+// ============================================================
+
+const PromptOption = mongoose.model('PromptOption', promptOptionSchema);
+
+// ============================================================
+// EXPORTS
+// ============================================================
+
+export default PromptOption;

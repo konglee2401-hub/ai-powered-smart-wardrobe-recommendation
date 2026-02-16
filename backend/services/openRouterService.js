@@ -3,7 +3,7 @@ import fs from 'fs';
 import { getKeyManager } from '../utils/keyManager.js';
 
 // Get key manager for OpenRouter
-const keyManager = getKeyManager('openrouter');
+const keyManager = getKeyManager('OPENROUTER');
 
 /**
  * OpenRouter Service
@@ -30,7 +30,7 @@ async function analyzeWithOpenRouter(imagePath, prompt, options = {}) {
   console.log(`   📦 OpenRouter Model: ${model}`);
   
   // Get API key
-  const keyInfo = keyManager.getNextKey();
+  const keyInfo = keyManager.getNextKey('OPENROUTER');
   const apiKey = keyInfo.key;
   
   if (!apiKey) {

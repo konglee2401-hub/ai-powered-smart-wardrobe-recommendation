@@ -59,6 +59,14 @@ export const API_ENDPOINTS = {
   IMAGE_UPLOAD: `${API_BASE_URL}/image/upload`,
   
   // ============================================
+  // UNIFIED FLOW (Phase 1)
+  // ============================================
+  UNIFIED_ANALYZE: `${API_BASE_URL}/ai/analyze-unified`,
+  UNIFIED_GENERATE: `${API_BASE_URL}/ai/generate-unified`,
+  PROVIDER_STATUS: `${API_BASE_URL}/ai/provider-status`,
+  KEY_ROTATION_TEST: `${API_BASE_URL}/ai/test-key-rotation`,
+  
+  // ============================================
   // N8N INTEGRATION (existing)
   // ============================================
   N8N_WEBHOOK: import.meta.env.VITE_N8N_WEBHOOK_URL || '',

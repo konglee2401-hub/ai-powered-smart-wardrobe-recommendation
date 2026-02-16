@@ -10,6 +10,11 @@ import PromptBuilder from './pages/PromptBuilder';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import OptionsManagement from './pages/OptionsManagement';
+import BatchProcessingPage from './pages/BatchProcessingPage';
+import GalleryPage from './pages/GalleryPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import AdvancedCustomizationPage from './pages/AdvancedCustomizationPage';
+import PerformanceOptimizerPage from './pages/PerformanceOptimizerPage';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -30,6 +35,11 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/options" element={<OptionsManagement />} />
+          <Route path="/batch" element={<BatchProcessingPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/customization" element={<AdvancedCustomizationPage />} />
+          <Route path="/performance" element={<PerformanceOptimizerPage />} />
           
           {/* Redirect old routes */}
           <Route path="/model-tester" element={<Navigate to="/tester" replace />} />

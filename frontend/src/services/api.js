@@ -192,4 +192,71 @@ export const authAPI = {
   getMe: () => api.get(API_ENDPOINTS.AUTH_ME),
 };
 
+// ============================================
+// UNIFIED FLOW APIs (Phase 1)
+// ============================================
+
+export const unifiedFlowAPI = {
+  /**
+   * Unified Analysis - Analyze both character and product in ONE call
+   * @param {File} characterImage - Character image file
+   * @param {File} productImage - Product image file
+   * @param {Object} options - Analysis options
+   * @param {string} options.useCase - Use case (change-clothes, ecommerce-product, etc.)
+   * @param {string} options.productFocus - Product focus (full-outfit, top, bottom, etc.)
+   * @param {boolean} options.generateImages - Whether to generate images
+   * @param {number} options.imageCount - Number of images to generate
+   * @param {Function} onProgress - Progress callback
+   */
+  analyzeUnified: async (characterImage, productImage, options = {}, onProgress = null) => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('productImage', productImage);
+    formData.append('useCase', options.useCase || 'change-clothes');
+    formData.append('productFocus', options.productFocus || 'full-outfit');
+    
+    if (options.generateImages !== undefined) {
+      formData.append('generateImages', options.generateImages);
+    }
+    if (options.imageCount) {
+      formData.append('imageCount', options.imageCount);
+    }
+    if (options.selectedOptions) {
+      formData.append('selectedOptions', JSON.stringify(options.selectedOptions));
+    }
+    
+    return api.postFormData(API_ENDPOINTS.UNIFIED_ANALYZE, formData, onProgress);
+  },
+  
+  /**
+   * Generate images with smart fallback
+   * @param {Object} params - Generation parameters
+   * @param {string} params.prompt - Positive prompt
+   * @param {string} params.negativePrompt - Negative prompt
+   * @param {Object} params.options - Generation options
+   * @param {Function} onProgress - Progress callback
+   */
+  generateImages: async (params, onProgress = null) => {
+    const formData = new FormData();
+    formData.append('prompt', params.prompt);
+    formData.append('negativePrompt', params.negativePrompt || '');
+    
+    if (params.options) {
+      formData.append('options', JSON.stringify(params.options));
+    }
+    
+    return api.postFormData(API_ENDPOINTS.UNIFIED_GENERATE, formData, onProgress);
+  },
+  
+  /**
+   * Get provider status
+   */
+  getProviderStatus: () => api.get(API_ENDPOINTS.PROVIDER_STATUS),
+  
+  /**
+   * Test key rotation
+   */
+  testKeyRotation: () => api.get(API_ENDPOINTS.KEY_ROTATION_TEST),
+};
+
 export default api;

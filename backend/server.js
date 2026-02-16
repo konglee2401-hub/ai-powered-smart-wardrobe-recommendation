@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import { printServicesSummary } from './utils/keyManager.js';
+import { printServicesSummary, initKeyManager } from './utils/keyManager.js';
 import authRoutes from './routes/authRoutes.js';
 import testAuthRoutes from './routes/testAuthRoutes.js';
 import clothingRoutes from './routes/clothingRoutes.js';
@@ -23,6 +23,7 @@ import promptOptionsRoutes from './routes/promptOptions.js';
 import historyRoutes from './routes/history.js';
 import videoGenRoutes from './routes/video.js';
 import multiFlowRoutes from './routes/multiFlowRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
 import * as modelSyncService from './services/modelSyncService.js';
@@ -63,6 +64,7 @@ app.use('/api/prompt-options', promptOptionsRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/video', videoGenRoutes);
 app.use('/api/multi-flow', multiFlowRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Smart Wardrobe API' });

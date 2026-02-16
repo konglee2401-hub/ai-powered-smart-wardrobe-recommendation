@@ -5,7 +5,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard
+  Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard, Layers, Image, TrendingUp, Settings, Gauge
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -13,8 +13,13 @@ export default function Navbar() {
 
   const navItems = [
     { path: '/', label: 'Generate', icon: Sparkles },
+    { path: '/batch', label: 'Batch', icon: Layers },
+    { path: '/gallery', label: 'Gallery', icon: Image },
     { path: '/history', label: 'History', icon: Clock },
     { path: '/stats', label: 'Stats', icon: BarChart3 },
+    { path: '/analytics', label: 'Analytics', icon: TrendingUp },
+    { path: '/customization', label: 'Customize', icon: Settings },
+    { path: '/performance', label: 'Performance', icon: Gauge },
     { path: '/tester', label: 'Tester', icon: Zap },
     { path: '/prompt-builder', label: 'Prompts', icon: FileText },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

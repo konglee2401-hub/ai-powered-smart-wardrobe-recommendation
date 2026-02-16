@@ -59,7 +59,7 @@ const VISION_PROVIDERS = [
     model: 'qwen/qwen-2-vl-72b-instruct',
     priority: 0, // HIGHEST PRIORITY
     pricing: null, // FREE
-    available: !!getKeyManager('openrouter').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENROUTER')?.length,
     analyze: analyzeWithOpenRouter
   },
   {
@@ -68,7 +68,7 @@ const VISION_PROVIDERS = [
     model: 'google/gemini-2.0-flash-exp:free',
     priority: 1,
     pricing: null, // FREE
-    available: !!getKeyManager('openrouter').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENROUTER')?.length,
     analyze: analyzeWithOpenRouter
   },
   {
@@ -77,7 +77,7 @@ const VISION_PROVIDERS = [
     model: 'meta-llama/llama-3.2-90b-vision-instruct:free',
     priority: 2,
     pricing: null, // FREE
-    available: !!getKeyManager('openrouter').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENROUTER')?.length,
     analyze: analyzeWithOpenRouter
   },
   {
@@ -86,7 +86,7 @@ const VISION_PROVIDERS = [
     model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
     priority: 3,
     pricing: null, // FREE
-    available: !!getKeyManager('openrouter').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENROUTER')?.length,
     analyze: analyzeWithOpenRouter
   },
 
@@ -99,7 +99,7 @@ const VISION_PROVIDERS = [
     model: 'claude-3-5-sonnet-20241022',
     priority: 10,
     pricing: 3.00,
-    available: !!getKeyManager('anthropic').keys.length,
+    available: () => !!getKeyManager().keys.get('ANTHROPIC')?.length,
     analyze: analyzeWithClaude
   },
   {
@@ -108,7 +108,7 @@ const VISION_PROVIDERS = [
     model: 'gpt-4o',
     priority: 11,
     pricing: 5.00,
-    available: !!getKeyManager('openai').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENAI')?.length,
     analyze: analyzeWithGPT4Vision
   },
   {
@@ -117,7 +117,7 @@ const VISION_PROVIDERS = [
     model: 'claude-3-opus-20240229',
     priority: 12,
     pricing: 15.00,
-    available: !!getKeyManager('anthropic').keys.length,
+    available: () => !!getKeyManager().keys.get('ANTHROPIC')?.length,
     analyze: analyzeWithClaude
   },
   {
@@ -126,7 +126,7 @@ const VISION_PROVIDERS = [
     model: 'gpt-4-vision-preview',
     priority: 13,
     pricing: 10.00,
-    available: !!getKeyManager('openai').keys.length,
+    available: () => !!getKeyManager().keys.get('OPENAI')?.length,
     analyze: analyzeWithGPT4Vision
   },
 
@@ -139,7 +139,7 @@ const VISION_PROVIDERS = [
     model: 'claude-3-haiku-20240307',
     priority: 20,
     pricing: 0.25,
-    available: !!getKeyManager('anthropic').keys.length,
+    available: () => !!getKeyManager().keys.get('ANTHROPIC')?.length,
     analyze: analyzeWithClaude
   },
   {
@@ -148,7 +148,7 @@ const VISION_PROVIDERS = [
     model: 'gemini-2.5-flash',
     priority: 21,
     pricing: 0.075,
-    available: !!process.env.GOOGLE_API_KEY || !!getKeyManager('google').keys.length,
+    available: () => !!process.env.GOOGLE_API_KEY || !!getKeyManager().keys.get('GOOGLE')?.length,
     analyze: analyzeWithGemini
   },
   {
@@ -157,7 +157,7 @@ const VISION_PROVIDERS = [
     model: 'gemini-2.5-pro',
     priority: 22,
     pricing: 1.25,
-    available: !!process.env.GOOGLE_API_KEY || !!getKeyManager('google').keys.length,
+    available: () => !!process.env.GOOGLE_API_KEY || !!getKeyManager().keys.get('GOOGLE')?.length,
     analyze: analyzeWithGemini
   },
 
@@ -170,7 +170,7 @@ const VISION_PROVIDERS = [
     model: 'glm-4-vision', // FIXED: was glm-4v-flash
     priority: 30,
     pricing: null, // FREE
-    available: !!getKeyManager('zai').keys.length,
+    available: () => !!getKeyManager().keys.get('ZAI')?.length,
     analyze: analyzeWithZAI
   },
 
@@ -183,7 +183,7 @@ const VISION_PROVIDERS = [
     model: 'meta/llama-3.2-11b-vision-instruct',
     priority: 40,
     pricing: null,
-    available: !!getKeyManager('nvidia').keys.length,
+    available: () => !!getKeyManager().keys.get('NVIDIA')?.length,
     analyze: analyzeWithNVIDIA
   },
   {
@@ -192,7 +192,7 @@ const VISION_PROVIDERS = [
     model: 'meta/llama-3.2-90b-vision-instruct',
     priority: 41,
     pricing: null,
-    available: !!getKeyManager('nvidia').keys.length,
+    available: () => !!getKeyManager().keys.get('NVIDIA')?.length,
     analyze: analyzeWithNVIDIA
   },
   {
@@ -201,7 +201,7 @@ const VISION_PROVIDERS = [
     model: 'microsoft/phi-3.5-vision-instruct',
     priority: 42,
     pricing: null,
-    available: !!getKeyManager('nvidia').keys.length,
+    available: () => !!getKeyManager().keys.get('NVIDIA')?.length,
     analyze: analyzeWithNVIDIA
   },
 
@@ -214,7 +214,7 @@ const VISION_PROVIDERS = [
     model: 'pixtral-12b-2409',
     priority: 50,
     pricing: 0.15,
-    available: !!getKeyManager('mistral').keys.length,
+    available: () => !!getKeyManager().keys.get('MISTRAL')?.length,
     analyze: analyzeWithMistral
   },
   {
@@ -223,7 +223,7 @@ const VISION_PROVIDERS = [
     model: 'pixtral-large-latest',
     priority: 51,
     pricing: 2.00,
-    available: !!getKeyManager('mistral').keys.length,
+    available: () => !!getKeyManager().keys.get('MISTRAL')?.length,
     analyze: analyzeWithMistral
   },
 
@@ -236,7 +236,7 @@ const VISION_PROVIDERS = [
     model: 'gemini-1.5-pro',
     priority: 60,
     pricing: 1.25,
-    available: !!process.env.GOOGLE_API_KEY || !!getKeyManager('google').keys.length,
+    available: () => !!process.env.GOOGLE_API_KEY || !!getKeyManager().keys.get('GOOGLE')?.length,
     analyze: analyzeWithGemini
   },
   {
@@ -245,7 +245,7 @@ const VISION_PROVIDERS = [
     model: 'gemini-1.5-flash',
     priority: 61,
     pricing: 0.075,
-    available: !!process.env.GOOGLE_API_KEY || !!getKeyManager('google').keys.length,
+    available: () => !!process.env.GOOGLE_API_KEY || !!getKeyManager().keys.get('GOOGLE')?.length,
     analyze: analyzeWithGemini
   },
 
@@ -258,7 +258,7 @@ const VISION_PROVIDERS = [
     model: 'glm-5',
     priority: 70,
     pricing: 0.5,
-    available: !!getKeyManager('zai').keys.length,
+    available: () => !!getKeyManager().keys.get('ZAI')?.length,
     analyze: analyzeWithZAI
   }
 ];
@@ -428,7 +428,7 @@ async function analyzeWithFallback(imageInput, analysisType, options = {}) {
 
   const errors = [];
   const sortedProviders = VISION_PROVIDERS
-    .filter(p => p.available)
+    .filter(p => p.available())
     .sort((a, b) => a.priority - b.priority);
 
   // Enhanced logging with more details
@@ -955,7 +955,7 @@ const getAvailableModels = async (req, res) => {
   res.json({
     success: true,
     data: {
-      models: VISION_PROVIDERS.filter(p => p.available).map(p => ({
+      models: VISION_PROVIDERS.filter(p => p.available()).map(p => ({
         id: p.model,
         name: p.name,
         provider: p.provider,
@@ -1047,7 +1047,7 @@ const getAvailableProviders = async (req, res) => {
       keyStats: keyStats,
       stats: {
         total: providers.length,
-        available: providers.filter(p => p.available).length,
+        available: providers.filter(p => p.available()).length,
         free: providers.filter(p => !p.pricing).length,
         paid: providers.filter(p => p.pricing).length
       }
