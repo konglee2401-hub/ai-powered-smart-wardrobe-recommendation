@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { promptsAPI, templatesAPI } from '../services/api';
 import '../styles/PromptBuilder.css';
 
+// REVISED: Unified userInputs state object for form sync (Issue 3 fix)
+const DEFAULT_INPUTS = {
+  characterDescription: '',
+  productDescription: '',
+  useCase: 'ecommerce',
+  style: 'realistic'
+};
+
 const PromptBuilder = () => {
-  // State for form inputs
-  const [characterDescription, setCharacterDescription] = useState('');
-  const [productDescription, setProductDescription] = useState('');
-  const [useCase, setUseCase] = useState('ecommerce');
-  const [style, setStyle] = useState('realistic');
+  // REVISED: Single unified state for user inputs (solves sync issue)
+  const [userInputs, setUserInputs] = useState(DEFAULT_INPUTS);
 
   // State for generated prompts
   const [generatedPrompt, setGeneratedPrompt] = useState('');
@@ -17,13 +22,21 @@ const PromptBuilder = () => {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
-  // State for UI
+  // REVISED: State for UI with better error handling (Issue 4 fix)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [errorDetails, setErrorDetails] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
+
+  // REVISED: Controlled input handler with proper state sync (Issue 3 fix)
+  const handleInputChange = useCallback((field, value) => {
+    setUserInputs(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (error) setError('');
+  }, [error]);
 
   // Fetch templates on mount
   useEffect(() => {
@@ -45,21 +58,30 @@ const PromptBuilder = () => {
   // Generate prompt
   const handleGeneratePrompt = async (e) => {
     e.preventDefault();
+    
+    // REVISED: Clear previous errors and validate
     setError('');
+    setErrorDetails(null);
     setSuccessMessage('');
 
-    if (!characterDescription.trim() || !productDescription.trim()) {
-      setError('Please fill in all required fields');
+    // REVISED: Better validation with specific error messages
+    if (!userInputs.characterDescription?.trim()) {
+      setError('Please enter a character description');
+      return;
+    }
+    if (!userInputs.productDescription?.trim()) {
+      setError('Please enter a product description');
       return;
     }
 
     setLoading(true);
     try {
+      // REVISED: Use unified userInputs state
       const response = await promptsAPI.generate(
-        characterDescription,
-        productDescription,
-        useCase,
-        style
+        userInputs.characterDescription,
+        userInputs.productDescription,
+        userInputs.useCase,
+        userInputs.style
       );
 
       if (response.success) {
@@ -70,8 +92,13 @@ const PromptBuilder = () => {
         setError(response.error || 'Failed to generate prompt');
       }
     } catch (error) {
-      setError('Error generating prompt. Please try again.');
-      console.error('Error:', error);
+      // REVISED: Better error handling with user feedback (Issue 4 fix)
+      const errorMessage = error.response?.data?.error || 
+                          error.message || 
+                          'Network error. Please check your connection and try again.';
+      setError(errorMessage);
+      setErrorDetails(process.env.NODE_ENV === 'development' ? error.stack : null);
+      console.error('Error generating prompt:', error);
     } finally {
       setLoading(false);
     }
@@ -93,11 +120,12 @@ const PromptBuilder = () => {
 
     setLoading(true);
     try {
+      // REVISED: Use unified userInputs state
       const response = await templatesAPI.create(
         templateName,
         templateDescription,
-        useCase,
-        style,
+        userInputs.useCase,
+        userInputs.style,
         generatedPrompt,
         generatedNegativePrompt
       );
@@ -112,8 +140,10 @@ const PromptBuilder = () => {
         setError(response.error || 'Failed to save template');
       }
     } catch (error) {
-      setError('Error saving template. Please try again.');
-      console.error('Error:', error);
+      // REVISED: Better error handling
+      const errorMsg = error.response?.data?.error || 'Failed to save template. Please try again.';
+      setError(errorMsg);
+      console.error('Error saving template:', error);
     } finally {
       setLoading(false);
     }
@@ -125,18 +155,24 @@ const PromptBuilder = () => {
       const response = await templatesAPI.getById(templateId);
       if (response.success) {
         const template = response.data;
-        setCharacterDescription('');
-        setProductDescription('');
-        setUseCase(template.useCase);
-        setStyle(template.style);
+        // REVISED: Update unified state (solves sync issue)
+        setUserInputs({
+          characterDescription: '',
+          productDescription: '',
+          useCase: template.useCase,
+          style: template.style
+        });
         setGeneratedPrompt(template.defaultPrompt);
         setGeneratedNegativePrompt(template.defaultNegativePrompt);
         setSelectedTemplate(templateId);
         setSuccessMessage('Template loaded successfully!');
+        setError('');
       }
     } catch (error) {
-      setError('Error loading template');
-      console.error('Error:', error);
+      // REVISED: Better error handling
+      const errorMsg = error.response?.data?.error || 'Failed to load template';
+      setError(errorMsg);
+      console.error('Error loading template:', error);
     }
   };
 
@@ -163,14 +199,13 @@ const PromptBuilder = () => {
 
   // Reset form
   const handleReset = () => {
-    setCharacterDescription('');
-    setProductDescription('');
-    setUseCase('ecommerce');
-    setStyle('realistic');
+    // REVISED: Reset unified state (solves sync issue)
+    setUserInputs(DEFAULT_INPUTS);
     setGeneratedPrompt('');
     setGeneratedNegativePrompt('');
     setSelectedTemplate(null);
     setError('');
+    setErrorDetails(null);
     setSuccessMessage('');
   };
 
@@ -192,8 +227,9 @@ const PromptBuilder = () => {
               <label htmlFor="character">Character Description *</label>
               <textarea
                 id="character"
-                value={characterDescription}
-                onChange={(e) => setCharacterDescription(e.target.value)}
+                // REVISED: Use unified userInputs state (Issue 3 fix)
+                value={userInputs.characterDescription}
+                onChange={(e) => handleInputChange('characterDescription', e.target.value)}
                 placeholder="e.g., A young woman with long blonde hair, wearing makeup, confident expression"
                 rows="3"
               />
@@ -204,8 +240,9 @@ const PromptBuilder = () => {
               <label htmlFor="product">Product Description *</label>
               <textarea
                 id="product"
-                value={productDescription}
-                onChange={(e) => setProductDescription(e.target.value)}
+                // REVISED: Use unified userInputs state (Issue 3 fix)
+                value={userInputs.productDescription}
+                onChange={(e) => handleInputChange('productDescription', e.target.value)}
                 placeholder="e.g., A red summer dress with floral patterns, lightweight fabric"
                 rows="3"
               />
@@ -216,8 +253,9 @@ const PromptBuilder = () => {
               <label htmlFor="useCase">Use Case</label>
               <select
                 id="useCase"
-                value={useCase}
-                onChange={(e) => setUseCase(e.target.value)}
+                // REVISED: Use unified userInputs state (Issue 3 fix)
+                value={userInputs.useCase}
+                onChange={(e) => handleInputChange('useCase', e.target.value)}
               >
                 <option value="ecommerce">E-commerce</option>
                 <option value="social">Social Media</option>
@@ -232,8 +270,9 @@ const PromptBuilder = () => {
               <label htmlFor="style">Style</label>
               <select
                 id="style"
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
+                // REVISED: Use unified userInputs state (Issue 3 fix)
+                value={userInputs.style}
+                onChange={(e) => handleInputChange('style', e.target.value)}
               >
                 <option value="realistic">Realistic</option>
                 <option value="cinematic">Cinematic</option>

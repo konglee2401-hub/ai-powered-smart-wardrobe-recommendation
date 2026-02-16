@@ -102,6 +102,10 @@ export async function getBestAvailableModel() {
 
   // Priority order
   const priorities = [
+    'gemini-3.0-pro',
+    'gemini-3.0-flash',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
     'gemini-2.0-flash-exp',
     'gemini-2.0-flash-thinking-exp',
     'gemini-exp-1206',
@@ -140,6 +144,7 @@ export async function findModelByName(friendlyName) {
 
   // Try partial match
   const searchTerms = {
+    'gemini-3.0-flash': ['gemini-3.0-flash', 'gemini-3.0-latest'],
     'gemini-2.5-flash': ['gemini-2.0-flash-exp', 'gemini-2.0-flash'],
     'gemini-2.5-pro': ['gemini-2.0-flash-thinking-exp', 'gemini-2.0-pro'],
     'gemini-3.0-flash': ['gemini-exp-1206', 'gemini-exp'],

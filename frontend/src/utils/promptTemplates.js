@@ -14,11 +14,11 @@ const customizations = {
   // Use Case 1: Casual Beach (style: casual, setting: beach, colors: bright)
   casualBeach: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'cotton or linen');
-    customized = customized.replace('studio', 'beach with ocean background');
-    customized = customized.replace('soft-diffused lighting', 'natural golden hour lighting');
-    customized = customized.replace('neutral color palette', 'vibrant and warm color palette');
-    customized = customized.replace('elegant', 'relaxed and carefree');
+    customized = customized.replaceAll('silk blend', 'cotton or linen');
+    customized = customized.replaceAll('studio', 'beach with ocean background');
+    customized = customized.replaceAll('soft-diffused lighting', 'natural golden hour lighting');
+    customized = customized.replaceAll('neutral color palette', 'vibrant and warm color palette');
+    customized = customized.replaceAll('elegant', 'relaxed and carefree');
     customized += ', summer vibes, sandy beach, waves in background, natural makeup, beach accessories';
     return customized;
   },
@@ -26,13 +26,13 @@ const customizations = {
   // Use Case 2: Formal Business (style: formal, gender: male, setting: office)
   formalBusiness: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('female', 'male');
-    customized = customized.replace('slim, fair skin tone', 'well-built, professional appearance');
-    customized = customized.replace('silk blend', 'wool or high-quality cotton');
-    customized = customized.replace('studio', 'modern office or boardroom');
-    customized = customized.replace('elegant', 'professional and authoritative');
-    customized = customized.replace('soft-diffused lighting', 'professional studio lighting');
-    customized = customized.replace('neutral color palette', 'corporate neutral palette (navy, gray, white)');
+    customized = customized.replaceAll('female', 'male');
+    customized = customized.replaceAll('slim, fair skin tone', 'well-built, professional appearance');
+    customized = customized.replaceAll('silk blend', 'wool or high-quality cotton');
+    customized = customized.replaceAll('studio', 'modern office or boardroom');
+    customized = customized.replaceAll('elegant', 'professional and authoritative');
+    customized = customized.replaceAll('soft-diffused lighting', 'professional studio lighting');
+    customized = customized.replaceAll('neutral color palette', 'corporate neutral palette (navy, gray, white)');
     customized += ', business suit, tie, professional accessories, sharp focus on face and outfit, corporate photography';
     return customized;
   },
@@ -40,11 +40,11 @@ const customizations = {
   // Use Case 3: Elegant Evening (style: elegant, mood: romantic, colors: red/black, setting: ballroom)
   elegantEvening: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'silk or satin');
-    customized = customized.replace('studio', 'elegant ballroom or upscale venue');
-    customized = customized.replace('soft-diffused lighting', 'dramatic warm lighting with shadows');
-    customized = customized.replace('neutral color palette', 'rich warm color palette (reds, golds, blacks)');
-    customized = customized.replace('elegant', 'glamorous and sophisticated');
+    customized = customized.replaceAll('silk blend', 'silk or satin');
+    customized = customized.replaceAll('studio', 'elegant ballroom or upscale venue');
+    customized = customized.replaceAll('soft-diffused lighting', 'dramatic warm lighting with shadows');
+    customized = customized.replaceAll('neutral color palette', 'rich warm color palette (reds, golds, blacks)');
+    customized = customized.replaceAll('elegant', 'glamorous and sophisticated');
     customized += ', evening gown or tuxedo, luxury accessories, dramatic makeup, champagne glass, upscale ambiance';
     return customized;
   },
@@ -52,11 +52,11 @@ const customizations = {
   // Use Case 4: Casual Streetwear (style: casual, setting: urban, colors: monochrome)
   casualStreetwear: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'cotton, denim, or polyester blend');
-    customized = customized.replace('studio', 'urban street or modern city background');
-    customized = customized.replace('soft-diffused lighting', 'natural daylight with urban shadows');
-    customized = customized.replace('neutral color palette', 'monochrome or contrasting urban palette');
-    customized = customized.replace('elegant', 'trendy and urban');
+    customized = customized.replaceAll('silk blend', 'cotton, denim, or polyester blend');
+    customized = customized.replaceAll('studio', 'urban street or modern city background');
+    customized = customized.replaceAll('soft-diffused lighting', 'natural daylight with urban shadows');
+    customized = customized.replaceAll('neutral color palette', 'monochrome or contrasting urban palette');
+    customized = customized.replaceAll('elegant', 'trendy and urban');
     customized += ', sneakers, casual accessories, street style, graffiti or modern architecture background, candid pose';
     return customized;
   },
@@ -64,11 +64,11 @@ const customizations = {
   // Use Case 5: Sporty Athleisure (style: sporty, setting: gym/outdoor, colors: bright)
   sportyAthleisure: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'technical fabric or athletic wear');
-    customized = customized.replace('studio', 'gym, outdoor park, or athletic facility');
-    customized = customized.replace('soft-diffused lighting', 'bright natural or gym lighting');
-    customized = customized.replace('neutral color palette', 'bright and energetic color palette');
-    customized = customized.replace('elegant', 'athletic and energetic');
+    customized = customized.replaceAll('silk blend', 'technical fabric or athletic wear');
+    customized = customized.replaceAll('studio', 'gym, outdoor park, or athletic facility');
+    customized = customized.replaceAll('soft-diffused lighting', 'bright natural or gym lighting');
+    customized = customized.replaceAll('neutral color palette', 'bright and energetic color palette');
+    customized = customized.replaceAll('elegant', 'athletic and energetic');
     customized += ', sports shoes, fitness accessories, active pose, sweat details, healthy glow, dynamic movement';
     return customized;
   },
@@ -76,11 +76,11 @@ const customizations = {
   // Use Case 6: Vintage/Retro (style: vintage, colors: muted, material: wool)
   vintageRetro: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'wool, tweed, or vintage fabric');
-    customized = customized.replace('studio', 'vintage studio or retro-themed location');
-    customized = customized.replace('soft-diffused lighting', 'warm vintage lighting with film grain effect');
-    customized = customized.replace('neutral color palette', 'muted vintage color palette (sepia, pastels)');
-    customized = customized.replace('elegant', 'vintage and nostalgic');
+    customized = customized.replaceAll('silk blend', 'wool, tweed, or vintage fabric');
+    customized = customized.replaceAll('studio', 'vintage studio or retro-themed location');
+    customized = customized.replaceAll('soft-diffused lighting', 'warm vintage lighting with film grain effect');
+    customized = customized.replaceAll('neutral color palette', 'muted vintage color palette (sepia, pastels)');
+    customized = customized.replaceAll('elegant', 'vintage and nostalgic');
     customized += ', vintage accessories, classic hairstyle, retro makeup, film photography style, 1950s or 1970s aesthetic';
     return customized;
   },
@@ -88,11 +88,11 @@ const customizations = {
   // Use Case 7: Luxury/High Fashion (style: luxury, colors: premium, material: silk)
   luxuryHighFashion: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'pure silk, cashmere, or designer fabric');
-    customized = customized.replace('studio', 'luxury studio or high-end boutique');
-    customized = customized.replace('soft-diffused lighting', 'professional luxury studio lighting');
-    customized = customized.replace('neutral color palette', 'premium color palette with gold or silver accents');
-    customized = customized.replace('elegant', 'luxurious and exclusive');
+    customized = customized.replaceAll('silk blend', 'pure silk, cashmere, or designer fabric');
+    customized = customized.replaceAll('studio', 'luxury studio or high-end boutique');
+    customized = customized.replaceAll('soft-diffused lighting', 'professional luxury studio lighting');
+    customized = customized.replaceAll('neutral color palette', 'premium color palette with gold or silver accents');
+    customized = customized.replaceAll('elegant', 'luxurious and exclusive');
     customized += ', luxury designer pieces, high-end jewelry, flawless makeup, exclusive accessories, editorial fashion magazine quality';
     return customized;
   },
@@ -100,11 +100,11 @@ const customizations = {
   // Use Case 8: Bohemian/Hippie (style: bohemian, setting: nature, colors: earth tones)
   bohemianHippie: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'cotton, linen, or natural fibers');
-    customized = customized.replace('studio', 'natural outdoor setting with nature elements');
-    customized = customized.replace('soft-diffused lighting', 'natural soft golden hour lighting');
-    customized = customized.replace('neutral color palette', 'earth tone and natural color palette');
-    customized = customized.replace('elegant', 'free-spirited and bohemian');
+    customized = customized.replaceAll('silk blend', 'cotton, linen, or natural fibers');
+    customized = customized.replaceAll('studio', 'natural outdoor setting with nature elements');
+    customized = customized.replaceAll('soft-diffused lighting', 'natural soft golden hour lighting');
+    customized = customized.replaceAll('neutral color palette', 'earth tone and natural color palette');
+    customized = customized.replaceAll('elegant', 'free-spirited and bohemian');
     customized += ', bohemian accessories, flower crown, natural makeup, barefoot or sandals, forest or garden background, peaceful mood';
     return customized;
   },
@@ -112,11 +112,11 @@ const customizations = {
   // Use Case 9: Minimalist/Modern (style: minimalist, colors: monochrome, setting: studio)
   minimalistModern: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'clean minimalist fabric');
-    customized = customized.replace('studio', 'clean white or gray studio');
-    customized = customized.replace('soft-diffused lighting', 'clean minimalist lighting');
-    customized = customized.replace('neutral color palette', 'pure monochrome palette (black, white, gray)');
-    customized = customized.replace('elegant', 'minimalist and modern');
+    customized = customized.replaceAll('silk blend', 'clean minimalist fabric');
+    customized = customized.replaceAll('studio', 'clean white or gray studio');
+    customized = customized.replaceAll('soft-diffused lighting', 'clean minimalist lighting');
+    customized = customized.replaceAll('neutral color palette', 'pure monochrome palette (black, white, gray)');
+    customized = customized.replaceAll('elegant', 'minimalist and modern');
     customized += ', minimal accessories, clean lines, geometric shapes, white background, negative space, contemporary art photography';
     return customized;
   },
@@ -124,31 +124,41 @@ const customizations = {
   // Use Case 10: Edgy/Alternative (style: edgy, material: leather, colors: dark)
   edgyAlternative: (template, inputs) => {
     let customized = template;
-    customized = customized.replace('silk blend', 'leather or alternative materials');
-    customized = customized.replace('studio', 'dark moody studio or urban setting');
-    customized = customized.replace('soft-diffused lighting', 'dramatic dark lighting with strong shadows');
-    customized = customized.replace('neutral color palette', 'dark and moody color palette (blacks, deep purples, silvers)');
-    customized = customized.replace('elegant', 'edgy and alternative');
+    customized = customized.replaceAll('silk blend', 'leather or alternative materials');
+    customized = customized.replaceAll('studio', 'dark moody studio or urban setting');
+    customized = customized.replaceAll('soft-diffused lighting', 'dramatic dark lighting with strong shadows');
+    customized = customized.replaceAll('neutral color palette', 'dark and moody color palette (blacks, deep purples, silvers)');
+    customized = customized.replaceAll('elegant', 'edgy and alternative');
     customized += ', leather jacket, metal accessories, bold makeup, alternative style, grunge aesthetic, rebellious mood';
     return customized;
   }
 };
 
-// Function to detect use case from inputs
+// Function to detect use case from inputs with priority-based logic
 const detectUseCase = (inputs) => {
   const { style, setting, colors, material, mood, gender, age } = inputs;
 
-  // Logic to detect: Check combinations of inputs to identify use case
-  if (style === 'casual' && setting === 'beach') return 'casualBeach';
+  // Priority 1: Specific combinations (most specific)
   if (style === 'formal' && gender === 'male' && setting === 'office') return 'formalBusiness';
-  if (style === 'elegant' && mood === 'romantic' && colors?.includes('red')) return 'elegantEvening';
+  if (style === 'casual' && setting === 'beach') return 'casualBeach';
   if (style === 'casual' && setting === 'urban') return 'casualStreetwear';
+  if (style === 'elegant' && mood === 'romantic' && colors?.includes('red')) return 'elegantEvening';
   if (style === 'sporty' && setting === 'gym') return 'sportyAthleisure';
+  
+  // Priority 2: Style-based (medium specificity)
   if (style === 'vintage') return 'vintageRetro';
   if (style === 'luxury' || style === 'premium') return 'luxuryHighFashion';
   if (style === 'bohemian' && setting === 'nature') return 'bohemianHippie';
   if (style === 'minimalist') return 'minimalistModern';
+  
+  // Priority 3: Material-based (less specific)
   if (style === 'edgy' && material === 'leather') return 'edgyAlternative';
+  
+  // Priority 4: Fallback to style-based detection
+  if (style === 'casual') return 'casualStreetwear';
+  if (style === 'elegant') return 'elegantEvening';
+  if (style === 'formal') return 'formalBusiness';
+  if (style === 'edgy') return 'edgyAlternative';
 
   // Default: return null (use base template)
   return null;
@@ -177,7 +187,7 @@ export const generateDynamicPrompt = (inputs) => {
 
   // Step 5: Material-based adjustments (global)
   if (inputs.material === 'leather') {
-    prompt = prompt.replace('elegant', 'edgy and bold');
+    prompt = prompt.replaceAll('elegant', 'edgy and bold');
   }
   if (inputs.material === 'wool') {
     prompt += ', warm and cozy feeling';
