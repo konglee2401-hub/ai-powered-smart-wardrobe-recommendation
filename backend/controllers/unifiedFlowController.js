@@ -195,6 +195,115 @@ export async function analyzeUnifiedEndpoint(req, res) {
 }
 
 // ============================================================
+// GENERATE UNIFIED ENDPOINT (for image generation only)
+// ============================================================
+
+export async function generateUnifiedEndpoint(req, res) {
+  const startTime = Date.now();
+
+  try {
+    console.log('\n🎬 GENERATE UNIFIED ENDPOINT: Starting image generation...');
+
+    // Extract request data
+    const {
+      prompt,
+      negativePrompt = '',
+      options = {},
+      imageCount = 2,
+      imageSize = '1024x1024',
+      preferredProvider = null,
+      maxBudget = null
+    } = req.body;
+
+    // Validate prompt
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Prompt is required'
+      });
+    }
+
+    console.log(`📝 Prompt: ${prompt.substring(0, 100)}...`);
+    console.log(`🎨 Negative: ${negativePrompt || 'none'}`);
+    console.log(`🖼️  Image count: ${imageCount}`);
+
+    // ============================================================
+    // IMAGE GENERATION
+    // ============================================================
+
+    console.log('\n🎨 Generating images...');
+
+    const generationResult = await generateWithSmartFallback(
+      prompt,
+      negativePrompt,
+      {
+        count: imageCount,
+        imageSize,
+        preferredProvider,
+        maxBudget,
+        onProgress: (progress) => {
+          console.log(`   📊 Generation: ${progress.current}/${progress.total} (${progress.status})`);
+        }
+      }
+    );
+
+    const generatedImages = generationResult.results || [];
+    const generationMetadata = {
+      total: generationResult.summary?.total || 0,
+      successful: generationResult.summary?.successful || 0,
+      failed: generationResult.summary?.failed || 0,
+      providers: generationResult.summary?.providers || [],
+      errors: generationResult.errors || []
+    };
+
+    console.log(`   ✅ Generated ${generatedImages.length}/${imageCount} images`);
+
+    // ============================================================
+    // RESPONSE
+    // ============================================================
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    const response = {
+      success: true,
+      data: {
+        generatedImages: generatedImages.map(img => ({
+          url: img.url,
+          provider: img.provider,
+          model: img.model,
+          timestamp: img.timestamp
+        })),
+        metadata: {
+          duration: `${duration}s`,
+          imageCount: generatedImages.length,
+          promptLength: prompt.length,
+          ...generationMetadata
+        }
+      }
+    };
+
+    console.log(`\n✅ IMAGE GENERATION COMPLETE in ${duration}s`);
+    console.log(`   📊 Images: ${generatedImages.length}/${imageCount}`);
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('💥 GENERATE UNIFIED ERROR:', error);
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      metadata: {
+        duration: `${duration}s`,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+}
+
+// ============================================================
 // UTILITY FUNCTIONS
 // ============================================================
 

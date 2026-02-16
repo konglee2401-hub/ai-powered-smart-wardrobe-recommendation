@@ -257,6 +257,92 @@ export const unifiedFlowAPI = {
    * Test key rotation
    */
   testKeyRotation: () => api.get(API_ENDPOINTS.KEY_ROTATION_TEST),
+
+  /**
+   * Generate video with AI
+   * @param {Object} params - Generation parameters
+   * @param {string} params.prompt - Video prompt
+   * @param {string} params.provider - Video provider
+   * @param {Array} params.referenceImages - Reference images
+   * @param {Object} params.options - Video options
+   */
+  generateVideo: async (params) => {
+    const formData = new FormData();
+    
+    if (params.referenceImages && params.referenceImages.length > 0 && params.referenceImages[0].preview) {
+      try {
+        const response = await fetch(params.referenceImages[0].preview);
+        const blob = await response.blob();
+        formData.append('character_image', blob, 'character.jpg');
+      } catch (e) {
+        console.warn('Could not convert image:', e);
+      }
+    }
+    
+    formData.append('prompt', params.prompt);
+    if (params.provider) {
+      formData.append('model', params.provider);
+    }
+    if (params.options) {
+      formData.append('style_preferences', JSON.stringify(params.options));
+    }
+    
+    return api.postFormData(API_ENDPOINTS.VIDEO_GENERATE, formData);
+  },
+};
+
+// ============================================
+// BROWSER AUTOMATION APIs
+// ============================================
+
+export const browserAutomationAPI = {
+  /**
+   * Analyze images using browser automation
+   * @param {File} characterImage - Character image file
+   * @param {File} clothingImage - Clothing image file
+   * @param {string} provider - Provider to use (grok, zai-chat)
+   */
+  analyze: async (characterImage, clothingImage, provider = 'grok') => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('clothingImage', clothingImage);
+    formData.append('provider', provider);
+    return api.postFormData(API_ENDPOINTS.BROWSER_ANALYZE, formData);
+  },
+  
+  /**
+   * Generate image using browser automation
+   * @param {string} prompt - Generation prompt
+   * @param {string} provider - Provider to use (grok, zai-image)
+   */
+  generateImage: async (prompt, provider = 'grok') => {
+    return api.post(API_ENDPOINTS.BROWSER_GENERATE_IMAGE, { prompt, provider });
+  },
+  
+  /**
+   * Generate video using browser automation
+   * @param {string} prompt - Generation prompt
+   * @param {string} provider - Provider to use (grok)
+   */
+  generateVideo: async (prompt, provider = 'grok') => {
+    return api.post(API_ENDPOINTS.BROWSER_GENERATE_VIDEO, { prompt, provider });
+  },
+  
+  /**
+   * Full workflow: Analyze + Generate image + optional video
+   * @param {File} characterImage - Character image file
+   * @param {File} clothingImage - Clothing image file
+   * @param {string} provider - Provider to use
+   * @param {boolean} generateVideo - Whether to generate video
+   */
+  fullWorkflow: async (characterImage, clothingImage, provider = 'grok', generateVideo = false) => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('clothingImage', clothingImage);
+    formData.append('provider', provider);
+    formData.append('generateVideo', generateVideo);
+    return api.postFormData(API_ENDPOINTS.BROWSER_FULL_WORKFLOW, formData);
+  },
 };
 
 export default api;

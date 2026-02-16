@@ -24,6 +24,7 @@ import historyRoutes from './routes/history.js';
 import videoGenRoutes from './routes/video.js';
 import multiFlowRoutes from './routes/multiFlowRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import browserAutomationRoutes from './routes/browserAutomationRoutes.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
 import * as modelSyncService from './services/modelSyncService.js';
@@ -65,6 +66,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/video', videoGenRoutes);
 app.use('/api/multi-flow', multiFlowRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/browser', browserAutomationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Smart Wardrobe API' });

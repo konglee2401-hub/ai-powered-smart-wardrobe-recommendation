@@ -107,25 +107,62 @@ export default function AnalysisDisplay({
                 {characterAnalysis.faceShape && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Face Shape:</span>
-                    <span className="font-medium">{characterAnalysis.faceShape}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.faceShape === 'object' 
+                        ? JSON.stringify(characterAnalysis.faceShape) 
+                        : characterAnalysis.faceShape}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.expression && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Expression:</span>
-                    <span className="font-medium">{characterAnalysis.expression}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.expression === 'object' 
+                        ? JSON.stringify(characterAnalysis.expression) 
+                        : characterAnalysis.expression}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.skinTone && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Skin Tone:</span>
-                    <span className="font-medium">{characterAnalysis.skinTone}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.skinTone === 'object' 
+                        ? JSON.stringify(characterAnalysis.skinTone) 
+                        : characterAnalysis.skinTone}
+                    </span>
+                  </div>
+                )}
+                {/* Add skin field from backend */}
+                {characterAnalysis.skin && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Skin:</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.skin === 'object' 
+                        ? JSON.stringify(characterAnalysis.skin) 
+                        : characterAnalysis.skin}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.makeup && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Makeup:</span>
-                    <span className="font-medium">{characterAnalysis.makeup}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.makeup === 'object' 
+                        ? JSON.stringify(characterAnalysis.makeup) 
+                        : characterAnalysis.makeup}
+                    </span>
+                  </div>
+                )}
+                {characterAnalysis.ethnicity && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Ethnicity:</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.ethnicity === 'object' 
+                        ? JSON.stringify(characterAnalysis.ethnicity) 
+                        : characterAnalysis.ethnicity}
+                    </span>
                   </div>
                 )}
               </div>
@@ -136,28 +173,37 @@ export default function AnalysisDisplay({
               <div>
                 <h4 className="text-sm font-medium text-gray-500 mb-2">Hair</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  {characterAnalysis.hair.style && (
+                  {typeof characterAnalysis.hair === 'object' ? (
+                    <>
+                      {characterAnalysis.hair.style && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Style:</span>
+                          <span className="font-medium">{characterAnalysis.hair.style}</span>
+                        </div>
+                      )}
+                      {characterAnalysis.hair.color && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Color:</span>
+                          <span className="font-medium">{characterAnalysis.hair.color}</span>
+                        </div>
+                      )}
+                      {characterAnalysis.hair.length && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Length:</span>
+                          <span className="font-medium">{characterAnalysis.hair.length}</span>
+                        </div>
+                      )}
+                      {characterAnalysis.hair.texture && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Texture:</span>
+                          <span className="font-medium">{characterAnalysis.hair.texture}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
                     <div className="flex justify-between">
                       <span className="text-gray-600">Style:</span>
-                      <span className="font-medium">{characterAnalysis.hair.style}</span>
-                    </div>
-                  )}
-                  {characterAnalysis.hair.color && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Color:</span>
-                      <span className="font-medium">{characterAnalysis.hair.color}</span>
-                    </div>
-                  )}
-                  {characterAnalysis.hair.length && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Length:</span>
-                      <span className="font-medium">{characterAnalysis.hair.length}</span>
-                    </div>
-                  )}
-                  {characterAnalysis.hair.texture && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Texture:</span>
-                      <span className="font-medium">{characterAnalysis.hair.texture}</span>
+                      <span className="font-medium">{characterAnalysis.hair}</span>
                     </div>
                   )}
                 </div>
@@ -171,25 +217,51 @@ export default function AnalysisDisplay({
                 {characterAnalysis.bodyType && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Body Type:</span>
-                    <span className="font-medium">{characterAnalysis.bodyType}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.bodyType === 'object' 
+                        ? JSON.stringify(characterAnalysis.bodyType) 
+                        : characterAnalysis.bodyType}
+                    </span>
+                  </div>
+                )}
+                {characterAnalysis.body && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Body:</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.body === 'object' 
+                        ? JSON.stringify(characterAnalysis.body) 
+                        : characterAnalysis.body}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.pose && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Pose:</span>
-                    <span className="font-medium">{characterAnalysis.pose}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.pose === 'object' 
+                        ? JSON.stringify(characterAnalysis.pose) 
+                        : characterAnalysis.pose}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.age && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Age:</span>
-                    <span className="font-medium">{characterAnalysis.age}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.age === 'object' 
+                        ? JSON.stringify(characterAnalysis.age) 
+                        : characterAnalysis.age}
+                    </span>
                   </div>
                 )}
                 {characterAnalysis.gender && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Gender:</span>
-                    <span className="font-medium">{characterAnalysis.gender}</span>
+                    <span className="font-medium">
+                      {typeof characterAnalysis.gender === 'object' 
+                        ? JSON.stringify(characterAnalysis.gender) 
+                        : characterAnalysis.gender}
+                    </span>
                   </div>
                 )}
               </div>
@@ -201,7 +273,9 @@ export default function AnalysisDisplay({
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Overall Vibe:</span>
                   <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                    {characterAnalysis.overallVibe}
+                    {typeof characterAnalysis.overallVibe === 'object' 
+                      ? JSON.stringify(characterAnalysis.overallVibe) 
+                      : characterAnalysis.overallVibe}
                   </span>
                 </div>
               </div>
@@ -226,25 +300,61 @@ export default function AnalysisDisplay({
                 {productAnalysis.type && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Type:</span>
-                    <span className="font-medium">{productAnalysis.type}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.type === 'object' 
+                        ? JSON.stringify(productAnalysis.type) 
+                        : productAnalysis.type}
+                    </span>
                   </div>
                 )}
                 {productAnalysis.style && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Style:</span>
-                    <span className="font-medium">{productAnalysis.style}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.style === 'object' 
+                        ? JSON.stringify(productAnalysis.style) 
+                        : productAnalysis.style}
+                    </span>
                   </div>
                 )}
                 {productAnalysis.material && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Material:</span>
-                    <span className="font-medium">{productAnalysis.material}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.material === 'object' 
+                        ? JSON.stringify(productAnalysis.material) 
+                        : productAnalysis.material}
+                    </span>
                   </div>
                 )}
                 {productAnalysis.fit && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Fit:</span>
-                    <span className="font-medium">{productAnalysis.fit}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.fit === 'object' 
+                        ? JSON.stringify(productAnalysis.fit) 
+                        : productAnalysis.fit}
+                    </span>
+                  </div>
+                )}
+                {productAnalysis.brand && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Brand:</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.brand === 'object' 
+                        ? JSON.stringify(productAnalysis.brand) 
+                        : productAnalysis.brand}
+                    </span>
+                  </div>
+                )}
+                {productAnalysis.occasion && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Occasion:</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.occasion === 'object' 
+                        ? JSON.stringify(productAnalysis.occasion) 
+                        : productAnalysis.occasion}
+                    </span>
                   </div>
                 )}
               </div>
@@ -305,13 +415,21 @@ export default function AnalysisDisplay({
                 {productAnalysis.targetDemographic && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Target:</span>
-                    <span className="font-medium">{productAnalysis.targetDemographic}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.targetDemographic === 'object' 
+                        ? JSON.stringify(productAnalysis.targetDemographic) 
+                        : productAnalysis.targetDemographic}
+                    </span>
                   </div>
                 )}
                 {productAnalysis.season && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Season:</span>
-                    <span className="font-medium">{productAnalysis.season}</span>
+                    <span className="font-medium">
+                      {typeof productAnalysis.season === 'object' 
+                        ? JSON.stringify(productAnalysis.season) 
+                        : productAnalysis.season}
+                    </span>
                   </div>
                 )}
               </div>
@@ -447,7 +565,9 @@ export default function AnalysisDisplay({
                   </h4>
                   <div className="flex items-center gap-2">
                     <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                      {rec.primary}
+                      {typeof rec.primary === 'object' 
+                        ? JSON.stringify(rec.primary) 
+                        : rec.primary}
                     </span>
                     {rec.alternatives && rec.alternatives.length > 0 && (
                       <span className="text-xs text-gray-400">
@@ -457,7 +577,9 @@ export default function AnalysisDisplay({
                   </div>
                   {rec.reason && (
                     <p className="text-xs text-gray-500 mt-2">
-                      {rec.reason}
+                      {typeof rec.reason === 'object' 
+                        ? JSON.stringify(rec.reason) 
+                        : rec.reason}
                     </p>
                   )}
                 </div>
@@ -473,7 +595,11 @@ export default function AnalysisDisplay({
           {pose && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-3">📸 Pose Direction</h3>
-              <p className="text-gray-600">{pose.description || pose}</p>
+              <p className="text-gray-600">
+                {pose && typeof pose === 'object' 
+                  ? pose.description || JSON.stringify(pose) 
+                  : pose}
+              </p>
               {pose.confidence && (
                 <div className="mt-3 flex items-center gap-2">
                   <span className="text-sm text-gray-500">Confidence:</span>
@@ -492,7 +618,11 @@ export default function AnalysisDisplay({
           {stylingNotes && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-3">✨ Styling Notes</h3>
-              <p className="text-gray-600">{stylingNotes}</p>
+              <p className="text-gray-600">
+                {typeof stylingNotes === 'object' 
+                  ? JSON.stringify(stylingNotes) 
+                  : stylingNotes}
+              </p>
             </div>
           )}
         </div>

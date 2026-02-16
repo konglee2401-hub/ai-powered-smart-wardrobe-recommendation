@@ -193,11 +193,12 @@ promptOptionSchema.statics.getWithStats = function(category = null) {
 };
 
 /**
- * Bulk update usage counts
+ * Bulk update usage counts by option value (string)
+ * @param {string[]} optionValues - Array of option values like ['studio', 'soft-diffused']
  */
-promptOptionSchema.statics.bulkIncrementUsage = function(optionIds) {
+promptOptionSchema.statics.bulkIncrementUsage = function(optionValues) {
   return this.updateMany(
-    { _id: { $in: optionIds } },
+    { value: { $in: optionValues } },
     [
       {
         $set: {

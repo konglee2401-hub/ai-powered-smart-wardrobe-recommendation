@@ -67,9 +67,22 @@ export const API_ENDPOINTS = {
   KEY_ROTATION_TEST: `${API_BASE_URL}/ai/test-key-rotation`,
   
   // ============================================
+  // VIDEO GENERATION
+  // ============================================
+  VIDEO_GENERATE: `${API_BASE_URL}/videos/generate`,
+  
+  // ============================================
   // N8N INTEGRATION (existing)
   // ============================================
   N8N_WEBHOOK: import.meta.env.VITE_N8N_WEBHOOK_URL || '',
+  
+  // ============================================
+  // BROWSER AUTOMATION
+  // ============================================
+  BROWSER_ANALYZE: `${API_BASE_URL}/browser/analyze`,
+  BROWSER_GENERATE_IMAGE: `${API_BASE_URL}/browser/generate-image`,
+  BROWSER_GENERATE_VIDEO: `${API_BASE_URL}/browser/generate-video`,
+  BROWSER_FULL_WORKFLOW: `${API_BASE_URL}/browser/full-workflow`,
 };
 
 // API Configuration

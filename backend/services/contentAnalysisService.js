@@ -3,11 +3,271 @@ import User from '../models/User.js';
 import { OpenAI } from 'openai';
 import axios from 'axios';
 
+// Analysis providers configuration
+const ANALYSIS_PROVIDERS = [
+  { name: 'openai', priority: 1, requiresKey: true, free: false },
+  { name: 'huggingface', priority: 2, requiresKey: true, free: true }
+];
+
 class ContentAnalysisService {
   constructor() {
     this.openai = (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) 
       ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
       : null;
+    
+    this.huggingfaceApiKey = process.env.HUGGINGFACE_API_KEY || null;
+  }
+
+  /**
+   * Main analysis function with intelligent provider fallback
+   */
+  async analyzeGeneration(generationId) {
+    const generation = await GenerationResult.findOne({ _id: generationId });
+    if (!generation) throw new Error('Generation not found');
+
+    // Try providers in order of priority
+    let analysis = null;
+    let usedProvider = null;
+
+    for (const provider of ANALYSIS_PROVIDERS) {
+      try {
+        if (provider.name === 'openai' && this.openai) {
+          analysis = await this._analyzeWithOpenAI(generation);
+          usedProvider = 'openai';
+          break;
+        } else if (provider.name === 'huggingface' && this.huggingfaceApiKey) {
+          analysis = await this._analyzeWithHuggingFace(generation);
+          usedProvider = 'huggingface';
+          break;
+        }
+      } catch (error) {
+        console.warn(`Analysis provider ${provider.name} failed:`, error.message);
+        continue;
+      }
+    }
+
+    // Fallback to basic analysis if all providers failed
+    if (!analysis) {
+      analysis = await this._basicFallbackAnalysis(generation);
+      usedProvider = 'fallback';
+    }
+
+    return {
+      ...analysis,
+      generationId,
+      provider: usedProvider,
+      createdAt: new Date()
+    };
+  }
+
+  /**
+   * Analyze with OpenAI (primary provider)
+   */
+  async _analyzeWithOpenAI(generation) {
+    const analysis = {
+      basic: await this.basicAnalysis(generation),
+      content: await this.contentAnalysis(generation),
+      quality: await this.qualityAnalysis(generation),
+      suggestions: await this.generateSuggestions(generation)
+    };
+    return analysis;
+  }
+
+  /**
+   * Analyze with HuggingFace (free fallback provider)
+   */
+  async _analyzeWithHuggingFace(generation) {
+    console.log('🔍 Using HuggingFace for analysis...');
+    
+    try {
+      // Get image for analysis
+      const imageUrl = generation.imageUrl || generation.url;
+      let imageBase64 = null;
+      
+      if (imageUrl) {
+        try {
+          const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+          imageBase64 = Buffer.from(imageResponse.data).toString('base64');
+        } catch (e) {
+          console.warn('Could not fetch image for HF analysis:', e.message);
+        }
+      }
+
+      // Use HF inference API for image analysis
+      const hfResults = {};
+      
+      // Image captioning
+      if (imageBase64) {
+        try {
+          const captionResponse = await axios.post(
+            'https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base',
+            { inputs: imageBase64 },
+            {
+              headers: { 'Authorization': `Bearer ${this.huggingfaceApiKey}` },
+              timeout: 30000
+            }
+          );
+          hfResults.caption = Array.isArray(captionResponse.data) 
+            ? captionResponse.data[0]?.generated_text 
+            : captionResponse.data?.generated_text;
+        } catch (e) {
+          console.warn('HF caption failed:', e.message);
+        }
+
+        // Object detection
+        try {
+          const objResponse = await axios.post(
+            'https://api-inference.huggingface.co/models/facebook/detr-resnet-50-panoptic',
+            { inputs: imageBase64 },
+            {
+              headers: { 'Authorization': `Bearer ${this.huggingfaceApiKey}` },
+              timeout: 30000
+            }
+          );
+          hfResults.objects = this._parseDetrResults(objResponse.data);
+        } catch (e) {
+          console.warn('HF object detection failed:', e.message);
+        }
+
+        // Image classification
+        try {
+          const classResponse = await axios.post(
+            'https://api-inference.huggingface.co/models/google/vit-base-patch16-224',
+            { inputs: imageBase64 },
+            {
+              headers: { 'Authorization': `Bearer ${this.huggingfaceApiKey}` },
+              timeout: 30000
+            }
+          );
+          hfResults.classification = this._parseClassificationResults(classResponse.data);
+        } catch (e) {
+          console.warn('HF classification failed:', e.message);
+        }
+      }
+
+      // Generate quality assessment based on HF results
+      const qualityScore = this._calculateQualityFromHF(hfResults);
+
+      return {
+        basic: await this.basicAnalysis(generation),
+        visual: {
+          caption: hfResults.caption || 'Unable to generate caption',
+          detectedObjects: hfResults.objects || [],
+          classifications: hfResults.classification || [],
+          provider: 'huggingface'
+        },
+        content: await this.contentAnalysis(generation),
+        quality: {
+          overallScore: qualityScore,
+          criteria: {
+            technicalQuality: qualityScore,
+            aestheticAppeal: qualityScore,
+            promptAdherence: qualityScore,
+            practicalUtility: qualityScore
+          },
+          feedback: hfResults.caption ? `AI Caption: ${hfResults.caption}` : 'Analysis based on HuggingFace models',
+          grade: this.scoreToGrade(qualityScore)
+        },
+        suggestions: [
+          {
+            type: 'hf',
+            title: 'HuggingFace Analysis',
+            description: 'Analysis provided by free HuggingFace inference API',
+            impact: 'Zero cost analysis'
+          },
+          {
+            type: 'upgrade',
+            title: 'Upgrade to OpenAI',
+            description: 'For more detailed analysis, configure OpenAI API key',
+            impact: 'Get GPT-4 powered insights'
+          }
+        ],
+        provider: 'huggingface'
+      };
+    } catch (error) {
+      console.error('HuggingFace analysis error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse DETR object detection results
+   */
+  _parseDetrResults(data) {
+    if (!data || !Array.isArray(data)) return [];
+    
+    return data
+      .filter(item => item.score > 0.5)
+      .slice(0, 10)
+      .map(item => ({
+        label: item.label,
+        confidence: Math.round(item.score * 100) / 100
+      }));
+  }
+
+  /**
+   * Parse classification results
+   */
+  _parseClassificationResults(data) {
+    if (!data || !Array.isArray(data) || !data[0]) return [];
+    
+    return data[0]
+      .slice(0, 5)
+      .map(item => ({
+        label: item.label,
+        confidence: Math.round(item.score * 100) / 100
+      }));
+  }
+
+  /**
+   * Calculate quality score from HuggingFace results
+   */
+  _calculateQualityFromHF(hfResults) {
+    let score = 7; // Base score
+    
+    // Higher confidence in detected objects suggests better image quality
+    if (hfResults.objects && hfResults.objects.length > 0) {
+      const avgConfidence = hfResults.objects.reduce((sum, obj) => sum + obj.confidence, 0) / hfResults.objects.length;
+      if (avgConfidence > 0.8) score += 1;
+      else if (avgConfidence > 0.6) score += 0.5;
+    }
+    
+    // Having classification results is a good sign
+    if (hfResults.classification && hfResults.classification.length > 0) {
+      score += 0.5;
+    }
+    
+    return Math.min(10, Math.max(1, score));
+  }
+
+  /**
+   * Basic fallback analysis when all providers fail
+   */
+  async _basicFallbackAnalysis(generation) {
+    return {
+      basic: await this.basicAnalysis(generation),
+      content: await this.contentAnalysis(generation),
+      quality: {
+        overallScore: generation.success ? 6 : 3,
+        criteria: {
+          technicalQuality: generation.success ? 6 : 3,
+          aestheticAppeal: generation.success ? 6 : 3,
+          promptAdherence: generation.success ? 6 : 3,
+          practicalUtility: generation.success ? 6 : 3
+        },
+        feedback: 'Basic analysis - providers unavailable',
+        grade: generation.success ? 'C' : 'F'
+      },
+      suggestions: [
+        {
+          type: 'config',
+          title: 'Configure API Keys',
+          description: 'Add OpenAI or HuggingFace API keys for detailed analysis',
+          impact: 'Enable AI-powered insights'
+        }
+      ],
+      provider: 'fallback'
+    };
   }
 
   async analyzeGeneration(generationId) {

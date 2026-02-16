@@ -1,16 +1,17 @@
 /**
  * Virtual Try-On Page - Phase 1 Unified Flow
  * 6-step flow: Upload → Analysis → Customize → Prompt → Generate → Results
+ * Supports both Image and Video generation
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Upload, Sparkles, Sliders, FileText, Rocket, Image,
   ChevronLeft, ChevronRight, Check, AlertCircle, Loader2,
-  Download, Save, RefreshCw, X, CheckCircle
+  Download, Save, RefreshCw, X, CheckCircle, Video
 } from 'lucide-react';
 
-import { unifiedFlowAPI } from '../services/api';
+import { unifiedFlowAPI, browserAutomationAPI } from '../services/api';
 
 // Import components
 import UseCaseSelector from '../components/UseCaseSelector';
@@ -30,7 +31,24 @@ const STEPS = [
   { id: 6, name: 'Results', icon: Image },
 ];
 
+// Tab configuration for Image vs Video
+const TABS = [
+  { id: 'image', label: '🖼️ Image Generation', icon: Image },
+  { id: 'video', label: '🎬 Video Generation', icon: Video }
+];
+
+// Mode configuration for input methods
+const MODES = [
+  { id: 'upload', label: '📤 Upload', icon: Upload },
+  { id: 'browser', label: '🌐 Browser AI', icon: Sparkles },
+  { id: 'prompt', label: '✏️ Prompt Only', icon: FileText }
+];
+
 export default function VirtualTryOnPage() {
+  // Tab management - Image vs Video
+  const [activeTab, setActiveTab] = useState('image');
+  // Mode management - Upload vs Browser vs Prompt
+  const [activeMode, setActiveMode] = useState('upload');
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -56,6 +74,19 @@ export default function VirtualTryOnPage() {
 
   const [providerStatus, setProviderStatus] = useState(null);
 
+  // Video-specific states
+  const [videoOptions, setVideoOptions] = useState({
+    model: 'auto',
+    duration: 5,
+    resolution: '720p',
+    motionStyle: 'smooth'
+  });
+  const [generatedVideo, setGeneratedVideo] = useState(null);
+
+  // Browser automation states
+  const [browserProvider, setBrowserProvider] = useState('grok');
+  const [browserPrompt, setBrowserPrompt] = useState('');
+
   // Load provider status on mount
   useEffect(() => {
     loadProviderStatus();
@@ -74,7 +105,19 @@ export default function VirtualTryOnPage() {
   const canProceedToStep = (step) => {
     switch (step) {
       case 2:
-        return characterImage && productImage && useCase && productFocus;
+        // Upload mode: need both images
+        if (activeMode === 'upload') {
+          return characterImage && productImage && useCase && productFocus;
+        }
+        // Browser mode: need prompt
+        if (activeMode === 'browser') {
+          return browserPrompt.trim().length > 0;
+        }
+        // Prompt mode: need prompt
+        if (activeMode === 'prompt') {
+          return browserPrompt.trim().length > 0;
+        }
+        return false;
       case 3:
         return analysis && !isAnalyzing;
       case 4:
@@ -82,7 +125,7 @@ export default function VirtualTryOnPage() {
       case 5:
         return generatedPrompt && promptBuilt;
       case 6:
-        return generatedImages.length > 0;
+        return generatedImages.length > 0 || generatedVideo;
       default:
         return true;
     }
@@ -159,25 +202,78 @@ export default function VirtualTryOnPage() {
     }
   };
 
-  // Step 4 -> Step 5: Start generation
+  // Step 4 -> Step 5: Start generation (Image or Video)
   const handleStartGeneration = async () => {
-    if (!generatedPrompt) return;
+    if (!generatedPrompt && activeTab === 'image') return;
 
     setIsGenerating(true);
     setGenerationError(null);
 
     try {
-      const response = await unifiedFlowAPI.generateImages({
-        prompt: generatedPrompt.positive,
-        negativePrompt: generatedPrompt.negative,
-        options: {
-          imageCount: selectedOptions.imageCount || 2,
-          aspectRatio: selectedOptions.aspectRatio || '1:1',
-        },
-      });
+      if (activeMode === 'browser' || activeMode === 'prompt') {
+        // Browser/Prompt-only mode: Use browser automation
+        if (activeTab === 'image') {
+          const response = await browserAutomationAPI.generateImage(
+            browserPrompt,
+            browserProvider
+          );
+          
+          if (response.success) {
+            setGeneratedImages([{ url: response.imageUrl, provider: browserProvider }]);
+            setCurrentStep(5);
+          } else {
+            throw new Error(response.error || 'Generation failed');
+          }
+        } else {
+          // Video generation via browser
+          const response = await browserAutomationAPI.generateVideo(
+            browserPrompt,
+            browserProvider
+          );
+          
+          if (response.success) {
+            setGeneratedVideo({ url: response.videoUrl });
+            setCurrentStep(5);
+          } else {
+            throw new Error(response.error || 'Generation failed');
+          }
+        }
+        return;
+      }
 
-      setGeneratedImages(response.data.images || []);
-      setCurrentStep(5);
+      // Standard upload mode: Use existing generation logic
+      if (activeTab === 'image') {
+        // Image generation
+        const response = await unifiedFlowAPI.generateImages({
+          prompt: generatedPrompt.positive,
+          negativePrompt: generatedPrompt.negative,
+          options: {
+            imageCount: selectedOptions.imageCount || 2,
+            aspectRatio: selectedOptions.aspectRatio || '1:1',
+          },
+        });
+
+        setGeneratedImages(response.data.images || []);
+        setCurrentStep(5);
+      } else {
+        // Video generation
+        const videoPrompt = generatedPrompt?.positive || 
+          (analysis?.promptKeywords?.join(', ')) || 
+          'A person wearing fashionable clothes, smooth motion';
+        
+        const response = await unifiedFlowAPI.generateVideo({
+          prompt: videoPrompt,
+          provider: videoOptions.model,
+          options: {
+            durationSeconds: videoOptions.duration,
+            motionStyle: videoOptions.motionStyle
+          },
+          referenceImages: characterImage ? [{ url: characterImage.preview }] : []
+        });
+
+        setGeneratedVideo(response.data || response);
+        setCurrentStep(5);
+      }
     } catch (error) {
       console.error('Generation failed:', error);
       setGenerationError(error.message || 'Generation failed. Please try again.');
@@ -195,7 +291,8 @@ export default function VirtualTryOnPage() {
     } else if (currentStep === 3) {
       handleBuildPrompt();
     } else if (currentStep === 4) {
-      handleStartGeneration();
+      // At step 4 (prompt), build prompt first then move to generation
+      handleBuildPrompt();
     } else if (currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
@@ -224,6 +321,7 @@ export default function VirtualTryOnPage() {
     setGeneratedImages([]);
     setIsGenerating(false);
     setGenerationError(null);
+    setBrowserPrompt('');
   };
 
   // Render step content
@@ -533,26 +631,74 @@ export default function VirtualTryOnPage() {
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Virtual Try-On Studio
               </h1>
               <p className="text-sm text-gray-500">
-                Phase 1: Unified AI Analysis & Generation
+                Unified AI Analysis & Generation
               </p>
             </div>
 
-            {/* Provider Status */}
-            {providerStatus && (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500">API Status:</span>
-                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                  ✅ {providerStatus.totalKeys || 14} Keys Active
-                </span>
+            {/* Mode & Tab Navigation */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              {/* Mode Selector - Compact */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+                {MODES.map(mode => {
+                  const Icon = mode.icon;
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={() => { setActiveMode(mode.id); handleReset(); }}
+                      className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${
+                        activeMode === mode.id 
+                          ? 'bg-white text-purple-700 shadow-sm' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                      title={mode.label}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">{mode.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+
+              {/* Tab Navigation */}
+              <div className="flex items-center gap-2">
+                {TABS.map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); handleReset(); }}
+                      className={`
+                      flex items-center gap-2 px-4 py-2 rounded-lg transition-colors
+                      ${activeTab === tab.id 
+                        ? 'bg-purple-600 text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }
+                    `}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </div>
+      </div>
+      </div>
+
+      {/* Mode Indicator */}
+      <div className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white py-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm font-medium">
+          {activeTab === 'image' 
+            ? '🖼️ Image Generation Mode - Create stunning product images' 
+            : '🎬 Video Generation Mode - Create dynamic video content'
+          }
         </div>
       </div>
 
@@ -644,6 +790,11 @@ export default function VirtualTryOnPage() {
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Processing...
+                  </>
+                ) : currentStep === 4 ? (
+                  <>
+                    <Rocket className="w-5 h-5" />
+                    Build Prompt & Continue
                   </>
                 ) : currentStep === 5 ? (
                   <>
