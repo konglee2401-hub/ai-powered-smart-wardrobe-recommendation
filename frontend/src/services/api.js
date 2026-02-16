@@ -95,6 +95,97 @@ export const promptTemplateAPI = {
 };
 
 // ============================================
+// PROMPTS APIs - Simple prompt generation
+// ============================================
+
+export const promptsAPI = {
+  generate: async (characterDescription, productDescription, useCase, style) => {
+    try {
+      const response = await axiosInstance.post('/prompts/generate', {
+        characterDescription,
+        productDescription,
+        useCase,
+        style,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
+// TEMPLATES APIs - Simple template CRUD
+// ============================================
+
+export const templatesAPI = {
+  getAll: async () => {
+    try {
+      const response = await axiosInstance.get('/prompt-templates');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      throw error;
+    }
+  },
+
+  getById: async (id) => {
+    try {
+      const response = await axiosInstance.get(`/prompt-templates/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching template:', error);
+      throw error;
+    }
+  },
+
+  create: async (name, description, useCase, style, defaultPrompt, defaultNegativePrompt) => {
+    try {
+      const response = await axiosInstance.post('/prompt-templates', {
+        name,
+        description,
+        useCase,
+        style,
+        defaultPrompt,
+        defaultNegativePrompt,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating template:', error);
+      throw error;
+    }
+  },
+
+  update: async (id, name, description, useCase, style, defaultPrompt, defaultNegativePrompt) => {
+    try {
+      const response = await axiosInstance.put(`/prompt-templates/${id}`, {
+        name,
+        description,
+        useCase,
+        style,
+        defaultPrompt,
+        defaultNegativePrompt,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating template:', error);
+      throw error;
+    }
+  },
+
+  delete: async (id) => {
+    try {
+      const response = await axiosInstance.delete(`/prompt-templates/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
 // AI OPTIONS APIs - Discover new options from AI analysis
 // ============================================
 

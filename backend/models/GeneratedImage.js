@@ -80,6 +80,36 @@ const GeneratedImageSchema = new mongoose.Schema({
     default: 'full'
   },
 
+  // Dynamic Template Fields (Phase 2)
+  dynamicTemplate: {
+    // User inputs for dynamic template
+    userInputs: {
+      age: String,
+      gender: String,
+      style: String,
+      colors: String,
+      material: String,
+      setting: String,
+      mood: String
+    },
+    // Detected use case
+    useCase: {
+      type: String,
+      description: 'Detected use case (e.g., casualBeach, formalBusiness, elegantEvening)'
+    },
+    // Draft prompt before AI enhancement
+    draftPrompt: {
+      type: String,
+      description: 'Draft prompt from dynamic template before AI enhancement'
+    },
+    // Template mode
+    templateMode: {
+      type: String,
+      enum: ['dynamic', 'manual'],
+      default: 'manual'
+    }
+  },
+
   // Generated image
   imageUrl: {
     type: String,

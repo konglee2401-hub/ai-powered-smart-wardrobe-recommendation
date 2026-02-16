@@ -9,6 +9,16 @@
 - [ ] Đăng nhập / đăng ký hoạt động bình thường (hoặc đăng nhập bằng user seed).  
 - [ ] Các API chính (`/api/auth`, `/api/clothes`, `/api/outfits` nếu có) trả về kết quả đúng.  
 
+## Phase 2: Dynamic Templates ✅
+
+- [x] Tạo promptTemplates.js library (10 use cases)
+- [x] Update PromptBuilder.jsx (integrate templates, add form inputs)
+- [x] Expand form inputs (age, gender, style, colors, material, setting, mood)
+- [x] Tạo promptTemplates.test.js (test all use cases)
+- [x] Update prompts.js routes (prepare for AI enhancement)
+- [x] Update GeneratedImage model (add metadata fields)
+- [x] Tạo promptRoutes.test.js (backend API tests)
+
 ## Bảo mật
 
 - [ ] Không có file `.env` nào được add vào git.  

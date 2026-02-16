@@ -280,6 +280,75 @@ Content-Type: application/json
 
 ---
 
+## Phase 2: Dynamic Templates
+
+### Endpoint: POST /api/prompts/generate-prompt
+**Purpose:** Receive draft prompt from frontend, enhance, return enhanced prompt.
+
+**Request:**
+```json
+{
+  "draft": "Professional fashion photography of 20-30 year old, female, casual and confident...",
+  "userInputs": {
+    "age": "20-30",
+    "gender": "female",
+    "style": "casual",
+    "colors": "bright",
+    "material": "cotton",
+    "setting": "beach",
+    "mood": "relaxed"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "enhancedPrompt": "Professional fashion photography of 20-30 year old, female, casual and confident... [Enhanced]",
+  "status": "success",
+  "draftLength": 150,
+  "enhancedLength": 180,
+  "useCase": "casual_beach"
+}
+```
+
+### Use Cases Supported
+
+1. **Casual Beach**: style=casual, setting=beach → Cotton, beach background, golden hour lighting
+2. **Formal Business**: style=formal, gender=male, setting=office → Wool, office setting, professional lighting
+3. **Elegant Evening**: style=elegant, mood=romantic, colors=red/black → Satin, ballroom, dramatic lighting
+4. **Casual Streetwear**: style=casual, setting=urban → Denim, urban background, natural daylight
+5. **Sporty Athleisure**: style=sporty, setting=gym → Technical fabric, gym/outdoor, bright lighting
+6. **Vintage Retro**: style=vintage → Wool/tweed, vintage studio, warm vintage lighting
+7. **Luxury High Fashion**: style=luxury → Silk/cashmere, luxury studio, premium lighting
+8. **Bohemian Hippie**: style=bohemian, setting=nature → Linen, outdoor nature, golden hour
+9. **Minimalist Modern**: style=minimalist → Clean fabric, white studio, minimalist lighting
+10. **Edgy Alternative**: style=edgy, material=leather → Leather, dark studio, dramatic lighting
+
+### Frontend Integration
+
+**File:** `frontend/src/utils/promptTemplates.js`
+- `generateDynamicPrompt(inputs)`: Generate dynamic prompt from user inputs
+- `detectUseCase(inputs)`: Detect use case from combinations
+- `getAllUseCases()`: List all use cases
+
+**File:** `frontend/src/pages/PromptBuilder.jsx`
+- Form inputs: age, gender, style, colors, material, setting, mood
+- Toggle button: "Use Dynamic Templates"
+- Display: Generated prompt, char count, copy button
+
+### Testing
+
+**Frontend:** `frontend/src/test/promptTemplates.test.js`
+- Run: `window.runPromptTests()` in browser console
+- Tests: 10 use cases, keyword validation
+
+**Backend:** `backend/test/promptRoutes.test.js`
+- Run: `node backend/test/promptRoutes.test.js`
+- Tests: Valid/invalid drafts, error handling
+
+---
+
 ## Image Generation Endpoints
 
 ### Get Available Providers
