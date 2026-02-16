@@ -3,6 +3,7 @@ import aiController from '../controllers/aiController.js';
 import optionsController from '../controllers/optionsController.js';
 import { protect } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
+import { analyzeUnifiedEndpoint, getProviderStatus } from '../controllers/unifiedFlowController.js';
 
 const router = express.Router();
 
@@ -12,8 +13,15 @@ router.get('/options/:category', optionsController.getOptionsByCategory);
 router.get('/export', aiController.exportOptions);
 router.get('/models', aiController.getAvailableModels);
 router.get('/providers', aiController.getAvailableProviders);
+router.get('/provider-status', getProviderStatus);
 router.get('/use-cases', aiController.getUseCases);
 router.get('/focus-areas', aiController.getFocusAreas);
+
+// Unified Flow endpoints
+router.post('/analyze-unified', upload.fields([
+  { name: 'characterImage', maxCount: 1 },
+  { name: 'productImage', maxCount: 1 }
+]), analyzeUnifiedEndpoint);
 
 // Image analysis with fallback
 router.post('/analyze-character', upload.single('image'), aiController.analyzeCharacterImage);
