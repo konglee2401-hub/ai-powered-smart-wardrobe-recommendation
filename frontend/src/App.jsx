@@ -18,6 +18,7 @@ import PerformanceOptimizerPage from './pages/PerformanceOptimizerPage';
 
 // Import components
 import Navbar from './components/Navbar';
+import VirtualTryOnPage from './pages/VirtualTryOnPage';
 
 function App() {
   return (
@@ -27,7 +28,7 @@ function App() {
         
         <Routes>
           {/* Main Routes */}
-          <Route path="/" element={<UnifiedVideoGeneration />} />
+          <Route path="/" element={<VirtualTryOnPage />} />
           <Route path="/history" element={<GenerationHistory />} />
           <Route path="/stats" element={<ModelStats />} />
           <Route path="/tester" element={<ModelTester />} />

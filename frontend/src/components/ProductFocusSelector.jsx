@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { User, Shirt, Pants, Footprints, Watch, Target } from 'lucide-react';
+import { User, Shirt, Armchair, Footprints, Watch, Target } from 'lucide-react';
 
 const FOCUS_OPTIONS = [
   {
@@ -25,7 +25,7 @@ const FOCUS_OPTIONS = [
     value: 'bottom',
     label: 'Bottom (Quần/Váy)',
     description: 'Phần dưới',
-    icon: Pants,
+    icon: Armchair,
     recommended: false,
   },
   {
