@@ -47,7 +47,9 @@ const AIModelSchema = new mongoose.Schema({
     available: { type: Boolean, default: true },
     deprecated: { type: Boolean, default: false },
     experimental: { type: Boolean, default: false },
-    recommended: { type: Boolean, default: false }
+    recommended: { type: Boolean, default: false },
+    lastChecked: { type: Date, default: Date.now },
+    performanceScore: { type: Number, default: 0 }
   },
   
   // Performance

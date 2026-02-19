@@ -65,3 +65,36 @@ export const testLogin = async (req, res) => {
     });
   }
 };
+
+export const deleteTestUser = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required to delete test user'
+      });
+    }
+
+    const result = await User.deleteOne({ email });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Test user not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Test user ${email} deleted successfully`
+    });
+  } catch (error) {
+    console.error('Delete test user error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};

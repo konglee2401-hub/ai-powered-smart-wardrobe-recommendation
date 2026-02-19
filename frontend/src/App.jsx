@@ -15,6 +15,7 @@ import GalleryPage from './pages/GalleryPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import AdvancedCustomizationPage from './pages/AdvancedCustomizationPage';
 import PerformanceOptimizerPage from './pages/PerformanceOptimizerPage';
+import AIProviderManager from './pages/AIProviderManager';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -41,6 +42,7 @@ function App() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/customization" element={<AdvancedCustomizationPage />} />
           <Route path="/performance" element={<PerformanceOptimizerPage />} />
+          <Route path="/admin/providers" element={<AIProviderManager />} />
           
           {/* Redirect old routes */}
           <Route path="/model-tester" element={<Navigate to="/tester" replace />} />

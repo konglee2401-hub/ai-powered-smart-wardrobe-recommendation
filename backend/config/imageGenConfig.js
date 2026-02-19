@@ -4,6 +4,8 @@
  */
 
 import { getKeyManager } from '../utils/keyManager.js';
+import { queryAIModel } from '../services/aiQueryService.js';
+import { generateWithGoogle } from '../services/imageGenService.js';
 
 /**
  * Helper function to check if provider has API key available
@@ -18,142 +20,242 @@ function isProviderKeyAvailable(provider) {
 }
 
 /**
+ * Helper to create a consistent generate function for OpenRouter models.
+ */
+const createOpenRouterGenerateFunction = (modelId) => async (prompt, options, apiKey) => {
+    return queryAIModel('openrouter', modelId, prompt, {
+        type: 'image',
+        apiKey
+    });
+};
+
+/**
+ * Helper to create a consistent generate function for Replicate models.
+ */
+const createReplicateGenerateFunction = (modelId) => async (prompt, options, apiKey) => {
+    return queryAIModel('replicate', modelId, prompt, {
+        type: 'image',
+        apiKey
+    });
+};
+
+/**
  * Image Generation Providers - Sorted by priority
  * Priority: Lower number = Higher priority (tried first)
  */
 export const IMAGE_GEN_PROVIDERS = [
   // ============================================================================
+  // PRIORITY 0: GOOGLE (Premium / Pro)
+  // ============================================================================
+  {
+    id: 'google-imagen-3',
+    name: 'Google Imagen 3',
+    provider: 'google',
+    model: 'imagen-3.0-generate-001',
+    generate: async (prompt, options, apiKey) => {
+        const { negativePrompt, count, characterImagePath, productImagePath } = options;
+        return generateWithGoogle({ model: 'imagen-3.0-generate-001' }, prompt, negativePrompt, apiKey, count, characterImagePath, productImagePath);
+    }
+  },
+
+  // ============================================================================
   // PRIORITY 1-2: OPENROUTER (Free & Reliable)
   // ============================================================================
   {
-    name: 'openrouter',
-    priority: 1,
-    endpoint: 'https://openrouter.ai/api/v1/images/generations',
+    id: 'openrouter-flux-schnell-free',
+    name: 'OpenRouter Flux Schnell (Free)',
+    provider: 'openrouter',
     model: 'black-forest-labs/flux-schnell-free',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'OpenRouter Free Flux - Fast and reliable'
+    generate: createOpenRouterGenerateFunction('black-forest-labs/flux-schnell-free')
   },
   {
-    name: 'openrouter',
-    priority: 2,
-    endpoint: 'https://openrouter.ai/api/v1/images/generations',
+    id: 'openrouter-sdxl',
+    name: 'OpenRouter SDXL',
+    provider: 'openrouter',
     model: 'stabilityai/stable-diffusion-xl-base-1.0',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'OpenRouter SDXL - High quality'
+    generate: createOpenRouterGenerateFunction('stabilityai/stable-diffusion-xl-base-1.0')
+  },
+  {
+    id: 'openrouter-ideogram-v2',
+    name: 'OpenRouter Ideogram V2',
+    provider: 'openrouter',
+    model: 'ideogram-ai/ideogram-v2',
+    generate: createOpenRouterGenerateFunction('ideogram-ai/ideogram-v2')
+  },
+  {
+    id: 'openrouter-recraft-v3',
+    name: 'OpenRouter Recraft V3',
+    provider: 'openrouter',
+    model: 'recraft-ai/recraft-v3',
+    generate: createOpenRouterGenerateFunction('recraft-ai/recraft-v3')
+  },
+  {
+    id: 'openrouter-fal-flux-pro',
+    name: 'OpenRouter FAL Flux Pro',
+    provider: 'openrouter',
+    model: 'fal-ai/flux-pro',
+    generate: createOpenRouterGenerateFunction('fal-ai/flux-pro')
+  },
+  {
+    id: 'openrouter-fal-flux-realism',
+    name: 'OpenRouter FAL Flux Realism',
+    provider: 'openrouter',
+    model: 'fal-ai/flux-realism',
+    generate: createOpenRouterGenerateFunction('fal-ai/flux-realism')
   },
   
-  // ============================================================================
-  // PRIORITY 3-4: NVIDIA (Free with API key)
-  // ============================================================================
-  {
-    name: 'nvidia',
-    priority: 3,
-    endpoint: 'https://integrate.api.nvidia.com/v1/images/generations',
-    model: 'stabilityai/stable-diffusion-3-5-large',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'NVIDIA SD 3.5 Large - Best quality'
-  },
-  {
-    name: 'nvidia',
-    priority: 4,
-    endpoint: 'https://integrate.api.nvidia.com/v1/images/generations',
-    model: 'black-forest-labs/flux-schnell',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'NVIDIA Flux Schnell - Fast generation'
-  },
+
 
   // ============================================================================
   // PRIORITY 5-6: FIREWORKS (Free credits)
   // ============================================================================
   {
-    name: 'fireworks',
-    priority: 5,
-    endpoint: 'https://api.fireworks.ai/inference/v1/image_generation',
+    id: 'fireworks-sd3',
+    name: 'Fireworks SD3',
+    provider: 'fireworks',
     model: 'stable-diffusion-3',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'Fireworks SD3 - Good quality'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('fireworks', 'stable-diffusion-3', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
   {
-    name: 'fireworks',
-    priority: 6,
-    endpoint: 'https://api.fireworks.ai/inference/v1/image_generation',
+    id: 'fireworks-ground',
+    name: 'Fireworks Playground v2.5',
+    provider: 'fireworks',
     model: 'playground-v2-5-1024px-aesthetic',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'Fireworks Playground v2.5 - Aesthetic'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('fireworks', 'playground-v2-5-1024px-aesthetic', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
 
   // ============================================================================
   // PRIORITY 7-8: TOGETHER AI (Free credits)
   // ============================================================================
   {
-    name: 'together',
-    priority: 7,
-    endpoint: 'https://api.together.xyz/v1/images/generations',
+    id: 'together-flux-schnell',
+    name: 'Together AI Flux Schnell',
+    provider: 'together',
     model: 'black-forest-labs/FLUX.1-schnell',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'Together AI Flux Schnell - Fast'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('together', 'black-forest-labs/FLUX.1-schnell', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
   {
-    name: 'together',
-    priority: 8,
-    endpoint: 'https://api.together.xyz/v1/images/generations',
+    id: 'together-sdxl',
+    name: 'Together AI SDXL',
+    provider: 'together',
     model: 'stabilityai/stable-diffusion-xl-base-1.0',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'Together AI SDXL - Reliable'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('together', 'stabilityai/stable-diffusion-xl-base-1.0', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
 
   // ============================================================================
   // PRIORITY 9-10: FAL.AI (Free tier)
   // ============================================================================
   {
-    name: 'fal',
-    priority: 9,
-    endpoint: 'https://fal.run/fal-ai/flux-pro',
+    id: 'fal-flux-pro',
+    name: 'FAL.ai Flux Pro',
+    provider: 'fal',
     model: 'flux-pro',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'FAL.ai Flux Pro - Premium quality'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('fal', 'flux-pro', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
   {
-    name: 'fal',
-    priority: 10,
-    endpoint: 'https://fal.run/fal-ai/flux-realism',
+    id: 'fal-flux-realism',
+    name: 'FAL.ai Flux Realism',
+    provider: 'fal',
     model: 'flux-realism',
-    free: true,
-    requiresKey: true,
-    supportsNegativePrompt: true,
-    description: 'FAL.ai Flux Realism - Photorealistic'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('fal', 'flux-realism', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
   },
 
   // ============================================================================
   // PRIORITY 99: POLLINATIONS (Ultimate fallback - No API key needed)
   // ============================================================================
   {
-    name: 'pollinations',
-    priority: 99,
-    endpoint: 'https://image.pollinations.ai',
+    id: 'pollinations',
+    name: 'Pollinations AI',
+    provider: 'pollinations',
     model: 'flux',
-    free: true,
-    requiresKey: false,
-    supportsNegativePrompt: false,
-    description: 'Pollinations AI - No API key required'
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('pollinations', 'flux', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
+  },
+
+  // ============================================================================
+  // PRIORITY 10: OPENAI (DALL-E 3)
+  // ============================================================================
+  {
+    id: 'openai-dall-e-3',
+    name: 'OpenAI DALL-E 3',
+    provider: 'openai',
+    model: 'dall-e-3',
+    generate: async (prompt, options, apiKey) => {
+        return queryAIModel('openai', 'dall-e-3', prompt, {
+            type: 'image',
+            apiKey
+        });
+    }
+  },
+
+  // ============================================================================
+  // PRIORITY 11: REPLICATE (Flux Pro)
+  // ============================================================================
+  {
+    id: 'replicate-flux-pro',
+    name: 'Replicate Flux Pro',
+    provider: 'replicate',
+    model: 'black-forest-labs/flux-1.1-pro',
+    generate: createReplicateGenerateFunction('black-forest-labs/flux-1.1-pro')
+  },
+
+  // ============================================================================
+  // PRIORITY 12: REPLICATE (Other Models)
+  // ============================================================================
+  {
+    id: 'replicate-flux-schnell',
+    name: 'Replicate Flux Schnell',
+    provider: 'replicate',
+    model: 'black-forest-labs/flux-schnell',
+    generate: createReplicateGenerateFunction('black-forest-labs/flux-schnell')
+  },
+  {
+    id: 'replicate-flux-dev',
+    name: 'Replicate Flux Dev',
+    provider: 'replicate',
+    model: 'black-forest-labs/flux-dev',
+    generate: createReplicateGenerateFunction('black-forest-labs/flux-dev')
+  },
+  {
+    id: 'replicate-sdxl',
+    name: 'Replicate SDXL',
+    provider: 'replicate',
+    model: 'stability-ai/sdxl',
+    generate: createReplicateGenerateFunction('stability-ai/sdxl')
   }
 ];
 

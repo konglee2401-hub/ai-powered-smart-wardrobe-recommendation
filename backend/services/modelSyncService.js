@@ -1,3 +1,4 @@
+
 import AIModel from '../models/AIModel.js';
 import axios from 'axios';
 
@@ -26,28 +27,6 @@ const DEFAULT_MODELS = {
       status: { recommended: true },
       performance: { priority: 2 },
       apiDetails: { modelIdentifier: 'gpt-4o', maxTokens: 16384, contextWindow: 128000 }
-    },
-    {
-      modelId: 'gemini-2.5-flash',
-      name: 'Gemini 2.5 Flash',
-      provider: 'google',
-      type: 'analysis',
-      capabilities: { vision: true, imageInput: true, streaming: true, reasoning: false },
-      pricing: { free: true },
-      status: { recommended: true },
-      performance: { priority: 6 },
-      apiDetails: { modelIdentifier: 'gemini-2.0-flash-exp', contextWindow: 1000000 }
-    },
-    {
-      modelId: 'gemini-2.5-pro',
-      name: 'Gemini 2.5 Pro',
-      provider: 'google',
-      type: 'analysis',
-      capabilities: { vision: true, imageInput: true, streaming: true, reasoning: true },
-      pricing: { free: true },
-      status: { recommended: true },
-      performance: { priority: 7 },
-      apiDetails: { modelIdentifier: 'gemini-2.0-flash-thinking-exp-01-21', contextWindow: 1000000 }
     }
   ],
   
@@ -62,17 +41,6 @@ const DEFAULT_MODELS = {
       status: { recommended: true },
       performance: { priority: 1 },
       apiDetails: { modelIdentifier: 'black-forest-labs/flux-schnell' }
-    },
-    {
-      modelId: 'fireworks-playground',
-      name: 'Playground v2.5',
-      provider: 'fireworks',
-      type: 'image-generation',
-      capabilities: { imageInput: false },
-      pricing: { imageCost: 0.002, free: false },
-      status: { recommended: true },
-      performance: { priority: 2 },
-      apiDetails: { modelIdentifier: 'playground-v2-5-1024px-aesthetic' }
     }
   ],
   
@@ -102,99 +70,80 @@ const DEFAULT_MODELS = {
   ]
 };
 
-// ==================== FETCH MODELS FROM PROVIDERS ====================
+import { getKeyManager } from '../utils/keyManager.js';
+
+// Helper to get key (supports rotation if needed, or just gets first available)
+function getProviderKey(provider) {
+  try {
+    const km = getKeyManager(provider);
+    if (!km) return process.env[`${provider.toUpperCase()}_API_KEY`];
+    
+    // For syncing models, we just need ANY valid key, not necessarily rotated for load balancing
+    // So we check if we have keys in the manager
+    const keys = km.getKeys();
+    if (keys && keys.length > 0) {
+      // Find first active key
+      const activeKey = keys.find(k => k.status === 'active' || !k.status);
+      return activeKey ? activeKey.key : keys[0].key;
+    }
+    
+    // Fallback to env
+    return process.env[`${provider.toUpperCase()}_API_KEY`];
+  } catch (error) {
+    // If key manager fails or not initialized, fallback to env
+    return process.env[`${provider.toUpperCase()}_API_KEY`];
+  }
+}
+
+// ==================== FETCH PROVIDER MODELS ====================
 
 async function fetchAnthropicModels() {
-  console.log('   🔍 Fetching Anthropic models...');
-  
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.log('   ⚠️  ANTHROPIC_API_KEY not configured');
-    return [];
-  }
-
-  try {
-    // Anthropic doesn't have a public models list API
-    // Return known models
-    const knownModels = [
-      {
-        modelId: 'claude-3-5-sonnet',
-        name: 'Claude 3.5 Sonnet',
-        apiDetails: { modelIdentifier: 'claude-3-5-sonnet-20241022' },
-        status: { available: true }
-      },
-      {
-        modelId: 'claude-3-opus',
-        name: 'Claude 3 Opus',
-        apiDetails: { modelIdentifier: 'claude-3-opus-20240229' },
-        status: { available: true }
-      },
-      {
-        modelId: 'claude-3-haiku',
-        name: 'Claude 3 Haiku',
-        apiDetails: { modelIdentifier: 'claude-3-haiku-20240307' },
-        status: { available: true }
-      }
-    ];
-
-    console.log(`   ✅ Found ${knownModels.length} Anthropic models`);
-    return knownModels;
-
-  } catch (error) {
-    console.error('   ❌ Failed to fetch Anthropic models:', error.message);
-    return [];
-  }
+  // Placeholder - Anthropic doesn't have a public models list API that returns pricing/specs easily
+  // We return defaults or static list
+  return DEFAULT_MODELS.analysis.filter(m => m.provider === 'anthropic');
 }
 
 async function fetchOpenAIModels() {
   console.log('   🔍 Fetching OpenAI models...');
   
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = getProviderKey('openai');
   if (!apiKey) {
-    console.log('   ⚠️  OPENAI_API_KEY not configured');
-    return [];
+      console.log('   ⚠️  OPENAI_API_KEY not configured');
+      return [];
   }
-
+  
   try {
     const response = await axios.get('https://api.openai.com/v1/models', {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      },
-      timeout: 10000
+      headers: { 'Authorization': `Bearer ${apiKey}` }
     });
-
-    const visionModels = response.data.data
-      .filter(model => model.id.includes('gpt-4') && (model.id.includes('vision') || model.id.includes('gpt-4o')))
-      .map(model => ({
-        modelId: model.id.replace(':', '-'),
-        name: model.id.toUpperCase(),
-        apiDetails: { modelIdentifier: model.id },
-        status: { available: true },
-        metadata: { description: 'OpenAI Vision Model' }
+    
+    // Filter for known vision models
+    return response.data.data
+      .filter(m => m.id.includes('gpt-4') || m.id.includes('vision'))
+      .map(m => ({
+         modelId: m.id,
+         name: m.id,
+         status: { available: true }
       }));
-
-    console.log(`   ✅ Found ${visionModels.length} OpenAI vision models`);
-    return visionModels;
-
-  } catch (error) {
-    console.error('   ❌ Failed to fetch OpenAI models:', error.message);
-    return [];
+  } catch (e) {
+      console.error('   ❌ Failed to fetch OpenAI models:', e.message);
+      return [];
   }
 }
 
 async function fetchGoogleModels() {
-  console.log('   🔍 Fetching Google Gemini models...');
+  console.log('   🔍 Fetching Google models...');
   
-  const apiKey = process.env.GOOGLE_API_KEY;
+  const apiKey = getProviderKey('google');
   if (!apiKey) {
     console.log('   ⚠️  GOOGLE_API_KEY not configured');
     return [];
   }
 
   try {
-    const response = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
-      timeout: 10000
-    });
+    const response = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    
+    if (!response.data.models) return [];
 
     const visionModels = response.data.models
       .filter(model => 
@@ -214,10 +163,6 @@ async function fetchGoogleModels() {
           status: { 
             available: true,
             experimental: modelId.includes('exp')
-          },
-          metadata: { 
-            description: model.description,
-            supportedFormats: model.supportedGenerationMethods
           }
         };
       });
@@ -234,7 +179,7 @@ async function fetchGoogleModels() {
 async function fetchFireworksModels() {
   console.log('   🔍 Fetching Fireworks models...');
   
-  const apiKey = process.env.FIREWORKS_API_KEY;
+  const apiKey = getProviderKey('fireworks');
   if (!apiKey) {
     console.log('   ⚠️  FIREWORKS_API_KEY not configured');
     return [];
@@ -273,130 +218,143 @@ async function fetchFireworksModels() {
   }
 }
 
-async function fetchReplicateModels() {
-  console.log('   🔍 Fetching Replicate models...');
+async function fetchMoonshotModels() {
+  console.log('   🔍 Fetching Moonshot models...');
   
-  const apiKey = process.env.REPLICATE_API_TOKEN;
+  const apiKey = getProviderKey('moonshot');
   if (!apiKey) {
-    console.log('   ⚠️  REPLICATE_API_TOKEN not configured');
+    console.log('   ⚠️  MOONSHOT_API_KEY not configured');
     return [];
   }
 
   try {
-    // Replicate doesn't have a simple models list API
-    // Return known image generation models
-    const knownModels = [
-      {
-        modelId: 'replicate-flux-schnell',
-        name: 'FLUX Schnell',
-        apiDetails: { modelIdentifier: 'black-forest-labs/flux-schnell' },
-        status: { available: true }
+    const response = await axios.get('https://api.moonshot.ai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
       },
-      {
-        modelId: 'replicate-flux-dev',
-        name: 'FLUX Dev',
-        apiDetails: { modelIdentifier: 'black-forest-labs/flux-dev' },
-        status: { available: true }
-      },
-      {
-        modelId: 'replicate-sdxl',
-        name: 'Stable Diffusion XL',
-        apiDetails: { modelIdentifier: 'stability-ai/sdxl' },
-        status: { available: true }
-      }
-    ];
+      timeout: 10000
+    });
 
-    console.log(`   ✅ Found ${knownModels.length} Replicate models`);
-    return knownModels;
+    const models = response.data.data.map(model => ({
+      modelId: model.id,
+      name: model.id,
+      apiDetails: { 
+        modelIdentifier: model.id
+      },
+      status: { available: true },
+      pricing: { free: false } // Assuming paid
+    }));
+
+    console.log(`   ✅ Found ${models.length} Moonshot models`);
+    return models;
 
   } catch (error) {
-    console.error('   ❌ Failed to fetch Replicate models:', error.message);
+    console.error('   ❌ Failed to fetch Moonshot models:', error.message);
     return [];
   }
 }
 
-// ==================== SYNC MODELS TO DATABASE ====================
+async function fetchReplicateModels() {
+    return DEFAULT_MODELS['image-generation'].filter(m => m.provider === 'replicate');
+}
 
-export async function syncModelsToDatabase(type = null) {
-  console.log('\n' + '='.repeat(80));
-  console.log('🔄 SYNCING MODELS TO DATABASE');
-  console.log('='.repeat(80));
-  
-  const typesToSync = type ? [type] : ['analysis', 'image-generation', 'video-generation'];
-  
-  for (const modelType of typesToSync) {
-    console.log(`\n📊 Syncing ${modelType} models...`);
-    
-    let allModels = [];
-    
-    if (modelType === 'analysis') {
-      // Fetch from all analysis providers
-      const [anthropic, openai, google, fireworks] = await Promise.all([
-        fetchAnthropicModels(),
-        fetchOpenAIModels(),
-        fetchGoogleModels(),
-        fetchFireworksModels()
-      ]);
-      
-      allModels = [
-        ...anthropic.map(m => ({ ...m, provider: 'anthropic', type: 'analysis' })),
-        ...openai.map(m => ({ ...m, provider: 'openai', type: 'analysis' })),
-        ...google.map(m => ({ ...m, provider: 'google', type: 'analysis' })),
-        ...fireworks.map(m => ({ ...m, provider: 'fireworks', type: 'analysis' }))
-      ];
-      
-    } else if (modelType === 'image-generation') {
-      // Fetch from image generation providers
-      const replicate = await fetchReplicateModels();
-      
-      allModels = [
-        ...replicate.map(m => ({ ...m, provider: 'replicate', type: 'image-generation' }))
-      ];
-      
-    } else if (modelType === 'video-generation') {
-      // Video generation models (no API to fetch, use defaults)
-      allModels = DEFAULT_MODELS['video-generation'];
-    }
-    
-    // Merge with defaults
-    const defaultModels = DEFAULT_MODELS[modelType] || [];
-    const mergedModels = [...defaultModels];
-    
-    // Add fetched models that aren't in defaults
-    for (const fetchedModel of allModels) {
-      const exists = mergedModels.find(m => m.modelId === fetchedModel.modelId);
-      if (!exists) {
-        mergedModels.push(fetchedModel);
+// ==================== SYNC FUNCTIONS ====================
+
+/**
+ * Main sync function: Fetches models from all providers and updates DB
+ * @param {Object} options - Sync options
+ * @param {boolean} options.forceCheck - Force bypass of cache check
+ */
+export async function syncModelsWithDB(options = {}) {
+  const { forceCheck = false } = options;
+  console.log('\n========================================');
+  console.log('🔄 STARTING MODEL SYNC WITH DATABASE');
+  console.log(`   Options: forceCheck=${forceCheck}`);
+  console.log('========================================\n');
+
+  try {
+    // Check if we ran recently (1 hour cache)
+    if (!forceCheck) {
+      const lastSync = await AIModel.findOne().sort({ 'status.lastChecked': -1 });
+      if (lastSync && lastSync.status && lastSync.status.lastChecked) {
+        const hoursSinceLastCheck = (Date.now() - new Date(lastSync.status.lastChecked).getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastCheck < 1) {
+          console.log(`⏳ Skipping sync: Last check was ${hoursSinceLastCheck.toFixed(2)} hours ago (< 1 hour).`);
+          return { skipped: true, reason: 'Recent check' };
+        }
       }
     }
+
+    let allModels = [];
+
+    // Fetch from all analysis providers
+    const [anthropic, openai, google, fireworks, moonshot] = await Promise.all([
+      fetchAnthropicModels(),
+      fetchOpenAIModels(),
+      fetchGoogleModels(),
+      fetchFireworksModels(),
+      fetchMoonshotModels()
+    ]);
     
-    console.log(`\n💾 Saving ${mergedModels.length} ${modelType} models to database...`);
+    allModels.push(...anthropic.map(m => ({ ...m, provider: 'anthropic', type: 'analysis' })));
+    allModels.push(...openai.map(m => ({ ...m, provider: 'openai', type: 'analysis' })));
+    allModels.push(...google.map(m => ({ ...m, provider: 'google', type: 'analysis' })));
+    allModels.push(...fireworks.map(m => ({ ...m, provider: 'fireworks', type: 'analysis' })));
+    allModels.push(...moonshot.map(m => ({ ...m, provider: 'moonshot', type: 'analysis' })));
+
+    // Fetch from image generation providers
+    const replicate = await fetchReplicateModels();
+    allModels.push(...replicate.map(m => ({ ...m, provider: 'replicate', type: 'image-generation' })));
+
+    // Use defaults for others if not fetched
+    if (DEFAULT_MODELS['video-generation']) {
+       allModels.push(...DEFAULT_MODELS['video-generation']);
+    }
+
+    // Save to DB
+    console.log(`\n💾 Saving ${allModels.length} models to database...`);
     
-    // Upsert to database
-    let savedCount = 0;
     let updatedCount = 0;
+    let savedCount = 0;
     
-    for (const modelData of mergedModels) {
+    for (const modelData of allModels) {
       try {
         const existing = await AIModel.findOne({ modelId: modelData.modelId });
         
         if (existing) {
-          // Update existing model (preserve performance stats)
-          existing.name = modelData.name || existing.name;
-          existing.status.available = modelData.status?.available ?? existing.status.available;
-          existing.apiDetails = { ...existing.apiDetails, ...modelData.apiDetails };
-          existing.metadata.lastChecked = new Date();
-          
-          await existing.save();
+          // Update existing
+          await AIModel.updateOne(
+            { _id: existing._id },
+            { 
+              $set: {
+                name: modelData.name || existing.name,
+                status: {
+                  ...existing.status,
+                  available: true, // Mark as available since we just fetched it
+                  lastChecked: new Date(),
+                  message: 'Synced from provider'
+                },
+                apiDetails: { ...existing.apiDetails, ...modelData.apiDetails },
+                pricing: { ...existing.pricing, ...modelData.pricing }
+              }
+            }
+          );
           updatedCount++;
-          
         } else {
-          // Create new model
+          // Create new
           await AIModel.create({
-            ...modelData,
+            modelId: modelData.modelId,
+            name: modelData.name,
+            provider: modelData.provider,
+            type: modelData.type,
             capabilities: modelData.capabilities || {},
             pricing: modelData.pricing || {},
-            status: modelData.status || {},
+            status: {
+              available: true,
+              lastChecked: new Date(),
+              performanceScore: 80, // Default score
+              message: 'Initial sync'
+            },
             performance: modelData.performance || {},
             metadata: modelData.metadata || {}
           });
@@ -410,117 +368,20 @@ export async function syncModelsToDatabase(type = null) {
     
     console.log(`   ✅ Saved ${savedCount} new models`);
     console.log(`   ✅ Updated ${updatedCount} existing models`);
-  }
-  
-  console.log('\n' + '='.repeat(80));
-  console.log('✅ MODEL SYNC COMPLETE');
-  console.log('='.repeat(80) + '\n');
-}
+    return { success: true, saved: savedCount, updated: updatedCount };
 
-// ==================== GET MODELS FROM DATABASE ====================
-
-export async function getModelsFromDatabase(type, options = {}) {
-  const {
-    provider = null,
-    onlyAvailable = true,
-    onlyRecommended = false,
-    limit = null
-  } = options;
-  
-  const query = { type };
-  
-  if (provider) query.provider = provider;
-  if (onlyAvailable) query['status.available'] = true;
-  if (onlyRecommended) query['status.recommended'] = true;
-  
-  query['status.deprecated'] = false;
-  
-  let queryBuilder = AIModel.find(query).sort({ 'performance.priority': 1 });
-  
-  if (limit) queryBuilder = queryBuilder.limit(limit);
-  
-  const models = await queryBuilder;
-  
-  // If no models found, return defaults
-  if (models.length === 0) {
-    console.log(`   ⚠️  No models in database, using defaults for ${type}`);
-    return DEFAULT_MODELS[type] || [];
-  }
-  
-  return models;
-}
-
-// ==================== CHECK MODEL AVAILABILITY ====================
-
-export async function checkModelAvailability(modelId) {
-  const model = await AIModel.findOne({ modelId });
-  
-  if (!model) {
-    console.log(`   ⚠️  Model ${modelId} not found in database`);
-    return false;
-  }
-  
-  // Check if API key exists for provider
-  const providerKeys = {
-    'anthropic': process.env.ANTHROPIC_API_KEY,
-    'openai': process.env.OPENAI_API_KEY,
-    'google': process.env.GOOGLE_API_KEY,
-    'byteplus': process.env.BYTEPLUS_API_KEY,
-    'fireworks': process.env.FIREWORKS_API_KEY,
-    'zai': process.env.ZAI_TOKEN,
-    'grok': process.env.GROK_SSO,
-    'replicate': process.env.REPLICATE_API_TOKEN,
-    'huggingface': process.env.HUGGINGFACE_API_KEY,
-    'runway': process.env.RUNWAY_API_KEY,
-    'luma': process.env.LUMA_API_KEY
-  };
-  
-  const hasKey = !!providerKeys[model.provider];
-  
-  // Update availability in database
-  if (model.status.available !== hasKey) {
-    await model.updateAvailability(hasKey);
-  }
-  
-  return hasKey && model.status.available;
-}
-
-// ==================== AUTO SYNC ON STARTUP ====================
-
-export async function autoSyncOnStartup() {
-  try {
-    console.log('\n🔄 Auto-syncing models on startup...');
-    
-    // Check when last synced
-    const lastModel = await AIModel.findOne().sort({ 'metadata.lastChecked': -1 });
-    
-    if (!lastModel) {
-      console.log('   📊 No models in database, performing initial sync...');
-      await syncModelsToDatabase();
-      return;
-    }
-    
-    const hoursSinceLastSync = (Date.now() - lastModel.metadata.lastChecked) / (1000 * 60 * 60);
-    
-    if (hoursSinceLastSync > 24) {
-      console.log(`   📊 Last sync was ${hoursSinceLastSync.toFixed(1)} hours ago, syncing...`);
-      await syncModelsToDatabase();
-    } else {
-      console.log(`   ✅ Models synced ${hoursSinceLastSync.toFixed(1)} hours ago, skipping`);
-    }
-    
   } catch (error) {
-    console.error('   ❌ Auto-sync failed:', error.message);
-    console.log('   💡 Will use default models as fallback');
+    console.error('❌ Model sync failed:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// ==================== EXPORT ====================
+// ==================== AUTO SYNC ====================
 
-export default {
-  syncModelsToDatabase,
-  getModelsFromDatabase,
-  checkModelAvailability,
-  autoSyncOnStartup,
-  DEFAULT_MODELS
-};
+export function autoSyncOnStartup() {
+  setTimeout(() => {
+    syncModelsWithDB({ forceCheck: false })
+      .then(res => console.log('✅ Startup model sync completed:', res))
+      .catch(err => console.error('❌ Startup model sync failed:', err));
+  }, 5000); // 5s delay
+}

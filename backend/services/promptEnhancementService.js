@@ -3,9 +3,7 @@
  * Phase 3: Core enhancement logic with 6 functions + caching + retry logic
  */
 
-import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
-import axios from 'axios';
+import { queryAIModel } from './aiQueryService.js';
 import NodeCache from 'node-cache';
 import { getKeyManager } from '../utils/keyManager.js';
 
@@ -16,19 +14,19 @@ import { getKeyManager } from '../utils/keyManager.js';
 const CACHE = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
 
 const ENHANCEMENT_MODELS = {
-  gpt4: 'gpt-4-turbo-preview',
-  claude: 'claude-3-sonnet-20240229',
+  gpt4: 'openai/gpt-4-turbo',
+  claude: 'anthropic/claude-3-sonnet',
   openrouter: 'openrouter/auto',
 };
 
 const MODEL_CONFIG = {
-  'gpt-4-turbo-preview': {
-    provider: 'openai',
+  'openai/gpt-4-turbo': {
+    provider: 'openrouter',
     maxTokens: 4000,
     costPer1kTokens: 0.01,
   },
-  'claude-3-sonnet-20240229': {
-    provider: 'anthropic',
+  'anthropic/claude-3-sonnet': {
+    provider: 'openrouter',
     maxTokens: 4000,
     costPer1kTokens: 0.003,
   },
@@ -75,19 +73,7 @@ const logger = {
  */
 function validateApiKey(provider) {
   const keyManager = getKeyManager();
-  const key = keyManager.getKey(provider);
-  
-  if (!key) {
-    logger.warn(`Missing API key for: ${provider}`);
-    return false;
-  }
-  
-  if (typeof key !== 'string' || key.trim().length === 0) {
-    logger.warn(`Invalid API key format for: ${provider}`);
-    return false;
-  }
-  
-  return true;
+  return keyManager.hasAvailableKeys(provider.toUpperCase());
 }
 
 /**
@@ -160,7 +146,7 @@ async function measurePerformance(fn) {
 /**
  * FUNCTION 1: Enhance a draft prompt
  */
-export async function enhancePrompt(draftPrompt, options = {}) {
+export async function enhancePrompt(draftPrompt, analysis, selectedOptions, options = {}) {
   try {
     if (!draftPrompt || draftPrompt.trim().length < PROMPT_CONSTRAINTS.minLength) {
       throw new Error(`Prompt must be at least ${PROMPT_CONSTRAINTS.minLength} characters`);
@@ -187,10 +173,19 @@ export async function enhancePrompt(draftPrompt, options = {}) {
 
     const selectedModel = model === 'auto' ? await selectBestModel('enhancement') : model;
 
-    logger.info(`Enhancing prompt with model: ${selectedModel}, type: ${type}, style: ${style}`);
+    logger.info(`Enhancing prompt with model: ${selectedModel}`);
+    console.log('============================================================');
+    console.log('🤖 AI PROMPT ENHANCEMENT - FULL PAYLOAD 🤖');
+    console.log('============================================================');
+    console.log('MODEL:', selectedModel);
+    console.log('--- SYSTEM PROMPT ---');
+    console.log(buildSystemPromptWithContext(analysis, selectedOptions, style));
+    console.log('--- USER DRAFT PROMPT ---');
+    console.log(draftPrompt);
+    console.log('============================================================');
 
-    const systemPrompt = buildSystemPrompt(type, style);
-    
+    const systemPrompt = buildSystemPromptWithContext(analysis, selectedOptions, style);
+
     const { result, executionTime } = await measurePerformance(async () => {
       return await retryWithBackoff(async () => {
         return await callAIProvider(selectedModel, systemPrompt, draftPrompt);
@@ -537,20 +532,14 @@ export function optimizeForVideoGen(prompt) {
 // ============================================================================
 
 async function callAIProvider(model, systemPrompt, userPrompt) {
-  const provider = MODEL_CONFIG[model]?.provider || 'openai';
-
-  try {
-    if (provider === 'openai') {
-      return await callOpenAI(model, systemPrompt, userPrompt);
-    } else if (provider === 'anthropic') {
-      return await callAnthropic(model, systemPrompt, userPrompt);
-    } else {
-      throw new Error(`Unsupported provider: ${provider}`);
-    }
-  } catch (error) {
-    logger.error('Error calling AI provider:', error);
-    throw error;
-  }
+  const provider = MODEL_CONFIG[model].provider;
+  // The executeWithKeyRotation is now handled inside queryAIModel
+  return await queryAIModel(
+    provider,
+    model,
+    systemPrompt,
+    [{ role: 'user', content: userPrompt }]
+  );
 }
 
 async function callOpenAI(model, systemPrompt, userPrompt) {
@@ -661,6 +650,28 @@ function checkLocalSafety(text) {
     isSafe: flags.length === 0,
     flags,
   };
+}
+
+function buildSystemPromptWithContext(analysis, selectedOptions, style) {
+  let context = `You are a world-class fashion photography prompt engineer. Your task is to enhance a draft prompt by incorporating detailed context from an AI analysis.
+
+**Analysis Context:**
+- Character: ${JSON.stringify(analysis.character, null, 2)}
+- Product: ${JSON.stringify(analysis.product, null, 2)}
+- Compatibility Score: ${analysis.compatibility.score}/100
+- AI Recommendations: ${JSON.stringify(analysis.recommendations, null, 2)}
+- Selected Options by User: ${JSON.stringify(selectedOptions, null, 2)}
+
+**Your Goal:**
+Refine the following user-provided draft prompt. Use the context above to add rich, coherent details. The final prompt should be a masterpiece of descriptive detail, suitable for a high-end fashion photoshoot.
+
+**Style Guide (${style}):**
+- **Detailed:** Be extremely descriptive. Mention textures, lighting specifics, camera settings, and mood.
+- **Concise:** Be punchy and direct. Use strong keywords.
+- **Artistic:** Be more abstract and evocative. Focus on the feeling and atmosphere.
+
+Please provide ONLY the enhanced prompt, with no extra text, commentary, or markdown.`;
+  return context;
 }
 
 function buildSystemPrompt(type, style) {

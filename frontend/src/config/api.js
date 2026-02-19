@@ -1,6 +1,23 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+export const API_CONFIG = {
+  TIMEOUT: 90000, // 90 seconds
+  RETRY: {
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 1000, // 1 second
+  },
+};
+
+export const API_ENDPOINTS = {
+  PROMPTS: '/prompts',
+  ENHANCE_PROMPT: '/prompts/enhance', // NEW
+  PROMPT_TEMPLATES: '/prompt-templates',
+  PROVIDER_STATUS: '/ai/providers', // Get vision/analysis providers from AI controller
+  UNIFIED_ANALYZE: '/flows/analyze', // NEW: Unified flow analysis endpoint
+  UNIFIED_GENERATE: '/flows/generate', // NEW: Unified flow generation endpoint
+};
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

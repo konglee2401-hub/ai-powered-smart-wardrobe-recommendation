@@ -11,7 +11,7 @@ import {
   Download, Save, RefreshCw, X, CheckCircle, Video
 } from 'lucide-react';
 
-import { unifiedFlowAPI, browserAutomationAPI } from '../services/api';
+import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api'; // Add aiOptionsAPI
 
 // Import components
 import UseCaseSelector from '../components/UseCaseSelector';
@@ -71,6 +71,7 @@ export default function VirtualTryOnPage() {
   const [generatedImages, setGeneratedImages] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false); // Add this line for general loading state
 
   const [providerStatus, setProviderStatus] = useState(null);
 
@@ -87,56 +88,102 @@ export default function VirtualTryOnPage() {
   const [browserProvider, setBrowserProvider] = useState('grok');
   const [browserPrompt, setBrowserPrompt] = useState('');
 
-  // Load provider status on mount
-  useEffect(() => {
-    loadProviderStatus();
-  }, []);
+  const [promptOptions, setPromptOptions] = useState(null);
 
-  const loadProviderStatus = async () => {
-    try {
-      const status = await unifiedFlowAPI.getProviderStatus();
-      setProviderStatus(status);
-    } catch (error) {
-      console.warn('Could not load provider status:', error);
-    }
-  };
+  // Load provider status and prompt options on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        console.log("Loading initial data...");
+        const [status, options] = await Promise.all([
+          unifiedFlowAPI.getProviderStatus(),
+          aiOptionsAPI.getAllOptions() // Fetch all prompt options
+        ]);
+        setProviderStatus(status);
+        setPromptOptions(options);
+        console.log("Initial data loaded.", { status, options });
+      } catch (error) {
+        console.warn('Could not load initial data:', error);
+      }
+    };
+    loadInitialData();
+  }, []);
 
   // Step validation
   const canProceedToStep = (step) => {
     switch (step) {
       case 2:
-        // Upload mode: need both images
-        if (activeMode === 'upload') {
-          return characterImage && productImage && useCase && productFocus;
-        }
-        // Browser mode: need prompt
-        if (activeMode === 'browser') {
-          return browserPrompt.trim().length > 0;
-        }
-        // Prompt mode: need prompt
-        if (activeMode === 'prompt') {
-          return browserPrompt.trim().length > 0;
-        }
-        return false;
+        return characterImage && productImage && useCase && productFocus;
       case 3:
         return analysis && !isAnalyzing;
       case 4:
-        return Object.keys(selectedOptions).length > 0;
+        return analysis && Object.keys(selectedOptions).length > 0;
       case 5:
-        return generatedPrompt && promptBuilt;
+        // CRITICAL FIX: The "Generate" button should be enabled once a prompt exists.
+        return generatedPrompt?.positive && !isGenerating && !isLoading;
       case 6:
         return generatedImages.length > 0 || generatedVideo;
       default:
         return true;
     }
   };
+  const handleOptionChange = (category, value) => {
+    setSelectedOptions(prev => ({ ...prev, [category]: value }));
+  };
 
-  // Step 1 -> Step 2: Start Analysis
+  const handleCustomOptionChange = (category, value) => {
+    setCustomOptions(prev => ({ ...prev, [category]: value }));
+  };
+
+  // Handle prompt changes from the PromptBuilder component
+  const handlePromptChange = (prompt) => {
+    setGeneratedPrompt(prompt);
+  };
+
+  // Regenerate prompt based on analysis data
+  const handleRegeneratePrompt = async (currentAnalysis) => {
+    // Handle both nested and direct analysis structures
+    const analysisData = currentAnalysis?.analysis || currentAnalysis;
+
+    if (!analysisData) {
+      console.warn("Cannot regenerate prompt: analysis data is missing.");
+      return;
+    }
+
+    try {
+      if (analysisData?.promptKeywords) {
+        const keywords = Object.values(analysisData.promptKeywords).flat().join(', ');
+        setGeneratedPrompt({
+          positive: keywords,
+          negative: 'blurry, low quality, distorted',
+        });
+      } else if (analysisData?.summary) {
+        setGeneratedPrompt({
+          positive: analysisData.summary,
+          negative: 'blurry, low quality, distorted',
+        });
+      } else {
+        console.warn("Analysis result does not contain promptKeywords or summary for prompt generation.");
+      }
+    } catch (error) {
+      console.error('Failed to regenerate prompt:', error);
+    }
+  };
+
+  // ============================================================
+  // STEP HANDLERS - Flow control
+  // ============================================================
+
+  /**
+   * STEP 1 -> STEP 2: Unified Analysis (both images together)
+   * Analyzes character and product images in a single AI call
+   */
   const handleStartAnalysis = async () => {
     if (!characterImage?.file || !productImage?.file) return;
 
     setIsAnalyzing(true);
     setAnalysisError(null);
+    console.log('📸 STEP 1: Starting unified analysis...');
 
     try {
       const response = await unifiedFlowAPI.analyzeUnified(
@@ -145,156 +192,242 @@ export default function VirtualTryOnPage() {
         { useCase, productFocus }
       );
 
-      setAnalysis(response.data.analysis);
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Analysis failed');
+      }
+
+      // Store the full response data (includes analysis and metadata)
+      setAnalysis(response.data);
+      console.log('✅ Analysis complete, moving to customization');
+      
+      // Move to step 2 (Apply AI Recommendations)
       setCurrentStep(2);
+      setAnalysisError(null);
     } catch (error) {
-      console.error('Analysis failed:', error);
+      console.error('❌ Analysis failed:', error);
       setAnalysisError(error.message || 'Analysis failed. Please try again.');
+      setCurrentStep(1); // Stay on step 1
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Step 2 -> Step 3: Apply AI recommendations
-  const handleApplyRecommendations = () => {
-    const aiOptions = {};
-    if (analysis?.recommendations) {
-      Object.entries(analysis.recommendations).forEach(([category, rec]) => {
-        if (rec.primary) {
-          aiOptions[category] = rec.primary;
-        }
-      });
-    }
-    setSelectedOptions(aiOptions);
-    setCurrentStep(3);
-  };
-
-  // Step 3 -> Step 4: Build prompt
-  const handleBuildPrompt = () => {
-    setPromptBuilt(true);
-    setCurrentStep(4);
-  };
-
-  // Handle prompt change
-  const handlePromptChange = (prompt) => {
-    setGeneratedPrompt(prompt);
-  };
-
-  // Handle regenerate prompt
-  const handleRegeneratePrompt = async () => {
-    if (!analysis) return;
+  /**
+   * STEP 2 -> STEP 3: Apply AI Recommendations and Move to Customization
+   * User reviews and accepts AI recommendations, then proceeds to customization
+   */
+  const handleApplyRecommendations = async () => {
+    if (!analysis?.analysis) return;
+    
+    console.log('🎯 STEP 2->3: Applying recommendations and moving to customization');
 
     try {
-      const response = await unifiedFlowAPI.analyzeUnified(
-        characterImage.file,
-        productImage.file,
-        { useCase, productFocus, selectedOptions }
-      );
-
-      if (response.data?.analysis?.promptKeywords) {
-        setGeneratedPrompt({
-          positive: response.data.analysis.promptKeywords.join(', '),
-          negative: 'blurry, low quality, distorted',
+      // Extract AI recommendations from analysis
+      const analysisData = analysis.analysis;
+      const aiOptions = {};
+      
+      if (analysisData?.recommendations) {
+        Object.entries(analysisData.recommendations).forEach(([category, rec]) => {
+          if (rec.primary) {
+            aiOptions[category] = rec.primary;
+          }
         });
       }
+
+      // Set selected options from recommendations
+      setSelectedOptions(aiOptions);
+      console.log('✅ Recommendations applied:', aiOptions);
+      
+      // Move to step 3 (Style Customization)
+      setCurrentStep(3);
     } catch (error) {
-      console.error('Failed to regenerate prompt:', error);
+      console.error('❌ Failed to apply recommendations:', error);
+      setAnalysisError(error.message);
     }
   };
 
-  // Step 4 -> Step 5: Start generation (Image or Video)
+  /**
+   * STEP 3 -> STEP 4: Build Prompt from Analysis and Options
+   * Takes the analysis + selected options and builds a detailed, use-case-aware prompt
+   */
+  const handleBuildPrompt = async () => {
+    if (!analysis?.analysis) {
+      setAnalysisError('No analysis data available');
+      return;
+    }
+
+    setIsLoading(true);
+    console.log(`🎨 STEP 3->4: Building smart prompt (useCase: ${useCase}, focus: ${productFocus})...`);
+
+    try {
+      const response = await unifiedFlowAPI.buildPrompt(
+        analysis.analysis,  // Pass just the analysis object, not the wrapper
+        selectedOptions,
+        useCase,           // Pass use case for smart prompt building
+        productFocus       // Pass product focus for context-aware suggestions
+      );
+
+      if (!response.success || !response.data?.prompt) {
+        throw new Error(response.error || 'Failed to build prompt');
+      }
+
+      // Set the generated prompt
+      setGeneratedPrompt(response.data.prompt);
+      console.log('✅ Smart prompt built successfully');
+
+      // Move to step 4 (Prompt Building/Review)
+      setCurrentStep(4);
+    } catch (error) {
+      console.error('❌ Prompt building failed:', error);
+      setAnalysisError(error.message || 'Failed to build prompt');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * STEP 4: Enhance/Refine the Prompt (Optional)
+   * User can enhance the built prompt before generation
+   */
+  const handleEnhancePrompt = async () => {
+    if (!generatedPrompt?.positive) {
+      console.error('❌ No prompt to enhance');
+      return;
+    }
+
+    setIsLoading(true);
+    console.log('✨ STEP 4: Enhancing prompt...');
+
+    try {
+      const response = await promptsAPI.enhancePrompt(
+        generatedPrompt.positive,
+        analysis,
+        selectedOptions
+      );
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to enhance prompt');
+      }
+
+      // Update with enhanced prompt
+      setGeneratedPrompt({
+        positive: response.enhancedPrompt,
+        negative: generatedPrompt.negative
+      });
+
+      console.log('✅ Prompt enhanced successfully');
+      setPromptBuilt(true);
+    } catch (error) {
+      console.error('❌ Enhancement failed:', error);
+      setAnalysisError('Could not enhance prompt. Using current prompt.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * STEP 4 -> STEP 5: Generate Images from Prompt
+   * Calls the generation API with the built prompt
+   */
   const handleStartGeneration = async () => {
-    if (!generatedPrompt && activeTab === 'image') return;
+    if (!generatedPrompt?.positive) {
+      console.error('❌ No prompt for generation');
+      return;
+    }
 
     setIsGenerating(true);
     setGenerationError(null);
+    console.log('🎨 STEP 4->5: Starting image generation...');
 
     try {
-      if (activeMode === 'browser' || activeMode === 'prompt') {
-        // Browser/Prompt-only mode: Use browser automation
-        if (activeTab === 'image') {
-          const response = await browserAutomationAPI.generateImage(
-            browserPrompt,
-            browserProvider
-          );
-          
-          if (response.success) {
-            setGeneratedImages([{ url: response.imageUrl, provider: browserProvider }]);
-            setCurrentStep(5);
-          } else {
-            throw new Error(response.error || 'Generation failed');
-          }
-        } else {
-          // Video generation via browser
-          const response = await browserAutomationAPI.generateVideo(
-            browserPrompt,
-            browserProvider
-          );
-          
-          if (response.success) {
-            setGeneratedVideo({ url: response.videoUrl });
-            setCurrentStep(5);
-          } else {
-            throw new Error(response.error || 'Generation failed');
-          }
+      const response = await unifiedFlowAPI.generateImages({
+        prompt: generatedPrompt.positive,
+        negativePrompt: generatedPrompt.negative,
+        options: {
+          imageCount: selectedOptions.imageCount || 2,
+          aspectRatio: selectedOptions.aspectRatio || '1:1'
         }
-        return;
+      });
+
+      if (!response.success || !response.data?.generatedImages) {
+        throw new Error(response.error || 'Image generation failed');
       }
 
-      // Standard upload mode: Use existing generation logic
-      if (activeTab === 'image') {
-        // Image generation
-        const response = await unifiedFlowAPI.generateImages({
-          prompt: generatedPrompt.positive,
-          negativePrompt: generatedPrompt.negative,
-          options: {
-            imageCount: selectedOptions.imageCount || 2,
-            aspectRatio: selectedOptions.aspectRatio || '1:1',
-          },
-        });
+      // Set generated images
+      const images = response.data.generatedImages || [];
+      setGeneratedImages(images);
+      console.log(`✅ Generated ${images.length} images`);
 
-        setGeneratedImages(response.data.images || []);
-        setCurrentStep(5);
-      } else {
-        // Video generation
-        const videoPrompt = generatedPrompt?.positive || 
-          (analysis?.promptKeywords?.join(', ')) || 
-          'A person wearing fashionable clothes, smooth motion';
-        
-        const response = await unifiedFlowAPI.generateVideo({
-          prompt: videoPrompt,
-          provider: videoOptions.model,
-          options: {
-            durationSeconds: videoOptions.duration,
-            motionStyle: videoOptions.motionStyle
-          },
-          referenceImages: characterImage ? [{ url: characterImage.preview }] : []
-        });
-
-        setGeneratedVideo(response.data || response);
-        setCurrentStep(5);
-      }
+      // Move to step 5 (Results)
+      setCurrentStep(5);
     } catch (error) {
-      console.error('Generation failed:', error);
-      setGenerationError(error.message || 'Generation failed. Please try again.');
+      console.error('❌ Generation failed:', error);
+      setGenerationError(error.message || 'Image generation failed. Please try again.');
+      setCurrentStep(4); // Stay on step 4
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Step navigation
+  // ============================================================
+  // STEP NAVIGATION
+  // ============================================================
+
+  /**
+   * handleNextStep - Orchestrates progression through the 6-step workflow
+   * Each step has specific prerequisites and triggers specific actions
+   */
   const handleNextStep = () => {
-    if (currentStep === 1) {
-      handleStartAnalysis();
-    } else if (currentStep === 2) {
-      handleApplyRecommendations();
-    } else if (currentStep === 3) {
-      handleBuildPrompt();
-    } else if (currentStep === 4) {
-      // At step 4 (prompt), build prompt first then move to generation
-      handleBuildPrompt();
-    } else if (currentStep < 6) {
-      setCurrentStep(currentStep + 1);
+    switch (currentStep) {
+      case 1:
+        // Step 1: Upload → Step 2: Analysis
+        // Prerequisites: Both images and settings selected
+        if (!characterImage?.file || !productImage?.file) {
+          setAnalysisError('Please upload both images');
+          return;
+        }
+        handleStartAnalysis();
+        break;
+
+      case 2:
+        // Step 2: Analysis → Step 3: Customization
+        // Automatically apply AI recommendations and move to customization
+        handleApplyRecommendations();
+        break;
+
+      case 3:
+        // Step 3: Customization → Step 4: Prompt Building
+        // User has selected options; now build the detailed prompt
+        if (Object.keys(selectedOptions).length === 0) {
+          setAnalysisError('Please select at least one customization option');
+          return;
+        }
+        handleBuildPrompt();
+        break;
+
+      case 4:
+        // Step 4: Prompt → Step 5: Generation
+        // Prompt is ready; start image generation
+        if (!generatedPrompt?.positive) {
+          setAnalysisError('No prompt available for generation');
+          return;
+        }
+        handleStartGeneration();
+        break;
+
+      case 5:
+        // Step 5: Results → Step 6: Download/Share
+        setCurrentStep(6);
+        break;
+
+      case 6:
+        // Already at results
+        break;
+
+      default:
+        if (currentStep < 6) {
+          setCurrentStep(currentStep + 1);
+        }
     }
   };
 
@@ -396,58 +529,23 @@ export default function VirtualTryOnPage() {
 
       case 2:
         return (
-          <div className="space-y-6">
-            {/* Analysis Display */}
-            <AnalysisDisplay
-              characterAnalysis={analysis?.character}
-              productAnalysis={analysis?.product}
-              compatibility={analysis?.compatibility}
-              recommendations={analysis?.recommendations}
-              pose={analysis?.pose}
-              stylingNotes={analysis?.stylingNotes}
-              isAnalyzing={isAnalyzing}
-            />
-
-            {/* Error message */}
-            {analysisError && (
-              <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600" />
-                  <p className="text-red-800">{analysisError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Apply recommendations button */}
-            {analysis && !isAnalyzing && (
-              <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-purple-800">AI Analysis Complete!</p>
-                    <p className="text-sm text-purple-600">
-                      AI đã phân tích và đưa ra recommendations. Click "Tiếp Tục" để áp dụng.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleApplyRecommendations}
-                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    <Sparkles className="w-5 h-5" />
-                    Apply AI Recommendations
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <AnalysisDisplay
+            analysis={analysis?.analysis}
+            isAnalyzing={isAnalyzing}
+          />
         );
 
       case 3:
         return (
           <StyleCustomizer
-            aiRecommendations={analysis?.recommendations}
+            options={promptOptions}
             selectedOptions={selectedOptions}
-            onOptionsChange={setSelectedOptions}
+            onOptionChange={handleOptionChange}
             customOptions={customOptions}
+            onCustomOptionChange={handleCustomOptionChange}
+            recommendations={analysis?.analysis?.recommendations}
+            newOptions={analysis?.analysis?.newOptions}
+            analysis={analysis?.analysis}
           />
         );
 
@@ -455,11 +553,11 @@ export default function VirtualTryOnPage() {
         return (
           <div className="space-y-6">
             <PromptBuilder
-              analysis={analysis}
+              analysis={analysis?.analysis}
               selectedOptions={selectedOptions}
-              onPromptChange={handlePromptChange}
               generatedPrompt={generatedPrompt}
-              onRegeneratePrompt={handleRegeneratePrompt}
+              onPromptChange={handlePromptChange}
+              onRegeneratePrompt={() => handleRegeneratePrompt(analysis?.analysis)}
             />
 
             {/* Build prompt button */}
@@ -472,11 +570,21 @@ export default function VirtualTryOnPage() {
                   </p>
                 </div>
                 <button
-                  onClick={handleBuildPrompt}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleEnhancePrompt}
+                  disabled={!generatedPrompt?.positive || isLoading}
+                  className="flex items-center justify-center w-full px-8 py-3 text-base font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  <Rocket className="w-5 h-5" />
-                  Continue to Generation
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Building Prompt...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-5 h-5 mr-2" />
+                      Build Prompt
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -759,55 +867,69 @@ export default function VirtualTryOnPage() {
       {currentStep < 6 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={handlePrevStep}
-                disabled={currentStep === 1}
-                className={`
-                  flex items-center gap-2 px-6 py-3 rounded-lg transition-colors
-                  ${currentStep === 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }
-                `}
-              >
-                <ChevronLeft className="w-5 h-5" />
-                Back
-              </button>
+            <div className="flex items-center justify-end gap-4">
+              {currentStep > 1 && (
+                <button
+                  onClick={handlePrevStep}
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Back
+                </button>
+              )}
 
-              <button
-                onClick={handleNextStep}
-                disabled={!canProceedToStep(currentStep + 1) || isAnalyzing || isGenerating}
-                className={`
-                  flex items-center gap-2 px-8 py-3 rounded-lg transition-colors
-                  ${!canProceedToStep(currentStep + 1) || isAnalyzing || isGenerating
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }
-                `}
-              >
-                {isAnalyzing || isGenerating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing...
-                  </>
-                ) : currentStep === 4 ? (
-                  <>
-                    <Rocket className="w-5 h-5" />
-                    Build Prompt & Continue
-                  </>
-                ) : currentStep === 5 ? (
-                  <>
-                    <Rocket className="w-5 h-5" />
-                    Generate
-                  </>
-                ) : (
-                  <>
-                    Continue
-                    <ChevronRight className="w-5 h-5" />
-                  </>
-                )}
-              </button>
+              {/* Step 1: Start Analysis */}
+              {currentStep === 1 && (
+                <button onClick={handleNextStep} disabled={!canProceedToStep(2) || isAnalyzing} className="flex items-center justify-center w-full sm:w-auto px-8 py-3 text-base font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  {isAnalyzing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}
+                  Start AI Analysis
+                </button>
+              )}
+
+              {/* Step 2: Apply Recommendations */}
+              {currentStep === 2 && (
+                <button onClick={handleNextStep} disabled={!canProceedToStep(3)} className="flex items-center justify-center w-full sm:w-auto px-8 py-3 text-base font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  <Sliders className="w-5 h-5 mr-2" />
+                  Apply Recommendations
+                </button>
+              )}
+
+              {/* Step 3: Continue to Final Prompt */}
+              {currentStep === 3 && (
+                <button onClick={handleNextStep} disabled={!canProceedToStep(4)} className="flex items-center justify-center w-full sm:w-auto px-8 py-3 text-base font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  Continue to Final Prompt
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </button>
+              )}
+
+              {/* Step 4: Enhance and Generate */}
+              {currentStep === 4 && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={handleEnhancePrompt}
+                    disabled={isLoading || isGenerating}
+                    className="flex items-center justify-center px-6 py-2 text-sm font-medium text-purple-700 bg-purple-100 border border-transparent rounded-lg hover:bg-purple-200 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}
+                    Enhance with AI
+                  </button>
+                  <button
+                    onClick={handleStartGeneration}
+                    disabled={!canProceedToStep(5) || isGenerating || isLoading}
+                    className="flex items-center justify-center w-full sm:w-auto px-8 py-3 text-base font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {isGenerating ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Rocket className="w-5 h-5 mr-2" />}
+                    Generate {activeTab === 'image' ? 'Images' : 'Video'}
+                  </button>
+                </div>
+              )}
+              
+              {/* Step 5: View Results -> Step 6 */}
+              {currentStep === 5 && (
+                <button onClick={handleNextStep} disabled={!canProceedToStep(6)} className="flex items-center justify-center w-full sm:w-auto px-8 py-3 text-base font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                    <Image className="w-5 h-5 mr-2" />
+                    View Results
+                </button>
+              )}
             </div>
           </div>
         </div>

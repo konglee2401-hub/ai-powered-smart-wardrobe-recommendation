@@ -24,17 +24,17 @@ import PromptHistory from '../models/PromptHistory.js';
  */
 export async function enhancePrompt(req, res) {
   try {
-    const { prompt, options = {} } = req.body;
+    const { draft: prompt, analysis, selectedOptions, options = {} } = req.body;
 
     if (!prompt) {
       return res.status(400).json({
         success: false,
-        error: 'Prompt is required',
+        error: 'Prompt (draft) is required',
       });
     }
 
     // Call enhancement service
-    const result = await promptEnhancementService.enhancePrompt(prompt, options);
+    const result = await promptEnhancementService.enhancePrompt(prompt, analysis, selectedOptions, options);
 
     // Save to history (optional - can be disabled for performance)
     if (req.body.saveToHistory !== false) {

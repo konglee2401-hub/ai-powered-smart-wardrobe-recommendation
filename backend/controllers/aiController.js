@@ -1012,7 +1012,7 @@ const getAvailableProviders = async (req, res) => {
       model: p.model,
       priority: p.priority,
       pricing: p.pricing,
-      available: p.available
+      available: p.available() // Call the function to get boolean
     }));
 
     // Group by provider type
@@ -1047,7 +1047,7 @@ const getAvailableProviders = async (req, res) => {
       keyStats: keyStats,
       stats: {
         total: providers.length,
-        available: providers.filter(p => p.available()).length,
+        available: providers.filter(p => p.available).length, // available is now a boolean
         free: providers.filter(p => !p.pricing).length,
         paid: providers.filter(p => p.pricing).length
       }

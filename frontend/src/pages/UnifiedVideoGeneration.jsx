@@ -20,6 +20,9 @@ export default function UnifiedVideoGeneration() {
   const [productPreview, setProductPreview] = useState(null);
 
   // ==================== STATE: PHASE 1 - PRE-ANALYSIS ====================
+  const [useBrowserAutomation, setUseBrowserAutomation] = useState(false);
+  const [browserAnalysisProvider, setBrowserAnalysisProvider] = useState('chat.z.ai');
+  const [browserImageGenProvider, setBrowserImageGenProvider] = useState('grok.com');
   const [analysisMode, setAnalysisMode] = useState('semi-auto'); // manual, semi-auto, full-auto, hybrid
   const [productFocus, setProductFocus] = useState('full-outfit'); // top, bottom, footwear, accessories, full-outfit
   const [preferredModel, setPreferredModel] = useState('auto');
@@ -78,8 +81,6 @@ export default function UnifiedVideoGeneration() {
   // ==================== STATE: PHASE 3 - IMAGE GENERATION ====================
   const [imageCount, setImageCount] = useState(2);
   const [imageProvider, setImageProvider] = useState('auto');
-  const [generationMethod, setGenerationMethod] = useState('api'); // 'api' or 'browser-automation'
-  const [browserProvider, setBrowserProvider] = useState('google-labs'); // google-labs, grok, image-z-ai, seedream
   const [availableProviders, setAvailableProviders] = useState([]);
   const [generatedImages, setGeneratedImages] = useState([]);
   const [savingImages, setSavingImages] = useState({});
@@ -595,12 +596,14 @@ export default function UnifiedVideoGeneration() {
     addLog('='.repeat(80), 'info');
     addLog('PHASE 3: GENERATING IMAGES', 'info');
     addLog('='.repeat(80), 'info');
-    addLog(`Method: ${generationMethod}`);
 
-    if (generationMethod === 'api') {
-      addLog(`Provider: ${imageProvider}`, 'info');
+    if (useBrowserAutomation) {
+      addLog(`Method: Browser Automation`, 'info');
+      addLog(`Analysis Provider: ${browserAnalysisProvider}`, 'info');
+      addLog(`Image Generation Provider: ${browserImageGenProvider}`, 'info');
     } else {
-      addLog(`Browser Provider: ${browserProvider}`, 'info');
+      addLog(`Method: API`, 'info');
+      addLog(`Provider: ${imageProvider}`, 'info');
     }
 
     addLog(`Count: ${imageCount}`, 'info');
@@ -616,7 +619,19 @@ export default function UnifiedVideoGeneration() {
 
       let response;
 
-      if (generationMethod === 'api') {
+      if (useBrowserAutomation) {
+        formData.append('analysisProvider', browserAnalysisProvider);
+        formData.append('imageGenProvider', browserImageGenProvider);
+        
+        response = await axiosInstance.post(
+          `/api/browser-automation/generate-image`,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 300000 // 5 minutes for browser automation
+          }
+        );
+      } else {
         formData.append('selectedModel', imageProvider);
 
         response = await axiosInstance.post(
@@ -625,18 +640,6 @@ export default function UnifiedVideoGeneration() {
           {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: 180000
-          }
-        );
-      } else {
-        // Browser automation
-        formData.append('provider', browserProvider);
-
-        response = await axios.post(
-          `${API_BASE_URL}/image-gen/browser-generate`,
-          formData,
-          {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 300000 // 5 minutes for browser automation
           }
         );
       }

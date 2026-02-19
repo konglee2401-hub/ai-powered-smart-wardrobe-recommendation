@@ -99,20 +99,12 @@ export const promptTemplateAPI = {
 // ============================================
 
 export const promptsAPI = {
-  generate: async (characterDescription, productDescription, useCase, style) => {
-    try {
-      const response = await axiosInstance.post('/prompts/generate', {
-        characterDescription,
-        productDescription,
-        useCase,
-        style,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error generating prompt:', error);
-      throw error;
-    }
-  },
+  // Generate simple prompt
+  generatePrompt: (data) => api.post(API_ENDPOINTS.PROMPTS, data),
+  
+  // Enhance a draft prompt
+  enhancePrompt: (draft, analysis, selectedOptions) => 
+    api.post(API_ENDPOINTS.ENHANCE_PROMPT, { draft, analysis, selectedOptions }),
 };
 
 // ============================================
@@ -191,19 +183,23 @@ export const templatesAPI = {
 
 export const aiOptionsAPI = {
   // Discover new options from AI response
-  discoverOptions: (options) => api.post(API_ENDPOINTS.AI_DISCOVER_OPTIONS, { options }),
+  discoverOptions: (options) => api.post('/prompt-options/discover', { options }),
   
   // Get all options grouped by category
-  getAllOptions: () => api.get(API_ENDPOINTS.AI_OPTIONS),
+  getAllOptions: () => api.get('/prompt-options'),
   
   // Get options by category
-  getOptionsByCategory: (category) => api.get(`${API_ENDPOINTS.AI_OPTIONS}/${category}`),
+  getOptionsByCategory: (category) => api.get(`/prompt-options/${category}`),
+  
+  // Create a new option (save to database)
+  createOption: (category, value, label, description, metadata = {}) => 
+    api.post('/prompt-options', { category, value, label, description, metadata }),
   
   // Delete option
-  deleteOption: (id) => api.delete(`${API_ENDPOINTS.AI_OPTIONS}/${id}`),
+  deleteOption: (id) => api.delete(`/prompt-options/${id}`),
   
   // Export options for training
-  exportOptions: () => api.get(`${API_ENDPOINTS.AI_OPTIONS}/export`),
+  exportOptions: () => api.get('/prompt-options/export'),
 };
 
 // ============================================
@@ -320,6 +316,24 @@ export const unifiedFlowAPI = {
   },
   
   /**
+   * Build Prompt from Analysis
+   * Takes analysis data and options, returns a prompt ready for image generation
+   * Now includes use-case and product-focus aware prompt building
+   * @param {Object} analysis - Analysis data from analyzeUnified
+   * @param {Object} selectedOptions - User-selected options for the prompt
+   * @param {string} useCase - Use case (change-clothes, styling, complete-look, etc.)
+   * @param {string} productFocus - Product focus (full-outfit, top, bottom, etc.)
+   */
+  buildPrompt: async (analysis, selectedOptions = {}, useCase = 'change-clothes', productFocus = 'full-outfit') => {
+    return api.post('/ai/build-prompt-unified', {
+      analysis,
+      selectedOptions,
+      useCase,
+      productFocus
+    });
+  },
+  
+  /**
    * Generate images with smart fallback
    * @param {Object} params - Generation parameters
    * @param {string} params.prompt - Positive prompt
@@ -328,15 +342,16 @@ export const unifiedFlowAPI = {
    * @param {Function} onProgress - Progress callback
    */
   generateImages: async (params, onProgress = null) => {
-    const formData = new FormData();
-    formData.append('prompt', params.prompt);
-    formData.append('negativePrompt', params.negativePrompt || '');
+    // Send as JSON instead of FormData since we're not uploading files
+    const payload = {
+      prompt: params.prompt,
+      negativePrompt: params.negativePrompt || '',
+      options: params.options || {},
+      // Extract imageCount to top level as expected by backend
+      imageCount: params.options?.imageCount || 2
+    };
     
-    if (params.options) {
-      formData.append('options', JSON.stringify(params.options));
-    }
-    
-    return api.postFormData(API_ENDPOINTS.UNIFIED_GENERATE, formData, onProgress);
+    return api.post(API_ENDPOINTS.UNIFIED_GENERATE, payload);
   },
   
   /**
@@ -434,6 +449,36 @@ export const browserAutomationAPI = {
     formData.append('generateVideo', generateVideo);
     return api.postFormData(API_ENDPOINTS.BROWSER_FULL_WORKFLOW, formData);
   },
+};
+
+// ============================================
+// PROVIDER APIs (Provider Manager)
+// ============================================
+
+export const providersAPI = {
+  // Get all providers and their models
+  getAll: () => api.get('/providers'),
+
+  // Update provider (settings, enabled status)
+  update: (id, data) => api.put(`/providers/${id}`, data),
+
+  // Reorder providers
+  reorder: (orderedIds) => api.post('/providers/reorder', { orderedIds }),
+
+  // Add API Key
+  addKey: (providerId, key, label) => 
+    api.post(`/providers/${providerId}/keys`, { action: 'add', keyData: { key, label } }),
+
+  // Remove API Key
+  removeKey: (providerId, keyId) => 
+    api.post(`/providers/${providerId}/keys`, { action: 'remove', keyData: { keyId } }),
+
+  // Update Key Status
+  updateKey: (providerId, keyId, status) => 
+    api.post(`/providers/${providerId}/keys`, { action: 'update', keyData: { keyId, status } }),
+
+  // Sync models
+  syncModels: (force = false) => api.post('/providers/sync', { force })
 };
 
 export default api;

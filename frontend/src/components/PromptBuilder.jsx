@@ -178,20 +178,12 @@ export default function PromptBuilder({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">
-            📏 Positive: {prompts.positive.length} chars
+            📏 Positive: {prompts?.positive?.length || 0} chars
           </span>
           <span className="text-sm text-gray-500">
-            🚫 Negative: {prompts.negative.length} chars
+            🚫 Negative: {prompts?.negative?.length || 0} chars
           </span>
         </div>
-
-        <button
-          onClick={onRegeneratePrompt}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-        >
-          <Sparkles className="w-4 h-4" />
-          Regenerate
-        </button>
       </div>
 
       {/* Prompts Display */}
@@ -261,37 +253,50 @@ export default function PromptBuilder({
               <h3 className="font-semibold text-red-800 flex items-center gap-2">
                 🚫 Negative Prompt
               </h3>
-              <button
-                onClick={() => handleCopy('negative')}
-                className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-              >
-                {copied.negative ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => editingPrompt ? handleSave() : setEditingPrompt(true)}
+                  className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+                >
+                  {editingPrompt ? (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save
+                    </>
+                  ) : (
+                    <>
+                      <Edit3 className="w-4 h-4" />
+                      Edit
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleCopy('negative')}
+                  className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                >
+                  {copied.negative ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="p-6">
-              {editingPrompt ? (
-                <textarea
-                  value={prompts.negative}
-                  onChange={(e) => handlePromptChange('negative', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none font-mono"
-                  rows={4}
-                />
-              ) : (
-                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
-                  {prompts.negative}
-                </div>
-              )}
+              <textarea
+                value={prompts.negative}
+                onChange={(e) => handlePromptChange('negative', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none font-mono"
+                rows={4}
+                readOnly={!editingPrompt}
+              />
             </div>
           </div>
 
@@ -337,7 +342,7 @@ export default function PromptBuilder({
           
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 line-clamp-3">
-              {prompts.positive.substring(0, 200)}...
+              {prompts?.positive?.substring(0, 200) || 'Prompt not generated yet...'}...
             </p>
           </div>
         </div>

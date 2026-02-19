@@ -11,10 +11,16 @@
     "seed": "cd backend && npm run seed",
     "start": "cd backend && npm start"
   },
-  "keywords": ["wardrobe", "ai", "fashion", "recommendation"],
+  "keywords": [
+    "wardrobe",
+    "ai",
+    "fashion",
+    "recommendation"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^8.2.2"
   }
 }

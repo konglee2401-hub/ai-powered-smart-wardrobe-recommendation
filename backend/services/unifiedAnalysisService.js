@@ -12,28 +12,8 @@ import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import PromptOption from '../models/PromptOption.js';
 import { getKeyManager, executeWithKeyRotation } from '../utils/keyManager.js';
-import { getProvidersByPriority } from '../config/imageGenConfig.js';
-import {
-  analyzeMultipleImagesWithOpenRouter,
-  analyzeWithOpenRouter
-} from '../services/openRouterService.js';
-
-// ============================================================
-// GET PROVIDER PRIORITY FROM CONFIG
-// ============================================================
-
-function getAnalysisProviders() {
-  if (process.env.VISION_PROVIDER_PRIORITY) {
-    return process.env.VISION_PROVIDER_PRIORITY.split(',').map(x => x.trim().toLowerCase());
-  }
-  
-  try {
-    const providers = getProvidersByPriority('analysis');
-    return providers.map(p => p.name);
-  } catch {
-    return ['openrouter', 'google', 'anthropic', 'openai'];
-  }
-}
+import { getAnalysisProviders } from '../config/analysisProviders.js';
+import AIModel from '../models/AIModel.js';
 
 // ============================================================
 // ANALYZE MULTIPLE IMAGES WITH GOOGLE GEMINI (Native)
@@ -196,107 +176,142 @@ function buildUnifiedPrompt(allOptions, useCase, productFocus) {
   const colorOpts = allOptions.colorPalette?.map(o => o.value).join(', ') || 'neutral, warm, cool';
   const cameraOpts = allOptions.cameraAngle?.map(o => o.value).join(', ') || 'eye-level, three-quarter';
 
-  return `You are an expert AI fashion stylist and photographer. Your task is to analyze BOTH images together and provide detailed recommendations.
+  return `You are an elite AI fashion stylist and technical photographer. Your task is to analyze BOTH images to create a highly detailed generation prompt.
 
 IMAGES TO ANALYZE:
-1. Character/Model image - the person who will wear the product
-2. Product image - the clothing/accessory item
+1. Character/Model image: Analyze physique, skin, hair, facial features, and pose.
+2. Product image: Analyze the clothing item(s) in extreme technical detail (fabric, cut, texture, stitching).
 
 USE CASE: ${useCase}
 PRODUCT FOCUS: ${productFocus}
 
-AVAILABLE OPTIONS (Choose ONLY from these values):
-
-SCENE/LOCATION:
-${sceneOpts}
-
-LIGHTING:
-${lightingOpts}
-
-MOOD:
-${moodOpts}
-
-STYLE:
-${styleOpts}
-
-COLOR PALETTE:
-${colorOpts}
-
-CAMERA ANGLE:
-${cameraOpts}
+AVAILABLE OPTIONS:
+SCENE: ${sceneOpts}
+LIGHTING: ${lightingOpts}
+MOOD: ${moodOpts}
+STYLE: ${styleOpts}
+COLOR PALETTE: ${colorOpts}
+CAMERA ANGLE: ${cameraOpts}
 
 TASK:
-Analyze both images together and provide a JSON response with these exact fields:
+Provide a JSON response with these EXACT fields. Do not omit any field.
 
 {
   "character": {
-    "age": "estimated age range",
-    "gender": "gender presentation",
-    "skinTone": "skin tone description",
-    "bodyType": "body type description",
-    "hair": { "color": "", "length": "", "style": "" },
-    "overallVibe": "character personality/style vibe"
+    "gender": "male, female, or non-binary (be precise based on visual)",
+    "age": "specific age range (e.g. 25-28)",
+    "bodyType": "precise body shape (e.g. hourglass, athletic, slim, curvy, pear, rectangle)",
+    "skinTone": "detailed skin tone (e.g. fair cool, olive warm, deep brown, porcelain)",
+    "hair": { 
+      "color": "exact color (e.g. honey blonde, jet black)", 
+      "length": "short/medium/long", 
+      "style": "wavy/straight/curly/braided/updo" 
+    },
+    "facialFeatures": "distinctive features (e.g. high cheekbones, freckles, sharp jawline)",
+    "overallVibe": "specific vibe (e.g. confident executive, boho chic, streetwear edginess)"
   },
   "product": {
-    "type": "clothing type",
-    "style": "style category",
-    "colors": ["main colors"],
-    "material": "material description",
-    "fit": "fit type",
-    "occasion": "suitable occasions",
-    "season": "appropriate seasons",
-    "details": ["key details"]
+    "category": "exact category (e.g. Maxi Dress, T-Shirt, Suit)",
+    "type": "Top, Bottom, One-Piece, Outerwear, or Accessory",
+    "detailedDescription": "A comprehensive paragraph describing the garment. FORCEFULLY include fabric texture (silk, denim), cut, fit, neckline, sleeve length, patterns, and distinctive details.",
+    "technicalDetails": {
+      "fabric": "material name (e.g. 100% Cotton, Satin, Heavy Denim)",
+      "texture": "texture description (e.g. ribbed, smooth, distressed)",
+      "pattern": "pattern details (e.g. floral, solid, stripes)",
+      "neckline": "neckline type (e.g. V-neck, crew, halter)",
+      "sleeves": "sleeve length/style (e.g. sleeveless, long puff, cap)",
+      "fit": "fit type (e.g. Oversized, Slim, Tailored, Bodycon)"
+    },
+    "colors": ["primary color", "secondary color"]
   },
   "compatibility": {
     "score": 0-100,
-    "strengths": ["why they work together"],
-    "concerns": ["potential issues"],
-    "fitAssessment": "how the product fits this character"
+    "reasoning": "Why this product works (or doesn't) with this character",
+    "fitAssessment": "How well the item fits the character's body type"
   },
   "recommendations": {
-    "scene": { "primary": "", "reason": "", "alternatives": [] },
-    "lighting": { "primary": "", "reason": "", "alternatives": [] },
-    "mood": { "primary": "", "reason": "", "alternatives": [] },
-    "style": { "primary": "", "reason": "", "alternatives": [] },
-    "colorPalette": { "primary": "", "reason": "", "alternatives": [] },
-    "cameraAngle": { "primary": "", "reason": "", "alternatives": [] }
-  },
-  "pose": {
-    "description": "recommended pose",
-    "hands": "hand positioning",
-    "expression": "facial expression"
+    "scene": { 
+      "primary": "MUST be from available list: ${sceneOpts}. Choose the BEST match for this character + product. If the product is a formal dress, choose 'elegant-interior' or 'outdoor-luxury'. If casual, choose 'street' or 'urban'. Provide detailed reasoning.",
+      "reason": "Detailed explanation of why this scene best showcases the character and product together",
+      "alternatives": ["other good scene options from the list"]
+    },
+    "lighting": { 
+      "primary": "value from list", 
+      "reason": "Explain how lighting should highlight the character's features AND the product's texture/details" 
+    },
+    "mood": { 
+      "primary": "value from list", 
+      "reason": "Describe the overall emotional tone for photography" 
+    },
+    "style": { 
+      "primary": "value from list", 
+      "reason": "Photography style that complements both character and product" 
+    },
+    "colorPalette": {
+      "primary": "MUST be from available list: ${colorOpts}. Analyze: (1) Character's skin tone, (2) Product's colors, (3) Overall harmony. For warm skin with cool-toned product, balance with 'warm' palette. For cool skin with warm product, use 'cool' palette. Choose palette that HARMONIZES character + product.",
+      "reason": "Detailed analysis: How does this palette complement the character's skin tone? How does it enhance the product colors? Why is this the best choice?",
+      "alternatives": ["other good color palette options from the list"]
+    },
+    "cameraAngle": { 
+      "primary": "value from list", 
+      "reason": "Camera angle that flatters the character's body and shows the product details" 
+    }
   },
   "promptKeywords": {
-    "subject": ["keywords for subject"],
-    "clothing": ["keywords for clothing"],
-    "environment": ["keywords for background"],
-    "lighting": ["keywords for lighting"],
-    "camera": ["keywords for camera setup"],
-    "mood": ["keywords for mood"],
-    "quality": ["quality descriptors"]
+    "subject": ["keywords defining the person"],
+    "clothing": ["technical keywords for the garment"],
+    "environment": ["background keywords"],
+    "lighting": ["lighting keywords"],
+    "quality": ["8k", "masterpiece", "raw photo", "ultra-detailed"]
   },
   "stylingNotes": {
-    "accessories": "recommended accessories",
-    "hair": "hair styling notes",
-    "makeup": "makeup recommendations"
-  }
+    "accessories": "suggested accessories that work with this product for this character",
+    "shoes": "suggested footwear that complements the outfit",
+    "makeup": "suggested makeup look that works with the overall vibe"
+  },
+  "newOptions": [
+    {
+      "category": "scene|colorPalette",
+      "value": "new_option_slug",
+      "label": "New Option Label",
+      "description": "Why this new option is unique and better than existing ones in the list",
+      "reason": "When and why a stylist should use this option"
+    }
+  ]
 }
 
-IMPORTANT INSTRUCTIONS:
-1. Analyze the character and product TOGETHER - consider how they complement each other
-2. For recommendations, ONLY use values from the AVAILABLE OPTIONS listed above
-3. Be specific and detailed in descriptions - these will be used to generate images
-4. The "reason" fields should explain WHY each choice works for THIS specific character + product combination
-5. promptKeywords should contain descriptive phrases useful for image generation AI
-6. Consider skin tone when recommending lighting and color palette
-7. Consider body type when recommending camera angle and pose
-8. Consider product style when recommending scene and mood`;
+CRITICAL INSTRUCTIONS:
+1. SCENE: You MUST choose from the provided list. Be detailed about WHY this scene works for this character+product combination.
+2. COLOR PALETTE: This is CRITICAL. Analyze the character's skin tone + product colors together. Choose the palette that HARMONIZES them. Provide detailed reasoning about skin tone compatibility and how the palette makes the product colors pop.
+3. If available options don't fit, suggest NEW OPTIONS in the "newOptions" array (e.g., if the character is Asian with warm undertones and needs a specific palette, suggest "warm-golden" if not in the list).
+4. For recommendations, always provide detailed "reason" fields that explain the visual/technical reasoning.
+5. "newOptions" should only include options that are truly better than existing ones, not duplicates.`;
 }
+
+// Enhance instructions when productFocus indicates a partial item (e.g., top, bottom, shoes, accessory)
+// Require AI to suggest complementary items and include them in `stylingNotes` and `newOptions`.
+function buildComplementaryInstructions(productFocus) {
+  if (!productFocus || productFocus === 'full-outfit') return '';
+
+  return `\n\nADDITIONAL INSTRUCTION FOR PARTIAL PRODUCTS (MANDATORY):\n` +
+    `If PRODUCT FOCUS is '${productFocus}', you MUST suggest complementary items to make a complete outfit.\n` +
+    `- If '${productFocus}' is 'top' or product type indicates a top, provide recommendations for bottoms, shoes, and accessories that pair well (include styles, colors, and example item labels).\n` +
+    `- If '${productFocus}' is 'bottom', recommend matching tops, shoes, and accessories.\n` +
+    `- If '${productFocus}' is 'shoes', recommend matching outfit pieces and accessories.\n` +
+    `- If '${productFocus}' is 'accessory', recommend the outfit and shoes that work best with this accessory.\n` +
+    `Provide these suggestions under the 'stylingNotes' field (keys: 'suggestedTops','suggestedBottoms','shoes','accessories') and also emit any novel palette/scene options under 'newOptions' when appropriate.\n` +
+    `Each suggested item should include: category, value (slug), label, brief description, and why it pairs well.\n`;
+}
+
 
 // ============================================================
 // MAIN: UNIFIED ANALYSIS FUNCTION
 // ============================================================
 
+/**
+ * Main unified analysis function with smart provider selection and fallback.
+ * This is the core function for analyzing images.
+ */
 export async function analyzeUnified(characterImagePath, productImagePath, options = {}) {
   const {
     useCase = 'change-clothes',
@@ -315,7 +330,7 @@ export async function analyzeUnified(characterImagePath, productImagePath, optio
   console.log(`   🎯 Product Focus: ${productFocus}`);
 
   const allOptions = await loadAllOptionsForAI();
-  const prompt = buildUnifiedPrompt(allOptions, useCase, productFocus);
+  const prompt = buildUnifiedPrompt(allOptions, useCase, productFocus) + buildComplementaryInstructions(productFocus);
   console.log(`   📝 Prompt length: ${prompt.length} chars`);
 
   if (!fs.existsSync(characterImagePath)) {
@@ -331,130 +346,104 @@ export async function analyzeUnified(characterImagePath, productImagePath, optio
   let usedProvider = null;
   let usedModel = null;
 
-  const providers = getAnalysisProviders();
-  console.log(`   🔄 Providers in order: ${providers.join(', ')}`);
+  const availableModels = await AIModel.find({ 
+    type: 'analysis', 
+    'status.available': true 
+  }).sort({ 'status.performanceScore': -1 });
 
-  const visionModels = [
-    'qwen/qwen-2-vl-72b-instruct',
-    'google/gemini-2.0-flash-exp:free',
-    'meta-llama/llama-3.2-90b-vision-instruct:free',
-    'meta-llama/llama-3.2-11b-vision-instruct:free'
-  ];
+  console.log(`\n   🔍 Found ${availableModels.length} available analysis models in DB.`);
 
-  for (const provider of providers) {
-    console.log(`\n   ▶️  Trying provider: ${provider}`);
-    
+  if (availableModels.length === 0) {
+    return { success: false, error: 'No available analysis models found in the database.' };
+  }
+  
+  const providers = getAnalysisProviders(); // Still need the config for the .analyze function
+  let lastError = null;
+
+  for (const model of availableModels) {
+    const providerConfig = providers.find(p => p.id === model.modelId);
+    if (!providerConfig) continue;
+
     try {
-      if (provider === 'openrouter') {
-        const modelsToTry = preferredModel ? [preferredModel] : visionModels;
-        
-        for (const model of modelsToTry) {
-          try {
-            console.log(`   🔄 Trying model: ${model}`);
-            
-            rawResult = await executeWithKeyRotation('OPENROUTER', async (apiKey) => {
-              return await analyzeMultipleImagesWithOpenRouter(
-                [characterImagePath, productImagePath],
-                prompt,
-                { model, apiKey }
-              );
-            });
+      console.log(`\nAttempting analysis with: ${providerConfig.name}`);
+      const result = await executeWithKeyRotation(
+          providerConfig.provider.toUpperCase(),
+          (apiKey) => providerConfig.analyze.bind(providerConfig)(characterImagePath, productImagePath, apiKey, options, prompt)
+        );
+      // Parse the result immediately
+      console.log('\n   📊 Parsing AI response...');
+      const parsed = parseUnifiedResult(result.data);
 
-            usedProvider = 'openrouter';
-            usedModel = model;
-            console.log(`   ✅ Success with ${provider}/${model}`);
-            break;
-          } catch (error) {
-            console.log(`   ❌ Failed with ${model}: ${error.message}`);
-          }
+      // Ensure newOptions are included in the final response
+      const finalParsed = { ...parsed, newOptions: parsed.newOptions || [] };
+      
+      // Save any new options discovered
+      if (parsed.newOptions && Array.isArray(parsed.newOptions) && parsed.newOptions.length > 0) {
+        console.log(`   ✨ AI suggested ${parsed.newOptions.length} new options. Saving to DB...`);
+        for (const newOpt of parsed.newOptions) {
+            try {
+                await PromptOption.updateOne(
+                    { category: newOpt.category, value: newOpt.value },
+                    {
+                        $set: {
+                            label: newOpt.label,
+                            description: newOpt.description,
+                            isAIGenerated: true,
+                            lastUsed: new Date()
+                        },
+                        $inc: { usageCount: 1 }
+                    },
+                    { upsert: true }
+                );
+                console.log(`      ➕ Saved new option: ${newOpt.category}/${newOpt.value}`);
+            } catch (dbError) {
+                console.warn(`      ⚠️ Failed to save new option: ${dbError.message}`);
+            }
         }
-        
-        if (rawResult) break;
       }
-      
-      if (provider === 'google') {
-        try {
-          rawResult = await analyzeMultipleImagesWithGemini(
-            [characterImagePath, productImagePath],
-            prompt
-          );
-          usedProvider = 'google';
-          usedModel = 'gemini-2.0-flash-exp';
-          console.log(`   ✅ Success with Google Gemini`);
-          break;
-        } catch (error) {
-          console.log(`   ❌ Failed with Google Gemini: ${error.message}`);
-        }
-      }
-      
-      if (provider === 'anthropic') {
-        console.log('   ⚠️  Anthropic multi-image not yet implemented, skipping...');
-      }
-      
-      if (provider === 'openai') {
-        console.log('   ⚠️  OpenAI multi-image not yet implemented, skipping...');
-      }
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      logAnalysisResult(finalParsed, providerConfig.name, result.model, duration);
+
+      return {
+        success: true,
+        data: finalParsed,
+        metadata: {
+          provider: providerConfig.name,
+          model: result.model,
+          duration: result.duration,
+        },
+      };
     } catch (error) {
-      console.log(`   ❌ Provider ${provider} failed: ${error.message}`);
+      console.error(`Analysis with ${providerConfig.name} failed:`, error.message);
+      lastError = error;
     }
   }
 
   if (!rawResult) {
-    console.log('\n   ⚠️  Multi-image failed with all providers, trying single-image fallback...');
+    console.log('\n   ⚠️  Multi-image analysis failed, trying single-image fallback...');
     
-    for (const provider of providers) {
+    for (const model of availableModels) {
+      const providerConfig = providers.find(p => p.id === model.modelId);
+      if (!providerConfig) continue;
+
       try {
-        console.log(`\n   ▶️  Trying single-image with: ${provider}`);
+        console.log(`\n   ▶️  Trying single-image with: ${providerConfig.name}`);
         
-        if (provider === 'openrouter') {
-          const fallbackModel = preferredModel || visionModels[0];
-          const fallbackPrompt = prompt + '\n\nNOTE: Only one image is provided (the character). For the product, use reasonable defaults based on the use case.';
-          
-          rawResult = await executeWithKeyRotation('OPENROUTER', async (apiKey) => {
-            return await analyzeWithOpenRouter(
-              characterImagePath,
-              fallbackPrompt,
-              { model: fallbackModel, apiKey }
-            );
-          });
-          
-          usedProvider = 'openrouter (single-image)';
-          usedModel = fallbackModel;
-          console.log('   ✅ Single-image fallback succeeded with OpenRouter');
-          break;
-        }
+        // Pass a flag to the analyze function to indicate single image mode
+        const result = await executeWithKeyRotation(
+          providerConfig.provider.toUpperCase(),
+          (apiKey) => providerConfig.analyze.bind(providerConfig)(characterImagePath, null, apiKey, { ...options, singleImage: true }, prompt)
+        );
         
-        if (provider === 'google') {
-          const keyManager = getKeyManager('google');
-          const keyInfo = keyManager.getNextKey();
-          const apiKey = keyInfo.key;
-          
-          if (apiKey) {
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-            
-            const imageBuffer = fs.readFileSync(characterImagePath);
-            const base64 = imageBuffer.toString('base64');
-            const ext = path.extname(characterImagePath).toLowerCase();
-            const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
-            
-            const fallbackPrompt = prompt + '\n\nNOTE: Only one image is provided (the character). For the product, use reasonable defaults based on the use case.';
-            
-            const result = await model.generateContent([
-              { inlineData: { data: base64, mimeType } },
-              { text: fallbackPrompt }
-            ]);
-            
-            rawResult = result.response.text();
-            usedProvider = 'google (single-image)';
-            usedModel = 'gemini-2.0-flash-exp';
-            console.log('   ✅ Single-image fallback succeeded with Google Gemini');
-            break;
-          }
-        }
+        rawResult = result.data; // The parsed JSON data is in result.data now
+        usedProvider = `${providerConfig.name} (single-image)`;
+        usedModel = result.model;
+        console.log(`   ✅ Single-image fallback succeeded with ${providerConfig.name}`);
+        break; // Exit loop on first success
         
       } catch (fallbackError) {
-        console.log(`   ❌ Single-image fallback failed with ${provider}: ${fallbackError.message}`);
+        console.log(`   ❌ Single-image fallback failed with ${providerConfig.name}: ${fallbackError.message}`);
       }
     }
   }
@@ -466,12 +455,40 @@ export async function analyzeUnified(characterImagePath, productImagePath, optio
   console.log('\n   📊 Parsing AI response...');
   const parsed = parseUnifiedResult(rawResult);
 
+  // Ensure newOptions are included in the final response
+  const finalParsed = { ...parsed, newOptions: parsed.newOptions || [] };
+
+  // Process and save new options if any
+  if (parsed.newOptions && Array.isArray(parsed.newOptions) && parsed.newOptions.length > 0) {
+    console.log(`   ✨ AI suggested ${parsed.newOptions.length} new options. Saving to DB...`);
+    for (const newOpt of parsed.newOptions) {
+      try {
+        await PromptOption.updateOne(
+          { category: newOpt.category, value: newOpt.value },
+          {
+            $set: {
+              label: newOpt.label,
+              description: newOpt.description,
+              isAIGenerated: true,
+              lastUsed: new Date()
+            },
+            $inc: { usageCount: 1 }
+          },
+          { upsert: true }
+        );
+        console.log(`      ➕ Saved new option: ${newOpt.category}/${newOpt.value}`);
+      } catch (dbError) {
+        console.warn(`      ⚠️ Failed to save new option: ${dbError.message}`);
+      }
+    }
+  }
+
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  logAnalysisResult(parsed, usedProvider, usedModel, duration);
+  logAnalysisResult(finalParsed, usedProvider, usedModel, duration);
 
   return {
     success: true,
-    data: parsed,
+    data: finalParsed,
     metadata: {
       provider: usedProvider,
       model: usedModel,
@@ -488,12 +505,20 @@ export async function analyzeUnified(characterImagePath, productImagePath, optio
 // PARSE THE UNIFIED RESULT
 // ============================================================
 
-function parseUnifiedResult(rawText) {
+function parseUnifiedResult(rawInput) {
+  // Handle case where input is already an object (pre-parsed)
+  if (typeof rawInput === 'object' && rawInput !== null) {
+    console.log('   [DEBUG] Input is already a parsed object. Content preview:');
+    console.log(JSON.stringify(rawInput, null, 2).substring(0, 1000));
+    return validateAndFillDefaults(rawInput);
+  }
+
+  // Handle string input
+  const rawText = String(rawInput || ''); // Ensure rawText is a string
   console.log(`   📄 Raw response length: ${rawText.length} chars`);
-  console.log(`   📄 First 300 chars: ${rawText.substring(0, 300)}`);
+  console.log(`   📄 Raw Text Preview: ${rawText.substring(0, 1000)}`); 
 
   let jsonString = rawText.trim();
-
   if (jsonString.startsWith('```json')) {
     jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
   } else if (jsonString.startsWith('```')) {
@@ -507,7 +532,27 @@ function parseUnifiedResult(rawText) {
 
   try {
     const parsed = JSON.parse(jsonString);
+    return validateAndFillDefaults(parsed);
+  } catch (parseError) {
+    console.error('   ❌ JSON parse failed:', parseError.message);
+    console.error('   📄 Attempted to parse:', jsonString.substring(0, 500));
     
+    return {
+      character: { overallVibe: 'Could not parse', raw: rawText.substring(0, 500) },
+      product: { type: 'clothing', raw: rawText.substring(0, 500) },
+      compatibility: { score: 50, strengths: ['Analysis completed but parsing failed'], concerns: ['Manual review recommended'] },
+      recommendations: getDefaultRecommendations(),
+      promptKeywords: getDefaultPromptKeywords(),
+      pose: { description: 'natural standing pose' },
+      newOptions: [],
+      stylingNotes: {},
+      _parseError: true,
+      _rawText: rawText
+    };
+  }
+}
+
+function validateAndFillDefaults(parsed) {
     const requiredFields = ['character', 'product', 'recommendations', 'promptKeywords'];
     const missing = requiredFields.filter(f => !parsed[f]);
     
@@ -521,31 +566,15 @@ function parseUnifiedResult(rawText) {
       if (!parsed.pose) parsed.pose = { description: 'natural standing pose' };
       if (!parsed.stylingNotes) parsed.stylingNotes = {};
     }
+    if (!parsed.newOptions) parsed.newOptions = [];
 
-    console.log('   ✅ JSON parsed successfully');
+    console.log('   ✅ Data validation successful');
     console.log(`   📊 Character: ${parsed.character?.overallVibe || 'parsed'}`);
     console.log(`   📊 Product: ${parsed.product?.type || 'parsed'} - ${parsed.product?.style || ''}`);
     console.log(`   📊 Compatibility: ${parsed.compatibility?.score || 'N/A'}/100`);
     console.log(`   📊 Recommendations: ${Object.keys(parsed.recommendations || {}).length} categories`);
 
     return parsed;
-
-  } catch (parseError) {
-    console.error('   ❌ JSON parse failed:', parseError.message);
-    console.error('   📄 Attempted to parse:', jsonString.substring(0, 500));
-    
-    return {
-      character: { overallVibe: 'Could not parse', raw: rawText.substring(0, 500) },
-      product: { type: 'clothing', raw: rawText.substring(0, 500) },
-      compatibility: { score: 50, strengths: ['Analysis completed but parsing failed'], concerns: ['Manual review recommended'] },
-      recommendations: getDefaultRecommendations(),
-      promptKeywords: getDefaultPromptKeywords(),
-      pose: { description: 'natural standing pose' },
-      stylingNotes: {},
-      _parseError: true,
-      _rawText: rawText
-    };
-  }
 }
 
 function getDefaultRecommendations() {

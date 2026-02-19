@@ -154,9 +154,15 @@ class KeyRotationManager {
       }
 
       // Check for too many consecutive failures (circuit breaker)
-      if (keyObj.consecutiveFailures >= 3) {
+      // Check if temporary ban is active
+      if (keyObj.consecutiveFailures >= 3 && keyObj.rateLimitUntil && keyObj.rateLimitUntil > now) {
         isAvailable = false;
-        console.log(`      🚫 Circuit breaker: ${keyObj.consecutiveFailures} consecutive failures`);
+        console.log(`      🚫 Circuit breaker: ${keyObj.consecutiveFailures} consecutive failures (Cooling down)`);
+      } else if (keyObj.consecutiveFailures >= 3 && (!keyObj.rateLimitUntil || keyObj.rateLimitUntil <= now)) {
+         // Reset after cooldown
+         keyObj.consecutiveFailures = 0;
+         keyObj.rateLimitUntil = null;
+         console.log(`      ♻️ Circuit breaker reset: Key #${keyObj.index} is available again`);
       }
 
       if (isAvailable) {
@@ -245,10 +251,19 @@ class KeyRotationManager {
 
       if (keyObj.consecutiveFailures >= 3) {
         console.log(`🚫 ${provider} Key #${keyObj.index} circuit breaker activated (${keyObj.consecutiveFailures} failures)`);
+        // If 3 consecutive failures, mark as temporarily unavailable for 5 mins
+        keyObj.rateLimitUntil = Date.now() + (300 * 1000); 
       }
     } else {
       // Regular failure - increment consecutive failures
       keyObj.consecutiveFailures++;
+
+      // If 3 consecutive failures, mark as temporarily unavailable for 5 mins
+      // Also apply this for explicit 'circuit breaker' calls
+      if (keyObj.consecutiveFailures >= 3) {
+        console.log(`🚫 ${provider} Key #${keyObj.index} circuit breaker activated (${keyObj.consecutiveFailures} failures)`);
+        keyObj.rateLimitUntil = Date.now() + (300 * 1000); 
+      }
     }
 
     // Update provider stats
@@ -421,12 +436,12 @@ export async function executeWithKeyRotation(provider, apiFunction, options = {}
       // Get next available key
       const apiKey = keyManager.getNextKey(provider);
 
-      // Execute the API function
-      console.log(`🔑 Using ${provider} key (attempt ${attempt}/${maxRetries})`);
-      const result = await apiFunction(apiKey);
+      // Execute the API function - PASS THE KEY STRING, NOT THE OBJECT
+      console.log(`🔑 Using ${provider} key #${apiKey.index} (attempt ${attempt}/${maxRetries})`);
+      const result = await apiFunction(apiKey.key);
 
       // Success! Mark key as successful
-      keyManager.markKeySuccess(provider, apiKey);
+      keyManager.markKeySuccess(provider, apiKey.key);
 
       return result;
 

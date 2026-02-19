@@ -12,7 +12,8 @@
 
 import { analyzeUnified } from '../services/unifiedAnalysisService.js';
 import { buildDetailedPrompt } from '../services/smartPromptBuilder.js';
-import { generateWithSmartFallback } from '../services/smartProviderSelector.js';
+import { generateImages as generateImagesWithUnifiedService } from '../services/imageGenService.js'; // Use the new unified service
+import { buildImageGenerationPrompt } from '../services/imagePromptBuilder.js'; // Import the new builder
 import PromptOption from '../models/PromptOption.js';
 
 // ============================================================
@@ -74,71 +75,14 @@ export async function analyzeUnifiedEndpoint(req, res) {
     const { data: analysis, metadata: analysisMetadata } = analysisResult;
 
     // ============================================================
-    // STEP 2: SMART PROMPT BUILDING
-    // ============================================================
-
-    console.log('\n🎨 STEP 2: Smart Prompt Building...');
-
-    // Use provided options or AI recommendations
-    const selectedOptions = {
-      scene: options.scene || analysis.recommendations.scene.primary,
-      lighting: options.lighting || analysis.recommendations.lighting.primary,
-      mood: options.mood || analysis.recommendations.mood.primary,
-      style: options.style || analysis.recommendations.style.primary,
-      colorPalette: options.colorPalette || analysis.recommendations.colorPalette.primary,
-      cameraAngle: options.cameraAngle || analysis.recommendations.cameraAngle.primary
-    };
-
-    const promptResult = await buildDetailedPrompt(analysis, selectedOptions);
-
-    // Track option usage
-    await trackOptionUsage(selectedOptions);
-
-    // ============================================================
-    // STEP 3: IMAGE GENERATION (optional)
-    // ============================================================
-
-    let generatedImages = [];
-    let generationMetadata = null;
-
-    if (generateImages) {
-      console.log('\n🎨 STEP 3: Image Generation...');
-
-      const generationResult = await generateWithSmartFallback(
-        promptResult.prompt,
-        promptResult.negativePrompt,
-        {
-          useCase,
-          productFocus,
-          count: imageCount,
-          imageSize,
-          preferredProvider,
-          maxBudget,
-          onProgress: (progress) => {
-            console.log(`   📊 Generation: ${progress.current}/${progress.total} (${progress.status})`);
-          }
-        }
-      );
-
-      generatedImages = generationResult.results || [];
-      generationMetadata = {
-        total: generationResult.summary?.total || 0,
-        successful: generationResult.summary?.successful || 0,
-        failed: generationResult.summary?.failed || 0,
-        providers: generationResult.summary?.providers || [],
-        errors: generationResult.errors || []
-      };
-
-      console.log(`   ✅ Generated ${generatedImages.length}/${imageCount} images`);
-    }
-
-    // ============================================================
-    // STEP 4: RESPONSE
+    // RESPONSE: Analysis only (Prompt building & generation happen after)
     // ============================================================
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    const response = {
+    console.log(`\n✅ ANALYSIS COMPLETE in ${duration}s`);
+
+    res.json({
       success: true,
       data: {
         analysis: {
@@ -147,36 +91,17 @@ export async function analyzeUnifiedEndpoint(req, res) {
           compatibility: analysis.compatibility,
           recommendations: analysis.recommendations,
           pose: analysis.pose,
-          stylingNotes: analysis.stylingNotes
+          stylingNotes: analysis.stylingNotes,
+          promptKeywords: analysis.promptKeywords
         },
-        prompt: {
-          positive: promptResult.prompt,
-          negative: promptResult.negativePrompt
-        },
-        selectedOptions,
-        generatedImages: generatedImages.map(img => ({
-          url: img.url,
-          provider: img.provider,
-          model: img.model,
-          timestamp: img.timestamp
-        })),
         metadata: {
           duration: `${duration}s`,
           useCase,
           productFocus,
-          analysisDuration: analysisMetadata.duration,
-          imageCount: generatedImages.length,
-          promptLength: promptResult.prompt.length,
-          optionsUsed: Object.keys(selectedOptions).length
+          analysisDuration: analysisMetadata.duration
         }
       }
-    };
-
-    console.log(`\n✅ UNIFIED FLOW COMPLETE in ${duration}s`);
-    console.log(`   📊 Analysis: ${analysisMetadata.duration}`);
-    console.log(`   🎨 Images: ${generatedImages.length}/${imageCount}`);
-
-    res.json(response);
+    });
 
   } catch (error) {
     console.error('💥 UNIFIED FLOW ERROR:', error);
@@ -190,6 +115,76 @@ export async function analyzeUnifiedEndpoint(req, res) {
         duration: `${duration}s`,
         timestamp: new Date().toISOString()
       }
+    });
+  }
+}
+
+/**
+ * Build Prompt from Analysis - Takes analysis data and options, returns prompt
+ * Now uses smart, use-case-aware prompt builder
+ */
+export async function buildPromptEndpoint(req, res) {
+  try {
+    console.log('\n🎨 BUILD PROMPT: Building smart, use-case-aware prompt from analysis...');
+
+    const { 
+      analysis, 
+      selectedOptions = {},
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit'
+    } = req.body;
+
+    if (!analysis) {
+      return res.status(400).json({
+        success: false,
+        error: 'Analysis data is required'
+      });
+    }
+
+    // Use provided options or AI recommendations
+    const finalOptions = {
+      scene: selectedOptions.scene || analysis?.recommendations?.scene?.primary || 'studio',
+      lighting: selectedOptions.lighting || analysis?.recommendations?.lighting?.primary || 'soft-diffused',
+      mood: selectedOptions.mood || analysis?.recommendations?.mood?.primary || 'elegant',
+      style: selectedOptions.style || analysis?.recommendations?.style?.primary || 'fashion-editorial',
+      colorPalette: selectedOptions.colorPalette || analysis?.recommendations?.colorPalette?.primary || 'neutral',
+      cameraAngle: selectedOptions.cameraAngle || analysis?.recommendations?.cameraAngle?.primary || 'three-quarter',
+      hairstyle: selectedOptions.hairstyle,
+      makeup: selectedOptions.makeup
+    };
+
+    console.log(`🎯 UseCase: ${useCase}, ProductFocus: ${productFocus}`);
+
+    // Build smart prompt with use-case awareness
+    const promptResult = await buildDetailedPrompt(
+      analysis, 
+      finalOptions,
+      useCase,
+      productFocus
+    );
+
+    // Track option usage
+    await trackOptionUsage(finalOptions);
+
+    console.log(`✅ Prompt built (${useCase} mode):\n${promptResult.prompt.substring(0, 150)}...\n`);
+
+    res.json({
+      success: true,
+      data: {
+        prompt: {
+          positive: promptResult.prompt,
+          negative: promptResult.negativePrompt
+        },
+        selectedOptions: finalOptions,
+        useCase,
+        productFocus
+      }
+    });
+  } catch (error) {
+    console.error('💥 BUILD PROMPT ERROR:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 }
@@ -233,18 +228,11 @@ export async function generateUnifiedEndpoint(req, res) {
 
     console.log('\n🎨 Generating images...');
 
-    const generationResult = await generateWithSmartFallback(
+    const generationResult = await generateImagesWithUnifiedService(
       prompt,
       negativePrompt,
-      {
-        count: imageCount,
-        imageSize,
-        preferredProvider,
-        maxBudget,
-        onProgress: (progress) => {
-          console.log(`   📊 Generation: ${progress.current}/${progress.total} (${progress.status})`);
-        }
-      }
+      'auto', // modelPreference
+      imageCount
     );
 
     const generatedImages = generationResult.results || [];

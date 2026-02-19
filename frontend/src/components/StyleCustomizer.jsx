@@ -4,7 +4,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Sliders, Sparkles, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sliders, Sparkles, Check, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
+import { aiOptionsAPI } from '../services/api';
 
 // Category configurations with icons and descriptions
 const CATEGORY_CONFIG = {
@@ -13,15 +14,15 @@ const CATEGORY_CONFIG = {
     icon: '🎬',
     description: 'Môi trường chụp ảnh',
     options: [
-      { value: 'studio', label: 'Studio (Clean White)', icon: '📷' },
+      { value: 'studio', label: 'Professional Studio', icon: '📷' },
+      { value: 'white-background', label: 'White Background', icon: '⬜' },
       { value: 'urban-street', label: 'Urban Street', icon: '🏙️' },
-      { value: 'indoor-living', label: 'Indoor Living Space', icon: '🏠' },
-      { value: 'outdoor-natural', label: 'Outdoor Natural', icon: '🌳' },
-      { value: 'cafe-restaurant', label: 'Cafe/Restaurant', icon: '☕' },
-      { value: 'office-workspace', label: 'Office/Workspace', icon: '💼' },
-      { value: 'beach', label: 'Beach', icon: '🏖️' },
+      { value: 'minimalist-indoor', label: 'Minimalist Indoor', icon: '🏠' },
+      { value: 'cafe', label: 'Cafe', icon: '☕' },
+      { value: 'outdoor-park', label: 'Outdoor Park', icon: '🌳' },
+      { value: 'office', label: 'Modern Office', icon: '💼' },
       { value: 'luxury-interior', label: 'Luxury Interior', icon: '✨' },
-      { value: 'white-background', label: 'Pure White Background', icon: '⬜' },
+      { value: 'rooftop', label: 'Rooftop', icon: '🏙️' },
     ],
   },
   lighting: {
@@ -29,14 +30,14 @@ const CATEGORY_CONFIG = {
     icon: '💡',
     description: 'Ánh sáng và hiệu ứng',
     options: [
-      { value: 'natural-light', label: 'Natural Light', icon: '☀️' },
-      { value: 'studio-softbox', label: 'Studio Softbox', icon: '💡' },
-      { value: 'golden-hour', label: 'Golden Hour', icon: '🌅' },
-      { value: 'dramatic-side', label: 'Dramatic Side Light', icon: '🎭' },
-      { value: 'rim-light', label: 'Rim Light', icon: '✨' },
       { value: 'soft-diffused', label: 'Soft Diffused', icon: '🌤️' },
+      { value: 'natural-window', label: 'Natural Window', icon: '🪟' },
+      { value: 'golden-hour', label: 'Golden Hour', icon: '🌅' },
+      { value: 'dramatic-rembrandt', label: 'Dramatic Rembrandt', icon: '🎭' },
       { value: 'high-key', label: 'High Key (Bright)', icon: '🔆' },
-      { value: 'low-key', label: 'Low Key (Dark)', icon: '🌙' },
+      { value: 'backlit', label: 'Backlit', icon: '✨' },
+      { value: 'neon-colored', label: 'Neon/Colored', icon: '🎨' },
+      { value: 'overcast-outdoor', label: 'Overcast Outdoor', icon: '☁️' },
     ],
   },
   mood: {
@@ -44,14 +45,14 @@ const CATEGORY_CONFIG = {
     icon: '😊',
     description: 'Tâm trạng và cảm xúc',
     options: [
-      { value: 'confident', label: 'Confident', icon: '💪' },
-      { value: 'playful', label: 'Playful', icon: '🎉' },
-      { value: 'elegant', label: 'Elegant', icon: '👑' },
-      { value: 'casual', label: 'Casual', icon: '😌' },
-      { value: 'energetic', label: 'Energetic', icon: '⚡' },
-      { value: 'romantic', label: 'Romantic', icon: '💕' },
+      { value: 'confident', label: 'Confident & Powerful', icon: '💪' },
+      { value: 'relaxed', label: 'Relaxed & Casual', icon: '😌' },
+      { value: 'elegant', label: 'Elegant & Sophisticated', icon: '👑' },
+      { value: 'energetic', label: 'Energetic & Dynamic', icon: '⚡' },
+      { value: 'playful', label: 'Playful & Fun', icon: '🎉' },
+      { value: 'mysterious', label: 'Mysterious & Edgy', icon: '🕵️' },
+      { value: 'romantic', label: 'Romantic & Dreamy', icon: '💕' },
       { value: 'professional', label: 'Professional', icon: '👔' },
-      { value: 'edgy', label: 'Edgy', icon: '🔥' },
     ],
   },
   style: {
@@ -60,13 +61,13 @@ const CATEGORY_CONFIG = {
     description: 'Phong cách nhiếp ảnh',
     options: [
       { value: 'minimalist', label: 'Minimalist', icon: '🔳' },
-      { value: 'editorial-fashion', label: 'Editorial Fashion', icon: '📖' },
-      { value: 'lifestyle', label: 'Lifestyle', icon: '🏞️' },
-      { value: 'product-focus', label: 'Product Focus', icon: '📦' },
-      { value: 'artistic', label: 'Artistic', icon: '🎨' },
+      { value: 'editorial', label: 'Editorial', icon: '📖' },
       { value: 'commercial', label: 'Commercial', icon: '🛒' },
-      { value: 'street-style', label: 'Street Style', icon: '🛹' },
-      { value: 'glamour', label: 'Glamour', icon: '💎' },
+      { value: 'lifestyle', label: 'Lifestyle', icon: '🏞️' },
+      { value: 'high-fashion', label: 'High Fashion', icon: '👠' },
+      { value: 'vintage', label: 'Vintage/Retro', icon: '🕰️' },
+      { value: 'street', label: 'Street Style', icon: '🛹' },
+      { value: 'bohemian', label: 'Bohemian', icon: '🌻' },
     ],
   },
   colorPalette: {
@@ -74,14 +75,48 @@ const CATEGORY_CONFIG = {
     icon: '🎨',
     description: 'Bảng màu tổng thể',
     options: [
-      { value: 'neutral-tones', label: 'Neutral Tones', icon: '⚪' },
-      { value: 'vibrant', label: 'Vibrant', icon: '🌈' },
-      { value: 'monochrome', label: 'Monochrome', icon: '⚫' },
-      { value: 'complementary', label: 'Complementary', icon: '🔄' },
-      { value: 'warm-tones', label: 'Warm Tones', icon: '🔥' },
-      { value: 'cool-tones', label: 'Cool Tones', icon: '❄️' },
+      { value: 'neutral', label: 'Neutral', icon: '⚪' },
+      { value: 'warm', label: 'Warm Tones', icon: '🔥' },
+      { value: 'cool', label: 'Cool Tones', icon: '❄️' },
       { value: 'pastel', label: 'Pastel', icon: '🌸' },
+      { value: 'monochrome', label: 'Monochrome', icon: '⚫' },
+      { value: 'vibrant', label: 'Vibrant', icon: '🌈' },
       { value: 'earth-tones', label: 'Earth Tones', icon: '🌍' },
+      { value: 'metallic', label: 'Metallic', icon: '🪙' },
+    ],
+  },
+  hairstyle: {
+    label: 'Hairstyle',
+    icon: '💇',
+    description: 'Kiểu tóc',
+    options: [
+      { value: 'long-straight', label: 'Long Straight', icon: '📏' },
+      { value: 'long-wavy', label: 'Long Wavy', icon: '〰️' },
+      { value: 'long-curly', label: 'Long Curly', icon: '🌀' },
+      { value: 'medium-straight', label: 'Medium Straight', icon: '📏' },
+      { value: 'medium-wavy', label: 'Medium Wavy', icon: '〰️' },
+      { value: 'medium-curly', label: 'Medium Curly', icon: '🌀' },
+      { value: 'short-bob', label: 'Short Bob', icon: '✂️' },
+      { value: 'short-pixie', label: 'Short Pixie', icon: '✨' },
+      { value: 'bun', label: 'Bun Updo', icon: '🧦' },
+      { value: 'braided', label: 'Braided', icon: '📿' },
+      { value: 'loose-bun', label: 'Loose Bun', icon: '🌸' },
+    ],
+  },
+  makeup: {
+    label: 'Makeup Look',
+    icon: '💄',
+    description: 'Kiểu trang điểm',
+    options: [
+      { value: 'natural', label: 'Natural/No-Makeup', icon: '✨' },
+      { value: 'light', label: 'Light & Fresh', icon: '🌙' },
+      { value: 'glowing', label: 'Glowing', icon: '💫' },
+      { value: 'bold-lips', label: 'Bold Lips', icon: '💋' },
+      { value: 'smokey-eyes', label: 'Smokey Eyes', icon: '👁️' },
+      { value: 'winged-liner', label: 'Winged Eyeliner', icon: '🎨' },
+      { value: 'contoured', label: 'Contoured', icon: '🎭' },
+      { value: 'glamorous', label: 'Glamorous', icon: '👑' },
+      { value: 'dewy', label: 'Dewy Skin', icon: '💧' },
     ],
   },
   cameraAngle: {
@@ -90,39 +125,62 @@ const CATEGORY_CONFIG = {
     description: 'Góc máy ảnh',
     options: [
       { value: 'eye-level', label: 'Eye Level', icon: '👀' },
-      { value: 'slightly-above', label: 'Slightly Above', icon: '⬆️' },
-      { value: 'low-angle', label: 'Low Angle', icon: '⬇️' },
-      { value: 'three-quarter', label: '3/4 View', icon: '🔄' },
-      { value: 'full-body', label: 'Full Body', icon: '📏' },
-      { value: 'portrait', label: 'Portrait Close-up', icon: '🤳' },
+      { value: 'slight-angle', label: 'Slight Angle', icon: '📐' },
+      { value: 'three-quarter', label: 'Three-Quarter', icon: '🔄' },
+      { value: 'full-front', label: 'Full Front', icon: '🧍' },
+      { value: 'over-shoulder', label: 'Over Shoulder', icon: '👥' },
     ],
   },
 };
 
 export default function StyleCustomizer({
-  aiRecommendations,
+  options,
   selectedOptions,
-  onOptionsChange,
+  onOptionChange,
   customOptions,
+  onCustomOptionChange,
+  recommendations,
+  newOptions,
+  analysis
 }) {
   const [expandedCategories, setExpandedCategories] = useState(
     Object.keys(CATEGORY_CONFIG).reduce((acc, key) => ({ ...acc, [key]: true }), {})
   );
+  const [savingOptions, setSavingOptions] = useState({});
+  const [savedNewOptions, setSavedNewOptions] = useState([]);
 
   // Apply AI recommendations as defaults when they change
   useEffect(() => {
-    if (aiRecommendations && Object.keys(selectedOptions).length === 0) {
-      const defaults = {};
-      Object.entries(aiRecommendations).forEach(([category, rec]) => {
+    if (recommendations && Object.keys(selectedOptions).length === 0) {
+      Object.entries(recommendations).forEach(([category, rec]) => {
         if (rec.primary) {
-          defaults[category] = rec.primary;
+          onOptionChange(category, rec.primary);
         }
       });
-      if (Object.keys(defaults).length > 0) {
-        onOptionsChange(defaults);
-      }
     }
-  }, [aiRecommendations]);
+  }, [recommendations]);
+
+  // Handle saving a new AI-suggested option to the database
+  const handleSaveNewOption = async (newOption) => {
+    if (savedNewOptions.includes(newOption.value)) return;
+    
+    setSavingOptions(prev => ({ ...prev, [newOption.value]: true }));
+    try {
+      await aiOptionsAPI.createOption(
+        newOption.category,
+        newOption.value,
+        newOption.label,
+        newOption.description,
+        { reason: newOption.reason }
+      );
+      setSavedNewOptions(prev => [...prev, newOption.value]);
+      console.log(`✅ New option saved: ${newOption.category}/${newOption.value}`);
+    } catch (error) {
+      console.error('❌ Failed to save new option:', error);
+    } finally {
+      setSavingOptions(prev => ({ ...prev, [newOption.value]: false }));
+    }
+  };
 
   const toggleCategory = (category) => {
     setExpandedCategories((prev) => ({
@@ -131,15 +189,8 @@ export default function StyleCustomizer({
     }));
   };
 
-  const handleOptionSelect = (category, value) => {
-    onOptionsChange({
-      ...selectedOptions,
-      [category]: value,
-    });
-  };
-
   const isAISuggested = (category, value) => {
-    return aiRecommendations?.[category]?.primary === value;
+    return recommendations?.[category]?.primary === value;
   };
 
   const isSelected = (category, value) => {
@@ -181,11 +232,11 @@ export default function StyleCustomizer({
 
               <div className="flex items-center gap-3">
                 {/* AI Suggestion Badge */}
-                {aiRecommendations?.[categoryKey] && (
+                {recommendations?.[categoryKey] && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-purple-100 rounded-full">
                     <Sparkles className="w-4 h-4 text-purple-600" />
                     <span className="text-sm font-medium text-purple-700">
-                      AI: {config.options.find(o => o.value === aiRecommendations[categoryKey].primary)?.label}
+                      AI: {config.options.find(o => o.value === recommendations[categoryKey].primary)?.label}
                     </span>
                   </div>
                 )}
@@ -201,71 +252,55 @@ export default function StyleCustomizer({
 
             {/* Options Grid */}
             {expandedCategories[categoryKey] && (
-              <div className="px-6 pb-6">
-                {/* AI Reason */}
-                {aiRecommendations?.[categoryKey]?.reason && (
-                  <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                    <p className="text-sm text-purple-700">
-                      <Sparkles className="w-4 h-4 inline mr-1" />
-                      <strong>AI Reason:</strong> {aiRecommendations[categoryKey].reason}
-                    </p>
+              <div className="px-6 pb-6 space-y-4">
+                {/* AI Recommendation Details */}
+                {recommendations?.[categoryKey] && (
+                  <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                    <div className="flex gap-2 items-start">
+                      <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-blue-900 mb-1">
+                          AI Đề Xuất: {CATEGORY_CONFIG[categoryKey].options.find(o => o.value === recommendations[categoryKey].primary)?.label}
+                        </p>
+                        <p className="text-sm text-blue-800 leading-relaxed">
+                          {recommendations[categoryKey].reason}
+                        </p>
+                        {recommendations[categoryKey].alternatives && recommendations[categoryKey].alternatives.length > 0 && (
+                          <p className="text-xs text-blue-700 mt-2">
+                            <strong>Các tùy chọn khác:</strong> {recommendations[categoryKey].alternatives.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* Options */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {config.options.map((option) => {
-                    const isSuggested = isAISuggested(categoryKey, option.value);
-                    const selected = isSelected(categoryKey, option.value);
+                    const isSelected = selectedOptions[categoryKey] === option.value;
+                    const isRecommended = recommendations?.[categoryKey]?.primary === option.value;
 
                     return (
-                      <button
-                        key={option.value}
-                        onClick={() => handleOptionSelect(categoryKey, option.value)}
-                        className={`
-                          relative p-3 rounded-xl border-2 transition-all text-left
-                          ${selected
-                            ? 'border-purple-500 bg-purple-50 shadow-md'
-                            : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
-                          }
-                          ${isSuggested && !selected ? 'ring-2 ring-purple-300 ring-offset-1' : ''}
-                        `}
-                      >
-                        {/* Selected indicator */}
-                        {selected && (
-                          <div className="absolute top-2 right-2">
-                            <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                              <Check className="w-3 h-3 text-white" />
-                            </div>
+                      <div key={option.value} className="relative">
+                        <button
+                          onClick={() => onOptionChange(categoryKey, option.value)}
+                          className={`
+                            w-full h-full text-left p-3 rounded-lg border-2 transition-all
+                            ${isSelected ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white hover:border-purple-300'}
+                            ${isRecommended && !isSelected ? 'border-green-400 ring-2 ring-green-200' : 'border-gray-200'}
+                          `}
+                        >
+                          <div className="font-semibold">{option.label}</div>
+                          <div className={`text-xs ${isSelected ? 'text-purple-200' : 'text-gray-500'}`}>{option.description}</div>
+                        </button>
+                        {isRecommended && !isSelected && (
+                          <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] rounded-full font-bold flex items-center gap-1">
+                            <Sparkles size={10} />
+                            AI Rec
                           </div>
                         )}
-
-                        {/* AI Suggested indicator */}
-                        {isSuggested && !selected && (
-                          <div className="absolute top-2 right-2">
-                            <div className="w-5 h-5 bg-purple-200 rounded-full flex items-center justify-center">
-                              <Sparkles className="w-3 h-3 text-purple-600" />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Icon */}
-                        <div className="text-2xl mb-2">{option.icon}</div>
-
-                        {/* Label */}
-                        <div className={`font-medium text-sm ${selected ? 'text-purple-700' : 'text-gray-800'}`}>
-                          {option.label}
-                        </div>
-
-                        {/* AI Badge */}
-                        {isSuggested && (
-                          <div className="mt-1">
-                            <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
-                              AI Pick
-                            </span>
-                          </div>
-                        )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -277,7 +312,7 @@ export default function StyleCustomizer({
                     placeholder={`Custom ${config.label}...`}
                     value={customOptions?.[categoryKey] || ''}
                     onChange={(e) =>
-                      handleOptionSelect(categoryKey, e.target.value)
+                      onCustomOptionChange(categoryKey, e.target.value)
                     }
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -287,6 +322,74 @@ export default function StyleCustomizer({
           </div>
         ))}
       </div>
+
+      {/* New AI-Suggested Options */}
+      {newOptions && newOptions.length > 0 && (
+        <div className="mt-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl shadow-sm border border-amber-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-amber-600" />
+            <h3 className="text-lg font-semibold text-amber-900">✨ AI Đề Xuất Thêm Tùy Chọn Mới</h3>
+          </div>
+          
+          <p className="text-sm text-amber-800 mb-4">
+            AI nhận thấy những tùy chọn mới có thể phù hợp hơn với hình ảnh của bạn. Nhấp "Lưu" để thêm vào hệ thống.
+          </p>
+
+          <div className="space-y-3">
+            {newOptions.map((newOption, idx) => {
+              const isSaved = savedNewOptions.includes(newOption.value);
+              const isSaving = savingOptions[newOption.value];
+              const categoryConfig = CATEGORY_CONFIG[newOption.category];
+
+              return (
+                <div
+                  key={idx}
+                  className="bg-white rounded-lg p-4 border border-amber-100 hover:border-amber-300 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-amber-600">
+                          {categoryConfig?.label || newOption.category}
+                        </span>
+                        <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded">
+                          NEW
+                        </span>
+                      </div>
+                      <h4 className="font-semibold text-gray-800 mb-1">{newOption.label}</h4>
+                      <p className="text-sm text-gray-600 mb-2">{newOption.description}</p>
+                      {newOption.reason && (
+                        <p className="text-xs text-gray-500 italic">
+                          💡 {newOption.reason}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleSaveNewOption(newOption)}
+                      disabled={isSaved || isSaving}
+                      className={`
+                        flex items-center gap-2 px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all
+                        ${isSaved 
+                          ? 'bg-green-100 text-green-700 cursor-default' 
+                          : isSaving
+                          ? 'bg-blue-100 text-blue-700 cursor-wait'
+                          : 'bg-amber-500 text-white hover:bg-amber-600 active:scale-95'
+                        }
+                      `}
+                    >
+                      {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {isSaved && <Check className="w-4 h-4" />}
+                      {!isSaving && !isSaved && <Plus className="w-4 h-4" />}
+                      {isSaved ? 'Đã Lưu' : isSaving ? 'Đang Lưu...' : 'Lưu Tùy Chọn'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Advanced Options */}
       <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

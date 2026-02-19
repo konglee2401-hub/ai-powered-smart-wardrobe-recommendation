@@ -125,8 +125,8 @@ class BrowserService {
     console.log(`📍 Navigating to: ${url}`);
     
     await this.page.goto(url, {
-      waitUntil: options.waitUntil || 'networkidle',
-      timeout: options.timeout || this.options.timeout
+      waitUntil: options.waitUntil || 'load',
+      timeout: options.timeout || 120000
     });
 
     console.log('✅ Page loaded');

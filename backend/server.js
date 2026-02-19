@@ -26,6 +26,9 @@ import multiFlowRoutes from './routes/multiFlowRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import browserAutomationRoutes from './routes/browserAutomationRoutes.js';
 import promptEnhancementRoutes from './routes/promptEnhancementRoutes.js';
+import healthCheckRoutes from './routes/healthCheckRoutes.js';
+import aiProviderRoutes from './routes/aiProviderRoutes.js';
+import { seedProviders } from './scripts/seedProviders.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
 import * as modelSyncService from './services/modelSyncService.js';
@@ -37,12 +40,13 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-connectDB().then(() => {
+connectDB().then(async () => {
   // Auto-sync models after DB connection
-  modelSyncService.autoSyncOnStartup();
+  await seedProviders(); // Ensure providers exist first
+  modelSyncService.autoSyncOnStartup(); // Only one sync - runs after 5s
 });
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3002'] }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -53,7 +57,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/test', testAuthRoutes);
 app.use('/api/clothes', clothingRoutes);
 app.use('/api/outfits', outfitRoutes);
-app.use('/api/pipeline', pipelineRoutes);
+// app.use('/api/flows', pipelineRoutes); // DEPRECATED: This was the source of the conflict
 app.use('/api/prompt-templates', promptTemplateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/videos', videoRoutes);
@@ -67,12 +71,11 @@ app.use('/api/history', historyRoutes);
 app.use('/api/video', videoGenRoutes);
 app.use('/api/multi-flow', multiFlowRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/browser', browserAutomationRoutes);
+app.use('/api/v1/browser-automation', browserAutomationRoutes);
 app.use('/api/prompts', promptEnhancementRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Smart Wardrobe API' });
-});
+app.use('/api/prompts-v1', promptsRoutes); // Keep old as v1 for compatibility
+app.use('/api', healthCheckRoutes);
+app.use('/api/providers', aiProviderRoutes);
 
 app.use(errorHandler);
 

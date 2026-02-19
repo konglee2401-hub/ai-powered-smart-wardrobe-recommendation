@@ -3,9 +3,10 @@
  * User authentication
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,20 +16,81 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const testEmail = 'test@example.com';
+    const testPassword = 'password123';
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setEmail(testEmail);
+      setPassword(testPassword);
+
+      const autoLogin = async () => {
+        try {
+          // 1. Attempt initial login
+          const loginResponse = await axios.post('/api/auth/login', { email: testEmail, password: testPassword });
+          if (loginResponse.data.success) {
+            localStorage.setItem('token', loginResponse.data.data.token);
+            navigate('/dashboard');
+            return;
+          }
+        } catch (loginError) {
+          // If login failed, it might be due to incorrect password hash (e.g., manual db entry)
+          // Proceed to delete and re-register
+          console.log('Initial login failed for test user. Attempting to delete and re-register.');
+        }
+
+        try {
+          // 2. Try to delete the test user (in case of old, invalid password hash)
+          await axios.delete('/api/test/delete-test-user', { data: { email: testEmail } });
+          console.log('Test user deleted for re-registration.');
+        } catch (deleteError) {
+          if (deleteError.response && deleteError.response.status === 404) {
+            console.log('Test user not found, proceeding to register.');
+          } else {
+            console.error('Error during test user deletion:', deleteError);
+            // If deletion fails for other reasons, we might still proceed, but log it.
+          }
+        }
+
+        try {
+          // 3. Register the test user
+          await axios.post('/api/auth/register', { name: 'Test User', email: testEmail, password: testPassword });
+          console.log('Test user registered successfully.');
+
+          // 4. Attempt login again after successful registration
+          const finalLoginResponse = await axios.post('/api/auth/login', { email: testEmail, password: testPassword });
+          if (finalLoginResponse.data.success) {
+            localStorage.setItem('token', finalLoginResponse.data.data.token);
+            navigate('/dashboard');
+          } else {
+            setError(finalLoginResponse.data.message || 'Auto-login failed after re-registration.');
+          }
+        } catch (err) {
+          setError(err.response?.data?.message || 'Auto-login process failed.');
+          console.error('Auto-login process failed:', err);
+        }
+      };
+      autoLogin();
+    }
+  }, []);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      // Mock login - in real app, call API
-      if (email && password) {
-        // Simulate successful login
+      const response = await axios.post('/api/auth/login', { email, password });
+      if (response.data.success) {
+        // Optionally store token or user info in local storage/context
+        localStorage.setItem('token', response.data.data.token);
         navigate('/dashboard');
       } else {
-        setError('Please fill in all fields');
+        setError(response.data.message || 'Login failed.');
       }
     } catch (err) {
+      setError(err.response?.data?.message || 'Login failed. Please try again.');
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);

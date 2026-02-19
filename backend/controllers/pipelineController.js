@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import GeneratedMedia from '../models/GeneratedMedia.js';
-import visionService from '../services/visionService.js';
 import imageGenService from '../services/imageGenService.js';
 import videoGenService from '../services/videoGenService.js';
 import { buildImagePrompt, buildVideoPrompt } from '../services/promptBuilder.js';
@@ -55,7 +54,7 @@ const analyzeOutfit = async (req, res) => {
 
     fileReferences.push(`Character: ${characterFile.originalname}`);
     
-    const result = await visionService.analyzeImage(charB64, getMimeType(characterFile.originalname), {
+    const result = await imageGenService.analyzeImage(charB64, getMimeType(characterFile.originalname), {
       categories,
       filename: characterFile.originalname,
       context: 'character_reference'

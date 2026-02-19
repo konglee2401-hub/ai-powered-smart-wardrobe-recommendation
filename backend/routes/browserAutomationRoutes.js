@@ -1,10 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import * as browserAutomationController from '../controllers/browserAutomationController.js';
+import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, analyzeAndGenerate } from '../controllers/browserAutomationController.js';
 
 const router = express.Router();
 
-// Configure multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -13,22 +12,21 @@ const upload = multer({
   }
 });
 
-// Analyze images using browser automation
 router.post('/analyze', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'clothingImage', maxCount: 1 }
-]), browserAutomationController.analyzeBrowser);
+]), analyzeBrowser);
 
-// Generate image using browser automation
-router.post('/generate-image', browserAutomationController.generateImageBrowser);
-
-// Generate video using browser automation
-router.post('/generate-video', browserAutomationController.generateVideoBrowser);
-
-// Full workflow: Analyze + Generate
-router.post('/full-workflow', upload.fields([
+router.post('/generate-image-browser', upload.fields([
   { name: 'characterImage', maxCount: 1 },
-  { name: 'clothingImage', maxCount: 1 }
-]), browserAutomationController.fullWorkflowBrowser);
+  { name: 'productImage', maxCount: 1 }
+]), generateImageBrowser);
+
+router.post('/generate-image', upload.fields([
+  { name: 'characterImage', maxCount: 1 },
+  { name: 'productImage', maxCount: 1 }
+]), analyzeAndGenerate);
+
+router.post('/generate-video', generateVideoBrowser);
 
 export default router;

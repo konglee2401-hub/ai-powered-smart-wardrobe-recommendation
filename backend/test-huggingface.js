@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const HF_API_KEY = process.env.HUGGINGFACE_API_KEY_1; // Use Key 1 by default
 
 const MODELS_TO_TEST = [
   // Using router.huggingface.co for all models

@@ -1,0 +1,183 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e6]:
+      - link "AI Product Photo" [ref=e7] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+        - generic [ref=e11]: AI Product Photo
+      - generic [ref=e12]:
+        - link "Generate" [ref=e13] [cursor=pointer]:
+          - /url: /
+          - img [ref=e14]
+          - generic [ref=e16]: Generate
+        - link "Batch" [ref=e17] [cursor=pointer]:
+          - /url: /batch
+          - img [ref=e18]
+          - generic [ref=e22]: Batch
+        - link "Gallery" [ref=e23] [cursor=pointer]:
+          - /url: /gallery
+          - img [ref=e24]
+          - generic [ref=e28]: Gallery
+        - link "History" [ref=e29] [cursor=pointer]:
+          - /url: /history
+          - img [ref=e30]
+          - generic [ref=e33]: History
+        - link "Stats" [ref=e34] [cursor=pointer]:
+          - /url: /stats
+          - img [ref=e35]
+          - generic [ref=e37]: Stats
+        - link "Analytics" [ref=e38] [cursor=pointer]:
+          - /url: /analytics
+          - img [ref=e39]
+          - generic [ref=e42]: Analytics
+        - link "Customize" [ref=e43] [cursor=pointer]:
+          - /url: /customization
+          - img [ref=e44]
+          - generic [ref=e47]: Customize
+        - link "Performance" [ref=e48] [cursor=pointer]:
+          - /url: /performance
+          - img [ref=e49]
+          - generic [ref=e52]: Performance
+        - link "Tester" [ref=e53] [cursor=pointer]:
+          - /url: /tester
+          - img [ref=e54]
+          - generic [ref=e56]: Tester
+        - link "Prompts" [ref=e57] [cursor=pointer]:
+          - /url: /prompt-builder
+          - img [ref=e58]
+          - generic [ref=e61]: Prompts
+        - link "Dashboard" [ref=e62] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e63]
+          - generic [ref=e68]: Dashboard
+  - generic [ref=e69]:
+    - generic [ref=e72]:
+      - generic [ref=e73]:
+        - heading "Virtual Try-On Studio" [level=1] [ref=e74]
+        - paragraph [ref=e75]: Unified AI Analysis & Generation
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - button "📤 Upload" [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+            - generic [ref=e82]: 📤 Upload
+          - button "🌐 Browser AI" [ref=e83] [cursor=pointer]:
+            - img [ref=e84]
+            - generic [ref=e86]: 🌐 Browser AI
+          - button "✏️ Prompt Only" [ref=e87] [cursor=pointer]:
+            - img [ref=e88]
+            - generic [ref=e91]: ✏️ Prompt Only
+        - generic [ref=e92]:
+          - button "🖼️ Image Generation" [ref=e93] [cursor=pointer]:
+            - img [ref=e94]
+            - generic [ref=e98]: 🖼️ Image Generation
+          - button "🎬 Video Generation" [ref=e99] [cursor=pointer]:
+            - img [ref=e100]
+            - generic [ref=e103]: 🎬 Video Generation
+    - generic [ref=e105]: 🖼️ Image Generation Mode - Create stunning product images
+    - generic [ref=e108]:
+      - button "Upload & Setup" [ref=e109]:
+        - img [ref=e111]
+        - generic [ref=e114]: Upload & Setup
+      - button "2 AI Analysis" [disabled] [ref=e116]:
+        - generic [ref=e118]: "2"
+        - generic [ref=e119]: AI Analysis
+      - button "3 Style Customization" [disabled] [ref=e121]:
+        - generic [ref=e123]: "3"
+        - generic [ref=e124]: Style Customization
+      - button "4 Prompt Building" [disabled] [ref=e126]:
+        - generic [ref=e128]: "4"
+        - generic [ref=e129]: Prompt Building
+      - button "5 Generation" [disabled] [ref=e131]:
+        - generic [ref=e133]: "5"
+        - generic [ref=e134]: Generation
+      - button "6 Results" [disabled] [ref=e136]:
+        - generic [ref=e138]: "6"
+        - generic [ref=e139]: Results
+    - generic [ref=e141]:
+      - generic [ref=e142]:
+        - generic [ref=e143]:
+          - heading "🎯 Chọn Mục Đích Nội Dung" [level=3] [ref=e144]
+          - paragraph [ref=e145]: Chọn mục đích sử dụng để AI tối ưu hóa kết quả
+        - generic [ref=e146]:
+          - button "Change Clothes Mặc sản phẩm lên người mẫu" [ref=e147] [cursor=pointer]:
+            - img [ref=e150]
+            - img [ref=e153]
+            - heading "Change Clothes" [level=4] [ref=e155]
+            - paragraph [ref=e156]: Mặc sản phẩm lên người mẫu
+          - button "E-commerce Product Shot Ảnh sản phẩm thương mại" [ref=e157] [cursor=pointer]:
+            - img [ref=e159]
+            - heading "E-commerce Product Shot" [level=4] [ref=e162]
+            - paragraph [ref=e163]: Ảnh sản phẩm thương mại
+          - button "Social Media Post Bài đăng mạng xã hội" [ref=e164] [cursor=pointer]:
+            - img [ref=e166]
+            - heading "Social Media Post" [level=4] [ref=e172]
+            - paragraph [ref=e173]: Bài đăng mạng xã hội
+          - button "Fashion Editorial Bài báo thời trang chuyên nghiệp" [ref=e174] [cursor=pointer]:
+            - img [ref=e176]
+            - heading "Fashion Editorial" [level=4] [ref=e179]
+            - paragraph [ref=e180]: Bài báo thời trang chuyên nghiệp
+          - button "Lifestyle Scene Cảnh sống hàng ngày" [ref=e181] [cursor=pointer]:
+            - img [ref=e183]
+            - heading "Lifestyle Scene" [level=4] [ref=e186]
+            - paragraph [ref=e187]: Cảnh sống hàng ngày
+          - button "Before/After Comparison So sánh trước/sau" [ref=e188] [cursor=pointer]:
+            - img [ref=e190]
+            - heading "Before/After Comparison" [level=4] [ref=e195]
+            - paragraph [ref=e196]: So sánh trước/sau
+      - generic [ref=e197]:
+        - generic [ref=e198]:
+          - heading "🎯 Chọn Khu Vực Tập Trung" [level=3] [ref=e199]
+          - paragraph [ref=e200]: Xác định phần nào của sản phẩm cần tập trung hiển thị
+        - generic [ref=e201]:
+          - button "Full Outfit Toàn bộ trang phục" [ref=e202] [cursor=pointer]:
+            - img [ref=e205]
+            - img [ref=e208]
+            - heading "Full Outfit" [level=4] [ref=e211]
+            - paragraph [ref=e212]: Toàn bộ trang phục
+          - button "Top (Áo) Phần trên" [ref=e213] [cursor=pointer]:
+            - img [ref=e215]
+            - heading "Top (Áo)" [level=4] [ref=e217]
+            - paragraph [ref=e218]: Phần trên
+          - button "Bottom (Quần/Váy) Phần dưới" [ref=e219] [cursor=pointer]:
+            - img [ref=e221]
+            - heading "Bottom (Quần/Váy)" [level=4] [ref=e224]
+            - paragraph [ref=e225]: Phần dưới
+          - button "Shoes Giày" [ref=e226] [cursor=pointer]:
+            - img [ref=e228]
+            - heading "Shoes" [level=4] [ref=e231]
+            - paragraph [ref=e232]: Giày
+          - button "Accessories Phụ kiện" [ref=e233] [cursor=pointer]:
+            - img [ref=e235]
+            - heading "Accessories" [level=4] [ref=e240]
+            - paragraph [ref=e241]: Phụ kiện
+          - button "Specific Item Món đồ cụ thể" [ref=e242] [cursor=pointer]:
+            - img [ref=e244]
+            - heading "Specific Item" [level=4] [ref=e248]
+            - paragraph [ref=e249]: Món đồ cụ thể
+      - generic [ref=e250]:
+        - heading "📤 Upload Images" [level=3] [ref=e251]
+        - generic [ref=e252]:
+          - generic [ref=e253]:
+            - generic [ref=e254]: 👤 Character Image (Người Mẫu)
+            - generic [ref=e256]:
+              - img "Preview" [ref=e257]
+              - button [ref=e259] [cursor=pointer]:
+                - img [ref=e260]
+          - generic [ref=e263]:
+            - generic [ref=e264]: 👗 Product Image (Sản Phẩm)
+            - generic [ref=e266]:
+              - img "Preview" [ref=e267]
+              - button [ref=e269] [cursor=pointer]:
+                - img [ref=e270]
+        - generic [ref=e274]:
+          - img [ref=e275]
+          - generic [ref=e278]:
+            - paragraph [ref=e279]: Sẵn sàng tiến hành phân tích!
+            - paragraph [ref=e280]: Click "Tiếp Tục" để bắt đầu AI Analysis
+    - button "Start AI Analysis" [ref=e284] [cursor=pointer]:
+      - img [ref=e285]
+      - text: Start AI Analysis
+```

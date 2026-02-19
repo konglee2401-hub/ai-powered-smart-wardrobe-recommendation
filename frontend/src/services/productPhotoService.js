@@ -4,7 +4,7 @@
  */
 
 import axiosInstance, { createFormData, validateImageFile } from './axios';
-import { API_ENDPOINTS, API_SUCCESS_MESSAGES } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
 
 // ============================================
 // GENERATION PRESETS

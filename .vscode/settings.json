@@ -1,0 +1,11 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm install": true,
+        "mongosh": true,
+        "mongo": true,
+        "/^node backend/test-gemini-direct\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

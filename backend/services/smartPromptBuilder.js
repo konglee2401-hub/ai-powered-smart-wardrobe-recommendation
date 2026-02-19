@@ -51,14 +51,6 @@ function getFallbackTechnicalDetails(category, optionValue) {
       'backlit': { 'rim_light': 'from behind subject', 'intensity': 'medium to high', 'effect': 'silhouette, rim glow' },
       'neon-colored': { 'gels': 'RGB LED panels', 'colors': 'vibrant', 'intensity': 'medium', 'mood': 'creative, energetic' },
       'overcast-outdoor': { 'source': 'cloudy sky', 'quality': 'even, soft', 'direction': 'diffused', 'shadows': 'soft' }
-    },
-    cameraAngle: {
-      'eye-level': { 'height': 'subject eye level', 'distance': '3-4 meters', 'lens': '85mm f/1.8', 'perspective': 'natural' },
-      'slightly-above': { 'height': '20-30cm above eye level', 'distance': '3-4 meters', 'lens': '85mm f/1.8', 'effect': 'slimming' },
-      'low-angle': { 'height': '1 meter below eye level', 'distance': '2-3 meters', 'lens': '50mm f/1.4', 'effect': 'powerful' },
-      'three-quarter': { 'angle': '45° to subject', 'height': 'eye level', 'distance': '3-4 meters', 'lens': '70mm f/1.8', 'effect': 'dynamic' },
-      'full-body-straight': { 'height': 'eye level', 'distance': '4-5 meters', 'lens': '50mm f/1.8', 'perspective': 'straight on' },
-      'close-up-detail': { 'distance': '1-2 meters', 'lens': '100mm f/2.8', 'focus': 'product details', 'depth': 'shallow' }
     }
   };
   
@@ -69,344 +61,241 @@ function getFallbackTechnicalDetails(category, optionValue) {
 // BUILD COMPREHENSIVE PROMPT STRUCTURE
 // ============================================================
 
-export async function buildDetailedPrompt(analysis, selectedOptions = {}) {
-  const { character, product, compatibility, recommendations, promptKeywords, pose, stylingNotes } = analysis;
-  
-  console.log('\n🎨 BUILDING DETAILED PROMPT...');
-  
-  // Load technical details for each selected option
-  const technicalDetails = {};
-  for (const [category, rec] of Object.entries(recommendations)) {
-    const selectedValue = selectedOptions[category] || rec.primary;
-    technicalDetails[category] = await loadOptionDetails(selectedValue, category);
+/**
+ * Build smart, structured prompt based on use case and product focus
+ * @param {Object} analysis - Full analysis data from unified analysis
+ * @param {Object} selectedOptions - User-selected options
+ * @param {string} useCase - 'change-clothes', 'styling', 'complete-look', etc.
+ * @param {string} productFocus - 'full-outfit', 'top', 'bottom', 'accessory'
+ */
+export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit') {
+  if (!analysis) {
+    return { prompt: '', negativePrompt: buildNegativePromptGeneric(selectedOptions) };
   }
-  
-  // Build structured prompt sections
-  const promptSections = {
-    photography: buildPhotographySection(selectedOptions, technicalDetails),
-    subject: buildSubjectSection(character, promptKeywords.subject || []),
-    clothing: buildClothingSection(product, promptKeywords.clothing || []),
-    environment: buildEnvironmentSection(selectedOptions, technicalDetails, promptKeywords.environment || []),
-    lighting: buildLightingSection(selectedOptions, technicalDetails, promptKeywords.lighting || []),
-    mood: buildMoodSection(selectedOptions, promptKeywords.mood || []),
-    camera: buildCameraSection(selectedOptions, technicalDetails, promptKeywords.camera || []),
-    quality: buildQualitySection(promptKeywords.quality || [])
-  };
-  
-  // Combine into final prompt
-  const finalPrompt = Object.values(promptSections).filter(section => section).join(', ');
-  
-  // Build negative prompt
-  const negativePrompt = buildNegativePrompt(product, selectedOptions);
-  
-  console.log(`📝 Final prompt length: ${finalPrompt.length} chars`);
-  console.log(`🚫 Negative prompt length: ${negativePrompt.length} chars`);
-  
-  return {
-    prompt: finalPrompt,
-    negativePrompt,
-    metadata: {
-      selectedOptions,
-      technicalDetails,
-      analysis: {
-        compatibilityScore: compatibility?.score,
-        characterVibe: character?.overallVibe,
-        productType: product?.type
-      },
-      promptStructure: promptSections,
-      timestamp: new Date().toISOString()
-    }
-  };
-}
 
-// ============================================================
-// PHOTOGRAPHY SETUP SECTION
-// ============================================================
+  let promptStr = '';
 
-function buildPhotographySection(selectedOptions, technicalDetails) {
-  const parts = [];
-  
-  // Camera specs
-  const cameraAngle = selectedOptions.cameraAngle || 'eye-level';
-  const cameraTech = technicalDetails.cameraAngle || {};
-  
-  parts.push('Professional fashion photography');
-  parts.push('full-frame DSLR camera');
-  parts.push(`${cameraTech.lens || '85mm f/1.8 lens'}`);
-  parts.push(`${cameraTech.distance || '3-4 meters'} distance`);
-  parts.push(`${cameraAngle} perspective`);
-  
-  // Shot type based on product focus
-  const productFocus = selectedOptions.productFocus || 'full-outfit';
-  switch (productFocus) {
-    case 'full-outfit':
-      parts.push('full-body fashion shot');
+  // Route to appropriate prompt builder based on use case
+  switch (useCase) {
+    case 'change-clothes':
+      promptStr = buildChangeClothesPrompt(analysis, selectedOptions, productFocus);
       break;
-    case 'top':
-      parts.push('three-quarter body shot focusing on upper body');
+    case 'styling':
+      promptStr = buildStylingPrompt(analysis, selectedOptions, productFocus);
       break;
-    case 'bottom':
-      parts.push('lower body focused shot');
-      break;
-    case 'shoes':
-      parts.push('feet and lower leg detail shot');
-      break;
-    case 'accessories':
-      parts.push('close-up detail shot');
+    case 'complete-look':
+      promptStr = buildCompleteLookPrompt(analysis, selectedOptions, productFocus);
       break;
     default:
-      parts.push('full-body fashion shot');
+      promptStr = buildDefaultPrompt(analysis, selectedOptions);
   }
-  
-  return parts.join(', ');
+
+  const negativePrompt = buildNegativePrompt(analysis?.product, selectedOptions);
+
+  return {
+    prompt: promptStr.trim(),
+    negativePrompt: negativePrompt.trim()
+  };
 }
 
-// ============================================================
-// SUBJECT SECTION
-// ============================================================
-
-function buildSubjectSection(character, subjectKeywords) {
+/**
+ * CHANGE CLOTHES: Keep character's face and body, ONLY change the clothing
+ * Most important: Emphasize keeping face, body, pose identical
+ */
+function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
   const parts = [];
-  
-  // Base description
-  if (character.age) parts.push(`${character.age} year old ${character.gender || 'person'}`);
-  if (character.ethnicity) parts.push(character.ethnicity);
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  // 1. CHARACTER SECTION - Emphasize what STAYS THE SAME
+  parts.push('=== KEEP CHARACTER UNCHANGED ===');
+  if (character.age) parts.push(`${character.age} year old`);
+  if (character.gender) parts.push(character.gender);
   if (character.skinTone) parts.push(`${character.skinTone} skin tone`);
   
-  // Body type and features
-  if (character.bodyType) parts.push(`${character.bodyType} body type`);
-  if (character.height) parts.push(character.height);
-  
-  if (character.distinctiveFeatures && character.distinctiveFeatures.length > 0) {
-    parts.push(`with ${character.distinctiveFeatures.join(', ')}`);
+  if (character.hair?.color && character.hair?.style) {
+    parts.push(`${character.hair.color} hair, ${character.hair.style} style, ${character.hair.length || 'medium length'}`);
   }
   
-  // Hair
-  if (character.hair) {
-    const hairDesc = [];
-    if (character.hair.color) hairDesc.push(character.hair.color);
-    if (character.hair.length) hairDesc.push(character.hair.length);
-    if (character.hair.style) hairDesc.push(character.hair.style);
-    if (character.hair.texture) hairDesc.push(character.hair.texture + ' hair');
-    
-    if (hairDesc.length > 0) {
-      parts.push(hairDesc.join(' '));
-    }
-  }
-  
-  // Face shape
-  if (character.faceShape) parts.push(`${character.faceShape} face`);
-  
-  // Overall vibe
-  if (character.overallVibe) parts.push(character.overallVibe);
-  
-  // Add custom keywords
-  if (subjectKeywords.length > 0) {
-    parts.push(...subjectKeywords);
-  }
-  
-  return parts.join(', ');
-}
+  parts.push(`SAME face with same expression`);
+  parts.push(`SAME body and body type`);
+  parts.push(`SAME pose and position exactly as reference image`);
+  parts.push(`SAME pose orientation and arm position`);
 
-// ============================================================
-// CLOTHING SECTION
-// ============================================================
-
-function buildClothingSection(product, clothingKeywords) {
-  const parts = [];
-  
-  // Product type and style
-  if (product.type) parts.push(product.type);
-  if (product.style) parts.push(product.style);
-  
-  // Colors and patterns
-  if (product.colors && product.colors.length > 0) {
-    parts.push(`${product.colors.join(' and ')} colors`);
+  // 2. CHANGE THIS - The new clothing
+  parts.push(`\n=== CHANGE CLOTHING TO ===`);
+  if (product.detailedDescription) {
+    parts.push(product.detailedDescription);
+  } else {
+    if (product.type) parts.push(`${product.type}`);
+    if (product.style) parts.push(`${product.style} style`);
+    if (product.colors?.length > 0) parts.push(`in ${product.colors.join(' and ')}`);
   }
   
-  if (product.patterns && product.patterns.length > 0) {
-    parts.push(product.patterns.join(' '));
-  }
-  
-  // Material and fit
-  if (product.material) parts.push(`${product.material} fabric`);
+  if (product.material) parts.push(`${product.material} material`);
   if (product.fit) parts.push(`${product.fit} fit`);
-  if (product.silhouette) parts.push(`${product.silhouette} silhouette`);
-  
-  // Details
-  if (product.details && product.details.length > 0) {
-    parts.push(`with ${product.details.join(', ')}`);
+
+  // 3. HAIRSTYLE & MAKEUP (usually stay same for change-clothes, but include in case user customize)
+  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
+    parts.push(`\n=== OPTIONAL ===`);
+    parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
   }
+
+  // 4. ENVIRONMENT & LIGHTING
+  parts.push(`\n=== ENVIRONMENT ===`);
+  if (selectedOptions.scene) parts.push(`Setting: ${selectedOptions.scene}`);
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  if (selectedOptions.mood) parts.push(`Mood/Vibe: ${selectedOptions.mood}`);
+
+  // 5. PHOTO STYLE
+  parts.push(`\n=== PHOTOGRAPHY ===`);
+  if (selectedOptions.style) parts.push(`Style: ${selectedOptions.style}`);
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
+  if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}`);
   
-  // Occasion and season
-  if (product.occasion) parts.push(`for ${product.occasion}`);
-  if (product.season) parts.push(`${product.season} season`);
-  
-  // Add custom keywords
-  if (clothingKeywords.length > 0) {
-    parts.push(...clothingKeywords);
-  }
-  
-  return parts.join(', ');
+  parts.push(`Professional photography, 8k, sharp focus, ultra-detailed, photorealistic`);
+
+  return parts.join('\n');
 }
 
-// ============================================================
-// ENVIRONMENT SECTION
-// ============================================================
-
-function buildEnvironmentSection(selectedOptions, technicalDetails, environmentKeywords) {
-  const scene = selectedOptions.scene || 'studio';
-  const sceneTech = technicalDetails.scene || {};
-  
+/**
+ * STYLING: Change styling elements (hair, makeup, accessories) with the outfit
+ */
+function buildStylingPrompt(analysis, selectedOptions, productFocus) {
   const parts = [];
-  
-  // Scene description
-  parts.push(`${scene} setting`);
-  
-  // Technical details
-  if (sceneTech.background) parts.push(sceneTech.background);
-  if (sceneTech.location) parts.push(sceneTech.location);
-  if (sceneTech.space) parts.push(`${sceneTech.space} space`);
-  
-  // Time and elements
-  if (sceneTech.time) parts.push(sceneTech.time);
-  if (sceneTech.elements) parts.push(sceneTech.elements);
-  
-  // Props and details
-  if (sceneTech.props) parts.push(sceneTech.props);
-  if (sceneTech.floor) parts.push(`${sceneTech.floor} floor`);
-  if (sceneTech.decor) parts.push(sceneTech.decor);
-  if (sceneTech.materials) parts.push(sceneTech.materials);
-  if (sceneTech.view) parts.push(sceneTech.view);
-  if (sceneTech.surface) parts.push(sceneTech.surface);
-  
-  // Add custom keywords
-  if (environmentKeywords.length > 0) {
-    parts.push(...environmentKeywords);
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  // 1. CHARACTER & OUTFIT
+  parts.push('=== CHARACTER & OUTFIT ===');
+  if (character.age && character.gender) {
+    parts.push(`${character.age} year old ${character.gender}`);
   }
+  if (character.skinTone) parts.push(`${character.skinTone} skin`);
   
-  return parts.join(', ');
+  if (product.detailedDescription) {
+    parts.push(`wearing ${product.detailedDescription}`);
+  } else if (product.type) {
+    parts.push(`wearing a ${product.type}`);
+  }
+
+  // 2. STYLING FOCUS
+  parts.push(`\n=== UPDATE STYLING ===`);
+  if (selectedOptions.hairstyle) parts.push(`New hairstyle: ${selectedOptions.hairstyle}`);
+  if (selectedOptions.makeup) parts.push(`Makeup look: ${selectedOptions.makeup}`);
+  parts.push(`Same face expression as reference`);
+  parts.push(`Same pose orientation as reference`);
+
+  // 3. ENVIRONMENT
+  parts.push(`\n=== ENVIRONMENT ===`);
+  if (selectedOptions.scene) parts.push(`Scene: ${selectedOptions.scene}`);
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
+
+  // 4. TECHNICAL
+  parts.push(`\n=== PHOTOGRAPHY SPECS ===`);
+  if (selectedOptions.style) parts.push(`Style: ${selectedOptions.style}`);
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
+  if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}`);
+  
+  parts.push(`Professional photography, 8k, sharp focus, ultra-detailed`);
+
+  return parts.join('\n');
 }
 
-// ============================================================
-// LIGHTING SECTION
-// ============================================================
-
-function buildLightingSection(selectedOptions, technicalDetails, lightingKeywords) {
-  const lighting = selectedOptions.lighting || 'soft-diffused';
-  const lightingTech = technicalDetails.lighting || {};
-  
+/**
+ * COMPLETE LOOK: Show the character in full styling with complete outfit context
+ */
+function buildCompleteLookPrompt(analysis, selectedOptions, productFocus) {
   const parts = [];
-  
-  // Lighting type
-  parts.push(`${lighting} lighting`);
-  
-  // Technical details
-  if (lightingTech.key_light) parts.push(lightingTech.key_light);
-  if (lightingTech.fill) parts.push(lightingTech.fill);
-  if (lightingTech.source) parts.push(lightingTech.source);
-  if (lightingTech.direction) parts.push(lightingTech.direction);
-  if (lightingTech.rim_light) parts.push(lightingTech.rim_light);
-  
-  // Quality and ratios
-  if (lightingTech.ratio) parts.push(`${lightingTech.ratio} ratio`);
-  if (lightingTech.quality) parts.push(lightingTech.quality);
-  if (lightingTech.intensity) parts.push(lightingTech.intensity);
-  if (lightingTech.color_temp) parts.push(`${lightingTech.color_temp} color temperature`);
-  if (lightingTech.setup) parts.push(lightingTech.setup);
-  if (lightingTech.shadow) parts.push(lightingTech.shadow);
-  if (lightingTech.effect) parts.push(lightingTech.effect);
-  
-  // Effects
-  if (lightingTech.power) parts.push(`${lightingTech.power} power`);
-  if (lightingTech.gels) parts.push(lightingTech.gels);
-  if (lightingTech.colors) parts.push(lightingTech.colors);
-  if (lightingTech.mood) parts.push(lightingTech.mood);
-  
-  // Add custom keywords
-  if (lightingKeywords.length > 0) {
-    parts.push(...lightingKeywords);
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('=== FULL CHARACTER LOOK ===');
+  if (character.overallVibe) parts.push(character.overallVibe);
+  if (character.age) parts.push(`${character.age} year old`);
+  if (character.gender) parts.push(character.gender);
+  if (character.skinTone) parts.push(`${character.skinTone} skin`);
+
+  if (character.hair) {
+    const hairDesc = [character.hair.color, character.hair.style, character.hair.length]
+      .filter(Boolean).join(' ');
+    parts.push(`${hairDesc} hair`);
+  }
+
+  // OUTFIT DESCRIPTION
+  parts.push(`\n=== COMPLETE OUTFIT ===`);
+  if (product.detailedDescription) {
+    parts.push(product.detailedDescription);
+  } else {
+    if (product.type) parts.push(`${product.type}`);
+    if (product.style) parts.push(`${product.style} style`);
+    if (product.colors?.length > 0) parts.push(`in ${product.colors.join(' and ')}`);
   }
   
-  return parts.join(', ');
+  // STYLING
+  if (selectedOptions.hairstyle) parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
+  if (selectedOptions.makeup) parts.push(`Makeup: ${selectedOptions.makeup}`);
+  
+  parts.push(`Full body, standing, confident pose`);
+
+  // ENVIRONMENT
+  parts.push(`\n=== SETTING ===`);
+  if (selectedOptions.scene) parts.push(`Location: ${selectedOptions.scene}`);
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  if (selectedOptions.mood) parts.push(`Atmosphere: ${selectedOptions.mood}`);
+
+  // TECHNICAL
+  parts.push(`\n=== TECHNICAL ===`);
+  if (selectedOptions.style) parts.push(`Photography: ${selectedOptions.style}`);
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
+  if (selectedOptions.colorPalette) parts.push(`Color harmony: ${selectedOptions.colorPalette}`);
+  
+  parts.push(`Professional fashion photography, 8k, sharp focus, magazine-quality, ultra high resolution`);
+
+  return parts.join('\n');
 }
 
-// ============================================================
-// MOOD & STYLE SECTION
-// ============================================================
-
-function buildMoodSection(selectedOptions, moodKeywords) {
+/**
+ * DEFAULT: General structured prompt when use case not specified
+ */
+function buildDefaultPrompt(analysis, selectedOptions) {
   const parts = [];
-  
-  // Mood
-  const mood = selectedOptions.mood || 'confident';
-  parts.push(`${mood} mood`);
-  
-  // Style
-  const style = selectedOptions.style || 'commercial';
-  parts.push(`${style} photography style`);
-  
-  // Color palette
-  const colorPalette = selectedOptions.colorPalette || 'neutral';
-  parts.push(`${colorPalette} color palette`);
-  
-  // Add custom keywords
-  if (moodKeywords.length > 0) {
-    parts.push(...moodKeywords);
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  if (character.overallVibe) parts.push(character.overallVibe);
+  if (character.age && character.gender) {
+    parts.push(`${character.age} year old ${character.gender.toLowerCase()}`);
   }
+  if (character.skinTone) parts.push(`${character.skinTone} skin`);
   
+  if (product.detailedDescription) {
+    parts.push(`wearing ${product.detailedDescription}`);
+  } else if (product.type) {
+    parts.push(`wearing a ${product.type}`);
+  }
+
+  if (selectedOptions.scene) parts.push(`in ${selectedOptions.scene}`);
+  if (selectedOptions.lighting) parts.push(`${selectedOptions.lighting} lighting`);
+  if (selectedOptions.mood) parts.push(`${selectedOptions.mood} mood`);
+  if (selectedOptions.style) parts.push(`${selectedOptions.style} photography`);
+  if (selectedOptions.colorPalette) parts.push(`${selectedOptions.colorPalette} color palette`);
+
+  parts.push(`8k, professional, sharp focus, ultra-detailed`);
+
   return parts.join(', ');
 }
 
-// ============================================================
-// CAMERA & COMPOSITION SECTION
-// ============================================================
-
-function buildCameraSection(selectedOptions, technicalDetails, cameraKeywords) {
-  const parts = [];
-  
-  // Camera angle technical details
-  const cameraTech = technicalDetails.cameraAngle || {};
-  
-  if (cameraTech.height) parts.push(cameraTech.height);
-  if (cameraTech.distance) parts.push(`${cameraTech.distance} distance`);
-  if (cameraTech.lens) parts.push(cameraTech.lens);
-  if (cameraTech.effect) parts.push(cameraTech.effect);
-  if (cameraTech.angle) parts.push(cameraTech.angle);
-  if (cameraTech.focus) parts.push(cameraTech.focus);
-  if (cameraTech.depth) parts.push(cameraTech.depth);
-  if (cameraTech.perspective) parts.push(cameraTech.perspective);
-  
-  // Composition
-  parts.push('centered subject');
-  parts.push('rule of thirds composition');
-  parts.push('negative space for elegance');
-  
-  // Add custom keywords
-  if (cameraKeywords.length > 0) {
-    parts.push(...cameraKeywords);
-  }
-  
-  return parts.join(', ');
-}
-
-// ============================================================
-// QUALITY SECTION
-// ============================================================
-
-function buildQualitySection(qualityKeywords) {
-  const defaultQuality = [
-    'professional fashion photography',
-    '8K resolution',
-    'sharp focus',
-    'photorealistic',
-    'high detail',
-    'studio quality',
-    'commercial grade'
+/**
+ * Generic negative prompt when no product data available
+ */
+function buildNegativePromptGeneric(selectedOptions) {
+  const baseNegatives = [
+    'blurry', 'low quality', 'distorted', 'bad anatomy', 'ugly',
+    'artifacts', 'watermark', 'text', 'out of focus', 'pixelated'
   ];
-  
-  const quality = qualityKeywords.length > 0 ? qualityKeywords : defaultQuality;
-  return quality.join(', ');
+  return baseNegatives.join(', ');
 }
 
 // ============================================================
@@ -491,29 +380,6 @@ function buildNegativePrompt(product, selectedOptions) {
 // EXPORTS
 // ============================================================
 
-export {
-  loadOptionDetails,
-  buildPhotographySection,
-  buildSubjectSection,
-  buildClothingSection,
-  buildEnvironmentSection,
-  buildLightingSection,
-  buildMoodSection,
-  buildCameraSection,
-  buildQualitySection,
-  buildNegativePrompt
-};
-
-export default {
-  buildDetailedPrompt,
-  loadOptionDetails,
-  buildPhotographySection,
-  buildSubjectSection,
-  buildClothingSection,
-  buildEnvironmentSection,
-  buildLightingSection,
-  buildMoodSection,
-  buildCameraSection,
-  buildQualitySection,
-  buildNegativePrompt
-};
+// This file no longer needs to export individual builder functions.
+// The main 'buildDetailedPrompt' is the single entry point.
+// Removing the old, unnecessary export statements that were causing the crash.

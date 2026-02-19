@@ -4,7 +4,7 @@
  */
 
 import axios from 'axios';
-import { API_BASE_URL, API_CONFIG, API_ERROR_MESSAGES } from '../config/api';
+import { API_BASE_URL, API_CONFIG } from '../config/api';
 
 // Create axios instance
 const axiosInstance = axios.create({
@@ -100,7 +100,7 @@ axiosInstance.interceptors.response.use(
       }
       
       return Promise.reject({
-        message: API_ERROR_MESSAGES.NETWORK_ERROR,
+        message: 'Network error. Please check your connection.',
         originalError: error,
       });
     }
@@ -113,7 +113,7 @@ axiosInstance.interceptors.response.use(
     console.error(`[API Error ${status}]`, {
       url: originalRequest.url,
       status,
-      message: data?.message || data?.error,
+      message: data?.error || data?.message || (status === 408 ? API_ERROR_MESSAGES.TIMEOUT : API_ERROR_MESSAGES.SERVER_ERROR),
     });
     
     // Handle specific status codes
@@ -128,21 +128,21 @@ axiosInstance.interceptors.response.use(
         }
         
         return Promise.reject({
-          message: API_ERROR_MESSAGES.UNAUTHORIZED,
+          message: 'Unauthorized. Please log in again.',
           status,
           data,
         });
       
       case 403: // Forbidden
         return Promise.reject({
-          message: API_ERROR_MESSAGES.FORBIDDEN,
+          message: 'You do not have permission to access this resource.',
           status,
           data,
         });
       
       case 404: // Not Found
         return Promise.reject({
-          message: API_ERROR_MESSAGES.NOT_FOUND,
+          message: 'The requested resource was not found.',
           status,
           data,
         });
@@ -172,7 +172,7 @@ axiosInstance.interceptors.response.use(
         }
         
         return Promise.reject({
-          message: status === 408 ? API_ERROR_MESSAGES.TIMEOUT : API_ERROR_MESSAGES.SERVER_ERROR,
+          message: data?.error || data?.message || (status === 408 ? API_ERROR_MESSAGES.TIMEOUT : API_ERROR_MESSAGES.SERVER_ERROR),
           status,
           data,
         });
@@ -263,5 +263,11 @@ export function downloadFile(url, filename) {
   link.click();
   document.body.removeChild(link);
 }
+
+const API_ERROR_MESSAGES = {
+  TIMEOUT: 'The request timed out. Please try again.',
+  SERVER_ERROR: 'An unexpected server error occurred.',
+  VALIDATION_ERROR: 'Please check your input and try again.',
+};
 
 export default axiosInstance;

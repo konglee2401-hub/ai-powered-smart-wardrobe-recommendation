@@ -3,7 +3,7 @@ import aiController from '../controllers/aiController.js';
 import optionsController from '../controllers/optionsController.js';
 import { protect } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
-import { analyzeUnifiedEndpoint, getProviderStatus, generateUnifiedEndpoint } from '../controllers/unifiedFlowController.js';
+import { analyzeUnifiedEndpoint, buildPromptEndpoint, getProviderStatus, generateUnifiedEndpoint } from '../controllers/unifiedFlowController.js';
 
 const router = express.Router();
 
@@ -23,11 +23,11 @@ router.post('/analyze-unified', upload.fields([
   { name: 'productImage', maxCount: 1 }
 ]), analyzeUnifiedEndpoint);
 
-// Generate unified - handles image/video generation
-router.post('/generate-unified', upload.fields([
-  { name: 'characterImage', maxCount: 1 },
-  { name: 'productImage', maxCount: 1 }
-]), generateUnifiedEndpoint);
+// Build prompt from analysis (receives analysis data and options, returns prompt)
+router.post('/build-prompt-unified', buildPromptEndpoint);
+
+// Generate images from prompt only (no file upload needed)
+router.post('/generate-unified', generateUnifiedEndpoint);
 
 // Image analysis with fallback
 router.post('/analyze-character', upload.single('image'), aiController.analyzeCharacterImage);
