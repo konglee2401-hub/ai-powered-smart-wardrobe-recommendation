@@ -1,10 +1,14 @@
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Apply stealth plugin to bypass bot detection
+puppeteer.use(StealthPlugin());
 
 /**
  * Base Browser Service
@@ -13,7 +17,6 @@ const __dirname = path.dirname(__filename);
 class BrowserService {
   constructor(options = {}) {
     this.browser = null;
-    this.context = null;
     this.page = null;
     this.sessionManager = options.sessionManager || null;
     this.options = {
@@ -32,75 +35,28 @@ class BrowserService {
   async launch() {
     console.log('🚀 Launching browser...');
     
-    this.browser = await chromium.launch({
+    this.browser = await puppeteer.launch({
       headless: this.options.headless,
       slowMo: this.options.slowMo,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
         '--disable-web-security',
-        '--disable-features=BlockInsecurePrivateNetworkRequests'
-      ]
+        '--disable-features=IsolateOrigins,site-per-process'
+      ],
+      defaultViewport: this.options.viewport
     });
 
-    // Create context with optional session
-    const contextOptions = {
-      viewport: this.options.viewport,
-      userAgent: this.options.userAgent,
-      locale: 'en-US',
-      timezoneId: 'America/New_York',
-      permissions: ['clipboard-read', 'clipboard-write'],
-      javaScriptEnabled: true,
-      bypassCSP: true
-    };
-
-    // Load session if available
-    if (this.sessionManager && this.sessionManager.hasSession()) {
-      console.log('📂 Loading saved session...');
-      const sessionData = this.sessionManager.loadSession();
-      
-      if (sessionData) {
-        contextOptions.storageState = sessionData;
-        console.log('✅ Session loaded');
-      }
-    }
-
-    this.context = await this.browser.newContext(contextOptions);
-
-    // Add stealth scripts
-    await this.context.addInitScript(() => {
-      // Override navigator.webdriver
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false
-      });
-
-      // Override chrome property
-      window.chrome = {
-        runtime: {}
-      };
-
-      // Override permissions
-      const originalQuery = window.navigator.permissions.query;
-      window.navigator.permissions.query = (parameters) => (
-        parameters.name === 'notifications' ?
-          Promise.resolve({ state: Notification.permission }) :
-          originalQuery(parameters)
-      );
-
-      // Add plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5]
-      });
-
-      // Add languages
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en']
-      });
-    });
-
-    this.page = await this.context.newPage();
+    this.page = await this.browser.newPage();
+    
+    // Set user agent
+    await this.page.setUserAgent(this.options.userAgent);
+    
+    // Set viewport
+    await this.page.setViewport(this.options.viewport);
     
     // Set default timeout
     this.page.setDefaultTimeout(this.options.timeout);
@@ -112,8 +68,9 @@ class BrowserService {
    * Save current session
    */
   async saveSession() {
-    if (this.sessionManager && this.context) {
-      return await this.sessionManager.saveSession(this.context);
+    if (this.sessionManager && this.page) {
+      const cookies = await this.page.cookies();
+      return await this.sessionManager.saveSession(cookies);
     }
     return false;
   }
@@ -138,7 +95,7 @@ class BrowserService {
   async waitForSelector(selector, options = {}) {
     return await this.page.waitForSelector(selector, {
       timeout: options.timeout || this.options.timeout,
-      state: options.state || 'visible'
+      visible: options.visible !== false
     });
   }
 
@@ -146,16 +103,13 @@ class BrowserService {
    * Type text with human-like delays
    */
   async typeText(selector, text, options = {}) {
-    const element = await this.waitForSelector(selector);
+    await this.waitForSelector(selector);
     
-    await element.click();
+    await this.page.click(selector);
     await this.page.waitForTimeout(options.delay || 100);
     
     // Type with random delays between keystrokes
-    for (const char of text) {
-      await element.type(char);
-      await this.page.waitForTimeout(Math.random() * 100 + 50);
-    }
+    await this.page.type(selector, text, { delay: Math.random() * 50 + 25 });
   }
 
   /**
@@ -169,7 +123,7 @@ class BrowserService {
       throw new Error(`File input not found: ${selector}`);
     }
     
-    await input.setInputFiles(filePath);
+    await input.uploadFile(filePath);
     console.log('✅ File uploaded');
   }
 
@@ -213,23 +167,17 @@ class BrowserService {
    * Get text content
    */
   async getText(selector) {
-    const element = await this.waitForSelector(selector);
-    return await element.textContent();
+    await this.waitForSelector(selector);
+    return await this.page.$eval(selector, el => el.textContent);
   }
 
   /**
    * Get all text content
    */
   async getAllText(selector) {
-    const elements = await this.page.$$(selector);
-    const texts = [];
-    
-    for (const element of elements) {
-      const text = await element.textContent();
-      texts.push(text);
-    }
-    
-    return texts;
+    return await this.page.$$eval(selector, elements => 
+      elements.map(el => el.textContent)
+    );
   }
 
   /**
@@ -247,7 +195,6 @@ class BrowserService {
       console.log('🔒 Closing browser...');
       await this.browser.close();
       this.browser = null;
-      this.context = null;
       this.page = null;
       console.log('✅ Browser closed');
     }
