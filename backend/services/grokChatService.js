@@ -1,7 +1,11 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs/promises';
 import path from 'path';
 import axios from 'axios';
+
+// Use stealth plugin to bypass Cloudflare bot detection
+puppeteer.use(StealthPlugin());
 
 // ==================== GROK CHAT CONFIGURATION ====================
 
@@ -31,14 +35,15 @@ export async function analyzeWithGrokAPI(imagePath, prompt) {
     // Build cookies string
     const cookies = `sso=${GROK_SSO}; sso-rw=${GROK_SSO_RW}; x-userid=${GROK_USER_ID}; i18nextLng=en`;
 
-    // Launch browser for file upload
+    // Launch browser for file upload with stealth mode
     browser = await puppeteer.launch({
       headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled'
       ]
     });
 
