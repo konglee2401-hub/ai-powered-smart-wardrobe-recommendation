@@ -33,26 +33,34 @@ class BrowserService {
    * Launch browser with optional session
    */
   async launch() {
-    console.log('🚀 Launching browser (using real Chrome)...');
+    console.log('🚀 Launching browser (using real Chrome with Cris Lee profile)...');
+    
+    // Get Chrome User Data directory with Cris Lee profile (Profile 2)
+    const chromeUserDataDir = path.join(
+      process.env.LOCALAPPDATA || process.env.HOME,
+      'Google',
+      'Chrome',
+      'User Data'
+    );
     
     try {
-      // Try with real Chrome first
+      // Try with real Chrome first (using Cris Lee profile)
       this.browser = await puppeteer.launch({
-        channel: 'chrome', // Use real Chrome installation instead of Chromium
-        headless: this.options.headless,
-        slowMo: this.options.slowMo,
+        channel: 'chrome', // Use real Chrome installation
+        headless: false, // Keep visible for manual interaction
         args: [
+          `--user-data-dir=${chromeUserDataDir}`, // Use Chrome User Data directory
+          '--profile-directory=Profile 2', // Explicitly use Cris Lee's profile
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--disable-web-security',
           '--disable-features=IsolateOrigins,site-per-process'
         ],
         defaultViewport: this.options.viewport
       });
-      console.log('✅ Using real Chrome browser');
+      console.log('✅ Using real Chrome with Cris Lee profile (Profile 2)');
     } catch (error) {
       if (error.message.includes('channel') || error.message.includes('Chrome')) {
         console.log('⚠️  Chrome not found, falling back to Chromium...');
@@ -100,7 +108,7 @@ class BrowserService {
     // Set default timeout
     this.page.setDefaultTimeout(this.options.timeout);
 
-    console.log('✅ Browser launched');
+    console.log('✅ Browser launched with Cris Lee profile');
   }
 
   /**
