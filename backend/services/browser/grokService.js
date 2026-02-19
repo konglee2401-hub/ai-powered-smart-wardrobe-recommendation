@@ -105,6 +105,103 @@ class GrokService extends BrowserService {
   }
 
   /**
+   * Wait for Cloudflare challenge to be resolved (if any)
+   */
+  async waitForCloudflareResolved() {
+    const maxWait = 120000; // 120 seconds
+    const startTime = Date.now();
+    let checkCount = 0;
+    
+    while (Date.now() - startTime < maxWait) {
+      checkCount++;
+      
+      try {
+        // Check if Cloudflare challenge page is visible
+        const challengeStatus = await this.page.evaluate(() => {
+          const text = document.body.innerText.toLowerCase();
+          const html = document.documentElement.outerHTML.toLowerCase();
+          
+          const hasCloudflareText = text.includes('cloudflare') || 
+                                  text.includes('verify you are human') ||
+                                  text.includes('challenge') ||
+                                  text.includes('just a moment');
+          
+          const hasCloudflareElements = 
+            document.querySelector('iframe[src*="challenges.cloudflare.com"]') !== null ||
+            document.querySelector('iframe[src*="cdn-cgi"]') !== null ||
+            document.querySelector('[data-testid="challenge-guard"]') !== null ||
+            html.includes('cf_clearance') ||
+            html.includes('challenge');
+          
+          return {
+            detected: hasCloudflareText || hasCloudflareElements,
+            textDetected: hasCloudflareText,
+            elementDetected: hasCloudflareElements
+          };
+        });
+
+        if (checkCount === 1 || checkCount % 10 === 0) {
+          process.stdout.write(`\r⏳ Cloudflare check [${checkCount}]... (${Math.round((maxWait - (Date.now() - startTime)) / 1000)}s left)`);
+        }
+
+        if (challengeStatus.detected) {
+          process.stdout.write(`\r🛡️  Cloudflare challenge detected - Please verify in browser...            \n`);
+          // Keep checking until it's gone
+          let challengePassed = false;
+          let passCheckCount = 0;
+          
+          while (!challengePassed && (Date.now() - startTime) < maxWait) {
+            await this.page.waitForTimeout(3000);
+            passCheckCount++;
+            
+            const stillDetected = await this.page.evaluate(() => {
+              const text = document.body.innerText.toLowerCase();
+              return text.includes('cloudflare') || 
+                    text.includes('verify you are human') ||
+                    text.includes('challenge') ||
+                    text.includes('just a moment');
+            });
+
+            if (!stillDetected) {
+              challengePassed = true;
+              process.stdout.write(`\r✅ Cloudflare challenge resolved!                               \n`);
+            } else {
+              const remaining = Math.round((maxWait - (Date.now() - startTime)) / 1000);
+              process.stdout.write(`\r⏳ Waiting for Cloudflare verification... (${remaining}s) [attempt ${passCheckCount}]`);
+            }
+          }
+
+          if (!challengePassed) {
+            throw new Error('Cloudflare challenge timeout');
+          }
+          
+          return;
+        }
+
+        // Check if page loaded properly (has significant content)
+        const pageContent = await this.page.evaluate(() => {
+          return {
+            bodyLength: document.body.innerText.length,
+            hasContent: document.body.innerText.length > 500
+          };
+        });
+
+        if (pageContent.hasContent) {
+          console.log('');
+          return;  // Page loaded successfully, no Cloudflare
+        }
+
+      } catch (error) {
+        console.log(`\n⚠️  Cloudflare check error: ${error.message}`);
+      }
+
+      await this.page.waitForTimeout(1000);
+    }
+
+    console.log('\n✅ Cloudflare check timeout - continuing (no active challenge)');
+  }
+
+  /**
    * Upload image and get analysis
    */
   async analyzeImage(imagePath, prompt) {
@@ -115,35 +212,51 @@ class GrokService extends BrowserService {
     console.log('');
 
     try {
+      // Wait for Cloudflare challenge to be resolved (if any)
+      console.log('⏳ Checking for Cloudflare challenge...');
+      try {
+        await this.waitForCloudflareResolved();
+        console.log('✅ Cloudflare check passed');
+      } catch (error) {
+        console.log(`⚠️  Cloudflare check error: ${error.message}`);
+      }
+
       // Look for new chat or input area
       console.log('🔍 Looking for chat interface...');
       
       // Wait for chat interface to load
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(3000);
 
       // Look for file upload button/input
       console.log('🔍 Looking for upload button...');
+      console.log('   Checking input[type="file"]...');
       
-      const uploadSelectors = [
-        'input[type="file"]',
-        'input[accept*="image"]',
-        '[data-testid="file-upload"]',
-        '[aria-label*="upload"]',
-        '[aria-label*="attach"]',
-        'button[aria-label*="image"]'
-      ];
+      let uploadInput = await this.page.$('input[type="file"]');
+      if (uploadInput) {
+        console.log(`✅ Found upload input directly: input[type="file"]`);
+      } else {
+        console.log('   ❌ Not found, trying other selectors...');
+        
+        const uploadSelectors = [
+          'input[accept*="image"]',
+          '[data-testid="file-upload"]',
+          '[aria-label*="upload"]',
+          '[aria-label*="attach"]',
+          'button[aria-label*="image"]'
+        ];
 
-      let uploadInput = null;
-      for (const selector of uploadSelectors) {
-        uploadInput = await this.page.$(selector);
-        if (uploadInput) {
-          console.log(`✅ Found upload input: ${selector}`);
-          break;
+        for (const selector of uploadSelectors) {
+          uploadInput = await this.page.$(selector);
+          if (uploadInput) {
+            console.log(`✅ Found upload input: ${selector}`);
+            break;
+          }
         }
       }
 
       // If no direct input, try to click attach button
       if (!uploadInput) {
+        console.log('🔍 Searching for attach button...');
         const attachButtons = await this.page.$$('button');
         for (const button of attachButtons) {
           const ariaLabel = await button.getAttribute('aria-label');
@@ -165,7 +278,9 @@ class GrokService extends BrowserService {
       }
 
       if (!uploadInput) {
-        throw new Error('Could not find file upload input. Grok may have changed its UI.');
+        // Take screenshot for debugging
+        await this.screenshot(`temp/grok-upload-debug-${Date.now()}.png`);
+        throw new Error('Could not find file upload input. Grok interface may have changed.');
       }
 
       // Upload image
