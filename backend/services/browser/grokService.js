@@ -300,9 +300,11 @@ class GrokService extends BrowserService {
       ];
 
       let textInput = null;
+      let usedTextSelector = null;
       for (const selector of textInputSelectors) {
         textInput = await this.page.$(selector);
         if (textInput) {
+          usedTextSelector = selector;
           console.log(`✅ Found text input: ${selector}`);
           break;
         }
@@ -314,7 +316,7 @@ class GrokService extends BrowserService {
 
       // Type prompt
       console.log('⌨️  Typing prompt...');
-      await this.typeText(textInputSelectors.find(s => textInput), prompt);
+      await this.typeText(usedTextSelector, prompt);
       await this.page.waitForTimeout(1000);
 
       // Find and click send button
