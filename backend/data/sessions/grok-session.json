@@ -1,0 +1,21 @@
+{
+  "service": "grok",
+  "savedAt": "2026-02-19T02:44:53.830Z",
+  "cookies": [
+    {
+      "name": "__cf_bm",
+      "value": "JIGBZqOdECUIo57BW6Wy3EoPEFooCtn9Gha0PYm9Gqc-1771468641-1.0.1.1-bXR4Jyyfn4JOffXTI1jSeFeCN_0GqPqjRiGBS_.q0rymPBCa2VPxFkfpppth26ivcOeA8QcvA5NJEbk8u7oF1BRvxzikZIhy_mC2q1Il_fo",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1771470441.261352,
+      "size": 177,
+      "httpOnly": true,
+      "secure": true,
+      "session": false,
+      "sameSite": "None",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    }
+  ]
+}

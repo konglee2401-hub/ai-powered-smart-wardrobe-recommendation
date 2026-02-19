@@ -33,22 +33,48 @@ class BrowserService {
    * Launch browser with optional session
    */
   async launch() {
-    console.log('🚀 Launching browser...');
+    console.log('🚀 Launching browser (using real Chrome)...');
     
-    this.browser = await puppeteer.launch({
-      headless: this.options.headless,
-      slowMo: this.options.slowMo,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ],
-      defaultViewport: this.options.viewport
-    });
+    try {
+      // Try with real Chrome first
+      this.browser = await puppeteer.launch({
+        channel: 'chrome', // Use real Chrome installation instead of Chromium
+        headless: this.options.headless,
+        slowMo: this.options.slowMo,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ],
+        defaultViewport: this.options.viewport
+      });
+      console.log('✅ Using real Chrome browser');
+    } catch (error) {
+      if (error.message.includes('channel') || error.message.includes('Chrome')) {
+        console.log('⚠️  Chrome not found, falling back to Chromium...');
+        this.browser = await puppeteer.launch({
+          headless: this.options.headless,
+          slowMo: this.options.slowMo,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process'
+          ],
+          defaultViewport: this.options.viewport
+        });
+        console.log('✅ Using Chromium');
+      } else {
+        throw error;
+      }
+    }
 
     this.page = await this.browser.newPage();
     

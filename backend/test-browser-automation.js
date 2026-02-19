@@ -183,6 +183,10 @@ async function testGrok(imagePath, prompt) {
   } catch (error) {
     log(`Grok failed: ${error.message}`, 'error');
     
+    // KEEP BROWSER OPEN for verification
+    console.log(chalk.yellow('\n⏳ Browser will stay open for 30 seconds for verification...\n'));
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    
     return {
       service: 'Grok',
       status: 'failed',
