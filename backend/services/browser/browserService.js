@@ -52,6 +52,19 @@ class BrowserService {
 
     this.page = await this.browser.newPage();
     
+    // Load session cookies if available
+    if (this.sessionManager && this.sessionManager.hasSession()) {
+      try {
+        const cookies = this.sessionManager.loadSession();
+        if (cookies && cookies.length > 0) {
+          await this.page.setCookie(...cookies);
+          console.log(`✅ Loaded ${cookies.length} cookies from saved session`);
+        }
+      } catch (error) {
+        console.log(`⚠️  Failed to load session cookies: ${error.message}`);
+      }
+    }
+    
     // Set user agent
     await this.page.setUserAgent(this.options.userAgent);
     
@@ -65,12 +78,18 @@ class BrowserService {
   }
 
   /**
-   * Save current session
+   * Save current session cookies
    */
   async saveSession() {
     if (this.sessionManager && this.page) {
-      const cookies = await this.page.cookies();
-      return await this.sessionManager.saveSession(cookies);
+      try {
+        const cookies = await this.page.cookies();
+        await this.sessionManager.saveSession(cookies);
+        return true;
+      } catch (error) {
+        console.error(`❌ Failed to save session: ${error.message}`);
+        return false;
+      }
     }
     return false;
   }

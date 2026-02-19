@@ -1,4 +1,5 @@
 import BrowserService from './browserService.js';
+import SessionManager from '../utils/sessionManager.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -8,8 +9,13 @@ import path from 'path';
  */
 class GrokService extends BrowserService {
   constructor(options = {}) {
-    super(options);
+    // Create session manager for Grok
+    const sessionManager = new SessionManager('grok');
+    
+    // Pass session manager to parent
+    super({ ...options, sessionManager });
     this.baseUrl = 'https://grok.com';
+    this.sessionManager = sessionManager;
   }
 
   /**
@@ -27,19 +33,71 @@ class GrokService extends BrowserService {
     const isLoginPage = await this.page.evaluate(() => {
       return document.body.innerText.includes('Sign in') || 
              document.body.innerText.includes('Log in') ||
-             document.body.innerText.includes('Continue with');
+             document.body.innerText.includes('Continue with') ||
+             document.body.innerText.includes('Sign up');
     });
     
     if (isLoginPage) {
-      console.log('⚠️  Login required. Grok requires X/Twitter authentication.');
-      console.log('💡 Please login manually or implement OAuth flow.');
+      console.log('\n╔════════════════════════════════════════════════════════╗');
+      console.log('║         🔐 GROK AUTHENTICATION REQUIRED                  ║');
+      console.log('╚════════════════════════════════════════════════════════╝\n');
+      console.log('⚠️  Login required. Please complete X/Twitter login in the browser window.\n');
+      console.log('📝 Steps:');
+      console.log('  1. Sign in with your X/Twitter account');
+      console.log('  2. Complete any 2FA verification (if enabled)');
+      console.log('  3. Wait for Grok dashboard to load\n');
       
       // Wait for manual login (if not headless)
       if (!this.options.headless) {
-        console.log('⏳ Waiting 60 seconds for manual login...');
-        await this.page.waitForTimeout(60000);
+        console.log('⏳ Waiting 120 seconds for manual login (browser window should be visible)...\n');
+        
+        // Poll for successful login
+        let loggedIn = false;
+        let waitTime = 0;
+        const maxWait = 120000; // 120 seconds
+        const pollInterval = 3000; // Check every 3 seconds
+        
+        while (!loggedIn && waitTime < maxWait) {
+          await this.page.waitForTimeout(pollInterval);
+          waitTime += pollInterval;
+          
+          const stillOnLogin = await this.page.evaluate(() => {
+            return document.body.innerText.includes('Sign in') || 
+                   document.body.innerText.includes('Log in') ||
+                   document.body.innerText.includes('Continue with') ||
+                   document.body.innerText.includes('Sign up');
+          });
+          
+          if (!stillOnLogin) {
+            loggedIn = true;
+            console.log('✅ Login successful! Session will be saved.\n');
+          } else {
+            const secondsLeft = Math.round((maxWait - waitTime) / 1000);
+            process.stdout.write(`\r⏳ Waiting for login... (${secondsLeft}s remaining)`);
+          }
+        }
+        
+        if (!loggedIn) {
+          throw new Error('Login timeout. Please try again.');
+        }
+        
+        // Save session after successful login
+        await this.page.waitForTimeout(2000); // Wait for page to fully load
+        const saved = await this.saveSession();
+        if (saved) {
+          console.log('💾 Session saved - you won\'t need to login again!');
+        }
       } else {
         throw new Error('Grok requires authentication. Please run in non-headless mode for manual login.');
+      }
+    } else {
+      console.log('✅ Already logged in (using saved session)');
+      
+      // Also save current cookies (session refresh)
+      try {
+        await this.saveSession();
+      } catch (error) {
+        // Silent fail - session update not critical
       }
     }
     
