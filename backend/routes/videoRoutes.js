@@ -226,4 +226,102 @@ router.post('/:id/feedback', protect, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/videos/generate-prompts
+ * Generate video segment prompts from Grok AI
+ */
+router.post('/generate-prompts', protect, async (req, res) => {
+  try {
+    const { duration, scenario, segments = 3, style = 'professional' } = req.body;
+
+    if (!duration || !scenario) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duration and scenario are required'
+      });
+    }
+
+    // Use GrokServiceV2 if available, otherwise simulate prompt generation
+    try {
+      const GrokServiceV2 = await import('../services/GrokServiceV2.js').then(m => m.GrokServiceV2);
+      const grokService = new GrokServiceV2();
+
+      const prompt = `Generate ${segments} detailed video prompts for a ${style} ${scenario}. 
+Each prompt should be 1-2 sentences describing the action for a ~${duration / segments}s segment.
+Focus on: movement, camera angles, clothing details, facial expressions, background.
+Format: Segment 1: [prompt] | Segment 2: [prompt] | Segment 3: [prompt]`;
+
+      const response = await grokService.generateVideoPrompts(prompt);
+      
+      // Parse the response to extract individual segment prompts
+      const segmentPrompts = response
+        .split(/Segment \d+:|(?=Segment)/)
+        .filter(p => p.trim())
+        .map(p => p.replace(/^\s*\|/, '').trim())
+        .slice(0, segments);
+
+      res.json({
+        success: true,
+        data: {
+          prompts: segmentPrompts,
+          scenario,
+          duration,
+          segments: segments
+        }
+      });
+
+    } catch (grokError) {
+      // Fallback: Generate basic prompts based on scenario templates
+      const scenarioTemplates = {
+        'product-intro': [
+          'Start with close-up of product details, slowly panning to show full item against clean white background',
+          'Model wearing product, walking or posing with confident movement, highlighting fit and fabric',
+          'Transition to product showcase, rotating to show all angles with professional lighting'
+        ],
+        'fashion-show': [
+          'Model walking down runway with energetic stride, showcasing outfit movement and drape',
+          'Pause and turn to display outfit from multiple angles, showing styling details and accessories',
+          'Exit runway with confident walk, camera following to capture full outfit movement'
+        ],
+        'styling-tips': [
+          'Start with full body shot of basic outfit, then zoom to highlight key styling element',
+          'Show how to layer or accessorize, demonstrating styling techniques with clear visibility',
+          'Final shot of complete styled outfit from front and side, modeling natural movement'
+        ],
+        'unboxing': [
+          'Hands opening package or revealing product with excitement, showing packaging details',
+          'Close-up examination of product, handling it carefully with good lighting on details',
+          'Final reveal of product in use or displayed, showing quality and craftsmanship'
+        ]
+      };
+
+      const templates = scenarioTemplates[scenario] || scenarioTemplates['product-intro'];
+      const selectedPrompts = templates.slice(0, segments);
+
+      // Pad with additional prompts if needed
+      while (selectedPrompts.length < segments) {
+        selectedPrompts.push(`Continue showcasing the product with focused camera movement and professional lighting`);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          prompts: selectedPrompts,
+          scenario,
+          duration,
+          segments: segments,
+          isTemplate: true
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Prompt generation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;

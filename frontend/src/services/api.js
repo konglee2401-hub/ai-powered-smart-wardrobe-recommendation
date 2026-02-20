@@ -548,6 +548,23 @@ export const browserAutomationAPI = {
     };
     return api.post('/v1/browser-automation/generate-video', payload);
   },
+
+  /**
+   * Generate video segment prompts from Grok AI
+   * @param {number} duration - Video duration (20, 30, 40, etc.)
+   * @param {string} scenario - Video scenario (product-intro, fashion-show, styling-tips, unboxing)
+   * @param {number} segments - Number of segments (default: 3)
+   * @param {string} style - Style of prompts (professional, creative, casual)
+   */
+  generateVideoPrompts: async (duration, scenario, segments = 3, style = 'professional') => {
+    const payload = {
+      duration,
+      scenario,
+      segments,
+      style
+    };
+    return api.post('/api/videos/generate-prompts', payload);
+  },
   
   /**
    * Full workflow: Analyze + Generate image + optional video

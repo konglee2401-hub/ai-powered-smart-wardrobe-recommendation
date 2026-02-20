@@ -112,15 +112,6 @@ function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selecte
           }
         }}
       />
-
-      {/* Next Button */}
-      <button
-        onClick={onNext}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm font-medium text-white"
-      >
-        <span>Continue to Script</span>
-        <ChevronRight className="w-4 h-4" />
-      </button>
     </div>
   );
 }
@@ -137,6 +128,8 @@ function VideoPromptStep({
 }) {
   const scen = VIDEO_SCENARIOS.find(s => s.value === scenario);
   const segments = VIDEO_DURATIONS.find(d => d.value === duration)?.segments || 3;
+  const [isGeneratingPrompts, setIsGeneratingPrompts] = React.useState(false);
+  const [promptError, setPromptError] = React.useState(null);
 
   const handlePromptChange = (index, value) => {
     const newPrompts = [...prompts];
@@ -147,6 +140,34 @@ function VideoPromptStep({
   const handleAutoFill = () => {
     if (scen?.scriptTemplate) {
       onPromptsChange(scen.scriptTemplate);
+      setPromptError(null);
+    }
+  };
+
+  const handleGeneratePromptsFromGrok = async () => {
+    setIsGeneratingPrompts(true);
+    setPromptError(null);
+    
+    try {
+      const response = await browserAutomationAPI.generateVideoPrompts(
+        duration,
+        scenario,
+        segments,
+        'professional'
+      );
+
+      if (response.success && response.data.prompts) {
+        onPromptsChange(response.data.prompts);
+      } else {
+        setPromptError('Failed to generate prompts. Using template instead.');
+        handleAutoFill();
+      }
+    } catch (error) {
+      console.error('Error generating prompts:', error);
+      setPromptError('Could not generate prompts from Grok. Using template instead.');
+      handleAutoFill();
+    } finally {
+      setIsGeneratingPrompts(false);
     }
   };
 
@@ -160,14 +181,41 @@ function VideoPromptStep({
         </p>
       </div>
 
-      {/* Auto-fill Button */}
-      <button
-        onClick={handleAutoFill}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-700/50 rounded-lg text-xs font-medium text-blue-300 transition-colors"
-      >
-        <Sparkles className="w-3 h-3" />
-        Fill with Template
-      </button>
+      {/* Prompt Generation Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleGeneratePromptsFromGrok}
+          disabled={isGeneratingPrompts}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-900/30 hover:bg-green-900/50 border border-green-700/50 rounded-lg text-xs font-medium text-green-300 transition-colors disabled:opacity-50"
+        >
+          {isGeneratingPrompts ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3 h-3" />
+              Generate with Grok AI
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={handleAutoFill}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-700/50 rounded-lg text-xs font-medium text-blue-300 transition-colors"
+        >
+          <Sparkles className="w-3 h-3" />
+          Use Template
+        </button>
+      </div>
+
+      {/* Error Message */}
+      {promptError && (
+        <div className="bg-red-900/20 rounded-lg p-3 border border-red-700/50">
+          <p className="text-xs text-red-300">{promptError}</p>
+        </div>
+      )}
 
       {/* Prompt Segments */}
       <div className="space-y-3">
@@ -202,24 +250,6 @@ function VideoPromptStep({
         <p className="text-xs text-gray-400">
           💡 <strong>Pro tip:</strong> Mention specific details like clothing, accessories, emotions, camera angles, and movements for better results.
         </p>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex gap-2">
-        <button
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium text-white"
-        >
-          <ChevronRight className="w-4 h-4" />
-          Back
-        </button>
-        <button
-          onClick={onNext}
-          disabled={isGenerating || prompts.some(p => !p || p.trim().length === 0)}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
-        >
-          <span>Generate Video</span>
-          <ChevronRight className="w-4 h-4" />
-        </button>
       </div>
     </div>
   );
@@ -311,33 +341,6 @@ function VideoGenerationStep({
         <p className="text-xs text-yellow-300">
           ⏱️ <strong>Important:</strong> Grok supports ~10 seconds per segment. Your video will be generated as {segments} separate clips that will be combined.
         </p>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={onBack}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium text-white"
-        >
-          Back
-        </button>
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Generating...</span>
-            </>
-          ) : (
-            <>
-              <Rocket className="w-4 h-4" />
-              <span>Create Video</span>
-            </>
-          )}
-        </button>
       </div>
     </div>
   );
@@ -454,50 +457,52 @@ export default function VideoGenerationPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar - Settings */}
-        <div className="w-80 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
-          <div className="p-4 space-y-4">
-            {currentStep === 1 && (
-              <VideoSettingsStep
-                onNext={() => setCurrentStep(2)}
-                selectedDuration={selectedDuration}
-                onDurationChange={setSelectedDuration}
-                selectedScenario={selectedScenario}
-                onScenarioChange={setSelectedScenario}
-                onImageChange={handleImageChange}
-              />
-            )}
+      {/* Main Content - Flex container with scrollable content and fixed bottom buttons */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Main Content Area - Scrollable */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Sidebar - Settings */}
+          <div className="w-80 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="p-4 space-y-4">
+              {currentStep === 1 && (
+                <VideoSettingsStep
+                  onNext={() => setCurrentStep(2)}
+                  selectedDuration={selectedDuration}
+                  onDurationChange={setSelectedDuration}
+                  selectedScenario={selectedScenario}
+                  onScenarioChange={setSelectedScenario}
+                  onImageChange={handleImageChange}
+                />
+              )}
 
-            {currentStep === 2 && (
-              <VideoPromptStep
-                onNext={() => setCurrentStep(3)}
-                duration={selectedDuration}
-                scenario={selectedScenario}
-                prompts={prompts}
-                onPromptsChange={setPrompts}
-                selectedImage={currentImage}
-                isGenerating={isGenerating}
-              />
-            )}
+              {currentStep === 2 && (
+                <VideoPromptStep
+                  onNext={() => setCurrentStep(3)}
+                  duration={selectedDuration}
+                  scenario={selectedScenario}
+                  prompts={prompts}
+                  onPromptsChange={setPrompts}
+                  selectedImage={currentImage}
+                  isGenerating={isGenerating}
+                />
+              )}
 
-            {currentStep === 3 && (
-              <VideoGenerationStep
-                duration={selectedDuration}
-                scenario={selectedScenario}
-                prompts={prompts}
-                selectedImage={currentImage}
-                onBack={() => setCurrentStep(2)}
-                isGenerating={isGenerating}
-                onGenerate={handleGenerateVideo}
-              />
-            )}
+              {currentStep === 3 && (
+                <VideoGenerationStep
+                  duration={selectedDuration}
+                  scenario={selectedScenario}
+                  prompts={prompts}
+                  selectedImage={currentImage}
+                  onBack={() => setCurrentStep(2)}
+                  isGenerating={isGenerating}
+                  onGenerate={handleGenerateVideo}
+                />
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Center - Preview */}
-        <div className="flex-1 bg-gray-900 overflow-y-auto">
+          {/* Center - Preview */}
+          <div className="flex-1 bg-gray-900 overflow-y-auto">
           <div className="p-6 max-w-4xl mx-auto">
             {currentStep === 1 && (
               <div className="space-y-6">
@@ -692,6 +697,73 @@ export default function VideoGenerationPage() {
           </div>
         </div>
       </div>
+
+      {/* ==================== FIXED BOTTOM ACTION BAR ==================== */}
+      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {/* Status Messages */}
+          <div className="text-xs text-gray-400">
+            {currentStep === 1 && '⬆️ Select video settings in the left panel'}
+            {currentStep === 2 && '✍️ Write your video script (3 segments)'}
+            {currentStep === 3 && '🚀 Ready to generate video'}
+            {isGenerating && '⏳ Video generation in progress...'}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {currentStep > 1 && !isGenerating && (
+              <button
+                onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium text-white"
+              >
+                Back
+              </button>
+            )}
+
+            {currentStep === 1 && (
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm font-medium text-white"
+              >
+                <span>Continue to Script</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+
+            {currentStep === 2 && (
+              <button
+                onClick={() => setCurrentStep(3)}
+                disabled={isGenerating || prompts.some(p => !p || p.trim().length === 0)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
+              >
+                <span>Review & Generate</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+
+            {currentStep === 3 && (
+              <button
+                onClick={handleGenerateVideo}
+                disabled={isGenerating || !currentImage}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-4 h-4" />
+                    <span>Create Video</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+
