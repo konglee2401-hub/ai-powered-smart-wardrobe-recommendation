@@ -11,6 +11,213 @@ if (!fs.existsSync(tempDir)) {
 }
 
 /**
+ * Build comprehensive analysis prompt with all VTO style options
+ * Based on the test script prompt but expanded with all StyleCustomizer options
+ */
+function buildAnalysisPrompt(options = {}) {
+  const {
+    scene = 'studio',
+    lighting = 'soft-diffused',
+    mood = 'confident',
+    style = 'minimalist',
+    colorPalette = 'neutral',
+    hairstyle = null,
+    makeup = null,
+    cameraAngle = 'eye-level',
+    aspectRatio = '1:1',
+    customPrompt = ''
+  } = options;
+
+  // Map option values to descriptive text
+  const sceneMap = {
+    'studio': 'Professional Studio',
+    'white-background': 'White Background',
+    'urban-street': 'Urban Street',
+    'minimalist-indoor': 'Minimalist Indoor',
+    'cafe': 'Cafe',
+    'outdoor-park': 'Outdoor Park',
+    'office': 'Modern Office',
+    'luxury-interior': 'Luxury Interior',
+    'rooftop': 'Rooftop'
+  };
+
+  const lightingMap = {
+    'soft-diffused': 'Soft Diffused Lighting',
+    'natural-window': 'Natural Window Light',
+    'golden-hour': 'Golden Hour Lighting',
+    'dramatic-rembrandt': 'Dramatic Rembrandt Lighting',
+    'high-key': 'High Key Bright Lighting',
+    'backlit': 'Backlit Effect',
+    'neon-colored': 'Neon/Colored Lighting',
+    'overcast-outdoor': 'Overcast Outdoor Light'
+  };
+
+  const moodMap = {
+    'confident': 'Confident & Powerful',
+    'relaxed': 'Relaxed & Casual',
+    'elegant': 'Elegant & Sophisticated',
+    'energetic': 'Energetic & Dynamic',
+    'playful': 'Playful & Fun',
+    'mysterious': 'Mysterious & Edgy',
+    'romantic': 'Romantic & Dreamy',
+    'professional': 'Professional'
+  };
+
+  const styleMap = {
+    'minimalist': 'Minimalist Photography',
+    'editorial': 'Editorial Style',
+    'commercial': 'Commercial Photography',
+    'lifestyle': 'Lifestyle Photography',
+    'high-fashion': 'High Fashion Style',
+    'vintage': 'Vintage/Retro Style',
+    'street': 'Street Style',
+    'bohemian': 'Bohemian Style'
+  };
+
+  const colorPaletteMap = {
+    'neutral': 'Neutral Colors',
+    'warm': 'Warm Tones',
+    'cool': 'Cool Tones',
+    'pastel': 'Pastel Colors',
+    'monochrome': 'Monochrome',
+    'vibrant': 'Vibrant Colors',
+    'earth-tones': 'Earth Tones',
+    'metallic': 'Metallic'
+  };
+
+  const cameraAngleMap = {
+    'eye-level': 'Eye Level Camera',
+    'slight-angle': 'Slight Angle',
+    'three-quarter': 'Three-Quarter View',
+    'full-front': 'Full Front View',
+    'over-shoulder': 'Over Shoulder View'
+  };
+
+  return `Analyze these two images in detail for a Virtual Try-On system:
+
+IMAGE 1 - CHARACTER/PERSON (Vietnamese/Southeast Asian):
+- Gender, estimated age
+- Ethnicity: Note Vietnamese characteristics (olive/tan skin tone, dark hair, typical Vietnamese facial features)
+- Body type (slim, athletic, curvy, etc.) - common Vietnamese body types
+- Skin tone (Vietnamese: olive, tan, light brown, fair with warm undertones)
+- Hair: color (typically black/dark brown), style, length - common Vietnamese hairstyles
+- Current pose and expression
+- Current outfit (if any)
+- Note: Subject appears to be Vietnamese based on features
+
+IMAGE 2 - CLOTHING PRODUCT:
+- Type of clothing (dress, top, pants, etc.)
+- Style category (casual, formal, elegant, streetwear, ao dai, etc.)
+- Colors and patterns
+- Material/fabric type
+- Fit type (slim, regular, loose, oversized)
+- Notable design details (buttons, zippers, prints, embroidery)
+- Is this suitable for Vietnamese fashion/trends?
+
+FASHION ANALYSIS:
+- Compatibility score (1-10) between character and clothing
+- Style recommendations for scene, lighting, and mood suitable for Vietnamese context
+- Suggested pose for wearing this clothing
+- Color harmony analysis
+- Any adjustments needed for Vietnamese body types/skin tones?
+
+STYLE CUSTOMIZATION (User Selected):
+- Scene: ${sceneMap[scene] || scene}
+- Lighting: ${lightingMap[lighting] || lighting}
+- Mood: ${moodMap[mood] || mood}
+- Photography Style: ${styleMap[style] || style}
+- Color Palette: ${colorPaletteMap[colorPalette] || colorPalette}
+- Camera Angle: ${cameraAngleMap[cameraAngle] || cameraAngle}
+${hairstyle ? `- Hairstyle: ${hairstyle}` : ''}
+${makeup ? `- Makeup: ${makeup}` : ''}
+${customPrompt ? `- Custom: ${customPrompt}` : ''}
+
+Please provide detailed, structured analysis focusing on Vietnamese subjects and fashion. Include specific recommendations that match the selected style options above.`;
+}
+
+/**
+ * Build generation prompt from analysis and options
+ */
+function buildGenerationPrompt(analysisText, options = {}) {
+  const {
+    scene = 'studio',
+    lighting = 'soft-diffused',
+    mood = 'confident',
+    style = 'minimalist',
+    colorPalette = 'neutral',
+    cameraAngle = 'eye-level',
+    aspectRatio = '1:1',
+    negativePrompt = ''
+  } = options;
+
+  // Map aspect ratio
+  const aspectRatioMap = {
+    '1:1': 'square (1:1)',
+    '4:3': 'landscape (4:3)',
+    '3:4': 'portrait (3:4)',
+    '16:9': 'wide (16:9)',
+    '9:16': 'vertical (9:16)'
+  };
+
+  const sceneMap = {
+    'studio': 'Professional Studio with clean background',
+    'white-background': 'White Background',
+    'urban-street': 'Urban Street Environment',
+    'minimalist-indoor': 'Minimalist Indoor Setting',
+    'cafe': 'Cozy Cafe Setting',
+    'outdoor-park': 'Outdoor Park with natural greenery',
+    'office': 'Modern Office Interior',
+    'luxury-interior': 'Luxury Interior with elegant decor',
+    'rooftop': 'Rooftop with city skyline view'
+  };
+
+  const lightingMap = {
+    'soft-diffused': 'soft diffused lighting from 45° angle',
+    'natural-window': 'natural window light',
+    'golden-hour': 'golden hour warm lighting',
+    'dramatic-rembrandt': 'dramatic Rembrandt lighting',
+    'high-key': 'high key bright lighting',
+    'backlit': 'backlit with rim light',
+    'neon-colored': 'neon colored lighting effects',
+    'overcast-outdoor': 'soft overcast outdoor lighting'
+  };
+
+  return `Based on the analysis of the two images I uploaded earlier, generate a photorealistic fashion image.
+
+=== KEEP CHARACTER UNCHANGED ===
+Keep the EXACT same person from image 1:
+- Same face, same facial features, same expression
+- Same body type and proportions
+- Same skin tone
+- Same hair color and style
+- Same pose orientation
+
+=== CHANGE CLOTHING TO ===
+Dress the character in the EXACT clothing from image 2:
+- Match the exact color, pattern, and design
+- Match the exact material and texture
+- The clothing should fit naturally on the character's body
+- Proper draping and fabric physics
+
+=== ENVIRONMENT ===
+Setting: ${sceneMap[scene] || scene}
+Lighting: ${lightingMap[lighting] || lighting}
+Mood: ${mood}
+
+=== PHOTOGRAPHY ===
+Style: ${style}
+Camera: ${cameraAngle}
+Aspect Ratio: ${aspectRatioMap[aspectRatio] || aspectRatio}
+Quality: 8K, ultra-detailed, sharp focus, photorealistic
+Color: Natural, accurate color reproduction with ${colorPalette} palette
+Composition: Centered, full body visible, fashion magazine quality
+
+${negativePrompt ? `=== AVOID ===\n${negativePrompt}` : '=== AVOID ===\nblurry, low quality, watermark, distorted, artifacts, bad lighting'}
+
+Generate this image now.`;
+}
+
+/**
  * Build AI-optimized prompt from analysis text
  */
 function buildAIPrompt(basePrompt, analysisText, negativePrompt) {
@@ -115,8 +322,34 @@ export async function analyzeAndGenerate(req, res) {
       imageGenProvider = 'grok',
       prompt, 
       negativePrompt,
-      useRealAnalysis = true  // Enable real analysis by default
+      useRealAnalysis = true,  // Enable real analysis by default
+      // Style customization options from frontend
+      scene = 'studio',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      style = 'minimalist',
+      colorPalette = 'neutral',
+      hairstyle = null,
+      makeup = null,
+      cameraAngle = 'eye-level',
+      aspectRatio = '1:1',
+      customPrompt = ''
     } = req.body;
+    
+    // Build style options object
+    const styleOptions = {
+      scene,
+      lighting,
+      mood,
+      style,
+      colorPalette,
+      hairstyle,
+      makeup,
+      cameraAngle,
+      aspectRatio,
+      customPrompt,
+      negativePrompt
+    };
 
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
@@ -191,9 +424,12 @@ Professional studio lighting, white background, fashion photography quality.`;
         console.log(`   📸 Uploading and analyzing images...`);
         console.log(`   ⏳ This may take a minute...`);
         
+        // Use the comprehensive analysis prompt with all style options
+        const analysisPrompt = buildAnalysisPrompt(styleOptions);
+        
         const analysisResult = await analysisService.analyzeMultipleImages(
           [charImagePath, prodImagePath],
-          'Analyze fashion compatibility: 1) Character style, appearance, skin tone, body type 2) Product/clothing style, color, fit. Provide: color recommendations, style compatibility score, fashion tips for combining them.'
+          analysisPrompt
         );
         
         analysisText = analysisResult?.text || analysisResult;
@@ -214,10 +450,12 @@ Professional studio lighting, white background, fashion photography quality.`;
     }
 
     // ====================================
-    // STEP 3: Build optimized prompt
+    // STEP 3: Build generation prompt with all style options
     // ====================================
-    console.log(`\n🔨 STEP 3: Building AI-optimized prompt...`);
-    const optimizedPrompt = buildAIPrompt(finalPrompt, analysisText, negativePrompt);
+    console.log(`\n🔨 STEP 3: Building generation prompt with all style options...`);
+    // Use the comprehensive generation prompt with all style customization
+    const optimizedPrompt = buildGenerationPrompt(analysisText, styleOptions);
+    console.log(`   ✅ Prompt built with scene: ${styleOptions.scene}, lighting: ${styleOptions.lighting}, mood: ${styleOptions.mood}`);
 
     // ====================================
     // STEP 4: Generate image (reuse service if possible)

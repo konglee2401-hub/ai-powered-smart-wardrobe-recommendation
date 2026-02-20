@@ -1030,37 +1030,52 @@ class GrokServiceV2 extends BrowserService {
   async _sendMessage() {
     console.log('📤 Sending message...');
     
-    // Try to find send button - use individual selectors (no :has-text)
-    let sendButton = null;
+    // Wait for any animations to complete
+    await this.page.waitForTimeout(500);
     
-    const buttonSelectors = [
-      'button[type="submit"]',
-      'button[aria-label*="send"]',
-      'button[aria-label*="Send"]',
-      'button[aria-label*="submit"]',
-      'button[aria-label*="Submit"]'
+    // Try Enter key FIRST (most reliable method)
+    // Focus on the editor first
+    const editorSelectors = [
+      'div[contenteditable="true"].tiptap',
+      'div[contenteditable="true"].ProseMirror',
+      'div[contenteditable="true"]',
+      '[contenteditable="true"]',
+      'textarea',
+      '[role="textbox"]'
     ];
     
-    for (const selector of buttonSelectors) {
+    let editor = null;
+    for (const selector of editorSelectors) {
       try {
-        sendButton = await this.page.$(selector);
-        if (sendButton) {
-          console.log(`   Found button: ${selector}`);
+        editor = await this.page.$(selector);
+        if (editor) {
+          // Click to focus
+          await editor.click();
+          await this.page.waitForTimeout(200);
           break;
         }
       } catch (e) {}
     }
     
-    if (sendButton) {
-      await sendButton.click();
-      console.log('   ✅ Clicked send button');
-    } else {
-      // Try Enter key as fallback
-      console.log('   ⚠️  No send button found, using Enter key');
-      await this.page.keyboard.press('Enter');
-    }
-    
+    // Use Enter key (most reliable)
+    console.log('   ⌨️  Pressing Enter to send message...');
+    await this.page.keyboard.press('Enter');
     await this.page.waitForTimeout(2000);
+    
+    // Also try to find send button as backup (but don't wait too long)
+    try {
+      const sendButton = await this.page.$('button[type="submit"]');
+      if (sendButton) {
+        // Check if button is visible and clickable
+        const isVisible = await sendButton.isVisible();
+        if (isVisible) {
+          console.log('   ✅ Found submit button, clicking...');
+          await sendButton.click();
+        }
+      }
+    } catch (e) {
+      // Ignore - Enter key should have worked
+    }
     
     console.log('✅ Message sent');
   }
