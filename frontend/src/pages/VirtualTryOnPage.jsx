@@ -82,9 +82,8 @@ export default function VirtualTryOnPage() {
   const [activeTab, setActiveTab] = useState('image');
   const [activeMode, setActiveMode] = useState('browser');
   
-  // Refs for height calculation
+  // Ref for container
   const containerRef = useRef(null);
-  const [containerHeight, setContainerHeight] = useState(0);
 
   // Data
   const [characterImage, setCharacterImage] = useState(null);
@@ -119,49 +118,6 @@ export default function VirtualTryOnPage() {
     { id: 'grok', label: 'Grok', icon: '🤖' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
   ];
-
-  // Calculate container height on mount and resize
-  useEffect(() => {
-    const calculateHeight = () => {
-      const viewportHeight = window.innerHeight;
-      
-      // Find Navbar (the white header from App.jsx)
-      const navbars = document.querySelectorAll('nav');
-      let navHeight = 0;
-      // The first nav is the white Navbar
-      if (navbars.length > 0) {
-        navHeight = navbars[0].offsetHeight;
-      }
-      
-      // VirtualTryOnPage header is 56px (h-14)
-      const pageHeaderHeight = 56;
-      
-      // Calculate: viewport - navbar - page header
-      const calculatedHeight = viewportHeight - navHeight - pageHeaderHeight;
-      
-      console.log('Height Calculation:', {
-        viewportHeight,
-        navHeight,
-        pageHeaderHeight,
-        calculatedHeight
-      });
-      
-      setContainerHeight(calculatedHeight > 0 ? calculatedHeight : 400);
-    };
-
-    calculateHeight();
-    window.addEventListener('resize', calculateHeight);
-    window.addEventListener('DOMContentLoaded', calculateHeight);
-
-    // Check after render cycles
-    setTimeout(calculateHeight, 100);
-    setTimeout(calculateHeight, 500);
-    setTimeout(calculateHeight, 1000);
-
-    return () => {
-      window.removeEventListener('resize', calculateHeight);
-    };
-  }, []);
 
   // Load options
   useEffect(() => {
@@ -385,10 +341,9 @@ export default function VirtualTryOnPage() {
 
   const showUseCaseFocusInfo = currentStep >= 2;
 
-  // Dynamic height style
+  // Simple CSS height - calc(100vh - 56px header)
   const mainBodyStyle = {
-    height: containerHeight > 0 ? `${containerHeight}px` : 'auto',
-    minHeight: '400px'
+    height: 'calc(100vh - 56px)'
   };
 
   return (
