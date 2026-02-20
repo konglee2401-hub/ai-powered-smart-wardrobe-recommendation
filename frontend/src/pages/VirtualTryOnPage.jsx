@@ -1,14 +1,15 @@
 /**
  * AI Creative Studio - PicsArt Style Layout
- * - Compact toolbar icons (left)
- * - Steps bar (top of main)
- * - Action buttons (below preview)
+ * - 2 Left sidebars: Tools + Options
+ * - Center: Preview
+ * - Right: Style options
+ * - Fixed bottom action bar
  */
 
 import React, { useState, useEffect } from 'react';
 import {
   Upload, Sparkles, Sliders, FileText, Rocket, Image,
-  Loader2, RefreshCw, X, Video, Wand2, Layers, Settings
+  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
@@ -26,11 +27,31 @@ const STEPS = [
   { id: 5, name: 'Generate', icon: Rocket },
 ];
 
+// Use cases from component
+const USE_CASES = [
+  { value: 'change-clothes', label: 'Change Clothes' },
+  { value: 'ecommerce-product', label: 'E-commerce' },
+  { value: 'social-media', label: 'Social Media' },
+  { value: 'fashion-editorial', label: 'Editorial' },
+  { value: 'lifestyle-scene', label: 'Lifestyle' },
+  { value: 'before-after', label: 'Before/After' },
+];
+
+// Focus options from component
+const FOCUS_OPTIONS = [
+  { value: 'full-outfit', label: 'Full Outfit' },
+  { value: 'top', label: 'Top' },
+  { value: 'bottom', label: 'Bottom' },
+  { value: 'shoes', label: 'Shoes' },
+  { value: 'accessories', label: 'Accessories' },
+  { value: 'specific-item', label: 'Specific' },
+];
+
 export default function VirtualTryOnPage() {
   // State
   const [currentStep, setCurrentStep] = useState(1);
-  const [activeTab, setActiveTab] = useState('image'); // image | video
-  const [activeMode, setActiveMode] = useState('browser'); // browser | upload - DEFAULT browser
+  const [activeTab, setActiveTab] = useState('image');
+  const [activeMode, setActiveMode] = useState('browser');
 
   // Data
   const [characterImage, setCharacterImage] = useState(null);
@@ -45,7 +66,7 @@ export default function VirtualTryOnPage() {
   const [generatedPrompt, setGeneratedPrompt] = useState(null);
   const [generatedImages, setGeneratedImages] = useState([]);
 
-  // Loading states
+  // Loading
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,7 +118,7 @@ export default function VirtualTryOnPage() {
       const response = await browserAutomationAPI.generateImage(
         characterImage.file,
         productImage.file,
-        { provider: browserProvider }
+        { provider: browserProvider, scene: selectedOptions.scene, lighting: selectedOptions.lighting }
       );
 
       if (response.success && response.data) {
@@ -211,9 +232,9 @@ export default function VirtualTryOnPage() {
   const isReadyForGeneration = generatedPrompt?.positive;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* ==================== TOP BAR ==================== */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 py-2">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+      {/* ==================== HEADER ==================== */}
+      <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex-shrink-0">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2">
@@ -221,7 +242,7 @@ export default function VirtualTryOnPage() {
             <span className="font-bold">AI Creative Studio</span>
           </div>
 
-          {/* Steps Bar */}
+          {/* Steps */}
           <div className="flex items-center gap-1">
             {STEPS.map((step, idx) => {
               const Icon = step.icon;
@@ -249,9 +270,8 @@ export default function VirtualTryOnPage() {
             })}
           </div>
 
-          {/* Right Controls */}
+          {/* Right */}
           <div className="flex items-center gap-2">
-            {/* Tab: Image/Video */}
             <div className="flex bg-gray-700 rounded-lg p-0.5">
               <button
                 onClick={() => setActiveTab('image')}
@@ -260,7 +280,6 @@ export default function VirtualTryOnPage() {
                 }`}
               >
                 <Image className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Image</span>
               </button>
               <button
                 onClick={() => setActiveTab('video')}
@@ -269,43 +288,34 @@ export default function VirtualTryOnPage() {
                 }`}
               >
                 <Video className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Video</span>
               </button>
             </div>
-
-            {/* Reset */}
-            <button
-              onClick={handleReset}
-              className="p-1.5 bg-gray-700 rounded hover:bg-gray-600"
-              title="Reset"
-            >
+            <button onClick={handleReset} className="p-1.5 bg-gray-700 rounded hover:bg-gray-600">
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ==================== MAIN LAYOUT ==================== */}
-      <div className="flex h-[calc(100vh-48px)]">
-        {/* ==================== LEFT TOOLBAR (Icons only) ==================== */}
-        <div className="w-14 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2">
-          {/* Mode: Browser/Upload */}
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => setActiveMode('browser')}
-              className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-              title="Browser AI"
-            >
-              <Sparkles className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setActiveMode('upload')}
-              className={`p-2 rounded-lg transition-all ${activeMode === 'upload' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-              title="Upload Mode"
-            >
-              <Upload className="w-5 h-5" />
-            </button>
-          </div>
+      {/* ==================== MAIN BODY ==================== */}
+      <div className="flex-1 flex min-h-0">
+        {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
+        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0">
+          {/* Mode */}
+          <button
+            onClick={() => setActiveMode('browser')}
+            className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+            title="Browser AI"
+          >
+            <Sparkles className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setActiveMode('upload')}
+            className={`p-2 rounded-lg transition-all ${activeMode === 'upload' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+            title="Upload Mode"
+          >
+            <Upload className="w-5 h-5" />
+          </button>
 
           <div className="w-8 h-px bg-gray-700" />
 
@@ -325,27 +335,73 @@ export default function VirtualTryOnPage() {
             </div>
           )}
 
-          {/* Spacer */}
           <div className="flex-1" />
-
-          {/* Settings */}
           <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg" title="Settings">
             <Settings className="w-5 h-5" />
           </button>
         </div>
 
-        {/* ==================== CENTER: PREVIEW + ACTIONS ==================== */}
+        {/* ==================== LEFT TOOLBAR 2: Options (Use Case + Focus) ==================== */}
+        <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden flex-shrink-0">
+          <div className="p-3 space-y-4 overflow-y-auto flex-1">
+            {/* Use Case */}
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                <Shirt className="w-3 h-3" /> Use Case
+              </h3>
+              <div className="space-y-1">
+                {USE_CASES.map(uc => (
+                  <button
+                    key={uc.value}
+                    onClick={() => setUseCase(uc.value)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${
+                      useCase === uc.value 
+                        ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                        : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                    }`}
+                  >
+                    {uc.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Product Focus */}
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                <Target className="w-3 h-3" /> Focus
+              </h3>
+              <div className="space-y-1">
+                {FOCUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setProductFocus(opt.value)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${
+                      productFocus === opt.value 
+                        ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                        : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ==================== CENTER: Preview ==================== */}
         <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
-          {/* Upload Area / Preview */}
+          {/* Upload/Preview Area */}
           <div className="flex-1 p-4 overflow-auto">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-3xl mx-auto">
               {/* Upload Grid */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 {/* Character */}
-                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600 overflow-hidden">
+                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
                   {characterImage?.preview ? (
                     <>
-                      <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain" />
+                      <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
                       <button
                         onClick={() => setCharacterImage(null)}
                         className="absolute top-2 right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
@@ -368,10 +424,10 @@ export default function VirtualTryOnPage() {
                 </div>
 
                 {/* Product */}
-                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600 overflow-hidden">
+                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
                   {productImage?.preview ? (
                     <>
-                      <img src={productImage.preview} alt="Product" className="w-full h-full object-contain" />
+                      <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
                       <button
                         onClick={() => setProductImage(null)}
                         className="absolute top-2 right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
@@ -402,7 +458,7 @@ export default function VirtualTryOnPage() {
                     {generatedImages.map((img, idx) => (
                       <div key={idx} className="relative group">
                         <img src={img.url} alt={`Gen ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center gap-1">
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center">
                           <button onClick={() => window.open(img.url, '_blank')} className="p-1 bg-white/20 rounded">
                             <Image className="w-4 h-4" />
                           </button>
@@ -417,114 +473,16 @@ export default function VirtualTryOnPage() {
               {(isAnalyzing || isGenerating) && (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-                  <span className="ml-2 text-gray-400">
-                    {isAnalyzing ? 'Analyzing...' : 'Generating...'}
-                  </span>
+                  <span className="ml-2 text-gray-400">{isAnalyzing ? 'Analyzing...' : 'Generating...'}</span>
                 </div>
               )}
             </div>
           </div>
-
-          {/* ==================== ACTION BAR (Bottom) ==================== */}
-          <div className="bg-gray-800 border-t border-gray-700 px-4 py-3">
-            <div className="max-w-4xl mx-auto flex items-center justify-between">
-              {/* Left: Options toggles */}
-              <div className="flex items-center gap-3">
-                {/* Use Case */}
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">Use:</span>
-                  <select
-                    value={useCase}
-                    onChange={(e) => setUseCase(e.target.value)}
-                    className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
-                  >
-                    <option value="change-clothes">Change Clothes</option>
-                    <option value="try-on">Try On</option>
-                    <option value="style-transfer">Style Transfer</option>
-                  </select>
-                </div>
-
-                {/* Focus */}
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">Focus:</span>
-                  <select
-                    value={productFocus}
-                    onChange={(e) => setProductFocus(e.target.value)}
-                    className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
-                  >
-                    <option value="full-outfit">Full Outfit</option>
-                    <option value="upper-body">Upper</option>
-                    <option value="lower-body">Lower</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Right: Action Buttons */}
-              <div className="flex items-center gap-2">
-                {/* Analyze */}
-                {!analysis && !isAnalyzing && (
-                  <button
-                    onClick={handleStartAnalysis}
-                    disabled={!isReadyForAnalysis}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span className="text-sm font-medium">Start AI</span>
-                  </button>
-                )}
-
-                {/* Build Prompt */}
-                {analysis && !generatedPrompt && !isLoading && (
-                  <button
-                    onClick={handleBuildPrompt}
-                    disabled={!isReadyForPrompt}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="text-sm font-medium">Build Prompt</span>
-                  </button>
-                )}
-
-                {/* Enhance + Generate */}
-                {generatedPrompt && generatedImages.length === 0 && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleEnhancePrompt}
-                      disabled={isLoading}
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-                    >
-                      <Wand2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={handleStartGeneration}
-                      disabled={!isReadyForGeneration || isGenerating}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <Rocket className="w-4 h-4" />
-                      <span className="text-sm font-medium">Generate</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* New Session */}
-                {generatedImages.length > 0 && (
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span className="text-sm font-medium">New</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* ==================== RIGHT SIDEBAR (Collapsible Options) ==================== */}
-        <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto">
+        {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
+        <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
           <div className="p-3 space-y-4">
-            {/* Style Options */}
             {analysis && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Style Options</h3>
@@ -541,7 +499,6 @@ export default function VirtualTryOnPage() {
               </div>
             )}
 
-            {/* Current Prompt */}
             {generatedPrompt && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Prompt</h3>
@@ -549,6 +506,71 @@ export default function VirtualTryOnPage() {
                   {generatedPrompt.positive}
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ==================== FIXED BOTTOM ACTION BAR ==================== */}
+      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          {/* Status */}
+          <div className="text-xs text-gray-400">
+            {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {!analysis && !isAnalyzing && (
+              <button
+                onClick={handleStartAnalysis}
+                disabled={!isReadyForAnalysis}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="text-sm font-medium">Start AI</span>
+              </button>
+            )}
+
+            {analysis && !generatedPrompt && !isLoading && (
+              <button
+                onClick={handleBuildPrompt}
+                disabled={!isReadyForPrompt}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="text-sm font-medium">Build Prompt</span>
+              </button>
+            )}
+
+            {generatedPrompt && generatedImages.length === 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleEnhancePrompt}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
+                >
+                  <Wand2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleStartGeneration}
+                  disabled={!isReadyForGeneration || isGenerating}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                  <Rocket className="w-4 h-4" />
+                  <span className="text-sm font-medium">Generate</span>
+                </button>
+              </div>
+            )}
+
+            {generatedImages.length > 0 && (
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span className="text-sm font-medium">New</span>
+              </button>
             )}
           </div>
         </div>
