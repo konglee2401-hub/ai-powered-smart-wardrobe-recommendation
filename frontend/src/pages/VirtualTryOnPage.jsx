@@ -363,10 +363,10 @@ export default function VirtualTryOnPage() {
   const showUseCaseFocusInfo = currentStep >= 2;
 
   return (
-    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
       {/* ==================== HEADER ==================== */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0" style={{ height: '56px' }}>
-        <div className="flex items-center justify-between">
+      <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0 h-14">
+        <div className="flex items-center justify-between h-full">
           {/* Logo */}
           <div className="flex items-center gap-2">
             <Wand2 className="w-5 h-5 text-purple-400" />
@@ -429,7 +429,7 @@ export default function VirtualTryOnPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex" style={{ height: 'calc(100vh - 120px)' }}>
+      <div className="flex-1 flex overflow-hidden">
         {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
         <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
           <button
