@@ -1,5 +1,5 @@
 import BrowserService from './browserService.js';
-import SessionManager from '../utils/sessionManager.js';
+import SessionManager from './sessionManager.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -202,193 +202,265 @@ class GrokService extends BrowserService {
   }
 
   /**
-   * Upload image and get analysis
+   * Upload image and get analysis with retry logic
    */
-  async analyzeImage(imagePath, prompt) {
+  async analyzeImageWithRetry(imagePath, prompt, maxRetries = 3, retryDelay = 3000) {
     console.log('\n📊 GROK BROWSER ANALYSIS');
     console.log('='.repeat(80));
     console.log(`Image: ${path.basename(imagePath)}`);
     console.log(`Prompt: ${prompt}`);
     console.log('');
 
-    try {
-      // Wait for Cloudflare challenge to be resolved (if any)
-      console.log('⏳ Checking for Cloudflare challenge...');
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await this.waitForCloudflareResolved();
-        console.log('✅ Cloudflare check passed');
-      } catch (error) {
-        console.log(`⚠️  Cloudflare check error: ${error.message}`);
-      }
-
-      // Look for new chat or input area
-      console.log('🔍 Looking for chat interface...');
-      
-      // Wait for chat interface to load
-      await this.page.waitForTimeout(3000);
-
-      // Look for file upload button/input
-      console.log('🔍 Looking for upload button...');
-      console.log('   Checking input[type="file"]...');
-      
-      let uploadInput = await this.page.$('input[type="file"]');
-      if (uploadInput) {
-        console.log(`✅ Found upload input directly: input[type="file"]`);
-      } else {
-        console.log('   ❌ Not found, trying other selectors...');
+        console.log(`Attempt ${attempt}/${maxRetries}`);
         
-        const uploadSelectors = [
-          'input[accept*="image"]',
-          '[data-testid="file-upload"]',
-          '[aria-label*="upload"]',
-          '[aria-label*="attach"]',
-          'button[aria-label*="image"]'
-        ];
-
-        for (const selector of uploadSelectors) {
-          uploadInput = await this.page.$(selector);
-          if (uploadInput) {
-            console.log(`✅ Found upload input: ${selector}`);
-            break;
-          }
+        // Wait for Cloudflare challenge to be resolved (if any)
+        console.log('⏳ Checking for Cloudflare challenge...');
+        try {
+          await this.waitForCloudflareResolved();
+          console.log('✅ Cloudflare check passed');
+        } catch (error) {
+          console.log(`⚠️  Cloudflare check error: ${error.message}`);
         }
-      }
 
-      // If no direct input, try to click attach button
-      if (!uploadInput) {
-        console.log('🔍 Searching for attach button...');
-        const attachButtons = await this.page.$$('button');
-        for (const button of attachButtons) {
-          const ariaLabel = await button.getAttribute('aria-label');
-          const title = await button.getAttribute('title');
+        // Look for new chat or input area
+        console.log('🔍 Looking for chat interface...');
+        
+        // Wait for chat interface to load with retry
+        await this.waitForChatInterface(attempt * 2000);
+
+        // Look for file upload button/input
+        console.log('🔍 Looking for upload button...');
+        console.log('   Checking input[type="file"]...');
+        
+        let uploadInput = await this.page.$('input[type="file"]');
+        if (uploadInput) {
+          console.log(`✅ Found upload input directly: input[type="file"]`);
+        } else {
+          console.log('❌ Not found, trying other selectors...');
           
-          if (
-            (ariaLabel && (ariaLabel.includes('attach') || ariaLabel.includes('image') || ariaLabel.includes('upload'))) ||
-            (title && (title.includes('attach') || title.includes('image') || title.includes('upload')))
-          ) {
-            await button.click();
-            await this.page.waitForTimeout(1000);
-            uploadInput = await this.page.$('input[type="file"]');
+          const uploadSelectors = [
+            'input[accept*="image"]',
+            '[data-testid="file-upload"]',
+            '[aria-label*="upload"]',
+            '[aria-label*="attach"]',
+            'button[aria-label*="image"]'
+          ];
+
+          for (const selector of uploadSelectors) {
+            uploadInput = await this.page.$(selector);
             if (uploadInput) {
-              console.log('✅ Found upload input after clicking attach button');
+              console.log(`✅ Found upload input: ${selector}`);
               break;
             }
           }
         }
-      }
 
-      if (!uploadInput) {
-        // Take screenshot for debugging
-        await this.screenshot(`temp/grok-upload-debug-${Date.now()}.png`);
-        throw new Error('Could not find file upload input. Grok interface may have changed.');
-      }
-
-      // Upload image
-      await this.uploadFile('input[type="file"]', imagePath);
-      console.log('⏳ Waiting for image to upload...');
-      await this.page.waitForTimeout(3000);
-
-      // Look for text input
-      console.log('🔍 Looking for text input...');
-      
-      const textInputSelectors = [
-        'textarea[placeholder*="Ask"]',
-        'textarea[placeholder*="Message"]',
-        'textarea',
-        '[contenteditable="true"]',
-        'input[type="text"]'
-      ];
-
-      let textInput = null;
-      let usedTextSelector = null;
-      for (const selector of textInputSelectors) {
-        textInput = await this.page.$(selector);
-        if (textInput) {
-          usedTextSelector = selector;
-          console.log(`✅ Found text input: ${selector}`);
-          break;
+        // If no direct input, try to click attach button
+        if (!uploadInput) {
+          console.log('🔍 Searching for attach button...');
+          const attachButtons = await this.page.$$('button');
+          for (const button of attachButtons) {
+            const ariaLabel = await button.getAttribute('aria-label');
+            const title = await button.getAttribute('title');
+            
+            if (
+              (ariaLabel && (ariaLabel.includes('attach') || ariaLabel.includes('image') || ariaLabel.includes('upload'))) ||
+              (title && (title.includes('attach') || title.includes('image') || title.includes('upload')))
+            ) {
+              await button.click();
+              await this.page.waitForTimeout(1000);
+              uploadInput = await this.page.$('input[type="file"]');
+              if (uploadInput) {
+                console.log('✅ Found upload input after clicking attach button');
+                break;
+              }
+            }
+          }
         }
-      }
 
-      if (!textInput) {
-        throw new Error('Could not find text input');
-      }
-
-      // Type prompt
-      console.log('⌨️  Typing prompt...');
-      await this.typeText(usedTextSelector, prompt);
-      await this.page.waitForTimeout(1000);
-
-      // Find and click send button
-      console.log('🔍 Looking for send button...');
-      
-      const sendSelectors = [
-        'button[type="submit"]',
-        'button[aria-label*="send"]',
-        'button[aria-label*="Submit"]',
-        'button:has-text("Send")'
-      ];
-
-      let sendButton = null;
-      for (const selector of sendSelectors) {
-        sendButton = await this.page.$(selector);
-        if (sendButton) {
-          console.log(`✅ Found send button: ${selector}`);
-          break;
+        if (!uploadInput) {
+          // Take screenshot for debugging
+          await this.screenshot(`temp/grok-upload-debug-${Date.now()}.png`);
+          throw new Error('Could not find file upload input. Grok interface may have changed.');
         }
-      }
 
-      if (!sendButton) {
-        // Try pressing Enter
-        console.log('⌨️  Pressing Enter to send...');
-        await this.page.keyboard.press('Enter');
-      } else {
-        await sendButton.click();
-      }
+        // Upload image
+        await this.uploadFile('input[type="file"]', imagePath);
+        console.log('⏳ Waiting for image to upload...');
+        await this.page.waitForTimeout(3000);
 
-      console.log('✅ Message sent');
-      console.log('⏳ Waiting for Grok to respond...');
+        // Look for text input
+        console.log('🔍 Looking for text input...');
+        
+        const textInputSelectors = [
+          'textarea[placeholder="Ask Grok anything"]',  // Exact Grok textarea
+          'textarea[aria-label="Ask Grok anything"]',   // By aria-label
+          'textarea[placeholder*="Ask"]',
+          'textarea[placeholder*="Message"]',
+          'textarea',
+          '[contenteditable="true"]',
+          'input[type="text"]'
+        ];
 
-      // Wait for response
-      await this.page.waitForTimeout(5000);
+        let textInput = null;
+        let usedTextSelector = null;
+        
+        // Try to find textarea
+        for (const selector of textInputSelectors) {
+          try {
+            textInput = await this.page.$(selector);
+            if (textInput) {
+              usedTextSelector = selector;
+              console.log(`✅ Found text input: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            // Selector might fail, continue to next
+          }
+        }
 
-      // Monitor for response completion
-      let lastLength = 0;
-      let stableCount = 0;
-      const maxWait = 90000; // 90 seconds for Grok
-      const startTime = Date.now();
+        if (!textInput) {
+          throw new Error('Could not find text input');
+        }
 
-      while (Date.now() - startTime < maxWait) {
-        const currentText = await this.page.evaluate(() => document.body.innerText);
-        const currentLength = currentText.length;
+        // Type prompt - with error handling for waitForSelector timeout
+        console.log('📝 Typing prompt...');
+        try {
+          await this.typeText(usedTextSelector, prompt);
+        } catch (error) {
+          if (error.message.includes('Waiting for selector') || error.message.includes('exceeded')) {
+            console.log('⚠️  typeText timeout, trying direct click and type...');
+            // Fallback: click directly and type
+            await this.page.click(usedTextSelector);
+            await this.page.waitForTimeout(500);
+            await this.page.keyboard.type(prompt, { delay: 50 });
+          } else {
+            throw error;
+          }
+        }
+        await this.page.waitForTimeout(1000);
 
-        // Check if "thinking" or "typing" indicator is gone
-        const isThinking = await this.page.evaluate(() => {
-          const text = document.body.innerText.toLowerCase();
-          return text.includes('thinking') || 
-                 text.includes('typing') || 
-                 text.includes('generating');
-        });
+        // Find and click send button
+        console.log('🔍 Looking for send button...');
+        
+        const sendSelectors = [
+          'button[type="submit"]',
+          'button[aria-label*="send"]',
+          'button[aria-label*="Submit"]',
+          'button:has-text("Send")'
+        ];
 
-        if (!isThinking && currentLength === lastLength) {
-          stableCount++;
-          if (stableCount >= 3) {
+        let sendButton = null;
+        for (const selector of sendSelectors) {
+          sendButton = await this.page.$(selector);
+          if (sendButton) {
+            console.log(`✅ Found send button: ${selector}`);
             break;
           }
-        } else {
-          stableCount = 0;
         }
 
-        lastLength = currentLength;
-        await this.page.waitForTimeout(1000);
+        if (!sendButton) {
+          // Try pressing Enter
+          console.log('📝 Pressing Enter to send...');
+          await this.page.keyboard.press('Enter');
+        } else {
+          await sendButton.click();
+        }
+
+        console.log('✅ Message sent');
+        console.log('⏳ Waiting for Grok to respond...');
+
+        // Wait for response with improved detection
+        const response = await this.waitForGrokResponse(90000);
+        
+        console.log('='.repeat(80));
+        console.log('✅ ANALYSIS COMPLETE');
+        console.log(`Response length: ${response.length} characters`);
+        console.log('Response preview:', response.substring(0, 200) + '...');
+        console.log('='.repeat(80) + '\n');
+
+        return response;
+
+      } catch (error) {
+        lastError = error;
+        console.log(`❌ Attempt ${attempt} failed: ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          console.log(`📅 Retrying in ${retryDelay}ms...`);
+          await this.page.waitForTimeout(retryDelay);
+        }
+      }
+    }
+    
+    throw new Error(`Grok analysis failed after ${maxRetries} attempts: ${lastError.message}`);
+  }
+
+  /**
+   * Wait for chat interface to load
+   */
+  async waitForChatInterface(timeout = 10000) {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeout) {
+      try {
+        // Check for chat interface elements
+        const chatElements = await this.page.$$('[data-testid*="message"], textarea, button[type="submit"]');
+        if (chatElements.length > 0) {
+          return;
+        }
+      } catch (error) {
+        // Ignore errors, keep waiting
+      }
+      
+      await this.page.waitForTimeout(1000);
+    }
+    
+    throw new Error('Chat interface did not load within timeout');
+  }
+
+  /**
+   * Wait for Grok to complete response
+   */
+  async waitForGrokResponse(maxWait = 90000) {
+    const startTime = Date.now();
+    let lastLength = 0;
+    let stableCount = 0;
+
+    while (Date.now() - startTime < maxWait) {
+      const currentText = await this.page.evaluate(() => document.body.innerText);
+      const currentLength = currentText.length;
+
+      // Check if "thinking" or "typing" indicator is gone
+      const isThinking = await this.page.evaluate(() => {
+        const text = document.body.innerText.toLowerCase();
+        return text.includes('thinking') || 
+               text.includes('typing') || 
+               text.includes('generating');
+      });
+
+      if (!isThinking && currentLength === lastLength) {
+        stableCount++;
+        if (stableCount >= 3) {
+          break;
+        }
+      } else {
+        stableCount = 0;
       }
 
-      console.log('✅ Response received');
+      lastLength = currentLength;
+      await this.page.waitForTimeout(1000);
+    }
 
-      // Extract response
-      console.log('📝 Extracting response...');
-      
-      const response = await this.page.evaluate(() => {
+    // Extract response
+    console.log('📝 Extracting response...');
+    
+    let response = null;
+    try {
+      response = await this.page.evaluate(() => {
         // Try to find Grok's response messages
         const messageSelectors = [
           '[data-testid*="message"]',
@@ -398,47 +470,49 @@ class GrokService extends BrowserService {
         ];
 
         for (const selector of messageSelectors) {
-          const messages = Array.from(document.querySelectorAll(selector));
-          if (messages.length > 0) {
-            // Get the last message (should be Grok's response)
-            const lastMessage = messages[messages.length - 1];
-            const text = lastMessage.innerText;
-            
-            // Filter out user's message
-            if (!text.includes('Ask') && text.length > 50) {
-              return text;
+          try {
+            const messages = Array.from(document.querySelectorAll(selector));
+            if (messages.length > 0) {
+              // Get the last message (should be Grok's response)
+              const lastMessage = messages[messages.length - 1];
+              const text = lastMessage.innerText || lastMessage.textContent;
+              
+              // Filter out user's message
+              if (text && !text.includes('Ask') && text.length > 50) {
+                return text.trim();
+              }
             }
+          } catch (e) {
+            // Continue to next selector
           }
         }
 
         // Fallback: try to extract from page
-        const allText = document.body.innerText;
+        const allText = document.body.innerText || document.body.textContent || '';
+        if (!allText || allText.length < 50) {
+          return null;
+        }
+
         const lines = allText.split('\n').filter(line => line.trim().length > 0);
         
         // Find substantial text blocks (likely the response)
         const substantialLines = lines.filter(line => line.length > 100);
         if (substantialLines.length > 0) {
-          return substantialLines.join('\n');
+          return substantialLines.join('\n').trim();
         }
 
-        return allText;
+        return allText.trim();
       });
-
-      console.log('='.repeat(80));
-      console.log('✅ ANALYSIS COMPLETE');
-      console.log(`Response length: ${response.length} characters`);
-      console.log('='.repeat(80) + '\n');
-
-      return response;
-
-    } catch (error) {
-      console.error('❌ Grok analysis failed:', error.message);
-      
-      // Take screenshot for debugging
-      await this.screenshot({ path: path.join(process.cwd(), 'temp', `grok-error-${Date.now()}.png`) });
-      
-      throw error;
+    } catch (evalError) {
+      console.error('⚠️  Error during response extraction:', evalError.message);
+      response = null;
     }
+
+    if (!response || response.length === 0) {
+      throw new Error('Could not extract response from Grok');
+    }
+
+    return response;
   }
 }
 

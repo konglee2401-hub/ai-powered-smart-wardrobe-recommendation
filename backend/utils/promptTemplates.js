@@ -497,6 +497,120 @@ export function generatePromptVariations(inputs, count = 3) {
   return variations;
 }
 
+// ============ SMART PROMPT BUILDER (App Logic) ============
+
+/**
+ * Build smart prompt using exact app logic
+ * Replicates the prompt building flow from VirtualTryOnPage.jsx
+ * @param {Object} params - Parameters object
+ * @param {Object} params.analysis - Analysis data from unified analysis
+ * @param {Object} params.selectedOptions - Selected customization options
+ * @param {string} params.useCase - Use case (e.g., 'change-clothes')
+ * @param {string} params.productFocus - Product focus (e.g., 'full-outfit')
+ * @returns {Object} Smart prompt with positive and negative prompts
+ */
+export function buildSmartPrompt({ analysis, selectedOptions, useCase, productFocus }) {
+  // Extract analysis data
+  const character = analysis?.character || {};
+  const product = analysis?.product || {};
+  const recommendations = analysis?.recommendations || {};
+  
+  // Build base prompt components
+  let positivePrompt = '';
+  let negativePrompt = 'blurry, low quality, distorted, watermark, bad anatomy, extra limbs, deformed';
+  
+  // 1. Character description
+  if (character.gender || character.age || character.bodyType || character.skinTone) {
+    positivePrompt += `${character.gender || 'person'}, age ${character.age || 'unknown'}, `;
+    positivePrompt += `body type ${character.bodyType || 'unknown'}, `;
+    positivePrompt += `skin tone ${character.skinTone || 'unknown'}. `;
+  }
+  
+  // 2. Product description
+  if (product.category || product.type || product.colors) {
+    positivePrompt += `${product.category || 'clothing'} item, type ${product.type || 'unknown'}, `;
+    positivePrompt += `colors ${product.colors?.join(', ') || 'unknown'}. `;
+  }
+  
+  // 3. Use case specific adjustments
+  switch (useCase) {
+    case 'change-clothes':
+      positivePrompt += 'Change clothes scenario, ';
+      break;
+    case 'virtual-try-on':
+      positivePrompt += 'Virtual try-on scenario, ';
+      break;
+    case 'accessories-matching':
+      positivePrompt += 'Accessories matching scenario, ';
+      break;
+    default:
+      positivePrompt += 'Fashion scenario, ';
+  }
+  
+  // 4. Product focus adjustments
+  switch (productFocus) {
+    case 'full-outfit':
+      positivePrompt += 'full outfit visualization, ';
+      break;
+    case 'top':
+      positivePrompt += 'top clothing item, ';
+      break;
+    case 'bottom':
+      positivePrompt += 'bottom clothing item, ';
+      break;
+    case 'shoes':
+      positivePrompt += 'shoes and footwear, ';
+      break;
+    case 'accessories':
+      positivePrompt += 'accessories and jewelry, ';
+      break;
+    default:
+      positivePrompt += 'fashion item, ';
+  }
+  
+  // 5. Apply selected options (from AI recommendations)
+  if (selectedOptions.style) {
+    positivePrompt += `${selectedOptions.style} style, `;
+  }
+  
+  if (selectedOptions.scene) {
+    positivePrompt += `${selectedOptions.scene} scene, `;
+  }
+  
+  if (selectedOptions.lighting) {
+    positivePrompt += `${selectedOptions.lighting} lighting, `;
+  }
+  
+  if (selectedOptions.background) {
+    positivePrompt += `${selectedOptions.background} background, `;
+  }
+  
+  // 6. Quality and style enhancements
+  positivePrompt += 'professional photography, high quality, 8k, detailed, well-lit, ';
+  positivePrompt += 'fashion photography, studio lighting, sharp focus, ';
+  positivePrompt += 'realistic textures, accurate colors, ';
+  
+  // 7. Add specific negative prompts based on analysis
+  if (character.age && parseInt(character.age) > 50) {
+    negativePrompt += ', wrinkles, aging, ';
+  }
+  
+  if (product.colors && product.colors.includes('white')) {
+    negativePrompt += ', yellowing, stains, ';
+  }
+  
+  // 8. Final quality indicators
+  positivePrompt += 'perfect composition, award winning, masterpiece';
+  
+  // Clean up prompt (remove trailing commas and spaces)
+  positivePrompt = positivePrompt.replace(/,\s*$/, '');
+  
+  return {
+    positive: positivePrompt,
+    negative: negativePrompt
+  };
+}
+
 // ============ EXPORT DEFAULT ============
 
 export default {
@@ -510,6 +624,7 @@ export default {
   validateInputs,
   getPromptStats,
   generatePromptVariations,
+  buildSmartPrompt,
   USE_CASE_TEMPLATES,
   AGE_ADJUSTMENTS,
   MATERIAL_ADJUSTMENTS,

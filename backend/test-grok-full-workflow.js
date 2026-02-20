@@ -51,7 +51,7 @@ async function runGrokFullWorkflow() {
     const testImagesDir = path.join(__dirname, 'test-images');
     
     if (!characterImage) {
-      characterImage = path.join(testImagesDir, 'anh nhan vat.jpeg');
+      characterImage = path.join(testImagesDir, 'anh-nhan-vat.jpeg');
     }
     
     if (!clothingImage) {

@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Test images paths
-const characterImagePath = path.join(__dirname, 'test-images/anh nhan vat.jpeg');
+const characterImagePath = path.join(__dirname, 'test-images/anh-nhan-vat.jpeg');
 const productImagePath = path.join(__dirname, 'test-images/anh-san-pham.png');
 
 /**

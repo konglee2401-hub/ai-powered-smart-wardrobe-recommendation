@@ -16,7 +16,7 @@ async function testGrokAnalyze() {
   try {
     await service.initialize();
 
-    const imagePath = path.join(__dirname, 'test-images', 'anh nhan vat.jpeg');
+    const imagePath = path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg');
     const prompt = 'Describe this character in detail, including clothing, pose, and style.';
 
     const result = await service.analyzeImage(imagePath, prompt);

@@ -19,11 +19,13 @@ class BrowserService {
     this.browser = null;
     this.page = null;
     this.sessionManager = options.sessionManager || null;
+    // Use larger viewport to display full website content without cutting
+    // 1920x1080 provides full desktop experience and prevents content from being cut off
     this.options = {
       headless: options.headless !== false, // Default true
       slowMo: options.slowMo || 0,
       timeout: options.timeout || 60000,
-      viewport: options.viewport || { width: 1920, height: 1080 },
+      viewport: options.viewport || { width: 1280, height: 800 }, // 1280x800 viewport
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       ...options
     };
@@ -50,7 +52,7 @@ class BrowserService {
         headless: false, // Keep visible for manual interaction
         args: [
           `--user-data-dir=${chromeUserDataDir}`, // Use Chrome User Data directory
-          '--profile-directory=Profile 2', // Explicitly use Cris Lee's profile
+          '--profile-directory=Profile 1', // Explicitly use Cris Lee's profile
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
@@ -89,9 +91,16 @@ class BrowserService {
     // Load session cookies if available
     if (this.sessionManager && this.sessionManager.hasSession()) {
       try {
-        const cookies = this.sessionManager.loadSession();
+        const cookies = this.sessionManager.loadSession()
         if (cookies && cookies.length > 0) {
-          await this.page.setCookie(...cookies);
+          // Set cookies one by one to handle any issues
+          for (const cookie of cookies) {
+            try {
+              await this.page.setCookie(cookie);
+            } catch (cookieError) {
+              console.log(`⚠️  Failed to set cookie: ${cookie.name} - ${cookieError.message}`);
+            }
+          }
           console.log(`✅ Loaded ${cookies.length} cookies from saved session`);
         }
       } catch (error) {
@@ -102,8 +111,10 @@ class BrowserService {
     // Set user agent
     await this.page.setUserAgent(this.options.userAgent);
     
-    // Set viewport
-    await this.page.setViewport(this.options.viewport);
+    // Set viewport - use the configured viewport
+    if (this.options.viewport) {
+      await this.page.setViewport(this.options.viewport);
+    }
     
     // Set default timeout
     this.page.setDefaultTimeout(this.options.timeout);
@@ -117,8 +128,7 @@ class BrowserService {
   async saveSession() {
     if (this.sessionManager && this.page) {
       try {
-        const cookies = await this.page.cookies();
-        await this.sessionManager.saveSession(cookies);
+        await this.sessionManager.saveSession(this.page);
         return true;
       } catch (error) {
         console.error(`❌ Failed to save session: ${error.message}`);

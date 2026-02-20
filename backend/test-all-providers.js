@@ -60,7 +60,7 @@ async function runTests() {
 
   // Find test image
   const possiblePaths = [
-    path.join(__dirname, 'test-images', 'anh nhan vat.jpeg'),
+    path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg'),
     path.join(__dirname, 'test-images', 'anh-san-pham.png'),
     path.join(__dirname, 'temp', 'test-image.jpg')
   ];

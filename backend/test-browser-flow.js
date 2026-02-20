@@ -10,7 +10,7 @@ async function testBrowserAutomationFlow() {
 
   try {
     // 1. Prepare test images
-    const characterImagePath = path.resolve('./test-images/anh nhan vat.jpeg');
+    const characterImagePath = path.resolve('./test-images/anh-nhan-vat.jpeg');
     const productImagePath = path.resolve('./test-images/anh-san-pham.png');
 
     if (!fs.existsSync(characterImagePath)) {

@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 async function testMultiFlow() {
   console.log(chalk.cyan('\n🧪 Testing Multi-Flow Automation\n'));
 
-  const characterImage = path.join(__dirname, 'test-images', 'anh nhan vat.jpeg');
+  const characterImage = path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg');
   const clothingImage = path.join(__dirname, 'test-images', 'ao phong.jpg');
 
   // Test flows (excluding ones that require login for quick test)

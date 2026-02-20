@@ -17,7 +17,7 @@ describe('AI Provider Tests', () => {
   
   beforeAll(async () => {
     // Setup test images
-    testImagePath = path.join(__dirname, '../test-images/anh nhan vat.jpeg');
+    testImagePath = path.join(__dirname, '../test-images/anh-nhan-vat.jpeg');
     testProductPath = path.join(__dirname, '../test-images/Anh san pham.png');
     
     // Import service

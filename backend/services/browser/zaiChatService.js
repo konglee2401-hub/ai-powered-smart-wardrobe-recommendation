@@ -52,14 +52,22 @@ class ZAIChatService extends BrowserService {
         const avatar = document.querySelector('[class*="avatar"], [class*="profile"], [data-testid="user-menu"]');
         
         // Check for login buttons (if present, not logged in)
-        const loginButtons = document.querySelectorAll('button:has-text("Sign in"), button:has-text("Log in"), a:has-text("Sign in")');
+        const loginButtons = document.querySelectorAll('button, a');
+        let hasLoginButtons = false;
+        for (const btn of loginButtons) {
+          const text = btn.textContent || btn.innerText || '';
+          if (text.includes('Sign in') || text.includes('Log in') || text.includes('Login')) {
+            hasLoginButtons = true;
+            break;
+          }
+        }
         
         // Check for "Unlock Your Insights" modal
         const loginModal = document.body.innerText.includes('Unlock Your Insights');
         
         return {
           hasAvatar: !!avatar,
-          hasLoginButtons: loginButtons.length > 0,
+          hasLoginButtons: hasLoginButtons,
           hasLoginModal: loginModal
         };
       });
@@ -473,8 +481,8 @@ class ZAIChatService extends BrowserService {
    * Save current session
    */
   async saveSession() {
-    if (this.sessionManager && this.context) {
-      return await this.sessionManager.saveSession(this.context);
+    if (this.sessionManager && this.page) {
+      return await this.sessionManager.saveSession(this.page);
     }
     return false;
   }

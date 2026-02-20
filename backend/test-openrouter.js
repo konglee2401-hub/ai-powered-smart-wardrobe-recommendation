@@ -26,7 +26,7 @@ async function testOpenRouter() {
 
   console.log(chalk.green('✅ API key found\n'));
 
-  const imagePath = path.join(__dirname, 'test-images', 'anh nhan vat.jpeg');
+  const imagePath = path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg');
   
   if (!fs.existsSync(imagePath)) {
     console.error(chalk.red(`❌ Test image not found: ${imagePath}`));

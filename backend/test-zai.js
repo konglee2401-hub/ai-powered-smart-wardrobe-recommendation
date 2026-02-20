@@ -61,9 +61,9 @@ async function runTests() {
   // Test 2: Find test image
   console.log('📋 Test 2: Find test image');
   const possiblePaths = [
-    path.join(__dirname, 'test-images', 'anh nhan vat.jpeg'),
+    path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg'),
     path.join(__dirname, 'temp', 'test-image.jpg'),
-    path.join(__dirname, 'temp', 'anh nhan vat.jpeg'),
+    path.join(__dirname, 'temp', 'anh-nhan-vat.jpeg'),
     path.join(__dirname, 'test-images', 'test-product.jpg')
   ];
 

@@ -43,7 +43,7 @@ const options = program.opts();
 // ============================================
 
 const TEST_IMAGES = [
-  'anh nhan vat.jpeg',
+  'anh-nhan-vat.jpeg',
   'ao phong.jpg'
 ];
 
@@ -146,7 +146,7 @@ async function testZAIChat(imagePath, prompt) {
 async function testGrok(imagePath, prompt) {
   printHeader('🤖 Testing Grok Browser Automation');
   
-  log('⚠️  Grok requires X/Twitter authentication', 'warning');
+  log('⚠️  ⚠️  Grok requires X/Twitter authentication', 'warning');
   log('Running in non-headless mode for manual login...', 'info');
   
   const service = new GrokService({
@@ -160,18 +160,23 @@ async function testGrok(imagePath, prompt) {
     // Initialize
     await service.initialize();
 
-    // Analyze image
-    const result = await service.analyzeImage(imagePath, prompt);
+    // Wait for manual login if requested
+    if (options.waitLogin && !options.headless) {
+      await service.waitForManualLogin(60);
+    }
+
+    // Analyze image with improved Cloudflare handling
+    const result = await service.analyzeImageWithRetry(imagePath, prompt, 3, 3000);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     // Display result
-    console.log(chalk.green('\n✅ GROK ANALYSIS SUCCESSFUL\n'));
+    console.log(chalk.green('\n🎉 GROK ANALYSIS SUCCESSFUL\n'));
     console.log(chalk.bold('Response:'));
     console.log(chalk.gray('-'.repeat(80)));
     console.log(result);
     console.log(chalk.gray('-'.repeat(80)));
-    console.log(chalk.blue(`\n⏱️  Total duration: ${duration}s\n`));
+    console.log(chalk.blue(`\n🕐 Total duration: ${duration}s\n`));
 
     return {
       service: 'Grok',
@@ -184,7 +189,7 @@ async function testGrok(imagePath, prompt) {
     log(`Grok failed: ${error.message}`, 'error');
     
     // KEEP BROWSER OPEN for verification
-    console.log(chalk.yellow('\n⏳ Browser will stay open for 30 seconds for verification...\n'));
+    console.log(chalk.yellow('\n🕐 Browser will stay open for 30 seconds for verification...\n'));
     await new Promise(resolve => setTimeout(resolve, 30000));
     
     return {

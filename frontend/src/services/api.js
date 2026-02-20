@@ -413,16 +413,37 @@ export const browserAutomationAPI = {
     formData.append('characterImage', characterImage);
     formData.append('clothingImage', clothingImage);
     formData.append('provider', provider);
-    return api.postFormData(API_ENDPOINTS.BROWSER_ANALYZE, formData);
+    return api.postFormData('/v1/browser-automation/analyze', formData);
   },
   
   /**
-   * Generate image using browser automation
+   * Generate image using browser automation (full flow: analyze + generate)
+   * @param {File} characterImage - Character image file
+   * @param {File} productImage - Product/clothing image file
+   * @param {Object} options - Generation options
+   */
+  generateImage: async (characterImage, productImage, options = {}) => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('productImage', productImage);
+    if (options.prompt) {
+      formData.append('prompt', options.prompt);
+    }
+    // Send both analysis and image gen provider
+    const provider = options.provider || 'grok';
+    formData.append('analysisProvider', provider);
+    formData.append('imageGenProvider', provider);
+    formData.append('useRealAnalysis', 'true');
+    return api.postFormData('/v1/browser-automation/generate-image', formData);
+  },
+  
+  /**
+   * Generate image only (using existing analysis)
    * @param {string} prompt - Generation prompt
    * @param {string} provider - Provider to use (grok, zai-image)
    */
-  generateImage: async (prompt, provider = 'grok') => {
-    return api.post(API_ENDPOINTS.BROWSER_GENERATE_IMAGE, { prompt, provider });
+  generateImageOnly: async (prompt, provider = 'grok') => {
+    return api.post('/v1/browser-automation/generate-image-browser', { prompt, provider });
   },
   
   /**
@@ -431,7 +452,7 @@ export const browserAutomationAPI = {
    * @param {string} provider - Provider to use (grok)
    */
   generateVideo: async (prompt, provider = 'grok') => {
-    return api.post(API_ENDPOINTS.BROWSER_GENERATE_VIDEO, { prompt, provider });
+    return api.post('/v1/browser-automation/generate-video', { prompt, provider });
   },
   
   /**
@@ -447,7 +468,7 @@ export const browserAutomationAPI = {
     formData.append('clothingImage', clothingImage);
     formData.append('provider', provider);
     formData.append('generateVideo', generateVideo);
-    return api.postFormData(API_ENDPOINTS.BROWSER_FULL_WORKFLOW, formData);
+    return api.postFormData('/v1/browser-automation/generate-image', formData);
   },
 };
 

@@ -70,7 +70,7 @@ const VISION_PROVIDERS = [
  */
 function findTestImage() {
   const possiblePaths = [
-    path.join(__dirname, 'test-images', 'anh nhan vat.jpeg'),
+    path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg'),
     path.join(__dirname, 'test-images', 'anh-san-pham.png'),
     path.join(__dirname, 'uploads', 'test', 'test-image.jpg')
   ];
@@ -308,7 +308,7 @@ async function main() {
   if (!testImage) {
     console.error('❌ No test image found!');
     console.error('   Please place a test image in:');
-    console.error('   - test-images/anh nhan vat.jpeg');
+    console.error('   - test-images/anh-nhan-vat.jpeg');
     console.error('   - test-images/anh-san-pham.png');
     console.error('   - uploads/test/test-image.jpg');
     process.exit(1);

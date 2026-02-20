@@ -22,7 +22,7 @@ async function testImageGeneration() {
   
   try {
     // Paths to test images (in backend/test-images folder)
-    const characterImagePath = path.join(__dirname, './test-images/anh nhan vat.jpeg');
+    const characterImagePath = path.join(__dirname, './test-images/anh-nhan-vat.jpeg');
     const productImagePath = path.join(__dirname, './test-images/Anh san pham.png');
     
     // Check if test images exist

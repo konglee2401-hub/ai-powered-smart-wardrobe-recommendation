@@ -17,6 +17,12 @@ export const API_ENDPOINTS = {
   PROVIDER_STATUS: '/ai/providers', // Get vision/analysis providers from AI controller
   UNIFIED_ANALYZE: '/flows/analyze', // NEW: Unified flow analysis endpoint
   UNIFIED_GENERATE: '/flows/generate', // NEW: Unified flow generation endpoint
+  
+  // Browser Automation Endpoints
+  BROWSER_ANALYZE: '/browser-automation/analyze',
+  BROWSER_GENERATE_IMAGE: '/browser-automation/generate-image-browser',
+  BROWSER_GENERATE_IMAGE_FULL: '/browser-automation/generate-image',
+  BROWSER_GENERATE_VIDEO: '/browser-automation/generate-video',
 };
 
 const apiClient = axios.create({

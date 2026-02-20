@@ -31,30 +31,75 @@ class ZAIImageService extends BrowserService {
     console.log('');
 
     try {
-      // Find text input
-      const textarea = await this.page.waitForSelector(
-        'textarea, [contenteditable="true"], input[type="text"]',
-        { timeout: 10000 }
-      );
+      // Wait for page to load
+      await this.page.waitForTimeout(3000);
 
-      if (!textarea) {
-        throw new Error('Could not find text input');
+      // Try multiple selectors for the input (Puppeteer API)
+      console.log('⌨️  Looking for text input...');
+      
+      const inputSelectors = [
+        'textarea',
+        'input[type="text"]',
+        'div[contenteditable="true"]'
+      ];
+      
+      let filled = false;
+      for (const selector of inputSelectors) {
+        try {
+          const element = await this.page.$(selector);
+          if (element) {
+            console.log(`   Found input: ${selector}`);
+            // Use Puppeteer method - click then type
+            await this.page.click(selector);
+            await this.page.waitForTimeout(500);
+            await this.page.keyboard.type(prompt, { delay: 30 });
+            filled = true;
+            console.log('   ✅ Filled prompt');
+            break;
+          }
+        } catch (e) {
+          console.log(`   ⚠️ Error with ${selector}: ${e.message}`);
+        }
       }
-
-      // Type prompt
-      console.log('⌨️  Typing prompt...');
-      await textarea.click();
-      await this.page.waitForTimeout(500);
-      await textarea.fill(prompt);
+      
+      if (!filled) {
+        throw new Error('Could not find any text input');
+      }
+      
       await this.page.waitForTimeout(1000);
 
-      // Find and click generate button
+      // Find and click generate button (Puppeteer API)
       console.log('🔍 Looking for generate button...');
-      const generateButton = await this.page.$('button:has-text("Start Generation"), button:has-text("Generate"), button[type="submit"]');
+      
+      const buttonSelectors = [
+        'button',
+        '[role="button"]',
+        'input[type="submit"]'
+      ];
+      
+      let generateButton = null;
+      for (const selector of buttonSelectors) {
+        try {
+          const buttons = await this.page.$$(selector);
+          for (const btn of buttons) {
+            const text = await this.page.evaluate(el => el.textContent, btn);
+            if (text && (text.includes('Generate') || text.includes('Start') || text.includes('Create') || text.includes('Tạo'))) {
+              generateButton = btn;
+              console.log(`   Found button: "${text.trim()}"`);
+              break;
+            }
+          }
+          if (generateButton) break;
+        } catch (e) {
+          // Continue
+        }
+      }
       
       if (generateButton) {
         await generateButton.click();
+        console.log('   ✅ Clicked generate button');
       } else {
+        console.log('   ⚠️ No generate button found, pressing Enter');
         await this.page.keyboard.press('Enter');
       }
 
@@ -98,35 +143,54 @@ class ZAIImageService extends BrowserService {
   async _waitForGeneratedImage(maxWait = 120000) {
     const startTime = Date.now();
     
+    // Get initial image URLs to ignore them
+    const initialImages = await this.page.evaluate(() => {
+      const images = document.querySelectorAll('img');
+      return Array.from(images).map(img => img.src).filter(src => src.startsWith('https://'));
+    });
+    
+    console.log(`   Initial images on page: ${initialImages.length}`);
+    
     while (Date.now() - startTime < maxWait) {
-      const imageUrl = await this.page.evaluate(() => {
+      // Wait a bit before checking
+      await this.page.waitForTimeout(3000);
+      
+      const imageUrl = await this.page.evaluate((initialImgs) => {
         const images = document.querySelectorAll('img');
         
         for (const img of images) {
           const src = img.src;
           
+          // Skip initial images (logos, existing images)
+          if (initialImgs.includes(src)) continue;
+          
+          // Skip small images (icons, avatars, logos)
+          if (img.naturalWidth < 400 || img.naturalHeight < 400) continue;
+          
+          // Skip known non-generated sources
+          if (src.includes('logo') || src.includes('icon') || src.includes('avatar') || src.includes('profile')) continue;
+          
+          // Accept generated images
           if (
             src.includes('generated') ||
             src.includes('result') ||
             src.includes('output') ||
-            (src.startsWith('https://') && 
-             !src.includes('logo') && 
-             !src.includes('icon') &&
-             !src.includes('avatar') &&
-             img.naturalWidth > 200)
+            src.includes('blob') ||
+            src.startsWith('https://')
           ) {
             return src;
           }
         }
         
         return null;
-      });
+      }, initialImages);
       
       if (imageUrl) {
+        console.log(`   ✅ Found new generated image: ${imageUrl.substring(0, 80)}...`);
         return imageUrl;
       }
       
-      await this.page.waitForTimeout(2000);
+      console.log(`   ⏳ Waiting for new image... (${Math.floor((Date.now() - startTime)/1000)}s)`);
     }
     
     return null;

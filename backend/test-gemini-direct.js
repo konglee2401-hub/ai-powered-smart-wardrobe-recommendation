@@ -21,7 +21,7 @@ async function testGeminiDeepAnalysis() {
     console.log('🧪 Starting Gemini DEEP Analysis Test...');
     
     // Ensure test images exist
-    const charPath = path.join(__dirname, 'test-images/anh nhan vat.jpeg');
+    const charPath = path.join(__dirname, 'test-images/anh-nhan-vat.jpeg');
     const prodPath = path.join(__dirname, 'test-images/anh-san-pham.png');
 
     if (!fs.existsSync(charPath) || !fs.existsSync(prodPath)) {

@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // ==================== TEST CONFIGURATION ====================
 
 const TEST_CONFIG = {
-  characterImage: path.join(__dirname, 'test-images', 'anh nhan vat.jpeg'),
+  characterImage: path.join(__dirname, 'test-images', 'anh-nhan-vat.jpeg'),
   productImage: path.join(__dirname, 'test-images', 'Anh san pham.png'),
   
   prompts: {

@@ -144,7 +144,7 @@ Unavailable: 0
 
 ================================================================================
 
-✅ Test image: test-images/anh nhan vat.jpeg
+✅ Test image: test-images/anh-nhan-vat.jpeg
    Size: 245.67 KB
 
 📤 UPLOADING IMAGE TO CLOUD

@@ -258,7 +258,7 @@ Test Configuration:
 [10:30:15] ℹ️  Found 2 test image(s)
 
 ================================================================================
-  📸 Testing Image 1/2: anh nhan vat.jpeg
+  📸 Testing Image 1/2: anh-nhan-vat.jpeg
 ================================================================================
 
 ✔ Image uploaded to imgbb
@@ -352,7 +352,7 @@ Detailed Results:
 
 ### "No test images found"
 **Solution:** Ensure these files exist in `test-images/` folder:
-- `anh nhan vat.jpeg`
+- `anh-nhan-vat.jpeg`
 - `ao phong.jpg`
 
 Or use custom file:

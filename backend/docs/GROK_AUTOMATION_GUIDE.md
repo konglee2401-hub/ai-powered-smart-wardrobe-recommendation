@@ -161,7 +161,7 @@ output/
 ================================================================================
 
 Configuration:
-  Character: anh nhan vat.jpeg
+  Character: anh-nhan-vat.jpeg
   Clothing: ao phong.jpg
   Output: ./output
   Generate Video: Yes
@@ -175,10 +175,10 @@ Configuration:
 
 📊 GROK MULTI-IMAGE ANALYSIS
 ================================================================================
-Images: anh nhan vat.jpeg, ao phong.jpg
+Images: anh-nhan-vat.jpeg, ao phong.jpg
 Prompt: Analyze these two images...
 
-📤 Uploading: anh nhan vat.jpeg
+📤 Uploading: anh-nhan-vat.jpeg
 ✅ Image uploaded
 📤 Uploading: ao phong.jpg
 ✅ Image uploaded

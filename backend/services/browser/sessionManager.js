@@ -9,7 +9,7 @@ const SESSION_DIR = path.join(__dirname, '../../.sessions');
 
 /**
  * Session Manager
- * Handles saving and loading browser sessions
+ * Handles saving and loading browser sessions using cookies
  */
 class SessionManager {
   constructor(serviceName) {
@@ -30,15 +30,25 @@ class SessionManager {
   }
 
   /**
-   * Save session
+   * Save session using cookies
    */
-  async saveSession(context) {
+  async saveSession(page) {
     try {
       console.log(`💾 Saving session to: ${this.sessionPath}`);
       
-      await context.storageState({ path: this.sessionPath });
+      // Get all cookies from the page
+      const cookies = await page.cookies();
       
-      console.log('✅ Session saved successfully');
+      // Save cookies to file
+      const sessionData = {
+        cookies: cookies,
+        timestamp: new Date().toISOString(),
+        serviceName: this.serviceName
+      };
+      
+      fs.writeFileSync(this.sessionPath, JSON.stringify(sessionData, null, 2));
+      
+      console.log(`✅ Session saved successfully (${cookies.length} cookies)`);
       return true;
     } catch (error) {
       console.error('❌ Failed to save session:', error.message);
@@ -47,7 +57,7 @@ class SessionManager {
   }
 
   /**
-   * Load session
+   * Load session cookies
    */
   loadSession() {
     try {
@@ -60,8 +70,8 @@ class SessionManager {
       
       const sessionData = JSON.parse(fs.readFileSync(this.sessionPath, 'utf-8'));
       
-      console.log('✅ Session loaded successfully');
-      return sessionData;
+      console.log(`✅ Session loaded successfully (${sessionData.cookies.length} cookies)`);
+      return sessionData.cookies;
     } catch (error) {
       console.error('❌ Failed to load session:', error.message);
       return null;
@@ -103,7 +113,9 @@ class SessionManager {
         created: stats.birthtime,
         modified: stats.mtime,
         hasCookies: sessionData.cookies && sessionData.cookies.length > 0,
-        cookieCount: sessionData.cookies ? sessionData.cookies.length : 0
+        cookieCount: sessionData.cookies ? sessionData.cookies.length : 0,
+        timestamp: sessionData.timestamp,
+        serviceName: sessionData.serviceName
       };
     } catch (error) {
       return null;

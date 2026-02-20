@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test.describe('Virtual Try-On Page End-to-End Test', () => {
-  const CHARACTER_IMAGE_PATH = path.resolve(__dirname, '../../../backend/test-images/anh nhan vat.jpeg');
+  const CHARACTER_IMAGE_PATH = path.resolve(__dirname, '../../../backend/test-images/anh-nhan-vat.jpeg');
   const PRODUCT_IMAGE_PATH = path.resolve(__dirname, '../../../backend/test-images/anh-san-pham.png');
 
   test.beforeEach(async ({ page }) => {

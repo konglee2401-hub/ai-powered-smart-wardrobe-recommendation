@@ -11,7 +11,7 @@ import {
   Download, Save, RefreshCw, X, CheckCircle, Video
 } from 'lucide-react';
 
-import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api'; // Add aiOptionsAPI
+import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 
 // Import components
 import UseCaseSelector from '../components/UseCaseSelector';
@@ -87,6 +87,12 @@ export default function VirtualTryOnPage() {
   // Browser automation states
   const [browserProvider, setBrowserProvider] = useState('grok');
   const [browserPrompt, setBrowserPrompt] = useState('');
+
+  // Browser AI provider options
+  const BROWSER_PROVIDERS = [
+    { id: 'grok', label: '🤖 Grok (grok.com)', description: 'AI mạnh, không cần API key' },
+    { id: 'zai', label: '💎 Z.AI (chat.z.ai)', description: 'Image generation nhanh' },
+  ];
 
   const [promptOptions, setPromptOptions] = useState(null);
 
@@ -175,12 +181,58 @@ export default function VirtualTryOnPage() {
   // ============================================================
 
   /**
-   * STEP 1 -> STEP 2: Unified Analysis (both images together)
-   * Analyzes character and product images in a single AI call
+   * STEP 1 -> STEP 2/5: Unified Analysis or Browser AI Mode
+   * For 'browser' mode: skips to generation directly using browser automation
+   * For 'upload' mode: uses API-based analysis
    */
   const handleStartAnalysis = async () => {
     if (!characterImage?.file || !productImage?.file) return;
 
+    // Browser AI mode - use browser automation for full flow
+    if (activeMode === 'browser') {
+      setIsAnalyzing(true);
+      setAnalysisError(null);
+      console.log('🌐 BROWSER MODE: Starting browser automation flow...');
+
+      try {
+        // Call browser automation API (analyze + generate in one go)
+        const response = await browserAutomationAPI.generateImage(
+          characterImage.file,
+          productImage.file,
+          { provider: browserProvider }
+        );
+
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Browser automation failed');
+        }
+
+        // Store analysis if available
+        if (response.data.analysis) {
+          setAnalysis(response.data.analysis);
+        }
+
+        // Store generated images
+        const images = response.data.generatedImages || [];
+        if (images.length > 0) {
+          setGeneratedImages(images);
+          console.log(`✅ Browser automation complete: ${images.length} images generated`);
+          
+          // Move directly to results (step 6)
+          setCurrentStep(6);
+        } else {
+          throw new Error('No images generated from browser automation');
+        }
+
+      } catch (error) {
+        console.error('❌ Browser automation failed:', error);
+        setAnalysisError(error.message || 'Browser AI failed. Please try again.');
+      } finally {
+        setIsAnalyzing(false);
+      }
+      return;
+    }
+
+    // Normal upload mode - use API-based analysis
     setIsAnalyzing(true);
     setAnalysisError(null);
     console.log('📸 STEP 1: Starting unified analysis...');
@@ -462,63 +514,152 @@ export default function VirtualTryOnPage() {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-8">
-            {/* Use Case Selector */}
-            <UseCaseSelector
-              selectedUseCase={useCase}
-              onUseCaseChange={setUseCase}
-            />
+          <div className="space-y-6">
+            {/* Compact: Use Case + Product Focus + Browser Provider (2 columns) */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Use Case Selector - Compact */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <label className="block text-sm font-semibold text-gray-800 mb-3">
+                  🎯 Use Case
+                </label>
+                <UseCaseSelector
+                  selectedUseCase={useCase}
+                  onUseCaseChange={setUseCase}
+                />
+              </div>
 
-            {/* Product Focus Selector */}
-            <ProductFocusSelector
-              selectedFocus={productFocus}
-              onFocusChange={setProductFocus}
-            />
+              {/* Product Focus Selector - Compact */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <label className="block text-sm font-semibold text-gray-800 mb-3">
+                  👗 Product Focus
+                </label>
+                <ProductFocusSelector
+                  selectedFocus={productFocus}
+                  onFocusChange={setProductFocus}
+                />
+              </div>
+            </div>
+
+            {/* Browser AI Provider Selector - Only show in browser mode */}
+            {activeMode === 'browser' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <label className="block text-sm font-semibold text-gray-800 mb-3">
+                  🌐 Browser AI Provider
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {BROWSER_PROVIDERS.map((provider) => (
+                    <button
+                      key={provider.id}
+                      onClick={() => setBrowserProvider(provider.id)}
+                      className={`p-3 rounded-lg border-2 transition-all text-left ${
+                        browserProvider === provider.id
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium text-sm">{provider.label}</div>
+                      <div className="text-xs text-gray-500">{provider.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Image Upload */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">📤 Upload Images</h3>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    👤 Character Image (Người Mẫu)
+                    👤 Character (Người Mẫu)
                   </label>
-                  <ImageUpload
-                    image={characterImage?.preview}
-                    onUpload={(file) => setCharacterImage({
-                      file,
-                      preview: URL.createObjectURL(file),
-                    })}
-                    onRemove={() => setCharacterImage(null)}
-                    label="Upload character image"
-                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+                    {characterImage?.preview ? (
+                      <div className="relative aspect-square bg-gray-50">
+                        <img
+                          src={characterImage.preview}
+                          alt="Character"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          onClick={() => setCharacterImage(null)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center aspect-square cursor-pointer hover:bg-gray-50">
+                        <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                        <span className="text-sm text-gray-500">Click to upload</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setCharacterImage({
+                                file,
+                                preview: URL.createObjectURL(file),
+                              });
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    👗 Product Image (Sản Phẩm)
+                    👗 Product (Sản Phẩm)
                   </label>
-                  <ImageUpload
-                    image={productImage?.preview}
-                    onUpload={(file) => setProductImage({
-                      file,
-                      preview: URL.createObjectURL(file),
-                    })}
-                    onRemove={() => setProductImage(null)}
-                    label="Upload product image"
-                  />
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+                    {productImage?.preview ? (
+                      <div className="relative aspect-square bg-gray-50">
+                        <img
+                          src={productImage.preview}
+                          alt="Product"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          onClick={() => setProductImage(null)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center aspect-square cursor-pointer hover:bg-gray-50">
+                        <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                        <span className="text-sm text-gray-500">Click to upload</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setProductImage({
+                                file,
+                                preview: URL.createObjectURL(file),
+                              });
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Ready notice */}
               {characterImage && productImage && useCase && productFocus && (
-                <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-200">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
                     <div>
-                      <p className="font-medium text-green-800">Sẵn sàng tiến hành phân tích!</p>
-                      <p className="text-sm text-green-600">
-                        Click "Tiếp Tục" để bắt đầu AI Analysis
-                      </p>
+                      <p className="font-medium text-green-800 text-sm">Sẵn sàng! Click "Start AI Analysis"</p>
                     </div>
                   </div>
                 </div>

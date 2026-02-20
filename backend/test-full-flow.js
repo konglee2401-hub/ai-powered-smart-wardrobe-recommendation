@@ -65,7 +65,7 @@ const options = program.opts();
 // ============================================
 
 const TEST_IMAGES = [
-  'anh nhan vat.jpeg',
+  'anh-nhan-vat.jpeg',
   'ao phong.jpg'
 ];
 
