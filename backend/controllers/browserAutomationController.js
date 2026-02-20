@@ -111,11 +111,11 @@ export async function analyzeAndGenerate(req, res) {
 
   try {
     const { 
-      analysisProvider = 'chat.z.ai',
-      imageGenProvider = 'image.z.ai',
+      analysisProvider = 'grok',
+      imageGenProvider = 'grok',
       prompt, 
       negativePrompt,
-      useRealAnalysis = false  // Use fallback by default for speed - set to true for real analysis
+      useRealAnalysis = true  // Enable real analysis by default
     } = req.body;
 
     const characterImage = req.files?.characterImage?.[0];
@@ -128,11 +128,13 @@ export async function analyzeAndGenerate(req, res) {
       });
     }
 
-    if (!prompt) {
-      return res.status(400).json({ 
-        error: 'Prompt is required',
-        success: false 
-      });
+    // Generate default prompt if not provided
+    let finalPrompt = prompt;
+    if (!finalPrompt) {
+      finalPrompt = `Generate a photorealistic fashion image of a person wearing the clothing product shown. 
+Keep the character unchanged: same face, same body type, same skin tone.
+Change only the clothing to match the product image.
+Professional studio lighting, white background, fashion photography quality.`;
     }
 
     // ====================================
@@ -154,30 +156,40 @@ export async function analyzeAndGenerate(req, res) {
     console.log(`   ✅ Product: ${path.basename(prodImagePath)}`);
 
     // ====================================
-    // STEP 2: Analyze with provider
+    // STEP 2 & 4: Single browser service for both analysis and generation
     // ====================================
+    // Reuse same service instance for both analysis and generation when providers match
+    const useSameService = analysisProvider === imageGenProvider || 
+                          (analysisProvider === 'grok' && imageGenProvider === 'grok') ||
+                          (analysisProvider === 'grok.com' && imageGenProvider === 'grok.com');
+    
     console.log(`\n📊 STEP 2: Analysis...`);
     let analysisText = null;
 
-    if (useRealAnalysis) {
-      try {
-        console.log(`   🤖 Real analysis with ${analysisProvider}...`);
+    try {
+      // Create service for analysis
+      if (!useSameService || !analysisService) {
         switch (analysisProvider) {
-          case 'chat.z.ai':
-            analysisService = new ZAIChatService({ headless: false });
-            break;
+          case 'grok':
           case 'grok.com':
             analysisService = new GrokServiceV2({ headless: false });
             break;
+          case 'zai':
+          case 'chat.z.ai':
           default:
             analysisService = new ZAIChatService({ headless: false });
         }
-
+        
         console.log(`   🚀 Initializing ${analysisProvider}...`);
         await analysisService.initialize();
-        
+      } else {
+        console.log(`   ♻️  Reusing same service for analysis + generation`);
+      }
+
+      if (useRealAnalysis) {
+        console.log(`   🤖 Real analysis with ${analysisProvider}...`);
         console.log(`   📸 Uploading and analyzing images...`);
-        console.log(`   ⏳ This may take a minute (includes human verification on some services)...`);
+        console.log(`   ⏳ This may take a minute...`);
         
         const analysisResult = await analysisService.analyzeMultipleImages(
           [charImagePath, prodImagePath],
@@ -186,58 +198,67 @@ export async function analyzeAndGenerate(req, res) {
         
         analysisText = analysisResult?.text || analysisResult;
         console.log(`   ✅ Analysis complete!`);
-        console.log(`      Result: "${analysisText.substring(0, 200)}..."`);
-        
-        await analysisService.close();
-      } catch (error) {
-        console.warn(`⚠️  Real analysis error: ${error.message}`);
-        console.log(`   Falling back to default analysis...`);
-        analysisText = null;
+        console.log(`      Result: "${analysisText?.substring(0, 200) || 'N/A'}..."`);
+      } else {
+        console.log(`   ℹ️  Skipping real analysis (useRealAnalysis=false)`);
       }
+    } catch (error) {
+      console.warn(`⚠️  Real analysis error: ${error.message}`);
+      console.log(`   Falling back to default analysis...`);
     }
 
     // Use fallback if no real analysis
     if (!analysisText) {
       analysisText = 'Professional fashion styling, modern aesthetic, high quality finish recommended.';
-      if (useRealAnalysis) {
-        console.log(`   ✅ Using fallback analysis (real analysis had issues)`);
-      } else {
-        console.log(`   ℹ️  Using default fallback analysis (real analysis disabled)`);
-      }
+      console.log(`   ✅ Using fallback analysis`);
     }
 
     // ====================================
     // STEP 3: Build optimized prompt
     // ====================================
     console.log(`\n🔨 STEP 3: Building AI-optimized prompt...`);
-    const finalPrompt = buildAIPrompt(prompt, analysisText, negativePrompt);
+    const optimizedPrompt = buildAIPrompt(finalPrompt, analysisText, negativePrompt);
 
     // ====================================
-    // STEP 4: Generate image
+    // STEP 4: Generate image (reuse service if possible)
     // ====================================
     console.log(`\n🎨 STEP 4: Generating image with ${imageGenProvider}...`);
+    
+    // Use existing service if same provider, otherwise create new one
+    if (!useSameService) {
+      // Need different service for generation
+      if (analysisService) {
+        console.log(`   🔄 Closing analysis service to create generation service...`);
+        await analysisService.close();
+        analysisService = null;
+      }
+      
+      switch (imageGenProvider) {
+        case 'grok':
+        case 'grok.com':
+          imageGenService = new GrokServiceV2({ headless: false });
+          break;
+        case 'zai':
+        case 'image.z.ai':
+        default:
+          imageGenService = new ZAIImageService({ headless: false });
+      }
+      
+      console.log(`   🚀 Initializing ${imageGenProvider}...`);
+      await imageGenService.initialize();
+    } else {
+      // Reuse analysis service for generation
+      imageGenService = analysisService;
+      console.log(`   ♻️  Reusing service for generation (same provider)`);
+    }
     
     try {
       outputImagePath = path.join(tempDir, `browser-gen-${Date.now()}.png`);
       
-      switch (imageGenProvider) {
-        case 'image.z.ai':
-          imageGenService = new ZAIImageService({ headless: false });
-          break;
-        case 'grok.com':
-          imageGenService = new GrokServiceV2({ headless: false });
-          break;
-        default:
-          imageGenService = new ZAIImageService({ headless: false });
-      }
-
-      console.log(`   🚀 Initializing ${imageGenProvider}...`);
-      await imageGenService.initialize();
-      
-      console.log(`   🖼️  Generating with prompt: "${finalPrompt.substring(0, 80)}..."`);
+      console.log(`   🖼️  Generating with prompt: "${optimizedPrompt.substring(0, 80)}..."`);
       console.log(`   ⏳ Generating image...`);
       
-      const imageResult = await imageGenService.generateImage(finalPrompt, {
+      const imageResult = await imageGenService.generateImage(optimizedPrompt, {
         download: true,
         outputPath: outputImagePath
       });
@@ -247,8 +268,6 @@ export async function analyzeAndGenerate(req, res) {
       if (imageResult?.path) {
         outputImagePath = imageResult.path;
       }
-      
-      await imageGenService.close();
 
       if (!outputImagePath) {
         throw new Error('No image path returned from generation');
@@ -257,7 +276,7 @@ export async function analyzeAndGenerate(req, res) {
     } catch (genError) {
       console.error(`❌ Generation error: ${genError.message}`);
       if (analysisService) await analysisService.close();
-      if (imageGenService) await imageGenService.close();
+      if (imageGenService && imageGenService !== analysisService) await imageGenService.close();
       
       cleanupTempFiles(tempFiles);
       
@@ -266,6 +285,11 @@ export async function analyzeAndGenerate(req, res) {
         success: false,
         stage: 'generation'
       });
+    } finally {
+      // Only close if it's a different service
+      if (imageGenService && imageGenService !== analysisService && imageGenService.close) {
+        await imageGenService.close();
+      }
     }
 
     // ====================================
@@ -303,14 +327,15 @@ export async function analyzeAndGenerate(req, res) {
     return res.json({
       success: true,
       data: {
-        images: [{
+        generatedImages: [{
           url: `file://${outputImagePath}`,
           path: outputImagePath,
           size: fileStats.size,
-          filename: path.basename(outputImagePath)
+          filename: path.basename(outputImagePath),
+          provider: 'grok'
         }],
         analysis: analysisText,
-        prompt: finalPrompt,
+        prompt: optimizedPrompt,
         providers: {
           analysis: analysisProvider,
           generation: imageGenProvider
