@@ -428,13 +428,10 @@ class GrokServiceV2 extends BrowserService {
     // Wait for challenge to load
     await this.page.waitForTimeout(5000);
     
-    // Try to find and click verification button
+    // Try to find and click verification button - individual selectors (no :has-text)
     const verificationSelectors = [
       'input[type="checkbox"]',
       'button[type="submit"]',
-      'button:has-text("Verify")',
-      'button:has-text("Continue")',
-      'button:has-text("Accept")',
       '.cf-turnstile',
       '[data-sitekey]',
       'iframe[src*="challenge"]'
@@ -465,6 +462,30 @@ class GrokServiceV2 extends BrowserService {
       } catch (e) {
         // Continue to next selector
       }
+    }
+    
+    // Try to find button by evaluating all buttons on page
+    const buttonClicked = await this.page.evaluate(() => {
+      const buttons = document.querySelectorAll('button');
+      const keywords = ['verify', 'continue', 'accept', 'check', 'submit'];
+      
+      for (const btn of buttons) {
+        const text = btn.textContent?.toLowerCase() || '';
+        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        
+        for (const keyword of keywords) {
+          if (text.includes(keyword) || ariaLabel.includes(keyword)) {
+            btn.click();
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+    
+    if (buttonClicked) {
+      console.log('   ✅ Clicked verification button via evaluate');
+      await this.page.waitForTimeout(2000);
     }
     
     // Take screenshot for manual verification
@@ -1009,13 +1030,33 @@ class GrokServiceV2 extends BrowserService {
   async _sendMessage() {
     console.log('📤 Sending message...');
     
-    // Try to find send button first
-    const sendButton = await this.page.$('button[type="submit"], button:has-text("Send"), button[aria-label*="send"], button[aria-label*="Submit"]');
+    // Try to find send button - use individual selectors (no :has-text)
+    let sendButton = null;
+    
+    const buttonSelectors = [
+      'button[type="submit"]',
+      'button[aria-label*="send"]',
+      'button[aria-label*="Send"]',
+      'button[aria-label*="submit"]',
+      'button[aria-label*="Submit"]'
+    ];
+    
+    for (const selector of buttonSelectors) {
+      try {
+        sendButton = await this.page.$(selector);
+        if (sendButton) {
+          console.log(`   Found button: ${selector}`);
+          break;
+        }
+      } catch (e) {}
+    }
     
     if (sendButton) {
       await sendButton.click();
+      console.log('   ✅ Clicked send button');
     } else {
-      // Try Enter key
+      // Try Enter key as fallback
+      console.log('   ⚠️  No send button found, using Enter key');
       await this.page.keyboard.press('Enter');
     }
     
