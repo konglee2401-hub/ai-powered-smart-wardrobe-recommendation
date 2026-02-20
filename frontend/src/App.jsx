@@ -24,34 +24,58 @@ import VirtualTryOnPage from './pages/VirtualTryOnPage';
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
+      <Routes>
+        {/* VirtualTryOnPage - Full screen layout without Navbar */}
+        <Route path="/" element={<VirtualTryOnPage />} />
         
-        <Routes>
-          {/* Main Routes */}
-          <Route path="/" element={<VirtualTryOnPage />} />
-          <Route path="/history" element={<GenerationHistory />} />
-          <Route path="/stats" element={<ModelStats />} />
-          <Route path="/tester" element={<ModelTester />} />
-          <Route path="/prompt-builder" element={<PromptBuilder />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/options" element={<OptionsManagement />} />
-          <Route path="/batch" element={<BatchProcessingPage />} />
-          <Route path="/gallery" element={<GalleryPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/customization" element={<AdvancedCustomizationPage />} />
-          <Route path="/performance" element={<PerformanceOptimizerPage />} />
-          <Route path="/admin/providers" element={<AIProviderManager />} />
-          
-          {/* Redirect old routes */}
-          <Route path="/model-tester" element={<Navigate to="/tester" replace />} />
-          <Route path="/model-stats" element={<Navigate to="/stats" replace />} />
-          
-          {/* 404 */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
+        {/* Other pages with Navbar */}
+        <Route path="/history" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><GenerationHistory /></div>
+        } />
+        <Route path="/stats" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><ModelStats /></div>
+        } />
+        <Route path="/tester" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><ModelTester /></div>
+        } />
+        <Route path="/prompt-builder" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><PromptBuilder /></div>
+        } />
+        <Route path="/dashboard" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><Dashboard /></div>
+        } />
+        <Route path="/login" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><Login /></div>
+        } />
+        <Route path="/options" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><OptionsManagement /></div>
+        } />
+        <Route path="/batch" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><BatchProcessingPage /></div>
+        } />
+        <Route path="/gallery" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><GalleryPage /></div>
+        } />
+        <Route path="/analytics" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><AnalyticsPage /></div>
+        } />
+        <Route path="/customization" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><AdvancedCustomizationPage /></div>
+        } />
+        <Route path="/performance" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><PerformanceOptimizerPage /></div>
+        } />
+        <Route path="/admin/providers" element={
+          <div className="min-h-screen bg-gray-50"><Navbar /><AIProviderManager /></div>
+        } />
+        
+        {/* Redirect old routes */}
+        <Route path="/model-tester" element={<Navigate to="/tester" replace />} />
+        <Route path="/model-stats" element={<Navigate to="/stats" replace />} />
+        
+        {/* 404 */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Router>
   );
 }
