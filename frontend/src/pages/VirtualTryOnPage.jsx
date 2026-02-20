@@ -541,268 +541,218 @@ export default function VirtualTryOnPage() {
           </div>
         </div>
 
-        {/* ==================== CENTER: Preview + Actions ==================== */}
-        <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
-          {/* Use Case / Focus Info Bar */}
-          {showUseCaseFocusInfo && (
-            <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
-              <div className="flex items-center gap-4 text-xs">
-                <span className="text-gray-400">Use case:</span>
-                <span className="text-purple-400 font-medium">{getLabel(USE_CASES, useCase)}</span>
-                <span className="text-gray-600">|</span>
-                <span className="text-gray-400">Focus:</span>
-                <span className="text-purple-400 font-medium">{getLabel(FOCUS_OPTIONS, productFocus)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Content Area */}
-          <div className="flex-1 p-4 overflow-auto">
-            <div className="max-w-3xl mx-auto">
-              {/* Step 1: Upload */}
-              {currentStep === 1 && (
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                    {characterImage?.preview ? (
-                      <>
-                        <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
-                        <button onClick={() => setCharacterImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                        <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                        <span className="text-sm text-gray-500">Character</span>
-                        <input type="file" accept="image/*" className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setCharacterImage({ file, preview: URL.createObjectURL(file) });
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-
-                  <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                    {productImage?.preview ? (
-                      <>
-                        <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
-                        <button onClick={() => setProductImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                        <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                        <span className="text-sm text-gray-500">Product</span>
-                        <input type="file" accept="image/*" className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setProductImage({ file, preview: URL.createObjectURL(file) });
-                          }}
-                        />
-                      </label>
-                    )}
+        {/* ==================== CENTER + RIGHT: Combined ==================== */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Inner flex: Center (scrollable) + Right (scrollable) */}
+          <div className="flex-1 flex min-h-0">
+            {/* ==================== CENTER: Preview ==================== */}
+            <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
+              {/* Use Case / Focus Info Bar */}
+              {showUseCaseFocusInfo && (
+                <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="text-gray-400">Use case:</span>
+                    <span className="text-purple-400 font-medium">{getLabel(USE_CASES, useCase)}</span>
+                    <span className="text-gray-600">|</span>
+                    <span className="text-gray-400">Focus:</span>
+                    <span className="text-purple-400 font-medium">{getLabel(FOCUS_OPTIONS, productFocus)}</span>
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Analysis Result */}
-              {currentStep === 2 && analysisRaw && (
-                <div className="space-y-4">
-                  <div className="bg-gray-800 rounded-xl p-4">
-                    <h3 className="text-sm font-semibold text-purple-400 mb-2">🤖 AI Analysis Result</h3>
-                    <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-96 bg-gray-900 rounded-lg p-3">
-                      {typeof analysisRaw === 'string' ? analysisRaw : JSON.stringify(analysisRaw, null, 2)}
-                    </pre>
-                  </div>
+              {/* Content Area - SCROLLABLE */}
+              <div className="flex-1 p-4 overflow-auto">
+                <div className="max-w-3xl mx-auto">
+                  {/* Step 1: Upload */}
+                  {currentStep === 1 && (
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
+                        {characterImage?.preview ? (
+                          <>
+                            <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
+                            <button onClick={() => setCharacterImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
+                            <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                            <span className="text-sm text-gray-500">Character</span>
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setCharacterImage({ file, preview: URL.createObjectURL(file) });
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
 
-                  {/* Extracted Keywords */}
-                  {analysis?.analysis?.recommendations && (
-                    <div className="bg-gray-800 rounded-xl p-4">
-                      <h3 className="text-sm font-semibold text-green-400 mb-2">📋 Extracted Keywords</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(analysis.analysis.recommendations).map(([key, value]) => (
-                          <span key={key} className="px-2 py-1 bg-gray-700 rounded text-xs">
-                            {key}: <span className="text-purple-400">{value}</span>
-                          </span>
+                      <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
+                        {productImage?.preview ? (
+                          <>
+                            <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
+                            <button onClick={() => setProductImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
+                            <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                            <span className="text-sm text-gray-500">Product</span>
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setProductImage({ file, preview: URL.createObjectURL(file) });
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Analysis Result */}
+                  {currentStep === 2 && analysisRaw && (
+                    <div className="space-y-4">
+                      <div className="bg-gray-800 rounded-xl p-4">
+                        <h3 className="text-sm font-semibold text-purple-400 mb-2">🤖 AI Analysis Result</h3>
+                        <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-96 bg-gray-900 rounded-lg p-3">
+                          {typeof analysisRaw === 'string' ? analysisRaw : JSON.stringify(analysisRaw, null, 2)}
+                        </pre>
+                      </div>
+
+                      {analysis?.analysis?.recommendations && (
+                        <div className="bg-gray-800 rounded-xl p-4">
+                          <h3 className="text-sm font-semibold text-green-400 mb-2">📋 Extracted Keywords</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(analysis.analysis.recommendations).map(([key, value]) => (
+                              <span key={key} className="px-2 py-1 bg-gray-700 rounded text-xs">
+                                {key}: <span className="text-purple-400">{value}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 3+: Generated Images */}
+                  {generatedImages.length > 0 && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-medium text-gray-400 mb-2">Generated ({generatedImages.length})</h3>
+                      <div className="grid grid-cols-4 gap-2">
+                        {generatedImages.map((img, idx) => (
+                          <div key={idx} className="relative group">
+                            <img src={img.url} alt={`Gen ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center">
+                              <button onClick={() => window.open(img.url, '_blank')} className="p-1 bg-white/20 rounded">
+                                <Image className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Step 3+: Generated Images */}
-              {generatedImages.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">Generated ({generatedImages.length})</h3>
-                  <div className="grid grid-cols-4 gap-2">
-                    {generatedImages.map((img, idx) => (
-                      <div key={idx} className="relative group">
-                        <img src={img.url} alt={`Gen ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center">
-                          <button onClick={() => window.open(img.url, '_blank')} className="p-1 bg-white/20 rounded">
-                            <Image className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {/* Loading */}
+                  {(isAnalyzing || isGenerating) && (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                      <span className="ml-2 text-gray-400">{isAnalyzing ? 'Analyzing...' : 'Generating...'}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {/* Loading */}
-              {(isAnalyzing || isGenerating) && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-                  <span className="ml-2 text-gray-400">{isAnalyzing ? 'Analyzing...' : 'Generating...'}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* STICKY BOTTOM ACTION BAR */}
-          <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
-            <div className="max-w-3xl mx-auto flex items-center justify-between">
-              <div className="text-xs text-gray-400">
-                {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Step 1: Start Analysis */}
-                {currentStep === 1 && (
-                  <button
-                    onClick={handleStartAnalysis}
-                    disabled={!isReadyForAnalysis || isAnalyzing}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm font-medium">Analyzing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span className="text-sm font-medium">Start AI</span>
-                      </>
-                    )}
-                  </button>
-                )}
+              {/* ==================== STICKY BOTTOM ACTION BAR ==================== */}
+              <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
+                <div className="max-w-3xl mx-auto flex items-center justify-between">
+                  <div className="text-xs text-gray-400">
+                    {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
+                  </div>
 
-                {/* Step 2: Apply Recommendation */}
-                {currentStep === 2 && (
-                  <button
-                    onClick={handleApplyRecommendation}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-                  >
-                    <Wand2 className="w-4 h-4" />
-                    <span className="text-sm font-medium">Apply Recommendations</span>
-                  </button>
-                )}
-
-                {/* Step 3: Build Prompt */}
-                {currentStep === 3 && !generatedPrompt && !isLoading && (
-                  <button
-                    onClick={handleBuildPrompt}
-                    disabled={!isReadyForPrompt}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="text-sm font-medium">Build Prompt</span>
-                  </button>
-                )}
-
-                {/* Step 4: Enhance + Generate */}
-                {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleEnhancePrompt}
-                      disabled={isLoading}
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-                    >
-                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={handleStartGeneration}
-                      disabled={!isReadyForGeneration || isGenerating}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="text-sm font-medium">Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Rocket className="w-4 h-4" />
-                          <span className="text-sm font-medium">Generate</span>
-                        </>
-                      )}
+                    {currentStep === 1 && (
+                      <button
+                        onClick={handleStartAnalysis}
+                        disabled={!isReadyForAnalysis || isAnalyzing}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
+                      >
+                        {isAnalyzing ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm font-medium">Analyzing...</span></>
+                        ) : (
+                          <><Sparkles className="w-4 h-4" /><span className="text-sm font-medium">Start AI</span></>
+                        )}
+                      </button>
+                    )}
+
+                    {currentStep === 2 && (
+                      <button onClick={handleApplyRecommendation} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700">
+                        <Wand2 className="w-4 h-4" /><span className="text-sm font-medium">Apply Recommendations</span>
+                      </button>
+                    )}
+
+                    {currentStep === 3 && !generatedPrompt && !isLoading && (
+                      <button onClick={handleBuildPrompt} disabled={!isReadyForPrompt} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                        <FileText className="w-4 h-4" /><span className="text-sm font-medium">Build Prompt</span>
+                      </button>
+                    )}
+
+                    {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
+                      <div className="flex items-center gap-2">
+                        <button onClick={handleEnhancePrompt} disabled={isLoading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50">
+                          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                        </button>
+                        <button onClick={handleStartGeneration} disabled={!isReadyForGeneration || isGenerating} className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                          {isGenerating ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm font-medium">Generating...</span></>
+                          ) : (
+                            <><Rocket className="w-4 h-4" /><span className="text-sm font-medium">Generate</span></>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {generatedImages.length > 0 && (
+                      <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600">
+                        <RefreshCw className="w-4 h-4" /><span className="text-sm font-medium">New</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
+            <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
+              <div className="p-3 space-y-4">
+                {currentStep === 2 && analysis && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">💾 Save Recommendations</h3>
+                    <button onClick={handleSaveRecommendations} disabled={isSaving} className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600/20 text-green-400 border border-green-600/50 rounded-lg hover:bg-green-600/30 disabled:opacity-50">
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span className="text-xs">Save to Database</span>
                     </button>
                   </div>
                 )}
 
-                {/* Step 5: New */}
-                {generatedImages.length > 0 && (
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span className="text-sm font-medium">New</span>
-                  </button>
+                {currentStep >= 3 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Style Options</h3>
+                    <StyleCustomizer options={promptOptions} selectedOptions={selectedOptions} onOptionChange={handleOptionChange} customOptions={customOptions} onCustomOptionChange={handleCustomOptionChange} recommendations={analysis?.analysis?.recommendations} analysis={analysis?.analysis} />
+                  </div>
+                )}
+
+                {generatedPrompt && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Prompt</h3>
+                    <div className="bg-gray-900 rounded-lg p-2 text-xs text-gray-300 max-h-32 overflow-auto">{generatedPrompt.positive}</div>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
-        <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
-          <div className="p-3 space-y-4">
-            {/* Step 2: Analysis + Save Options */}
-            {currentStep === 2 && analysis && (
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">💾 Save Recommendations</h3>
-                <button
-                  onClick={handleSaveRecommendations}
-                  disabled={isSaving}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600/20 text-green-400 border border-green-600/50 rounded-lg hover:bg-green-600/30 disabled:opacity-50"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span className="text-xs">Save to Database</span>
-                </button>
-              </div>
-            )}
-
-            {/* Step 3+: Style Options in Right Sidebar */}
-            {currentStep >= 3 && (
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Style Options</h3>
-                <StyleCustomizer
-                  options={promptOptions}
-                  selectedOptions={selectedOptions}
-                  onOptionChange={handleOptionChange}
-                  customOptions={customOptions}
-                  onCustomOptionChange={handleCustomOptionChange}
-                  recommendations={analysis?.analysis?.recommendations}
-                  analysis={analysis?.analysis}
-                />
-              </div>
-            )}
-
-            {/* Generated Prompt */}
-            {generatedPrompt && (
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Prompt</h3>
-                <div className="bg-gray-900 rounded-lg p-2 text-xs text-gray-300 max-h-32 overflow-auto">
-                  {generatedPrompt.positive}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
