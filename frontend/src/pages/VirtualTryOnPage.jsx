@@ -6,7 +6,7 @@
  * - Fixed bottom action bar
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Upload, Sparkles, Sliders, FileText, Rocket, Image,
   Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save
@@ -81,6 +81,10 @@ export default function VirtualTryOnPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('image');
   const [activeMode, setActiveMode] = useState('browser');
+  
+  // Refs for height calculation
+  const containerRef = useRef(null);
+  const [containerHeight, setContainerHeight] = useState(0);
 
   // Data
   const [characterImage, setCharacterImage] = useState(null);
@@ -115,6 +119,33 @@ export default function VirtualTryOnPage() {
     { id: 'grok', label: 'Grok', icon: '🤖' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
   ];
+
+  // Calculate container height on mount and resize
+  useEffect(() => {
+    const calculateHeight = () => {
+      const viewportHeight = window.innerHeight;
+      const navbar = document.querySelector('nav');
+      const navHeight = navbar ? navbar.offsetHeight : 0;
+      const mainBody = document.querySelector('[data-main-body]');
+      const mainBodyHeight = mainBody ? mainBody.offsetHeight : 0;
+      
+      // Calculate: viewport - navbar - main header (56px = h-14)
+      const calculatedHeight = viewportHeight - navHeight - 56;
+      setContainerHeight(calculatedHeight > 0 ? calculatedHeight : 400);
+    };
+
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    window.addEventListener('DOMContentLoaded', calculateHeight);
+
+    // Also check after a short delay to ensure everything is rendered
+    setTimeout(calculateHeight, 100);
+    setTimeout(calculateHeight, 500);
+
+    return () => {
+      window.removeEventListener('resize', calculateHeight);
+    };
+  }, []);
 
   // Load options
   useEffect(() => {
@@ -164,13 +195,9 @@ export default function VirtualTryOnPage() {
       );
 
       if (analysisResponse.success && analysisResponse.data) {
-        // Store raw response for display
         setAnalysisRaw(analysisResponse.data);
-        
-        // Extract analysis content
         setAnalysis(analysisResponse.data);
         
-        // Store image base64
         const charBase64 = await fileToBase64(characterImage.file);
         const prodBase64 = await fileToBase64(productImage.file);
         
@@ -179,7 +206,6 @@ export default function VirtualTryOnPage() {
           product: prodBase64
         });
         
-        // Stay at Step 2 - show analysis result
         setCurrentStep(2);
       }
     } catch (error) {
@@ -190,11 +216,8 @@ export default function VirtualTryOnPage() {
   };
 
   const handleApplyRecommendation = () => {
-    // Apply AI recommendations and go to Step 3
     if (analysis?.analysis?.recommendations) {
       const rec = analysis.analysis.recommendations;
-      
-      // Apply recommendations to selectedOptions
       const newOptions = { ...selectedOptions };
       if (rec.scene) newOptions.scene = rec.scene;
       if (rec.lighting) newOptions.lighting = rec.lighting;
@@ -202,11 +225,8 @@ export default function VirtualTryOnPage() {
       if (rec.style) newOptions.style = rec.style;
       if (rec.colorPalette) newOptions.colorPalette = rec.colorPalette;
       if (rec.cameraAngle) newOptions.cameraAngle = rec.cameraAngle;
-      
       setSelectedOptions(newOptions);
     }
-    
-    // Go to Step 3
     setCurrentStep(3);
   };
 
@@ -216,25 +236,13 @@ export default function VirtualTryOnPage() {
     setIsSaving(true);
     try {
       const rec = analysis.analysis.recommendations;
+      if (rec.scene) await aiOptionsAPI.createOption('scene', rec.scene, rec.scene, `AI recommended scene`, {});
+      if (rec.lighting) await aiOptionsAPI.createOption('lighting', rec.lighting, rec.lighting, `AI recommended lighting`, {});
+      if (rec.mood) await aiOptionsAPI.createOption('mood', rec.mood, rec.mood, `AI recommended mood`, {});
+      if (rec.colorPalette) await aiOptionsAPI.createOption('colorPalette', rec.colorPalette, rec.colorPalette, `AI recommended color palette`, {});
       
-      // Save each recommendation as new option
-      if (rec.scene) {
-        await aiOptionsAPI.createOption('scene', rec.scene, rec.scene, `AI recommended scene`, {});
-      }
-      if (rec.lighting) {
-        await aiOptionsAPI.createOption('lighting', rec.lighting, rec.lighting, `AI recommended lighting`, {});
-      }
-      if (rec.mood) {
-        await aiOptionsAPI.createOption('mood', rec.mood, rec.mood, `AI recommended mood`, {});
-      }
-      if (rec.colorPalette) {
-        await aiOptionsAPI.createOption('colorPalette', rec.colorPalette, rec.colorPalette, `AI recommended color palette`, {});
-      }
-      
-      // Reload options
       const options = await aiOptionsAPI.getAllOptions();
       setPromptOptions(options);
-      
       alert('Recommendations saved to database!');
     } catch (error) {
       console.error('Save failed:', error);
@@ -359,11 +367,16 @@ export default function VirtualTryOnPage() {
   const isReadyForPrompt = analysis && Object.keys(selectedOptions).length > 0;
   const isReadyForGeneration = generatedPrompt?.positive;
 
-  // Show Use Case / Focus info
   const showUseCaseFocusInfo = currentStep >= 2;
 
+  // Dynamic height style
+  const mainBodyStyle = {
+    height: containerHeight > 0 ? `${containerHeight}px` : 'auto',
+    minHeight: '400px'
+  };
+
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
+    <div className="bg-gray-900 text-white flex flex-col" data-main-body>
       {/* ==================== HEADER ==================== */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0 h-14">
         <div className="flex items-center justify-between h-full">
@@ -429,7 +442,7 @@ export default function VirtualTryOnPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-1 overflow-hidden" ref={containerRef} style={mainBodyStyle}>
         {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
         <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
           <button
@@ -473,7 +486,6 @@ export default function VirtualTryOnPage() {
         {/* ==================== LEFT SIDEBAR 2: Options ==================== */}
         <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0">
           <div className="p-3 space-y-4 overflow-y-auto flex-1">
-            {/* Step 1: Use Case + Focus (before analysis) */}
             {currentStep === 1 && (
               <>
                 <div>
@@ -522,7 +534,6 @@ export default function VirtualTryOnPage() {
               </>
             )}
 
-            {/* Step 3: Style Options (after apply recommendation) */}
             {currentStep >= 3 && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
@@ -541,13 +552,11 @@ export default function VirtualTryOnPage() {
           </div>
         </div>
 
-        {/* ==================== CENTER + RIGHT: Combined ==================== */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Inner flex: Center (scrollable) + Right (scrollable) */}
-          <div className="flex-1 flex min-h-0">
-            {/* ==================== CENTER: Preview ==================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
-              {/* Use Case / Focus Info Bar */}
+        {/* ==================== CENTER + RIGHT ==================== */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* CENTER */}
+            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 overflow-hidden">
               {showUseCaseFocusInfo && (
                 <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
                   <div className="flex items-center gap-4 text-xs">
@@ -560,10 +569,8 @@ export default function VirtualTryOnPage() {
                 </div>
               )}
 
-              {/* Content Area - SCROLLABLE */}
               <div className="flex-1 p-4 overflow-auto">
                 <div className="max-w-3xl mx-auto">
-                  {/* Step 1: Upload */}
                   {currentStep === 1 && (
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
@@ -612,7 +619,6 @@ export default function VirtualTryOnPage() {
                     </div>
                   )}
 
-                  {/* Step 2: Analysis Result */}
                   {currentStep === 2 && analysisRaw && (
                     <div className="space-y-4">
                       <div className="bg-gray-800 rounded-xl p-4">
@@ -637,7 +643,6 @@ export default function VirtualTryOnPage() {
                     </div>
                   )}
 
-                  {/* Step 3+: Generated Images */}
                   {generatedImages.length > 0 && (
                     <div className="mb-4">
                       <h3 className="text-sm font-medium text-gray-400 mb-2">Generated ({generatedImages.length})</h3>
@@ -656,7 +661,6 @@ export default function VirtualTryOnPage() {
                     </div>
                   )}
 
-                  {/* Loading */}
                   {(isAnalyzing || isGenerating) && (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
@@ -666,7 +670,7 @@ export default function VirtualTryOnPage() {
                 </div>
               </div>
 
-              {/* ==================== STICKY BOTTOM ACTION BAR ==================== */}
+              {/* ACTION BAR */}
               <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                   <div className="text-xs text-gray-400">
@@ -725,7 +729,7 @@ export default function VirtualTryOnPage() {
               </div>
             </div>
 
-            {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
+            {/* RIGHT SIDEBAR */}
             <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-3 space-y-4">
                 {currentStep === 2 && analysis && (
