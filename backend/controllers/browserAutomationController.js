@@ -132,7 +132,23 @@ ${hairstyle ? `- Hairstyle: ${hairstyle}` : ''}
 ${makeup ? `- Makeup: ${makeup}` : ''}
 ${customPrompt ? `- Custom: ${customPrompt}` : ''}
 
-Please provide detailed, structured analysis focusing on Vietnamese subjects and fashion. Include specific recommendations that match the selected style options above.`;
+IMPORTANT: Please provide your recommendations in this STRUCTURED FORMAT at the end of your analysis:
+
+=== RECOMMENDATIONS ===
+scene: [primary recommendation]
+lighting: [primary recommendation]
+mood: [primary recommendation]
+style: [primary recommendation]
+colorPalette: [primary recommendation]
+cameraAngle: [primary recommendation]
+hairstyle: [recommendation for hairstyle - if character has suitable hair, suggest specific style like "long-straight", "medium-wavy", "short-bob", etc. or say "keep-current" if current style fits]
+makeup: [recommendation for makeup style - "natural", "light", "glowing", "bold-lips", "smokey-eyes", or "keep-current"]
+bottoms: [if top/product shown, suggest bottoms like "jeans", "trousers", "skirt", "shorts", "leggings", "cargo-pants" or "keep-existing"]
+shoes: [suggest shoes like "sneakers", "heels", "boots", "flats", "sandals", "loafers" or "keep-existing"]
+accessories: [suggest accessories like "necklace", "earrings", "watch", "bag", "sunglasses", "scarf", "belt", "hat" or "none"]
+outerwear: [suggest outerwear like "jacket", "coat", "blazer", "cardigan", "hoodie", "vest" or "none"]
+
+Provide detailed reasoning for each recommendation based on the analysis of both images.`;
 }
 
 /**
@@ -308,6 +324,124 @@ function cleanupTempFiles(files) {
 }
 
 /**
+ * Parse structured recommendations from AI analysis response
+ * Extracts recommendations from the === RECOMMENDATIONS === section
+ */
+function parseRecommendations(analysisText) {
+  const recommendations = {
+    scene: null,
+    lighting: null,
+    mood: null,
+    style: null,
+    colorPalette: null,
+    cameraAngle: null,
+    hairstyle: null,
+    makeup: null,
+    bottoms: null,
+    shoes: null,
+    accessories: null,
+    outerwear: null
+  };
+
+  try {
+    // Find the RECOMMENDATIONS section
+    const recSectionMatch = analysisText.match(/=== RECOMMENDATIONS ===([\s\S]*?)(?:===|$)/i);
+    
+    if (!recSectionMatch || !recSectionMatch[1]) {
+      console.log(`⚠️  No structured RECOMMENDATIONS section found in analysis`);
+      return recommendations;
+    }
+
+    const recText = recSectionMatch[1];
+    console.log(`📋 Found recommendations section, parsing...`);
+
+    // Parse each field
+    const fields = ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'];
+    
+    fields.forEach(field => {
+      // Match "field: value" pattern
+      const match = recText.match(new RegExp(`${field}:\\s*([^\\n]+)`, 'i'));
+      if (match && match[1]) {
+        let value = match[1].trim().toLowerCase();
+        
+        // Clean up the value - remove quotes, brackets, etc.
+        value = value.replace(/^["'\[\]{}]+|["'\[\]{}]+$/g, '').trim();
+        
+        // Skip "keep-current", "keep-existing", "none" values for fashion categories
+        if (!['keep-current', 'keep-existing', 'none', 'n/a', 'not applicable'].includes(value)) {
+          recommendations[field] = value;
+          console.log(`   ✅ ${field}: ${value}`);
+        }
+      }
+    });
+
+    console.log(`📋 Parsed recommendations:`, recommendations);
+    return recommendations;
+
+  } catch (error) {
+    console.error(`❌ Error parsing recommendations:`, error.message);
+    return recommendations;
+  }
+}
+
+/**
+ * Auto-save new options to database
+ * Checks if option exists, if not creates it
+ */
+async function autoSaveRecommendations(recommendations) {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { default: PromptOption } = await import('../models/PromptOption.js');
+    
+    const newOptionsCreated = [];
+    const categories = ['hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'];
+    
+    for (const category of categories) {
+      const value = recommendations[category];
+      if (!value) continue;
+      
+      // Check if option already exists
+      const existing = await PromptOption.findOne({ 
+        category, 
+        value,
+        isActive: true 
+      });
+      
+      if (!existing) {
+        // Create new option with auto-generated label and description
+        const label = value.split('-').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+        
+        const newOption = new PromptOption({
+          category,
+          value,
+          label,
+          description: `Auto-created from AI recommendation for ${category}`,
+          keywords: [value, category],
+          technicalDetails: {
+            source: 'ai_recommendation',
+            createdAt: new Date().toISOString()
+          },
+          isActive: true,
+          sortOrder: 999 // Put at end
+        });
+        
+        await newOption.save();
+        newOptionsCreated.push({ category, value, label });
+        console.log(`   ✅ Auto-created new option: ${category}/${value}`);
+      }
+    }
+    
+    return newOptionsCreated;
+    
+  } catch (error) {
+    console.error(`❌ Error auto-saving recommendations:`, error.message);
+    return [];
+  }
+}
+
+/**
  * STEP 2: Browser Analysis - Only analyze images, return text
  * Does NOT generate any images - just returns analysis text
  */
@@ -412,25 +546,39 @@ export async function analyzeWithBrowser(req, res) {
     console.log(`   ✅ Analysis complete!`);
     console.log(`      Result: "${analysisText?.substring(0, 200) || 'N/A'}..."`);
 
+    // ====================================
+    // STEP 5: Parse recommendations from AI response
+    // ====================================
+    console.log(`\n📋 Parsing recommendations from AI response...`);
+    const recommendations = parseRecommendations(analysisText);
+    
+    // ====================================
+    // STEP 6: Auto-save new options to database
+    // ====================================
+    console.log(`\n💾 Auto-saving new options to database...`);
+    const newOptionsCreated = await autoSaveRecommendations(recommendations);
+
     // Cleanup
     await browserService.close();
     cleanupTempFiles(tempFiles);
 
-    // Return ONLY analysis - no images generated
+    // Return analysis + recommendations
     console.log(`\n✅ BROWSER ANALYSIS - COMPLETE`);
-    console.log(`   Analysis text returned (no images generated)\n`);
+    console.log(`   Analysis text returned with ${Object.values(recommendations).filter(v => v).length} recommendations\n`);
 
     return res.json({
       success: true,
       data: {
         analysis: analysisText,
+        recommendations, // Parsed structured recommendations
+        newOptionsCreated, // New options that were auto-created in DB
         providers: {
           analysis: analysisProvider
         },
         // Return empty images array - this is ANALYSIS ONLY
         generatedImages: []
       },
-      message: 'Analysis completed successfully via browser automation. No images generated yet.'
+      message: 'Analysis completed successfully. Recommendations parsed and new options auto-saved to database.'
     });
 
   } catch (error) {
