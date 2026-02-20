@@ -410,8 +410,24 @@ export const browserAutomationAPI = {
    */
   analyzeBrowserOnly: async (characterImage, productImage, options = {}) => {
     const formData = new FormData();
-    formData.append('characterImage', characterImage);
-    formData.append('productImage', productImage);
+    
+    // Convert base64 strings to Blob/File objects for multipart/form-data
+    // characterImage and productImage are base64 strings (without data URL prefix)
+    const base64ToBlob = (base64String) => {
+      const binaryString = atob(base64String);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: 'image/jpeg' });
+    };
+    
+    const charBlob = base64ToBlob(characterImage);
+    const prodBlob = base64ToBlob(productImage);
+    
+    // Append as files, not raw strings
+    formData.append('characterImage', charBlob, 'character.jpg');
+    formData.append('productImage', prodBlob, 'product.jpg');
     formData.append('analysisProvider', options.provider || 'grok');
     
     // Add all style options
@@ -450,7 +466,17 @@ export const browserAutomationAPI = {
       characterImageBase64: options.characterImageBase64,
       productImageBase64: options.productImageBase64,
       characterImagePath: options.characterImagePath,
-      productImagePath: options.productImagePath
+      productImagePath: options.productImagePath,
+      // 💫 Pass conversation ID to reuse
+      grokConversationId: options.grokConversationId,
+      grokUrl: options.grokUrl,
+      // 💫 NEW: Pass image count and character description
+      imageCount: options.imageCount || 1,
+      characterDescription: options.characterDescription || '',
+      // Storage configuration
+      storageType: options.storageType || 'cloud',
+      localFolder: options.localFolder,
+      cloudProvider: options.cloudProvider || 'imgbb'
     };
     
     return api.post('/v1/browser-automation/generate-browser', payload);
@@ -502,11 +528,25 @@ export const browserAutomationAPI = {
   
   /**
    * Generate video using browser automation
-   * @param {string} prompt - Generation prompt
-   * @param {string} provider - Provider to use (grok)
+   * @param {Object} videoData - Video generation data
+   * @param {string} videoData.duration - Video duration (20, 30, 40)
+   * @param {string} videoData.scenario - Video scenario (dancing, product-intro, etc.)
+   * @param {Array} videoData.segments - Array of prompt segments
+   * @param {string} videoData.sourceImage - Source image URL
+   * @param {string} videoData.characterImage - Character image URL
+   * @param {string} videoData.productImage - Product image URL
    */
-  generateVideo: async (prompt, provider = 'grok') => {
-    return api.post('/v1/browser-automation/generate-video', { prompt, provider });
+  generateVideo: async (videoData) => {
+    const payload = {
+      duration: videoData.duration,
+      scenario: videoData.scenario,
+      segments: videoData.segments,
+      sourceImage: videoData.sourceImage,
+      characterImage: videoData.characterImage,
+      productImage: videoData.productImage,
+      provider: 'grok'  // Grok is the default video provider
+    };
+    return api.post('/v1/browser-automation/generate-video', payload);
   },
   
   /**

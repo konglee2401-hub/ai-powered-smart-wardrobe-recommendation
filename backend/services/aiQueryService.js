@@ -14,7 +14,7 @@ export async function queryAIModel(provider, model, payload, options = {}) {
         type = 'chat', // 'chat' or 'image'
         responseFormat = 'json', // 'json' or 'url'
         systemPrompt = '',
-        timeout = 90000,
+        timeout = 300000,
         apiKey: specificApiKey 
     } = options;
 

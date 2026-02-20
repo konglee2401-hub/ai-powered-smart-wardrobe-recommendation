@@ -225,6 +225,48 @@ promptOptionSchema.statics.bulkIncrementUsage = function(optionValues) {
   );
 };
 
+/**
+ * Add or update option (upsert pattern)
+ * @param {string} category - Category like 'scene', 'lighting', etc.
+ * @param {string} value - The option value/slug
+ * @param {string} label - Display label
+ * @param {object} metadata - Additional metadata (reasons, alternatives, etc.)
+ */
+promptOptionSchema.statics.addOrUpdate = async function(category, value, label, metadata = {}) {
+  // Find existing option (case-insensitive value match)
+  const existing = await this.findOne({
+    category,
+    value: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+  });
+
+  if (existing) {
+    // Update existing: increment usage, update label, merge metadata
+    existing.label = label;
+    existing.usageCount = (existing.usageCount || 0) + 1;
+    existing.lastUsed = new Date();
+    
+    // Merge metadata
+    if (metadata && Object.keys(metadata).length > 0) {
+      existing.technicalDetails = { ...existing.technicalDetails, ...metadata };
+    }
+    
+    return await existing.save();
+  }
+
+  // Create new option
+  return await this.create({
+    category,
+    value,
+    label,
+    description: label, // Use label as description if not provided
+    keywords: [label.toLowerCase()],
+    technicalDetails: metadata || {},
+    usageCount: 1,
+    lastUsed: new Date(),
+    isActive: true
+  });
+};
+
 // ============================================================
 // MIDDLEWARE
 // ============================================================

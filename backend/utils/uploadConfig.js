@@ -62,7 +62,9 @@ const fileFilter = (req, file, cb) => {
 export const upload = multer({
   storage: storage,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024 // 50MB
+    fieldSize: 50 * 1024 * 1024,      // 50MB - for large form fields (base64 images)
+    fieldNameSize: 200,                // 200 bytes - for field names
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024 // 50MB - for actual files
   },
   fileFilter: fileFilter
 });

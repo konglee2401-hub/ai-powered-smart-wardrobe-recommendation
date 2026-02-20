@@ -67,7 +67,69 @@ const videoGenerationSchema = new mongoose.Schema({
     min: 1,
     max: 5
   },
-  userFeedback: String
+  userFeedback: String,
+
+  // Session and segment data (NEW)
+  sessionId: String,
+  segments: [{
+    index: Number,
+    prompt: String,
+    videoUrl: String,
+    videoDuration: Number,
+    videoSize: Number,
+    generatedAt: Date,
+    completedAt: Date,
+    status: {
+      type: String,
+      enum: ['pending', 'generating', 'completed', 'failed'],
+      default: 'pending'
+    },
+    errorMessage: String
+  }],
+  
+  // Composed video (NEW)
+  composedVideoUrl: String,
+  composedVideoSize: Number,
+  composedAt: Date,
+  
+  // Extracted frames (NEW)
+  extractedFrames: [{
+    id: String,
+    videoSegmentIndex: Number,
+    framePosition: String, // e.g., 'last-frame'
+    framePath: String,
+    extractedAt: Date,
+    usedFor: String // Reference to next generation if reused
+  }],
+  
+  // Generation metrics (NEW)
+  metrics: {
+    uploadTimeMs: Number,
+    postIdDetectionTimeMs: Number,
+    segmentGenerationTimesMs: [Number],
+    totalTimeMs: Number,
+    successRate: Number,
+    retryCount: Number,
+    errors: [String],
+    bottleneck: String,
+    phaseBreakdown: mongoose.Schema.Types.Mixed
+  },
+  
+  // Prompt suggestions history (NEW)
+  promptSuggestions: [{
+    original: String,
+    suggested: String,
+    type: String,
+    appliedAt: Date
+  }],
+  
+  // Frame reuse tracking (NEW)
+  usedExtractedFrame: {
+    sourceGenerationId: mongoose.Schema.Types.ObjectId,
+    sourceSessionId: String,
+    frameId: String,
+    usedAt: Date
+  }
   
 }, {
   timestamps: true
@@ -76,5 +138,7 @@ const videoGenerationSchema = new mongoose.Schema({
 // Index for faster queries
 videoGenerationSchema.index({ userId: 1, createdAt: -1 });
 videoGenerationSchema.index({ status: 1 });
+videoGenerationSchema.index({ sessionId: 1 });
+videoGenerationSchema.index({ 'usedExtractedFrame.sourceGenerationId': 1 });
 
 export default mongoose.model('VideoGeneration', videoGenerationSchema);

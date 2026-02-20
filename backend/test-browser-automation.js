@@ -9,7 +9,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import ZAIChatService from './services/browser/zaiChatService.js';
-import GrokService from './services/browser/grokService.js';
+import GrokServiceV2 from './services/browser/grokServiceV2.js';
 
 dotenv.config();
 
@@ -149,7 +149,7 @@ async function testGrok(imagePath, prompt) {
   log('⚠️  ⚠️  Grok requires X/Twitter authentication', 'warning');
   log('Running in non-headless mode for manual login...', 'info');
   
-  const service = new GrokService({
+  const service = new GrokServiceV2({
     headless: false, // Force non-headless for Grok
     slowMo: options.slow ? 100 : 0
   });

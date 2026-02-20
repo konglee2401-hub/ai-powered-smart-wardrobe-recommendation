@@ -479,7 +479,7 @@ async function sendMessage(page) {
   console.log('✅ Message sent');
 }
 
-async function waitForResponse(page, maxWait = 90000) {
+async function waitForResponse(page, maxWait = 300000) {
   console.log('⏳ Waiting for response...');
   
   const startTime = Date.now();
@@ -934,7 +934,7 @@ async function main() {
     await typePrompt(page, analysisPrompt);
     await sendMessage(page);
     
-    const analysisResult = await waitForResponse(page, 90000);
+    const analysisResult = await waitForResponse(page, 300000);
     
     console.log('\n📊 ANALYSIS RESULT:');
     console.log('-'.repeat(60));

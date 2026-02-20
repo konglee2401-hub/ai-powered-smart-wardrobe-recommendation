@@ -343,7 +343,7 @@ async function analyzeMultipleImagesWithOpenRouter(imagePaths, prompt, options =
         'X-Title': 'Smart Wardrobe AI',
         'Content-Type': 'application/json'
       },
-      timeout: 90000
+      timeout: 300000
     });
     
     const content = response.data?.choices?.[0]?.message?.content;

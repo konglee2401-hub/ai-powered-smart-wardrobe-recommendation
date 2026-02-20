@@ -1,31 +1,43 @@
 /**
- * AI Creative Studio - PicsArt Style Layout
- * - 2 Left sidebars: Tools + Options
- * - Center: Preview
- * - Right: Style options
- * - Fixed bottom action bar
+ * AI Creative Studio - Enhanced Virtual Try-On
+ * - Step 1: Upload images (Character + Product)
+ * - Step 2: AI Analysis with breakdown & extraction
+ * - Step 3: Style customization & Prompt building (Merged)
+ * - Step 4: Image generation with options
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Upload, Sparkles, Sliders, FileText, Rocket, Image,
-  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save
+  Upload, Sparkles, FileText, Rocket, Image,
+  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 
-import StyleCustomizer from '../components/StyleCustomizer';
+// New: Session tracking and advanced prompt engineering
+import SessionHistoryService from '../services/sessionHistoryService';
+import { SessionHistory, generateSessionId } from '../utils/sessionHistory';
+import { PromptLayering, PromptVariationGenerator, GrokConversationEnhancer } from '../utils/advancedPromptEngineering';
 
-// Steps
+import AnalysisBreakdown from '../components/AnalysisBreakdown';
+import CharacterProductSummary from '../components/CharacterProductSummary';
+import PromptEditor from '../components/PromptEditor';
+import GenerationOptions from '../components/GenerationOptions';
+import GenerationResult from '../components/GenerationResult';
+import PromptQualityIndicator from '../components/PromptQualityIndicator';
+import NewOptionsDetected from '../components/NewOptionsDetected';
+import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
+import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
+
+// Steps - Style and Prompt merged into single step
 const STEPS = [
   { id: 1, name: 'Upload', icon: Upload },
   { id: 2, name: 'Analysis', icon: Sparkles },
-  { id: 3, name: 'Style', icon: Sliders },
-  { id: 4, name: 'Prompt', icon: FileText },
-  { id: 5, name: 'Generate', icon: Rocket },
+  { id: 3, name: 'Style & Prompt', icon: Wand2 },
+  { id: 4, name: 'Generate', icon: Rocket },
 ];
 
-// Use cases from original component
+// Use cases
 const USE_CASES = [
   { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
   { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
@@ -35,7 +47,7 @@ const USE_CASES = [
   { value: 'before-after', label: 'Before/After', description: 'So sánh trước/sau' },
 ];
 
-// Focus options from original component
+// Focus options
 const FOCUS_OPTIONS = [
   { value: 'full-outfit', label: 'Full Outfit', description: 'Toàn bộ trang phục' },
   { value: 'top', label: 'Top', description: 'Phần trên (áo)' },
@@ -55,7 +67,7 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Tooltip component - show below on hover
+// Tooltip component
 function Tooltip({ children, content }) {
   return (
     <div className="group relative inline-block w-full">
@@ -81,9 +93,11 @@ export default function VirtualTryOnPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('image');
   const [activeMode, setActiveMode] = useState('browser');
+  const [showFinalPrompt, setShowFinalPrompt] = useState(true);
   
   // Ref for container
   const containerRef = useRef(null);
+  const step3ComponentRef = useRef(null);
 
   // Data
   const [characterImage, setCharacterImage] = useState(null);
@@ -92,6 +106,7 @@ export default function VirtualTryOnPage() {
   const [productFocus, setProductFocus] = useState('full-outfit');
   const [selectedOptions, setSelectedOptions] = useState({});
   const [customOptions, setCustomOptions] = useState({});
+  const [expandedCategories, setExpandedCategories] = useState({});
 
   // Results
   const [analysis, setAnalysis] = useState(null);
@@ -114,6 +129,42 @@ export default function VirtualTryOnPage() {
   // Options from API
   const [promptOptions, setPromptOptions] = useState(null);
 
+  // Generation options
+  const [imageCount, setImageCount] = useState(2);
+  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [hasWatermark, setHasWatermark] = useState(false);
+  const [referenceImage, setReferenceImage] = useState(null);
+  const [customPrompt, setCustomPrompt] = useState('');
+
+  // New options tracking
+  const [newOptions, setNewOptions] = useState([]);
+
+  // Advanced generation settings
+  const [generationSteps, setGenerationSteps] = useState(30);
+  const [generationCfgScale, setGenerationCfgScale] = useState(7.5);
+  const [generationSamplingMethod, setGenerationSamplingMethod] = useState('euler');
+  const [generationSeed, setGenerationSeed] = useState(null);
+  const [generationRandomSeed, setGenerationRandomSeed] = useState(true);
+
+  // Analysis metadata
+  const [analysisTime, setAnalysisTime] = useState(null);
+  const [analysisMetadata, setAnalysisMetadata] = useState(null);
+
+  // 💫 NEW: Character description from analysis for precise generation
+  const [characterDescription, setCharacterDescription] = useState(null);
+
+  // 💫 NEW: Grok conversation ID for reusing conversation across steps
+  const [grokConversationId, setGrokConversationId] = useState(null);
+
+  // 💫 NEW: Storage configuration for generated images
+  const [storageType, setStorageType] = useState('cloud'); // 'local' or 'cloud'
+  const [localFolder, setLocalFolder] = useState(null);
+
+  // Session history and advanced features (new)
+  const [userId, setUserId] = useState('user-' + Math.random().toString(36).substr(2, 9)); // Generate random user ID
+  const [referenceImages, setReferenceImages] = useState([]);
+
+  // Providers
   const PROVIDERS = [
     { id: 'grok', label: 'Grok', icon: '🤖' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
@@ -141,6 +192,41 @@ export default function VirtualTryOnPage() {
     setCustomOptions(prev => ({ ...prev, [category]: value }));
   };
 
+  const handleApplyStylePreset = (preset) => {
+    setSelectedOptions(prev => ({
+      ...prev,
+      ...preset.styles
+    }));
+  };
+
+  const handleSaveNewOption = async (category, value) => {
+    if (!value) return;
+    
+    setIsSaving(true);
+    try {
+      await aiOptionsAPI.createOption(
+        category,
+        value,
+        value,
+        `AI recommended ${category}`,
+        {}
+      );
+
+      // Mark category as saved - this will hide the save button for this category in NewOptionsDetected
+      if (!newOptions.includes(category)) {
+        setNewOptions(prev => [...prev, category]);
+      }
+
+      // Refresh options from database so newly saved options are in the list
+      const options = await aiOptionsAPI.getAllOptions();
+      setPromptOptions(options);
+    } catch (error) {
+      console.error('Save failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // ============================================================
   // ACTIONS
   // ============================================================
@@ -149,12 +235,15 @@ export default function VirtualTryOnPage() {
     if (!characterImage?.file || !productImage?.file) return;
 
     setIsAnalyzing(true);
-    setCurrentStep(2);
-
+    const startTime = Date.now();
+    
     try {
+      const charBase64 = await fileToBase64(characterImage.file);
+      const prodBase64 = await fileToBase64(productImage.file);
+
       const analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
-        characterImage.file,
-        productImage.file,
+        charBase64,
+        prodBase64,
         { 
           provider: browserProvider, 
           scene: selectedOptions.scene || 'studio', 
@@ -166,17 +255,57 @@ export default function VirtualTryOnPage() {
         }
       );
 
+      const endTime = Date.now();
+      const duration = Math.round((endTime - startTime) / 1000);
+
       if (analysisResponse.success && analysisResponse.data) {
         setAnalysisRaw(analysisResponse.data);
-        setAnalysis(analysisResponse.data);
         
-        const charBase64 = await fileToBase64(characterImage.file);
-        const prodBase64 = await fileToBase64(productImage.file);
+        // Restructure data for components:
+        // - analysis.analysis = raw response text (for display)
+        // - analysis.recommendations = parsed structured data
+        // - analysis.characterProfile, productDetails = nested objects
+        const analysisWithParsing = {
+          analysis: analysisResponse.data.analysis || analysisResponse.data,
+          recommendations: analysisResponse.data.recommendations || {},
+          characterProfile: analysisResponse.data.recommendations?.characterProfile || {},
+          productDetails: analysisResponse.data.recommendations?.productDetails || {},
+          analysisScore: analysisResponse.data.recommendations?.analysis || {},
+        };
+        
+        setAnalysis(analysisWithParsing);
+        console.log('📊 Analysis saved to state:', analysisWithParsing);
+        console.log('🎯 Recommendations available:', analysisWithParsing.analysis?.recommendations);
+        
+        // Store response length for display
+        const responseLength = typeof analysisResponse.data.analysis === 'string' 
+          ? analysisResponse.data.analysis.length 
+          : JSON.stringify(analysisResponse.data).length;
+        
+        setAnalysisMetadata({
+          duration,
+          responseLength,
+          timestamp: new Date().toISOString(),
+          provider: browserProvider
+        });
+        setAnalysisTime(duration);
         
         setStoredImages({
           character: charBase64,
           product: prodBase64
         });
+        
+        // 💫 NEW: Save Grok conversation ID for reuse in generation step
+        if (analysisResponse.data.grokConversationId) {
+          console.log('💾 Saving Grok conversation ID:', analysisResponse.data.grokConversationId);
+          setGrokConversationId(analysisResponse.data.grokConversationId);
+        }
+        
+        // 💫 NEW: Save character description for generation
+        if (analysisResponse.data.characterDescription) {
+          console.log('📝 Saving character description:', analysisResponse.data.characterDescription.substring(0, 80));
+          setCharacterDescription(analysisResponse.data.characterDescription);
+        }
         
         setCurrentStep(2);
       }
@@ -188,40 +317,88 @@ export default function VirtualTryOnPage() {
   };
 
   const handleApplyRecommendation = () => {
-    if (analysis?.analysis?.recommendations) {
-      const rec = analysis.analysis.recommendations;
-      const newOptions = { ...selectedOptions };
-      if (rec.scene) newOptions.scene = rec.scene;
-      if (rec.lighting) newOptions.lighting = rec.lighting;
-      if (rec.mood) newOptions.mood = rec.mood;
-      if (rec.style) newOptions.style = rec.style;
-      if (rec.colorPalette) newOptions.colorPalette = rec.colorPalette;
-      if (rec.cameraAngle) newOptions.cameraAngle = rec.cameraAngle;
-      setSelectedOptions(newOptions);
+    if (analysis?.recommendations) {
+      console.log('🔄 handleApplyRecommendation called');
+      const rec = analysis.recommendations;
+      console.log('📥 Recommendations from analysis:', rec);
+      const newOpts = { ...selectedOptions };
+      // Extract .choice value from nested {choice, reason, alternatives} structure
+      if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
+      if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
+      if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
+      if (rec.style?.choice) newOpts.style = rec.style.choice;
+      if (rec.colorPalette?.choice) newOpts.colorPalette = rec.colorPalette.choice;
+      if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
+      console.log('✅ New options to apply:', newOpts);
+      setSelectedOptions(newOpts);
+      
+      // Expand all categories when applying recommendations
+      const allCategories = {};
+      Object.keys(STYLE_CATEGORIES).forEach(key => {
+        allCategories[key] = true;
+      });
+      console.log('📂 Expanding categories from handleApplyRecommendation:', allCategories);
+      setExpandedCategories(allCategories);
+    } else {
+      console.log('❌ No recommendations found in handleApplyRecommendation');
     }
-    setCurrentStep(3);
+    setCurrentStep(3); // Go to merged Style & Prompt step
   };
 
-  const handleSaveRecommendations = async () => {
-    if (!analysis?.analysis?.recommendations) return;
-    
-    setIsSaving(true);
-    try {
-      const rec = analysis.analysis.recommendations;
-      if (rec.scene) await aiOptionsAPI.createOption('scene', rec.scene, rec.scene, `AI recommended scene`, {});
-      if (rec.lighting) await aiOptionsAPI.createOption('lighting', rec.lighting, rec.lighting, `AI recommended lighting`, {});
-      if (rec.mood) await aiOptionsAPI.createOption('mood', rec.mood, rec.mood, `AI recommended mood`, {});
-      if (rec.colorPalette) await aiOptionsAPI.createOption('colorPalette', rec.colorPalette, rec.colorPalette, `AI recommended color palette`, {});
-      
-      const options = await aiOptionsAPI.getAllOptions();
-      setPromptOptions(options);
-      alert('Recommendations saved to database!');
-    } catch (error) {
-      console.error('Save failed:', error);
-    } finally {
-      setIsSaving(false);
+  // CRITICAL: Memoize this callback to prevent infinite loop in Step3EnhancedWithSession
+  // Without useCallback, the function reference changes every render, causing useEffect dependencies to trigger infinitely
+  const handlePromptChange = useCallback((promptData) => {
+    console.log('📥 Parent received prompt from Step3:', promptData);
+    // Handle both string and object formats for backward compatibility
+    if (typeof promptData === 'string') {
+      setGeneratedPrompt({ positive: promptData, negative: '' });
+    } else if (promptData && typeof promptData === 'object') {
+      setGeneratedPrompt(promptData);
     }
-  };
+  }, []); // Empty dependency array - function never changes after first render
+
+  // Auto-apply recommendations when entering Step 3 and expand categories
+  useEffect(() => {
+    if (currentStep === 3) {
+      console.log('✅ Step 3 Entered');
+      console.log('📊 Current Analysis:', analysis);
+      console.log('🎯 Current selectedOptions:', selectedOptions);
+      
+      // Check top-level recommendations, not nested
+      if (analysis?.recommendations) {
+        console.log('✓ Found recommendations at top level:', analysis.recommendations);
+        
+        // Always expand all style categories when in Step 3 with recommendations
+        const allCategories = {};
+        Object.keys(STYLE_CATEGORIES).forEach(key => {
+          allCategories[key] = true;
+        });
+        console.log('📂 Expanding all categories in Step 3:', allCategories);
+        setExpandedCategories(allCategories);
+        
+        // Only auto-apply if options are empty
+        if (Object.keys(selectedOptions).length === 0) {
+          console.log('📝 Applying recommendations...');
+          const rec = analysis.recommendations;
+          const newOpts = { ...selectedOptions };
+          // Extract .choice value from nested {choice, reason, alternatives} structure
+          if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
+          if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
+          if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
+          if (rec.style?.choice) newOpts.style = rec.style.choice;
+          if (rec.colorPalette?.choice) newOpts.colorPalette = rec.colorPalette.choice;
+          if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
+          
+          console.log('✅ Setting selectedOptions to:', newOpts);
+          setSelectedOptions(newOpts);
+        } else {
+          console.log('⚠️ Options already selected:', selectedOptions);
+        }
+      } else {
+        console.log('❌ No recommendations found. Analysis:', analysis);
+      }
+    }
+  }, [currentStep, analysis]);
 
   const handleBuildPrompt = async () => {
     if (!analysis?.analysis) return;
@@ -271,46 +448,98 @@ export default function VirtualTryOnPage() {
   };
 
   const handleStartGeneration = async () => {
-    if (!generatedPrompt?.positive) return;
+    console.log('🔘 Generate button clicked!');
+    console.log('   currentStep:', currentStep);
+    console.log('   generatedPrompt:', generatedPrompt);
+    console.log('   generatedPrompt?.positive:', generatedPrompt?.positive);
+    console.log('   activeMode:', activeMode);
+    console.log('   storedImages:', storedImages);
+    
+    if (!generatedPrompt?.positive) {
+      console.warn('⚠️ No generated prompt found!');
+      console.warn('   generatedPrompt is:', generatedPrompt);
+      console.log('📌 You need to complete Step 3 first:');
+      console.log('   1. Select style options in the left sidebar');
+      console.log('   2. Wait for the prompt to generate (should see blue/green/red boxes)');
+      console.log('   3. Click "Next Step" to go to Step 4');
+      return;
+    }
+    
     setIsGenerating(true);
-    setCurrentStep(5);
+    setCurrentStep(4);
 
     try {
+      const finalPrompt = generatedPrompt.positive + (customPrompt ? '\n' + customPrompt : '');
+      
+      console.log('🎨 Starting generation...');
+      console.log('   Mode:', activeMode);
+      console.log('   Provider:', browserProvider);
+      console.log('   Has stored images:', !!storedImages.character && !!storedImages.product);
+      console.log('   Has prompt:', !!finalPrompt);
+      
       let response;
       
       if (activeMode === 'browser' && storedImages.character && storedImages.product) {
-        response = await browserAutomationAPI.generateBrowserOnly(
-          generatedPrompt.positive,
-          {
-            provider: browserProvider,
-            negativePrompt: generatedPrompt.negative,
-            scene: selectedOptions.scene || 'studio',
-            lighting: selectedOptions.lighting || 'soft-diffused',
-            mood: selectedOptions.mood || 'confident',
-            style: selectedOptions.style || 'minimalist',
-            colorPalette: selectedOptions.colorPalette || 'neutral',
-            cameraAngle: selectedOptions.cameraAngle || 'eye-level',
-            aspectRatio: selectedOptions.aspectRatio || '1:1',
-            characterImageBase64: storedImages.character,
-            productImageBase64: storedImages.product
-          }
-        );
+        console.log('✅ Using browser generation mode with Grok');
+        const refBase64 = referenceImage?.file ? await fileToBase64(referenceImage.file) : null;
+        
+        const genOptions = {
+          provider: browserProvider,
+          negativePrompt: generatedPrompt.negative,
+          scene: selectedOptions.scene || 'studio',
+          lighting: selectedOptions.lighting || 'soft-diffused',
+          mood: selectedOptions.mood || 'confident',
+          style: selectedOptions.style || 'minimalist',
+          colorPalette: selectedOptions.colorPalette || 'neutral',
+          cameraAngle: selectedOptions.cameraAngle || 'eye-level',
+          aspectRatio,
+          characterImageBase64: storedImages.character,
+          productImageBase64: storedImages.product,
+          referenceImageBase64: refBase64,
+          imageCount,
+          hasWatermark,
+          grokConversationId, // Pass conversation ID to reuse
+          grokUrl: null, // Will be set based on conversation ID
+          // 💫 NEW: Pass character description for better generation
+          characterDescription,
+          // Storage configuration
+          storageType,
+          localFolder
+        };
+        
+        console.log('📤 Sending generation request to backend...');
+        response = await browserAutomationAPI.generateBrowserOnly(finalPrompt, genOptions);
+        console.log('📥 Generation response:', response);
       } else {
+        console.log('⚠️ Fallback to unified flow (images may not be stored)');
+        console.log('   activeMode:', activeMode);
+        console.log('   storedImages.character:', !!storedImages.character);
+        console.log('   storedImages.product:', !!storedImages.product);
+        
+        const refBase64 = referenceImage?.file ? await fileToBase64(referenceImage.file) : null;
+        
         response = await unifiedFlowAPI.generateImages({
-          prompt: generatedPrompt.positive,
+          prompt: finalPrompt,
           negativePrompt: generatedPrompt.negative,
           options: {
-            imageCount: selectedOptions.imageCount || 2,
-            aspectRatio: selectedOptions.aspectRatio || '1:1'
+            imageCount,
+            aspectRatio,
+            hasWatermark,
+            referenceImage: refBase64
           }
         });
       }
 
-      if (response.success && response.data?.generatedImages) {
+      if (response?.success && response?.data?.generatedImages) {
+        console.log('✅ Generation successful! Generated images:', response.data.generatedImages);
         setGeneratedImages(response.data.generatedImages);
+      } else {
+        console.error('❌ Generation response missing expected data:', response);
       }
     } catch (error) {
-      console.error('Generation failed:', error);
+      console.error('❌ Generation failed:', error);
+      console.error('   Error message:', error.message);
+      console.error('   Error details:', error);
     } finally {
       setIsGenerating(false);
     }
@@ -329,6 +558,22 @@ export default function VirtualTryOnPage() {
     setGeneratedPrompt(null);
     setGeneratedImages([]);
     setStoredImages({ character: null, product: null });
+    setImageCount(2);
+    setAspectRatio('1:1');
+    setHasWatermark(false);
+    setReferenceImage(null);
+    setReferenceImages([]);
+    setCustomPrompt('');
+    setNewOptions([]);
+    setGenerationSteps(30);
+    setGenerationCfgScale(7.5);
+    setGenerationSamplingMethod('euler');
+    setGenerationSeed(null);
+    setGenerationRandomSeed(true);
+    setGrokConversationId(null);
+    setCharacterDescription(null);
+    setStorageType('cloud');
+    setLocalFolder(null);
   };
 
   // ============================================================
@@ -341,13 +586,12 @@ export default function VirtualTryOnPage() {
 
   const showUseCaseFocusInfo = currentStep >= 2;
 
-  // Simple CSS height - calc(100vh - 56px header)
   const mainBodyStyle = {
     height: 'calc(100vh - 56px)'
   };
 
   return (
-    <div className="bg-gray-900 text-white flex flex-col" data-main-body>
+    <div className="bg-gray-900 text-white flex flex-col" ref={containerRef} style={mainBodyStyle} data-main-body>
       {/* ==================== HEADER ==================== */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0 h-14">
         <div className="flex items-center justify-between h-full">
@@ -413,8 +657,8 @@ export default function VirtualTryOnPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex flex-1 overflow-hidden" ref={containerRef} style={mainBodyStyle}>
-        {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* ==================== LEFT TOOLBAR: Mode + Provider ==================== */}
         <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
           <button
             onClick={() => setActiveMode('browser')}
@@ -454,9 +698,10 @@ export default function VirtualTryOnPage() {
           </button>
         </div>
 
-        {/* ==================== LEFT SIDEBAR 2: Options ==================== */}
-        <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0">
+        {/* ==================== LEFT SIDEBAR: Options ==================== */}
+        <div className={`${currentStep === 3 ? 'w-80' : 'w-56'} bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
           <div className="p-3 space-y-4 overflow-y-auto flex-1">
+            {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
               <>
                 <div>
@@ -505,19 +750,165 @@ export default function VirtualTryOnPage() {
               </>
             )}
 
-            {currentStep >= 3 && (
+            {/* Step 2: Image Previews */}
+            {currentStep === 2 && (characterImage || productImage) && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
-                  <Sliders className="w-3 h-3" /> Style
+                  <Image className="w-3 h-3" /> Uploaded Images
                 </h3>
-                <StyleCustomizer
-                  options={promptOptions}
-                  selectedOptions={selectedOptions}
-                  onOptionChange={handleOptionChange}
-                  customOptions={customOptions}
-                  onCustomOptionChange={handleCustomOptionChange}
-                  analysis={analysis?.analysis}
+                <div className="space-y-2">
+                  {characterImage?.preview && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">👤 Character</p>
+                      <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                        <img 
+                          src={characterImage.preview} 
+                          alt="Character" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {productImage?.preview && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">👕 Product</p>
+                      <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                        <img 
+                          src={productImage.preview} 
+                          alt="Product" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Style Options - Inline Expansion */}
+            {currentStep === 3 && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
+                  <Wand2 className="w-3 h-3" /> Style Options
+                </h3>
+                <div className="space-y-2">
+                  {Object.entries(STYLE_CATEGORIES).map(([key, category]) => (
+                    <div key={key} className="border border-gray-700 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }))}
+                        className="w-full px-2 py-2 bg-gray-700 hover:bg-gray-600 transition flex items-center justify-between text-xs font-medium text-white"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm">{category.icon}</span>
+                          <span>{category.label}</span>
+                        </span>
+                        {expandedCategories[key] ? (
+                          <ChevronRight className="w-3 h-3 transform rotate-90" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                      </button>
+
+                      {expandedCategories[key] && (
+                        <div className="p-2 bg-gray-800 space-y-1 max-h-40 overflow-y-auto">
+                          {category.options.map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => setSelectedOptions(prev => ({ ...prev, [key]: opt.value }))}
+                              className={`w-full px-2 py-1 text-xs rounded text-left transition ${
+                                selectedOptions[key] === opt.value
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              }`}
+                              title={opt.label}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Generation Options */}
+            {currentStep === 4 && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                  <Rocket className="w-3 h-3" /> Generation
+                </h3>
+                <GenerationOptions
+                  imageCount={imageCount}
+                  onImageCountChange={setImageCount}
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
+                  hasWatermark={hasWatermark}
+                  onWatermarkChange={setHasWatermark}
+                  referenceImage={referenceImage}
+                  onReferenceImageChange={setReferenceImage}
+                  steps={generationSteps}
+                  onStepsChange={setGenerationSteps}
+                  cfgScale={generationCfgScale}
+                  onCfgScaleChange={setGenerationCfgScale}
+                  samplingMethod={generationSamplingMethod}
+                  onSamplingMethodChange={setGenerationSamplingMethod}
+                  seed={generationSeed}
+                  onSeedChange={setGenerationSeed}
+                  randomSeed={generationRandomSeed}
+                  onRandomSeedChange={setGenerationRandomSeed}
                 />
+
+                {/* 💫 NEW: Storage Configuration */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
+                    <Save className="w-3 h-3" /> Image Storage
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <button
+                      onClick={() => setStorageType('cloud')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        storageType === 'cloud'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      ☁️ Cloud (ImgBB)
+                    </button>
+                    <button
+                      onClick={() => setStorageType('local')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        storageType === 'local'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      💾 Local Folder
+                    </button>
+                  </div>
+
+                  {storageType === 'local' && (
+                    <div>
+                      <label className="text-xs text-gray-400 mb-2 block">Folder Path</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., ./generated-images"
+                        value={localFolder || ''}
+                        onChange={(e) => setLocalFolder(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Default: ./generated-images</p>
+                    </div>
+                  )}
+
+                  {storageType === 'cloud' && (
+                    <div className="text-xs text-gray-400">
+                      📁 Auto-folder: <span className="text-purple-400 font-mono">{new Date().toISOString().split('T')[0]}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -526,7 +917,7 @@ export default function VirtualTryOnPage() {
         {/* ==================== CENTER + RIGHT ==================== */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 flex min-h-0 overflow-hidden">
-            {/* CENTER */}
+            {/* ==================== CENTER MAIN CONTENT ==================== */}
             <div className="flex-1 flex flex-col min-w-0 bg-gray-900 overflow-hidden">
               {showUseCaseFocusInfo && (
                 <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
@@ -541,7 +932,8 @@ export default function VirtualTryOnPage() {
               )}
 
               <div className="flex-1 p-4 overflow-auto">
-                <div className="max-w-3xl mx-auto">
+                <div className="max-w-4xl mx-auto">
+                  {/* Step 1: Upload */}
                   {currentStep === 1 && (
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
@@ -590,62 +982,68 @@ export default function VirtualTryOnPage() {
                     </div>
                   )}
 
-                  {currentStep === 2 && analysisRaw && (
-                    <div className="space-y-4">
-                      <div className="bg-gray-800 rounded-xl p-4">
-                        <h3 className="text-sm font-semibold text-purple-400 mb-2">🤖 AI Analysis Result</h3>
-                        <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-96 bg-gray-900 rounded-lg p-3">
-                          {typeof analysisRaw === 'string' ? analysisRaw : JSON.stringify(analysisRaw, null, 2)}
-                        </pre>
-                      </div>
-
-                      {analysis?.analysis?.recommendations && (
-                        <div className="bg-gray-800 rounded-xl p-4">
-                          <h3 className="text-sm font-semibold text-green-400 mb-2">📋 Extracted Keywords</h3>
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(analysis.analysis.recommendations).map(([key, value]) => (
-                              <span key={key} className="px-2 py-1 bg-gray-700 rounded text-xs">
-                                {key}: <span className="text-purple-400">{value}</span>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  {/* Step 2: Analysis */}
+                  {currentStep === 2 && analysis && (
+                    <AnalysisBreakdown
+                      analysis={analysis}
+                      newOptions={newOptions}
+                      onSaveOption={handleSaveNewOption}
+                      isSaving={isSaving}
+                      metadata={analysisMetadata}
+                    />
                   )}
 
-                  {generatedImages.length > 0 && (
-                    <div className="mb-4">
-                      <h3 className="text-sm font-medium text-gray-400 mb-2">Generated ({generatedImages.length})</h3>
-                      <div className="grid grid-cols-4 gap-2">
-                        {generatedImages.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img src={img.url} alt={`Gen ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center">
-                              <button onClick={() => window.open(img.url, '_blank')} className="p-1 bg-white/20 rounded">
-                                <Image className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+            {/* Step 3: Style & Prompt (Merged) */}
+            {currentStep === 3 && analysis && (
+              <Step3EnhancedWithSession
+                ref={step3ComponentRef}
+                characterImage={characterImage}
+                productImage={productImage}
+                selectedOptions={selectedOptions}
+                onOptionChange={handleOptionChange}
+                generatedPrompt={generatedPrompt}
+                onPromptChange={handlePromptChange}
+                useCase={useCase}
+                userId={userId}
+                analysis={analysis}
+                characterDescription={characterDescription}
+              />
+            )}
+
+
+
+                  {/* Step 4: Generation Result */}
+                  {currentStep === 4 && (
+                    <GenerationResult
+                      images={generatedImages}
+                      isGenerating={isGenerating}
+                      onRegenerate={handleStartGeneration}
+                      generationPrompt={generatedPrompt?.positive}
+                      aspectRatio={aspectRatio}
+                      styleOptions={selectedOptions}
+                      isRegenerating={isGenerating}
+                      characterImage={characterImage?.preview}
+                      productImage={productImage?.preview}
+                    />
                   )}
 
-                  {(isAnalyzing || isGenerating) && (
-                    <div className="flex items-center justify-center py-8">
+                  {(isAnalyzing) && (
+                    <div className="flex items-center justify-center py-12">
                       <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-                      <span className="ml-2 text-gray-400">{isAnalyzing ? 'Analyzing...' : 'Generating...'}</span>
+                      <span className="ml-2 text-gray-400">Analyzing...</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ACTION BAR */}
+              {/* ==================== ACTION BAR ==================== */}
               <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
-                <div className="max-w-3xl mx-auto flex items-center justify-between">
+                <div className="max-w-4xl mx-auto flex items-center justify-between">
                   <div className="text-xs text-gray-400">
-                    {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
+                    {currentStep === 1 && (isReadyForAnalysis ? '✅ Ready to analyze' : '⬆️ Upload 2 images')}
+                    {currentStep === 2 && '📊 Analysis complete'}
+                    {currentStep === 3 && '🎨 Style & Prompt editor'}
+                    {currentStep === 4 && '🚀 Generate images'}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -653,46 +1051,81 @@ export default function VirtualTryOnPage() {
                       <button
                         onClick={handleStartAnalysis}
                         disabled={!isReadyForAnalysis || isAnalyzing}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isAnalyzing ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm font-medium">Analyzing...</span></>
+                          <><Loader2 className="w-4 h-4 animate-spin" /><span>Analyzing...</span></>
                         ) : (
-                          <><Sparkles className="w-4 h-4" /><span className="text-sm font-medium">Start AI</span></>
+                          <><Sparkles className="w-4 h-4" /><span>Start Analysis</span></>
                         )}
                       </button>
                     )}
 
                     {currentStep === 2 && (
-                      <button onClick={handleApplyRecommendation} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700">
-                        <Wand2 className="w-4 h-4" /><span className="text-sm font-medium">Apply Recommendations</span>
+                      <button
+                        onClick={() => {
+                          handleApplyRecommendation();
+                          setCurrentStep(3);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                        <span>Apply AI Recommendation</span>
                       </button>
                     )}
 
-                    {currentStep === 3 && !generatedPrompt && !isLoading && (
-                      <button onClick={handleBuildPrompt} disabled={!isReadyForPrompt} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
-                        <FileText className="w-4 h-4" /><span className="text-sm font-medium">Build Prompt</span>
-                      </button>
-                    )}
-
-                    {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
+                    {currentStep === 3 && (
                       <div className="flex items-center gap-2">
-                        <button onClick={handleEnhancePrompt} disabled={isLoading} className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50">
-                          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                        <button
+                          onClick={() => step3ComponentRef.current?.triggerVariations()}
+                          className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-sm"
+                        >
+                          <Shuffle className="w-4 h-4" />
+                          <span>Variations</span>
                         </button>
-                        <button onClick={handleStartGeneration} disabled={!isReadyForGeneration || isGenerating} className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
-                          {isGenerating ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm font-medium">Generating...</span></>
-                          ) : (
-                            <><Rocket className="w-4 h-4" /><span className="text-sm font-medium">Generate</span></>
-                          )}
+                        <button
+                          onClick={() => step3ComponentRef.current?.triggerOptimize()}
+                          className="flex items-center gap-2 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-700 text-sm"
+                        >
+                          <Zap className="w-4 h-4" />
+                          <span>Optimize</span>
+                        </button>
+                        <div className="flex-1" />
+                        <button
+                          onClick={handleBuildPrompt}
+                          disabled={isLoading || !analysis?.analysis}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                          <span>{isLoading ? 'Building...' : 'Next Step'}</span>
                         </button>
                       </div>
                     )}
 
+                    {currentStep === 4 && generatedImages.length === 0 && (
+                      <>
+                        {console.log('✅ Step 4 render - showing Generate button (generatedImages.length:', generatedImages.length, ')')}
+                        <button
+                          onClick={handleStartGeneration}
+                          disabled={isGenerating}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {isGenerating ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /><span>Generating...</span></>
+                          ) : (
+                            <><Rocket className="w-4 h-4" /><span>Generate Images</span></>
+                          )}
+                        </button>
+                      </>
+                    )}
+
                     {generatedImages.length > 0 && (
-                      <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600">
-                        <RefreshCw className="w-4 h-4" /><span className="text-sm font-medium">New</span>
+                      <button
+                        onClick={handleReset}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Start New</span>
                       </button>
                     )}
                   </div>
@@ -700,31 +1133,292 @@ export default function VirtualTryOnPage() {
               </div>
             </div>
 
-            {/* RIGHT SIDEBAR */}
-            <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
-              <div className="p-3 space-y-4">
+            {/* ==================== RIGHT SIDEBAR ==================== */}
+            <div className="w-60 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
+              <div className="p-4 space-y-4">
+                {/* Step 2: Character + Product Summary */}
                 {currentStep === 2 && analysis && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">💾 Save Recommendations</h3>
-                    <button onClick={handleSaveRecommendations} disabled={isSaving} className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600/20 text-green-400 border border-green-600/50 rounded-lg hover:bg-green-600/30 disabled:opacity-50">
-                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      <span className="text-xs">Save to Database</span>
-                    </button>
+                  <>
+                    <CharacterProductSummary
+                      analysis={analysis}
+                      characterImage={characterImage}
+                      productImage={productImage}
+                      onSaveNewOption={handleSaveNewOption}
+                      isSaving={isSaving}
+                    />
+                    
+                    <NewOptionsDetected
+                      analysis={analysis}
+                      existingOptions={promptOptions}
+                      newOptions={newOptions}
+                      onSaveOption={handleSaveNewOption}
+                      isSaving={isSaving}
+                    />
+                  </>
+                )}
+
+                {/* Step 3: Preview Images */}
+                {currentStep === 3 && (
+                  <>
+                    {/* Character & Product Preview */}
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 font-medium">👤 Character</p>
+                          <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                            {characterImage?.preview ? (
+                              <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1 font-medium">👕 Product</p>
+                          <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                            {productImage?.preview ? (
+                              <img src={productImage.preview} alt="Product" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Reference Images */}
+                      <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700">
+                        <h4 className="text-xs font-semibold text-white mb-2">📸 Style References</h4>
+                        <div className="grid grid-cols-3 gap-1.5 mb-2">
+                          {referenceImages.map((ref, idx) => (
+                            <div key={ref.id} className="relative bg-gray-700 rounded overflow-hidden group aspect-square">
+                              <img src={ref.base64} alt="Ref" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => setReferenceImages(referenceImages.filter((_, i) => i !== idx))}
+                                className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        {referenceImages.length < 3 && (
+                          <label className="flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs cursor-pointer transition font-medium">
+                            <Upload className="w-3 h-3" />
+                            Add
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                if (referenceImages.length + files.length > 3) {
+                                  alert('Max 3 reference images');
+                                  return;
+                                }
+                                files.forEach(file => {
+                                  const reader = new FileReader();
+                                  reader.onload = (evt) => {
+                                    setReferenceImages(prev => [...prev, {
+                                      id: `ref-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                      base64: evt.target.result,
+                                      name: file.name
+                                    }]);
+                                  };
+                                  reader.readAsDataURL(file);
+                                });
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Deviation Indicator */}
+                      {analysis?.recommendations && (
+                        <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 space-y-2">
+                          <h3 className="text-xs font-semibold text-blue-300">✨ AI Recommendations vs Current</h3>
+                          <div className="space-y-1.5 text-xs">
+                            {Object.entries(STYLE_CATEGORIES).map(([categoryKey]) => {
+                              const aiRecObj = analysis.recommendations[categoryKey];
+                              const aiRecChoice = aiRecObj?.choice;
+                              const current = selectedOptions[categoryKey];
+                              const changed = current && aiRecChoice && current !== aiRecChoice;
+                              
+                              // Show AI recommendations when available, OR user-selected values (style, colorPalette)
+                              // style and colorPalette are user-selected, not from Grok analysis
+                              const isUserSelectedOnly = (categoryKey === 'style' || categoryKey === 'colorPalette');
+                              if (!aiRecChoice && !isUserSelectedOnly) return null;
+                              
+                              // Determine what to display
+                              const displayValue = aiRecChoice || (isUserSelectedOnly && current);
+                              if (!displayValue) return null;
+                              
+                              return (
+                                <div key={categoryKey} className={`flex items-center justify-between px-2 py-1.5 rounded ${
+                                  changed ? 'bg-yellow-500/20 border border-yellow-500/30' : 
+                                  isUserSelectedOnly ? 'bg-purple-700/20 border border-purple-500/20' : 'bg-gray-700/30'
+                                }`}>
+                                  <span className="text-gray-400">{categoryKey}</span>
+                                  <div className="flex items-center gap-1 text-right">
+                                    <span className={changed ? 'text-yellow-300' : isUserSelectedOnly ? 'text-purple-300' : 'text-green-400'}>
+                                      {displayValue}
+                                    </span>
+                                    {changed && (
+                                      <>
+                                        <span className="text-gray-500">→</span>
+                                        <span className="text-yellow-400 font-medium">{current}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Step 3+: Style Summary */}
+                {currentStep >= 3 && currentStep !== 3 && Object.keys(selectedOptions).length > 0 && (
+                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700 space-y-2">
+                    <h3 className="text-xs font-semibold text-purple-300">✨ Current Style</h3>
+                    <div className="space-y-1 text-xs">
+                      {Object.entries(selectedOptions).map(([key, value]) => (
+                        value && (
+                          <div key={key} className="flex justify-between">
+                            <span className="text-gray-500">{key}</span>
+                            <span className="text-purple-300 font-medium">{value}</span>
+                          </div>
+                        )
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {currentStep >= 3 && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Style Options</h3>
-                    <StyleCustomizer options={promptOptions} selectedOptions={selectedOptions} onOptionChange={handleOptionChange} customOptions={customOptions} onCustomOptionChange={handleCustomOptionChange} recommendations={analysis?.analysis?.recommendations} analysis={analysis?.analysis} />
+                {/* Step 3+: Prompt Summary */}
+                {currentStep >= 3 && currentStep !== 3 && generatedPrompt && (
+                  <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-lg p-3 border border-purple-700/50 space-y-2">
+                    <h3 className="text-xs font-semibold text-blue-300">📝 Prompt Summary</h3>
+                    <div className="text-xs text-gray-400 line-clamp-4 leading-relaxed">
+                      {generatedPrompt.positive}
+                    </div>
+                    {generatedPrompt.negative && (
+                      <div className="pt-2 border-t border-purple-700/50">
+                        <div className="text-xs text-gray-500 mb-1">Negative:</div>
+                        <div className="text-xs text-gray-400 line-clamp-2">
+                          {generatedPrompt.negative}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {generatedPrompt && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Prompt</h3>
-                    <div className="bg-gray-900 rounded-lg p-2 text-xs text-gray-300 max-h-32 overflow-auto">{generatedPrompt.positive}</div>
-                  </div>
+                {/* Step 4: Generation Info */}
+                {currentStep === 4 && (
+                  <>
+                    {/* Preview Images */}
+                    {(characterImage || productImage) && (
+                      <div className="space-y-3 mb-4">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1 font-medium">👤 Character</p>
+                            <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                              {characterImage?.preview ? (
+                                <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1 font-medium">👕 Product</p>
+                            <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                              {productImage?.preview ? (
+                                <img src={productImage.preview} alt="Product" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generation Settings */}
+                    <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700 space-y-2">
+                      <h3 className="text-xs font-semibold text-gray-300">⚙️ Generation Settings</h3>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Images:</span>
+                          <span className="text-gray-300">{imageCount}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Aspect Ratio:</span>
+                          <span className="text-gray-300">{aspectRatio}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Watermark:</span>
+                        <span className="text-gray-300">{hasWatermark ? 'Yes' : 'No'}</span>
+                      </div>
+                      {referenceImage && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Reference:</span>
+                          <span className="text-green-400">✓ Added</span>
+                        </div>
+                      )}
+                    </div>
+                    </div>
+
+                    {/* Final Prompt Display */}
+                    {generatedPrompt?.positive && (
+                      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                        <button
+                          onClick={() => setShowFinalPrompt(!showFinalPrompt)}
+                          className="w-full px-3 py-2.5 flex items-center justify-between bg-gray-700 hover:bg-gray-600 transition"
+                        >
+                          <span className="flex items-center gap-2 text-xs font-medium text-white">
+                            <FileText className="w-3 h-3 text-blue-400" />
+                            Final Prompt
+                          </span>
+                          {showFinalPrompt ? (
+                            <ChevronUp className="w-3 h-3 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 text-gray-400" />
+                          )}
+                        </button>
+                        
+                        {showFinalPrompt && (
+                          <div className="p-3 space-y-2.5">
+                            <div>
+                              <h4 className="text-xs font-semibold text-blue-400 mb-1.5">✅ Positive</h4>
+                              <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 max-h-32 overflow-y-auto border border-blue-900/30">
+                                {generatedPrompt.positive}
+                              </div>
+                            </div>
+                            
+                            {generatedPrompt.negative && (
+                              <div>
+                                <h4 className="text-xs font-semibold text-red-400 mb-1.5">❌ Negative</h4>
+                                <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 max-h-20 overflow-y-auto border border-red-900/30">
+                                  {generatedPrompt.negative}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {customPrompt && (
+                              <div>
+                                <h4 className="text-xs font-semibold text-purple-400 mb-1.5">+ Custom</h4>
+                                <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 border border-purple-900/30">
+                                  {customPrompt}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

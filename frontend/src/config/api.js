@@ -3,7 +3,7 @@ import axios from 'axios';
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const API_CONFIG = {
-  TIMEOUT: 90000, // 90 seconds
+  TIMEOUT: 600000, // 600 seconds = 10 minutes (for long-running browser automation)
   RETRY: {
     MAX_RETRIES: 3,
     RETRY_DELAY: 1000, // 1 second

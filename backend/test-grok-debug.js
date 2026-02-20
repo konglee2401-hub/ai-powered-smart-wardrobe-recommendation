@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import GrokService from './services/browser/grokService.js';
+import GrokServiceV2 from './services/browser/grokServiceV2.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function main() {
   console.log('\n🔍 GROK DEBUG - Checking page content\n');
 
-  const service = new GrokService({
+  const service = new GrokServiceV2({
     headless: false
   });
 

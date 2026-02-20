@@ -8,7 +8,9 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fieldSize: 50 * 1024 * 1024,      // 50MB - for large form fields (base64 images)
+    fieldNameSize: 200,                // 200 bytes - for field names
+    fileSize: 50 * 1024 * 1024         // 50MB - increased from 10MB
   }
 });
 

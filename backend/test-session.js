@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import ZAIChatService from './services/browser/zaiChatService.js';
-import GrokService from './services/browser/grokService.js';
+import GrokServiceV2 from './services/browser/grokServiceV2.js';
 import chalk from 'chalk';
 
 console.log(chalk.cyan('='.repeat(80)));
@@ -162,7 +162,7 @@ async function testSessionManagement() {
   console.log('   Z.AI:');
   console.log('     1. Run: node -e "import ZAIChatService from \'./services/browser/zaiChatService.js\'; const s = new ZAIChatService({headless: false}); await s.launch(); await s.goto(\'https://chat.z.ai\'); console.log(\'Login manually\'); await new Promise(r => setTimeout(r, 60000)); await s.saveSession(); await s.close();"');
   console.log('   Grok:');
-  console.log('     1. Run: node -e "import GrokService from \'./services/browser/grokService.js\'; const s = new GrokService({headless: false}); await s.launch(); await s.goto(\'https://grok.com\'); console.log(\'Login manually\'); await new Promise(r => setTimeout(r, 120000)); await s.saveSession(); await s.close();"');
+  console.log('     1. Run: node -e "import GrokServiceV2 from \'./services/browser/grokServiceV2.js\'; const s = new GrokServiceV2({headless: false}); await s.launch(); await s.initialize(); console.log(\'Login manually\'); await new Promise(r => setTimeout(r, 120000)); await s.saveSession(); await s.close();"');
 }
 
 // Run the test

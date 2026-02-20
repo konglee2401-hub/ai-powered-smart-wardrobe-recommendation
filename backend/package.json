@@ -71,6 +71,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-validator": "^7.3.1",
+    "fluent-ffmpeg": "^2.1.2",
     "form-data": "^4.0.5",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.23.0",
@@ -80,7 +81,8 @@
     "openai": "^4.20.0",
     "ora": "^9.3.0",
     "puppeteer": "^21.11.0",
-    "replicate": "^0.25.2"
+    "replicate": "^0.25.2",
+    "socket.io": "^4.7.0"
   },
   "devDependencies": {
     "bcryptjs": "^3.0.3",

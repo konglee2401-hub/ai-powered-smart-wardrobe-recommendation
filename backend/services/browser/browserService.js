@@ -264,6 +264,16 @@ class BrowserService {
   }
 
   /**
+   * Get current page URL
+   */
+  async getUrl() {
+    if (this.page) {
+      return await this.page.url();
+    }
+    return null;
+  }
+
+  /**
    * Get page instance (for advanced operations)
    */
   getPage() {

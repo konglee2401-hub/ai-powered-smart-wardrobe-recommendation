@@ -1,0 +1,64 @@
+{
+  "Service Initialization": {
+    "status": "PASSED",
+    "duration": "0.00s"
+  },
+  "Browser Initialization & Grok Connection": {
+    "status": "PASSED",
+    "duration": "7.92s"
+  },
+  "Image File Creation & Validation": {
+    "status": "FAILED",
+    "duration": "0.00s",
+    "error": "❌ Assertion failed: Image converted to base64 (0.10KB)"
+  },
+  "Navigate to Grok Imagine (Video) Page": {
+    "status": "FAILED",
+    "duration": "1.06s",
+    "error": "❌ Assertion failed: File upload input element found"
+  },
+  "Image Upload to Grok": {
+    "status": "FAILED",
+    "duration": "2.80s",
+    "error": "The \"path\" argument must be of type string. Received an instance of Object"
+  },
+  "Post ID Format Validation": {
+    "status": "FAILED",
+    "duration": "0.00s",
+    "error": "❌ Assertion failed: Post ID matches valid UUID format: undefined"
+  },
+  "Navigate to Video Post Page": {
+    "status": "FAILED",
+    "duration": "2.90s",
+    "error": "❌ Assertion failed: Successfully navigated to post page: https://grok.com/imagine"
+  },
+  "Locate Video Prompt Input Element": {
+    "status": "FAILED",
+    "duration": "0.02s",
+    "error": "❌ Assertion failed: Found prompt textarea with selector: null"
+  },
+  "Input Video Segment Prompts": {
+    "status": "PASSED",
+    "duration": "0.00s"
+  },
+  "Locate Generate/Create Video Button": {
+    "status": "PASSED",
+    "duration": "0.18s"
+  },
+  "Error Handling - Invalid Image Detection": {
+    "status": "PASSED",
+    "duration": "0.00s"
+  },
+  "Video Configuration Validation": {
+    "status": "PASSED",
+    "duration": "0.00s"
+  },
+  "Full Video Generation Workflow": {
+    "status": "SKIPPED",
+    "reason": "Skipped (full generation takes 5-10 minutes)"
+  },
+  "Performance Metrics Collection": {
+    "status": "PASSED",
+    "duration": "0.00s"
+  }
+}

@@ -1,35 +1,22 @@
-import BrowserService from './browserService.js';
-import SessionManager from './sessionManager.js';
-import fs from 'fs';
-import path from 'path';
-
 /**
- * Grok Browser Service
- * Automates grok.com (x.ai) for image analysis
+ * ⚠️  DEPRECATED: This file has been replaced by GrokServiceV2.js
+ * 
+ * This is a compatibility shim that re-exports GrokServiceV2.
+ * Please update your imports to use GrokServiceV2 instead.
+ * 
+ * OLD: import GrokService from './services/browser/grokService.js';
+ * NEW: import GrokServiceV2 from './services/browser/grokServiceV2.js';
  */
-class GrokService extends BrowserService {
-  constructor(options = {}) {
-    // Create session manager for Grok
-    const sessionManager = new SessionManager('grok');
-    
-    // Pass session manager to parent
-    super({ ...options, sessionManager });
-    this.baseUrl = 'https://grok.com';
-    this.sessionManager = sessionManager;
-  }
 
-  /**
-   * Initialize Grok
-   */
-  async initialize() {
-    await this.launch();
-    await this.goto(this.baseUrl);
+import GrokServiceV2 from './grokServiceV2.js';
+
+// Export GrokServiceV2 as GrokService for backward compatibility
+export default GrokServiceV2;
+
     
     // Wait for page to load
     console.log('⏳ Waiting for Grok to load...');
-    await this.page.waitForTimeout(3000);
-    
-    // Check if login required (Grok requires X/Twitter login)
+
     const isLoginPage = await this.page.evaluate(() => {
       return document.body.innerText.includes('Sign in') || 
              document.body.innerText.includes('Log in') ||
@@ -208,7 +195,36 @@ class GrokService extends BrowserService {
     console.log('\n📊 GROK BROWSER ANALYSIS');
     console.log('='.repeat(80));
     console.log(`Image: ${path.basename(imagePath)}`);
-    console.log(`Prompt: ${prompt}`);
+    const structuredPrompt = `
+      Please analyze the uploaded image of clothing and provide a detailed, structured response based on the following categories. Ensure each section is clearly labeled and follows the specified format.
+
+      **CHARACTER PROFILE**:
+      - Briefly describe the person wearing the clothing, including observable traits like gender, approximate age, and overall style.
+
+      **PRODUCT DETAILS**:
+      - Identify the main clothing item(s) in the image (e.g., "blue denim jacket", "white t-shirt", "black ripped jeans").
+      - Describe key features of each item (e.g., "oversized fit", "v-neck", "distressed").
+      - Suggest a potential brand or style inspiration if applicable.
+
+      **CATEGORY ANALYSIS**:
+      - Categorize the overall outfit (e.g., "casual street style", "formal business attire", "bohemian chic").
+      - Provide a brief justification for the category.
+
+      **RECOMMENDATIONS**:
+      - Suggest specific clothing items or accessories that would complement the existing outfit.
+      - Recommend occasions or environments where this outfit would be suitable.
+      - Offer styling tips for different variations of the outfit.
+
+      **NEW OPTIONS (grouped)**:
+      - List 3-5 distinct, innovative ideas for new clothing items or accessories inspired by the current outfit. Group similar ideas (e.g., "Dresses: [idea1], [idea2]"). These should be actionable suggestions for creating new fashion items.
+
+      Your response should be concise, clear, and directly address each of these sections. Do not include any introductory or concluding remarks outside of these sections.
+
+      Original Request: ${prompt}
+    `;
+
+    console.log(`Prompt: ${structuredPrompt}`);
+
     console.log('');
 
     let lastError = null;
@@ -330,7 +346,8 @@ class GrokService extends BrowserService {
         // Type prompt - with error handling for waitForSelector timeout
         console.log('📝 Typing prompt...');
         try {
-          await this.typeText(usedTextSelector, prompt);
+          await this.typeText(usedTextSelector, structuredPrompt);
+        this.lastPrompt = structuredPrompt;
         } catch (error) {
           if (error.message.includes('Waiting for selector') || error.message.includes('exceeded')) {
             console.log('⚠️  typeText timeout, trying direct click and type...');
@@ -375,7 +392,7 @@ class GrokService extends BrowserService {
         console.log('⏳ Waiting for Grok to respond...');
 
         // Wait for response with improved detection
-        const response = await this.waitForGrokResponse(90000);
+        const response = await this.waitForGrokResponse(300000);
         
         console.log('='.repeat(80));
         console.log('✅ ANALYSIS COMPLETE');
@@ -425,29 +442,65 @@ class GrokService extends BrowserService {
   /**
    * Wait for Grok to complete response
    */
-  async waitForGrokResponse(maxWait = 90000) {
+  async waitForGrokResponse(maxWait = 300000) {
     const startTime = Date.now();
     let lastLength = 0;
     let stableCount = 0;
+    let lastLogTime = 0;
+    let hasCompleteResponse = false;
 
+    console.log('⏳ Starting response wait (max 5 minutes)...');
+    
     while (Date.now() - startTime < maxWait) {
-      const currentText = await this.page.evaluate(() => document.body.innerText);
-      const currentLength = currentText.length;
-
-      // Check if "thinking" or "typing" indicator is gone
-      const isThinking = await this.page.evaluate(() => {
-        const text = document.body.innerText.toLowerCase();
-        return text.includes('thinking') || 
-               text.includes('typing') || 
-               text.includes('generating');
+      const { currentText, pageState } = await this.page.evaluate(() => {
+        const text = document.body.innerText;
+        const textLower = text.toLowerCase();
+        
+        return {
+          currentText: text,
+          pageState: {
+            isThinking: textLower.includes('thinking') || textLower.includes('generating'),
+            isTyping: textLower.includes('typing'),
+            hasRecommendationsEnd: textLower.includes('*** recommendations end ***'),
+            hasNewOptionsEnd: textLower.includes('*** new options end ***'),
+            hasAnalysisEnd: textLower.includes('*** analysis end ***'),
+            bodyLength: text.length
+          }
+        };
       });
 
-      if (!isThinking && currentLength === lastLength) {
+      const currentLength = pageState.bodyLength;
+      const isThinking = pageState.isThinking || pageState.isTyping;
+      const hasCompleteMarkers = pageState.hasRecommendationsEnd || pageState.hasNewOptionsEnd || pageState.hasAnalysisEnd;
+
+      // Log progress every 10 seconds
+      if (Date.now() - lastLogTime > 10000) {
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+        console.log(`⏳ Waiting... (${elapsedSeconds}s, length: ${currentLength}, thinking: ${isThinking}, complete: ${hasCompleteMarkers})`);
+        lastLogTime = Date.now();
+      }
+
+      // If still generating/thinking, reset stability count
+      if (isThinking) {
+        stableCount = 0;
+        hasCompleteResponse = false;
+      } else if (hasCompleteMarkers) {
+        // Response has complete markers - very likely done
         stableCount++;
-        if (stableCount >= 3) {
+        hasCompleteResponse = true;
+        if (stableCount >= 5) { // 5 checks = 5 seconds after seeing markers
+          console.log(`✅ Response completion markers detected`);
+          break;
+        }
+      } else if (currentLength === lastLength) {
+        // Content stable but no markers
+        stableCount++;
+        if (stableCount >= 30) { // 30 seconds of stability = 30 checks
+          console.log(`✅ Response stabilized (no new content for 30s)`);
           break;
         }
       } else {
+        // Content still growing
         stableCount = 0;
       }
 
@@ -455,64 +508,119 @@ class GrokService extends BrowserService {
       await this.page.waitForTimeout(1000);
     }
 
-    // Extract response
+    const totalSeconds = Math.round((Date.now() - startTime) / 1000);
+    console.log(`✅ Waiting complete after ${totalSeconds} seconds`);
+
+    // Extract response - now we need to separate prompt from response
     console.log('📝 Extracting response...');
     
-    let response = null;
+    let rawResponse = null;
     try {
-      response = await this.page.evaluate(() => {
-        // Try to find Grok's response messages
-        const messageSelectors = [
-          '[data-testid*="message"]',
-          '[class*="message"]',
-          '[class*="response"]',
-          '[role="article"]'
-        ];
-
-        for (const selector of messageSelectors) {
-          try {
-            const messages = Array.from(document.querySelectorAll(selector));
-            if (messages.length > 0) {
-              // Get the last message (should be Grok's response)
-              const lastMessage = messages[messages.length - 1];
-              const text = lastMessage.innerText || lastMessage.textContent;
-              
-              // Filter out user's message
-              if (text && !text.includes('Ask') && text.length > 50) {
-                return text.trim();
-              }
-            }
-          } catch (e) {
-            // Continue to next selector
+      rawResponse = await this.page.evaluate(() => {
+        // Get all text
+        let fullText = document.body.innerText;
+        
+        // Find where the response actually starts (after the prompt)
+        // The prompt ends with "CRITICAL: Use exact format..." 
+        // The response should start with "*** CHARACTER PROFILE START ***" or similar
+        const criticalMarker = 'CRITICAL: Use exact format markers';
+        const criticalIndex = fullText.toLowerCase().indexOf(criticalMarker.toLowerCase());
+        
+        if (criticalIndex !== -1) {
+          // Find the next "***" after the critical marker
+          const afterCritical = fullText.substring(criticalIndex);
+          const firstMarkerInResponse = afterCritical.indexOf('***');
+          
+          if (firstMarkerInResponse !== -1) {
+            // Skip "Analyzing images" and other UI text that might come before
+            const responseStart = criticalIndex + firstMarkerInResponse;
+            fullText = fullText.substring(responseStart);
           }
         }
-
-        // Fallback: try to extract from page
-        const allText = document.body.innerText || document.body.textContent || '';
-        if (!allText || allText.length < 50) {
-          return null;
-        }
-
-        const lines = allText.split('\n').filter(line => line.trim().length > 0);
         
-        // Find substantial text blocks (likely the response)
-        const substantialLines = lines.filter(line => line.length > 100);
-        if (substantialLines.length > 0) {
-          return substantialLines.join('\n').trim();
-        }
-
-        return allText.trim();
+        return fullText.trim();
       });
-    } catch (evalError) {
-      console.error('⚠️  Error during response extraction:', evalError.message);
-      response = null;
+    } catch (error) {
+      console.error('Error extracting raw response:', error);
+      rawResponse = await this.page.evaluate(() => document.body.innerText);
     }
 
-    if (!response || response.length === 0) {
-      throw new Error('Could not extract response from Grok');
+    if (!rawResponse || rawResponse.length < 100) {
+      throw new Error(`Could not extract complete response from Grok (length: ${rawResponse ? rawResponse.length : 0})`);
     }
 
-    return response;
+    console.log(`📊 Extracted response length: ${rawResponse.length} characters`);
+    console.log(`📌 Response starts with: ${rawResponse.substring(0, 100)}...`);
+
+    // Now parse the structured response
+    return this.parseGrokResponse(rawResponse);
+  }
+
+  /**
+   * Parses the structured response from Grok.
+   */
+  parseGrokResponse(rawResponse) {
+    const sections = {
+      characterProfile: '',
+      productDetails: '',
+      categoryAnalysis: '',
+      recommendations: '',
+      newOptions: []
+    };
+
+    const lines = rawResponse.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+    let currentSection = null;
+
+    for (const line of lines) {
+      if (line.startsWith('**CHARACTER PROFILE**')) {
+        currentSection = 'characterProfile';
+        sections.characterProfile = ''; // Reset for new section
+        continue;
+      }
+      if (line.startsWith('**PRODUCT DETAILS**')) {
+        currentSection = 'productDetails';
+        sections.productDetails = ''; // Reset for new section
+        continue;
+      }
+      if (line.startsWith('**CATEGORY ANALYSIS**')) {
+        currentSection = 'categoryAnalysis';
+        sections.categoryAnalysis = ''; // Reset for new section
+        continue;
+      }
+      if (line.startsWith('**RECOMMENDATIONS**')) {
+        currentSection = 'recommendations';
+        sections.recommendations = ''; // Reset for new section
+        continue;
+      }
+      if (line.startsWith('**NEW OPTIONS (grouped)**')) {
+        currentSection = 'newOptions';
+        sections.newOptions = []; // Reset for new section
+        continue;
+      }
+
+      if (currentSection) {
+        if (currentSection === 'newOptions') {
+          // Handle grouped options, splitting by common delimiters
+          const cleanedLine = line.replace(/^[\*-]\s*/, '').trim(); // Remove leading bullets/hyphens
+          if (cleanedLine) {
+            // Split by comma or semicolon, but be careful not to split within a group description
+            const items = cleanedLine.split(/;\s*|\s*\([A-Za-z0-9_\s-]*\),\s*|\s*,\s*(?=[A-Z][a-z])|(?:\s*\w+:\s*)/).map(s => s.trim()).filter(s => s.length > 0);
+            sections.newOptions.push(...items);
+          }
+        } else {
+          sections[currentSection] += (sections[currentSection] ? '\n' : '') + line;
+        }
+      }
+    }
+    
+    // Further clean up newOptions to remove any lingering section headers or empty strings
+    sections.newOptions = sections.newOptions.filter(item => 
+      item.length > 3 && 
+      !item.toLowerCase().includes('new options') &&
+      !item.toLowerCase().includes('grouped')
+    );
+
+    return sections;
   }
 }
 

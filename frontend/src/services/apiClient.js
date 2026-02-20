@@ -12,7 +12,14 @@
 
 // ============ CONFIGURATION ============
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Works in browser - avoid process.env
+const API_BASE_URL = (() => {
+  if (typeof window !== 'undefined' && window.__API_BASE__) {
+    return window.__API_BASE__;
+  }
+  // Default for development
+  return 'http://localhost:5000/api';
+})();
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
