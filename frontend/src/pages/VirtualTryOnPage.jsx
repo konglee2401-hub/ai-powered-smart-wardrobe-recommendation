@@ -429,7 +429,7 @@ export default function VirtualTryOnPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex" style={{ height: 'calc(100vh - 56px)' }}>
+      <div className="flex" style={{ height: 'calc(100vh - 120px)' }}>
         {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
         <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
           <button
