@@ -541,7 +541,7 @@ export default function VirtualTryOnPage() {
           </div>
         </div>
 
-        {/* ==================== CENTER: Preview ==================== */}
+        {/* ==================== CENTER: Preview + Actions ==================== */}
         <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
           {/* Use Case / Focus Info Bar */}
           {showUseCaseFocusInfo && (
@@ -556,6 +556,7 @@ export default function VirtualTryOnPage() {
             </div>
           )}
 
+          {/* Content Area */}
           <div className="flex-1 p-4 overflow-auto">
             <div className="max-w-3xl mx-auto">
               {/* Step 1: Upload */}
@@ -661,6 +662,102 @@ export default function VirtualTryOnPage() {
               )}
             </div>
           </div>
+
+          {/* STICKY BOTTOM ACTION BAR */}
+          <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
+            <div className="max-w-3xl mx-auto flex items-center justify-between">
+              <div className="text-xs text-gray-400">
+                {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Step 1: Start Analysis */}
+                {currentStep === 1 && (
+                  <button
+                    onClick={handleStartAnalysis}
+                    disabled={!isReadyForAnalysis || isAnalyzing}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm font-medium">Analyzing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span className="text-sm font-medium">Start AI</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Step 2: Apply Recommendation */}
+                {currentStep === 2 && (
+                  <button
+                    onClick={handleApplyRecommendation}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">Apply Recommendations</span>
+                  </button>
+                )}
+
+                {/* Step 3: Build Prompt */}
+                {currentStep === 3 && !generatedPrompt && !isLoading && (
+                  <button
+                    onClick={handleBuildPrompt}
+                    disabled={!isReadyForPrompt}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="text-sm font-medium">Build Prompt</span>
+                  </button>
+                )}
+
+                {/* Step 4: Enhance + Generate */}
+                {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleEnhancePrompt}
+                      disabled={isLoading}
+                      className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={handleStartGeneration}
+                      disabled={!isReadyForGeneration || isGenerating}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm font-medium">Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Rocket className="w-4 h-4" />
+                          <span className="text-sm font-medium">Generate</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 5: New */}
+                {generatedImages.length > 0 && (
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="text-sm font-medium">New</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
@@ -705,102 +802,6 @@ export default function VirtualTryOnPage() {
                   {generatedPrompt.positive}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== STICKY BOTTOM ACTION BAR (inside main view) ==================== */}
-      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3 sticky bottom-0">
-        <div className="flex items-center justify-end gap-2">
-          <div className="text-xs text-gray-400">
-            {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Step 1: Start Analysis */}
-            {currentStep === 1 && (
-              <button
-                onClick={handleStartAnalysis}
-                disabled={!isReadyForAnalysis || isAnalyzing}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm font-medium">Analyzing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span className="text-sm font-medium">Start AI</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Step 2: Apply Recommendation */}
-            {currentStep === 2 && (
-              <button
-                onClick={handleApplyRecommendation}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-              >
-                <Wand2 className="w-4 h-4" />
-                <span className="text-sm font-medium">Apply Recommendations</span>
-              </button>
-            )}
-
-            {/* Step 3: Build Prompt */}
-            {currentStep === 3 && !generatedPrompt && !isLoading && (
-              <button
-                onClick={handleBuildPrompt}
-                disabled={!isReadyForPrompt}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
-                <FileText className="w-4 h-4" />
-                <span className="text-sm font-medium">Build Prompt</span>
-              </button>
-            )}
-
-            {/* Step 4: Enhance + Generate */}
-            {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleEnhancePrompt}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={handleStartGeneration}
-                  disabled={!isReadyForGeneration || isGenerating}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm font-medium">Generating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Rocket className="w-4 h-4" />
-                      <span className="text-sm font-medium">Generate</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Step 5: New */}
-            {generatedImages.length > 0 && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span className="text-sm font-medium">New</span>
-              </button>
             )}
           </div>
         </div>
