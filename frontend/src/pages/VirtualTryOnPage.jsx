@@ -710,9 +710,9 @@ export default function VirtualTryOnPage() {
         </div>
       </div>
 
-      {/* ==================== FIXED BOTTOM ACTION BAR ==================== */}
-      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
+      {/* ==================== STICKY BOTTOM ACTION BAR (inside main view) ==================== */}
+      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3 sticky bottom-0">
+        <div className="flex items-center justify-end gap-2">
           <div className="text-xs text-gray-400">
             {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
           </div>
