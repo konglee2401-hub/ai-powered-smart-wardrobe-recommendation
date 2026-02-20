@@ -1,5 +1,9 @@
 import BrowserService from './browserService.js';
 import SessionManager from './sessionManager.js';
+import ProgressEmitter from '../ProgressEmitter.js';
+import VideoGenerationMetrics from '../VideoGenerationMetrics.js';
+import PromptSuggestor from '../PromptSuggestor.js';
+import VideoSessionManager from '../VideoSessionManager.js';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -2175,11 +2179,31 @@ class GrokServiceV2 extends BrowserService {
     console.log(`🎭 Scenario: ${options.scenario || 'unknown'}`);
     console.log('');
     
+    // ✅ Initialize session tracking (Feature Integration)
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const sessionManager = new VideoSessionManager(sessionId);
+    const metrics = new VideoGenerationMetrics();
     const videoUrls = [];
+    const extractedFrames = [];
+    
+    // ✅ Initialize progress tracking (Feature 1 Integration)
+    try {
+      if (global.progressEmitter) {
+        global.progressEmitter.initSession(sessionId, {
+          totalSegments: segments.length,
+          estimatedTotalTime: (segments.length * 120000) + 30000 // 2min per segment + 30s overhead
+        });
+        console.log(`📡 Progress tracking initialized (sessionId: ${sessionId})`);
+      }
+    } catch (e) {
+      console.warn('⚠️ Progress emitter not available:', e.message);
+    }
     
     try {
       // Step 1: Upload image and get post ID
+      metrics.startPhase('upload');
       const uploadResult = await this.uploadImageForVideo(imageBase64);
+      metrics.endPhase('upload');
       
       if (!uploadResult.success) {
         throw new Error('Failed to upload image for video');
@@ -2195,11 +2219,15 @@ class GrokServiceV2 extends BrowserService {
         console.log(`SEGMENT ${i + 1}/${segments.length}`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         
+        // Track phase for this segment
+        metrics.startPhase(`segment-${i}`);
+        
         // Input prompt for this segment
         const promptInputted = await this.inputVideoSegmentPrompt(postId, prompt, i + 1);
         
         if (!promptInputted) {
           console.warn(`⚠️ Failed to input prompt for segment ${i + 1}, skipping generation`);
+          metrics.recordError(`segment-${i}`, 'Prompt input failed');
           videoUrls.push(null);
           continue;
         }
@@ -2211,33 +2239,105 @@ class GrokServiceV2 extends BrowserService {
         const videoUrl = await this.generateVideoSegment(postId, i + 1);
         videoUrls.push(videoUrl);
         
+        metrics.endPhase(`segment-${i}`);
+        
+        // ✅ Emit progress update (Feature 1 Integration)
+        try {
+          if (global.progressEmitter) {
+            global.progressEmitter.emitProgress(sessionId, {
+              segmentIndex: i,
+              segmentTotal: segments.length,
+              currentSegmentProgress: 100,
+              videoUrl: videoUrl,
+              estimatedRemaining: (segments.length - i - 1) * 120000
+            });
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not emit progress:', e.message);
+        }
+        
+        // ✅ Extract frame from last segment (Feature 5 Integration - Custom Feature)
+        if (videoUrl && i === segments.length - 1) {
+          try {
+            console.log('📸 Extracting frame from last segment...');
+            const frameData = await sessionManager.extractLastFrame(videoUrl, {
+              segmentIndex: i,
+              prompt: prompt,
+              timestamp: new Date()
+            });
+            
+            if (frameData) {
+              extractedFrames.push(frameData);
+              console.log(`✅ Frame extracted: ${frameData.frameId}`);
+            }
+          } catch (frameError) {
+            console.warn('⚠️ Frame extraction failed:', frameError.message);
+            // Don't fail generation if frame extraction fails
+          }
+        }
+        
         // Wait before next segment
         if (i < segments.length - 1) {
           await this.page.waitForTimeout(2000);
         }
       }
       
+      // ✅ Record final metrics (Feature 3 Integration - History & Analytics)
+      metrics.endPhase('composition');
+      const metricsReport = metrics.getReport();
+      
+      // ✅ Complete progress tracking
+      try {
+        if (global.progressEmitter) {
+          global.progressEmitter.completeSession(sessionId);
+        }
+      } catch (e) {
+        console.warn('⚠️ Could not complete progress session:', e.message);
+      }
+      
       console.log('\n' + '='.repeat(80));
       console.log('✅ VIDEO GENERATION COMPLETE');
       console.log('='.repeat(80));
       console.log(`Generated ${videoUrls.filter(u => !!u).length}/${segments.length} videos`);
+      console.log(`Frames extracted: ${extractedFrames.length}`);
+      console.log(`Total time: ${Math.round(metricsReport.totalTimeMs / 1000)}s`);
       
       return {
         success: true,
         postId,
         videoUrls,
+        sessionId,
         generatedCount: videoUrls.filter(u => !!u).length,
-        totalSegments: segments.length
+        totalSegments: segments.length,
+        extractedFrames: extractedFrames,
+        metrics: metricsReport,
+        generatedAt: new Date()
       };
       
     } catch (error) {
       console.error('❌ Video generation workflow failed:', error);
+      
+      // Record error in metrics
+      metrics.recordError(error.phase || 'generation', error.message);
+      
+      // Fail progress session
+      try {
+        if (global.progressEmitter) {
+          global.progressEmitter.failSession(sessionId, error.message);
+        }
+      } catch (e) {
+        console.warn('⚠️ Could not fail progress session:', e.message);
+      }
+      
       return {
         success: false,
         error: error.message,
+        sessionId,
         videoUrls,
         generatedCount: videoUrls.filter(u => !!u).length,
-        totalSegments: segments.length
+        totalSegments: segments.length,
+        extractedFrames: extractedFrames,
+        metrics: metrics.getReport()
       };
     }
   }

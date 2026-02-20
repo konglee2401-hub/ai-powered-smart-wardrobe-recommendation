@@ -2,6 +2,7 @@ import GrokServiceV2 from '../services/browser/grokServiceV2.js';
 import ZAIChatService from '../services/browser/zaiChatService.js';
 import ZAIImageService from '../services/browser/zaiImageService.js';
 import GoogleFlowService from '../services/browser/googleFlowService.js';
+import VideoGeneration from '../models/VideoGeneration.js';
 import uploadToImgBB from '../services/uploaders/imgbbUploader.js'; // 💫 NEW
 import path from 'path';
 import fs from 'fs';
@@ -1651,6 +1652,39 @@ export async function generateVideoBrowser(req, res) {
     // Clean up
     await grok.close();
 
+    // ✅ Save to database with enhanced fields (Features Integration)
+    try {
+      if (req.user && req.user.id) {
+        const videoDoc = new VideoGeneration({
+          userId: req.user.id,
+          originalPrompt: segments.join(' | '),
+          finalOutput: result.videoUrls[result.videoUrls.length - 1] || null,
+          status: result.success ? 'completed' : 'failed',
+          sessionId: result.sessionId,
+          segments: segments.map((prompt, index) => ({
+            index,
+            prompt,
+            videoUrl: result.videoUrls[index] || null,
+            status: result.videoUrls[index] ? 'generated' : 'failed',
+            errorMessage: result.videoUrls[index] ? null : 'Video URL not returned'
+          })),
+          extractedFrames: result.extractedFrames || [],
+          metrics: result.metrics || {},
+          duration,
+          scenario,
+          provider
+        });
+        
+        await videoDoc.save();
+        console.log(`✅ Video generation saved to database (ID: ${videoDoc._id})`);
+      } else {
+        console.warn('⚠️ User not authenticated, skipping database save');
+      }
+    } catch (dbError) {
+      console.warn('⚠️ Failed to save to database:', dbError.message);
+      // Don't fail the API response if database save fails
+    }
+
     res.json({
       success: result.success,
       data: {
@@ -1658,6 +1692,9 @@ export async function generateVideoBrowser(req, res) {
         videoUrls: result.videoUrls,
         generatedCount: result.generatedCount,
         totalSegments: result.totalSegments,
+        sessionId: result.sessionId,
+        extractedFrames: result.extractedFrames || [],
+        metrics: result.metrics || {},
         scenario,
         duration
       },
