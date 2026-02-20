@@ -547,6 +547,606 @@ const promptOptions = [
     },
     isActive: true,
     sortOrder: 6
+  },
+
+  // ============ NEW: Hairstyle options ============
+  {
+    category: 'hairstyle',
+    label: 'Long Straight',
+    value: 'long-straight',
+    description: 'Long straight hair, sleek and smooth',
+    keywords: ['long', 'straight', 'sleek', 'smooth', 'silky'],
+    technicalDetails: {
+      length: 'long',
+      texture: 'straight',
+      style: 'sleek and polished'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'hairstyle',
+    label: 'Long Wavy',
+    value: 'long-wavy',
+    description: 'Long wavy hair with natural waves',
+    keywords: ['long', 'wavy', 'waves', 'natural', 'flowing'],
+    technicalDetails: {
+      length: 'long',
+      texture: 'wavy',
+      style: 'natural and flowing'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'hairstyle',
+    label: 'Long Curly',
+    value: 'long-curly',
+    description: 'Long curly hair with defined curls',
+    keywords: ['long', 'curly', 'curls', 'bouncy', 'voluminous'],
+    technicalDetails: {
+      length: 'long',
+      texture: 'curly',
+      style: 'bouncy and voluminous'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'hairstyle',
+    label: 'Medium Straight',
+    value: 'medium-straight',
+    description: 'Medium length straight hair',
+    keywords: ['medium', 'straight', 'shoulder length', 'sleek'],
+    technicalDetails: {
+      length: 'medium',
+      texture: 'straight',
+      style: 'clean and simple'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'hairstyle',
+    label: 'Medium Wavy',
+    value: 'medium-wavy',
+    description: 'Medium length wavy hair',
+    keywords: ['medium', 'wavy', 'waves', 'shoulder length'],
+    technicalDetails: {
+      length: 'medium',
+      texture: 'wavy',
+      style: 'relaxed and natural'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'hairstyle',
+    label: 'Short Bob',
+    value: 'short-bob',
+    description: 'Short bob cut hair',
+    keywords: ['short', 'bob', 'chic', 'modern'],
+    technicalDetails: {
+      length: 'short',
+      texture: 'straight to wavy',
+      style: 'chic and modern'
+    },
+    isActive: true,
+    sortOrder: 6
+  },
+  {
+    category: 'hairstyle',
+    label: 'Short Pixie',
+    value: 'short-pixie',
+    description: 'Short pixie cut',
+    keywords: ['short', 'pixie', 'edgy', 'bold'],
+    technicalDetails: {
+      length: 'very short',
+      texture: 'short cropped',
+      style: 'edgy and bold'
+    },
+    isActive: true,
+    sortOrder: 7
+  },
+  {
+    category: 'hairstyle',
+    label: 'Braided',
+    value: 'braided',
+    description: 'Braided hairstyle',
+    keywords: ['braided', 'braids', 'plaited', 'traditional'],
+    technicalDetails: {
+      length: 'any',
+      texture: 'braided',
+      style: 'traditional and intricate'
+    },
+    isActive: true,
+    sortOrder: 8
+  },
+  {
+    category: 'hairstyle',
+    label: 'Bun',
+    value: 'bun',
+    description: 'Bun updo hairstyle',
+    keywords: ['bun', 'updo', 'elegant', 'formal'],
+    technicalDetails: {
+      length: 'any',
+      texture: 'pulled back',
+      style: 'elegant and formal'
+    },
+    isActive: true,
+    sortOrder: 9
+  },
+
+  // ============ Makeup options ============
+  {
+    category: 'makeup',
+    label: 'Natural',
+    value: 'natural',
+    description: 'Natural no-makeup look',
+    keywords: ['natural', 'no makeup', 'bare', 'minimal'],
+    technicalDetails: {
+      coverage: 'light',
+      finish: 'natural',
+      emphasis: 'skin clarity'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'makeup',
+    label: 'Light',
+    value: 'light',
+    description: 'Light and fresh makeup look',
+    keywords: ['light', 'fresh', 'daytime', 'subtle'],
+    technicalDetails: {
+      coverage: 'light to medium',
+      finish: 'dewy',
+      emphasis: 'healthy glow'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'makeup',
+    label: 'Glowing',
+    value: 'glowing',
+    description: 'Glowing radiant makeup',
+    keywords: ['glowing', 'radiant', 'glow', 'highlight'],
+    technicalDetails: {
+      coverage: 'medium',
+      finish: 'radiant',
+      emphasis: 'highlighter and glow'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'makeup',
+    label: 'Bold Lips',
+    value: 'bold-lips',
+    description: 'Bold lip color makeup',
+    keywords: ['bold lips', 'red lip', 'vibrant', 'statement'],
+    technicalDetails: {
+      coverage: 'full face',
+      finish: 'matte or satin',
+      emphasis: 'bold lip color'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'makeup',
+    label: 'Smokey Eyes',
+    value: 'smokey-eyes',
+    description: 'Smokey eye makeup',
+    keywords: ['smokey', 'smoke', 'eyeshadow', 'dramatic'],
+    technicalDetails: {
+      coverage: 'full face',
+      finish: 'matte or shimmer',
+      emphasis: 'dramatic eyes'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'makeup',
+    label: 'Winged Eyeliner',
+    value: 'winged-liner',
+    description: 'Winged eyeliner look',
+    keywords: ['winged', 'cat eye', 'eyeliner', 'precise'],
+    technicalDetails: {
+      coverage: 'full face',
+      finish: 'precise',
+      emphasis: 'eyeliner wings'
+    },
+    isActive: true,
+    sortOrder: 6
+  },
+  {
+    category: 'makeup',
+    label: 'Glamorous',
+    value: 'glamorous',
+    description: 'Glamorous full makeup',
+    keywords: ['glamorous', 'glam', 'full makeup', 'party'],
+    technicalDetails: {
+      coverage: 'full',
+      finish: 'glamorous',
+      emphasis: 'overall dramatic look'
+    },
+    isActive: true,
+    sortOrder: 7
+  },
+
+  // ============ Bottoms options ============
+  {
+    category: 'bottoms',
+    label: 'Jeans',
+    value: 'jeans',
+    description: 'Denim jeans pants',
+    keywords: ['jeans', 'denim', 'pants', 'casual'],
+    technicalDetails: {
+      type: 'denim pants',
+      fit: 'various fits',
+      style: 'casual versatile'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'bottoms',
+    label: 'Trousers',
+    value: 'trousers',
+    description: 'Formal trousers pants',
+    keywords: ['trousers', 'dress pants', 'formal', 'professional'],
+    technicalDetails: {
+      type: 'dress pants',
+      fit: 'tailored',
+      style: 'formal professional'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'bottoms',
+    label: 'Shorts',
+    value: 'shorts',
+    description: 'Casual shorts',
+    keywords: ['shorts', 'casual', 'summer', 'sporty'],
+    technicalDetails: {
+      type: 'shorts',
+      length: 'above knee',
+      style: 'casual summer'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'bottoms',
+    label: 'Skirt',
+    value: 'skirt',
+    description: 'Skirt bottom',
+    keywords: ['skirt', 'feminine', 'elegant', 'versatile'],
+    technicalDetails: {
+      type: 'skirt',
+      length: 'various',
+      style: 'feminine versatile'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'bottoms',
+    label: 'Leggings',
+    value: 'leggings',
+    description: 'Fitted leggings pants',
+    keywords: ['leggings', 'fitted', 'athletic', 'comfortable'],
+    technicalDetails: {
+      type: 'leggings',
+      fit: 'tight fitted',
+      style: 'athletic comfortable'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'bottoms',
+    label: 'Cargo Pants',
+    value: 'cargo-pants',
+    description: 'Cargo pants with pockets',
+    keywords: ['cargo', 'utility', 'pockets', 'streetwear'],
+    technicalDetails: {
+      type: 'cargo pants',
+      fit: 'relaxed',
+      style: 'utility streetwear'
+    },
+    isActive: true,
+    sortOrder: 6
+  },
+
+  // ============ Shoes options ============
+  {
+    category: 'shoes',
+    label: 'Sneakers',
+    value: 'sneakers',
+    description: 'Casual sneakers shoes',
+    keywords: ['sneakers', 'casual', 'sporty', 'comfortable'],
+    technicalDetails: {
+      type: 'sneakers',
+      heel: 'flat',
+      style: 'casual sporty'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'shoes',
+    label: 'Heels',
+    value: 'heels',
+    description: 'High heel shoes',
+    keywords: ['heels', 'high heels', 'formal', 'elegant'],
+    technicalDetails: {
+      type: 'heels',
+      heel: 'high',
+      style: 'formal elegant'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'shoes',
+    label: 'Boots',
+    value: 'boots',
+    description: 'Boot footwear',
+    keywords: ['boots', 'booties', 'ankle boots', 'stylish'],
+    technicalDetails: {
+      type: 'boots',
+      heel: 'various',
+      style: 'stylish versatile'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'shoes',
+    label: 'Flats',
+    value: 'flats',
+    description: 'Flat shoes',
+    keywords: ['flats', 'ballet flats', 'comfortable', 'casual'],
+    technicalDetails: {
+      type: 'flats',
+      heel: 'flat',
+      style: 'comfortable casual'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'shoes',
+    label: 'Sandals',
+    value: 'sandals',
+    description: 'Open sandals',
+    keywords: ['sandals', 'summer', 'open toe', 'breathable'],
+    technicalDetails: {
+      type: 'sandals',
+      heel: 'various',
+      style: 'summer breathable'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'shoes',
+    label: 'Loafers',
+    value: 'loafers',
+    description: 'Loafer shoes',
+    keywords: ['loafers', 'slip on', 'smart casual', 'classic'],
+    technicalDetails: {
+      type: 'loafers',
+      heel: 'flat',
+      style: 'smart casual classic'
+    },
+    isActive: true,
+    sortOrder: 6
+  },
+
+  // ============ Accessories options ============
+  {
+    category: 'accessories',
+    label: 'Necklace',
+    value: 'necklace',
+    description: 'Necklace accessory',
+    keywords: ['necklace', 'pendant', 'chain', 'jewelry'],
+    technicalDetails: {
+      type: 'necklace',
+      placement: 'neck',
+      style: 'decorative'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'accessories',
+    label: 'Earrings',
+    value: 'earrings',
+    description: 'Earrings accessory',
+    keywords: ['earrings', 'ear rings', 'jewelry', 'ear'],
+    technicalDetails: {
+      type: 'earrings',
+      placement: 'ears',
+      style: 'decorative'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'accessories',
+    label: 'Watch',
+    value: 'watch',
+    description: 'Wrist watch accessory',
+    keywords: ['watch', 'wrist watch', 'timepiece', 'accessory'],
+    technicalDetails: {
+      type: 'watch',
+      placement: 'wrist',
+      style: 'functional decorative'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'accessories',
+    label: 'Bag',
+    value: 'bag',
+    description: 'Handbag or purse',
+    keywords: ['bag', 'purse', 'handbag', 'accessory'],
+    technicalDetails: {
+      type: 'bag',
+      placement: 'hand or shoulder',
+      style: 'functional decorative'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'accessories',
+    label: 'Sunglasses',
+    value: 'sunglasses',
+    description: 'Sunglasses eyewear',
+    keywords: ['sunglasses', 'shades', 'eyewear', 'sun'],
+    technicalDetails: {
+      type: 'sunglasses',
+      placement: 'eyes',
+      style: 'protective fashionable'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'accessories',
+    label: 'Scarf',
+    value: 'scarf',
+    description: 'Scarf accessory',
+    keywords: ['scarf', 'shawl', 'neck scarf', 'accessory'],
+    technicalDetails: {
+      type: 'scarf',
+      placement: 'neck or shoulders',
+      style: 'decorative functional'
+    },
+    isActive: true,
+    sortOrder: 6
+  },
+  {
+    category: 'accessories',
+    label: 'Belt',
+    value: 'belt',
+    description: 'Waist belt accessory',
+    keywords: ['belt', 'waist belt', 'accessory', 'waist'],
+    technicalDetails: {
+      type: 'belt',
+      placement: 'waist',
+      style: 'functional decorative'
+    },
+    isActive: true,
+    sortOrder: 7
+  },
+  {
+    category: 'accessories',
+    label: 'Hat',
+    value: 'hat',
+    description: 'Hat accessory',
+    keywords: ['hat', 'cap', 'headwear', 'accessory'],
+    technicalDetails: {
+      type: 'hat',
+      placement: 'head',
+      style: 'protective fashionable'
+    },
+    isActive: true,
+    sortOrder: 8
+  },
+
+  // ============ Outerwear options ============
+  {
+    category: 'outerwear',
+    label: 'Jacket',
+    value: 'jacket',
+    description: 'Casual jacket',
+    keywords: ['jacket', 'casual', 'outerwear', 'light'],
+    technicalDetails: {
+      type: 'jacket',
+      weight: 'light to medium',
+      style: 'casual versatile'
+    },
+    isActive: true,
+    sortOrder: 1
+  },
+  {
+    category: 'outerwear',
+    label: 'Coat',
+    value: 'coat',
+    description: 'Formal coat',
+    keywords: ['coat', 'formal', 'outerwear', 'winter'],
+    technicalDetails: {
+      type: 'coat',
+      weight: 'heavy',
+      style: 'formal elegant'
+    },
+    isActive: true,
+    sortOrder: 2
+  },
+  {
+    category: 'outerwear',
+    label: 'Blazer',
+    value: 'blazer',
+    description: 'Blazer jacket',
+    keywords: ['blazer', 'structured', 'formal', 'professional'],
+    technicalDetails: {
+      type: 'blazer',
+      weight: 'light to medium',
+      style: 'formal professional'
+    },
+    isActive: true,
+    sortOrder: 3
+  },
+  {
+    category: 'outerwear',
+    label: 'Cardigan',
+    value: 'cardigan',
+    description: 'Knitted cardigan',
+    keywords: ['cardigan', 'knitted', 'sweater', 'casual'],
+    technicalDetails: {
+      type: 'cardigan',
+      weight: 'medium',
+      style: 'casual comfortable'
+    },
+    isActive: true,
+    sortOrder: 4
+  },
+  {
+    category: 'outerwear',
+    label: 'Hoodie',
+    value: 'hoodie',
+    description: 'Hooded sweatshirt',
+    keywords: ['hoodie', 'hooded', 'casual', 'sporty'],
+    technicalDetails: {
+      type: 'hoodie',
+      weight: 'medium',
+      style: 'casual sporty'
+    },
+    isActive: true,
+    sortOrder: 5
+  },
+  {
+    category: 'outerwear',
+    label: 'Vest',
+    value: 'vest',
+    description: 'Vest garment',
+    keywords: ['vest', 'waistcoat', 'layering', 'formal'],
+    technicalDetails: {
+      type: 'vest',
+      weight: 'light',
+      style: 'layering formal'
+    },
+    isActive: true,
+    sortOrder: 6
   }
 ];
 

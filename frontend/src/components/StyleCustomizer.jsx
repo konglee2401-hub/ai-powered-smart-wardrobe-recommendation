@@ -9,6 +9,7 @@ import { aiOptionsAPI } from '../services/api';
 
 // Category configurations with icons and descriptions
 const CATEGORY_CONFIG = {
+  // Core Photography Categories
   scene: {
     label: 'Scene',
     icon: '🎬',
@@ -85,6 +86,20 @@ const CATEGORY_CONFIG = {
       { value: 'metallic', label: 'Metallic', icon: '🪙' },
     ],
   },
+  cameraAngle: {
+    label: 'Camera Angle',
+    icon: '📐',
+    description: 'Góc máy ảnh',
+    options: [
+      { value: 'eye-level', label: 'Eye Level', icon: '👀' },
+      { value: 'slight-angle', label: 'Slight Angle', icon: '📐' },
+      { value: 'three-quarter', label: 'Three-Quarter', icon: '🔄' },
+      { value: 'full-front', label: 'Full Front', icon: '🧍' },
+      { value: 'over-shoulder', label: 'Over Shoulder', icon: '👥' },
+    ],
+  },
+  
+  // NEW: Fashion & Styling Categories
   hairstyle: {
     label: 'Hairstyle',
     icon: '💇',
@@ -95,12 +110,10 @@ const CATEGORY_CONFIG = {
       { value: 'long-curly', label: 'Long Curly', icon: '🌀' },
       { value: 'medium-straight', label: 'Medium Straight', icon: '📏' },
       { value: 'medium-wavy', label: 'Medium Wavy', icon: '〰️' },
-      { value: 'medium-curly', label: 'Medium Curly', icon: '🌀' },
       { value: 'short-bob', label: 'Short Bob', icon: '✂️' },
       { value: 'short-pixie', label: 'Short Pixie', icon: '✨' },
-      { value: 'bun', label: 'Bun Updo', icon: '🧦' },
       { value: 'braided', label: 'Braided', icon: '📿' },
-      { value: 'loose-bun', label: 'Loose Bun', icon: '🌸' },
+      { value: 'bun', label: 'Bun Updo', icon: '🧦' },
     ],
   },
   makeup: {
@@ -114,21 +127,61 @@ const CATEGORY_CONFIG = {
       { value: 'bold-lips', label: 'Bold Lips', icon: '💋' },
       { value: 'smokey-eyes', label: 'Smokey Eyes', icon: '👁️' },
       { value: 'winged-liner', label: 'Winged Eyeliner', icon: '🎨' },
-      { value: 'contoured', label: 'Contoured', icon: '🎭' },
       { value: 'glamorous', label: 'Glamorous', icon: '👑' },
-      { value: 'dewy', label: 'Dewy Skin', icon: '💧' },
     ],
   },
-  cameraAngle: {
-    label: 'Camera Angle',
-    icon: '📐',
-    description: 'Góc máy ảnh',
+  bottoms: {
+    label: 'Bottoms',
+    icon: '👖',
+    description: 'Quần/ Váy',
     options: [
-      { value: 'eye-level', label: 'Eye Level', icon: '👀' },
-      { value: 'slight-angle', label: 'Slight Angle', icon: '📐' },
-      { value: 'three-quarter', label: 'Three-Quarter', icon: '🔄' },
-      { value: 'full-front', label: 'Full Front', icon: '🧍' },
-      { value: 'over-shoulder', label: 'Over Shoulder', icon: '👥' },
+      { value: 'jeans', label: 'Jeans', icon: '👖' },
+      { value: 'trousers', label: 'Trousers', icon: '👔' },
+      { value: 'shorts', label: 'Shorts', icon: '🩳' },
+      { value: 'skirt', label: 'Skirt', icon: '👗' },
+      { value: 'leggings', label: 'Leggings', icon: '🧘' },
+      { value: 'cargo-pants', label: 'Cargo Pants', icon: '🎒' },
+    ],
+  },
+  shoes: {
+    label: 'Shoes',
+    icon: '👟',
+    description: 'Giày/ Dép',
+    options: [
+      { value: 'sneakers', label: 'Sneakers', icon: '👟' },
+      { value: 'heels', label: 'Heels', icon: '👠' },
+      { value: 'boots', label: 'Boots', icon: '👢' },
+      { value: 'flats', label: 'Flats', icon: '🥿' },
+      { value: 'sandals', label: 'Sandals', icon: '🩴' },
+      { value: 'loafers', label: 'Loafers', icon: '👞' },
+    ],
+  },
+  accessories: {
+    label: 'Accessories',
+    icon: '💎',
+    description: 'Phụ kiện',
+    options: [
+      { value: 'necklace', label: 'Necklace', icon: '📿' },
+      { value: 'earrings', label: 'Earrings', icon: '💫' },
+      { value: 'watch', label: 'Watch', icon: '⌚' },
+      { value: 'bag', label: 'Bag', icon: '👜' },
+      { value: 'sunglasses', label: 'Sunglasses', icon: '🕶️' },
+      { value: 'scarf', label: 'Scarf', icon: '🧣' },
+      { value: 'belt', label: 'Belt', icon: '👔' },
+      { value: 'hat', label: 'Hat', icon: '🎩' },
+    ],
+  },
+  outerwear: {
+    label: 'Outerwear',
+    icon: '🧥',
+    description: 'Áo khoác',
+    options: [
+      { value: 'jacket', label: 'Jacket', icon: '🧥' },
+      { value: 'coat', label: 'Coat', icon: '🧥' },
+      { value: 'blazer', label: 'Blazer', icon: '👔' },
+      { value: 'cardigan', label: 'Cardigan', icon: '🧶' },
+      { value: 'hoodie', label: 'Hoodie', icon: '👕' },
+      { value: 'vest', label: 'Vest', icon: '🎽' },
     ],
   },
 };

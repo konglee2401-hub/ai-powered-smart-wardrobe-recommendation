@@ -39,7 +39,21 @@ const promptOptionSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle'],
+    enum: [
+      'scene', 
+      'lighting', 
+      'mood', 
+      'style', 
+      'colorPalette', 
+      'cameraAngle',
+      // NEW: Fashion categories for VTO
+      'hairstyle',
+      'makeup',
+      'bottoms',
+      'shoes',
+      'accessories',
+      'outerwear'
+    ],
     index: true
   },
 
