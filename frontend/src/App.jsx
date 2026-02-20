@@ -25,13 +25,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* VirtualTryOnPage - Full screen layout WITH Navbar */}
-        <Route path="/" element={
-          <>
-            <Navbar />
-            <VirtualTryOnPage />
-          </>
-        } />
+        {/* VirtualTryOnPage - Full screen layout WITHOUT Navbar (has its own header) */}
+        <Route path="/" element={<VirtualTryOnPage />} />
         
         {/* Other pages with Navbar */}
         <Route path="/history" element={

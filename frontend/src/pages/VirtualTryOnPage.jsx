@@ -124,13 +124,21 @@ export default function VirtualTryOnPage() {
   useEffect(() => {
     const calculateHeight = () => {
       const viewportHeight = window.innerHeight;
-      const navbar = document.querySelector('nav');
-      const navHeight = navbar ? navbar.offsetHeight : 0;
-      const mainBody = document.querySelector('[data-main-body]');
-      const mainBodyHeight = mainBody ? mainBody.offsetHeight : 0;
       
-      // Calculate: viewport - navbar - main header (56px = h-14)
-      const calculatedHeight = viewportHeight - navHeight - 56;
+      // VirtualTryOnPage header is 56px (h-14)
+      // Navbar is in document flow now (not sticky), so it's part of the content
+      // We only need to subtract the VirtualTryOnPage header
+      const headerHeight = 56;
+      
+      // Calculate: viewport - header(56px)
+      const calculatedHeight = viewportHeight - headerHeight;
+      
+      console.log('Height Calculation:', {
+        viewportHeight,
+        headerHeight,
+        calculatedHeight
+      });
+      
       setContainerHeight(calculatedHeight > 0 ? calculatedHeight : 400);
     };
 
@@ -138,9 +146,10 @@ export default function VirtualTryOnPage() {
     window.addEventListener('resize', calculateHeight);
     window.addEventListener('DOMContentLoaded', calculateHeight);
 
-    // Also check after a short delay to ensure everything is rendered
+    // Check after render cycles
     setTimeout(calculateHeight, 100);
     setTimeout(calculateHeight, 500);
+    setTimeout(calculateHeight, 1000);
 
     return () => {
       window.removeEventListener('resize', calculateHeight);
