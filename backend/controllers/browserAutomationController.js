@@ -308,7 +308,305 @@ function cleanupTempFiles(files) {
 }
 
 /**
- * Analyze and generate image using browser automation - FULL FLOW
+ * STEP 2: Browser Analysis - Only analyze images, return text
+ * Does NOT generate any images - just returns analysis text
+ */
+export async function analyzeWithBrowser(req, res) {
+  let browserService = null;
+  const tempFiles = [];
+
+  try {
+    const { 
+      analysisProvider = 'grok',
+      // Style customization options from frontend
+      scene = 'studio',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      style = 'minimalist',
+      colorPalette = 'neutral',
+      hairstyle = null,
+      makeup = null,
+      cameraAngle = 'eye-level',
+      aspectRatio = '1:1',
+      customPrompt = ''
+    } = req.body;
+
+    const characterImage = req.files?.characterImage?.[0];
+    const productImage = req.files?.productImage?.[0];
+
+    if (!characterImage || !productImage) {
+      return res.status(400).json({ 
+        error: 'Both character and product images are required',
+        success: false 
+      });
+    }
+
+    // Build style options object
+    const styleOptions = {
+      scene,
+      lighting,
+      mood,
+      style,
+      colorPalette,
+      hairstyle,
+      makeup,
+      cameraAngle,
+      aspectRatio,
+      customPrompt
+    };
+
+    // ====================================
+    // STEP 1: Save uploaded images
+    // ====================================
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🔍 BROWSER ANALYSIS - START`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    console.log(`💾 Saving uploaded images to temp...`);
+    const charImagePath = path.join(tempDir, `char-${Date.now()}-${characterImage.originalname}`);
+    const prodImagePath = path.join(tempDir, `prod-${Date.now()}-${productImage.originalname}`);
+    
+    fs.writeFileSync(charImagePath, characterImage.buffer);
+    fs.writeFileSync(prodImagePath, productImage.buffer);
+    tempFiles.push(charImagePath, prodImagePath);
+    
+    console.log(`   ✅ Character: ${path.basename(charImagePath)}`);
+    console.log(`   ✅ Product: ${path.basename(prodImagePath)}`);
+
+    // ====================================
+    // STEP 2: Initialize browser service for analysis
+    // ====================================
+    console.log(`\n📊 Initializing browser service for analysis...`);
+    
+    switch (analysisProvider) {
+      case 'grok':
+      case 'grok.com':
+        browserService = new GrokServiceV2({ headless: false });
+        break;
+      case 'zai':
+      case 'chat.z.ai':
+      default:
+        browserService = new ZAIChatService({ headless: false });
+    }
+    
+    console.log(`   🚀 Initializing ${analysisProvider}...`);
+    await browserService.initialize();
+
+    // ====================================
+    // STEP 3: Build analysis prompt with all style options
+    // ====================================
+    console.log(`\n🔨 Building analysis prompt...`);
+    const analysisPrompt = buildAnalysisPrompt(styleOptions);
+
+    // ====================================
+    // STEP 4: Analyze images (NO generation)
+    // ====================================
+    console.log(`\n🤖 Analyzing images (no generation)...`);
+    
+    const analysisResult = await browserService.analyzeMultipleImages(
+      [charImagePath, prodImagePath],
+      analysisPrompt
+    );
+    
+    const analysisText = analysisResult?.text || analysisResult;
+    console.log(`   ✅ Analysis complete!`);
+    console.log(`      Result: "${analysisText?.substring(0, 200) || 'N/A'}..."`);
+
+    // Cleanup
+    await browserService.close();
+    cleanupTempFiles(tempFiles);
+
+    // Return ONLY analysis - no images generated
+    console.log(`\n✅ BROWSER ANALYSIS - COMPLETE`);
+    console.log(`   Analysis text returned (no images generated)\n`);
+
+    return res.json({
+      success: true,
+      data: {
+        analysis: analysisText,
+        providers: {
+          analysis: analysisProvider
+        },
+        // Return empty images array - this is ANALYSIS ONLY
+        generatedImages: []
+      },
+      message: 'Analysis completed successfully via browser automation. No images generated yet.'
+    });
+
+  } catch (error) {
+    console.error(`\n❌ ANALYSIS ERROR:`, error.message);
+    if (browserService) await browserService.close();
+    cleanupTempFiles(tempFiles);
+    
+    return res.status(500).json({
+      error: error.message,
+      success: false,
+      stage: 'analysis'
+    });
+  }
+}
+
+/**
+ * STEP 5: Browser Generation - Generate image from prompt/options
+ * Takes pre-uploaded images info and generates the final image
+ */
+export async function generateWithBrowser(req, res) {
+  let browserService = null;
+  const tempFiles = [];
+
+  try {
+    const { 
+      imageGenProvider = 'grok',
+      prompt,
+      negativePrompt = '',
+      // Style customization options
+      scene = 'studio',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      style = 'minimalist',
+      colorPalette = 'neutral',
+      cameraAngle = 'eye-level',
+      aspectRatio = '1:1',
+      // Images from previous step (passed as base64 or paths)
+      characterImageBase64,
+      productImageBase64,
+      characterImagePath,
+      productImagePath
+    } = req.body;
+
+    // Get image paths - either from temp files or convert base64
+    let charImagePath = characterImagePath;
+    let prodImagePath = productImagePath;
+    
+    // If base64 provided, save to temp
+    if (characterImageBase64 && productImageBase64) {
+      console.log(`\n💾 Converting base64 images to temp files...`);
+      
+      // Character image
+      const charBuffer = Buffer.from(characterImageBase64, 'base64');
+      charImagePath = path.join(tempDir, `char-gen-${Date.now()}.png`);
+      fs.writeFileSync(charImagePath, charBuffer);
+      tempFiles.push(charImagePath);
+      
+      // Product image
+      const prodBuffer = Buffer.from(productImageBase64, 'base64');
+      prodImagePath = path.join(tempDir, `prod-gen-${Date.now()}.png`);
+      fs.writeFileSync(prodImagePath, prodBuffer);
+      tempFiles.push(prodImagePath);
+      
+      console.log(`   ✅ Images saved to temp`);
+    }
+    
+    if (!charImagePath || !prodImagePath) {
+      return res.status(400).json({ 
+        error: 'Image paths or base64 required',
+        success: false 
+      });
+    }
+
+    // Build style options
+    const styleOptions = {
+      scene,
+      lighting,
+      mood,
+      style,
+      colorPalette,
+      cameraAngle,
+      aspectRatio,
+      negativePrompt
+    };
+
+    // ====================================
+    // STEP 1: Initialize browser service
+    // ====================================
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🎨 BROWSER GENERATION - START`);
+    console.log(`${'='.repeat(80)}\n`);
+    
+    switch (imageGenProvider) {
+      case 'grok':
+      case 'grok.com':
+        browserService = new GrokServiceV2({ headless: false });
+        break;
+      case 'zai':
+      case 'image.z.ai':
+      default:
+        browserService = new ZAIImageService({ headless: false });
+    }
+    
+    console.log(`   🚀 Initializing ${imageGenProvider}...`);
+    await browserService.initialize();
+
+    // ====================================
+    // STEP 2: Build generation prompt
+    // ====================================
+    console.log(`\n🔨 Building generation prompt...`);
+    const generationPrompt = buildGenerationPrompt(prompt, styleOptions);
+    console.log(`   ✅ Prompt built with scene: ${scene}, lighting: ${lighting}, mood: ${mood}`);
+
+    // ====================================
+    // STEP 3: Upload images and generate
+    // ====================================
+    console.log(`\n🖼️  Generating image...`);
+    
+    const outputImagePath = path.join(tempDir, `browser-gen-${Date.now()}.png`);
+    
+    const imageResult = await browserService.generateImage(generationPrompt, {
+      download: true,
+      outputPath: outputImagePath
+    });
+    
+    console.log(`   ✅ Image generated`);
+    
+    // Validate
+    await validateImage(outputImagePath);
+    
+    // Cleanup
+    await browserService.close();
+    cleanupTempFiles(tempFiles);
+
+    // Return generated image
+    const fileStats = fs.statSync(outputImagePath);
+    console.log(`\n✅ BROWSER GENERATION - COMPLETE\n`);
+
+    return res.json({
+      success: true,
+      data: {
+        generatedImages: [{
+          url: `file://${outputImagePath}`,
+          path: outputImagePath,
+          size: fileStats.size,
+          filename: path.basename(outputImagePath),
+          provider: imageGenProvider
+        }],
+        providers: {
+          generation: imageGenProvider
+        },
+        validation: {
+          status: 'valid',
+          size_bytes: fileStats.size,
+          timestamp: new Date().toISOString()
+        }
+      },
+      message: 'Image generated successfully via browser automation'
+    });
+
+  } catch (error) {
+    console.error(`\n❌ GENERATION ERROR:`, error.message);
+    if (browserService) await browserService.close();
+    cleanupTempFiles(tempFiles);
+    
+    return res.status(500).json({
+      error: error.message,
+      success: false,
+      stage: 'generation'
+    });
+  }
+}
+
+/**
+ * Legacy: Analyze and generate image using browser automation - FULL FLOW
+ * DEPRECATED - Use analyzeWithBrowser + generateWithBrowser instead
  */
 export async function analyzeAndGenerate(req, res) {
   let analysisService = null;

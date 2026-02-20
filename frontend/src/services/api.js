@@ -403,7 +403,61 @@ export const unifiedFlowAPI = {
 
 export const browserAutomationAPI = {
   /**
-   * Analyze images using browser automation
+   * Analyze images using browser automation (Step 2 - ANALYSIS ONLY, no generation)
+   * @param {File} characterImage - Character image file
+   * @param {File} productImage - Product/clothing image file
+   * @param {Object} options - Analysis options (scene, lighting, mood, etc.)
+   */
+  analyzeBrowserOnly: async (characterImage, productImage, options = {}) => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('productImage', productImage);
+    formData.append('analysisProvider', options.provider || 'grok');
+    
+    // Add all style options
+    if (options.scene) formData.append('scene', options.scene);
+    if (options.lighting) formData.append('lighting', options.lighting);
+    if (options.mood) formData.append('mood', options.mood);
+    if (options.style) formData.append('style', options.style);
+    if (options.colorPalette) formData.append('colorPalette', options.colorPalette);
+    if (options.hairstyle) formData.append('hairstyle', options.hairstyle);
+    if (options.makeup) formData.append('makeup', options.makeup);
+    if (options.cameraAngle) formData.append('cameraAngle', options.cameraAngle);
+    if (options.aspectRatio) formData.append('aspectRatio', options.aspectRatio);
+    if (options.customPrompt) formData.append('customPrompt', options.customPrompt);
+    
+    return api.postFormData('/v1/browser-automation/analyze-browser', formData);
+  },
+  
+  /**
+   * Generate image using browser automation (Step 5 - GENERATION ONLY)
+   * @param {string} prompt - Generation prompt
+   * @param {Object} options - Generation options
+   */
+  generateBrowserOnly: async (prompt, options = {}) => {
+    const payload = {
+      prompt,
+      imageGenProvider: options.provider || 'grok',
+      negativePrompt: options.negativePrompt || '',
+      scene: options.scene || 'studio',
+      lighting: options.lighting || 'soft-diffused',
+      mood: options.mood || 'confident',
+      style: options.style || 'minimalist',
+      colorPalette: options.colorPalette || 'neutral',
+      cameraAngle: options.cameraAngle || 'eye-level',
+      aspectRatio: options.aspectRatio || '1:1',
+      // Images need to be passed as base64 or paths from previous step
+      characterImageBase64: options.characterImageBase64,
+      productImageBase64: options.productImageBase64,
+      characterImagePath: options.characterImagePath,
+      productImagePath: options.productImagePath
+    };
+    
+    return api.post('/v1/browser-automation/generate-browser', payload);
+  },
+  
+  /**
+   * Analyze images using browser automation (legacy)
    * @param {File} characterImage - Character image file
    * @param {File} clothingImage - Clothing image file
    * @param {string} provider - Provider to use (grok, zai-chat)
