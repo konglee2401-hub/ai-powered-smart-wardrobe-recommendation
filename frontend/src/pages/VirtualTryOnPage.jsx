@@ -14,8 +14,6 @@ import {
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 
-import UseCaseSelector from '../components/UseCaseSelector';
-import ProductFocusSelector from '../components/ProductFocusSelector';
 import StyleCustomizer from '../components/StyleCustomizer';
 
 // Steps
@@ -47,6 +45,16 @@ const FOCUS_OPTIONS = [
   { value: 'specific-item', label: 'Specific' },
 ];
 
+// Helper to convert file to base64
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = error => reject(error);
+  });
+};
+
 export default function VirtualTryOnPage() {
   // State
   const [currentStep, setCurrentStep] = useState(1);
@@ -65,6 +73,9 @@ export default function VirtualTryOnPage() {
   const [analysis, setAnalysis] = useState(null);
   const [generatedPrompt, setGeneratedPrompt] = useState(null);
   const [generatedImages, setGeneratedImages] = useState([]);
+
+  // Store images for generation step (after analysis)
+  const [storedImages, setStoredImages] = useState({ character: null, product: null });
 
   // Loading
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -115,21 +126,35 @@ export default function VirtualTryOnPage() {
     setCurrentStep(2);
 
     try {
-      const response = await browserAutomationAPI.generateImage(
+      // STEP 1: Analyze only - using analyzeBrowserOnly endpoint
+      const analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
         characterImage.file,
         productImage.file,
-        { provider: browserProvider, scene: selectedOptions.scene, lighting: selectedOptions.lighting }
+        { 
+          provider: browserProvider, 
+          scene: selectedOptions.scene || 'studio', 
+          lighting: selectedOptions.lighting || 'soft-diffused',
+          mood: selectedOptions.mood || 'confident',
+          style: selectedOptions.style || 'minimalist',
+          colorPalette: selectedOptions.colorPalette || 'neutral',
+          cameraAngle: selectedOptions.cameraAngle || 'eye-level'
+        }
       );
 
-      if (response.success && response.data) {
-        if (response.data.analysis) {
-          setAnalysis(response.data.analysis);
-          setCurrentStep(3);
-        }
-        if (response.data.generatedImages?.length > 0) {
-          setGeneratedImages(response.data.generatedImages);
-          setCurrentStep(5);
-        }
+      if (analysisResponse.success && analysisResponse.data) {
+        // Store analysis results
+        setAnalysis(analysisResponse.data);
+        
+        // Store image base64 for generation step
+        const charBase64 = await fileToBase64(characterImage.file);
+        const prodBase64 = await fileToBase64(productImage.file);
+        
+        setStoredImages({
+          character: charBase64,
+          product: prodBase64
+        });
+        
+        setCurrentStep(3); // Move to Style step
       }
     } catch (error) {
       console.error('Analysis failed:', error);
@@ -191,14 +216,37 @@ export default function VirtualTryOnPage() {
     setCurrentStep(5);
 
     try {
-      const response = await unifiedFlowAPI.generateImages({
-        prompt: generatedPrompt.positive,
-        negativePrompt: generatedPrompt.negative,
-        options: {
-          imageCount: selectedOptions.imageCount || 2,
-          aspectRatio: selectedOptions.aspectRatio || '1:1'
-        }
-      });
+      let response;
+      
+      if (activeMode === 'browser' && storedImages.character && storedImages.product) {
+        // Use browser automation for generation
+        response = await browserAutomationAPI.generateBrowserOnly(
+          generatedPrompt.positive,
+          {
+            provider: browserProvider,
+            negativePrompt: generatedPrompt.negative,
+            scene: selectedOptions.scene || 'studio',
+            lighting: selectedOptions.lighting || 'soft-diffused',
+            mood: selectedOptions.mood || 'confident',
+            style: selectedOptions.style || 'minimalist',
+            colorPalette: selectedOptions.colorPalette || 'neutral',
+            cameraAngle: selectedOptions.cameraAngle || 'eye-level',
+            aspectRatio: selectedOptions.aspectRatio || '1:1',
+            characterImageBase64: storedImages.character,
+            productImageBase64: storedImages.product
+          }
+        );
+      } else {
+        // Use unified flow API
+        response = await unifiedFlowAPI.generateImages({
+          prompt: generatedPrompt.positive,
+          negativePrompt: generatedPrompt.negative,
+          options: {
+            imageCount: selectedOptions.imageCount || 2,
+            aspectRatio: selectedOptions.aspectRatio || '1:1'
+          }
+        });
+      }
 
       if (response.success && response.data?.generatedImages) {
         setGeneratedImages(response.data.generatedImages);
@@ -221,6 +269,7 @@ export default function VirtualTryOnPage() {
     setAnalysis(null);
     setGeneratedPrompt(null);
     setGeneratedImages([]);
+    setStoredImages({ character: null, product: null });
   };
 
   // ============================================================
