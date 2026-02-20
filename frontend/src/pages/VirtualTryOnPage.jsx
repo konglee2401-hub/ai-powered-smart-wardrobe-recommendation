@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Upload, Sparkles, Sliders, FileText, Rocket, Image,
-  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target
+  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
@@ -19,7 +19,7 @@ import StyleCustomizer from '../components/StyleCustomizer';
 // Steps
 const STEPS = [
   { id: 1, name: 'Upload', icon: Upload },
-  { id: 2, name: 'Analyze', icon: Sparkles },
+  { id: 2, name: 'Analysis', icon: Sparkles },
   { id: 3, name: 'Style', icon: Sliders },
   { id: 4, name: 'Prompt', icon: FileText },
   { id: 5, name: 'Generate', icon: Rocket },
@@ -55,20 +55,26 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Tooltip component
+// Tooltip component - show below on hover
 function Tooltip({ children, content }) {
   return (
-    <div className="group relative inline-block">
+    <div className="group relative inline-block w-full">
       {children}
-      <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 hidden group-hover:block w-48">
-        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl">
+      <div className="absolute bottom-full left-0 mb-2 z-50 hidden group-hover:block w-48">
+        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl whitespace-normal">
           {content}
-          <div className="absolute right-full top-1/2 -translate-y-1/2 border-8 border-transparent border-r-gray-900" />
+          <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-900" />
         </div>
       </div>
     </div>
   );
 }
+
+// Get label by value
+const getLabel = (list, value) => {
+  const item = list.find(i => i.value === value);
+  return item ? item.label : value;
+};
 
 export default function VirtualTryOnPage() {
   // State
@@ -86,16 +92,18 @@ export default function VirtualTryOnPage() {
 
   // Results
   const [analysis, setAnalysis] = useState(null);
+  const [analysisRaw, setAnalysisRaw] = useState(null);
   const [generatedPrompt, setGeneratedPrompt] = useState(null);
   const [generatedImages, setGeneratedImages] = useState([]);
 
-  // Store images for generation step (after analysis)
+  // Store images for generation step
   const [storedImages, setStoredImages] = useState({ character: null, product: null });
 
   // Loading
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Provider
   const [browserProvider, setBrowserProvider] = useState('grok');
@@ -141,7 +149,6 @@ export default function VirtualTryOnPage() {
     setCurrentStep(2);
 
     try {
-      // STEP 1: Analyze only - using analyzeBrowserOnly endpoint
       const analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
         characterImage.file,
         productImage.file,
@@ -157,10 +164,13 @@ export default function VirtualTryOnPage() {
       );
 
       if (analysisResponse.success && analysisResponse.data) {
-        // Store analysis results
+        // Store raw response for display
+        setAnalysisRaw(analysisResponse.data);
+        
+        // Extract analysis content
         setAnalysis(analysisResponse.data);
         
-        // Store image base64 for generation step
+        // Store image base64
         const charBase64 = await fileToBase64(characterImage.file);
         const prodBase64 = await fileToBase64(productImage.file);
         
@@ -169,12 +179,67 @@ export default function VirtualTryOnPage() {
           product: prodBase64
         });
         
-        setCurrentStep(3); // Move to Style step
+        // Stay at Step 2 - show analysis result
+        setCurrentStep(2);
       }
     } catch (error) {
       console.error('Analysis failed:', error);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleApplyRecommendation = () => {
+    // Apply AI recommendations and go to Step 3
+    if (analysis?.analysis?.recommendations) {
+      const rec = analysis.analysis.recommendations;
+      
+      // Apply recommendations to selectedOptions
+      const newOptions = { ...selectedOptions };
+      if (rec.scene) newOptions.scene = rec.scene;
+      if (rec.lighting) newOptions.lighting = rec.lighting;
+      if (rec.mood) newOptions.mood = rec.mood;
+      if (rec.style) newOptions.style = rec.style;
+      if (rec.colorPalette) newOptions.colorPalette = rec.colorPalette;
+      if (rec.cameraAngle) newOptions.cameraAngle = rec.cameraAngle;
+      
+      setSelectedOptions(newOptions);
+    }
+    
+    // Go to Step 3
+    setCurrentStep(3);
+  };
+
+  const handleSaveRecommendations = async () => {
+    if (!analysis?.analysis?.recommendations) return;
+    
+    setIsSaving(true);
+    try {
+      const rec = analysis.analysis.recommendations;
+      
+      // Save each recommendation as new option
+      if (rec.scene) {
+        await aiOptionsAPI.createOption('scene', rec.scene, rec.scene, `AI recommended scene`, {});
+      }
+      if (rec.lighting) {
+        await aiOptionsAPI.createOption('lighting', rec.lighting, rec.lighting, `AI recommended lighting`, {});
+      }
+      if (rec.mood) {
+        await aiOptionsAPI.createOption('mood', rec.mood, rec.mood, `AI recommended mood`, {});
+      }
+      if (rec.colorPalette) {
+        await aiOptionsAPI.createOption('colorPalette', rec.colorPalette, rec.colorPalette, `AI recommended color palette`, {});
+      }
+      
+      // Reload options
+      const options = await aiOptionsAPI.getAllOptions();
+      setPromptOptions(options);
+      
+      alert('Recommendations saved to database!');
+    } catch (error) {
+      console.error('Save failed:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -234,7 +299,6 @@ export default function VirtualTryOnPage() {
       let response;
       
       if (activeMode === 'browser' && storedImages.character && storedImages.product) {
-        // Use browser automation for generation
         response = await browserAutomationAPI.generateBrowserOnly(
           generatedPrompt.positive,
           {
@@ -252,7 +316,6 @@ export default function VirtualTryOnPage() {
           }
         );
       } else {
-        // Use unified flow API
         response = await unifiedFlowAPI.generateImages({
           prompt: generatedPrompt.positive,
           negativePrompt: generatedPrompt.negative,
@@ -282,6 +345,7 @@ export default function VirtualTryOnPage() {
     setSelectedOptions({});
     setCustomOptions({});
     setAnalysis(null);
+    setAnalysisRaw(null);
     setGeneratedPrompt(null);
     setGeneratedImages([]);
     setStoredImages({ character: null, product: null });
@@ -294,6 +358,9 @@ export default function VirtualTryOnPage() {
   const isReadyForAnalysis = characterImage && productImage;
   const isReadyForPrompt = analysis && Object.keys(selectedOptions).length > 0;
   const isReadyForGeneration = generatedPrompt?.positive;
+
+  // Show Use Case / Focus info
+  const showUseCaseFocusInfo = currentStep >= 2;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
@@ -365,7 +432,6 @@ export default function VirtualTryOnPage() {
       <div className="flex-1 flex min-h-0">
         {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
         <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0">
-          {/* Mode */}
           <button
             onClick={() => setActiveMode('browser')}
             className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
@@ -383,7 +449,6 @@ export default function VirtualTryOnPage() {
 
           <div className="w-8 h-px bg-gray-700" />
 
-          {/* Provider */}
           {activeMode === 'browser' && (
             <div className="flex flex-col gap-1">
               {PROVIDERS.map(provider => (
@@ -405,118 +470,170 @@ export default function VirtualTryOnPage() {
           </button>
         </div>
 
-        {/* ==================== LEFT TOOLBAR 2: Options (Use Case + Focus) ==================== */}
+        {/* ==================== LEFT SIDEBAR 2: Options ==================== */}
         <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden flex-shrink-0">
           <div className="p-3 space-y-4 overflow-y-auto flex-1">
-            {/* Use Case */}
-            <div>
-              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
-                <Shirt className="w-3 h-3" /> Use Case
-              </h3>
-              <div className="grid grid-cols-2 gap-1">
-                {USE_CASES.map(uc => (
-                  <Tooltip key={uc.value} content={uc.description}>
-                    <button
-                      onClick={() => setUseCase(uc.value)}
-                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
-                        useCase === uc.value 
-                          ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                          : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                      }`}
-                    >
-                      {uc.label}
-                    </button>
-                  </Tooltip>
-                ))}
-              </div>
-            </div>
+            {/* Step 1: Use Case + Focus (before analysis) */}
+            {currentStep === 1 && (
+              <>
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                    <Shirt className="w-3 h-3" /> Use Case
+                  </h3>
+                  <div className="grid grid-cols-2 gap-1">
+                    {USE_CASES.map(uc => (
+                      <Tooltip key={uc.value} content={uc.description}>
+                        <button
+                          onClick={() => setUseCase(uc.value)}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                            useCase === uc.value 
+                              ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                              : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                          }`}
+                        >
+                          {uc.label}
+                        </button>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Product Focus */}
-            <div>
-              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
-                <Target className="w-3 h-3" /> Focus
-              </h3>
-              <div className="grid grid-cols-2 gap-1">
-                {FOCUS_OPTIONS.map(opt => (
-                  <Tooltip key={opt.value} content={opt.description}>
-                    <button
-                      onClick={() => setProductFocus(opt.value)}
-                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
-                        productFocus === opt.value 
-                          ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                          : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  </Tooltip>
-                ))}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                    <Target className="w-3 h-3" /> Focus
+                  </h3>
+                  <div className="grid grid-cols-2 gap-1">
+                    {FOCUS_OPTIONS.map(opt => (
+                      <Tooltip key={opt.value} content={opt.description}>
+                        <button
+                          onClick={() => setProductFocus(opt.value)}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                            productFocus === opt.value 
+                              ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                              : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Step 3: Style Options (after apply recommendation) */}
+            {currentStep >= 3 && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                  <Sliders className="w-3 h-3" /> Style
+                </h3>
+                <StyleCustomizer
+                  options={promptOptions}
+                  selectedOptions={selectedOptions}
+                  onOptionChange={handleOptionChange}
+                  customOptions={customOptions}
+                  onCustomOptionChange={handleCustomOptionChange}
+                  analysis={analysis?.analysis}
+                />
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* ==================== CENTER: Preview ==================== */}
         <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
-          {/* Upload/Preview Area */}
+          {/* Use Case / Focus Info Bar */}
+          {showUseCaseFocusInfo && (
+            <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
+              <div className="flex items-center gap-4 text-xs">
+                <span className="text-gray-400">Use case:</span>
+                <span className="text-purple-400 font-medium">{getLabel(USE_CASES, useCase)}</span>
+                <span className="text-gray-600">|</span>
+                <span className="text-gray-400">Focus:</span>
+                <span className="text-purple-400 font-medium">{getLabel(FOCUS_OPTIONS, productFocus)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 p-4 overflow-auto">
             <div className="max-w-3xl mx-auto">
-              {/* Upload Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                {/* Character */}
-                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                  {characterImage?.preview ? (
-                    <>
-                      <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
-                      <button
-                        onClick={() => setCharacterImage(null)}
-                        className="absolute top-2 right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                      <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                      <span className="text-sm text-gray-500">Character</span>
-                      <input type="file" accept="image/*" className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) setCharacterImage({ file, preview: URL.createObjectURL(file) });
-                        }}
-                      />
-                    </label>
+              {/* Step 1: Upload */}
+              {currentStep === 1 && (
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
+                    {characterImage?.preview ? (
+                      <>
+                        <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
+                        <button onClick={() => setCharacterImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
+                        <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                        <span className="text-sm text-gray-500">Character</span>
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) setCharacterImage({ file, preview: URL.createObjectURL(file) });
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
+                    {productImage?.preview ? (
+                      <>
+                        <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
+                        <button onClick={() => setProductImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
+                        <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                        <span className="text-sm text-gray-500">Product</span>
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) setProductImage({ file, preview: URL.createObjectURL(file) });
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Analysis Result */}
+              {currentStep === 2 && analysisRaw && (
+                <div className="space-y-4">
+                  <div className="bg-gray-800 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-purple-400 mb-2">🤖 AI Analysis Result</h3>
+                    <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-96 bg-gray-900 rounded-lg p-3">
+                      {typeof analysisRaw === 'string' ? analysisRaw : JSON.stringify(analysisRaw, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Extracted Keywords */}
+                  {analysis?.analysis?.recommendations && (
+                    <div className="bg-gray-800 rounded-xl p-4">
+                      <h3 className="text-sm font-semibold text-green-400 mb-2">📋 Extracted Keywords</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(analysis.analysis.recommendations).map(([key, value]) => (
+                          <span key={key} className="px-2 py-1 bg-gray-700 rounded text-xs">
+                            {key}: <span className="text-purple-400">{value}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
+              )}
 
-                {/* Product */}
-                <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                  {productImage?.preview ? (
-                    <>
-                      <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
-                      <button
-                        onClick={() => setProductImage(null)}
-                        className="absolute top-2 right-2 p-1 bg-red-500 rounded-full hover:bg-red-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                      <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                      <span className="text-sm text-gray-500">Product</span>
-                      <input type="file" accept="image/*" className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) setProductImage({ file, preview: URL.createObjectURL(file) });
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Generated Images */}
+              {/* Step 3+: Generated Images */}
               {generatedImages.length > 0 && (
                 <div className="mb-4">
                   <h3 className="text-sm font-medium text-gray-400 mb-2">Generated ({generatedImages.length})</h3>
@@ -549,7 +666,23 @@ export default function VirtualTryOnPage() {
         {/* ==================== RIGHT SIDEBAR: Style Options ==================== */}
         <div className="w-64 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
           <div className="p-3 space-y-4">
-            {analysis && (
+            {/* Step 2: Analysis + Save Options */}
+            {currentStep === 2 && analysis && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">💾 Save Recommendations</h3>
+                <button
+                  onClick={handleSaveRecommendations}
+                  disabled={isSaving}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600/20 text-green-400 border border-green-600/50 rounded-lg hover:bg-green-600/30 disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span className="text-xs">Save to Database</span>
+                </button>
+              </div>
+            )}
+
+            {/* Step 3+: Style Options in Right Sidebar */}
+            {currentStep >= 3 && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Style Options</h3>
                 <StyleCustomizer
@@ -559,12 +692,12 @@ export default function VirtualTryOnPage() {
                   customOptions={customOptions}
                   onCustomOptionChange={handleCustomOptionChange}
                   recommendations={analysis?.analysis?.recommendations}
-                  newOptions={analysis?.analysis?.newOptions}
                   analysis={analysis?.analysis}
                 />
               </div>
             )}
 
+            {/* Generated Prompt */}
             {generatedPrompt && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Prompt</h3>
@@ -580,14 +713,13 @@ export default function VirtualTryOnPage() {
       {/* ==================== FIXED BOTTOM ACTION BAR ==================== */}
       <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {/* Status */}
           <div className="text-xs text-gray-400">
             {isReadyForAnalysis ? '✅ Ready to start' : '⬆️ Upload images'}
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-2">
-            {!analysis && (
+            {/* Step 1: Start Analysis */}
+            {currentStep === 1 && (
               <button
                 onClick={handleStartAnalysis}
                 disabled={!isReadyForAnalysis || isAnalyzing}
@@ -607,7 +739,19 @@ export default function VirtualTryOnPage() {
               </button>
             )}
 
-            {analysis && !generatedPrompt && !isLoading && (
+            {/* Step 2: Apply Recommendation */}
+            {currentStep === 2 && (
+              <button
+                onClick={handleApplyRecommendation}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+              >
+                <Wand2 className="w-4 h-4" />
+                <span className="text-sm font-medium">Apply Recommendations</span>
+              </button>
+            )}
+
+            {/* Step 3: Build Prompt */}
+            {currentStep === 3 && !generatedPrompt && !isLoading && (
               <button
                 onClick={handleBuildPrompt}
                 disabled={!isReadyForPrompt}
@@ -618,7 +762,8 @@ export default function VirtualTryOnPage() {
               </button>
             )}
 
-            {generatedPrompt && generatedImages.length === 0 && (
+            {/* Step 4: Enhance + Generate */}
+            {currentStep >= 4 && generatedPrompt && generatedImages.length === 0 && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleEnhancePrompt}
@@ -647,6 +792,7 @@ export default function VirtualTryOnPage() {
               </div>
             )}
 
+            {/* Step 5: New */}
             {generatedImages.length > 0 && (
               <button
                 onClick={handleReset}
