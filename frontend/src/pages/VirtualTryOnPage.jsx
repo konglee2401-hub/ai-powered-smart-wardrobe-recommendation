@@ -429,9 +429,9 @@ export default function VirtualTryOnPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex overflow-hidden">
         {/* ==================== LEFT TOOLBAR 1: Mode + Provider ==================== */}
-        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0">
+        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
           <button
             onClick={() => setActiveMode('browser')}
             className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
@@ -471,7 +471,7 @@ export default function VirtualTryOnPage() {
         </div>
 
         {/* ==================== LEFT SIDEBAR 2: Options ==================== */}
-        <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden flex-shrink-0">
+        <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0">
           <div className="p-3 space-y-4 overflow-y-auto flex-1">
             {/* Step 1: Use Case + Focus (before analysis) */}
             {currentStep === 1 && (
