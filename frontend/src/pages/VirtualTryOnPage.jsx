@@ -25,24 +25,24 @@ const STEPS = [
   { id: 5, name: 'Generate', icon: Rocket },
 ];
 
-// Use cases from component
+// Use cases from original component
 const USE_CASES = [
-  { value: 'change-clothes', label: 'Change Clothes' },
-  { value: 'ecommerce-product', label: 'E-commerce' },
-  { value: 'social-media', label: 'Social Media' },
-  { value: 'fashion-editorial', label: 'Editorial' },
-  { value: 'lifestyle-scene', label: 'Lifestyle' },
-  { value: 'before-after', label: 'Before/After' },
+  { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
+  { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
+  { value: 'social-media', label: 'Social Media', description: 'Bài đăng mạng xã hội' },
+  { value: 'fashion-editorial', label: 'Editorial', description: 'Bài báo thời trang chuyên nghiệp' },
+  { value: 'lifestyle-scene', label: 'Lifestyle', description: 'Cảnh sống hàng ngày' },
+  { value: 'before-after', label: 'Before/After', description: 'So sánh trước/sau' },
 ];
 
-// Focus options from component
+// Focus options from original component
 const FOCUS_OPTIONS = [
-  { value: 'full-outfit', label: 'Full Outfit' },
-  { value: 'top', label: 'Top' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'shoes', label: 'Shoes' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'specific-item', label: 'Specific' },
+  { value: 'full-outfit', label: 'Full Outfit', description: 'Toàn bộ trang phục' },
+  { value: 'top', label: 'Top', description: 'Phần trên (áo)' },
+  { value: 'bottom', label: 'Bottom', description: 'Phần dưới (quần/váy)' },
+  { value: 'shoes', label: 'Shoes', description: 'Giày' },
+  { value: 'accessories', label: 'Accessories', description: 'Phụ kiện' },
+  { value: 'specific-item', label: 'Specific', description: 'Món đồ cụ thể' },
 ];
 
 // Helper to convert file to base64
@@ -54,6 +54,21 @@ const fileToBase64 = (file) => {
     reader.onerror = error => reject(error);
   });
 };
+
+// Tooltip component
+function Tooltip({ children, content }) {
+  return (
+    <div className="group relative inline-block">
+      {children}
+      <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 hidden group-hover:block w-48">
+        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl">
+          {content}
+          <div className="absolute right-full top-1/2 -translate-y-1/2 border-8 border-transparent border-r-gray-900" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VirtualTryOnPage() {
   // State
@@ -398,19 +413,20 @@ export default function VirtualTryOnPage() {
               <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                 <Shirt className="w-3 h-3" /> Use Case
               </h3>
-              <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-1">
                 {USE_CASES.map(uc => (
-                  <button
-                    key={uc.value}
-                    onClick={() => setUseCase(uc.value)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${
-                      useCase === uc.value 
-                        ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                        : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                    }`}
-                  >
-                    {uc.label}
-                  </button>
+                  <Tooltip key={uc.value} content={uc.description}>
+                    <button
+                      onClick={() => setUseCase(uc.value)}
+                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                        useCase === uc.value 
+                          ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                          : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                      }`}
+                    >
+                      {uc.label}
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -420,19 +436,20 @@ export default function VirtualTryOnPage() {
               <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                 <Target className="w-3 h-3" /> Focus
               </h3>
-              <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-1">
                 {FOCUS_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setProductFocus(opt.value)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${
-                      productFocus === opt.value 
-                        ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                        : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
+                  <Tooltip key={opt.value} content={opt.description}>
+                    <button
+                      onClick={() => setProductFocus(opt.value)}
+                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                        productFocus === opt.value 
+                          ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
+                          : 'text-gray-400 hover:bg-gray-700 border border-transparent'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </div>
@@ -570,14 +587,23 @@ export default function VirtualTryOnPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {!analysis && !isAnalyzing && (
+            {!analysis && (
               <button
                 onClick={handleStartAnalysis}
-                disabled={!isReadyForAnalysis}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isReadyForAnalysis || isAnalyzing}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[140px] justify-center"
               >
-                <Sparkles className="w-4 h-4" />
-                <span className="text-sm font-medium">Start AI</span>
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm font-medium">Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span className="text-sm font-medium">Start AI</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -599,15 +625,24 @@ export default function VirtualTryOnPage() {
                   disabled={isLoading}
                   className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50"
                 >
-                  <Wand2 className="w-4 h-4" />
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                 </button>
                 <button
                   onClick={handleStartGeneration}
                   disabled={!isReadyForGeneration || isGenerating}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
-                  <Rocket className="w-4 h-4" />
-                  <span className="text-sm font-medium">Generate</span>
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm font-medium">Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-4 h-4" />
+                      <span className="text-sm font-medium">Generate</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
