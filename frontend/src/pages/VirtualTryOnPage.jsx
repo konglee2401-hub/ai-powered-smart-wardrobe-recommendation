@@ -125,17 +125,24 @@ export default function VirtualTryOnPage() {
     const calculateHeight = () => {
       const viewportHeight = window.innerHeight;
       
-      // VirtualTryOnPage header is 56px (h-14)
-      // Navbar is in document flow now (not sticky), so it's part of the content
-      // We only need to subtract the VirtualTryOnPage header
-      const headerHeight = 56;
+      // Find Navbar (the white header from App.jsx)
+      const navbars = document.querySelectorAll('nav');
+      let navHeight = 0;
+      // The first nav is the white Navbar
+      if (navbars.length > 0) {
+        navHeight = navbars[0].offsetHeight;
+      }
       
-      // Calculate: viewport - header(56px)
-      const calculatedHeight = viewportHeight - headerHeight;
+      // VirtualTryOnPage header is 56px (h-14)
+      const pageHeaderHeight = 56;
+      
+      // Calculate: viewport - navbar - page header
+      const calculatedHeight = viewportHeight - navHeight - pageHeaderHeight;
       
       console.log('Height Calculation:', {
         viewportHeight,
-        headerHeight,
+        navHeight,
+        pageHeaderHeight,
         calculatedHeight
       });
       
