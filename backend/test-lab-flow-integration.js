@@ -325,16 +325,16 @@ class LabFlowIntegrationTest {
       console.log('   • You can now verify the page is working');
       console.log('   • Interact with Lab Flow if needed');
       console.log('   • If login page appears, complete authentication');
-      console.log('   • Storage will be captured after 60 seconds\n');
+      console.log('   • Storage will be captured after 120 seconds\n');
       
-      // Show countdown
-      for (let i = 60; i > 0; i--) {
+      // Show countdown (120 seconds = 2 minutes)
+      for (let i = 120; i > 0; i--) {
         process.stdout.write(`⏳ ${i}s remaining...\r`);
         await this.service.page.waitForTimeout(1000);
       }
       
       console.log('                      ');
-      console.log('✅ 60 seconds elapsed - Capturing storage data...\n');
+      console.log('✅ 120 seconds elapsed - Capturing storage data...\n');
       
       // Capture localStorage
       console.log('💾 Capturing localStorage...');

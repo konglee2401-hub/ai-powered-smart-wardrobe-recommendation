@@ -58,11 +58,28 @@ class BrowserService {
           '--disable-blink-features=AutomationControlled',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--disable-features=IsolateOrigins,site-per-process'
+          '--disable-features=IsolateOrigins,site-per-process',
+          // Additional flags to avoid "browser not secure" on Google services
+          '--disable-web-resources',
+          '--disable-sync',
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-breakpad',
+          '--disable-client-side-phishing-detection',
+          '--disable-component-extensions-with-background-pages',
+          '--disable-default-apps',
+          '--disable-default-key-bindings',
+          '--disable-extensions',
+          '--disable-popup-blocking',
+          '--disable-print-preview',
+          '--disable-prompt-on-repost',
+          '--disable-password-manager-reauthentication'
         ],
         defaultViewport: this.options.viewport
       });
-      console.log('✅ Using real Chrome with Cris Lee profile (Profile 2)');
+      console.log('✅ Using real Chrome with profile (disabling security warnings)');
     } catch (error) {
       if (error.message.includes('channel') || error.message.includes('Chrome')) {
         console.log('⚠️  Chrome not found, falling back to Chromium...');

@@ -23,6 +23,10 @@ class GoogleFlowService extends BrowserService {
 
   async initialize() {
     await this.launch();
+    
+    // Add extra CDP protocol to mask automation
+    await this._maskAutomation();
+    
     await this.goto(this.baseUrl);
     
     console.log('⏳ Waiting for Google Flow to load...');
@@ -33,16 +37,72 @@ class GoogleFlowService extends BrowserService {
     
     if (!isLoggedIn) {
       console.log('⚠️  Google login required');
-      console.log('💡 Please login manually in the browser window');
-      console.log('⏳ Waiting 60 seconds for login...');
+      console.log('\n📋 Instructions:');
+      console.log('   1. Login with your Google account in the browser window');
+      console.log('   2. Complete any verification if asked');
+      console.log('   3. Wait for browser window to close automatically\n');
+      console.log('💡 Tip: Use your existing Chrome profile to avoid "browser not secure" error\n');
+      console.log('⏳ Waiting 120 seconds for manual login...\n');
       
-      await this.page.waitForTimeout(60000);
+      // Show countdown
+      for (let i = 120; i > 0; i--) {
+        process.stdout.write(`⏳ ${i}s remaining...\r`);
+        await this.page.waitForTimeout(1000);
+      }
+      
+      console.log('                      ');
+      console.log('✅ 120 seconds elapsed - Checking login status...\n');
       
       // Save session after login
-      await this.saveSession();
+      const saved = await this.saveSession();
+      if (saved) {
+        console.log('💾 Session saved - you won\'t need to login again!\n');
+      }
+    } else {
+      console.log('✅ Already logged in to Google!\n');
     }
     
     console.log('✅ Google Flow initialized');
+  }
+
+  /**
+   * Mask Playwright automation to avoid bot detection
+   */
+  async _maskAutomation() {
+    try {
+      // Override chrome object to look more like real browser
+      await this.page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+        
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+        
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en'],
+        });
+
+        // Mock chrome object for Google services
+        window.chrome = {
+          runtime: {}
+        };
+        
+        // Pass headless check
+        Object.defineProperty(document, 'hidden', {
+          get: () => false,
+        });
+        
+        Object.defineProperty(document, 'visibilityState', {
+          get: () => 'visible',
+        });
+      });
+      
+      console.log('✅ Browser automation masked');
+    } catch (error) {
+      console.warn('⚠️  Could not mask automation:', error.message);
+    }
   }
 
   async _checkIfLoggedIn() {
