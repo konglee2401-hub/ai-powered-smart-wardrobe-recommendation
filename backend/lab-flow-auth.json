@@ -1,0 +1,124 @@
+{
+  "timestamp": "2026-02-21T00:41:45.206Z",
+  "userEmail": "leecris241@gmail.com",
+  "localStorage": {
+    "event": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1771634505}",
+    "_grecaptcha": "09AKhCRwhAFVRMMHnWXNfJZfHgtIjbAr5RgvNCyS6m6itWa1TnSwsmVc6r24vb9Owch1K-AzN0aYwEMKi1bl4qproNlQfEvaeqJQSlRUbxNaDo9uYWcQG4Bs_u4FAbOoh2",
+    "PINHOLE_VIDEO_GENERATION_SETTINGS": "{\"seed\":1234567,\"isSeedLocked\":false,\"outputsPerPrompt\":2,\"videoDuration\":8,\"videoModelDisplayName\":\"Veo 3.1 - Fast\",\"isEnvironmentalAudioEnabled\":false,\"aspectRatio\":\"VIDEO_ASPECT_RATIO_PORTRAIT\"}",
+    "PINHOLE_ASSET_VIEW_MEDIA_TYPE": "\"IMAGES\"",
+    "MOST_RECENT_PINHOLE_IMAGE_MODEL_USED": "\"GEM_PIX_2\""
+  },
+  "cookies": [
+    {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Flabs.google%2Ffx%2Ftools%2Fflow",
+      "domain": "labs.google",
+      "path": "/",
+      "expiry": null,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-next-auth.session-token",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..EQNsD9tEP8RfPimd.M-OVymaIStE_TOAaRDPxOjG6pfKoJxEM75i5Hu752kCePOhjz8_BSEPsEgHUsmTH7Q1OaiSHqdPEZ64AHfqTN7XGBqNtJnKZm8tDiM96QQ0j9-Ufa7sMsWK98JQ03k5DIIZj3o93trjBVjn8UIxY53gyle8kawZOFMjfXwbN9MN8P_qDK13Oy2JMFrleqcDG4M40XLOPmj1fhy0n15mNwxs2oni_sNVlf5fiwrFLcFvKJqOzozWllaqa3tVXK2ZiyqT_kD41T5s_CMedbWrhQ_rlbf8FPbEliVzE-SwimfX1Z-RpVLw8QQPHldLK2zFq4wCPu56VjNv3xRUxp4sLumW5rEODFOdhrDcmS9BEx7DLfaD0ROVXInrK0zCCVWS9A6vwGDrT43GuX6ilFpHgQKOLexRngneO0KBuDKp7lCqgHYB3NSSrvtvKknAnKDWI7vfYWr8L7GGRji8hTz7hjp2kCO5WhUWh5cEMMM5uEam3M7IC-87s4qOElzWsZ29FnLWX6n7eHuVhzuWTfAHM4qSm_JJfntVGpS2rd6swP3TpTpwJQlVShzQg18ybr3SxBhKbWIl4WbGNRdH9Qitk-XEbComPqvBEpsq6Tc-uOoDtW_bIKHyPWpa4rWjRjIcNC68CP5167JDJuq36ajmPqqdQDBZBRdXtXEqbaDJy_HPq3eK9s_UJE2vlM4N86QdsmUFvqSF2hmKEx3rzHixdDHpmhr3nmp6uLHR7V291HPeg-z5KvpOyoNjAgh8PUVw5GvIB2zy-f65-5dXvoghljC9aG6rMs1_1j7Jmmp7bXaMx1RZs2ioLlT9GhQLbkVUI0a3gnFZF1hDxRQRRWEl0473Ppb0QAmcNIwIFI-7YC1nAqqGla-P1b08aLjteXBj_nczppfsEtbkCJyKdFv57mDfCwIR1ubQtfT7I0eM3XoFL9l55_-2f93TkONvpVgn7Zz-sO1RCaCq00rNdw0GXt0hFIsKUxdk.mLg2SoFVTanDGarQci_xiA",
+      "domain": "labs.google",
+      "path": "/",
+      "expiry": 1711270905,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "APISID",
+      "value": "i3Ck0A-VKv7QsXQE/AI5JvvNFusTLywvIv",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "HSID",
+      "value": "A1OUV2Min5-cFut8d",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "SAPISID",
+      "value": "vkwtoHjSKLjX7q1O/A5u2ssIfgAACTABz6",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SID",
+      "value": "g.a0006wi8qlySJLYolA4R0dENkVgjgwW_LLbAPTlL3gOWHgOLU4W_dMTKPWDbZVzyzyrRljE7XQACgYKAV8SARYSFQHGX2MiOIhRF-qLW0BPnEE1rbGblxoVAUF8yKqMgxwIqanzs4uHYESq9aSs0076",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "SIDCC",
+      "value": "AKEyXzV-YTIm5Fuv4DCKoIunsxrb2WqtJaS4sHVRClv902AZhOMfVV4EVGTibg8Oeik6uMwCj-s",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1708778334,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "SSID",
+      "value": "AL2QxxKWK9_cRs7Ss",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "NID",
+      "value": "529=gz9b_3obGlPpkbqwRpUSUCB7n4Lq-qrD_dpMmaQkFDWrEvs2LMV_WZ0HlCLQhp8mMgHunetqJln-4fMbpVKLX-KI1K2T0oGYZxh9vo0j7CihmlQBJdZN9-YXLnvXxdXM1taAeIl9ASBzcBkeb0ZIQSZZIWv5s-9L-VWp6Ykt1d-kmltVcotqSKyZtxDPbqw6WYdLno4qPuzue9AIAPetkVa8WdWgCO5Tdt4PyFes4EGylWBi4sdOJe5wew7ocUMop4FqGuzx2-eRhhhH1gHPEH2FLT0oRtieudAu_mB30FizPKBrH0QoG6KbGMB2x9tpthiiAIxIbYSp0gweHWi8Ue9RoS2UV1UMFLQuXECiKHQnXL9jObptwIlSFEDZuy0ynQ73eGJUmJ7k6la9PYkoaA1yx_FOD1vlYYpQ5WIvWXDT_B5CDFkhzXJzK_K3KiZO3NxTXSgSIhaflUcWGWU2VkC0Bd6t04YLUXfeugk5lOn1E1AHoGMjlBGDnub4X_w91TtMVNY7NSpZTo-s0U7xN5veT9xBYqekyHQAwpBbmybPYT5iL_nfN3izdCspipCfB20SEwNrAHE00SjjCRio5c_jMY7vJ88MJEJ2NKLOuTV4-fHiOVzkvY5xdIaRANrzwEaSv06P7kLfrciivZH93_sbihpRoLQoBBL8ECvtgQjJ12AAY0Ph7Q59CiU5-OvUKWI5SM6liKL-SBL_iGJrUN9u40BmbvYqskbOcD1J8zSn8PMEHWxseD7_XE2CydEO9TG2fzKTBbVdp1EumKDK8hPTK8-xXVeOHVuD-IQz2jvYNbWkztfPeiINDble--Bbc-l6C9DH27LVNFSUgQaXe1hohl0bPeN76VFrq9JJVmcKG5cTojETErDAJLcb_UlQ5VPbrszTKBwX_3nTCOM7V3B4ittgOsTl78DIt69DDubbqZXrgm-m0QKivu84jUFSGROo187GMVr0DiPoPDQiD_FzN2gNmfneD8QvKSLt_1bohnI4HTO2tuABCRRH0klGh0Zmq-O2SxFs0cOcbLLBfZ1O141Ku4rXIyCbHGK7x_AvANgGh7Q05rtJjVASseLMIsP9ROdnCZwxd5W5dSLLwV1RIVYirskCrV-yfBaXnKl7akYnG-N2Iuo3-vk51E3dAvi5goK_JrtmoICyQIkxfg_U-jnhuvZmcN1zdjo5ol5EsMZzKJBllcGuT-5dUwwUeuuJo2znmr8ujXq9ADPT-e-8hTU8ZmxjxmBtJzSjLpxT4X8caUcfYjk9SOihBMiJucjdYDU5VltgKnuA2FSwvLTWybmIK1CwDDLDZ6wF2N2x7x18X05iis6Yk7xzmhi_ssyTBRgFw4dv8nZ9fQIDKa-84Z23E5BxH0alPZQwKnggHyNqBhDiExYAcvNrqvmq1GbXZQ1yx_FOD1vlYYpQ5WIvWXDT_B5CDFkhzXJzK_K3KiZO3NxTXSgSIhaflUcWGWU2VkC0Bd6t04YLUXfeugk5lOn1E1AHoGMjlBGDnub4X_w91TtMVNY7NSpZTo-s0U7xN5veT9xBYqekyHQAwpBbmybPYT5iL_nfN3izdCspipCfB20SEwNrAHE00SjjCRio5c_jMY7vJ88MJEJ2NKLOuTV4-fHiOVzkvY5xdIaRANrzwEaSv06P7kLfrciivZH93_sbihpRoLQoBBL8ECvtgQjJ12AAY0Ph7Q59CiU5-OvUKWI5SM6liKL-SBL_iGJrUN9u40BmbvYqskbOcD1J8zSn8PMEHWxseD7_XE2CydEO9TG2fzKTBbVdp1EumKDK8hPTK8-xXVeOHVuD-IQz2jvYNbWkztfPeiINDble--Bbc-l6C9DH27LVNFSUgQaXe1hohl0bPeN76VFrq9JJVmcKG5cTojETErDAJLcb_UlQ5VPbrszTKBwX_3nTCOM7V3B4ittgOsTl78DIt69DDubbqZXrgm-m0QKivu84jUFSGROo187GMVr0DiPoPDQiD_FzN2gNmfneD8QvKSLt_1bohnI4HTO2tuABCRRH0klGh0Zmq-O2SxFs0cOcbLLBfZ1O141Ku4rXIyCbHGK7x_AvANgGh7Q05rtJjVASseLMIsP9ROdnCZwxd5W5dSLLwV1RIVYirskCrV-yfBaXnKl7akYnG-N2Iuo3-vk51E3dAvi5goK_JrtmoICyQIkxfg_U-jnhuvZmcN1zdjo5ol5EsMZzKJBllcGuT-5dUwwUeuuJo2znmr8ujXq9ADPT-e-8hTU8ZmxjxmBtJzSjLpxT4X8caUcfYjk9SOihBMiJucjdYDU5VltgKnuA2FSwvLTWybmIK1CwDDLDZ6wF2N2x7x18X05iis6Yk7xzmhi_ssyTBRgFw4dv8nZ9fQIDKa-84Z23E5BxH0alPZQwKnggHyNqBhDiExYAcvNrqvmq1GbXZQ1yx_FOD1vlYYpQ5WIvWXDT_B5CDFkhzXJzK_K3KiZO3NxTXSgSIhaflUcWGWU2VkC0Bd6t04YLUXfeugk5lOn1E1AHoGMjlBGDnub4X_w91TtMVNY7NSpZTo-s0U7xN5veT9xBYqekyHQAwpBbmybPYT5iL_nfN3izdCspipCfB20SEwNrAHE00SjjCRio5c_jMY7vJ88MJEJ2NKLOuTV4-fHiOVzkvY5xdIaRANrzwEaSv06P7kLfrciivZH93_sbihpRoLQoBBL8ECvtgQjJ12AAY0Ph7Q59CiU5-OvUKWI5SM6liKL-SBL_iGJrUN9u40BmbvYqskbOcD1J8zSn8PMEHWxseD7_XE2CydEO9TG2fzKTBbVdp1EumKDK8hPTK8-xXVeOHVuD-IQz2jvYNbWkztfPeiINDble--Bbc-l6C9DH27LVNFSUgQaXe1hohl0bPeN76VFrq9JJVmcKG5cTojETErDAJLcb_UlQ5VPbrszTKBwX_3nTCOM7V3B4ittgOsTl78DIt69DDubbqZXrgm-m0QKivu84jUFSGROo187GMVr0DiPoPDQiD_FzN2gNmfneD8QvKSLt_1bohnI4HTO2tuABCRRH0klGh0Zmq-O2SxFs0cOcbLLBfZ1O141Ku4rXIyCbHGK7x_AvANgGh7Q05rtJjVASseLMIsP9ROdnCZwxd5W5dSLLwV1RIVYirskCrV-yfBaXnKl7akYnG-N2Iuo3-vk51E3dAvi5goK_JrtmoICyQIkxfg_U-jnhuvZmcN1zdjo5ol5EsMZzKJBllcGuT-5dUwwUeuuJo2znmr8ujXq9ADPT-e-8hTU8ZmxjxmBtJzSjLpxT4X8caUcfYjk9SOihBMiJucjdYDU5VltgKnuA2FSwvLTWybmIK1CwDDLDZ6wF2N2x7x18X05iis6Yk7xzmhi_ssyTBRgFw4dv8nZ9fQIDKa-84Z23E5BxH0alPZQwKnggHyNqBhDiExYAcvNrqvmq1GbXZKj4ry1CsfDcd-bCCPYyeg5lFkv8T6fBBTCBc0etW7SSz0Jd7LShzwk",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1711355533,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "AEC",
+      "value": "AaJma5uhQ2Hqidf8Y9UCTRgow_QEwtSp1RAbv-EhHrUAnN_d4BgikZw9Lw",
+      "domain": ".google.com",
+      "path": "/",
+      "expiry": 1723151232,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "email",
+      "value": "leecris241%40gmail.com",
+      "domain": "labs.google",
+      "path": "/",
+      "expiry": null,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "notes": "Created from user's manual login. Contains NextAuth session token and Google authentication cookies. Can be loaded by test script to skip login on subsequent runs."
+}

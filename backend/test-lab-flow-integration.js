@@ -20,13 +20,72 @@ class LabFlowIntegrationTest {
     this.baseUrl = 'http://localhost:3002';
     this.tempDir = path.join(process.cwd(), 'temp');
     this.testDir = path.join(this.tempDir, 'lab-flow-tests');
+    this.authFile = path.join(process.cwd(), 'lab-flow-auth.json');
     this.service = null;
+    this.savedAuth = null;
     this.results = {
       totalTests: 0,
       passed: 0,
       failed: 0,
       errors: []
     };
+  }
+
+  loadSavedCredentials() {
+    try {
+      if (fs.existsSync(this.authFile)) {
+        this.savedAuth = JSON.parse(fs.readFileSync(this.authFile, 'utf-8'));
+        console.log('✅ Loaded saved credentials from lab-flow-auth.json');
+        console.log(`   User: ${this.savedAuth.userEmail}`);
+        console.log(`   Saved at: ${this.savedAuth.timestamp}\n`);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`⚠️  Could not load credentials: ${error.message}`);
+    }
+    return false;
+  }
+
+  async setSavedCredentialsInBrowser() {
+    if (!this.savedAuth || !this.service) return false;
+    
+    try {
+      console.log('🔑 Setting saved credentials in browser...');
+      
+      // Set localStorage
+      if (Object.keys(this.savedAuth.localStorage).length > 0) {
+        console.log('   💾 Setting localStorage keys...');
+        await this.service.page.evaluate((data) => {
+          Object.entries(data).forEach(([key, value]) => {
+            localStorage.setItem(key, value);
+          });
+        }, this.savedAuth.localStorage);
+        console.log(`      ✓ Set ${Object.keys(this.savedAuth.localStorage).length} localStorage entries`);
+      }
+      
+      // Set cookies
+      if (this.savedAuth.cookies && this.savedAuth.cookies.length > 0) {
+        console.log('   🍪 Setting cookies...');
+        const cookiesToAdd = this.savedAuth.cookies.map(cookie => ({
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite || 'Lax'
+        }));
+        
+        await this.service.page.context().addCookies(cookiesToAdd);
+        console.log(`      ✓ Set ${this.savedAuth.cookies.length} cookies`);
+      }
+      
+      console.log('✅ Credentials restored from saved file\n');
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Could not set credentials: ${error.message}`);
+      return false;
+    }
   }
 
   async setup() {
@@ -37,7 +96,17 @@ class LabFlowIntegrationTest {
       fs.mkdirSync(this.testDir, { recursive: true });
     }
     
-    console.log(`✅ Test directory: ${this.testDir}\n`);
+    console.log(`✅ Test directory: ${this.testDir}`);
+    
+    // Try to load saved credentials
+    console.log('\n🔐 Checking for saved credentials...');
+    if (this.loadSavedCredentials()) {
+      console.log('💡 Tip: Run test again without login if credentials work');
+    } else {
+      console.log('ℹ️  No saved credentials found - you may need to login manually');
+    }
+    
+    console.log('');
   }
 
   async testDirectService() {
@@ -215,43 +284,57 @@ class LabFlowIntegrationTest {
     }
     
     try {
-      console.log('🔐 Checking Google login status...\n');
+      console.log('🔐 Lab Flow Authentication Setup\n');
       
       // Navigate to Lab Flow
+      console.log('📍 Navigating to https://labs.google/fx/vi/tools/flow');
       await this.service.page.goto('https://labs.google/fx/vi/tools/flow');
-      await this.service.page.waitForTimeout(2000);
+      await this.service.page.waitForTimeout(1000);
       
-      // Check for login prompt
+      // Try to set saved credentials if available
+      if (this.savedAuth) {
+        await this.setSavedCredentialsInBrowser();
+        // Reload page to apply credentials
+        console.log('🔄 Reloading page to apply credentials...');
+        await this.service.page.reload();
+        await this.service.page.waitForTimeout(2000);
+      }
+      
+      // Check login status
+      let needsLogin = false;
       try {
-        const loginButtonExists = await this.service.page.evaluate(() => {
+        needsLogin = await this.service.page.evaluate(() => {
           const buttons = document.querySelectorAll('button');
           return Array.from(buttons).some(btn => 
             btn.textContent.includes('Sign in') || 
             btn.textContent.includes('Đăng nhập')
           );
         });
-        
-        if (loginButtonExists) {
-          console.log('⚠️  Google login required!\n');
-          console.log('📋 Instructions:');
-          console.log('   1. Browser window is now open');
-          console.log('   2. Click "Sign in" / "Đăng nhập"');
-          console.log('   3. Complete Google authentication');
-          console.log('   4. Waiting 60 seconds for you to login...\n');
-          
-          // Show countdown
-          for (let i = 60; i > 0; i--) {
-            process.stdout.write(`⏳ ${i}s remaining...\r`);
-            await this.service.page.waitForTimeout(1000);
-          }
-          
-          console.log('✅ 60 seconds elapsed - Capturing storage data...\n');
-        } else {
-          console.log('✅ Already logged in to Google!\n');
-        }
       } catch (e) {
-        console.log('ℹ️  Could not detect login status, proceeding with storage capture...\n');
+        console.log('ℹ️  Could not detect login button');
       }
+      
+      if (needsLogin) {
+        console.log('⚠️  Login still required - Please authenticate manually\n');
+      } else {
+        console.log('✅ Already authenticated!\n');
+      }
+      
+      // Always wait 60s for user to interact/verify credentials
+      console.log('📋 Waiting Window:');
+      console.log('   • You can now verify the page is working');
+      console.log('   • Interact with Lab Flow if needed');
+      console.log('   • If login page appears, complete authentication');
+      console.log('   • Storage will be captured after 60 seconds\n');
+      
+      // Show countdown
+      for (let i = 60; i > 0; i--) {
+        process.stdout.write(`⏳ ${i}s remaining...\r`);
+        await this.service.page.waitForTimeout(1000);
+      }
+      
+      console.log('                      ');
+      console.log('✅ 60 seconds elapsed - Capturing storage data...\n');
       
       // Capture localStorage
       console.log('💾 Capturing localStorage...');
