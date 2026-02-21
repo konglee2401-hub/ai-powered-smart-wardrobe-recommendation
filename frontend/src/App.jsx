@@ -19,19 +19,19 @@ import AIProviderManager from './pages/AIProviderManager';
 
 // Import components
 import Navbar from './components/Navbar';
-import VirtualTryOnPage from './pages/VirtualTryOnPage';
+import ImageGenerationPage from './pages/ImageGenerationPage';
 import VideoGenerationPage from './pages/VideoGenerationPage';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* VirtualTryOnPage - Full screen with Navbar */}
+        {/* ImageGenerationPage - Full screen with Navbar */}
         <Route path="/" element={
           <div className="h-screen flex flex-col bg-gray-900">
             <Navbar />
             <div className="flex-1 overflow-hidden">
-              <VirtualTryOnPage />
+              <ImageGenerationPage />
             </div>
           </div>
         } />

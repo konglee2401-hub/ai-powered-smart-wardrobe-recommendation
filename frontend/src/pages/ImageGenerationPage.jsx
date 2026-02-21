@@ -88,7 +88,7 @@ const getLabel = (list, value) => {
   return item ? item.label : value;
 };
 
-export default function VirtualTryOnPage() {
+export default function ImageGenerationPage() {
   // State
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('image');
@@ -126,6 +126,7 @@ export default function VirtualTryOnPage() {
   // Provider
   const [browserProvider, setBrowserProvider] = useState('grok');
   const [imageGenProvider, setImageGenProvider] = useState('grok');  // 💫 NEW: Image generation provider
+  const [generationProvider, setGenerationProvider] = useState('google-flow');  // 💫 Image generation provider selection
 
   // Options from API
   const [promptOptions, setPromptOptions] = useState(null);
@@ -168,7 +169,14 @@ export default function VirtualTryOnPage() {
   // Providers
   const PROVIDERS = [
     { id: 'grok', label: 'Grok', icon: '🤖' },
+    { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
+  ];
+  
+  // Image Generation Providers (for generation step)
+  const IMAGE_GEN_PROVIDERS = [
+    { id: 'grok', label: 'Grok Browser', description: 'Fast, web-based' },
+    { id: 'google-flow', label: 'Google Labs Flow', description: 'High quality, 4K capable' },
   ];
 
   // Load options
@@ -481,11 +489,12 @@ export default function VirtualTryOnPage() {
       let response;
       
       if (activeMode === 'browser' && storedImages.character && storedImages.product) {
-        console.log('✅ Using browser generation mode with Grok');
+        console.log('✅ Using browser generation mode with provider:', generationProvider);
         const refBase64 = referenceImage?.file ? await fileToBase64(referenceImage.file) : null;
         
         const genOptions = {
-          imageGenProvider,  // 💫 NEW: Use imageGenProvider instead of provider
+          generationProvider,  // 💫 Image generation provider selection (grok or google-flow)
+          imageGenProvider,  // 💫 For backward compatibility
           negativePrompt: generatedPrompt.negative,
           scene: selectedOptions.scene || 'studio',
           lighting: selectedOptions.lighting || 'soft-diffused',
@@ -1043,17 +1052,46 @@ export default function VirtualTryOnPage() {
 
                   {/* Step 4: Generation Result */}
                   {currentStep === 4 && (
-                    <GenerationResult
-                      images={generatedImages}
-                      isGenerating={isGenerating}
-                      onRegenerate={handleStartGeneration}
-                      generationPrompt={generatedPrompt?.positive}
-                      aspectRatio={aspectRatio}
-                      styleOptions={selectedOptions}
-                      isRegenerating={isGenerating}
-                      characterImage={characterImage?.preview}
-                      productImage={productImage?.preview}
-                    />
+                    <>
+                      {/* Image Generation Provider Selection */}
+                      <div className="mb-6 bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                          <Rocket className="w-4 h-4 text-purple-400" />
+                          Choose Browser Provider
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {IMAGE_GEN_PROVIDERS.map(provider => (
+                            <button
+                              key={provider.id}
+                              onClick={() => setGenerationProvider(provider.id)}
+                              className={`p-3 rounded-lg text-left transition-all ${
+                                generationProvider === provider.id
+                                  ? 'bg-purple-600 border border-purple-500 shadow-lg shadow-purple-500/20'
+                                  : 'bg-gray-700/50 border border-gray-600 hover:border-gray-500'
+                              }`}
+                            >
+                              <div className="font-medium text-sm text-white">{provider.label}</div>
+                              <div className="text-xs text-gray-400 mt-1">{provider.description}</div>
+                              {generationProvider === provider.id && (
+                                <div className="mt-2 text-xs text-purple-300 font-medium">✓ Selected</div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <GenerationResult
+                        images={generatedImages}
+                        isGenerating={isGenerating}
+                        onRegenerate={handleStartGeneration}
+                        generationPrompt={generatedPrompt?.positive}
+                        aspectRatio={aspectRatio}
+                        styleOptions={selectedOptions}
+                        isRegenerating={isGenerating}
+                        characterImage={characterImage?.preview}
+                        productImage={productImage?.preview}
+                      />
+                    </>
                   )}
 
                   {(isAnalyzing) && (

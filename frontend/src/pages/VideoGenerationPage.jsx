@@ -1,6 +1,6 @@
 /**
- * AI Creative Studio - Video Generation from Images
- * - Step 1: Settings (Video Duration + Scenario)
+ * AI Creative Studio - Video Generation
+ * - Step 1: Provider + Settings (Duration + Scenario)
  * - Step 2: Prompt (Script Builder)
  * - Step 3: Generate (Video Creation)
  */
@@ -22,12 +22,43 @@ const STEPS = [
   { id: 3, name: 'Generate', icon: Rocket },
 ];
 
+// 💫 NEW: Video Provider Options
+const VIDEO_PROVIDERS = [
+  { id: 'grok', label: 'Grok', icon: '🤖', description: 'Fast, interactive video generation' },
+  { id: 'google-flow', label: 'Google Flow', icon: '🌐', description: 'High quality, Advanced AI' },
+];
+
 // Step 1: Settings Component
-function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selectedScenario, onScenarioChange, onImageChange }) {
+function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selectedScenario, onScenarioChange, onImageChange, videoProvider, onVideoProviderChange }) {
   const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
 
   return (
     <div className="space-y-4">
+      {/* 💫 NEW: Provider Selection */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          Video Provider
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          {VIDEO_PROVIDERS.map(provider => (
+            <button
+              key={provider.id}
+              onClick={() => onVideoProviderChange(provider.id)}
+              className={`p-3 rounded-lg border-2 transition-all text-left ${
+                videoProvider === provider.id
+                  ? 'border-amber-500 bg-amber-600/20 text-white'
+                  : 'border-gray-700 hover:border-gray-600 text-gray-300'
+              }`}
+            >
+              <div className="text-lg mb-1">{provider.icon}</div>
+              <div className="font-medium text-sm">{provider.label}</div>
+              <div className="text-xs text-gray-400 mt-1">{provider.description}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Duration Selection */}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -353,6 +384,7 @@ export default function VideoGenerationPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [selectedScenario, setSelectedScenario] = useState('product-intro');
+  const [videoProvider, setVideoProvider] = useState('grok');  // 💫 NEW: Video provider selection
   const [prompts, setPrompts] = useState(['', '', '']);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showFinalPrompt, setShowFinalPrompt] = useState(true);
@@ -385,6 +417,7 @@ export default function VideoGenerationPage() {
     try {
       // Prepare video generation request
       const videoData = {
+        videoProvider,  // 💫 NEW: Include video provider selection
         duration: selectedDuration,
         scenario: selectedScenario,
         segments: prompts,
@@ -393,7 +426,8 @@ export default function VideoGenerationPage() {
         productImage
       };
 
-      console.log('📹 Starting video generation:', videoData);
+      console.log('📹 Starting video generation with provider:', videoProvider);
+      console.log('   Video data:', videoData);
 
       // Call backend API
       const response = await browserAutomationAPI.generateVideo(videoData);
@@ -472,6 +506,8 @@ export default function VideoGenerationPage() {
                   selectedScenario={selectedScenario}
                   onScenarioChange={setSelectedScenario}
                   onImageChange={handleImageChange}
+                  videoProvider={videoProvider}
+                  onVideoProviderChange={setVideoProvider}
                 />
               )}
 

@@ -6,6 +6,14 @@
         "/^node backend/test-gemini-direct\\.js$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^node debug-popup-detailed\\.js 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd \"c:/Work/Affiliate-AI/smart-wardrobe/backend\" && node debug-entire-page-popup\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

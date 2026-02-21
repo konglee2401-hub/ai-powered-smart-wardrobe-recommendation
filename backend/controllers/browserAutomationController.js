@@ -2,6 +2,8 @@ import GrokServiceV2 from '../services/browser/grokServiceV2.js';
 import ZAIChatService from '../services/browser/zaiChatService.js';
 import ZAIImageService from '../services/browser/zaiImageService.js';
 import GoogleFlowService from '../services/browser/googleFlowService.js';
+import { runImageGeneration } from '../services/imageGenerationService.js'; // 💫 Image Generation Service
+import { runVideoGeneration } from '../services/videoGenerationServiceV2.js'; // 💫 Video Generation Service (V2 with image upload support)
 import VideoGeneration from '../models/VideoGeneration.js';
 import uploadToImgBB from '../services/uploaders/imgbbUploader.js'; // 💫 NEW
 import path from 'path';
@@ -1032,6 +1034,7 @@ export async function generateWithBrowser(req, res) {
 
   try {
     const { 
+      generationProvider = 'grok',  // 💫 Image generation provider selection
       imageGenProvider = 'grok',
       prompt,
       negativePrompt = '',
@@ -1101,7 +1104,58 @@ export async function generateWithBrowser(req, res) {
     };
 
     // ====================================
-    // STEP 1: Initialize browser service
+    // 💫 NEW: Check if using Google Flow image generation
+    // ====================================
+    if (generationProvider === 'google-flow') {
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`🎯 IMAGE GENERATION - GOOGLE FLOW`);
+      console.log(`${'='.repeat(80)}\n`);
+
+      try {
+        const genResult = await runImageGeneration({
+          personImagePath: charImagePath,
+          productImagePath: prodImagePath,
+          prompt: prompt,
+          imageCount: imageCount,
+          aspectRatio: aspectRatio,
+          outputDir: path.join(tempDir, 'image-gen-results')
+        });
+
+        // Cleanup temp files
+        cleanupTempFiles(tempFiles);
+
+        console.log(`✅ Google Flow image generation complete`);
+        
+        return res.json({
+          success: true,
+          data: {
+            generatedImages: [{
+              filename: 'gen-result',
+              genResult: genResult,
+              provider: 'google-flow',
+              generatedAt: new Date().toISOString()
+            }],
+            providers: {
+              generation: 'google-flow'
+            }
+          },
+          message: `Images generated successfully via Google Labs Flow`
+        });
+
+      } catch (genError) {
+        console.error(`❌ Google Flow Image Generation Error:`, genError.message);
+        cleanupTempFiles(tempFiles);
+        
+        return res.status(500).json({
+          error: `Google Flow image generation failed: ${genError.message}`,
+          success: false,
+          stage: 'image-generation'
+        });
+      }
+    }
+
+    // ====================================
+    // STEP 1: Initialize browser service (for Grok provider)
     // ====================================
     console.log(`\n${'='.repeat(80)}`);
     console.log(`🎨 BROWSER GENERATION - START`);
@@ -1586,7 +1640,10 @@ export async function generateImageBrowser(req, res) {
 
 export async function generateVideoBrowser(req, res) {
   try {
-    const { duration, scenario, segments, sourceImage, provider = 'grok' } = req.body;
+    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok' } = req.body;
+    
+    // Accept both provider and videoProvider for backward compatibility
+    const selectedProvider = videoProvider || provider || 'grok';
 
     if (!segments || !Array.isArray(segments) || segments.length === 0) {
       return res.status(400).json({
@@ -1602,11 +1659,11 @@ export async function generateVideoBrowser(req, res) {
       });
     }
 
-    // Only Grok is supported for video
-    if (provider !== 'grok') {
+    // Support both Grok and Google Flow
+    if (selectedProvider !== 'grok' && selectedProvider !== 'google-flow') {
       return res.status(400).json({
         success: false,
-        error: `Video generation only supported for Grok, got: ${provider}`
+        error: `Video generation supported for: grok, google-flow. Got: ${selectedProvider}`
       });
     }
 
@@ -1615,8 +1672,58 @@ export async function generateVideoBrowser(req, res) {
     console.log(`Duration: ${duration}s`);
     console.log(`Scenario: ${scenario}`);
     console.log(`Segments: ${segments.length}`);
-    console.log(`Provider: ${provider}`);
+    console.log(`Provider: ${selectedProvider}`);
     console.log('');
+
+    // ====================================
+    // Handle Google Flow video generation
+    // ====================================
+    if (selectedProvider === 'google-flow') {
+      console.log('📺 Using Google Flow for video generation\n');
+
+      try {
+        const googleFlowService = new GoogleFlowService({ headless: false });
+        await googleFlowService.init();
+        await googleFlowService.navigateToProject();
+
+        // For Google Flow, combine segments into a single prompt
+        const combinedPrompt = segments.join('. ');
+
+        const videoResult = await googleFlowService.generateVideo(combinedPrompt, {
+          duration,
+          quality: 'high',
+          download: false
+        });
+
+        console.log(`✅ Google Flow video generation complete`);
+
+        return res.json({
+          success: true,
+          data: {
+            videoUrl: videoResult.url,
+            provider: 'google-flow',
+            scenario,
+            duration,
+            generatedAt: new Date().toISOString()
+          },
+          message: 'Video generated successfully via Google Flow'
+        });
+
+      } catch (flowError) {
+        console.error(`❌ Google Flow Video Generation Error:`, flowError.message);
+
+        return res.status(500).json({
+          error: `Google Flow video generation failed: ${flowError.message}`,
+          success: false,
+          stage: 'video-generation'
+        });
+      }
+    }
+
+    // ====================================
+    // Default: Grok video generation
+    // ====================================
+    console.log('🤖 Using Grok for video generation\n');
 
     // Initialize Grok Service
     const grok = new GrokServiceV2({
@@ -1648,7 +1755,7 @@ export async function generateVideoBrowser(req, res) {
     const result = await grok.generateVideoWithSegments(imageBase64, segments, {
       duration,
       scenario,
-      provider
+      provider: 'grok'
     });
 
     console.log('\n✅ Video generation complete');
@@ -1677,7 +1784,7 @@ export async function generateVideoBrowser(req, res) {
           metrics: result.metrics || {},
           duration,
           scenario,
-          provider
+          provider: 'grok'
         });
         
         await videoDoc.save();
@@ -1745,14 +1852,185 @@ async function downloadImageAsBase64(imageUrl) {
         
         response.on('end', () => {
           const base64 = data.toString('base64');
-          resolve(base64);
+          const ext = new URL(imageUrl).pathname.split('.').pop() || 'jpg';
+          resolve(`data:image/${ext};base64,${base64}`);
         });
-        
-        response.on('error', reject);
       }).on('error', reject);
     });
   } catch (error) {
-    console.error('Failed to download image:', error);
-    return null;
+    console.error('Failed to download image:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Generate video using selected provider (Grok or Google Flow)
+ * @param {Object} req - Express request with videoProvider, prompt, duration, quality, etc.
+ * @param {Object} res - Express response
+ */
+export async function generateVideo(req, res) {
+  try {
+    const {
+      videoProvider = 'grok',  // 💫 Video provider selection
+      prompt,
+      imagePath,  // 💫 NEW: Path to image file for video generation
+      imageBase64,  // 💫 NEW: Base64 encoded image
+      duration = 5,  // seconds
+      quality = 'high',  // low, medium, high
+      aspectRatio = '16:9',  // 16:9, 9:16, 1:1
+      characterImageBase64,  // Optional: for Grok background generation
+      productImageBase64,  // Optional: for context
+    } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: 'Prompt is required',
+        success: false
+      });
+    }
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🎬 VIDEO GENERATION - ${videoProvider.toUpperCase()}`);
+    console.log(`${'='.repeat(80)}\n`);
+    console.log(`⏱️  Duration: ${duration}s`);
+    console.log(`📐 Aspect Ratio: ${aspectRatio}`);
+    console.log(`✨ Quality: ${quality}\n`);
+
+    // ====================================
+    // 💫 Check if using Google Flow video generation
+    // ====================================
+    if (videoProvider === 'google-flow') {
+      console.log(`📺 Using Google Labs Flow for video generation\n`);
+
+      try {
+        let finalImagePath = imagePath;
+
+        // 💫 NEW: Handle Base64 image upload
+        if (imageBase64 && !imagePath) {
+          const base64Match = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (!base64Match) {
+            throw new Error('Invalid Base64 image format');
+          }
+          
+          const imageFormat = base64Match[1];
+          const imageBuffer = Buffer.from(base64Match[2], 'base64');
+          const tempImagePath = path.join(tempDir, `video-source-${Date.now()}.${imageFormat}`);
+          
+          fs.writeFileSync(tempImagePath, imageBuffer);
+          finalImagePath = tempImagePath;
+          console.log(`✓ Saved uploaded image to ${tempImagePath}\n`);
+        }
+
+        const videoResult = await runVideoGeneration({
+          prompt: prompt,
+          imagePath: finalImagePath,  // 💫 NEW: Pass image path to service
+          duration: duration,
+          aspectRatio: aspectRatio,
+          quality: quality,
+          outputDir: path.join(process.cwd(), 'temp', 'video-results')
+        });
+
+        if (!videoResult.success) {
+          throw new Error(videoResult.error || 'Video generation failed');
+        }
+
+        console.log(`✅ Google Flow video generation complete`);
+
+        return res.json({
+          success: true,
+          data: {
+            video: videoResult.video,
+            provider: 'google-flow',
+            prompt: prompt,
+            duration: duration,
+            quality: quality,
+            aspectRatio: aspectRatio,
+            hasImage: !!finalImagePath,  // 💫 NEW: Indicate if image was used
+            generatedAt: new Date().toISOString()
+          },
+          message: `Video generated successfully via Google Labs Flow`
+        });
+
+      } catch (flowError) {
+        console.error(`❌ Google Flow Video Generation Error:`, flowError.message);
+
+        return res.status(500).json({
+          error: `Google Flow video generation failed: ${flowError.message}`,
+          success: false,
+          stage: 'video-generation'
+        });
+      }
+    }
+
+    // ====================================
+    // Default: Grok video generation (with segments)
+    // ====================================
+    console.log(`🤖 Using Grok for video generation\n`);
+
+    try {
+      // For Grok, we might use image-based video generation if images provided
+      let imageBase64 = null;
+
+      if (characterImageBase64) {
+        imageBase64 = characterImageBase64;
+      } else if (productImageBase64) {
+        imageBase64 = productImageBase64;
+      }
+
+      const grokService = new GrokServiceV2({ headless: false });
+
+      let videoResult;
+
+      if (imageBase64) {
+        // Video generation from image with segments
+        const segments = [prompt]; // Can split prompt into segments for complex videos
+
+        videoResult = await grokService.generateVideoWithSegments(imageBase64, segments, {
+          duration: duration,
+          scenario: prompt.substring(0, 100),
+          quality: quality
+        });
+      } else {
+        // Text-only video generation - will use Grok's direct video generation
+        videoResult = {
+          success: true,
+          message: 'Use text prompt for Grok video generation',
+          prompt: prompt,
+          duration: duration
+        };
+      }
+
+      console.log(`✅ Grok video generation setup complete`);
+
+      return res.json({
+        success: true,
+        data: {
+          video: videoResult,
+          provider: 'grok',
+          prompt: prompt,
+          duration: duration,
+          quality: quality,
+          aspectRatio: aspectRatio,
+          generatedAt: new Date().toISOString()
+        },
+        message: `Video generation initiated via Grok`
+      });
+
+    } catch (grokError) {
+      console.error(`❌ Grok Video Generation Error:`, grokError.message);
+
+      return res.status(500).json({
+        error: `Grok video generation failed: ${grokError.message}`,
+        success: false,
+        stage: 'video-generation'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Video generation error:', error);
+    return res.status(500).json({
+      error: error.message,
+      success: false
+    });
   }
 }

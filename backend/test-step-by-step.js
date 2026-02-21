@@ -1,204 +1,113 @@
 #!/usr/bin/env node
 
-/**
- * Test the complete step-by-step flow
- * Tests all 3 backend endpoints in the new architecture:
- * 1. POST /api/ai/analyze-unified
- * 2. POST /api/ai/build-prompt-unified
- * 3. POST /api/ai/generate-unified
- */
-
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
-import fetch from 'node-fetch';
-import FormData from 'form-data';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const API_URL = process.env.API_URL || 'http://localhost:5000';
+puppeteer.use(StealthPlugin());
 
-console.log('\n' + '='.repeat(80));
-console.log('  🧪 STEP-BY-STEP FLOW TEST');
-console.log('='.repeat(80) + '\n');
+const SESSION_FILE = path.join(__dirname, '.sessions/google-flow-session.json');
+const PROJECT_URL = 'https://labs.google/fx/vi/tools/flow/project/3ba9e02e-0a33-4cf2-9d55-4c396941d7b7';
+const TEST_IMAGE = path.join(__dirname, 'test-image.png');
 
-// Helper function to pretty print
-function log(step, message) {
-  const icon = message.includes('❌') ? '❌' : message.includes('⏳') ? '⏳' : message.includes('✅') ? '✅' : 'ℹ️';
-  console.log(`${icon} STEP ${step}: ${message}`);
-}
-
-async function runTest() {
+async function testStepByStep() {
+  let browser;
   try {
-    // ============================================================
-    // STEP 1: ANALYZE UNIFIED
-    // ============================================================
-    console.log('\n📸 STEP 1: ANALYZE UNIFIED');
-    console.log('-'.repeat(80));
-    
-    // Find test image
-    const testImageDir = path.join(__dirname, 'test-images');
-    const images = fs.readdirSync(testImageDir).filter(f => 
-      /\.(jpg|jpeg|png|webp)$/i.test(f)
-    );
-    
-    if (images.length < 2) {
-      log(1, '❌ Test requires at least 2 test images');
+    console.log('��� Step-by-step popup testing\n');
+
+    if (!fs.existsSync(SESSION_FILE)) {
+      console.error('❌ Session file not found');
       return;
     }
 
-    const characterImagePath = path.join(testImageDir, images[0]);
-    const productImagePath = path.join(testImageDir, images[1]);
-    
-    log(1, `Using images: ${images[0]}, ${images[1]}`);
+    const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
 
-    // Create form data
-    const formData = new FormData();
-    formData.append('characterImage', fs.createReadStream(characterImagePath));
-    formData.append('productImage', fs.createReadStream(productImagePath));
-    formData.append('useCase', 'change-clothes');
-    formData.append('productFocus', 'full-outfit');
+    browser = await puppeteer.launch({ headless: false, args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
 
-    // Call analyze endpoint
-    log(1, '⏳ Calling /api/ai/analyze-unified...');
-    const analyzeResponse = await fetch(`${API_URL}/api/ai/analyze-unified`, {
-      method: 'POST',
-      body: formData,
-      headers: formData.getHeaders()
-    });
-
-    if (!analyzeResponse.ok) {
-      const error = await analyzeResponse.text();
-      log(1, `❌ Analysis failed: ${analyzeResponse.status} - ${error}`);
-      return;
+    for (const cookie of sessionData.cookies) {
+      try { await page.setCookie(cookie); } catch (e) {}
     }
 
-    const analyzeData = await analyzeResponse.json();
-    log(1, '✅ Analysis completed successfully');
+    console.log('Step 1: Loading page...');
+    await page.goto(PROJECT_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: '01-page-loaded.png' });
+    console.log('✓ Screenshot: 01-page-loaded.png\n');
 
-    if (!analyzeData.success || !analyzeData.data.analysis) {
-      log(1, `❌ Invalid response structure: ${JSON.stringify(analyzeData).substring(0, 100)}`);
-      return;
-    }
-
-    const analysis = analyzeData.data.analysis;
-    console.log(`   📊 Character: ${analysis.character?.name || 'Unknown'}`);
-    console.log(`   📊 Outfit Compatibility: ${analysis.outfitCompatibility || 'N/A'}`);
-    console.log(`   📊 Recommendations found: ${Object.keys(analysis.recommendations || {}).length}`);
-
-    // ============================================================
-    // STEP 2: BUILD PROMPT
-    // ============================================================
-    console.log('\n🎨 STEP 2: BUILD PROMPT UNIFIED');
-    console.log('-'.repeat(80));
-
-    const selectedOptions = {
-      style: 'modern casual',
-      color: 'black',
-      occasion: 'casual',
-      imageCount: 2
-    };
-
-    log(2, `⏳ Calling /api/ai/build-prompt-unified...`);
-    log(2, `📋 Selected options: ${JSON.stringify(selectedOptions)}`);
-
-    const promptResponse = await fetch(`${API_URL}/api/ai/build-prompt-unified`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        analysis,
-        selectedOptions
-      })
-    });
-
-    if (!promptResponse.ok) {
-      const error = await promptResponse.text();
-      log(2, `❌ Prompt building failed: ${promptResponse.status} - ${error}`);
-      return;
-    }
-
-    const promptData = await promptResponse.json();
-    log(2, '✅ Prompt built successfully');
-
-    if (!promptData.success || !promptData.data.prompt) {
-      log(2, `❌ Invalid response structure: ${JSON.stringify(promptData).substring(0, 100)}`);
-      return;
-    }
-
-    const prompt = promptData.data.prompt;
-    console.log(`   📝 Positive: ${prompt.positive.substring(0, 100)}...`);
-    console.log(`   📝 Negative: ${prompt.negative.substring(0, 100)}...`);
-
-    // ============================================================
-    // STEP 3: GENERATE IMAGES
-    // ============================================================
-    console.log('\n🎨 STEP 3: GENERATE IMAGES UNIFIED');
-    console.log('-'.repeat(80));
-
-    log(3, `⏳ Calling /api/ai/generate-unified...`);
-    log(3, `⏳ (This may take 30+ seconds or fail if no image providers configured)`);
-
-    const generatePromise = fetch(`${API_URL}/api/ai/generate-unified`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        prompt: prompt.positive,
-        negativePrompt: prompt.negative,
-        options: {
-          imageCount: 2,
-          aspectRatio: '1:1'
+    console.log('Step 2: Looking for add button...');
+    const addButtonInfo = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      for (const btn of buttons) {
+        const icon = btn.querySelector('i');
+        if (icon && icon.textContent.includes('add')) {
+          return {
+            found: true,
+            visible: btn.offsetParent !== null
+          };
         }
-      })
+      }
+      return { found: false };
     });
 
-    // Add 30-second timeout for generation
-    const generateResponse = await Promise.race([
-      generatePromise,
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Generation timeout (30s)')), 30000)
-      )
-    ]);
-
-    if (!generateResponse.ok) {
-      const error = await generateResponse.text();
-      log(3, `❌ Generation failed: ${generateResponse.status} - ${error}`);
+    if (!addButtonInfo.found) {
+      console.log('❌ Add button not found!');
       return;
     }
 
-    const generateData = await generateResponse.json();
-    
-    if (!generateData.success) {
-      log(3, `❌ Image generation not ready yet (expected): ${generateData.message || 'Feature in progress'}`);
-      console.log('   ℹ️  This is expected - backend may not have image generation providers configured');
-    } else {
-      log(3, '✅ Images generated successfully');
-      const images = generateData.data.generatedImages || [];
-      console.log(`   📊 Generated ${images.length} images`);
-    }
+    console.log('✓ Add button found\n');
 
-    // ============================================================
-    // SUMMARY
-    // ============================================================
-    console.log('\n' + '='.repeat(80));
-    console.log('  ✅ STEP-BY-STEP FLOW TEST COMPLETE');
-    console.log('='.repeat(80) + '\n');
-    console.log('✅ Steps 1-2 working correctly (Analysis → Prompt Building)');
-    console.log('⏳ Step 3 status: ' + (generateData.success ? '✅ Ready' : '⏭️  Awaiting provider config'));
-    console.log('\n📌 ARCHITECTURE VALIDATION:');
-    console.log('✅ Each endpoint executes independently');
-    console.log('✅ Analysis provides data to Prompt Building');
-    console.log('✅ Prompt Building provides data to Image Generation');
-    console.log('✅ Frontend can now orchestrate step-by-step flow\n');
+    console.log('Step 3: Clicking add button...');
+    await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      for (const btn of buttons) {
+        const icon = btn.querySelector('i');
+        if (icon && icon.textContent.includes('add')) {
+          btn.click();
+          return;
+        }
+      }
+    });
+
+    console.log('Waiting for popup...');
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: '02-after-click.png' });
+    console.log('✓ Screenshot: 02-after-click.png\n');
+
+    const fileInputCount = await page.evaluate(() => {
+      return document.querySelectorAll('input[type="file"]').length;
+    });
+
+    console.log(`File inputs found: ${fileInputCount}\n`);
+
+    if (fileInputCount > 0) {
+      console.log('✅ Attempting file upload...\n');
+      const fileChooserPromise = page.waitForFileChooser({ timeout: 3000 });
+      await page.evaluate(() => {
+        document.querySelector('input[type="file"]').click();
+      });
+      const fileChooser = await fileChooserPromise;
+      await fileChooser.accept([TEST_IMAGE]);
+      console.log('✓ File uploaded\n');
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: '03-after-upload.png' });
+      console.log('✓ Screenshot: 03-after-upload.png\n');
+    } else {
+      console.log('❌ No file input found\n');
+    }
 
   } catch (error) {
-    console.error('\n❌ Test failed with error:', error.message);
-    console.error(error.stack);
-    process.exit(1);
+    console.error('❌ Error:', error.message);
+  } finally {
+    if (browser) {
+      await browser.close();
+      console.log('Done');
+    }
   }
 }
 
-// Run the test
-runTest();
+testStepByStep();

@@ -453,7 +453,8 @@ export const browserAutomationAPI = {
   generateBrowserOnly: async (prompt, options = {}) => {
     const payload = {
       prompt,
-      imageGenProvider: options.provider || 'grok',
+      generationProvider: options.generationProvider || 'grok',  // 💫 Image generation provider
+      imageGenProvider: options.imageGenProvider || options.provider || 'grok',
       negativePrompt: options.negativePrompt || '',
       scene: options.scene || 'studio',
       lighting: options.lighting || 'soft-diffused',
@@ -481,7 +482,25 @@ export const browserAutomationAPI = {
     
     return api.post('/v1/browser-automation/generate-browser', payload);
   },
-  
+
+  /**
+   * Generate video with provider selection (Grok or Google Flow)
+   * @param {Object} options - Generation options
+   */
+  generateVideoWithProvider: async (options = {}) => {
+    const payload = {
+      videoProvider: options.videoProvider || 'grok',  // 💫 Video provider selection
+      prompt: options.prompt || '',
+      duration: options.duration || 5,
+      quality: options.quality || 'high',
+      aspectRatio: options.aspectRatio || '16:9',
+      characterImageBase64: options.characterImageBase64,
+      productImageBase64: options.productImageBase64
+    };
+
+    return api.post('/v1/browser-automation/generate-video-with-provider', payload);
+  },
+
   /**
    * Analyze images using browser automation (legacy)
    * @param {File} characterImage - Character image file
