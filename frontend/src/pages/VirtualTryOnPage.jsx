@@ -125,6 +125,7 @@ export default function VirtualTryOnPage() {
 
   // Provider
   const [browserProvider, setBrowserProvider] = useState('grok');
+  const [imageGenProvider, setImageGenProvider] = useState('grok');  // 💫 NEW: Image generation provider
 
   // Options from API
   const [promptOptions, setPromptOptions] = useState(null);
@@ -484,7 +485,7 @@ export default function VirtualTryOnPage() {
         const refBase64 = referenceImage?.file ? await fileToBase64(referenceImage.file) : null;
         
         const genOptions = {
-          provider: browserProvider,
+          imageGenProvider,  // 💫 NEW: Use imageGenProvider instead of provider
           negativePrompt: generatedPrompt.negative,
           scene: selectedOptions.scene || 'studio',
           lighting: selectedOptions.lighting || 'soft-diffused',
@@ -839,6 +840,34 @@ export default function VirtualTryOnPage() {
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                   <Rocket className="w-3 h-3" /> Generation
                 </h3>
+                
+                {/* 💫 NEW: Image Generation Provider Selection */}
+                <div className="mb-4 pb-4 border-b border-gray-700">
+                  <label className="text-xs text-gray-400 mb-2 block">Image Generation Provider</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setImageGenProvider('grok')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        imageGenProvider === 'grok'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      🤖 Grok
+                    </button>
+                    <button
+                      onClick={() => setImageGenProvider('lab-flow')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        imageGenProvider === 'lab-flow'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      🎨 Google Lab Flow
+                    </button>
+                  </div>
+                </div>
+                
                 <GenerationOptions
                   imageCount={imageCount}
                   onImageCountChange={setImageCount}

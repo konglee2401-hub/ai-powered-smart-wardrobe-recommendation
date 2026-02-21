@@ -1112,6 +1112,11 @@ export async function generateWithBrowser(req, res) {
       case 'grok.com':
         browserService = new GrokServiceV2({ headless: false });
         break;
+      case 'lab-flow':
+      case 'google-lab-flow':
+      case 'google-flow':
+        browserService = new GoogleFlowService({ headless: false });
+        break;
       case 'zai':
       case 'image.z.ai':
       default:
