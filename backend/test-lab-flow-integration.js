@@ -205,7 +205,7 @@ class LabFlowIntegrationTest {
 
   async testLoginRequirement() {
     console.log('━'.repeat(80));
-    console.log('📋 TEST 4: Google Login Requirement Check');
+    console.log('📋 TEST 4: Google Login & Storage Capture');
     console.log('━'.repeat(80));
     this.results.totalTests++;
     
@@ -215,36 +215,133 @@ class LabFlowIntegrationTest {
     }
     
     try {
-      console.log('🔐 Checking if Google login is required...\n');
+      console.log('🔐 Checking Google login status...\n');
       
-      // Try to navigate to a new Lab Flow session
+      // Navigate to Lab Flow
+      await this.service.page.goto('https://labs.google/fx/vi/tools/flow');
+      await this.service.page.waitForTimeout(2000);
+      
+      // Check for login prompt
       try {
-        await this.service.page.goto('https://labs.google/fx/vi/tools/flow');
-        await this.service.page.waitForTimeout(2000);
+        const loginButtonExists = await this.service.page.evaluate(() => {
+          const buttons = document.querySelectorAll('button');
+          return Array.from(buttons).some(btn => 
+            btn.textContent.includes('Sign in') || 
+            btn.textContent.includes('Đăng nhập')
+          );
+        });
         
-        // Check for login prompt or login button
-        const loginElements = await this.service.page.$$('button:has-text("Sign in"), text="Sign in"');
-        
-        if (loginElements.length > 0) {
-          console.log('⚠️  Google login is required');
-          console.log('   Next steps:');
-          console.log('   1. A browser window should be open');
-          console.log('   2. Click "Sign in" and complete Google authentication');
-          console.log('   3. Once logged in, generation will proceed automatically\n');
+        if (loginButtonExists) {
+          console.log('⚠️  Google login required!\n');
+          console.log('📋 Instructions:');
+          console.log('   1. Browser window is now open');
+          console.log('   2. Click "Sign in" / "Đăng nhập"');
+          console.log('   3. Complete Google authentication');
+          console.log('   4. Waiting 60 seconds for you to login...\n');
+          
+          // Show countdown
+          for (let i = 60; i > 0; i--) {
+            process.stdout.write(`⏳ ${i}s remaining...\r`);
+            await this.service.page.waitForTimeout(1000);
+          }
+          
+          console.log('✅ 60 seconds elapsed - Capturing storage data...\n');
         } else {
-          console.log('✅ Already logged in to Google account\n');
+          console.log('✅ Already logged in to Google!\n');
         }
-        
-        this.results.passed++;
-      } catch (navError) {
-        console.log('⚠️  Could not check login status');
-        console.log(`   Message: ${navError.message}\n`);
+      } catch (e) {
+        console.log('ℹ️  Could not detect login status, proceeding with storage capture...\n');
       }
+      
+      // Capture localStorage
+      console.log('💾 Capturing localStorage...');
+      const localStorageData = await this.service.page.evaluate(() => {
+        const data = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          data[key] = localStorage.getItem(key);
+        }
+        return data;
+      });
+      
+      console.log('   Keys found:', Object.keys(localStorageData).length);
+      if (Object.keys(localStorageData).length > 0) {
+        console.log('   localStorage data:');
+        Object.entries(localStorageData).forEach(([key, value]) => {
+          const preview = typeof value === 'string' && value.length > 100 
+            ? value.substring(0, 100) + '...' 
+            : value;
+          console.log(`      • ${key}: ${preview}`);
+        });
+      }
+      console.log('');
+      
+      // Capture sessionStorage
+      console.log('💾 Capturing sessionStorage...');
+      const sessionStorageData = await this.service.page.evaluate(() => {
+        const data = {};
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          data[key] = sessionStorage.getItem(key);
+        }
+        return data;
+      });
+      
+      console.log('   Keys found:', Object.keys(sessionStorageData).length);
+      if (Object.keys(sessionStorageData).length > 0) {
+        console.log('   sessionStorage data:');
+        Object.entries(sessionStorageData).forEach(([key, value]) => {
+          const preview = typeof value === 'string' && value.length > 100 
+            ? value.substring(0, 100) + '...' 
+            : value;
+          console.log(`      • ${key}: ${preview}`);
+        });
+      }
+      console.log('');
+      
+      // Capture cookies
+      console.log('🍪 Capturing cookies...');
+      const cookies = await this.service.page.context().cookies();
+      
+      console.log('   Cookies found:', cookies.length);
+      if (cookies.length > 0) {
+        console.log('   Cookie list:');
+        cookies.forEach(cookie => {
+          console.log(`      • ${cookie.name}`);
+          console.log(`        - Domain: ${cookie.domain}`);
+          console.log(`        - Path: ${cookie.path}`);
+          console.log(`        - HttpOnly: ${cookie.httpOnly}`);
+          console.log(`        - Secure: ${cookie.secure}`);
+          console.log(`        - Expires: ${cookie.expires ? new Date(cookie.expires * 1000).toISOString() : 'Session'}`);
+          
+          // Show preview if value is not too long
+          if (cookie.value.length > 100) {
+            console.log(`        - Value: ${cookie.value.substring(0, 100)}...`);
+          } else {
+            console.log(`        - Value: ${cookie.value}`);
+          }
+        });
+      }
+      console.log('');
+      
+      // Save all data to file for reference
+      const storageFile = path.join(this.testDir, 'captured-storage.json');
+      fs.writeFileSync(storageFile, JSON.stringify({
+        timestamp: new Date().toISOString(),
+        localStorage: localStorageData,
+        sessionStorage: sessionStorageData,
+        cookies: cookies
+      }, null, 2));
+      
+      console.log(`📁 Storage data saved to: ${storageFile}\n`);
+      
+      console.log('✅ Storage capture complete');
+      this.results.passed++;
     } catch (error) {
       console.error(`❌ Test failed: ${error.message}`);
       this.results.failed++;
       this.results.errors.push({
-        test: 'Login Check',
+        test: 'Login & Storage Capture',
         error: error.message
       });
     }
@@ -282,12 +379,18 @@ class LabFlowIntegrationTest {
       console.log('');
     }
     
+    console.log('📁 Test Files:');
+    console.log(`   Directory: ${this.testDir}`);
+    console.log(`   • Generated images in: ${path.join(this.testDir, 'test-*.png')}`);
+    console.log(`   • Storage data in: ${path.join(this.testDir, 'captured-storage.json')}\n`);
+    
     console.log('🎉 Lab Flow Integration Test Complete!\n');
     
     console.log('📝 Next Steps:');
-    console.log('1. Review test results above');
-    console.log('2. If login was required, ensure you are logged in to Google');
-    console.log('3. Test the VTO UI in browser:');
+    console.log('1. Check the captured-storage.json file for auth tokens and storage data');
+    console.log('2. Identify which storage mechanism contains the login credentials');
+    console.log('3. Use SessionManager to persist these credentials');
+    console.log('4. Test the VTO UI in browser:');
     console.log('   - Go to VirtualTryOnPage in frontend');
     console.log('   - Select provider: "Google Lab Flow"');
     console.log('   - Upload images and generate to test integration');
