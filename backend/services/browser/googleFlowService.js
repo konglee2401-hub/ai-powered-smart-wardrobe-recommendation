@@ -8,6 +8,7 @@ import http from 'http';
 /**
  * Google Labs Flow Service
  * Requires Google login (session persistence)
+ * Can pre-load Google account cookies if available
  */
 class GoogleFlowService extends BrowserService {
   constructor(options = {}) {
@@ -19,6 +20,7 @@ class GoogleFlowService extends BrowserService {
     });
     
     this.baseUrl = 'https://labs.google/fx/vi/tools/flow';
+    this.usePreloadedGoogleAuth = options.usePreloadedGoogleAuth !== false; // Default true
   }
 
   async initialize() {
@@ -62,6 +64,51 @@ class GoogleFlowService extends BrowserService {
     }
     
     console.log('✅ Google Flow initialized');
+  }
+
+  /**
+   * Try to load and inject pre-saved Google authentication data
+   * This is optional and helps avoid "not secure" browser warnings
+   */
+  async _loadPreloadedGoogleAuth() {
+    try {
+      const googleAuthFile = path.join(path.dirname(import.meta.url), '../../.sessions/google-auth.json');
+      const normalPath = googleAuthFile.replace('file://', '');
+      
+      if (!fs.existsSync(normalPath)) {
+        return false;
+      }
+      
+      const authData = JSON.parse(fs.readFileSync(normalPath, 'utf-8'));
+      
+      console.log('🔌 Loading pre-saved Google authentication...');
+      
+      // Inject localStorage
+      if (authData.localStorage) {
+        console.log(`   • localStorage (${Object.keys(authData.localStorage).length} items)`);
+        await this.page.evaluate((data) => {
+          Object.entries(data).forEach(([key, value]) => {
+            localStorage.setItem(key, value);
+          });
+        }, authData.localStorage);
+      }
+      
+      // Inject cookies
+      if (authData.cookies && authData.cookies.length > 0) {
+        console.log(`   • Cookies (${authData.cookies.length} items)`);
+        try {
+          await this.page.context().addCookies(authData.cookies);
+        } catch (cookieError) {
+          console.warn(`      ⚠️  Some cookies could not be set: ${cookieError.message}`);
+        }
+      }
+      
+      console.log('✅ Pre-loaded Google auth injected\n');
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Could not load pre-saved Google auth: ${error.message}`);
+      return false;
+    }
   }
 
   /**

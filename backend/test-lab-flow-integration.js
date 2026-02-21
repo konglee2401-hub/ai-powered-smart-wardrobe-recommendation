@@ -286,6 +286,14 @@ class LabFlowIntegrationTest {
     try {
       console.log('🔐 Lab Flow Authentication\n');
       
+      // Ensure temp directories exist
+      if (!fs.existsSync(this.tempDir)) {
+        fs.mkdirSync(this.tempDir, { recursive: true });
+      }
+      if (!fs.existsSync(this.testDir)) {
+        fs.mkdirSync(this.testDir, { recursive: true });
+      }
+      
       // Navigate to Lab Flow WITHOUT setting any cookies first
       console.log('📍 Navigating to https://labs.google/fx/vi/tools/flow');
       console.log('⚠️  NOT using saved credentials - waiting for manual login\n');
@@ -295,9 +303,9 @@ class LabFlowIntegrationTest {
       console.log('📋 Manual Login Window (2 minutes):');
       console.log('   1. You should see Google login page');
       console.log('   2. Login with your Google account');
-      console.log('   3. Complete any verification');
-      console.log('   4. Wait for page to load fully');
-      console.log('   5. Storage will be captured after countdown ends\n');
+      console.log('   3. If Chrome opens new window, login there too');
+      console.log('   4. Navigate back to labs.google if needed');
+      console.log('   5. Storage will be captured after countdown\n');
       
       // Wait for user to complete login manually
       for (let i = 120; i > 0; i--) {
@@ -306,12 +314,49 @@ class LabFlowIntegrationTest {
       }
       
       console.log('                                ');
-      console.log('✅ 120 seconds elapsed\n');
+      console.log('⏳ Navigating to /flow after login...\n');
       
-      // Capture all storage data after manual login
+      // After waiting, navigate to labs.google flow URL to capture the post-login session
+      // This is critical because Chrome profile login might have opened new windows
+      try {
+        // Close any extra pages/windows (keep only main page)
+        const allPages = await this.service.page.browser().pages();
+        console.log(`📄 Found ${allPages.length} window(s) - using the one with labs.google\n`);
+        
+        // Find or navigate to the labs.google page
+        let flowPage = null;
+        for (const page of allPages) {
+          const url = page.url();
+          if (url.includes('labs.google')) {
+            flowPage = page;
+            break;
+          }
+        }
+        
+        // If no labs.google page found, use current page and navigate
+        if (!flowPage) {
+          flowPage = this.service.page;
+          console.log('🔄 Navigating to labs.google/fx/vi/tools/flow\n');
+          await flowPage.goto('https://labs.google/fx/vi/tools/flow', { waitUntil: 'networkidle2' });
+          await flowPage.waitForTimeout(2000);
+        } else {
+          console.log('✅ Found active labs.google page\n');
+          // Make sure we're on the right URL
+          if (!flowPage.url().includes('/flow')) {
+            await flowPage.goto('https://labs.google/fx/vi/tools/flow', { waitUntil: 'networkidle2' });
+            await flowPage.waitForTimeout(2000);
+          }
+        }
+        
+        // Now capture from the active flow page
+        this.service.page = flowPage;
+      } catch (navError) {
+        console.warn(`⚠️  Navigation warning: ${navError.message}`);
+      }
+      
       console.log('📊 Capturing authentication data...\n');
       
-      // Capture localStorage from labs.google
+      // Capture localStorage from labs.google context
       console.log('💾 localStorage (labs.google):');
       const localStorageData = await this.service.page.evaluate(() => {
         const data = {};
@@ -328,7 +373,7 @@ class LabFlowIntegrationTest {
           const preview = typeof value === 'string' && value.length > 50 
             ? value.substring(0, 50) + '...' 
             : value;
-          console.log(`     - ${key}: ${preview}`);
+          console.log(`     - ${key}`);
         });
       }
       console.log('');
@@ -344,19 +389,10 @@ class LabFlowIntegrationTest {
         return data;
       });
       
-      console.log(`   • Found ${Object.keys(sessionStorageData).length} keys`);
-      if (Object.keys(sessionStorageData).length > 0) {
-        Object.entries(sessionStorageData).forEach(([key, value]) => {
-          const preview = typeof value === 'string' && value.length > 50 
-            ? value.substring(0, 50) + '...' 
-            : value;
-          console.log(`     - ${key}: ${preview}`);
-        });
-      }
-      console.log('');
+      console.log(`   • Found ${Object.keys(sessionStorageData).length} keys\n`);
       
-      // Capture cookies from ALL domains (including google.com)
-      console.log('🍪 Cookies (All domains):');
+      // Capture cookies from browser context (includes all domains)
+      console.log('🍪 Capturing cookies from browser context...');
       const allCookies = await this.service.page.context().cookies();
       
       console.log(`   • Found ${allCookies.length} cookies total\n`);
@@ -373,17 +409,15 @@ class LabFlowIntegrationTest {
       console.log('   Grouped by domain:');
       Object.entries(cookiesByDomain).forEach(([domain, cookies]) => {
         console.log(`     📍 ${domain} (${cookies.length} cookies)`);
-        cookies.forEach(cookie => {
-          console.log(`        • ${cookie.name} ${cookie.secure ? '[Secure]' : ''} ${cookie.httpOnly ? '[HttpOnly]' : ''}`);
-        });
       });
       console.log('');
       
       // Save comprehensive auth data to file
       const authData = {
         timestamp: new Date().toISOString(),
-        userEmail: 'leecris241@gmail.com', // From your profile
-        capturedVia: 'Manual login - No cookies pre-injected',
+        userEmail: 'leecris241@gmail.com',
+        capturedVia: 'Manual login - Chrome profile',
+        notes: 'Post-login capture including google.com and labs.google cookies',
         localStorage: localStorageData,
         sessionStorage: sessionStorageData,
         cookies: allCookies.map(c => ({
@@ -396,7 +430,10 @@ class LabFlowIntegrationTest {
           sameSite: c.sameSite,
           expires: c.expires
         })),
-        notes: 'Includes cookies from all domains (google.com, labs.google, etc.). Use these for session persistence.'
+        cookiesByDomain: Object.entries(cookiesByDomain).reduce((acc, [domain, cookies]) => {
+          acc[domain] = cookies.length;
+          return acc;
+        }, {})
       };
       
       const storageFile = path.join(this.testDir, 'captured-storage.json');
@@ -412,6 +449,7 @@ class LabFlowIntegrationTest {
       console.log(`   • localStorage entries: ${Object.keys(savedData.localStorage).length}`);
       console.log(`   • sessionStorage entries: ${Object.keys(savedData.sessionStorage).length}`);
       console.log(`   • Total cookies: ${savedData.cookies.length}`);
+      console.log(`   • Domains covered: ${Object.keys(savedData.cookiesByDomain).join(', ')}`);
       
       // Show important auth cookies
       const authCookies = savedData.cookies.filter(c => 
@@ -420,22 +458,26 @@ class LabFlowIntegrationTest {
         c.name.includes('next-auth') ||
         c.name.includes('SID') ||
         c.name.includes('APISID') ||
-        c.name.includes('SAPISID')
+        c.name.includes('SAPISID') ||
+        c.name.includes('PSID') ||
+        c.name.includes('PSIDCC') ||
+        c.name.includes('PSIDTS')
       );
       
       if (authCookies.length > 0) {
-        console.log(`\n   🔐 Found ${authCookies.length} potential authentication cookies:`);
+        console.log(`\n   🔐 Found ${authCookies.length} authentication cookies:`);
         authCookies.forEach(cookie => {
           console.log(`      • ${cookie.name} (${cookie.domain})`);
         });
       }
       
-      console.log(`\n   📍 Data file: ${storageFile}`);
-      console.log('   You can review the file to see all captured credentials\n');
+      console.log(`\n   📍 File location: ${storageFile}`);
+      console.log('   File contains: localStorage, sessionStorage, all cookies\n');
       
       this.results.passed++;
     } catch (error) {
       console.error(`❌ Test failed: ${error.message}`);
+      console.error(error.stack);
       this.results.failed++;
       this.results.errors.push({
         test: 'Login & Storage Capture',
