@@ -40,8 +40,7 @@ class GoogleFlowService extends BrowserService {
       console.log('\n📋 Instructions:');
       console.log('   1. Login with your Google account in the browser window');
       console.log('   2. Complete any verification if asked');
-      console.log('   3. Wait for browser window to close automatically\n');
-      console.log('💡 Tip: Use your existing Chrome profile to avoid "browser not secure" error\n');
+      console.log('   3. Browser will close after successful login\n');
       console.log('⏳ Waiting 120 seconds for manual login...\n');
       
       // Show countdown
@@ -51,7 +50,7 @@ class GoogleFlowService extends BrowserService {
       }
       
       console.log('                      ');
-      console.log('✅ 120 seconds elapsed - Checking login status...\n');
+      console.log('✅ 120 seconds elapsed\n');
       
       // Save session after login
       const saved = await this.saveSession();

@@ -284,60 +284,35 @@ class LabFlowIntegrationTest {
     }
     
     try {
-      console.log('🔐 Lab Flow Authentication Setup\n');
+      console.log('🔐 Lab Flow Authentication\n');
       
-      // Navigate to Lab Flow
+      // Navigate to Lab Flow WITHOUT setting any cookies first
       console.log('📍 Navigating to https://labs.google/fx/vi/tools/flow');
+      console.log('⚠️  NOT using saved credentials - waiting for manual login\n');
       await this.service.page.goto('https://labs.google/fx/vi/tools/flow');
-      await this.service.page.waitForTimeout(1000);
+      await this.service.page.waitForTimeout(2000);
       
-      // Try to set saved credentials if available
-      if (this.savedAuth) {
-        await this.setSavedCredentialsInBrowser();
-        // Reload page to apply credentials
-        console.log('🔄 Reloading page to apply credentials...');
-        await this.service.page.reload();
-        await this.service.page.waitForTimeout(2000);
-      }
+      console.log('📋 Manual Login Window (2 minutes):');
+      console.log('   1. You should see Google login page');
+      console.log('   2. Login with your Google account');
+      console.log('   3. Complete any verification');
+      console.log('   4. Wait for page to load fully');
+      console.log('   5. Storage will be captured after countdown ends\n');
       
-      // Check login status
-      let needsLogin = false;
-      try {
-        needsLogin = await this.service.page.evaluate(() => {
-          const buttons = document.querySelectorAll('button');
-          return Array.from(buttons).some(btn => 
-            btn.textContent.includes('Sign in') || 
-            btn.textContent.includes('Đăng nhập')
-          );
-        });
-      } catch (e) {
-        console.log('ℹ️  Could not detect login button');
-      }
-      
-      if (needsLogin) {
-        console.log('⚠️  Login still required - Please authenticate manually\n');
-      } else {
-        console.log('✅ Already authenticated!\n');
-      }
-      
-      // Always wait 60s for user to interact/verify credentials
-      console.log('📋 Waiting Window:');
-      console.log('   • You can now verify the page is working');
-      console.log('   • Interact with Lab Flow if needed');
-      console.log('   • If login page appears, complete authentication');
-      console.log('   • Storage will be captured after 120 seconds\n');
-      
-      // Show countdown (120 seconds = 2 minutes)
+      // Wait for user to complete login manually
       for (let i = 120; i > 0; i--) {
-        process.stdout.write(`⏳ ${i}s remaining...\r`);
+        process.stdout.write(`⏳ ${i}s remaining for login...\r`);
         await this.service.page.waitForTimeout(1000);
       }
       
-      console.log('                      ');
-      console.log('✅ 120 seconds elapsed - Capturing storage data...\n');
+      console.log('                                ');
+      console.log('✅ 120 seconds elapsed\n');
       
-      // Capture localStorage
-      console.log('💾 Capturing localStorage...');
+      // Capture all storage data after manual login
+      console.log('📊 Capturing authentication data...\n');
+      
+      // Capture localStorage from labs.google
+      console.log('💾 localStorage (labs.google):');
       const localStorageData = await this.service.page.evaluate(() => {
         const data = {};
         for (let i = 0; i < localStorage.length; i++) {
@@ -347,20 +322,19 @@ class LabFlowIntegrationTest {
         return data;
       });
       
-      console.log('   Keys found:', Object.keys(localStorageData).length);
+      console.log(`   • Found ${Object.keys(localStorageData).length} keys`);
       if (Object.keys(localStorageData).length > 0) {
-        console.log('   localStorage data:');
         Object.entries(localStorageData).forEach(([key, value]) => {
-          const preview = typeof value === 'string' && value.length > 100 
-            ? value.substring(0, 100) + '...' 
+          const preview = typeof value === 'string' && value.length > 50 
+            ? value.substring(0, 50) + '...' 
             : value;
-          console.log(`      • ${key}: ${preview}`);
+          console.log(`     - ${key}: ${preview}`);
         });
       }
       console.log('');
       
       // Capture sessionStorage
-      console.log('💾 Capturing sessionStorage...');
+      console.log('💾 sessionStorage (labs.google):');
       const sessionStorageData = await this.service.page.evaluate(() => {
         const data = {};
         for (let i = 0; i < sessionStorage.length; i++) {
@@ -370,55 +344,95 @@ class LabFlowIntegrationTest {
         return data;
       });
       
-      console.log('   Keys found:', Object.keys(sessionStorageData).length);
+      console.log(`   • Found ${Object.keys(sessionStorageData).length} keys`);
       if (Object.keys(sessionStorageData).length > 0) {
-        console.log('   sessionStorage data:');
         Object.entries(sessionStorageData).forEach(([key, value]) => {
-          const preview = typeof value === 'string' && value.length > 100 
-            ? value.substring(0, 100) + '...' 
+          const preview = typeof value === 'string' && value.length > 50 
+            ? value.substring(0, 50) + '...' 
             : value;
-          console.log(`      • ${key}: ${preview}`);
+          console.log(`     - ${key}: ${preview}`);
         });
       }
       console.log('');
       
-      // Capture cookies
-      console.log('🍪 Capturing cookies...');
-      const cookies = await this.service.page.context().cookies();
+      // Capture cookies from ALL domains (including google.com)
+      console.log('🍪 Cookies (All domains):');
+      const allCookies = await this.service.page.context().cookies();
       
-      console.log('   Cookies found:', cookies.length);
-      if (cookies.length > 0) {
-        console.log('   Cookie list:');
+      console.log(`   • Found ${allCookies.length} cookies total\n`);
+      
+      // Group cookies by domain
+      const cookiesByDomain = {};
+      allCookies.forEach(cookie => {
+        if (!cookiesByDomain[cookie.domain]) {
+          cookiesByDomain[cookie.domain] = [];
+        }
+        cookiesByDomain[cookie.domain].push(cookie);
+      });
+      
+      console.log('   Grouped by domain:');
+      Object.entries(cookiesByDomain).forEach(([domain, cookies]) => {
+        console.log(`     📍 ${domain} (${cookies.length} cookies)`);
         cookies.forEach(cookie => {
-          console.log(`      • ${cookie.name}`);
-          console.log(`        - Domain: ${cookie.domain}`);
-          console.log(`        - Path: ${cookie.path}`);
-          console.log(`        - HttpOnly: ${cookie.httpOnly}`);
-          console.log(`        - Secure: ${cookie.secure}`);
-          console.log(`        - Expires: ${cookie.expires ? new Date(cookie.expires * 1000).toISOString() : 'Session'}`);
-          
-          // Show preview if value is not too long
-          if (cookie.value.length > 100) {
-            console.log(`        - Value: ${cookie.value.substring(0, 100)}...`);
-          } else {
-            console.log(`        - Value: ${cookie.value}`);
-          }
+          console.log(`        • ${cookie.name} ${cookie.secure ? '[Secure]' : ''} ${cookie.httpOnly ? '[HttpOnly]' : ''}`);
         });
-      }
+      });
       console.log('');
       
-      // Save all data to file for reference
-      const storageFile = path.join(this.testDir, 'captured-storage.json');
-      fs.writeFileSync(storageFile, JSON.stringify({
+      // Save comprehensive auth data to file
+      const authData = {
         timestamp: new Date().toISOString(),
+        userEmail: 'leecris241@gmail.com', // From your profile
+        capturedVia: 'Manual login - No cookies pre-injected',
         localStorage: localStorageData,
         sessionStorage: sessionStorageData,
-        cookies: cookies
-      }, null, 2));
+        cookies: allCookies.map(c => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain,
+          path: c.path,
+          secure: c.secure,
+          httpOnly: c.httpOnly,
+          sameSite: c.sameSite,
+          expires: c.expires
+        })),
+        notes: 'Includes cookies from all domains (google.com, labs.google, etc.). Use these for session persistence.'
+      };
       
-      console.log(`📁 Storage data saved to: ${storageFile}\n`);
+      const storageFile = path.join(this.testDir, 'captured-storage.json');
+      fs.writeFileSync(storageFile, JSON.stringify(authData, null, 2));
       
-      console.log('✅ Storage capture complete');
+      console.log(`📁 Data saved to: ${storageFile}\n`);
+      
+      // Read back file and verify
+      console.log('📖 Reading back saved data to verify...\n');
+      const savedData = JSON.parse(fs.readFileSync(storageFile, 'utf-8'));
+      
+      console.log('✅ Verification Summary:');
+      console.log(`   • localStorage entries: ${Object.keys(savedData.localStorage).length}`);
+      console.log(`   • sessionStorage entries: ${Object.keys(savedData.sessionStorage).length}`);
+      console.log(`   • Total cookies: ${savedData.cookies.length}`);
+      
+      // Show important auth cookies
+      const authCookies = savedData.cookies.filter(c => 
+        c.name.includes('session') || 
+        c.name.includes('auth') || 
+        c.name.includes('next-auth') ||
+        c.name.includes('SID') ||
+        c.name.includes('APISID') ||
+        c.name.includes('SAPISID')
+      );
+      
+      if (authCookies.length > 0) {
+        console.log(`\n   🔐 Found ${authCookies.length} potential authentication cookies:`);
+        authCookies.forEach(cookie => {
+          console.log(`      • ${cookie.name} (${cookie.domain})`);
+        });
+      }
+      
+      console.log(`\n   📍 Data file: ${storageFile}`);
+      console.log('   You can review the file to see all captured credentials\n');
+      
       this.results.passed++;
     } catch (error) {
       console.error(`❌ Test failed: ${error.message}`);
