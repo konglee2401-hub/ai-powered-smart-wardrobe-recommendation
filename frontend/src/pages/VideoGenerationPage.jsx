@@ -503,8 +503,8 @@ export default function VideoGenerationPage() {
 
           {/* Center - Preview */}
           <div className="flex-1 bg-gray-900 overflow-y-auto">
-          <div className="p-6 max-w-4xl mx-auto">
-            {currentStep === 1 && (
+            <div className="p-6 max-w-4xl mx-auto">
+              {currentStep === 1 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-2xl font-bold text-white mb-2">Step 1: Select Source Image</h2>
@@ -635,24 +635,24 @@ export default function VideoGenerationPage() {
                     }}
                   />
                 </div>
-              </div>
-            )}
+                </div>
+              )}
 
-            {currentStep === 2 && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-white mb-4">Step 2: Write Your Script</h2>
-                <p className="text-gray-400">Create a detailed script for each segment of your video.</p>
-              </div>
-            )}
+              {currentStep === 2 && (
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold text-white mb-4">Step 2: Write Your Script</h2>
+                  <p className="text-gray-400">Create a detailed script for each segment of your video.</p>
+                </div>
+              )}
 
-            {currentStep === 3 && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-white mb-4">Step 3: Generate Video</h2>
-                <p className="text-gray-400">Review your video configuration and generate the video.</p>
-              </div>
-            )}
+              {currentStep === 3 && (
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold text-white mb-4">Step 3: Generate Video</h2>
+                  <p className="text-gray-400">Review your video configuration and generate the video.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
         {/* Right Sidebar - Summary */}
         <div className="w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0 p-4">
@@ -695,6 +695,7 @@ export default function VideoGenerationPage() {
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
 
