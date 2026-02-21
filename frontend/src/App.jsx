@@ -21,6 +21,7 @@ import AIProviderManager from './pages/AIProviderManager';
 import Navbar from './components/Navbar';
 import ImageGenerationPage from './pages/ImageGenerationPage';
 import VideoGenerationPage from './pages/VideoGenerationPage';
+import OneClickCreatorPage from './pages/OneClickCreatorPage';
 
 function App() {
   return (
@@ -42,6 +43,16 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-hidden">
               <VideoGenerationPage />
+            </div>
+          </div>
+        } />
+        
+        {/* OneClickCreatorPage - Full screen with Navbar */}
+        <Route path="/generate/one-click" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-hidden">
+              <OneClickCreatorPage />
             </div>
           </div>
         } />

@@ -23,6 +23,7 @@ export default function Navbar() {
       submenu: [
         { path: '/', label: 'Image', icon: Image },
         { path: '/video-generation', label: 'Video', icon: Video },
+        { path: '/generate/one-click', label: '1-Click Creator', icon: Sparkles },
       ]
     },
     { path: '/gallery', label: 'Gallery', icon: Image, category: 'main' },
