@@ -20,7 +20,7 @@ class LabFlowIntegrationTest {
     this.baseUrl = 'http://localhost:3002';
     this.tempDir = path.join(process.cwd(), 'temp');
     this.testDir = path.join(this.tempDir, 'lab-flow-tests');
-    this.authFile = path.join(process.cwd(), 'lab-flow-auth.json');
+    this.sessionFile = path.join(process.cwd(), '.sessions', 'google-flow-session.json');
     this.service = null;
     this.savedAuth = null;
     this.results = {
@@ -33,15 +33,15 @@ class LabFlowIntegrationTest {
 
   loadSavedCredentials() {
     try {
-      if (fs.existsSync(this.authFile)) {
-        this.savedAuth = JSON.parse(fs.readFileSync(this.authFile, 'utf-8'));
-        console.log('✅ Loaded saved credentials from lab-flow-auth.json');
+      if (fs.existsSync(this.sessionFile)) {
+        this.savedAuth = JSON.parse(fs.readFileSync(this.sessionFile, 'utf-8'));
+        console.log('✅ Loaded saved session from .sessions/google-flow-session.json');
         console.log(`   User: ${this.savedAuth.userEmail}`);
-        console.log(`   Saved at: ${this.savedAuth.timestamp}\n`);
+        console.log(`   Saved at: ${this.savedAuth.savedAt}\n`);
         return true;
       }
     } catch (error) {
-      console.warn(`⚠️  Could not load credentials: ${error.message}`);
+      console.warn(`⚠️  Could not load session: ${error.message}`);
     }
     return false;
   }
@@ -117,10 +117,15 @@ class LabFlowIntegrationTest {
     
     try {
       console.log('⏳ Initializing GoogleFlowService...\n');
+      // Can pass chromeProfile: 'Cong' to use specific Chrome profile for modluffy90@gmail.com
       this.service = new GoogleFlowService({ headless: false });
       
       console.log('⏳ Loading Lab Flow UI...');
-      await this.service.initialize();
+      // Option 1: Use saved session if available
+      // Option 2: Pass chromeProfile to initialize() to use specific Chrome profile
+      await this.service.initialize({ 
+        // chromeProfile: 'Cong' // Uncomment to use Chrome profile for modluffy90@gmail.com
+      });
       
       console.log('✅ Service initialized successfully');
       console.log(`   📍 Base URL: ${this.service.baseUrl}`);

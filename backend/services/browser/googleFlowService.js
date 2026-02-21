@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import os from 'os';
 
 /**
  * Google Labs Flow Service (Puppeteer-only)
@@ -20,24 +21,46 @@ class GoogleFlowService extends BrowserService {
     });
     
     this.baseUrl = 'https://labs.google/fx/vi/tools/flow';
+    this.chromeProfile = options.chromeProfile; // e.g., 'Cong' for modluffy90@gmail.com
   }
 
   /**
    * Initialize Google Flow with session management
+   * @param {Object} options - Configuration options
+   * @param {string} options.chromeProfile - Chrome profile folder name (e.g., 'Cong' for modluffy90@gmail.com)
    */
-  async initialize() {
+  async initialize(options = {}) {
+    // If Chrome profile specified, update launch options
+    if (options.chromeProfile || this.chromeProfile) {
+      const profile = options.chromeProfile || this.chromeProfile;
+      console.log(`🔐 Using Chrome profile: ${profile}`);
+      this.browserOptions = {
+        ...this.browserOptions,
+        userDataDir: path.join(
+          process.env.USERPROFILE,
+          `AppData/Local/Google/Chrome/User Data/${profile}`
+        )
+      };
+    }
+    
     await this.launch();
     
     // Try to load existing session
-    await this._loadAndInjectSession();
+    const sessionLoaded = await this._loadAndInjectSession();
     
     // Navigate to Lab Flow
-    await this.goto(this.baseUrl);
+    try {
+      await this.goto(this.baseUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    } catch (error) {
+      console.warn(`⚠️  Navigation warning: ${error.message}`);
+      // Try again with simpler wait
+      await this.goto(this.baseUrl, { timeout: 30000 });
+    }
     
     console.log('⏳ Waiting for Google Flow to load...');
     await this.page.waitForTimeout(3000);
     
-    // Check if already logged in
+    // Check if already logged in (look for "Dự án mới" or create project UI)
     const isLoggedIn = await this._checkIfLoggedIn();
     
     if (!isLoggedIn) {
@@ -45,7 +68,10 @@ class GoogleFlowService extends BrowserService {
       console.log('\n📋 Instructions:');
       console.log('   1. Login with your Google account in the browser window');
       console.log('   2. Complete any verification if asked');
-      console.log('   3. Browser will close after successful login\n');
+      if (options.chromeProfile || this.chromeProfile) {
+        console.log('   3. Chrome profile will auto-fill your email');
+      }
+      console.log('   4. Browser will detect login automatically\n');
       console.log('⏳ Waiting 120 seconds for manual login...\n');
       
       // Show countdown
@@ -183,16 +209,43 @@ class GoogleFlowService extends BrowserService {
 
   /**
    * Check if already logged into Google
+   * Detects by looking for "Dự án mới" (Create project) button or project creation UI
    */
   async _checkIfLoggedIn() {
     try {
-      const isOnSignInPage = await this.page.evaluate(() => {
+      const isLoggedIn = await this.page.evaluate(() => {
+        // Look for signs of logged-in state
         const text = document.body.innerText.toLowerCase();
-        return text.includes('sign in') || text.includes('đăng nhập');
+        
+        // Check for login signs: "Dự án mới" (Vietnamese) or "Create" buttons  
+        const hasCreateProject = text.includes('dự án mới') || 
+                                 text.includes('create') || 
+                                 text.includes('project');
+        
+        // Look for visual indicators of logged-in state
+        const buttons = document.querySelectorAll('button');
+        let hasProjectButtons = false;
+        
+        for (const btn of buttons) {
+          const btnText = btn.textContent.toLowerCase();
+          if (btnText.includes('dự án') || 
+              btnText.includes('create') || 
+              btnText.includes('mới')) {
+            hasProjectButtons = true;
+            break;
+          }
+        }
+        
+        // Also check for absence of sign-in indicators
+        const isOnSignIn = text.includes('sign in') && text.includes('google');
+        
+        return (hasCreateProject || hasProjectButtons) && !isOnSignIn;
       });
-      return !isOnSignInPage;
-    } catch {
-      return true;
+      
+      return isLoggedIn;
+    } catch (error) {
+      console.warn(`⚠️  Login check failed: ${error.message}`);
+      return true; // Assume logged in if check fails
     }
   }
 
@@ -229,18 +282,44 @@ class GoogleFlowService extends BrowserService {
         console.warn('⚠️  Could not find Create Image button, attempting to find text input anyway');
       }
 
-      // Find text input (textarea or contenteditable or input)
-      const textarea = await this.page.waitForSelector('textarea, [contenteditable="true"], input[type="text"]', { timeout: 10000 });
-      
-      if (!textarea) {
-        throw new Error('Could not find text input');
+      // Find text input with better handling
+      console.log('⌨️  Looking for text input...');
+      const textInputFound = await this.page.evaluate(() => {
+        // Try textarea
+        const textarea = document.querySelector('textarea');
+        if (textarea && textarea.offsetParent !== null) {
+          return { type: 'textarea', found: true };
+        }
+        
+        // Try contenteditable
+        const contentEditable = document.querySelector('[contenteditable="true"]');
+        if (contentEditable && contentEditable.offsetParent !== null) {
+          return { type: 'contenteditable', found: true };
+        }
+        
+        // Try text input
+        const textInput = document.querySelector('input[type="text"]');
+        if (textInput && textInput.offsetParent !== null) {
+          return { type: 'text-input', found: true };
+        }
+        
+        return { type: null, found: false };
+      });
+
+      if (!textInputFound.found) {
+        throw new Error(`Could not find text input (${textInputFound.type})`);
       }
 
-      // Type prompt
-      console.log('⌨️  Typing prompt...');
-      await textarea.click();
+      console.log(`⌨️  Found ${textInputFound.type}, typing prompt...`);
+      
+      // Focus and type using page.type for more reliable input
+      const selector = textInputFound.type === 'textarea' ? 'textarea' :
+                      textInputFound.type === 'contenteditable' ? '[contenteditable="true"]' :
+                      'input[type="text"]';
+      
+      await this.page.focus(selector);
       await this.page.waitForTimeout(500);
-      await textarea.fill(prompt);
+      await this.page.type(selector, prompt, { delay: 10 }); // type with small delay
       await this.page.waitForTimeout(1000);
 
       // Submit by pressing Enter
@@ -274,9 +353,11 @@ class GoogleFlowService extends BrowserService {
 
     } catch (error) {
       console.error('❌ Google Flow generation failed:', error.message);
-      await this.screenshot({ 
-        path: path.join(process.cwd(), 'temp', `flow-error-${Date.now()}.png`) 
-      });
+      try {
+        await this.screenshot({ 
+          path: path.join(process.cwd(), 'temp', `flow-error-${Date.now()}.png`) 
+        });
+      } catch (e) {}
       throw error;
     }
   }
