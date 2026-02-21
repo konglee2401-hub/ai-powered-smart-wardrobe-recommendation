@@ -21,8 +21,10 @@ class LabFlowIntegrationTest {
     this.tempDir = path.join(process.cwd(), 'temp');
     this.testDir = path.join(this.tempDir, 'lab-flow-tests');
     this.sessionFile = path.join(process.cwd(), '.sessions', 'google-flow-session.json');
+    this.capturedStorageFile = path.join(this.testDir, 'captured-storage.json');
     this.service = null;
     this.savedAuth = null;
+    this.capturedStorage = null;
     this.results = {
       totalTests: 0,
       passed: 0,
@@ -44,6 +46,105 @@ class LabFlowIntegrationTest {
       console.warn(`⚠️  Could not load session: ${error.message}`);
     }
     return false;
+  }
+
+  loadCapturedStorage() {
+    try {
+      if (fs.existsSync(this.capturedStorageFile)) {
+        this.capturedStorage = JSON.parse(fs.readFileSync(this.capturedStorageFile, 'utf-8'));
+        console.log('✅ Loaded captured storage from temp/lab-flow-tests/captured-storage.json');
+        console.log(`   User: ${this.capturedStorage.userEmail}`);
+        console.log(`   Captured at: ${this.capturedStorage.timestamp}`);
+        console.log(`   Cookies: ${this.capturedStorage.cookies?.length || 0}`);
+        console.log(`   localStorage: ${Object.keys(this.capturedStorage.localStorage || {}).length} keys\n`);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`⚠️  Could not load captured storage: ${error.message}`);
+    }
+    return false;
+  }
+
+  async setCapturedCredentialsInBrowser() {
+    if (!this.capturedStorage || !this.service) return false;
+    
+    try {
+      console.log('🔑 Injecting captured credentials into browser...');
+      
+      // Set localStorage
+      if (Object.keys(this.capturedStorage.localStorage || {}).length > 0) {
+        console.log('   💾 Setting localStorage keys...');
+        await this.service.page.evaluate((data) => {
+          Object.entries(data).forEach(([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch (e) {}
+          });
+        }, this.capturedStorage.localStorage);
+        console.log(`      ✓ Set ${Object.keys(this.capturedStorage.localStorage).length} localStorage entries`);
+      }
+      
+      // Set cookies
+      if (this.capturedStorage.cookies && this.capturedStorage.cookies.length > 0) {
+        console.log('   🍪 Setting cookies...');
+        const cookiesToAdd = this.capturedStorage.cookies.map(cookie => ({
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain,
+          path: cookie.path || '/',
+          secure: cookie.secure !== undefined ? cookie.secure : true,
+          httpOnly: cookie.httpOnly !== undefined ? cookie.httpOnly : false,
+          sameSite: cookie.sameSite || 'Lax'
+        }));
+        
+        // Set cookies one by one to handle errors
+        let cookiesSet = 0;
+        for (const cookie of cookiesToAdd) {
+          try {
+            await this.service.page.setCookie(cookie);
+            cookiesSet++;
+          } catch (e) {
+            console.warn(`      ⚠️  Could not set cookie ${cookie.name}: ${e.message}`);
+          }
+        }
+        console.log(`      ✓ Set ${cookiesSet}/${this.capturedStorage.cookies.length} cookies`);
+      }
+      
+      console.log('✅ Captured credentials injected successfully\n');
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Could not set credentials: ${error.message}`);
+      return false;
+    }
+  }
+
+  saveCapturedStorageAsSession() {
+    if (!this.capturedStorage) return false;
+    
+    try {
+      console.log('💾 Saving captured storage as session file for future use...');
+      
+      const sessionData = {
+        service: 'google-flow',
+        savedAt: new Date().toISOString(),
+        userEmail: this.capturedStorage.userEmail,
+        source: 'captured-storage.json',
+        localStorage: this.capturedStorage.localStorage || {},
+        cookies: this.capturedStorage.cookies || []
+      };
+      
+      const sessionDir = path.dirname(this.sessionFile);
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(this.sessionFile, JSON.stringify(sessionData, null, 2));
+      console.log(`✅ Saved to: ${this.sessionFile}\n`);
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Could not save session: ${error.message}`);
+      return false;
+    }
   }
 
   async setSavedCredentialsInBrowser() {
@@ -96,14 +197,18 @@ class LabFlowIntegrationTest {
       fs.mkdirSync(this.testDir, { recursive: true });
     }
     
-    console.log(`✅ Test directory: ${this.testDir}`);
+    console.log(`✅ Test directory: ${this.testDir}\n`);
     
     // Try to load saved credentials
-    console.log('\n🔐 Checking for saved credentials...');
-    if (this.loadSavedCredentials()) {
-      console.log('💡 Tip: Run test again without login if credentials work');
-    } else {
-      console.log('ℹ️  No saved credentials found - you may need to login manually');
+    console.log('🔐 Checking for saved credentials...');
+    const sessionLoaded = this.loadSavedCredentials();
+    
+    // Try to load captured storage
+    console.log('📸 Checking for captured storage...');
+    const capturedLoaded = this.loadCapturedStorage();
+    
+    if (!sessionLoaded && !capturedLoaded) {
+      console.log('ℹ️  No saved credentials or captured storage found - you may need to login manually');
     }
     
     console.log('');
@@ -117,15 +222,18 @@ class LabFlowIntegrationTest {
     
     try {
       console.log('⏳ Initializing GoogleFlowService...\n');
-      // Can pass chromeProfile: 'Cong' to use specific Chrome profile for modluffy90@gmail.com
+      
+      // If we have captured storage, save it as session for automatic loading
+      if (this.capturedStorage && !this.savedAuth) {
+        console.log('📝 Using captured storage from previous test...\n');
+        this.saveCapturedStorageAsSession();
+      }
+      
       this.service = new GoogleFlowService({ headless: false });
       
       console.log('⏳ Loading Lab Flow UI...');
-      // Option 1: Use saved session if available
-      // Option 2: Pass chromeProfile to initialize() to use specific Chrome profile
-      await this.service.initialize({ 
-        // chromeProfile: 'Cong' // Uncomment to use Chrome profile for modluffy90@gmail.com
-      });
+      // GoogleFlowService will automatically load credentials from session file
+      await this.service.initialize();
       
       console.log('✅ Service initialized successfully');
       console.log(`   📍 Base URL: ${this.service.baseUrl}`);
@@ -526,18 +634,45 @@ class LabFlowIntegrationTest {
     console.log('📁 Test Files:');
     console.log(`   Directory: ${this.testDir}`);
     console.log(`   • Generated images in: ${path.join(this.testDir, 'test-*.png')}`);
-    console.log(`   • Storage data in: ${path.join(this.testDir, 'captured-storage.json')}\n`);
+    console.log(`   • Captured storage in: ${this.capturedStorageFile}`);
+    if (fs.existsSync(this.sessionFile)) {
+      console.log(`   • Session file in: ${this.sessionFile} ✅\n`);
+    } else {
+      console.log(`   • Session file: Not yet created\n`);
+    }
     
     console.log('🎉 Lab Flow Integration Test Complete!\n');
     
-    console.log('📝 Next Steps:');
-    console.log('1. Check the captured-storage.json file for auth tokens and storage data');
-    console.log('2. Identify which storage mechanism contains the login credentials');
-    console.log('3. Use SessionManager to persist these credentials');
-    console.log('4. Test the VTO UI in browser:');
+    console.log('📋 How to Reuse Captured Credentials:\n');
+    
+    if (this.capturedStorage) {
+      console.log('✅ CAPTURED STORAGE FOUND:');
+      console.log(`   User: ${this.capturedStorage.userEmail}`);
+      console.log(`   Cookies: ${this.capturedStorage.cookies?.length || 0}`);
+      console.log(`   Captured at: ${this.capturedStorage.timestamp}\n`);
+      
+      if (fs.existsSync(this.sessionFile)) {
+        console.log('✅ SESSION FILE SAVED:');
+        console.log(`   Location: ${this.sessionFile}`);
+        console.log('   Next time you run the test, it will load these credentials automatically!\n');
+      }
+    }
+    
+    console.log('📝 Next Steps:\n');
+    console.log('Option 1: Run test again (will auto-load captured credentials)');
+    console.log('   $ npm run test-lab-flow\n');
+    
+    console.log('Option 2: Generate more images with loaded credentials');
+    console.log('   $ npm run test-lab-flow -- test-image\n');
+    
+    console.log('Option 3: Test with Chrome profile for faster login');
+    console.log('   Edit test script and use: chromeProfile: "Profile 4"\n');
+    
+    console.log('Option 4: Test VTO integration in browser');
     console.log('   - Go to VirtualTryOnPage in frontend');
     console.log('   - Select provider: "Google Lab Flow"');
-    console.log('   - Upload images and generate to test integration');
+    console.log('   - Upload images and generate\n');
+    
     console.log('');
   }
 
