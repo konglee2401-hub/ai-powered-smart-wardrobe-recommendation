@@ -93,11 +93,11 @@ class GoogleFlowService extends BrowserService {
         }, authData.localStorage);
       }
       
-      // Inject cookies
+      // Inject cookies (using Puppeteer API)
       if (authData.cookies && authData.cookies.length > 0) {
         console.log(`   • Cookies (${authData.cookies.length} items)`);
         try {
-          await this.page.context().addCookies(authData.cookies);
+          await this.page.setCookie(...authData.cookies);
         } catch (cookieError) {
           console.warn(`      ⚠️  Some cookies could not be set: ${cookieError.message}`);
         }
@@ -153,8 +153,11 @@ class GoogleFlowService extends BrowserService {
 
   async _checkIfLoggedIn() {
     try {
-      const loginButton = await this.page.$('text=Sign in, button:has-text("Sign in")');
-      return !loginButton;
+      const isOnSignInPage = await this.page.evaluate(() => {
+        const text = document.body.innerText.toLowerCase();
+        return text.includes('sign in') || text.includes('đăng nhập');
+      });
+      return !isOnSignInPage;
     } catch {
       return true;
     }
@@ -167,12 +170,23 @@ class GoogleFlowService extends BrowserService {
     console.log('');
 
     try {
-      // Find "Tạo hình ảnh" (Create image) button
-      const createImageButton = await this.page.$('button:has-text("Tạo hình ảnh"), button:has-text("Create image"), button:has-text("Image")');
+      // Find and click "Tạo hình ảnh" (Create image) button with text matching
+      const buttonClicked = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('tạo hình ảnh') || text.includes('create image') || (text.includes('image') && !text.includes('model'))) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
       
-      if (createImageButton) {
-        await createImageButton.click();
+      if (buttonClicked) {
         await this.page.waitForTimeout(2000);
+      } else {
+        console.warn('⚠️  Could not find Create Image button, attempting to find text input anyway');
       }
 
       // Find text input

@@ -63,7 +63,7 @@ class LabFlowIntegrationTest {
         console.log(`      ✓ Set ${Object.keys(this.savedAuth.localStorage).length} localStorage entries`);
       }
       
-      // Set cookies
+      // Set cookies (using Puppeteer API)
       if (this.savedAuth.cookies && this.savedAuth.cookies.length > 0) {
         console.log('   🍪 Setting cookies...');
         const cookiesToAdd = this.savedAuth.cookies.map(cookie => ({
@@ -76,7 +76,7 @@ class LabFlowIntegrationTest {
           sameSite: cookie.sameSite || 'Lax'
         }));
         
-        await this.service.page.context().addCookies(cookiesToAdd);
+        await this.service.page.setCookie(...cookiesToAdd);
         console.log(`      ✓ Set ${this.savedAuth.cookies.length} cookies`);
       }
       
@@ -391,9 +391,9 @@ class LabFlowIntegrationTest {
       
       console.log(`   • Found ${Object.keys(sessionStorageData).length} keys\n`);
       
-      // Capture cookies from browser context (includes all domains)
-      console.log('🍪 Capturing cookies from browser context...');
-      const allCookies = await this.service.page.context().cookies();
+      // Capture cookies from browser (Puppeteer API)
+      console.log('🍪 Capturing cookies from browser...');
+      const allCookies = await this.service.page.cookies();
       
       console.log(`   • Found ${allCookies.length} cookies total\n`);
       
