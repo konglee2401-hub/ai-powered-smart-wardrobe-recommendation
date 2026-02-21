@@ -6,9 +6,9 @@ import https from 'https';
 import http from 'http';
 
 /**
- * Google Labs Flow Service
+ * Google Labs Flow Service (Puppeteer-only)
+ * Image & Video generation using Puppeteer automation
  * Requires Google login (session persistence)
- * Can pre-load Google account cookies if available
  */
 class GoogleFlowService extends BrowserService {
   constructor(options = {}) {
@@ -20,21 +20,24 @@ class GoogleFlowService extends BrowserService {
     });
     
     this.baseUrl = 'https://labs.google/fx/vi/tools/flow';
-    this.usePreloadedGoogleAuth = options.usePreloadedGoogleAuth !== false; // Default true
   }
 
+  /**
+   * Initialize Google Flow with session management
+   */
   async initialize() {
     await this.launch();
     
-    // Add extra CDP protocol to mask automation
-    await this._maskAutomation();
+    // Try to load existing session
+    await this._loadAndInjectSession();
     
+    // Navigate to Lab Flow
     await this.goto(this.baseUrl);
     
     console.log('⏳ Waiting for Google Flow to load...');
     await this.page.waitForTimeout(3000);
     
-    // Check if logged in
+    // Check if already logged in
     const isLoggedIn = await this._checkIfLoggedIn();
     
     if (!isLoggedIn) {
@@ -67,90 +70,120 @@ class GoogleFlowService extends BrowserService {
   }
 
   /**
-   * Try to load and inject pre-saved Google authentication data
-   * This is optional and helps avoid "not secure" browser warnings
+   * Load and inject saved session (cookies + localStorage)
    */
-  async _loadPreloadedGoogleAuth() {
+  async _loadAndInjectSession() {
     try {
-      const googleAuthFile = path.join(path.dirname(import.meta.url), '../../.sessions/google-auth.json');
-      const normalPath = googleAuthFile.replace('file://', '');
+      const sessionFile = path.join(process.cwd(), '.sessions', 'google-flow-session.json');
       
-      if (!fs.existsSync(normalPath)) {
+      if (!fs.existsSync(sessionFile)) {
         return false;
       }
       
-      const authData = JSON.parse(fs.readFileSync(normalPath, 'utf-8'));
+      const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
       
-      console.log('🔌 Loading pre-saved Google authentication...');
+      // Inject cookies using Puppeteer API
+      if (sessionData.cookies && sessionData.cookies.length > 0) {
+        console.log(`🍪 Restoring ${sessionData.cookies.length} cookies from session`);
+        
+        for (const cookie of sessionData.cookies) {
+          try {
+            await this.page.setCookie({
+              name: cookie.name,
+              value: cookie.value,
+              domain: cookie.domain,
+              path: cookie.path || '/',
+              expires: cookie.expires,
+              httpOnly: cookie.httpOnly || false,
+              secure: cookie.secure || true,
+              sameSite: cookie.sameSite || 'Lax'
+            });
+          } catch (e) {
+            console.warn(`   ⚠️  Could not set cookie ${cookie.name}`);
+          }
+        }
+        console.log('✅ Cookies injected\n');
+      }
       
       // Inject localStorage
-      if (authData.localStorage) {
-        console.log(`   • localStorage (${Object.keys(authData.localStorage).length} items)`);
-        await this.page.evaluate((data) => {
-          Object.entries(data).forEach(([key, value]) => {
-            localStorage.setItem(key, value);
+      if (sessionData.localStorage && Object.keys(sessionData.localStorage).length > 0) {
+        console.log(`💾 Restoring ${Object.keys(sessionData.localStorage).length} localStorage keys`);
+        
+        await this.page.evaluate((storageData) => {
+          Object.entries(storageData).forEach(([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch (e) {}
           });
-        }, authData.localStorage);
+        }, sessionData.localStorage);
+        console.log('✅ localStorage injected\n');
       }
       
-      // Inject cookies (using Puppeteer API)
-      if (authData.cookies && authData.cookies.length > 0) {
-        console.log(`   • Cookies (${authData.cookies.length} items)`);
-        try {
-          await this.page.setCookie(...authData.cookies);
-        } catch (cookieError) {
-          console.warn(`      ⚠️  Some cookies could not be set: ${cookieError.message}`);
-        }
-      }
-      
-      console.log('✅ Pre-loaded Google auth injected\n');
       return true;
     } catch (error) {
-      console.warn(`⚠️  Could not load pre-saved Google auth: ${error.message}`);
+      console.warn(`⚠️  Could not load session: ${error.message}`);
       return false;
     }
   }
 
   /**
-   * Mask Playwright automation to avoid bot detection
+   * Save current session (cookies + localStorage)
    */
-  async _maskAutomation() {
+  async saveSession() {
     try {
-      // Override chrome object to look more like real browser
-      await this.page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', {
-          get: () => false,
-        });
-        
-        Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5],
-        });
-        
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['en-US', 'en'],
-        });
-
-        // Mock chrome object for Google services
-        window.chrome = {
-          runtime: {}
-        };
-        
-        // Pass headless check
-        Object.defineProperty(document, 'hidden', {
-          get: () => false,
-        });
-        
-        Object.defineProperty(document, 'visibilityState', {
-          get: () => 'visible',
-        });
+      const sessionFile = path.join(process.cwd(), '.sessions', 'google-flow-session.json');
+      
+      // Get all cookies
+      const cookies = await this.page.cookies();
+      
+      // Get important localStorage keys
+      const localStorage = await this.page.evaluate(() => {
+        const keys = [
+          'PINHOLE_VIDEO_GENERATION_SETTINGS',
+          'PINHOLE_ASSET_VIEW_MEDIA_TYPE',
+          'MOST_RECENT_PINHOLE_IMAGE_MODEL_USED',
+          'event'
+        ];
+        const data = {};
+        for (const key of keys) {
+          try {
+            const value = localStorage.getItem(key);
+            if (value) {
+              data[key] = value;
+            }
+          } catch (e) {}
+        }
+        return data;
       });
       
-      console.log('✅ Browser automation masked');
+      const sessionData = {
+        service: 'google-flow',
+        savedAt: new Date().toISOString(),
+        cookies,
+        localStorage
+      };
+      
+      // Ensure directory exists
+      const dir = path.dirname(sessionFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      
+      fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
+      console.log(`✅ Session saved to: ${sessionFile}`);
+      console.log(`   Cookies: ${cookies.length}`);
+      console.log(`   LocalStorage: ${Object.keys(localStorage).length} keys\n`);
+      
+      return true;
     } catch (error) {
-      console.warn('⚠️  Could not mask automation:', error.message);
+      console.error(`❌ Failed to save session: ${error.message}`);
+      return false;
     }
   }
 
+  /**
+   * Check if already logged into Google
+   */
   async _checkIfLoggedIn() {
     try {
       const isOnSignInPage = await this.page.evaluate(() => {
@@ -163,6 +196,9 @@ class GoogleFlowService extends BrowserService {
     }
   }
 
+  /**
+   * Generate image from text prompt
+   */
   async generateImage(prompt, options = {}) {
     console.log('\n🎨 GOOGLE FLOW IMAGE GENERATION');
     console.log('='.repeat(80));
@@ -170,26 +206,30 @@ class GoogleFlowService extends BrowserService {
     console.log('');
 
     try {
-      // Find and click "Tạo hình ảnh" (Create image) button with text matching
-      const buttonClicked = await this.page.evaluate(() => {
+      // Find and click "Create image" button
+      const createImageButton = await this.page.evaluate(() => {
         const buttons = document.querySelectorAll('button');
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          if (text.includes('tạo hình ảnh') || text.includes('create image') || (text.includes('image') && !text.includes('model'))) {
+          if (text.includes('tạo hình ảnh') || 
+              text.includes('create image') || 
+              text.includes('generate image')) {
+            btn.scrollIntoView({ block: 'center' });
             btn.click();
             return true;
           }
         }
         return false;
       });
-      
-      if (buttonClicked) {
+
+      if (createImageButton) {
+        console.log('✅ Clicked Create Image button');
         await this.page.waitForTimeout(2000);
       } else {
         console.warn('⚠️  Could not find Create Image button, attempting to find text input anyway');
       }
 
-      // Find text input
+      // Find text input (textarea or contenteditable or input)
       const textarea = await this.page.waitForSelector('textarea, [contenteditable="true"], input[type="text"]', { timeout: 10000 });
       
       if (!textarea) {
@@ -203,7 +243,7 @@ class GoogleFlowService extends BrowserService {
       await textarea.fill(prompt);
       await this.page.waitForTimeout(1000);
 
-      // Submit
+      // Submit by pressing Enter
       await this.page.keyboard.press('Enter');
       
       console.log('✅ Generation started');
@@ -241,6 +281,9 @@ class GoogleFlowService extends BrowserService {
     }
   }
 
+  /**
+   * Generate video from text prompt
+   */
   async generateVideo(prompt, options = {}) {
     console.log('\n🎬 GOOGLE FLOW VIDEO GENERATION');
     console.log('='.repeat(80));
@@ -248,11 +291,25 @@ class GoogleFlowService extends BrowserService {
     console.log('');
 
     try {
-      // Find "Tạo video" (Create video) button
-      const createVideoButton = await this.page.$('button:has-text("Tạo video"), button:has-text("Create video"), button:has-text("Video")');
-      
+      // Find and click "Create video" button
+      const createVideoButton = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('tạo video') || 
+              text.includes('create video') || 
+              text.includes('generate video') ||
+              text.includes('video')) {
+            btn.scrollIntoView({ block: 'center' });
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
       if (createVideoButton) {
-        await createVideoButton.click();
+        console.log('✅ Clicked Create Video button');
         await this.page.waitForTimeout(2000);
       }
 
@@ -270,7 +327,7 @@ class GoogleFlowService extends BrowserService {
       await textarea.fill(prompt);
       await this.page.waitForTimeout(1000);
 
-      // Submit
+      // Submit by pressing Enter
       await this.page.keyboard.press('Enter');
       
       console.log('✅ Generation started');
@@ -308,6 +365,9 @@ class GoogleFlowService extends BrowserService {
     }
   }
 
+  /**
+   * Wait for image to be generated (monitors DOM for new images)
+   */
   async _waitForGeneratedImage(maxWait = 120000) {
     const startTime = Date.now();
     
@@ -319,7 +379,10 @@ class GoogleFlowService extends BrowserService {
           if (img.naturalWidth > 400 && img.naturalHeight > 400) {
             // Skip logos and icons
             const src = img.src;
-            if (!src.includes('logo') && !src.includes('icon') && !src.includes('avatar')) {
+            if (!src.includes('logo') && 
+                !src.includes('icon') && 
+                !src.includes('avatar') &&
+                !src.includes('data:')) {
               return src;
             }
           }
@@ -338,6 +401,9 @@ class GoogleFlowService extends BrowserService {
     return null;
   }
 
+  /**
+   * Wait for video to be generated (monitors DOM for new videos)
+   */
   async _waitForGeneratedVideo(maxWait = 180000) {
     const startTime = Date.now();
     
@@ -374,6 +440,9 @@ class GoogleFlowService extends BrowserService {
     return null;
   }
 
+  /**
+   * Download image from URL
+   */
   async _downloadImage(url, outputPath) {
     const filename = outputPath || path.join(
       process.cwd(), 
@@ -416,6 +485,9 @@ class GoogleFlowService extends BrowserService {
     });
   }
 
+  /**
+   * Download video from URL
+   */
   async _downloadVideo(url, outputPath) {
     const filename = outputPath || path.join(
       process.cwd(), 
