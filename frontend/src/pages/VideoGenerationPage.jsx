@@ -462,8 +462,8 @@ export default function VideoGenerationPage() {
         {/* Main Content Area - Scrollable */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Settings */}
-          <div className="w-80 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
-            <div className="p-4 space-y-4">
+          <div className="w-96 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="p-3 space-y-3">
               {currentStep === 1 && (
                 <VideoSettingsStep
                   onNext={() => setCurrentStep(2)}
@@ -505,19 +505,19 @@ export default function VideoGenerationPage() {
           <div className="flex-1 bg-gray-900 overflow-y-auto">
             <div className="p-6 max-w-4xl mx-auto">
               {currentStep === 1 && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div>
                   <h2 className="text-2xl font-bold text-white mb-2">Step 1: Select Source Image</h2>
                   <p className="text-gray-400">Choose or upload an image to create your video</p>
                 </div>
 
                 {/* Image Upload & Preview */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {currentImage ? (
                     <>
                       {/* Image Preview */}
                       <div className="relative bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-700">
-                        <div className="aspect-video flex items-center justify-center bg-gray-950">
+                        <div className="h-48 flex items-center justify-center bg-gray-950">
                           <img
                             src={currentImage}
                             alt="Video Source"
@@ -552,7 +552,7 @@ export default function VideoGenerationPage() {
                         onClick={() => imageInputRef.current?.click()}
                         className="relative bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg border-2 border-dashed border-blue-500/50 hover:border-blue-400/70 transition-colors cursor-pointer overflow-hidden"
                       >
-                        <div className="aspect-video flex flex-col items-center justify-center gap-3 p-8">
+                        <div className="h-48 flex flex-col items-center justify-center gap-3 p-8">
                           <Upload className="w-12 h-12 text-blue-400" />
                           <div className="text-center">
                             <h3 className="text-lg font-semibold text-white mb-2">Upload Source Image</h3>
@@ -581,7 +581,7 @@ export default function VideoGenerationPage() {
                                 onClick={() => handleImageChange(characterImage)}
                                 className="p-3 rounded-lg border-2 border-gray-700 hover:border-purple-500 hover:bg-purple-900/20 transition-all group"
                               >
-                                <div className="aspect-video mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
+                                <div className="h-32 mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
                                   <img
                                     src={characterImage}
                                     alt="Character"
@@ -599,7 +599,7 @@ export default function VideoGenerationPage() {
                                 onClick={() => handleImageChange(productImage)}
                                 className="p-3 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-blue-900/20 transition-all group"
                               >
-                                <div className="aspect-video mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
+                                <div className="h-32 mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
                                   <img
                                     src={productImage}
                                     alt="Product"
