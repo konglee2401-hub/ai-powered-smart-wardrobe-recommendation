@@ -229,7 +229,7 @@ class LabFlowIntegrationTest {
         this.saveCapturedStorageAsSession();
       }
       
-      this.service = new GoogleFlowService({ headless: false });
+      this.service = new GoogleFlowService({ headless: false, chromeProfile: 'Profile 2' });
       
       console.log('⏳ Loading Lab Flow UI...');
       // GoogleFlowService will automatically load credentials from session file

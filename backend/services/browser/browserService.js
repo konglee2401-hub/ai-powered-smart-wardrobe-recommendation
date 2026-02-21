@@ -34,10 +34,11 @@ class BrowserService {
   /**
    * Launch browser with optional session
    */
-  async launch() {
-    console.log('🚀 Launching browser (using real Chrome with Cris Lee profile)...');
+  async launch(options = {}) {
+    const chromeProfile = options.chromeProfile || this.options.chromeProfile || 'Profile 1';
+    console.log(`🚀 Launching browser with ${chromeProfile}...`);
     
-    // Get Chrome User Data directory with Cris Lee profile (Profile 2)
+    // Get Chrome User Data directory
     const chromeUserDataDir = path.join(
       process.env.LOCALAPPDATA || process.env.HOME,
       'Google',
@@ -46,13 +47,13 @@ class BrowserService {
     );
     
     try {
-      // Try with real Chrome first (using Cris Lee profile)
+      // Try with real Chrome first (using specified profile)
       this.browser = await puppeteer.launch({
         channel: 'chrome', // Use real Chrome installation
         headless: false, // Keep visible for manual interaction
         args: [
           `--user-data-dir=${chromeUserDataDir}`, // Use Chrome User Data directory
-          '--profile-directory=Profile 1', // Explicitly use Cris Lee's profile
+          `--profile-directory=${chromeProfile}`, // Use specified profile
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
@@ -79,7 +80,7 @@ class BrowserService {
         ],
         defaultViewport: this.options.viewport
       });
-      console.log('✅ Using real Chrome with profile (disabling security warnings)');
+      console.log(`✅ Using real Chrome with ${chromeProfile} (disabling security warnings)`);
     } catch (error) {
       if (error.message.includes('channel') || error.message.includes('Chrome')) {
         console.log('⚠️  Chrome not found, falling back to Chromium...');
@@ -105,8 +106,8 @@ class BrowserService {
 
     this.page = await this.browser.newPage();
     
-    // Load session cookies if available
-    if (this.sessionManager && this.sessionManager.hasSession()) {
+    // Load session cookies if available (unless skipSession option is set)
+    if (!options.skipSession && this.sessionManager && this.sessionManager.hasSession()) {
       try {
         const cookies = this.sessionManager.loadSession()
         if (cookies && cookies.length > 0) {
@@ -123,6 +124,8 @@ class BrowserService {
       } catch (error) {
         console.log(`⚠️  Failed to load session cookies: ${error.message}`);
       }
+    } else if (options.skipSession) {
+      console.log('⏭️  Skipping session loading (testing Profile auto-login)');
     }
     
     // Set user agent
@@ -136,7 +139,7 @@ class BrowserService {
     // Set default timeout
     this.page.setDefaultTimeout(this.options.timeout);
 
-    console.log('✅ Browser launched with Cris Lee profile');
+    console.log(`✅ Browser launched with ${chromeProfile}`);
   }
 
   /**

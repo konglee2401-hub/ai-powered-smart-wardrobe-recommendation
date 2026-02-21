@@ -43,12 +43,20 @@ class GoogleFlowService extends BrowserService {
       };
     }
     
-    await this.launch();
+    await this.launch({ 
+      chromeProfile: options.chromeProfile || this.chromeProfile,
+      skipSession: options.skipSession 
+    });
     
-    // Try to load existing session
-    const sessionLoaded = await this._loadAndInjectSession();
+    // Try to load existing session (unless skipSession is enabled)
+    let sessionLoaded = false;
+    if (!options.skipSession) {
+      sessionLoaded = await this._loadAndInjectSession();
+    } else {
+      console.log('⏭️  Skipping session loading - testing Profile auto-login');
+    }
     
-    // Navigate to Lab Flow
+    // Navigate to Lab Flow landing page
     try {
       await this.goto(this.baseUrl, { waitUntil: 'networkidle2', timeout: 30000 });
     } catch (error) {
@@ -90,6 +98,14 @@ class GoogleFlowService extends BrowserService {
       }
     } else {
       console.log('✅ Already logged in to Google!\n');
+    }
+    
+    // Navigate to editor/generator interface by clicking "Tạo bằng Flow" (Create with Flow)
+    console.log('📍 Navigating to generator interface...');
+    const navigatedToEditor = await this._navigateToEditorInterface();
+    
+    if (!navigatedToEditor) {
+      console.warn('⚠️  Could not navigate to editor interface');
     }
     
     console.log('✅ Google Flow initialized');
@@ -246,6 +262,57 @@ class GoogleFlowService extends BrowserService {
     } catch (error) {
       console.warn(`⚠️  Login check failed: ${error.message}`);
       return true; // Assume logged in if check fails
+    }
+  }
+
+  /**
+   * Navigate to the editor/generator interface
+   * Clicks "Tạo bằng Flow" (Create with Flow) button on landing page
+   */
+  async _navigateToEditorInterface() {
+    try {
+      const clickedButton = await this.page.evaluate(() => {
+        // Find and click the "Tạo bằng Flow" button
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('tạo bằng flow') || text.includes('create with flow')) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!clickedButton) {
+        console.warn('⚠️  Could not find "Tạo bằng Flow" button on landing page');
+        return false;
+      }
+
+      console.log('✅ Clicked "Tạo bằng Flow" button');
+
+      // Wait for editor interface to load
+      console.log('⏳ Waiting for editor interface to load...');
+      await this.page.waitForTimeout(5000);
+
+      // Check if we can find the textarea (should be in editor now)
+      const hasTextarea = await this.page.evaluate(() => {
+        const textarea = document.querySelector('textarea');
+        return textarea !== null && textarea.offsetParent !== null;
+      });
+
+      if (hasTextarea) {
+        console.log('✅ Editor interface loaded with textarea');
+        return true;
+      } else {
+        console.warn('⚠️  Editor interface loaded but textarea not found yet');
+        // Still return true as we clicked the button successfully
+        return true;
+      }
+
+    } catch (error) {
+      console.warn(`⚠️  Navigation to editor failed: ${error.message}`);
+      return false;
     }
   }
 
