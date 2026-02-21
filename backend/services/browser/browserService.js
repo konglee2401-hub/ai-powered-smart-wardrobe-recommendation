@@ -37,6 +37,7 @@ class BrowserService {
   async launch(options = {}) {
     const chromeProfile = options.chromeProfile || this.options.chromeProfile || 'Profile 1';
     console.log(`🚀 Launching browser with ${chromeProfile}...`);
+    console.log('🕵️  Applying stealth measures to bypass bot detection...');
     
     // Get Chrome User Data directory
     const chromeUserDataDir = path.join(
@@ -60,7 +61,7 @@ class BrowserService {
           '--disable-dev-shm-usage',
           '--disable-gpu',
           '--disable-features=IsolateOrigins,site-per-process',
-          // Additional flags to avoid "browser not secure" on Google services
+          // Aggressive bot detection bypass
           '--disable-web-resources',
           '--disable-sync',
           '--no-first-run',
@@ -76,17 +77,28 @@ class BrowserService {
           '--disable-popup-blocking',
           '--disable-print-preview',
           '--disable-prompt-on-repost',
-          '--disable-password-manager-reauthentication'
+          '--disable-password-manager-reauthentication',
+          // Additional stealth flags for Google security bypass
+          '--disable-plugins',
+          '--disable-images',
+          '--no-default-browser-check',
+          '--disable-web-meter-visible',
+          '--disable-component-update',
+          '--disable-client-side-phishing-detection',
+          '--disable-save-password-bubble',
+          '--disable-translate',
+          '--start-maximized',
+          '--disable-notifications'
         ],
-        defaultViewport: this.options.viewport
+        defaultViewport: null, // Allow full screen
+        timeout: 60000
       });
-      console.log(`✅ Using real Chrome with ${chromeProfile} (disabling security warnings)`);
+      console.log(`✅ Chrome launched with ${chromeProfile}`);
     } catch (error) {
       if (error.message.includes('channel') || error.message.includes('Chrome')) {
         console.log('⚠️  Chrome not found, falling back to Chromium...');
         this.browser = await puppeteer.launch({
-          headless: this.options.headless,
-          slowMo: this.options.slowMo,
+          headless: false,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -96,7 +108,8 @@ class BrowserService {
             '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process'
           ],
-          defaultViewport: this.options.viewport
+          defaultViewport: null,
+          timeout: 60000
         });
         console.log('✅ Using Chromium');
       } else {
@@ -105,6 +118,10 @@ class BrowserService {
     }
 
     this.page = await this.browser.newPage();
+    
+    // CRITICAL: Inject stealth JavaScript before navigation
+    console.log('🔓 Injecting stealth payload...');
+    await this._injectStealthPayload();
     
     // Load session cookies if available (unless skipSession option is set)
     if (!options.skipSession && this.sessionManager && this.sessionManager.hasSession()) {
@@ -131,15 +148,108 @@ class BrowserService {
     // Set user agent
     await this.page.setUserAgent(this.options.userAgent);
     
-    // Set viewport - use the configured viewport
-    if (this.options.viewport) {
-      await this.page.setViewport(this.options.viewport);
-    }
+    // Set viewport - allow full screen
+    await this.page.setViewport({ width: 1920, height: 1080 });
     
     // Set default timeout
     this.page.setDefaultTimeout(this.options.timeout);
 
-    console.log(`✅ Browser launched with ${chromeProfile}`);
+    console.log(`✅ Browser ready with stealth measures active`);
+  }
+
+  /**
+   * Inject stealth payload to hide automation detection
+   * This runs BEFORE any navigation to be most effective
+   */
+  async _injectStealthPayload() {
+    try {
+      await this.page.evaluateOnNewDocument(() => {
+        // Hide webdriver property
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+        
+        // Hide chrome property
+        window.chrome = {
+          runtime: {}
+        };
+        
+        // Override toString
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+        
+        // Hide headless mode
+        Object.defineProperty(navigator, 'headless', {
+          get: () => false,
+        });
+        
+        // Override user-agent string
+        Object.defineProperty(navigator, 'platform', {
+          get: () => 'Win32',
+        });
+        
+        // Remove headless indicator from user agent
+        const userAgent = navigator.userAgent;
+        Object.defineProperty(navigator, 'userAgent', {
+          get: () => userAgent.replace('HeadlessChrome', 'Chrome'),
+        });
+        
+        // Spoof plugins array
+        const spoofdPlugins = [
+          {
+            name: 'Chrome PDF Plugin',
+            filename: 'internal-pdf-viewer',
+            description: 'Portable Document Format'
+          },
+          {
+            name: 'Chrome PDF Viewer',
+            filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+            description: ''
+          }
+        ];
+        
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => spoofdPlugins,
+        });
+        
+        // Override languages
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en'],
+        });
+        
+        // Hide automation flag
+        if (navigator.vendor === 'Google Inc.') {
+          Object.defineProperty(navigator, 'vendor', {
+            get: () => 'Google Inc.',
+          });
+        }
+        
+        // Prevent performance.timing detection
+        const originalPerformanceNow = performance.now;
+        performance.now = function() {
+          return originalPerformanceNow.call(performance) + Math.random();
+        };
+        
+        // Spoof screen dimensions
+        Object.defineProperty(screen, 'width', {
+          get: () => 1920,
+        });
+        Object.defineProperty(screen, 'height', {
+          get: () => 1080,
+        });
+        
+        // Remove phantom detection
+        delete navigator.__proto__.webdriver;
+      });
+      
+      console.log('✅ Stealth payload injected');
+    } catch (error) {
+      console.warn(`⚠️  Could not inject stealth payload: ${error.message}`);
+    }
   }
 
   /**
