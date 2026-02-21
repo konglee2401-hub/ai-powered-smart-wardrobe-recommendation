@@ -177,8 +177,8 @@ export default function OneClickCreatorPage() {
   // Settings
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
-  const [imageProvider, setImageProvider] = useState('grok');
-  const [videoProvider, setVideoProvider] = useState('google-flow');
+  const [imageProvider, setImageProvider] = useState('google-flow');
+  const [videoProvider, setVideoProvider] = useState('grok');
   const [quantity, setQuantity] = useState(2);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isHeadless, setIsHeadless] = useState(true);
@@ -270,7 +270,7 @@ export default function OneClickCreatorPage() {
             charBase64,
             prodBase64,
             {
-              provider: imageProvider,
+              provider: 'grok',
               scene: 'studio',
               lighting: 'soft-diffused',
               mood: 'confident',
@@ -512,6 +512,17 @@ export default function OneClickCreatorPage() {
                   <option key={fo.value} value={fo.value}>{fo.label}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Analysis Provider Info */}
+            <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Analysis (Auto)
+              </h3>
+              <p className="text-xs text-blue-200">
+                🤖 Always uses <span className="font-bold">Grok.com</span> for image analysis
+              </p>
             </div>
 
             {/* Image Provider */}
