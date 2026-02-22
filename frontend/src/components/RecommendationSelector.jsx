@@ -104,15 +104,16 @@ export default function RecommendationSelector({
 
   // Update decision for a category
   const updateDecision = (category, updates) => {
+    const defaultDecision = { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
     setDecisions(prev => ({
       ...prev,
-      [category]: { ...prev[category], ...updates }
+      [category]: { ...(prev[category] || defaultDecision), ...updates }
     }));
   };
 
   // Get final value based on decision
   const getFinalValue = (category, rec) => {
-    const decision = decisions[category];
+    const decision = decisions[category] || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
     switch(decision.action) {
       case 'apply':
         return rec.choice;
@@ -128,10 +129,11 @@ export default function RecommendationSelector({
   const buildFinalRecommendations = () => {
     const result = {};
     Object.entries(recommendations).forEach(([cat, rec]) => {
+      const decision = decisions[cat] || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
       result[cat] = {
-        action: decisions[cat].action,
+        action: decision.action,
         finalValue: getFinalValue(cat, rec),
-        saveAsOption: decisions[cat].saveAsOption
+        saveAsOption: decision.saveAsOption
       };
     });
     return result;
@@ -145,7 +147,8 @@ export default function RecommendationSelector({
   const handleApplyAll = () => {
     const newDecisions = {};
     allRecommendationKeys.forEach(cat => {
-      newDecisions[cat] = { ...decisions[cat], action: 'apply' };
+      const defaultDecision = { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
+      newDecisions[cat] = { ...(decisions[cat] || defaultDecision), action: 'apply' };
     });
     setDecisions(newDecisions);
   };
@@ -154,7 +157,8 @@ export default function RecommendationSelector({
   const handleSaveAll = () => {
     const newDecisions = {};
     allRecommendationKeys.forEach(cat => {
-      newDecisions[cat] = { ...decisions[cat], saveAsOption: true };
+      const defaultDecision = { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
+      newDecisions[cat] = { ...(decisions[cat] || defaultDecision), saveAsOption: true };
     });
     setDecisions(newDecisions);
   };
@@ -163,7 +167,8 @@ export default function RecommendationSelector({
   const handleUnsaveAll = () => {
     const newDecisions = {};
     allRecommendationKeys.forEach(cat => {
-      newDecisions[cat] = { ...decisions[cat], saveAsOption: false };
+      const defaultDecision = { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
+      newDecisions[cat] = { ...(decisions[cat] || defaultDecision), saveAsOption: false };
     });
     setDecisions(newDecisions);
   };
@@ -211,7 +216,7 @@ export default function RecommendationSelector({
       {/* Recommendations List */}
       <div className="space-y-2">
         {Object.entries(recommendations).map(([category, rec]) => {
-          const decision = decisions[category];
+          const decision = decisions[category] || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
           const selectedAction = decision.action;
           const finalValue = getFinalValue(category, rec);
 
