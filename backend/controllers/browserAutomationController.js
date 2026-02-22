@@ -2033,3 +2033,111 @@ export async function generateVideo(req, res) {
     });
   }
 }
+
+/**
+ * 💫 NEW: Multi-Video Generation with Content Use Cases
+ * Generates seamless multi-video sequences for content workflows
+ * Supports frame chaining, ChatGPT-based prompting, and reference image management
+ */
+export async function generateMultiVideoSequence(req, res) {
+  try {
+    const {
+      sessionId = `session-${Date.now()}`,  // Unique session ID
+      useCase,  // 'change-clothes', 'product-showcase', 'styling-guide', etc.
+      refImage = null,  // Base64 encoded reference image
+      analysis = null,  // Analysis data from previous step (character, product details)
+      duration = 20,  // Total duration (will be split into segments)
+      quality = 'high',  // low, medium, high
+      aspectRatio = '16:9',  // 16:9, 9:16, 1:1
+      videoProvider = 'google-flow'  // Provider for video generation
+    } = req.body;
+
+    // Validate required parameters
+    if (!useCase) {
+      return res.status(400).json({
+        error: 'useCase is required',
+        success: false
+      });
+    }
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`🎬 MULTI-VIDEO GENERATION WITH CONTENT USE CASE`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`Session: ${sessionId}`);
+    console.log(`Use Case: ${useCase}`);
+    console.log(`Duration: ${duration}s`);
+    console.log(`Provider: ${videoProvider}`);
+    console.log(`Quality: ${quality}`);
+    console.log();
+
+    try {
+      // Import the multi-video service
+      const MultiVideoGenerationService = (await import('../services/multiVideoGenerationService.js')).default;
+      const multiVideoService = new MultiVideoGenerationService();
+
+      // Generate multi-video sequence
+      const result = await multiVideoService.generateMultiVideoSequence({
+        sessionId,
+        useCase,
+        duration,
+        refImage,
+        analysis,
+        quality,
+        aspectRatio,
+        videoProvider
+      });
+
+      // Close browser after generation
+      try {
+        await multiVideoService.close();
+      } catch (closeError) {
+        console.warn(`Warning: Could not close browser: ${closeError.message}`);
+      }
+
+      if (!result.success) {
+        return res.status(500).json({
+          error: result.error,
+          success: false,
+          sessio nId: sessionId,
+          videosGenerated: result.videosGenerated || 0
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          sessionId: sessionId,
+          useCase: useCase,
+          videos: result.videos,
+          videoCount: result.videoCount,
+          totalDuration: result.totalDuration,
+          frameChaining: result.frameChaining,
+          frameMetadata: result.frameMetadata,
+          quality: quality,
+          aspectRatio: aspectRatio,
+          generatedAt: new Date().toISOString(),
+          sessionPath: result.sessionPath
+        },
+        message: `Successfully generated ${result.videoCount} videos for ${useCase} workflow`
+      });
+
+    } catch (serviceError) {
+      console.error(`❌ Multi-Video Service Error:`, serviceError.message);
+      
+      return res.status(500).json({
+        error: `Multi-video generation failed: ${serviceError.message}`,
+        success: false,
+        sessionId: sessionId,
+        useCase: useCase,
+        stage: 'multi-video-generation'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Multi-video generation error:', error);
+    return res.status(500).json({
+      error: error.message,
+      success: false
+    });
+  }
+}

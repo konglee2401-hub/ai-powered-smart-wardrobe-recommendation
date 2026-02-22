@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, generateVideo, analyzeAndGenerate, analyzeWithBrowser, generateWithBrowser } from '../controllers/browserAutomationController.js';
+import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, generateVideo, analyzeAndGenerate, analyzeWithBrowser, generateWithBrowser, generateMultiVideoSequence } from '../controllers/browserAutomationController.js';
 
 const router = express.Router();
 
@@ -42,5 +42,8 @@ router.post('/generate-video', generateVideoBrowser);
 
 // 💫 NEW: Video generation endpoint for Google Flow (supports image uploads)
 router.post('/generate-video-with-provider', generateVideo);
+
+// 💫 NEW: Multi-video generation endpoint with content use cases
+router.post('/generate-multi-video-sequence', generateMultiVideoSequence);
 
 export default router;

@@ -584,6 +584,26 @@ export const browserAutomationAPI = {
     };
     return api.post('/api/videos/generate-prompts', payload);
   },
+
+  /**
+   * 💫 NEW: Generate multi-video sequence with content use cases
+   * Supports frame chaining and ChatGPT-based prompting
+   * @param {Object} options - Multi-video generation options
+   */
+  generateMultiVideoSequence: async (options = {}) => {
+    const payload = {
+      sessionId: options.sessionId || `session-${Date.now()}`,
+      useCase: options.useCase,  // 'change-clothes', 'product-showcase', 'styling-guide', etc.
+      refImage: options.refImage || null,  // Base64 reference image
+      analysis: options.analysis || null,  // Analysis data from previous steps
+      duration: options.duration || 20,    // Total duration
+      quality: options.quality || 'high',  // low, medium, high
+      aspectRatio: options.aspectRatio || '16:9',  // 16:9, 9:16, 1:1
+      videoProvider: options.videoProvider || 'google-flow'  // google-flow, grok
+    };
+
+    return api.post('/v1/browser-automation/generate-multi-video-sequence', payload);
+  },
   
   /**
    * Full workflow: Analyze + Generate image + optional video
