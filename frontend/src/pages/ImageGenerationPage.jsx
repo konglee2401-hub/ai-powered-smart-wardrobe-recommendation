@@ -459,53 +459,60 @@ export default function ImageGenerationPage() {
 
   // Auto-apply recommendations when entering Step 3 and expand categories
   useEffect(() => {
-    if (currentStep === 3) {
-      console.log('✅ Step 3 Entered');
-      console.log('📊 Current Analysis:', analysis);
-      console.log('🎯 Current selectedOptions:', selectedOptions);
+    if (currentStep === 3 && analysis?.recommendations) {
+      console.log('✅ Step 3 Entered - Auto-applying recommendations');
+      console.log('📊 Analysis recommendations:', analysis.recommendations);
       
-      // Check top-level recommendations, not nested
-      if (analysis?.recommendations) {
-        console.log('✓ Found recommendations at top level:', analysis.recommendations);
+      // Check if recommendations exist and options are empty
+      if (Object.keys(selectedOptions).length === 0) {
+        console.log('📝 Applying recommendations to options...');
+        const rec = analysis.recommendations;
+        const newOpts = {};
         
-        // Always expand all style categories when in Step 3 with recommendations
-        const allCategories = {};
-        Object.keys(STYLE_CATEGORIES).forEach(key => {
-          allCategories[key] = true;
-        });
-        console.log('📂 Expanding all categories in Step 3:', allCategories);
-        setExpandedCategories(allCategories);
+        // Apply each recommendation
+        let appliedCount = 0;
+        for (const key of ['scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup']) {
+          if (rec[key]?.choice) {
+            newOpts[key] = rec[key].choice;
+            appliedCount++;
+            console.log(`   ✓ ${key}: ${rec[key].choice}`);
+          }
+        }
         
-        // Only auto-apply if options are empty
-        if (Object.keys(selectedOptions).length === 0) {
-          console.log('📝 Applying recommendations...');
-          const rec = analysis.recommendations;
-          const newOpts = { ...selectedOptions };
-          // Extract .choice value from nested {choice, reason, alternatives} structure
-          if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
-          if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
-          if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
-          if (rec.style?.choice) newOpts.style = rec.style.choice;
-          if (rec.colorPalette?.choice) newOpts.colorPalette = rec.colorPalette.choice;
-          if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
-          
-          console.log('✅ Setting selectedOptions to:', newOpts);
+        if (appliedCount > 0) {
+          console.log(`✅ Applied ${appliedCount} recommendations`);
           setSelectedOptions(newOpts);
         } else {
-          console.log('⚠️ Options already selected:', selectedOptions);
+          console.warn('⚠️ No valid recommendations to apply');
         }
       } else {
-        console.log('❌ No recommendations found. Analysis:', analysis);
+        console.log('⚠️ Options already set, skipping auto-apply');
       }
+      
+      // Expand all categories for visibility
+      const allCategories = {};
+      Object.keys(STYLE_CATEGORIES).forEach(key => {
+        allCategories[key] = true;
+      });
+      setExpandedCategories(allCategories);
     }
-  }, [currentStep, analysis]);
+  }, [currentStep, analysis, selectedOptions]);
 
   const handleBuildPrompt = async () => {
-    if (!analysis?.analysis) return;
+    if (!analysis?.analysis) {
+      console.error('❌ Cannot build prompt: analysis.analysis is missing');
+      return;
+    }
+    
     setIsLoading(true);
-    setCurrentStep(4);
 
     try {
+      console.log('📝 Building prompt with:', { 
+        optionsCount: Object.keys(selectedOptions).length,
+        useCase,
+        productFocus 
+      });
+      
       const response = await unifiedFlowAPI.buildPrompt(
         analysis.analysis,
         selectedOptions,
@@ -514,10 +521,16 @@ export default function ImageGenerationPage() {
       );
 
       if (response.success && response.data?.prompt) {
+        console.log('✅ Prompt built successfully');
         setGeneratedPrompt(response.data.prompt);
+        // Move to Step 4 ONLY after successful prompt generation
+        setCurrentStep(4);
+      } else {
+        console.error('❌ Build prompt response missing data:', response);
       }
     } catch (error) {
       console.error('Build prompt failed:', error);
+      alert('Failed to build prompt: ' + (error.response?.data?.message || error.message));
     } finally {
       setIsLoading(false);
     }
