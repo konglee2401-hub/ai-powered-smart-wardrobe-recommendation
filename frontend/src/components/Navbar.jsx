@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard, Layers, Image, TrendingUp, Settings, Gauge,
-  Menu, X, ChevronDown, Video
+  Menu, X, ChevronDown, Video, Film
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -29,6 +29,7 @@ export default function Navbar() {
     { path: '/gallery', label: 'Gallery', icon: Image, category: 'main' },
     { path: '/history', label: 'History', icon: Clock, category: 'main' },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'main' },
+    { path: '/video-production', label: 'Video Production', icon: Film, category: 'main' },
   ];
 
   // Secondary navigation items (in Tools dropdown)

@@ -49,31 +49,57 @@ class PromptTemplateGenerator {
 
       console.log(`🤖 Calling Claude API for prompt generation...\n`);
 
-      // Call Claude
-      const message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: userPrompt
-          }
-        ]
-      });
+      let prompts = [];
+      let usedFallback = false;
+      let messageUsage = null;
 
-      const responseText = message.content[0].type === 'text' 
-        ? message.content[0].text 
-        : '';
+      try {
+        // Call Claude
+        const message = await this.client.messages.create({
+          model: this.model,
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: userPrompt
+            }
+          ]
+        });
 
-      // Parse the response
-      const prompts = this._parsePromptResponse(responseText, useCaseConfig.videoCount);
+        const responseText = message.content[0].type === 'text' 
+          ? message.content[0].text 
+          : '';
+
+        // Parse the response
+        prompts = this._parsePromptResponse(responseText, useCaseConfig.videoCount);
+        messageUsage = message.usage;
+      } catch (apiError) {
+        console.warn(`⚠️  Claude API failed: ${apiError.message}`);
+        console.log(`🔄 Using fallback prompts...\n`);
+        
+        // Use fallback prompts if API fails
+        prompts = this._getFallbackPrompts(useCase, useCaseConfig.videoCount);
+        usedFallback = true;
+      }
 
       console.log(`✅ Generated ${prompts.length} segment prompts:`);
       prompts.forEach(p => {
         console.log(`   📝 Segment ${p.index}: ${p.prompt.substring(0, 60)}...`);
       });
       console.log();
+
+      const metadata = {
+        generatedAt: new Date().toISOString(),
+        model: this.model
+      };
+
+      // Only add token count if Claude was used
+      if (!usedFallback && messageUsage) {
+        metadata.tokensUsed = messageUsage.input_tokens + messageUsage.output_tokens;
+      } else if (usedFallback) {
+        metadata.source = 'fallback';
+      }
 
       return {
         success: true,
@@ -82,11 +108,7 @@ class PromptTemplateGenerator {
         segmentDuration: segmentDuration,
         prompts: prompts,
         frameChaining: useCaseConfig.frameChaining,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          model: this.model,
-          tokensUsed: message.usage.input_tokens + message.usage.output_tokens
-        }
+        metadata: metadata
       };
 
     } catch (error) {
@@ -253,6 +275,50 @@ etc.`;
 
     // Trim to expected segments
     return prompts.slice(0, expectedSegments);
+  }
+
+  /**
+   * Get fallback prompts when Claude API is unavailable
+   * @param {string} useCase - The use case identifier
+   * @param {number} count - Number of prompts needed
+   * @returns {Array} - Array of fallback prompts
+   */
+  _getFallbackPrompts(useCase, count) {
+    const fallbackLibrary = {
+      'change-clothes': [
+        'A fashionable person in business casual outfit, confident pose, modern minimalist interior with natural window lighting, professional presentation suitable for product showcase',
+        'The same person transformed in casual weekend wear, relaxed posture, same interior setting, showing style versatility and comfort with the new outfit'
+      ],
+      'product-showcase': [
+        'Close-up of the premium casual outfit highlighting fabric texture, stitching details, and color quality with professional product photography and soft studio lighting',
+        'Full-body model wearing the outfit displaying the complete casual look from flattering angles with contemporary fashion photography style and proper lighting',
+        'Lifestyle shot of the outfit in real-world context showing comfort and practicality with warm natural lighting and relatable environment'
+      ],
+      'styling-guide': [
+        'Complete styled outfit with thoughtfully coordinated accessories on a confident model, showing the full look composition with proper proportions and balance',
+        'Close-up detail shot emphasizing the top portion of the outfit with professional lighting, highlighting fabric quality, color coordination, and accessory details',
+        'Styled shot of the bottom portion with footwear clearly visible, showing how it balances with the top and completing the overall aesthetic properly'
+      ],
+      'product-intro': [
+        'Hero shot of the casual outfit with professional soft lighting, showcasing the best angles, texture details, and color palette of the product',
+        'Model wearing the outfit in a confident relatable pose showing how it fits naturally on the body and how it moves with the wearer'
+      ],
+      'style-transform': [
+        'Before shot showing the person in basic casual wear with neutral expression and room temperature lighting to establish the starting point',
+        'After shot showing the same person transformed in the new premium casual outfit with confident expression and professional product lighting'
+      ]
+    };
+
+    const prompts = fallbackLibrary[useCase] || [
+      'Professional product video showcase with high quality cinematography and proper lighting setup',
+      'Detailed close-up shots highlighting product features with professional studio lighting'
+    ];
+
+    return prompts.slice(0, count).map((prompt, idx) => ({
+      index: idx + 1,
+      prompt: prompt,
+      source: 'fallback'
+    }));
   }
 
   /**

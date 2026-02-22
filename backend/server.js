@@ -33,6 +33,7 @@ import healthCheckRoutes from './routes/healthCheckRoutes.js';
 import aiProviderRoutes from './routes/aiProviderRoutes.js';
 import sessionHistoryRoutes from './routes/sessionHistory.js';
 import videoAnalyticsAndHistoryRoutes from './routes/videoAnalyticsAndHistoryRoutes.js';
+import affiliateVideoRoutes from './routes/affiliateVideoRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -127,6 +128,7 @@ app.use('/api/prompts-v1', promptsRoutes); // Keep old as v1 for compatibility
 app.use('/api', healthCheckRoutes);
 app.use('/api/sessions', sessionHistoryRoutes);
 app.use('/api/v1/video', videoAnalyticsAndHistoryRoutes);
+app.use('/api/affiliate', affiliateVideoRoutes);
 
 app.use(errorHandler);
 

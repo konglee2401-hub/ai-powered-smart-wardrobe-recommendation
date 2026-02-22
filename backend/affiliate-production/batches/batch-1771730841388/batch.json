@@ -1,0 +1,78 @@
+{
+  "batchId": "batch-1771730841388",
+  "projectId": "aff-1771730841383",
+  "totalProducts": 5,
+  "products": [
+    {
+      "id": "prod-1",
+      "name": "Premium Fashion Hoodie",
+      "productUrl": "https://shop.example.com/hoodie",
+      "category": "Clothing",
+      "price": "$49.99",
+      "description": "High-quality cotton hoodie perfect for casual wear",
+      "images": [],
+      "affiliateLink": "https://amzn.to/fashion-hoodie-123",
+      "videoPrompt": "Problem-solution format: Common Clothing issues solved by Premium Fashion Hoodie. Before/after demonstration. Quick testimonial-style voiceover. Professional cinematography. High conversion-focused narrative.",
+      "status": "pending",
+      "generatedAt": null
+    },
+    {
+      "id": "prod-2",
+      "name": "Designer Sunglasses",
+      "productUrl": "https://shop.example.com/sunglasses",
+      "category": "Accessories",
+      "price": "$89.99",
+      "description": "UV protection designer sunglasses with polarized lenses",
+      "images": [],
+      "affiliateLink": "https://amzn.to/sunglasses-aff",
+      "videoPrompt": "Lifestyle integration: Designer Sunglasses in real-life context. User-friendly demonstration. Vibrant colors and professional lighting. Quick benefit callouts. Designed for impulse purchase conversion.",
+      "status": "pending",
+      "generatedAt": null
+    },
+    {
+      "id": "prod-3",
+      "name": "Vintage Leather Jacket",
+      "productUrl": "https://shop.example.com/jacket",
+      "category": "Outerwear",
+      "price": "$199.99",
+      "description": "Authentic vintage leather jacket with unique patina",
+      "images": [],
+      "affiliateLink": "https://amzn.to/leather-jacket-deal",
+      "videoPrompt": "Trending effect-based: Vintage Leather Jacket featured with viral transitions and effects. TikTok/Reels native style. Catchy hook at beginning. Product integration feels natural and engaging.",
+      "status": "pending",
+      "generatedAt": null
+    },
+    {
+      "id": "prod-4",
+      "name": "Fashion Sneakers",
+      "productUrl": "https://shop.example.com/sneakers",
+      "category": "Footwear",
+      "price": "$79.99",
+      "description": "Comfortable and stylish everyday sneakers",
+      "images": [],
+      "affiliateLink": "https://amzn.to/sneakers-promo",
+      "videoPrompt": "Problem-solution format: Common Footwear issues solved by Fashion Sneakers. Before/after demonstration. Quick testimonial-style voiceover. Professional cinematography. High conversion-focused narrative.",
+      "status": "pending",
+      "generatedAt": null
+    },
+    {
+      "id": "prod-5",
+      "name": "Wool Cap",
+      "productUrl": "https://shop.example.com/cap",
+      "category": "Accessories",
+      "price": "$24.99",
+      "description": "Warm winter wool cap in multiple colors",
+      "images": [],
+      "affiliateLink": "https://amzn.to/wool-cap-deal",
+      "videoPrompt": "Quick affiliate showcase: Wool Cap - Perfect for Accessories. Professional product video highlighting features and benefits. High-energy presentation with trending transitions. 15-second format optimized for Reels/Shorts.",
+      "status": "pending",
+      "generatedAt": null
+    }
+  ],
+  "processingStatus": {
+    "generated": 0,
+    "failed": 0,
+    "inProgress": 0
+  },
+  "createdAt": "2026-02-22T03:27:21.389Z"
+}

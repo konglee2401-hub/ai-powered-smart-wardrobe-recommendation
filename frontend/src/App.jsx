@@ -16,6 +16,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import AdvancedCustomizationPage from './pages/AdvancedCustomizationPage';
 import PerformanceOptimizerPage from './pages/PerformanceOptimizerPage';
 import AIProviderManager from './pages/AIProviderManager';
+import { VideoProduction } from './pages/VideoProduction';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -159,6 +160,14 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-y-auto">
               <AIProviderManager />
+            </div>
+          </div>
+        } />
+        <Route path="/video-production" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <VideoProduction />
             </div>
           </div>
         } />

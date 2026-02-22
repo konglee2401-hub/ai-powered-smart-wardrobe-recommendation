@@ -2098,7 +2098,7 @@ export async function generateMultiVideoSequence(req, res) {
         return res.status(500).json({
           error: result.error,
           success: false,
-          sessio nId: sessionId,
+          sessionId: sessionId,
           videosGenerated: result.videosGenerated || 0
         });
       }

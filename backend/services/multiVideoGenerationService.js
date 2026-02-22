@@ -112,7 +112,7 @@ class MultiVideoGenerationService {
         console.log(`\n📹 SEGMENT ${segmentIndex}/${useCaseConfig.videoCount}`);
         console.log('┌' + '─'.repeat(78) + '┐');
         console.log(`│ Prompt: ${segmentPrompt.substring(0, 76)} ${segmentPrompt.length > 76 ? '...' : ''}`);
-        console.log('└' + '─'.repeat(78) + '┘");
+        console.log('└' + '─'.repeat(78) + '┘');
 
         // Generate video with Google Flow
         const videoResult = await this.googleFlow.generateVideo(segmentPrompt, {

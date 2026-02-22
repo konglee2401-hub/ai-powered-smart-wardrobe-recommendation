@@ -1,0 +1,64 @@
+{
+  "batchId": "batch-fashion-001",
+  "generatedAt": "2026-02-22T03:27:21.413Z",
+  "summary": {
+    "totalVideos": 4,
+    "totalViews": 726967,
+    "totalEngagement": 83432,
+    "totalAffiliateClicks": 3463,
+    "totalConversions": 241,
+    "estimatedRevenue": 6025,
+    "averageEngagementRate": "11.48"
+  },
+  "platformBreakdown": {
+    "instagram-reels": {
+      "views": 87067,
+      "engagement": 10579,
+      "clicks": 0
+    },
+    "youtube-shorts": {
+      "views": 35103,
+      "engagement": 8183,
+      "clicks": 0
+    },
+    "tiktok": {
+      "views": 604797,
+      "engagement": 64670,
+      "clicks": 0
+    }
+  },
+  "topPerformers": [
+    {
+      "videoId": "video-004",
+      "views": 144997,
+      "engagement": 21738,
+      "conversions": 78,
+      "revenue": 1950
+    },
+    {
+      "videoId": "video-001",
+      "views": 192344,
+      "engagement": 11489,
+      "conversions": 67,
+      "revenue": 1675
+    },
+    {
+      "videoId": "video-002",
+      "views": 222254,
+      "engagement": 26045,
+      "conversions": 57,
+      "revenue": 1425
+    },
+    {
+      "videoId": "video-003",
+      "views": 167372,
+      "engagement": 24160,
+      "conversions": 39,
+      "revenue": 975
+    }
+  ],
+  "recommendations": [
+    "Continue monitoring performance daily for first 7 days.",
+    "Repurpose top performers across other niches."
+  ]
+}
