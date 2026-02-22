@@ -2,14 +2,11 @@
  * Recommendation Selector Component
  * Allow per-category choice: Apply AI / Keep Current / Choose Manually + Save as option
  * 
- * Purpose: Users want flexibility to:
- * 1. Apply some AI recommendations
- * 2. Keep some current values (not options to save, just preserve)
- * 3. Choose manually from saved options
- * 4. Optionally save good recommendations for reuse next time
+ * Now dynamically shows ALL recommendations from analysis, not just hardcoded list
+ * Supports up to 13+ recommendations and allows creating new categories
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Check, Plus, AlertCircle } from 'lucide-react';
 
 export default function RecommendationSelector({
@@ -18,8 +15,8 @@ export default function RecommendationSelector({
   onApplyRecommendations, // Pass final selections
   isSaving = false
 }) {
-  // Categories that have AI recommendations
-  const RECOMMENDATION_CATEGORIES = [
+  // Hardcoded primary categories (always shown if available)
+  const PRIMARY_CATEGORIES = [
     'scene', 'lighting', 'mood', 'cameraAngle', 
     'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'
   ];
@@ -27,35 +24,70 @@ export default function RecommendationSelector({
   // Extract current selected values (from promptOptions)
   const currentValues = existingOptions || {};
 
-  // Track state: which action selected + save preference for each category
-  const [decisions, setDecisions] = useState(() => {
-    const init = {};
-    RECOMMENDATION_CATEGORIES.forEach(cat => {
-      init[cat] = {
-        action: 'keep', // 'apply' | 'keep' | 'choose'
-        chosenOption: currentValues[cat] || null,
-        saveAsOption: false,
-        expandWhy: false
-      };
-    });
-    return init;
-  });
+  // Extract ALL recommendations from analysis (both primary + any additional ones)
+  const allRecommendationKeys = useMemo(() => {
+    const keys = new Set();
+    
+    // Add primary categories
+    PRIMARY_CATEGORIES.forEach(k => keys.add(k));
+    
+    // Add ALL other keys from analysis.recommendations that aren't characterProfile or productDetails
+    if (analysis?.recommendations) {
+      Object.keys(analysis.recommendations).forEach(key => {
+        // Skip non-recommendation sections
+        if (key !== 'characterProfile' && key !== 'productDetails' && key !== 'analysis') {
+          keys.add(key);
+        }
+      });
+    }
+    
+    return Array.from(keys);
+  }, [analysis]);
 
-  // Extract recommendations from analysis
-  const recommendations = useMemo(() => {
-    const recs = {};
-    RECOMMENDATION_CATEGORIES.forEach(key => {
-      const rec = analysis?.recommendations?.[key] || analysis?.[key];
-      if (rec) {
-        recs[key] = {
-          choice: rec.choice || rec,
-          reason: rec.reason || '',
-          current: currentValues[key] || 'Not set'
+  // Track state: which action selected + save preference for each category
+  const [decisions, setDecisions] = useState({});
+
+  // Initialize decisions when recommendations change
+  useEffect(() => {
+    const newDecisions = {};
+    allRecommendationKeys.forEach(cat => {
+      // Preserve existing decision if it exists, otherwise create new
+      if (decisions[cat]) {
+        newDecisions[cat] = decisions[cat];
+      } else {
+        newDecisions[cat] = {
+          action: 'keep', // 'apply' | 'keep' | 'choose'
+          chosenOption: currentValues[cat] || null,
+          saveAsOption: false,
+          expandWhy: false
         };
       }
     });
+    setDecisions(newDecisions);
+  }, [allRecommendationKeys]);
+
+  // Extract recommendations from analysis - handles dynamic keys
+  const recommendations = useMemo(() => {
+    const recs = {};
+    allRecommendationKeys.forEach(key => {
+      const rec = analysis?.recommendations?.[key];
+      if (rec) {
+        // Handle both nested {choice, reason} structure and simple strings
+        const choice = rec.choice || rec;
+        const reason = rec.reason || '';
+        
+        if (choice) {
+          recs[key] = {
+            choice: choice.toString().trim(),
+            reason: reason.toString().trim(),
+            current: currentValues[key] || 'Not set',
+            isNew: PRIMARY_CATEGORIES.indexOf(key) === -1 // Mark as new if not in primary list
+          };
+        }
+      }
+    });
     return recs;
-  }, [analysis, currentValues]);
+  }, [analysis, currentValues, allRecommendationKeys]);
 
   // Get available options for manual selection
   // existingOptions structure: { hairstyle: [{value, label, ...}, ...], lighting: [...], ... }
@@ -112,7 +144,7 @@ export default function RecommendationSelector({
   // Apply All: Set all to 'apply' action
   const handleApplyAll = () => {
     const newDecisions = {};
-    Object.keys(recommendations).forEach(cat => {
+    allRecommendationKeys.forEach(cat => {
       newDecisions[cat] = { ...decisions[cat], action: 'apply' };
     });
     setDecisions(newDecisions);
@@ -121,7 +153,7 @@ export default function RecommendationSelector({
   // Save All: Mark all for saving
   const handleSaveAll = () => {
     const newDecisions = {};
-    Object.keys(recommendations).forEach(cat => {
+    allRecommendationKeys.forEach(cat => {
       newDecisions[cat] = { ...decisions[cat], saveAsOption: true };
     });
     setDecisions(newDecisions);
@@ -130,15 +162,15 @@ export default function RecommendationSelector({
   // Uncheck all saves
   const handleUnsaveAll = () => {
     const newDecisions = {};
-    Object.keys(recommendations).forEach(cat => {
+    allRecommendationKeys.forEach(cat => {
       newDecisions[cat] = { ...decisions[cat], saveAsOption: false };
     });
     setDecisions(newDecisions);
   };
 
-  const recommendationsCount = Object.keys(recommendations).length;
-  const appliedCount = Object.values(decisions).filter(d => d.action === 'apply').length;
-  const saveCount = Object.values(decisions).filter(d => d.saveAsOption).length;
+  const recommendationsCount = allRecommendationKeys.length;
+  const appliedCount = allRecommendationKeys.filter(k => decisions[k]?.action === 'apply').length;
+  const saveCount = allRecommendationKeys.filter(k => decisions[k]?.saveAsOption).length;
 
   return (
     <div className="space-y-4">
@@ -171,7 +203,7 @@ export default function RecommendationSelector({
             className="text-xs px-2 py-1 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded border border-gray-600/50 transition-colors"
             title="Uncheck all saves"
           >
-            Clear Saves
+            Clear Saves || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false }
           </button>
         </div>
       </div>
@@ -192,8 +224,13 @@ export default function RecommendationSelector({
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-200 capitalize mb-1">
+                    <h4 className="text-sm font-semibold text-gray-200 capitalize mb-1 flex items-center gap-2">
                       {category}
+                      {rec.isNew && (
+                        <span className="text-xs bg-orange-600/50 text-orange-200 px-1.5 py-0.5 rounded border border-orange-500/50">
+                          NEW
+                        </span>
+                      )}
                     </h4>
                     
                     {/* Current & Recommended Values */}
@@ -314,8 +351,8 @@ export default function RecommendationSelector({
       <div className="flex items-start gap-2 p-2 bg-blue-900/20 rounded border border-blue-700/30">
         <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-300">
-          <strong>How it works:</strong> Apply AI recommendations you like. Keep current values to preserve them. 
-          Or choose manually from your saved options. Checked items will be added as new choices for future use.
+          <strong>All {allRecommendationKeys.length} AI recommendations shown.</strong><br/>
+          Apply recommendations you like. <span className="text-orange-300">NEW</span> recommendations create new category options for future use. Your selections persist between projects.
         </p>
       </div>
 
