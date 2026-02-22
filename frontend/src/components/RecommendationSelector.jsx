@@ -203,7 +203,7 @@ export default function RecommendationSelector({
             className="text-xs px-2 py-1 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded border border-gray-600/50 transition-colors"
             title="Uncheck all saves"
           >
-            Clear Saves || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false }
+            Clear Saves
           </button>
         </div>
       </div>
