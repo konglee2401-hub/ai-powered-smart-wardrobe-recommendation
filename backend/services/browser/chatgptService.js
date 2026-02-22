@@ -607,16 +607,32 @@ class ChatGPTService extends BrowserService {
 
       // Step 6: Send message
       console.log('📍 STEP 6: Sending message...');
-      const enterKey = true;
-      if (enterKey) {
-        await this.page.keyboard.press('Enter');
-      } else {
-        const submitButton = await this.page.$('button[type="submit"], button[aria-label*="Send"], button[aria-label*="submit"]');
-        if (submitButton) {
-          await submitButton.click();
-        }
+      console.log('   ⌨️  Pressing Enter...');
+      await this.page.keyboard.press('Enter');
+      
+      console.log('   ⏸️  Waiting 3s for message to send...');
+      await this.page.waitForTimeout(3000);
+      
+      console.log('📍 STEP 6.5: Verify message was sent');
+      const messageState = await this.page.evaluate(() => {
+        const input = document.querySelector('textarea, [contenteditable="true"]');
+        const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        return {
+          inputFound: !!input,
+          inputLength: input ? (input.value || input.textContent || '').length : 0,
+          assistantMsgFound: !!assistantMsg,
+          bodyTextLength: (document.body.innerText || '').length,
+          pageTitle: document.title
+        };
+      });
+      
+      console.log('   📊 Message state:', messageState);
+      if (messageState.inputLength > 0) {
+        console.warn('   ⚠️  Input still has text - message may not have sent!');
       }
-      await this.page.waitForTimeout(2000);
+      if (!messageState.assistantMsgFound) {
+        console.warn('   ⚠️  No assistant message found yet - still waiting for response');
+      }
 
       // Step 7: Wait for response
       console.log('📍 STEP 7: Waiting for ChatGPT response...');
