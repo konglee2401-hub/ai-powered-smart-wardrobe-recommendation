@@ -34,6 +34,8 @@ import aiProviderRoutes from './routes/aiProviderRoutes.js';
 import sessionHistoryRoutes from './routes/sessionHistory.js';
 import videoAnalyticsAndHistoryRoutes from './routes/videoAnalyticsAndHistoryRoutes.js';
 import affiliateVideoRoutes from './routes/affiliateVideoRoutes.js';
+import cloudGalleryRoutes from './routes/cloudGalleryRoutes.js';
+import cloudBatchQueueRoutes from './routes/cloudBatchQueueRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -68,6 +70,12 @@ app.use((req, res, next) => {
 
 // Serve static files from upload directory
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+// Ensure upload temp directory exists
+const uploadTempDir = path.join(process.cwd(), 'uploads', 'temp');
+if (!fs.existsSync(uploadTempDir)) {
+  fs.mkdirSync(uploadTempDir, { recursive: true });
+}
 
 // 💫 NEW: Serve temporary generated files (images from browser automation)
 const tempDir = path.join(process.cwd(), 'temp');
@@ -129,6 +137,8 @@ app.use('/api', healthCheckRoutes);
 app.use('/api/sessions', sessionHistoryRoutes);
 app.use('/api/v1/video', videoAnalyticsAndHistoryRoutes);
 app.use('/api/affiliate', affiliateVideoRoutes);
+app.use('/api/cloud-gallery', cloudGalleryRoutes);
+app.use('/api/batch-queue', cloudBatchQueueRoutes);
 
 app.use(errorHandler);
 
