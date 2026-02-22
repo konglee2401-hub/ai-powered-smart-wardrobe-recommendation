@@ -104,55 +104,10 @@ export default function CharacterProductSummary({
       {/* Product Summary */}
       <TraitCard icon="👕" title="Product Details" traits={productTraits} />
 
-      {/* Recommendations Summary */}
-      {Object.keys(categoryRecommendations).length > 0 && (
-        <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 rounded-lg p-3 border border-purple-700/50">
-          <h4 className="text-xs font-semibold text-blue-300 mb-2 flex items-center gap-2">
-            <span className="text-lg">✨</span>
-            AI Recommendations
-          </h4>
-          <div className="space-y-2">
-            {Object.entries(categoryRecommendations).map(([key, rec]) => {
-              const isSelected = selectedNewOptions[`${key}-${rec.value}`];
-              return (
-                <div
-                  key={key}
-                  className={`flex items-start justify-between p-2 rounded-lg border transition-all ${
-                    isSelected
-                      ? 'bg-green-600/20 border-green-600/50'
-                      : 'bg-gray-800/50 border-gray-700/50 hover:border-purple-600/30'
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 capitalize font-medium">{key}</div>
-                    <div className="text-xs font-medium text-purple-300 mt-0.5">{rec.value}</div>
-                    {rec.reason && (
-                      <div className="text-xs text-gray-400 mt-1 italic line-clamp-2">
-                        {rec.reason.substring(0, 80)}{rec.reason.length > 80 ? '...' : ''}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleSaveOption(key, rec.value)}
-                    disabled={isSaving || isSelected}
-                    className={`ml-2 p-1 rounded transition-colors flex-shrink-0 ${
-                      isSelected
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-400 hover:bg-purple-600 hover:text-white'
-                    }`}
-                    title={isSelected ? 'Saved' : 'Save this option'}
-                  >
-                    {isSelected ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Recommendations Summary - Removed, now handled by RecommendationSelector */}
 
-      {/* Image Preview */}
-      {(characterImage || productImage) && (
+      {/* Image Preview - Hidden in Step 2 to reduce clutter */}
+      {false && (characterImage || productImage) && (
         <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
           <h4 className="text-xs font-semibold text-gray-300 mb-2">📸 Uploaded Images</h4>
           <div className="grid grid-cols-2 gap-2">

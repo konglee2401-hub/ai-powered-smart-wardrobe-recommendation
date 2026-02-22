@@ -23,12 +23,12 @@ import { SessionHistory, generateSessionId } from '../utils/sessionHistory';
 import { PromptLayering, PromptVariationGenerator, GrokConversationEnhancer } from '../utils/advancedPromptEngineering';
 
 import AnalysisBreakdown from '../components/AnalysisBreakdown';
+import RecommendationSelector from '../components/RecommendationSelector';
 import CharacterProductSummary from '../components/CharacterProductSummary';
 import PromptEditor from '../components/PromptEditor';
 import GenerationOptions from '../components/GenerationOptions';
 import GenerationResult from '../components/GenerationResult';
 import PromptQualityIndicator from '../components/PromptQualityIndicator';
-import NewOptionsDetected from '../components/NewOptionsDetected';
 import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
 import GalleryPicker from '../components/GalleryPicker';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
@@ -455,6 +455,44 @@ export default function ImageGenerationPage() {
       console.log('❌ No recommendations found in handleApplyRecommendation');
     }
     setCurrentStep(3); // Go to merged Style & Prompt step
+  };
+
+  // Handle per-category recommendations (new flow with RecommendationSelector)
+  const handleApplyRecommendationSelection = async (decisions) => {
+    console.log('📋 Per-category decisions received:', decisions);
+    
+    try {
+      const newOpts = { ...selectedOptions };
+      
+      // Apply each decision
+      Object.entries(decisions).forEach(([category, decision]) => {
+        if (decision.finalValue) {
+          newOpts[category] = decision.finalValue;
+          console.log(`   ✓ ${category}: ${decision.finalValue}`);
+        }
+      });
+      
+      console.log('✅ Options updated:', newOpts);
+      setSelectedOptions(newOpts);
+      
+      // Save new options where user checked "Save as":
+      const toSave = Object.entries(decisions)
+        .filter(([_, d]) => d.saveAsOption)
+        .map(([cat, d]) => ({ category: cat, value: d.finalValue }));
+      
+      if (toSave.length > 0) {
+        console.log(`💾 Saving ${toSave.length} new options...`);
+        for (const { category, value } of toSave) {
+          await handleSaveNewOption(category, value);
+        }
+      }
+      
+      // Move to Step 3
+      setCurrentStep(3);
+    } catch (error) {
+      console.error('❌ Error applying recommendations:', error);
+      alert(`Error: ${error.message}`);
+    }
   };
 
   // CRITICAL: Memoize this callback to prevent infinite loop in Step3EnhancedWithSession
@@ -1219,13 +1257,24 @@ export default function ImageGenerationPage() {
 
                   {/* Step 2: Analysis */}
                   {currentStep === 2 && analysis && (
-                    <AnalysisBreakdown
-                      analysis={analysis}
-                      newOptions={newOptions}
-                      onSaveOption={handleSaveNewOption}
-                      isSaving={isSaving}
-                      metadata={analysisMetadata}
-                    />
+                    <div className="space-y-4">
+                      {/* Character & Product Summary at top */}
+                      <CharacterProductSummary
+                        analysis={analysis}
+                        characterImage={characterImage}
+                        productImage={productImage}
+                        onSaveNewOption={handleSaveNewOption}
+                        isSaving={isSaving}
+                      />
+                      
+                      {/* Recommendation Selector - unified per-category decisions */}
+                      <RecommendationSelector
+                        analysis={analysis}
+                        existingOptions={promptOptions}
+                        onApplyRecommendations={handleApplyRecommendationSelection}
+                        isSaving={isSaving}
+                      />
+                    </div>
                   )}
 
             {/* Step 3: Style & Prompt (Merged) */}
@@ -1349,18 +1398,7 @@ export default function ImageGenerationPage() {
                       </button>
                     )}
 
-                    {currentStep === 2 && (
-                      <button
-                        onClick={() => {
-                          handleApplyRecommendation();
-                          setCurrentStep(3);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                        <span>Apply AI Recommendation</span>
-                      </button>
-                    )}
+                    {/* Step 2: No button neede - RecommendationSelector handles apply */}
 
                     {currentStep === 3 && (
                       <div className="flex items-center gap-2">
@@ -1424,25 +1462,13 @@ export default function ImageGenerationPage() {
             {/* ==================== RIGHT SIDEBAR ==================== */}
             <div className="w-60 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4 space-y-4">
-                {/* Step 2: Character + Product Summary */}
-                {currentStep === 2 && analysis && (
-                  <>
-                    <CharacterProductSummary
-                      analysis={analysis}
-                      characterImage={characterImage}
-                      productImage={productImage}
-                      onSaveNewOption={handleSaveNewOption}
-                      isSaving={isSaving}
-                    />
-                    
-                    <NewOptionsDetected
-                      analysis={analysis}
-                      existingOptions={promptOptions}
-                      newOptions={newOptions}
-                      onSaveOption={handleSaveNewOption}
-                      isSaving={isSaving}
-                    />
-                  </>
+                {/* Step 2: Moved to main content area */}
+                {currentStep === 2 && (
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                    <p className="text-xs text-gray-400">
+                      ← Recommendations shown in main area above
+                    </p>
+                  </div>
                 )}
 
                 {/* Step 3: Preview Images */}
