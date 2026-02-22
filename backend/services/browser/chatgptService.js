@@ -257,28 +257,58 @@ class ChatGPTService extends BrowserService {
         throw new Error('Could not find message input');
       }
 
-      // Step 6: Click input and type prompt character by character
+// Step 6: Click input and type prompt
       console.log('📍 STEP 6: Entering prompt...');
-      await this.page.click(textInputSelector);
-      console.log('   ✅ Input focused');
-      await this.page.waitForTimeout(500);
-      
-      // Clear any existing text first
-      await this.page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (el) {
-          el.textContent = '';
-          el.innerText = '';
-          el.value = '';
-        }
-      }, textInputSelector);
+      try {
+        await this.page.click(textInputSelector);
+        console.log('   ✅ Input focused');
+        await this.page.waitForTimeout(1000);
+        
+        // Clear any existing text
+        await this.page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          if (el) {
+            if (el.tagName === 'TEXTAREA') {
+              el.value = '';
+            } else if (el.contentEditable === 'true') {
+              el.textContent = '';
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }, textInputSelector);
+        await this.page.waitForTimeout(500);
 
-      // Type the prompt slowly for better detection
-      console.log(`   ⌨️  Typing "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"`);
-      await this.page.keyboard.type(prompt, { delay: 5 });
-      await this.page.waitForTimeout(500);
-
-      console.log('   ✅ Prompt entered');
+        // Use paste method instead of typing character by character
+        console.log(`   ⌨️  Pasting prompt (${prompt.length} chars)...`);
+        
+        await this.page.evaluate((sel, text) => {
+          const el = document.querySelector(sel);
+          if (!el) return false;
+          
+          // Method 1: Direct clipboard paste
+          const evt = new ClipboardEvent('paste', {
+            clipboardData: new DataTransfer(),
+            bubbles: true
+          });
+          evt.clipboardData.setData('text/plain', text);
+          
+          if (el.tagName === 'TEXTAREA') {
+            el.value = text;
+          } else if (el.contentEditable === 'true') {
+            el.textContent = text;
+          }
+          
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }, textInputSelector, prompt);
+        
+        await this.page.waitForTimeout(1000);
+        console.log('   ✅ Prompt entered');
+      } catch (error) {
+        console.error(`   ❌ Error entering prompt: ${error.message}`);
+        throw error;
+      }
 
       // Step 7: Find and click send button
       console.log('📍 STEP 7: Sending message...');
@@ -533,24 +563,47 @@ class ChatGPTService extends BrowserService {
 
       // Step 5: Type prompt
       console.log('📍 STEP 5: Entering prompt...');
-      await this.page.click(textInputSelector);
-      await this.page.waitForTimeout(500);
-      
-      // Clear and type
-      await this.page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (el) el.textContent = '';
-      }, textInputSelector);
-      
-      await this.page.waitForTimeout(300);
-      
-      // Type prompt character by character
-      for (const char of prompt) {
-        await this.page.keyboard.type(char);
-        await this.page.waitForTimeout(10);
+      try {
+        await this.page.click(textInputSelector);
+        await this.page.waitForTimeout(1000);
+        
+        // Clear existing text
+        await this.page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          if (!el) return;
+          if (el.tagName === 'TEXTAREA') {
+            el.value = '';
+          } else if (el.contentEditable === 'true') {
+            el.textContent = '';
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, textInputSelector);
+        
+        await this.page.waitForTimeout(500);
+        
+        // Paste prompt instead of typing
+        console.log(`   ⌨️  Pasting prompt (${prompt.length} chars)...`);
+        await this.page.evaluate((sel, text) => {
+          const el = document.querySelector(sel);
+          if (!el) return false;
+          
+          if (el.tagName === 'TEXTAREA') {
+            el.value = text;
+          } else if (el.contentEditable === 'true') {
+            el.textContent = text;
+          }
+          
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }, textInputSelector, prompt);
+        
+        await this.page.waitForTimeout(1000);
+        console.log(`   ✅ Prompt entered (${prompt.length} characters)`);
+      } catch (error) {
+        console.error(`   ❌ Error entering prompt: ${error.message}`);
+        throw error;
       }
-      
-      console.log(`   ✅ Prompt entered (${prompt.length} characters)`);
 
       // Step 6: Send message
       console.log('📍 STEP 6: Sending message...');
@@ -587,6 +640,88 @@ class ChatGPTService extends BrowserService {
       
       throw error;
     }
+  }
+
+  /**
+   * Wait for ChatGPT to finish responding
+   */
+  async waitForResponse(maxWait = 120000) {
+    console.log('⏳ Waiting for ChatGPT response...');
+    
+    const startTime = Date.now();
+    let lastProgressLog = Date.now();
+    let stableCount = 0;
+    const stabileThreshold = 3; // 3 consecutive checks with stable content = done
+    
+    while (Date.now() - startTime < maxWait) {
+      // Check page state
+      const state = await this.page.evaluate(() => {
+        // Get last message (response)
+        const messages = document.querySelectorAll('[role="article"]');
+        if (messages.length < 2) return { hasContent: false, length: 0, isLoading: true };
+        
+        const lastMessage = messages[messages.length - 1];
+        const text = lastMessage.innerText || lastMessage.textContent || '';
+        
+        // Check for loading indicators
+        const hasLoadingSpinner = !!document.querySelector('[class*="animate"], .animate-spin, .spinner');
+        const hasLoadingText = text.includes('thinking') || text.includes('generating');
+        
+        return {
+          hasContent: text.length > 50,
+          length: text.length,
+          isLoading: hasLoadingSpinner || hasLoadingText,
+          text: text.substring(0, 200)
+        };
+      });
+      
+      // Progress logging every 10 seconds
+      const now = Date.now();
+      if (now - lastProgressLog > 10000) {
+        const elapsed = Math.round((now - startTime) / 1000);
+        console.log(`⏳ (${elapsed}s) Content: ${state.length}ch, Loading: ${state.isLoading ? '🔄 yes' : '✅ no'}`);
+        lastProgressLog = now;
+      }
+      
+      // Check if response is complete
+      if (state.hasContent && !state.isLoading) {
+        stableCount++;
+        if (stableCount >= stabileThreshold) {
+          console.log(`✅ Response complete! (${state.length} characters)`);
+          break;
+        }
+      } else {
+        stableCount = 0;
+        if (!state.hasContent) {
+          console.log(`⏳ Waiting for content (${state.length}ch)...`);
+        }
+        if (state.isLoading) {
+          console.log(`🔄 ChatGPT is processing...`);
+        }
+      }
+      
+      await this.page.waitForTimeout(1000);
+    }
+    
+    const totalSeconds = Math.round((Date.now() - startTime) / 1000);
+    console.log(`Response wait completed after ${totalSeconds}s`);
+    
+    // Extract response text
+    const response = await this.page.evaluate(() => {
+      // Get all messages
+      const messages = document.querySelectorAll('[role=\"article\"]');
+      if (messages.length < 2) {
+        return 'No response found';
+      }
+      
+      // Get the last message (response)
+      const lastMessage = messages[messages.length - 1];
+      const text = lastMessage.innerText || lastMessage.textContent || '';
+      
+      return text.trim();
+    });
+    
+    return response;
   }
 }
 
