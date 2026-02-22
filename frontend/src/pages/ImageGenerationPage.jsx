@@ -128,7 +128,7 @@ export default function ImageGenerationPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Provider
-  const [browserProvider, setBrowserProvider] = useState('grok');
+  const [browserProvider, setBrowserProvider] = useState('chatgpt-browser');
   const [imageGenProvider, setImageGenProvider] = useState('grok');  // 💫 NEW: Image generation provider
   const [generationProvider, setGenerationProvider] = useState('google-flow');  // 💫 Image generation provider selection
 
@@ -178,6 +178,7 @@ export default function ImageGenerationPage() {
 
   // Providers
   const PROVIDERS = [
+    { id: 'chatgpt-browser', label: 'ChatGPT', icon: '🧠' },
     { id: 'grok', label: 'Grok', icon: '🤖' },
     { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
