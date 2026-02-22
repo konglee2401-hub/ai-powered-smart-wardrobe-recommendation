@@ -14,6 +14,9 @@ import {
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 
+// Import Google Drive API
+import driveAPI from '../services/driveAPI';
+
 // New: Session tracking and advanced prompt engineering
 import SessionHistoryService from '../services/sessionHistoryService';
 import { SessionHistory, generateSessionId } from '../utils/sessionHistory';
@@ -138,6 +141,8 @@ export default function ImageGenerationPage() {
   const [hasWatermark, setHasWatermark] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [uploadToDrive, setUploadToDrive] = useState(false);
+  const [driveUploadStatus, setDriveUploadStatus] = useState(null);
 
   // New options tracking
   const [newOptions, setNewOptions] = useState([]);
@@ -575,6 +580,11 @@ export default function ImageGenerationPage() {
       if (response?.success && response?.data?.generatedImages) {
         console.log('✅ Generation successful! Generated images:', response.data.generatedImages);
         setGeneratedImages(response.data.generatedImages);
+        
+        // Upload to Google Drive if enabled
+        if (uploadToDrive && response.data.generatedImages.length > 0) {
+          handleUploadToGoogleDrive(response.data.generatedImages);
+        }
       } else {
         console.error('❌ Generation response missing expected data:', response);
       }
@@ -584,6 +594,58 @@ export default function ImageGenerationPage() {
       console.error('   Error details:', error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleUploadToGoogleDrive = async (images) => {
+    try {
+      setDriveUploadStatus('Uploading to Google Drive...');
+      
+      for (const image of images) {
+        try {
+          // Convert base64 or URL to blob
+          let blob;
+          if (image.url?.startsWith('data:')) {
+            // Base64 image
+            const arr = image.url.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            const n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            for (let i = 0; i < n; i++) {
+              u8arr[i] = bstr.charCodeAt(i);
+            }
+            blob = new Blob([u8arr], { type: mime });
+          } else {
+            // URL image - fetch and convert
+            const response = await fetch(image.url);
+            blob = await response.blob();
+          }
+          
+          // Upload to drive
+          const fileName = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`;
+          const file = new File([blob], fileName, { type: 'image/png' });
+          
+          await driveAPI.uploadFile(file, {
+            description: `Generated from Smart Wardrobe App\nPrompt: ${generatedPrompt?.positive?.slice(0, 100)}...`,
+            metadata: {
+              useCase: useCase,
+              style: selectedOptions.style || 'unknown',
+              generatedAt: new Date().toISOString(),
+            }
+          });
+          
+          console.log(`✅ Uploaded: ${fileName}`);
+        } catch (error) {
+          console.error('❌ Failed to upload single image:', error);
+        }
+      }
+      
+      setDriveUploadStatus(`✅ Successfully uploaded ${images.length} image(s) to Google Drive!`);
+      setTimeout(() => setDriveUploadStatus(null), 5000);
+    } catch (error) {
+      console.error('❌ Google Drive upload failed:', error);
+      setDriveUploadStatus(`❌ Upload failed: ${error.message}`);
     }
   };
 
@@ -1134,6 +1196,30 @@ export default function ImageGenerationPage() {
                             </button>
                           ))}
                         </div>
+                      </div>
+
+                      {/* Google Drive Upload Option */}
+                      <div className="mb-6 bg-gradient-to-r from-blue-900/50 to-cyan-900/50 rounded-lg p-4 border border-blue-700">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={uploadToDrive}
+                            onChange={(e) => setUploadToDrive(e.target.checked)}
+                            className="w-5 h-5 rounded bg-gray-700 border-gray-600 checked:bg-blue-600"
+                          />
+                          <div>
+                            <div className="text-sm font-semibold text-white">☁️ Upload to Google Drive</div>
+                            <div className="text-xs text-gray-300">
+                              Save generated images to Google Drive (Affiliate AI → Images → Uploaded → App)
+                            </div>
+                          </div>
+                        </label>
+                        
+                        {driveUploadStatus && (
+                          <div className="mt-3 p-2 rounded bg-blue-900/50 border border-blue-700">
+                            <p className="text-xs text-blue-300">{driveUploadStatus}</p>
+                          </div>
+                        )}
                       </div>
 
                       <GenerationResult

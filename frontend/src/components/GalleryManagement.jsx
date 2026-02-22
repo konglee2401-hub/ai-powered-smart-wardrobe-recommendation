@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Heart, Trash2, Copy, Download } from 'lucide-react';
+import driveAPI from '../services/driveAPI';
 import './GalleryManagement.css';
 
 const GalleryManagement = ({ 
@@ -65,9 +66,33 @@ const GalleryManagement = ({
   const loadGallery = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API call
+      // Get mock data
       const mockImages = generateMockImages();
-      const filteredImages = filterImages(mockImages, filters);
+      let allImages = [...mockImages];
+      
+      // Try to load files from Google Drive
+      try {
+        const driveFiles = await driveAPI.listFiles();
+        const driveImages = driveFiles.map(file => ({
+          id: `drive-${file.id}`,
+          name: file.name,
+          url: file.thumbnailLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
+          thumbnail: file.thumbnailLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
+          contentType: 'drive',
+          provider: 'Google Drive',
+          createdAt: file.createdTime,
+          size: parseInt(file.size) || 0,
+          isFavorite: false,
+          usageCount: 0,
+          driveId: file.id,
+          webViewLink: file.webViewLink,
+        }));
+        allImages = [...allImages, ...driveImages];
+      } catch (error) {
+        console.warn('Could not load Google Drive files:', error);
+      }
+      
+      const filteredImages = filterImages(allImages, filters);
       const sortedImages = sortImages(filteredImages, sortBy);
       
       setImages(sortedImages);
@@ -401,203 +426,6 @@ const GalleryManagement = ({
           <div className="empty-icon">🖼️</div>
           <h3>No media found</h3>
           <p>Try adjusting your filters or upload some media to get started.</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default GalleryManagement;
-
-  if (loading) {
-    return (
-      <div className="gallery-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading gallery...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="gallery-management">
-      {/* Header */}
-      <div className="gallery-header">
-        <div className="header-info">
-          <h2>🖼️ My Gallery</h2>
-          <p>{images.length} media • {selectedForBatch.length} selected</p>
-        </div>
-
-        <div className="header-actions">
-          <button 
-            className={`mode-toggle ${selectMode ? 'active' : ''}`}
-            onClick={() => setSelectMode(!selectMode)}
-          >
-            {selectMode ? '✗ Exit Select' : '☑️ Select Multiple'}
-          </button>
-
-          {selectMode && selectedForBatch.length > 0 && (
-            <>
-              <button onClick={handleBatchSelect}>
-                🎯 Use Selected ({selectedForBatch.length})
-              </button>
-              <button onClick={exportSelected}>
-                📥 Export Selected
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="gallery-filters">
-        <div className="filter-row">
-          <div className="filter-group">
-            <label>Category</label>
-            <select
-              value={filters.category}
-              onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
-            >
-              <option value="all">All Images ({categoryCounts.all})</option>
-              <option value="character">Characters ({categoryCounts.character})</option>
-              <option value="product">Products ({categoryCounts.product})</option>
-              <option value="generated">Generated ({categoryCounts.generated})</option>
-              <option value="favorites">Favorites ({categoryCounts.favorites})</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Date Range</label>
-            <select
-              value={filters.dateRange}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Provider</label>
-            <select
-              value={filters.provider}
-              onChange={(e) => setFilters(prev => ({ ...prev, provider: e.target.value }))}
-            >
-              <option value="all">All Providers</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="nvidia">NVIDIA</option>
-              <option value="replicate">Replicate</option>
-              <option value="fal">Fal.ai</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              {sortOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="search-row">
-          <div className="search-group">
-            <input
-              type="text"
-              placeholder="Search images..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-            />
-            <button className="search-btn">🔍</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Gallery Grid */}
-      <div className={`gallery-grid ${viewMode}`}>
-        {images.map(image => (
-          <div 
-            key={image.id} 
-            className={`gallery-item ${selectedForBatch.some(img => img.id === image.id) ? 'selected' : ''}`}
-            onClick={() => handleImageClick(image)}
-          >
-            <div className="item-image">
-              <img src={image.thumbnail || image.url} alt={image.name} loading="lazy" />
-              
-              <div className="item-overlay">
-                <div className="item-actions">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); toggleFavorite(image.id); }}
-                    className={`favorite-btn ${image.isFavorite ? 'active' : ''}`}
-                  >
-                    {image.isFavorite ? '❤️' : '🤍'}
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); deleteImage(image.id); }}
-                    className="delete-btn"
-                  >
-                    🗑️
-                  </button>
-                </div>
-
-                {selectMode && (
-                  <div className="selection-indicator">
-                    {selectedForBatch.some(img => img.id === image.id) && '☑️'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="item-info">
-              <div className="item-name">{image.name}</div>
-              <div className="item-meta">
-                <span className="item-date">
-                  {new Date(image.createdAt).toLocaleDateString()}
-                </span>
-                <span className="item-provider">{image.provider}</span>
-              </div>
-              {image.usageCount > 0 && (
-                <div className="item-usage">Used {image.usageCount} times</div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="gallery-pagination">
-          <button 
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-          >
-            ← Previous
-          </button>
-
-          <span>Page {currentPage} of {totalPages}</span>
-
-          <button 
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-          >
-            Next →
-          </button>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {images.length === 0 && (
-        <div className="gallery-empty">
-          <div className="empty-icon">🖼️</div>
-          <h3>No images found</h3>
-          <p>Try adjusting your filters or upload some images to get started.</p>
         </div>
       )}
     </div>

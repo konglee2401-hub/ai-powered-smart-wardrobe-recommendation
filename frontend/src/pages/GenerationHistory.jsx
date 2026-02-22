@@ -314,7 +314,14 @@ export default function GenerationHistory() {
   }
   
   function formatDate(dateString) {
+    // Handle invalid or missing dates
+    if (!dateString) return 'Invalid date';
+    
     const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
     return new Intl.DateTimeFormat('vi-VN', {
       year: 'numeric',
       month: 'short',
