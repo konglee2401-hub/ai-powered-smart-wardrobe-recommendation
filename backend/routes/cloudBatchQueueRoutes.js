@@ -2,9 +2,10 @@
  * Cloud Batch Queue Routes
  */
 
-const express = require('express');
+import express from 'express';
+import cloudBatchQueueController from '../controllers/cloudBatchQueueController.js';
+
 const router = express.Router();
-const cloudBatchQueueController = require('../controllers/cloudBatchQueueController');
 
 // Initialize queue
 router.post('/init', cloudBatchQueueController.initializeQueue);
@@ -23,4 +24,4 @@ router.post('/:batchId/process-next', cloudBatchQueueController.nextItem);
 router.get('/:batchId/output', cloudBatchQueueController.getBatchOutput);
 router.delete('/:batchId', cloudBatchQueueController.deleteBatch);
 
-module.exports = router;
+export default router;

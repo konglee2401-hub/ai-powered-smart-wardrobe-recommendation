@@ -1,0 +1,28 @@
+{
+  "character": null,
+  "product": {
+    "name": "Premium Fashion Item",
+    "category": "Apparel",
+    "colors": [
+      "Neutral",
+      "Sophisticated"
+    ],
+    "material": "High Quality Fabric",
+    "features": [
+      "Comfortable",
+      "Stylish",
+      "Durable",
+      "Versatile"
+    ]
+  },
+  "recommendations": {
+    "scene": "Professional Studio",
+    "lighting": "Professional Studio Lighting",
+    "mood": "Premium & Aspirational",
+    "style": "Luxury Contemporary",
+    "colorPalette": "Neutral Premium",
+    "cameraAngle": "360 Degree Product Display"
+  },
+  "savedAt": "2026-02-22T08:04:02.939Z",
+  "sessionId": "test-multi-video-1771747440210-product-showcase"
+}

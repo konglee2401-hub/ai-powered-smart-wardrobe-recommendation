@@ -36,6 +36,7 @@ import videoAnalyticsAndHistoryRoutes from './routes/videoAnalyticsAndHistoryRou
 import affiliateVideoRoutes from './routes/affiliateVideoRoutes.js';
 import cloudGalleryRoutes from './routes/cloudGalleryRoutes.js';
 import cloudBatchQueueRoutes from './routes/cloudBatchQueueRoutes.js';
+import videoProductionRoutes from './routes/videoProductionRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -139,6 +140,7 @@ app.use('/api/v1/video', videoAnalyticsAndHistoryRoutes);
 app.use('/api/affiliate', affiliateVideoRoutes);
 app.use('/api/cloud-gallery', cloudGalleryRoutes);
 app.use('/api/batch-queue', cloudBatchQueueRoutes);
+app.use('/api/video-production', videoProductionRoutes);
 
 app.use(errorHandler);
 

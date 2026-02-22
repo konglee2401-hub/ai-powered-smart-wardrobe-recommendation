@@ -4,9 +4,9 @@
  * Queue automatically detects and uses media from cloud folders
  */
 
-const GoogleDriveService = require('./googleDriveService');
-const CloudMediaManager = require('./cloudMediaManager');
-const EventEmitter = require('events');
+import GoogleDriveService from './googleDriveService.js';
+import CloudMediaManager from './cloudMediaManager.js';
+import { EventEmitter } from 'events';
 
 class CloudBatchQueue extends EventEmitter {
   constructor() {
@@ -446,4 +446,4 @@ class CloudBatchQueue extends EventEmitter {
   }
 }
 
-module.exports = CloudBatchQueue;
+export default CloudBatchQueue;

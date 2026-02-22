@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { videoProductionApi } from '../services/videoProductionApi';
 
-export const useVideoProductionStore = create((set, get) => ({
+const useVideoProductionStore = create((set, get) => ({
   // ============ STATE ============
   queue: { items: [], stats: null, loading: false, error: null },
   accounts: { items: [], stats: null, loading: false, error: null },
@@ -219,3 +219,5 @@ export const useVideoProductionStore = create((set, get) => ({
     }
   }
 }));
+
+export default useVideoProductionStore;

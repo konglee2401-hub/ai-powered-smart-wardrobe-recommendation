@@ -1,0 +1,28 @@
+{
+  "character": {
+    "bodyType": "Slim Athletic",
+    "height": "Tall (5'10\"+)",
+    "skinTone": "Medium",
+    "confidence": 0.88
+  },
+  "product": {
+    "category": "Casual Outfit",
+    "colors": [
+      "Navy Blue",
+      "White"
+    ],
+    "material": "Cotton Linen Blend",
+    "style": "Contemporary Casual",
+    "fit": "Relaxed Comfortable"
+  },
+  "recommendations": {
+    "scene": "Modern Minimalist Interior",
+    "lighting": "Natural Window Light",
+    "mood": "Confident & Approachable",
+    "style": "Modern Casual",
+    "colorPalette": "Neutral Tones",
+    "cameraAngle": "Full Body at Eye Level"
+  },
+  "savedAt": "2026-02-22T08:04:00.344Z",
+  "sessionId": "test-multi-video-1771747440210-change-clothes"
+}

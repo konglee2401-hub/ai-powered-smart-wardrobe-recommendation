@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useVideoProductionStore } from '../../stores/videoProductionStore';
+import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import { Video, TrendingUp, AlertTriangle, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 

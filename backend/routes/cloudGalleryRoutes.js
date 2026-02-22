@@ -2,11 +2,12 @@
  * Cloud Gallery Routes
  */
 
-const express = require('express');
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import cloudGalleryController from '../controllers/cloudGalleryController.js';
+
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const cloudGalleryController = require('../controllers/cloudGalleryController');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -54,4 +55,4 @@ router.post('/batch', cloudGalleryController.manageBatchMedia);
 router.get('/cache/stats', cloudGalleryController.getCacheStats);
 router.post('/cache/clear', cloudGalleryController.clearCache);
 
-module.exports = router;
+export default router;

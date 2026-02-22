@@ -3,14 +3,16 @@
  * Handles batch processing API endpoints
  */
 
-const CloudBatchQueue = require('../services/cloudBatchQueue');
+import CloudBatchQueue from '../services/cloudBatchQueue.js';
 
 const batchQueue = new CloudBatchQueue();
 
 // Initialize on first request
 let initialized = false;
 
-exports.initializeQueue = async (req, res) => {
+const cloudBatchQueueController = {};
+
+cloudBatchQueueController.initializeQueue = async (req, res) => {
   try {
     if (!initialized) {
       await batchQueue.initialize();
@@ -30,7 +32,7 @@ exports.initializeQueue = async (req, res) => {
   }
 };
 
-exports.createBatch = async (req, res) => {
+cloudBatchQueueController.createBatch = async (req, res) => {
   try {
     const { name, inputFolder, outputFolder, templateFolder, processType, parameters } =
       req.body;
@@ -64,7 +66,7 @@ exports.createBatch = async (req, res) => {
   }
 };
 
-exports.addItemToBatch = async (req, res) => {
+cloudBatchQueueController.addItemToBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
     const { fileId, metadata } = req.body;
@@ -91,7 +93,7 @@ exports.addItemToBatch = async (req, res) => {
   }
 };
 
-exports.processBatch = async (req, res) => {
+cloudBatchQueueController.processBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -115,7 +117,7 @@ exports.processBatch = async (req, res) => {
   }
 };
 
-exports.processBatchSync = async (req, res) => {
+cloudBatchQueueController.processBatchSync = async (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -136,7 +138,7 @@ exports.processBatchSync = async (req, res) => {
   }
 };
 
-exports.getBatchStatus = (req, res) => {
+cloudBatchQueueController.getBatchStatus = (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -161,7 +163,7 @@ exports.getBatchStatus = (req, res) => {
   }
 };
 
-exports.getAllBatches = (req, res) => {
+cloudBatchQueueController.getAllBatches = (req, res) => {
   try {
     const { filter } = req.query;
 
@@ -180,7 +182,7 @@ exports.getAllBatches = (req, res) => {
   }
 };
 
-exports.getBatchOutput = async (req, res) => {
+cloudBatchQueueController.getBatchOutput = async (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -198,7 +200,7 @@ exports.getBatchOutput = async (req, res) => {
   }
 };
 
-exports.deleteBatch = async (req, res) => {
+cloudBatchQueueController.deleteBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -216,7 +218,7 @@ exports.deleteBatch = async (req, res) => {
   }
 };
 
-exports.getQueueStats = (req, res) => {
+cloudBatchQueueController.getQueueStats = (req, res) => {
   try {
     const stats = batchQueue.getQueueStats();
 
@@ -232,7 +234,7 @@ exports.getQueueStats = (req, res) => {
   }
 };
 
-exports.nextItem = async (req, res) => {
+cloudBatchQueueController.nextItem = async (req, res) => {
   try {
     const { batchId } = req.params;
 
@@ -249,3 +251,5 @@ exports.nextItem = async (req, res) => {
     });
   }
 };
+
+export default cloudBatchQueueController;

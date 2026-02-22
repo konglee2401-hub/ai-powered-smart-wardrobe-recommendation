@@ -3,11 +3,14 @@
  * Handles gallery endpoints for Google Drive integration
  */
 
-const CloudMediaManager = require('../services/cloudMediaManager');
+import fs from 'fs';
+import CloudMediaManager from '../services/cloudMediaManager.js';
 
 const mediaManager = new CloudMediaManager();
 
-exports.initializeGallery = async (req, res) => {
+const cloudGalleryController = {};
+
+cloudGalleryController.initializeGallery = async (req, res) => {
   try {
     await mediaManager.initialize();
 
@@ -24,7 +27,7 @@ exports.initializeGallery = async (req, res) => {
   }
 };
 
-exports.getMediaLibrary = async (req, res) => {
+cloudGalleryController.getMediaLibrary = async (req, res) => {
   try {
     const overview = await mediaManager.getMediaOverview();
 
@@ -40,7 +43,7 @@ exports.getMediaLibrary = async (req, res) => {
   }
 };
 
-exports.getMediaByType = async (req, res) => {
+cloudGalleryController.getMediaByType = async (req, res) => {
   try {
     const { type } = req.params;
 
@@ -60,7 +63,7 @@ exports.getMediaByType = async (req, res) => {
   }
 };
 
-exports.uploadMedia = async (req, res) => {
+cloudGalleryController.uploadMedia = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -78,7 +81,6 @@ exports.uploadMedia = async (req, res) => {
     });
 
     // Delete local file after upload
-    const fs = require('fs');
     fs.unlinkSync(req.file.path);
 
     res.json({
@@ -94,7 +96,7 @@ exports.uploadMedia = async (req, res) => {
   }
 };
 
-exports.downloadMedia = async (req, res) => {
+cloudGalleryController.downloadMedia = async (req, res) => {
   try {
     const { fileId } = req.params;
     const { outputDir } = req.body;
@@ -117,7 +119,7 @@ exports.downloadMedia = async (req, res) => {
   }
 };
 
-exports.getMediaPreview = async (req, res) => {
+cloudGalleryController.getMediaPreview = async (req, res) => {
   try {
     const { fileId } = req.params;
 
@@ -135,7 +137,7 @@ exports.getMediaPreview = async (req, res) => {
   }
 };
 
-exports.searchMedia = async (req, res) => {
+cloudGalleryController.searchMedia = async (req, res) => {
   try {
     const { query, type = 'all' } = req.query;
 
@@ -162,7 +164,7 @@ exports.searchMedia = async (req, res) => {
   }
 };
 
-exports.getGalleryUrls = async (req, res) => {
+cloudGalleryController.getGalleryUrls = async (req, res) => {
   try {
     const urls = await mediaManager.generateGalleryUrls();
 
@@ -178,7 +180,7 @@ exports.getGalleryUrls = async (req, res) => {
   }
 };
 
-exports.organizeByCollection = async (req, res) => {
+cloudGalleryController.organizeByCollection = async (req, res) => {
   try {
     const collections = await mediaManager.organizeMediaByCollection();
 
@@ -195,7 +197,7 @@ exports.organizeByCollection = async (req, res) => {
   }
 };
 
-exports.manageBatchMedia = async (req, res) => {
+cloudGalleryController.manageBatchMedia = async (req, res) => {
   try {
     const { batchId, action, mediaIds } = req.body;
 
@@ -231,7 +233,7 @@ exports.manageBatchMedia = async (req, res) => {
   }
 };
 
-exports.getCacheStats = (req, res) => {
+cloudGalleryController.getCacheStats = (req, res) => {
   try {
     const stats = mediaManager.getCacheStats();
 
@@ -247,7 +249,7 @@ exports.getCacheStats = (req, res) => {
   }
 };
 
-exports.clearCache = (req, res) => {
+cloudGalleryController.clearCache = (req, res) => {
   try {
     mediaManager.clearCache();
 
@@ -262,3 +264,5 @@ exports.clearCache = (req, res) => {
     });
   }
 };
+
+export default cloudGalleryController;

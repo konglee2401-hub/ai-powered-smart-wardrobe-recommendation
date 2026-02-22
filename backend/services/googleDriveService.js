@@ -3,9 +3,9 @@
  * Manages cloud file storage, folder structure, and file operations
  */
 
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 
 class GoogleDriveService {
   constructor() {
@@ -634,4 +634,4 @@ class GoogleDriveService {
   }
 }
 
-module.exports = GoogleDriveService;
+export default GoogleDriveService;

@@ -1,0 +1,37 @@
+{
+  "sessionId": "test-multi-video-1771747440210",
+  "startTime": "2026-02-22T08:04:00.210Z",
+  "environment": {
+    "baseUrl": "http://localhost:5000/api/v1/browser-automation",
+    "testImagesDir": "C:\\Work\\Affiliate-AI\\smart-wardrobe\\backend\\test-images",
+    "resultsDir": "C:\\Work\\Affiliate-AI\\smart-wardrobe\\backend\\test-results\\test-multi-video-1771747440210"
+  },
+  "tests": [
+    {
+      "name": "Change Clothes (2 videos + frame chaining)",
+      "status": "failed",
+      "error": "Request failed with status code 500",
+      "duration": 673
+    },
+    {
+      "name": "Product Showcase (3 videos, independent)",
+      "status": "failed",
+      "error": "Request failed with status code 500",
+      "duration": 421
+    },
+    {
+      "name": "Styling Guide (3 videos + frame chaining)",
+      "status": "failed",
+      "error": "Request failed with status code 500",
+      "duration": 449
+    }
+  ],
+  "endTime": "2026-02-22T08:04:05.767Z",
+  "totalDuration": "5.56",
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "successRate": "0.00%"
+  }
+}

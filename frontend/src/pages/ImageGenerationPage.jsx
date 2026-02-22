@@ -27,6 +27,7 @@ import GenerationResult from '../components/GenerationResult';
 import PromptQualityIndicator from '../components/PromptQualityIndicator';
 import NewOptionsDetected from '../components/NewOptionsDetected';
 import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
+import GalleryPicker from '../components/GalleryPicker';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
 // Steps - Style and Prompt merged into single step
@@ -166,6 +167,10 @@ export default function ImageGenerationPage() {
   const [userId, setUserId] = useState('user-' + Math.random().toString(36).substr(2, 9)); // Generate random user ID
   const [referenceImages, setReferenceImages] = useState([]);
 
+  // Gallery Picker State
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [galleryPickerFor, setGalleryPickerFor] = useState(null); // 'character' or 'product'
+
   // Providers
   const PROVIDERS = [
     { id: 'grok', label: 'Grok', icon: '🤖' },
@@ -195,6 +200,33 @@ export default function ImageGenerationPage() {
   // Handlers
   const handleOptionChange = (category, value) => {
     setSelectedOptions(prev => ({ ...prev, [category]: value }));
+  };
+
+  const handleGallerySelect = (items) => {
+    // If single item (not multiselect), items will be an object
+    const item = Array.isArray(items) ? items[0] : items;
+    
+    if (galleryPickerFor === 'character') {
+      // Fetch image from URL and convert to file
+      fetch(item.url)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'character-from-gallery.jpg', { type: blob.type });
+          const preview = URL.createObjectURL(file);
+          setCharacterImage({ file, preview });
+        })
+        .catch(err => console.error('Failed to load gallery image:', err));
+    } else if (galleryPickerFor === 'product') {
+      // Fetch image from URL and convert to file
+      fetch(item.url)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'product-from-gallery.jpg', { type: blob.type });
+          const preview = URL.createObjectURL(file);
+          setProductImage({ file, preview });
+        })
+        .catch(err => console.error('Failed to load gallery image:', err));
+    }
   };
 
   const handleCustomOptionChange = (category, value) => {
@@ -1020,6 +1052,30 @@ export default function ImageGenerationPage() {
                     </div>
                   )}
 
+                  {/* Gallery Picker Buttons */}
+                  {currentStep === 1 && (
+                    <div className="grid grid-cols-2 gap-2 mb-6">
+                      <button
+                        onClick={() => {
+                          setGalleryPickerFor('character');
+                          setShowGalleryPicker(true);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 rounded-lg text-white text-sm font-medium transition-all transform hover:scale-105"
+                      >
+                        📁 Pick Character from Gallery
+                      </button>
+                      <button
+                        onClick={() => {
+                          setGalleryPickerFor('product');
+                          setShowGalleryPicker(true);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-lg text-white text-sm font-medium transition-all transform hover:scale-105"
+                      >
+                        📁 Pick Product from Gallery
+                      </button>
+                    </div>
+                  )}
+
                   {/* Step 2: Analysis */}
                   {currentStep === 2 && analysis && (
                     <AnalysisBreakdown
@@ -1492,6 +1548,20 @@ export default function ImageGenerationPage() {
           </div>
         </div>
       </div>
+
+      {/* Gallery Picker Modal */}
+      <GalleryPicker
+        isOpen={showGalleryPicker}
+        onClose={() => {
+          setShowGalleryPicker(false);
+          setGalleryPickerFor(null);
+        }}
+        onSelect={handleGallerySelect}
+        mediaType="image"
+        contentType="all"
+        title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+      />
     </div>
   );
 }
+

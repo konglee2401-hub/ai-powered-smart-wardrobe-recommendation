@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { useVideoProductionStore } from '../../stores/videoProductionStore';
+import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import { Activity, AlertCircle, CheckCircle, BarChart3, Zap } from 'lucide-react';
 
 export function SystemStatus() {

@@ -4,11 +4,12 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useVideoProductionStore } from '../../stores/videoProductionStore';
-import { SystemStatus } from '../../components/VideoProduction/SystemStatus';
-import { QueueStatus } from '../../components/VideoProduction/QueueStatus';
-import { AccountCard } from '../../components/VideoProduction/AccountCard';
+import useVideoProductionStore from '@/stores/videoProductionStore.js';
+import { SystemStatus } from '@/components/VideoProduction/SystemStatus';
+import { QueueStatus } from '@/components/VideoProduction/QueueStatus';
+import { AccountCard } from '@/components/VideoProduction/AccountCard';
 import { Video, Users, Library, Zap, Plus } from 'lucide-react';
+import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
 
 export function VideoProduction() {
@@ -22,6 +23,8 @@ export function VideoProduction() {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddAccount, setShowAddAccount] = useState(false);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [selectedMediaForVideo, setSelectedMediaForVideo] = useState(null);
   const [formData, setFormData] = useState({
     platform: 'tiktok',
     username: '',
@@ -52,6 +55,13 @@ export function VideoProduction() {
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     }
+  };
+
+  const handleGallerySelect = (items) => {
+    // If single item (not multiselect), items will be an object
+    const item = Array.isArray(items) ? items[0] : items;
+    setSelectedMediaForVideo(item);
+    toast.success(`Selected: ${item.name}`);
   };
 
   const tabButtons = [
@@ -255,11 +265,71 @@ export function VideoProduction() {
 
       {/* Media Tab */}
       {activeTab === 'media' && (
-        <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-8 text-center">
-          <Library className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">Media Library features coming soon</p>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Media Library</h2>
+              <p className="text-gray-400 text-sm">Select media from your gallery for video production</p>
+            </div>
+            <button
+              onClick={() => setShowGalleryPicker(true)}
+              className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 transition"
+            >
+              <Plus className="w-4 h-4" />
+              Browse Gallery
+            </button>
+          </div>
+
+          {selectedMediaForVideo && (
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <h3 className="font-semibold mb-3">Selected Media</h3>
+              <div className="flex gap-4 items-start">
+                <img 
+                  src={selectedMediaForVideo.thumbnail} 
+                  alt={selectedMediaForVideo.name}
+                  className="w-24 h-24 object-cover rounded-lg"
+                />
+                <div className="flex-1">
+                  <p className="font-medium">{selectedMediaForVideo.name}</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    <span className="inline-block bg-purple-500/20 text-purple-300 px-2 py-1 rounded text-xs mr-2">
+                      {selectedMediaForVideo.contentType}
+                    </span>
+                    {new Date(selectedMediaForVideo.createdAt).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Size: {(selectedMediaForVideo.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMediaForVideo(null)}
+                className="mt-4 w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition"
+              >
+                Clear Selection
+              </button>
+            </div>
+          )}
+
+          {!selectedMediaForVideo && (
+            <div className="bg-gray-800/30 border border-gray-700 border-dashed rounded-lg p-8 text-center">
+              <Library className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">No media selected</p>
+              <p className="text-sm text-gray-500 mt-1">Click "Browse Gallery" to select media for video production</p>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Gallery Picker Modal */}
+      <GalleryPicker
+        isOpen={showGalleryPicker}
+        onClose={() => setShowGalleryPicker(false)}
+        onSelect={handleGallerySelect}
+        mediaType="all"
+        contentType="all"
+        title="Select Media for Video Production"
+      />
     </div>
   );
 }

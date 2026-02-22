@@ -1,0 +1,42 @@
+{
+  "sessionId": "test-multi-video-1771747462309",
+  "startTime": "2026-02-22T08:04:32.559Z",
+  "tests": [
+    {
+      "name": "Change Clothes (2 videos + frame chaining)",
+      "status": "failed",
+      "duration": 53,
+      "error": "Failed to save reference image"
+    },
+    {
+      "name": "Product Showcase (3 videos, no chaining)",
+      "status": "failed",
+      "duration": 65,
+      "error": "Failed to save reference image"
+    },
+    {
+      "name": "Styling Guide (3 videos + frame chaining)",
+      "status": "failed",
+      "duration": 43,
+      "error": "Failed to save reference image"
+    },
+    {
+      "name": "Product Introduction (2 videos, no chaining)",
+      "status": "failed",
+      "duration": 19,
+      "error": "Failed to save reference image"
+    },
+    {
+      "name": "Style Transformation (2 videos + frame chaining)",
+      "status": "failed",
+      "duration": 19,
+      "error": "Failed to save reference image"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5,
+    "successRate": "0.00%"
+  }
+}

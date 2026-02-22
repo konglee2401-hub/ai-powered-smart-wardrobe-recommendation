@@ -26,25 +26,33 @@ export default function Navbar() {
         { path: '/generate/one-click', label: '1-Click Creator', icon: Sparkles },
       ]
     },
-    { path: '/gallery', label: 'Gallery', icon: Image, category: 'main' },
-    { path: '/history', label: 'History', icon: Clock, category: 'main' },
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'main' },
-    { path: '/video-production', label: 'Video Production', icon: Film, category: 'main' },
   ];
 
-  // Secondary navigation items (in Tools dropdown)
-  const secondaryNavItems = [
+  // Media Management
+  const mediaNavItems = [
+    { path: '/gallery', label: 'Gallery', icon: Image, category: 'main' },
+    { path: '/history', label: 'History', icon: Clock, category: 'main' },
     { path: '/batch', label: 'Batch Processing', icon: Layers },
+  ];
+
+  // Dashboard & Analytics
+  const analyticsNavItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'main' },
     { path: '/stats', label: 'Statistics', icon: BarChart3 },
     { path: '/analytics', label: 'Analytics', icon: TrendingUp },
-    { path: '/tester', label: 'Provider Tester', icon: Zap },
+  ];
+
+  // Advanced Tools
+  const advancedToolsNavItems = [
     { path: '/prompt-builder', label: 'Prompt Builder', icon: FileText },
+    { path: '/tester', label: 'Provider Tester', icon: Zap },
+    { path: '/performance', label: 'Performance', icon: Gauge },
+    { path: '/video-production', label: 'Video Production', icon: Film },
   ];
 
   // Settings items
   const settingsItems = [
     { path: '/customization', label: 'Customization', icon: Settings },
-    { path: '/performance', label: 'Performance', icon: Gauge },
     { href: '/admin/providers', label: 'AI Providers', icon: Sparkles, external: true },
   ];
 
@@ -111,11 +119,10 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-2">
-            {/* Primary Items - with special handling for Generate */}
+          <div className="hidden lg:flex items-center gap-1">
+            {/* Primary Items - Generate */}
             {primaryNavItems.map((item) => 
               item.submenu ? (
-                // Generate menu with submenu
                 <div key="generate" className="relative group">
                   <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
                     <item.icon className="w-4 h-4" />
@@ -133,15 +140,43 @@ export default function Navbar() {
               )
             )}
 
-            {/* Tools Dropdown */}
+            {/* Media Management Dropdown */}
+            <div className="relative group">
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+                <Image className="w-4 h-4" />
+                <span>Media</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                {mediaNavItems.map((item) => (
+                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
+                ))}
+              </div>
+            </div>
+
+            {/* Dashboard & Analytics Dropdown */}
+            <div className="relative group">
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Analytics</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                {analyticsNavItems.map((item) => (
+                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
+                ))}
+              </div>
+            </div>
+
+            {/* Advanced Tools Dropdown */}
             <div className="relative group">
               <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
                 <Zap className="w-4 h-4" />
                 <span>Tools</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <div className="absolute right-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                {secondaryNavItems.map((item) => (
+              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                {advancedToolsNavItems.map((item) => (
                   <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
                 ))}
               </div>
@@ -179,7 +214,7 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <div className="lg:hidden mt-3 pb-3 border-t border-gray-700">
             <div className="space-y-1 mt-3">
-              {/* Primary Items */}
+              {/* Primary Items - Generate */}
               {primaryNavItems.map((item) =>
                 item.submenu ? (
                   <div key="generate-mobile">
@@ -208,7 +243,53 @@ export default function Navbar() {
                 )
               )}
 
-              {/* Tools Section */}
+              {/* Media Section */}
+              <div>
+                <button
+                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
+                  onClick={() => toggleExpandedMenu('media')}
+                >
+                  <span className="flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    Media
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${expandedMenu === 'media' ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {expandedMenu === 'media' && (
+                  <div className="pl-4 space-y-1 mt-1">
+                    {mediaNavItems.map((item) => (
+                      <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Analytics Section */}
+              <div>
+                <button
+                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
+                  onClick={() => toggleExpandedMenu('analytics')}
+                >
+                  <span className="flex items-center gap-2">
+                    <LayoutDashboard className="w-4 h-4" />
+                    Analytics
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${expandedMenu === 'analytics' ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {expandedMenu === 'analytics' && (
+                  <div className="pl-4 space-y-1 mt-1">
+                    {analyticsNavItems.map((item) => (
+                      <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Advanced Tools Section */}
               <div>
                 <button
                   className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
@@ -224,7 +305,7 @@ export default function Navbar() {
                 </button>
                 {expandedMenu === 'tools' && (
                   <div className="pl-4 space-y-1 mt-1">
-                    {secondaryNavItems.map((item) => (
+                    {advancedToolsNavItems.map((item) => (
                       <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
                     ))}
                   </div>

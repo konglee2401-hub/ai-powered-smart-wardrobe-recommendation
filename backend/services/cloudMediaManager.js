@@ -4,9 +4,9 @@
  * Provides unified interface for images, videos, audio files
  */
 
-const GoogleDriveService = require('./googleDriveService');
-const fs = require('fs');
-const path = require('path');
+import GoogleDriveService from './googleDriveService.js';
+import fs from 'fs';
+import path from 'path';
 
 class CloudMediaManager {
   constructor() {
@@ -413,4 +413,4 @@ class CloudMediaManager {
   }
 }
 
-module.exports = CloudMediaManager;
+export default CloudMediaManager;

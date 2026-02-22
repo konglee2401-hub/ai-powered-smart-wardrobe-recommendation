@@ -77,6 +77,7 @@
     "mongoose": "^8.23.0",
     "multer": "^1.4.5-lts.1",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "openai": "^4.20.0",
     "ora": "^9.3.0",

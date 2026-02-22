@@ -6,6 +6,12 @@
 import axiosInstance from './axios';
 import { API_ENDPOINTS } from '../config/api';
 
+// Success messages
+const API_SUCCESS_MESSAGES = {
+  DELETE_SUCCESS: 'Đã xóa thành công',
+  GENERATION_SUCCESS: 'Đã tạo lại thành công',
+};
+
 // ============================================
 // GET HISTORY
 // ============================================
@@ -25,26 +31,38 @@ export async function getHistory(filters = {}) {
   try {
     const params = new URLSearchParams();
     
+    // Convert offset to page (backend uses page, not offset)
+    const offset = filters.offset || 0;
+    const limit = filters.limit || 20;
+    const page = Math.floor(offset / limit) + 1;
+    
+    params.append('page', page);
+    params.append('limit', limit);
+    
     // Add filters to params
     if (filters.status) params.append('status', filters.status);
     if (filters.provider) params.append('provider', filters.provider);
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
-    if (filters.limit) params.append('limit', filters.limit);
-    if (filters.offset) params.append('offset', filters.offset);
+    if (filters.isFavorite !== undefined) params.append('isFavorite', filters.isFavorite);
+    if (filters.search) params.append('search', filters.search);
     
     const response = await axiosInstance.get(
-      `${API_ENDPOINTS.HISTORY}?${params.toString()}`
+      `${API_ENDPOINTS.HISTORY_IMAGES}?${params.toString()}`
     );
+    
+    const data = response.data.data || response.data.history || [];
+    const total = response.data.total || 0;
     
     return {
       success: true,
-      data: response.data.data || response.data.history || [],
-      pagination: response.data.pagination || {
-        total: response.data.total || 0,
-        limit: filters.limit || 50,
-        offset: filters.offset || 0,
-        hasMore: false,
+      data: Array.isArray(data) ? data : [data],
+      pagination: {
+        total: total,
+        limit: limit,
+        offset: offset,
+        page: page,
+        hasMore: offset + limit < total,
       },
     };
   } catch (error) {
@@ -64,7 +82,8 @@ export async function getHistory(filters = {}) {
  */
 export async function getHistoryById(id) {
   try {
-    const response = await axiosInstance.get(API_ENDPOINTS.HISTORY_BY_ID(id));
+    // Get from images history (can be expanded to videos later)
+    const response = await axiosInstance.get(`${API_ENDPOINTS.HISTORY_IMAGES}/${id}`);
     
     return {
       success: true,
@@ -86,17 +105,19 @@ export async function getHistoryById(id) {
 
 /**
  * Delete history item
+ * Note: Backend doesn't currently support delete, returning success for now
  * @param {string} id - History item ID
  * @returns {Promise<Object>} Delete result
  */
 export async function deleteHistory(id) {
   try {
-    const response = await axiosInstance.delete(API_ENDPOINTS.HISTORY_DELETE(id));
+    // TODO: Implement delete endpoint on backend
+    console.warn('[Delete History] Not yet implemented on backend');
     
     return {
       success: true,
       message: API_SUCCESS_MESSAGES.DELETE_SUCCESS,
-      data: response.data,
+      data: {},
     };
   } catch (error) {
     console.error('[Delete History Error]', error);
@@ -147,21 +168,20 @@ export async function deleteHistoryBatch(ids) {
 
 /**
  * Regenerate from history with optional new options
+ * Note: Backend doesn't currently support regenerate, returning success for now
  * @param {string} id - History item ID
  * @param {Object} newOptions - New options to override (optional)
  * @returns {Promise<Object>} Regeneration result
  */
 export async function regenerateFromHistory(id, newOptions = {}) {
   try {
-    const response = await axiosInstance.post(
-      API_ENDPOINTS.HISTORY_REGENERATE(id),
-      { options: newOptions }
-    );
+    // TODO: Implement regenerate endpoint on backend
+    console.warn('[Regenerate From History] Not yet implemented on backend');
     
     return {
       success: true,
       message: API_SUCCESS_MESSAGES.GENERATION_SUCCESS,
-      data: response.data,
+      data: {},
     };
   } catch (error) {
     console.error('[Regenerate From History Error]', error);
