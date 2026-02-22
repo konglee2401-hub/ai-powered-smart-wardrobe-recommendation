@@ -713,34 +713,52 @@ class ChatGPTService extends BrowserService {
       let fullText = '';
       let extractMethod = 'none';
       
-      // ===== METHOD 1: Get all text and find RESPONSE by markers =====
-      const allText = document.body.innerText || document.body.textContent || '';
-      
-      // Key difference: Response has *** CHARACTER PROFILE START ***
-      // Prompt has ⛔ CRITICAL: DO NOT REPEAT...
-      // So find the LAST occurrence of CHARACTER PROFILE START = response
-      const charProfileIndex = allText.lastIndexOf('*** CHARACTER PROFILE START ***');
-      
-      if (charProfileIndex > 0) {
-        // Found response marker - extract from there
-        fullText = allText.substring(charProfileIndex);
-        extractMethod = 'marker-body-split';
+      // ===== METHOD 1: Target ChatGPT assistant message element directly =====
+      const assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
+      if (assistantMessage) {
+        const text = assistantMessage.innerText || assistantMessage.textContent || '';
+        if (text.includes('*** CHARACTER PROFILE START ***')) {
+          fullText = text;
+          extractMethod = 'direct-assistant-element';
+        }
       }
       
-      // ===== METHOD 2: Find all message elements and check for markers =====
+      // ===== METHOD 2: Get markdown prose div from assistant message =====
       if (fullText.length < 300) {
-        const messages = Array.from(document.querySelectorAll('[role="article"], [class*="message"], div[data-role="assistant"]'));
-        
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const msg = messages[i];
-          const text = msg.innerText || msg.textContent || '';
-          
-          // Check if this element contains response marker
-          if (text.includes('*** CHARACTER PROFILE START ***') && !text.includes('⛔ CRITICAL:')) {
-            fullText = text;
-            extractMethod = `message-with-marker[${i}]`;
-            break;
+        const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        if (assistantMsg) {
+          const markdownDiv = assistantMsg.querySelector('.markdown');
+          if (markdownDiv) {
+            const text = markdownDiv.innerText || markdownDiv.textContent || '';
+            if (text.includes('*** CHARACTER PROFILE START ***')) {
+              fullText = text;
+              extractMethod = 'markdown-div-direct';
+            }
           }
+        }
+      }
+      
+      // ===== METHOD 3: Extract from all <p> tags in assistant message =====
+      if (fullText.length < 300) {
+        const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        if (assistantMsg) {
+          const paragraphs = Array.from(assistantMsg.querySelectorAll('p'));
+          const texts = paragraphs.map(p => (p.innerText || p.textContent || '').trim()).filter(t => t);
+          const combined = texts.join('\n');
+          if (combined.includes('*** CHARACTER PROFILE START ***')) {
+            fullText = combined;
+            extractMethod = 'combined-paragraphs';
+          }
+        }
+      }
+      
+      // ===== FALLBACK: Get all text and find RESPONSE by markers =====
+      if (fullText.length < 300) {
+        const allText = document.body.innerText || document.body.textContent || '';
+        const charProfileIndex = allText.lastIndexOf('*** CHARACTER PROFILE START ***');
+        if (charProfileIndex > 0) {
+          fullText = allText.substring(charProfileIndex);
+          extractMethod = 'marker-body-split';
         }
       }
       

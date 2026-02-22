@@ -308,21 +308,74 @@ export default function ImageGenerationPage() {
       if (analysisResponse.success && analysisResponse.data) {
         setAnalysisRaw(analysisResponse.data);
         
-        // Restructure data for components:
-        // - analysis.analysis = raw response text (for display)
-        // - analysis.recommendations = parsed structured data
-        // - analysis.characterProfile, productDetails = nested objects
+        // Parse analysis text from backend to extract structured data
+        const analysisText = analysisResponse.data.analysis || analysisResponse.data;
+        
+        // Extract sections from analysis text
+        const parseSection = (text, startMarker, endMarker) => {
+          const start = text.indexOf(startMarker);
+          const end = text.indexOf(endMarker);
+          if (start !== -1 && end !== -1) {
+            return text.substring(start + startMarker.length, end).trim();
+          }
+          return '';
+        };
+        
+        // Parse CHARACTER PROFILE
+        const charProfileText = parseSection(analysisText, '*** CHARACTER PROFILE START ***', '*** CHARACTER PROFILE END ***');
+        const characterProfile = {};
+        if (charProfileText) {
+          const lines = charProfileText.split('\n').filter(l => l.includes(':'));
+          lines.forEach(line => {
+            const [key, value] = line.split(':').map(s => s.trim());
+            if (key && value) characterProfile[key.toLowerCase().replace(/\s+/g, '_')] = value;
+          });
+        }
+        
+        // Parse PRODUCT DETAILS
+        const prodText = parseSection(analysisText, '*** PRODUCT DETAILS START ***', '*** PRODUCT DETAILS END ***');
+        const productDetails = {};
+        if (prodText) {
+          const lines = prodText.split('\n').filter(l => l.includes(':'));
+          lines.forEach(line => {
+            const [key, value] = line.split(':').map(s => s.trim());
+            if (key && value) productDetails[key.toLowerCase().replace(/\s+/g, '_')] = value;
+          });
+        }
+        
+        // Parse RECOMMENDATIONS
+        const recText = parseSection(analysisText, '*** RECOMMENDATIONS START ***', '*** RECOMMENDATIONS END ***');
+        const recommendations = {};
+        if (recText) {
+          // Parse structured SCENE_CHOICE, LIGHTING_CHOICE, etc.
+          const patterns = [
+            { name: 'scene', pattern: /SCENE_CHOICE:\s*(\w+)/ },
+            { name: 'lighting', pattern: /LIGHTING_CHOICE:\s*([\w-]+)/ },
+            { name: 'mood', pattern: /MOOD_CHOICE:\s*(\w+)/ },
+            { name: 'cameraAngle', pattern: /CAMERA_ANGLE:\s*([\w-]+)/ },
+            { name: 'hairstyle', pattern: /HAIRSTYLE:\s*([\w-]+)/ },
+            { name: 'makeup', pattern: /MAKEUP:\s*([\w-]+)/ },
+          ];
+          patterns.forEach(({ name, pattern }) => {
+            const match = recText.match(pattern);
+            if (match) {
+              recommendations[name] = { choice: match[1], reason: 'From AI analysis' };
+            }
+          });
+        }
+        
+        // Restructure data for components
         const analysisWithParsing = {
-          analysis: analysisResponse.data.analysis || analysisResponse.data,
-          recommendations: analysisResponse.data.recommendations || {},
-          characterProfile: analysisResponse.data.recommendations?.characterProfile || {},
-          productDetails: analysisResponse.data.recommendations?.productDetails || {},
+          analysis: analysisText,
+          recommendations: recommendations,
+          characterProfile: characterProfile,
+          productDetails: productDetails,
           analysisScore: analysisResponse.data.recommendations?.analysis || {},
         };
         
         setAnalysis(analysisWithParsing);
         console.log('📊 Analysis saved to state:', analysisWithParsing);
-        console.log('🎯 Recommendations available:', analysisWithParsing.analysis?.recommendations);
+        console.log('🎯 Recommendations available:', analysisWithParsing.recommendations);
         
         // Store response length for display
         const responseLength = typeof analysisResponse.data.analysis === 'string' 
