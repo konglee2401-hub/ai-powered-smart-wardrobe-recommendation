@@ -270,7 +270,7 @@ export default function OneClickCreatorPage() {
             charBase64,
             prodBase64,
             {
-              provider: 'grok',
+              provider: 'chatgpt-browser',
               scene: 'studio',
               lighting: 'soft-diffused',
               mood: 'confident',

@@ -14,6 +14,7 @@ import {
   analyzeMultipleImagesWithOpenRouter
 } from '../services/openRouterService.js';
 import { parseAnalysis, generateImagePrompt } from '../services/analysisParser.js';
+import ChatGPTService from '../services/browser/chatgptService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -260,6 +261,20 @@ const VISION_PROVIDERS = [
     pricing: 0.5,
     available: () => !!getKeyManager().keys.get('ZAI')?.length,
     analyze: analyzeWithZAI
+  },
+
+  // ============================================================================
+  // TIER 8: BROWSER AUTOMATION - CHATGPT (FREE)
+  // ============================================================================
+  {
+    name: 'ChatGPT (Browser)',
+    provider: 'chatgpt-browser',
+    model: 'gpt-4-vision',
+    priority: 75,
+    pricing: null, // FREE (browser automation)
+    available: () => true, // Always available if browser can be launched
+    analyze: analyzeWithChatGPT,
+    requiresBrowser: true
   }
 ];
 
@@ -412,6 +427,29 @@ async function analyzeWithGemini(imagePath, prompt, options = {}) {
 
   const response = await result.response;
   return response.text();
+}
+
+// ChatGPT analysis using browser automation
+async function analyzeWithChatGPT(imagePath, prompt, options = {}) {
+  const service = new ChatGPTService({ 
+    headless: true,
+    timeout: 120000
+  });
+
+  try {
+    await service.initialize();
+    const result = await service.analyzeImage(imagePath, prompt);
+    return result;
+  } catch (error) {
+    console.error('ChatGPT analysis error:', error.message);
+    throw new Error(`ChatGPT analysis failed: ${error.message}`);
+  } finally {
+    try {
+      await service.close();
+    } catch (e) {
+      // Browser already closed
+    }
+  }
 }
 
 // Fallback mechanism with enhanced logging

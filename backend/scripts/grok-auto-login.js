@@ -161,38 +161,28 @@ async function checkLoginStatus(page) {
 
 async function main() {
   console.log('==================================================');
-  console.log(' Test Grok Session Reuse');
+  console.log(' Grok Auto-Login (Chrome Profile)');
   console.log('==================================================');
   console.log('');
-  
-  // Load session
-  const sessionData = await loadSession();
-  
-  // Filter essential cookies
-  const essentialCookies = await filterEssentialCookies(sessionData.cookies);
-  console.log(`🍪 Essential cookies: ${essentialCookies.length}`);
-  essentialCookies.forEach(c => console.log(`   - ${c.name}`));
-  
-  // Filter essential localStorage
-  const essentialLocalStorage = await filterEssentialLocalStorage(sessionData.localStorage);
-  console.log(`💾 Essential localStorage: ${Object.keys(essentialLocalStorage).length} keys`);
-  
-  // Launch browser
+  console.log('ℹ️  Using Chrome profile with existing Grok session');
+  console.log('   Profile: ' + chromeUserDataDir);
   console.log('');
-  console.log('🚀 Launching browser...');
+  
+  // Launch browser with existing Chrome profile
+  console.log('🚀 Launching browser with existing Chrome profile...');
   
   const browser = await puppeteer.launch({
     channel: 'chrome',
     headless: false,
     args: [
       `--user-data-dir=${chromeUserDataDir}`,
-      '--profile-directory=Profile 1',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-web-resources'
     ],
     defaultViewport: { width: 1280, height: 800 }
   });
@@ -203,63 +193,23 @@ async function main() {
     // Set user agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
-    // Navigate to grok.com
+    // Navigate to grok.com - Chrome profile cookies will be used automatically
     console.log('📍 Navigating to https://grok.com...');
-    await page.goto('https://grok.com', { waitUntil: 'networkidle2', timeout: 60000 });
+    console.log('   (Chrome profile cookies will be used automatically)');
+    await page.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 60000 });
     console.log('✅ Page loaded');
     
-    // Inject cookies
-    console.log('🍪 Injecting essential cookies...');
-    for (const cookie of essentialCookies) {
-      try {
-        // Clean up cookie for puppeteer
-        const cleanCookie = {
-          name: cookie.name,
-          value: cookie.value,
-          domain: cookie.domain,
-          path: cookie.path || '/',
-          expires: cookie.expires,
-          httpOnly: cookie.httpOnly || false,
-          secure: cookie.secure || true,
-          sameSite: cookie.sameSite || 'None'
-        };
-        await page.setCookie(cleanCookie);
-        console.log(`   ✅ ${cookie.name}`);
-      } catch (error) {
-        console.log(`   ❌ ${cookie.name}: ${error.message}`);
-      }
-    }
-    
-    // Inject localStorage
-    console.log('💾 Injecting essential localStorage...');
-    await page.evaluate((storageData) => {
-      for (const [key, value] of Object.entries(storageData)) {
-        try {
-          localStorage.setItem(key, value);
-        } catch (e) {
-          console.log(`Error setting ${key}:`, e.message);
-        }
-      }
-    }, essentialLocalStorage);
-    console.log('   ✅ localStorage injected');
-    
-    // Wait a bit for any redirects
+    // Wait for page to fully settle
     console.log('⏳ Waiting for page to settle...');
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // First, try to trigger Cloudflare by refreshing or interacting
+    // Poll for login status with LONGER timeout for Cloudflare
     console.log('');
-    console.log('🔄 Triggering Cloudflare check...');
-    await page.reload({ waitUntil: 'networkidle0' }).catch(() => {});
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Poll for login status (with Cloudflare detection)
-    console.log('');
-    console.log('🔍 Checking login status (will poll for 2 minutes)...');
+    console.log('🔍 Checking Grok status (will wait up to 10 minutes for Cloudflare)...');
     
     let status = null;
     let checkCount = 0;
-    const maxChecks = 60; // 60 * 2s = 2 minutes
+    const maxChecks = 300; // 300 * 2s = 10 minutes
     const checkInterval = 2000;
     let cfRetryCount = 0;
     
@@ -271,71 +221,83 @@ async function main() {
       
       if (status.isCloudflare) {
         cfRetryCount++;
-        console.log(`🔄 Check #${checkCount}: ☁️ CLOUDFLARE DETECTED!`);
+        process.stdout.write(`\r🔄 Check #${checkCount}/${maxChecks}: ☁️ CLOUDFLARE DETECTED (waiting to verify...)`);
         
-        // Try to wait it out - the cf_clearance cookie should eventually work
-        // Sometimes Cloudflare needs a few seconds to validate the cookie
-        if (cfRetryCount >= 3 && cfRetryCount % 5 === 0) {
-          console.log('   ↳ Trying to wait out Cloudflare (cf_clearance cookie should help)...');
-          // Try refreshing the page
+        // Every 15 seconds, try a page reload to help Cloudflare process
+        if (cfRetryCount % 8 === 0) {
+          console.log('');
+          console.log(`   ↳ Attempt #${Math.floor(cfRetryCount/8)}: Reloading page to verify Cloudflare...`);
           await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } else if (status.isLoggedIn) {
+        console.log('');
         console.log(`✅ Check #${checkCount}: LOGGED IN!`);
         break;
-      } else {
-        console.log(`🔄 Check #${checkCount}: ${status.url}`);
+      } else if (checkCount % 10 === 0) {
+        console.log('');
+        console.log(`🔄 Check #${checkCount}: Waiting for Grok to load...`);
       }
     }
     
     console.log('');
-    console.log('📊 Final Login Status:');
+    console.log('📊 Final Status:');
     console.log(`   URL: ${status?.url}`);
     console.log(`   Logged in: ${status?.isLoggedIn ? '✅ YES' : '❌ NO'}`);
-    console.log(`   Cloudflare: ${status?.isCloudflare ? '☁️ YES' : '❌ NO'}`);
+    console.log(`   Cloudflare: ${status?.isCloudflare ? '☁️ BLOCKING' : '✅ PASSED'}`);
     console.log(`   Has chat input: ${status?.hasChatInput ? '✅' : '❌'}`);
     console.log(`   Has Grok UI: ${status?.hasGrokUI ? '✅' : '❌'}`);
     console.log(`   Has Sign in: ${status?.hasSignIn ? '⚠️ YES' : '✅ NO'}`);
     
     if (status?.isLoggedIn) {
       console.log('');
-      console.log('🎉 SUCCESS! Session reuse worked!');
+      console.log('🎉 SUCCESS! Grok is ready to use!');
     } else if (status?.isCloudflare) {
       console.log('');
-      console.log('⚠️  CLOUDLARE BLOCKING - Please click verify checkbox');
-      console.log('   The script will wait for you to complete verification...');
+      console.log('⚠️  CLOUDFLARE VERIFICATION REQUIRED');
+      console.log('   Please complete the verification in the browser window');
+      console.log('   The script will wait for you to verify (max 5 more minutes)...');
       
-      // Wait for user to complete Cloudflare
-      checkCount = 0;
-      while (!status?.isLoggedIn && checkCount < 30) {
+      // Wait additional 5 minutes for user to manually verify
+      let verifyCount = 0;
+      const maxVerifyChecks = 150; // 150 * 2s = 5 minutes
+      
+      while (!status?.isLoggedIn && verifyCount < maxVerifyChecks) {
         await new Promise(resolve => setTimeout(resolve, 2000));
-        checkCount++;
+        verifyCount++;
         status = await checkLoginStatus(page);
         
         if (status?.isLoggedIn) {
-          console.log(`✅ User completed verification! Logged in!`);
+          console.log('');
+          console.log(`✅ Verification complete! Grok is ready!`);
           break;
-        } else if (status?.isCloudflare) {
-          console.log(`⏳ Still waiting for verification... (#${checkCount})`);
-        } else {
-          console.log(`🔄 Check #${checkCount}: ${status?.url}`);
+        } else if (verifyCount % 15 === 0) {
+          console.log(`⏳ Still waiting for verification... (${verifyCount}/${maxVerifyChecks})`);
         }
       }
     } else {
       console.log('');
-      console.log('⚠️  Login not detected');
+      console.log('⚠️  Unable to determine login status');
     }
     
-    // Keep browser open for verification
+    // Keep browser open for user to use
     console.log('');
-    console.log('Browser will stay open for 60 seconds...');
-    await new Promise(resolve => setTimeout(resolve, 60000));
+    console.log('Browser will stay open. Close the window when done.');
+    console.log('Press Ctrl+C to exit the script.');
     
+    // Wait indefinitely or until user closes browser
+    await new Promise(resolve => setTimeout(resolve, 24 * 60 * 60 * 1000)); // 24 hours
+  
   } catch (error) {
     console.error('❌ Error:', error.message);
   } finally {
+    console.log('');
     console.log('🔒 Closing browser...');
-    await browser.close();
+    try {
+      await browser.close();
+    } catch (e) {
+      console.log('Browser already closed');
+    }
     console.log('✅ Done');
   }
 }

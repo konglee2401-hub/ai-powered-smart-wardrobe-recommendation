@@ -26,65 +26,201 @@ class GrokServiceV2 extends BrowserService {
   }
 
   /**
+   * Launch browser for Grok automation
+   * Override parent's launch to skip automatic session loading so we can control the flow
+   */
+  async launch() {
+    // Call parent launch but skip session loading - we'll do it manually in initialize()
+    return super.launch({ skipSession: true });
+  }
+
+  /**
    * Initialize Grok with session reuse and Cloudflare bypass
+   * CRITICAL: Follow the working pattern:
+   * 1. Navigate first (without cookies)
+   * 2. Set essential cookies AFTER navigation
+   * 3. Inject localStorage
+   * 4. RELOAD page (crucial step!)
+   * 5. Check for Cloudflare
+   * 6. Wait for input
    */
   async initialize() {
+    // Launch browser with skipSession option
     await this.launch();
     
-    // Try to load and inject session
-    await this._loadAndInjectSession();
+    // Read session data
+    const sessionFile = path.join(process.cwd(), 'backend', '.sessions', 'grok-session.json');
+    let sessionData = null;
     
-    // Navigate to Grok main page (NOT /chat)
-    await this.goto('https://grok.com');
+    if (fs.existsSync(sessionFile)) {
+      try {
+        sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+        console.log('✅ Session file loaded');
+      } catch (e) {
+        console.log(`⚠️  Could not load session: ${e.message}`);
+      }
+    } else {
+      console.log('⚠️  No saved session found');
+    }
     
-    console.log('⏳ Waiting for Grok to load...');
+    // STEP 1: Navigate to grok.com FIRST (without cookies)
+    console.log('📍 Step 1: Navigate to grok.com');
+    try {
+      await this.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      console.log('✅ Page loaded');
+    } catch (e) {
+      console.log(`⚠️  Navigation timeout: ${e.message}`);
+    }
+    
+    await this.page.waitForTimeout(1000);
+    
+    // STEP 2: Set ESSENTIAL cookies AFTER navigation
+    if (sessionData && sessionData.cookies) {
+      console.log('🍪 Step 2: Injecting essential cookies (cf_clearance, sso, etc.)');
+      
+      // Only essential cookies - matches working grok-auto-login.js pattern
+      const essentialCookieNames = ['cf_clearance', '__cf_bm', 'sso', 'sso-rw', 'x-userid'];
+      const essentialCookies = sessionData.cookies.filter(c => essentialCookieNames.includes(c.name));
+      
+      let cookieCount = 0;
+      for (const cookie of essentialCookies) {
+        try {
+          const cookieObj = {
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain || '.grok.com',
+            path: cookie.path || '/',
+            httpOnly: cookie.httpOnly || false,
+            secure: cookie.secure !== false ? true : false
+          };
+          
+          // Only add valid expires
+          if (cookie.expires && cookie.expires > 0) {
+            cookieObj.expires = cookie.expires;
+          }
+          
+          // Only add valid sameSite
+          if (cookie.sameSite && ['Strict', 'Lax', 'None'].includes(cookie.sameSite)) {
+            cookieObj.sameSite = cookie.sameSite;
+          }
+          
+          await this.page.setCookie(cookieObj);
+          console.log(`   ✅ ${cookie.name}`);
+          cookieCount++;
+        } catch (e) {
+          // Skip invalid cookies
+        }
+      }
+      console.log(`✅ Injected ${cookieCount}/${essentialCookies.length} essential cookies`);
+    }
+    
+    // STEP 3: Inject localStorage
+    if (sessionData && sessionData.localStorage) {
+      console.log('💾 Step 3: Injecting localStorage');
+      const localStorage = sessionData.localStorage;
+      
+      await this.page.evaluate((storageData) => {
+        for (const [key, value] of Object.entries(storageData)) {
+          try {
+            localStorage.setItem(key, String(value));
+          } catch (e) {
+            // Ignore quota errors
+          }
+        }
+      }, localStorage);
+      console.log('✅ localStorage injected');
+      
+      // Verify age-verif was set
+      const ageVerifSet = await this.page.evaluate(() => {
+        return localStorage.getItem('age-verif');
+      });
+      if (ageVerifSet) {
+        console.log('✅ Age verification pre-loaded');
+      }
+    }
+    
+    // STEP 4: Wait before reload
+    console.log('⏳ Waiting 3 seconds for cookies to settle...');
     await this.page.waitForTimeout(3000);
     
-    // Check for Cloudflare challenge - if detected, just reload the page
+    // STEP 5: RELOAD PAGE - CRITICAL! This makes cookies active
+    console.log('🔄 Step 4: Reloading page to activate cf_clearance cookie');
+    try {
+      await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      console.log('✅ Page reloaded successfully');
+    } catch (e) {
+      console.log(`⚠️  Reload timeout: ${e.message}`);
+    }
+    
+    await this.page.waitForTimeout(2000);
+    
+    // STEP 6: Check for Cloudflare challenges and reload if found
+    console.log('🛡️  Checking for Cloudflare...');
     let cloudflareCheckCount = 0;
-    while (cloudflareCheckCount < 3) {
-      const isCloudflareChallenge = await this.page.evaluate(() => {
-        return document.body.innerText.includes('Checking your browser') ||
-               document.body.innerText.includes('Please stand by') ||
-               document.body.innerText.includes('Just a moment') ||
-               document.body.querySelector('iframe[src*="challenge"]') !== null ||
-               document.body.querySelector('input[name="cf-turnstile-response"]') !== null;
+    const maxCloudflareAttempts = 5;
+    
+    while (cloudflareCheckCount < maxCloudflareAttempts) {
+      const cfStatus = await this.page.evaluate(() => {
+        const bodyText = document.body.innerText.toLowerCase();
+        const pageTitle = document.title.toLowerCase();
+        
+        const hasCFChallenge = bodyText.includes('checking your browser') ||
+                               bodyText.includes('please stand by') ||
+                               bodyText.includes('just a moment') ||
+                               bodyText.includes('cloudflare') ||
+                               pageTitle.includes('just a moment') ||
+                               document.body.querySelector('iframe[src*="challenge"]') !== null;
+        
+        const hasChatUI = bodyText.includes('hỏi grok') || 
+                         bodyText.includes('ask grok') ||
+                         !!document.querySelector('div[contenteditable="true"]');
+        
+        return { hasCFChallenge, hasChatUI };
       });
       
-      if (isCloudflareChallenge) {
-        console.log(`⚠️  Cloudflare challenge detected (attempt ${cloudflareCheckCount + 1}), reloading...`);
-        await this.page.reload({ waitUntil: 'networkidle2' });
-        await this.page.waitForTimeout(3000);
+      if (cfStatus.hasChatUI) {
+        console.log('✅ Cloudflare passed - Grok UI detected');
+        break;
+      }
+      
+      if (cfStatus.hasCFChallenge) {
         cloudflareCheckCount++;
+        console.log(`⚠️  Cloudflare challenge detected (attempt ${cloudflareCheckCount}/${maxCloudflareAttempts})`);
+        
+        if (cloudflareCheckCount < maxCloudflareAttempts) {
+          console.log(`🔄 Reloading page to bypass Cloudflare...`);
+          try {
+            await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+            console.log('✅ Page reloaded');
+          } catch (e) {
+            console.log(`⚠️  Reload error: ${e.message}`);
+          }
+          await this.page.waitForTimeout(3000);
+        }
       } else {
+        console.log('✅ Cloudflare check passed');
         break;
       }
     }
     
-    // After potential Cloudflare bypass, check if we're on chat page
+    // STEP 7: Check if we're on chat page
     const isOnChatPage = await this._checkChatPageReady();
     
     if (isOnChatPage) {
       console.log('✅ Grok ready (chat page detected)');
-      
-      // Check for age verification modal
       await this._handleAgeVerification();
-      
       return true;
     }
     
-    // Try to wait for the chat input to appear
+    // STEP 8: Wait for the chat input
     console.log('⏳ Waiting for chat input to appear...');
     try {
       await this.page.waitForSelector('[contenteditable="true"], textarea', { timeout: 10000 });
       console.log('✅ Grok ready (chat input found)');
-      
-      // Check for age verification modal
       await this._handleAgeVerification();
-      
       return true;
     } catch (e) {
-      console.log('⚠️  Chat input not found, but continuing...');
+      console.log('⚠️  Chat input not found yet, but continuing...');
       return true;
     }
   }
@@ -206,53 +342,72 @@ class GrokServiceV2 extends BrowserService {
     try {
       const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
       
-      // Essential cookies
-      const essentialCookies = ['cf_clearance', '__cf_bm', 'sso', 'sso-rw', 'x-userid'];
-      const filteredCookies = sessionData.cookies?.filter(c => essentialCookies.includes(c.name)) || [];
+      // Inject ALL cookies (not just essential ones)
+      const cookies = sessionData.cookies || [];
       
-      console.log(`🍪 Loading session with ${filteredCookies.length} essential cookies`);
+      console.log(`🍪 Loading session with ${cookies.length} cookies`);
       
-      // Inject cookies
-      for (const cookie of filteredCookies) {
+      // Set cookies before navigation
+      for (const cookie of cookies) {
         try {
+          // Skip cookies with invalid domains
+          if (!cookie.domain || !cookie.value) {
+            continue;
+          }
+          
           await this.page.setCookie({
             name: cookie.name,
             value: cookie.value,
-            domain: cookie.domain || '.grok.com',
+            domain: cookie.domain,
             path: cookie.path || '/',
-            expires: cookie.expires,
+            expires: cookie.expires && cookie.expires > 0 ? cookie.expires : undefined,
             httpOnly: cookie.httpOnly || false,
-            secure: cookie.secure || true,
+            secure: cookie.secure !== false ? true : false,
             sameSite: cookie.sameSite || 'None'
           });
           console.log(`   ✅ ${cookie.name}`);
         } catch (e) {
-          console.log(`   ⚠️  Could not set cookie ${cookie.name}: ${e.message}`);
+          // Silently skip invalid cookies
         }
       }
       
-      // Inject localStorage
-      const essentialLocalStorage = ['xai-ff-bu', 'chat-preferences', 'user-settings', 'anonUserId'];
-      const filteredLocalStorage = {};
-      for (const key of essentialLocalStorage) {
-        if (sessionData.localStorage?.[key] !== undefined) {
-          filteredLocalStorage[key] = sessionData.localStorage[key];
-        }
-      }
+      // Inject ALL localStorage items
+      const localStorage = sessionData.localStorage || {};
+      const allLocalStorageKeys = Object.keys(localStorage);
       
-      if (Object.keys(filteredLocalStorage).length > 0) {
-        console.log(`💾 Injecting ${Object.keys(filteredLocalStorage).length} localStorage keys`);
+      if (allLocalStorageKeys.length > 0) {
+        console.log(`💾 Injecting ${allLocalStorageKeys.length} localStorage keys (including age-verif, chat-preferences, etc.)`);
         await this.page.evaluate((storageData) => {
           for (const [key, value] of Object.entries(storageData)) {
             try {
-              localStorage.setItem(key, value);
-            } catch (e) {}
+              // Handle JSON and non-JSON values
+              let storageValue = value;
+              if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+                // Try to parse as JSON first to avoid double-encoding
+                try {
+                  storageValue = value;
+                } catch (e) {
+                  // Keep as string if not valid JSON
+                }
+              }
+              localStorage.setItem(key, String(storageValue));
+            } catch (e) {
+              // Ignore storage quota errors
+            }
           }
-        }, filteredLocalStorage);
+        }, localStorage);
         console.log('   ✅ localStorage injected');
+        
+        // Verify age-verif was set (critical for bypassing modal)
+        const ageVerifSet = await this.page.evaluate(() => {
+          return localStorage.getItem('age-verif');
+        });
+        if (ageVerifSet) {
+          console.log('   ✅ Age verification pre-loaded');
+        }
       }
       
-      console.log('✅ Session loaded and injected');
+      console.log('✅ Session loaded and injected (all cookies + localStorage)');
       return true;
     } catch (error) {
       console.log(`⚠️  Could not load session: ${error.message}`);
@@ -807,10 +962,14 @@ class GrokServiceV2 extends BrowserService {
     const mimeType = mimeMap[ext] || 'image/png';
     const fileName = path.basename(imagePath);
     
+    // Wait for page to be fully loaded
+    await this.page.waitForTimeout(1000);
+    
     // Find the contenteditable input area (Grok's "Hỏi Grok" / TipTap ProseMirror editor)
     const editorSelectors = [
       'div[contenteditable="true"].tiptap',
       'div[contenteditable="true"].ProseMirror',
+      'div[contenteditable="true"]:not(:empty), div[contenteditable="true"]:empty',
       'div[contenteditable="true"]',
       '[contenteditable="true"]',
       'textarea',
@@ -818,18 +977,51 @@ class GrokServiceV2 extends BrowserService {
     ];
     
     let editor = null;
+    let foundSelector = null;
+    
     for (const selector of editorSelectors) {
       try {
         editor = await this.page.$(selector);
         if (editor) {
-          console.log(`   Found editor: ${selector}`);
+          foundSelector = selector;
+          console.log(`   ✅ Found editor with selector: ${selector}`);
           break;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.log(`   ⏭️  Selector not found: ${selector}`);
+      }
     }
     
     if (!editor) {
-      throw new Error('Could not find Grok input area');
+      // Debug info: check page state
+      const pageInfo = await this.page.evaluate(() => {
+        return {
+          url: window.location.href,
+          title: document.title,
+          hasContentEditable: !!document.querySelector('[contenteditable="true"]'),
+          hasTextarea: !!document.querySelector('textarea'),
+          inputCount: document.querySelectorAll('input').length,
+          bodyText: document.body.innerText?.substring(0, 200)
+        };
+      });
+      
+      console.log('❌ Editor not found. Page state:');
+      console.log(`   URL: ${pageInfo.url}`);
+      console.log(`   Title: ${pageInfo.title}`);
+      console.log(`   Has contenteditable: ${pageInfo.hasContentEditable}`);
+      console.log(`   Has textarea: ${pageInfo.hasTextarea}`);
+      console.log(`   Input count: ${pageInfo.inputCount}`);
+      
+      // Take screenshot for debugging
+      try {
+        const screenshotPath = path.join(process.cwd(), 'backend', 'debug-no-input.png');
+        await this.page.screenshot({ path: screenshotPath });
+        console.log(`   📸 Screenshot saved: ${screenshotPath}`);
+      } catch (e) {
+        console.log(`   Screenshot failed: ${e.message}`);
+      }
+      
+      throw new Error('Could not find Grok input area. Page may not be fully loaded.');
     }
     
     // Click to focus the editor

@@ -1683,8 +1683,7 @@ export async function generateVideoBrowser(req, res) {
 
       try {
         const googleFlowService = new GoogleFlowService({ headless: false });
-        await googleFlowService.init();
-        await googleFlowService.navigateToProject();
+        await googleFlowService.initialize();
 
         // For Google Flow, combine segments into a single prompt
         const combinedPrompt = segments.join('. ');

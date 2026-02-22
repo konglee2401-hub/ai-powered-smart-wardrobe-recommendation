@@ -1,5 +1,99 @@
 {
+  "localStorage": {
+    "age-verif": "{\"state\":{\"dateOfBirthSeconds\":631213200,\"stage\":\"pass\"},\"version\":3}",
+    "chat-preferences": "{\"state\":{\"activeModelId\":\"grok-420\",\"defaultAnonModelId\":\"grok-3\",\"defaultFreeModelId\":\"grok-3\",\"defaultProModelId\":\"grok-4\"},\"version\":3}",
+    "anonUserId": "\"d2584c48-8f61-48a5-8699-9ef708cba832\"",
+    "xai-ff-bu": "{\"config\":{}}",
+    "anonPrivateKey": "\"hx1IPRkxl5oXa5yIkt8P/VJJ78Tg5rsHChZtsH6QyNY=\"",
+    "anonUserId": "\"04396d1e-7ac3-4db9-9fdc-8bf43ef86abf\"",
+    "chat-preferences": "{\"state\":{\"activeModelId\":\"grok-420\",\"defaultAnonModelId\":\"grok-3\",\"defaultFreeModelId\":\"grok-3\",\"defaultProModelId\":\"grok-4\",\"voiceId\":\"Ara\",\"voicePersonalityId\":\"assistant\",\"voiceCustomInstructions\":null,\"voicePlaybackSpeed\":1,\"modelMode\":\"grok-420\"},\"version\":3}",
+    "highlights-storage": "{\"state\":{\"storyReactions\":{}},\"version\":0}",
+    "i18nextLng": "\"vi\"",
+    "image-editor-first-open": "false",
+    "imagine-mute-preference": "false",
+    "loglevel:livekit": "\"SILENT\"",
+    "loglevel:livekit-engine": "\"SILENT\"",
+    "loglevel:livekit-participant": "\"SILENT\"",
+    "loglevel:livekit-pc-manager": "\"SILENT\"",
+    "loglevel:livekit-pc-transport": "\"SILENT\"",
+    "loglevel:livekit-room": "\"SILENT\"",
+    "loglevel:livekit-signal": "\"SILENT\"",
+    "loglevel:livekit-track": "\"SILENT\"",
+    "loglevel:livekit-track-publication": "\"SILENT\"",
+    "loglevel:lk-e2ee": "\"SILENT\"",
+    "model-select-tutorial": "true",
+    "new-feature-user:imagine:first-use": "1770971577418"
+  },
   "cookies": [
+    {
+      "name": "cf_clearance",
+      "value": "jIX.rcXSMcX8AiKcQP18b0BpfGkr6xpfF1LfwGl9VGM-1771711548-1.2.1.1-lcRXubSjZ7KmAl6zUUrd25J42_eDudmpA8zCvmzbRxv42ykNIBvspZGId3VX2dQaq_JZdbnSNvY0ktfLIuP8xUv38MohfRDpF6rxL75Oudd7yberXyoBMA.k7k.qSYSCQCSa6WKMuP_0960N6zBQH.QxGhclrlivVdM5h3_agCqWqwYvmVVOJJAtCZlVHhictzvZ0rMaFlRkYUAlHF0aH1ekflZTazPpsjNFnh0rIhFxxSbh5LLxeRGURpbdFVCH",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1771711549,
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "sso",
+      "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX2lkIjoiMjdkNjJjNmItNWY3Ni00OTk3LWE0MzAtYjJhZGQ1N2U2N2ZkIn0.zk0u6je_qhj6uVAemQqDldFUXfWMMFb7CN6o_VJdYok",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1724079682,
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sso-rw",
+      "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzZXNzaW9uX2lkIjoiMjdkNjJjNmItNWY3Ni00OTk3LWE0MzAtYjJhZGQ1N2U2N2ZkIn0.zk0u6je_qhj6uVAemQqDldFUXfWMMFb7CN6o_VJdYok",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1724079682,
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "x-userid",
+      "value": "d2584c48-8f61-48a5-8699-9ef708cba832",
+      "domain": ".grok.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false,
+      "sameSite": "None"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "yojgufjhNA_wgJomRYOlg4JMkitg4IJwP1TWbUJOPrk-1771509712-1.0.1.1-4bRkybCJ6b.Omx3WmfMhy0eaYcgfKeITMyp65UGWQaLM4b86yiABs2ssnroJD4rWhQFbzoD9PGxgp9pVALex.e8hodFQaIO_H2PJVwlDbCM",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1771511512,
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__Secure-BUCKET",
+      "value": "CDo",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1723137607,
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": null
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1588378148.1770771786",
+      "domain": ".grok.com",
+      "path": "/",
+      "expires": 1748819626,
+      "secure": false,
+      "httpOnly": false,
+      "sameSite": null
+    },
     {
       "name": "_ga_8FEWB057YH",
       "value": "GS2.1.s1771509680$o1$g1$t1771509716$j24$l0$h0",
