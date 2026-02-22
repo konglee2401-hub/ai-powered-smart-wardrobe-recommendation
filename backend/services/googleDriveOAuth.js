@@ -40,16 +40,42 @@ class GoogleDriveOAuthService {
    */
   async authenticate() {
     try {
+      // Check if credentials file exists
+      if (!fs.existsSync(this.credentialsPath)) {
+        console.error(`❌ Credentials file not found: ${this.credentialsPath}`);
+        console.error('📍 Expected location: backend/config/client_secret_*.json');
+        throw new Error(`Credentials file not found at ${this.credentialsPath}`);
+      }
+
       const credentials = JSON.parse(
-        fs.readFileSync(this.credentialsPath)
+        fs.readFileSync(this.credentialsPath, 'utf8')
       );
 
+      // Validate credentials structure
+      if (!credentials.web) {
+        console.error('❌ Invalid credentials format. Missing "web" property');
+        console.error('Expected format: { "web": { "client_id": "...", "client_secret": "...", "redirect_uris": [...] } }');
+        throw new Error('Invalid credentials format');
+      }
+
       const { client_id, client_secret, redirect_uris } = credentials.web;
+
+      // Validate required fields
+      if (!client_id || !client_secret) {
+        throw new Error('Missing client_id or client_secret in credentials');
+      }
+
+      // Use redirect_uris from credentials or default values
+      const redirectUri = (redirect_uris && redirect_uris.length > 0) 
+        ? redirect_uris[0]
+        : 'http://localhost:3000/api/drive/auth-callback'; // Default redirect URI
+
+      console.log(`📍 Using OAuth redirect URI: ${redirectUri}`);
 
       const auth = new google.auth.OAuth2(
         client_id,
         client_secret,
-        redirect_uris[0]
+        redirectUri
       );
 
       // Check if we have stored token
@@ -288,11 +314,21 @@ class GoogleDriveOAuthService {
   async uploadBuffer(buffer, fileName, options = {}) {
     try {
       if (!this.initialized) {
+        console.log(`🔐 Authenticating with Google Drive...`);
         await this.authenticate();
       }
 
       if (!this.folderIds.imagesApp) {
+        console.log(`📁 Initializing folder structure...`);
         await this.initializeFolderStructure();
+      }
+
+      if (!buffer) {
+        throw new Error('No buffer provided for upload');
+      }
+
+      if (!this.drive) {
+        throw new Error('Google Drive not initialized. Please authenticate first.');
       }
 
       const mimeType = this.getMimeType(fileName);
