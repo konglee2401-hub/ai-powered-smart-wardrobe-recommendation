@@ -1270,7 +1270,7 @@ export default function ImageGenerationPage() {
                       {/* Recommendation Selector - unified per-category decisions */}
                       <RecommendationSelector
                         analysis={analysis}
-                        existingOptions={promptOptions}
+                        existingOptions={promptOptions?.data?.options || {}}
                         onApplyRecommendations={handleApplyRecommendationSelection}
                         isSaving={isSaving}
                       />
@@ -1462,12 +1462,45 @@ export default function ImageGenerationPage() {
             {/* ==================== RIGHT SIDEBAR ==================== */}
             <div className="w-60 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4 space-y-4">
-                {/* Step 2: Moved to main content area */}
-                {currentStep === 2 && (
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
-                    <p className="text-xs text-gray-400">
-                      ← Recommendations shown in main area above
-                    </p>
+                {/* Step 2: Character & Product Info in Sidebar */}
+                {currentStep === 2 && analysis && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase">Analysis Summary</h4>
+                    <div className="space-y-2">
+                      {/* Character Profile */}
+                      <div className="bg-gray-800/80 rounded p-2 border border-gray-700">
+                        <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
+                          <span>👤</span> Character
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {analysis?.recommendations?.characterProfile && Object.entries(analysis.recommendations.characterProfile).map(([key, value]) => {
+                            if (!value) return null;
+                            return (
+                              <div key={key} className="truncate">
+                                <span className="text-gray-500">{key}:</span> {value}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Product Details */}
+                      <div className="bg-gray-800/80 rounded p-2 border border-gray-700">
+                        <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
+                          <span>👕</span> Product
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          {analysis?.recommendations?.productDetails && Object.entries(analysis.recommendations.productDetails).map(([key, value]) => {
+                            if (!value) return null;
+                            return (
+                              <div key={key} className="truncate">
+                                <span className="text-gray-500">{key}:</span> {value}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

@@ -58,10 +58,16 @@ export default function RecommendationSelector({
   }, [analysis, currentValues]);
 
   // Get available options for manual selection
+  // existingOptions structure: { hairstyle: [{value, label, ...}, ...], lighting: [...], ... }
   const getOptionsForCategory = (category) => {
-    return existingOptions?.[category] ? 
-      (Array.isArray(existingOptions[category]) ? existingOptions[category] : [existingOptions[category]]) 
-      : [];
+    const catOptions = existingOptions?.[category];
+    if (!catOptions) return [];
+    // Handle both array and single object
+    if (Array.isArray(catOptions)) {
+      return catOptions.map(opt => opt.value || opt);
+    } else {
+      return [catOptions.value || catOptions];
+    }
   };
 
   // Update decision for a category
@@ -103,7 +109,36 @@ export default function RecommendationSelector({
     onApplyRecommendations(buildFinalRecommendations());
   };
 
+  // Apply All: Set all to 'apply' action
+  const handleApplyAll = () => {
+    const newDecisions = {};
+    Object.keys(recommendations).forEach(cat => {
+      newDecisions[cat] = { ...decisions[cat], action: 'apply' };
+    });
+    setDecisions(newDecisions);
+  };
+
+  // Save All: Mark all for saving
+  const handleSaveAll = () => {
+    const newDecisions = {};
+    Object.keys(recommendations).forEach(cat => {
+      newDecisions[cat] = { ...decisions[cat], saveAsOption: true };
+    });
+    setDecisions(newDecisions);
+  };
+
+  // Uncheck all saves
+  const handleUnsaveAll = () => {
+    const newDecisions = {};
+    Object.keys(recommendations).forEach(cat => {
+      newDecisions[cat] = { ...decisions[cat], saveAsOption: false };
+    });
+    setDecisions(newDecisions);
+  };
+
   const recommendationsCount = Object.keys(recommendations).length;
+  const appliedCount = Object.values(decisions).filter(d => d.action === 'apply').length;
+  const saveCount = Object.values(decisions).filter(d => d.saveAsOption).length;
 
   return (
     <div className="space-y-4">
@@ -114,8 +149,31 @@ export default function RecommendationSelector({
           AI Recommendations
         </h3>
         <p className="text-xs text-gray-400 mt-1">
-          {recommendationsCount} suggestions detected. Choose how to apply each one.
+          {recommendationsCount} suggestions detected. Applied: {appliedCount} | To save: {saveCount}
         </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <button
+            onClick={handleApplyAll}
+            className="text-xs px-2 py-1 bg-purple-600/50 hover:bg-purple-600 text-purple-200 rounded border border-purple-500/50 transition-colors"
+            title="Set all to Apply"
+          >
+            ✓ Apply All
+          </button>
+          <button
+            onClick={handleSaveAll}
+            className="text-xs px-2 py-1 bg-green-600/50 hover:bg-green-600 text-green-200 rounded border border-green-500/50 transition-colors"
+            title="Mark all for saving"
+          >
+            💾 Save All
+          </button>
+          <button
+            onClick={handleUnsaveAll}
+            className="text-xs px-2 py-1 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded border border-gray-600/50 transition-colors"
+            title="Uncheck all saves"
+          >
+            Clear Saves
+          </button>
+        </div>
       </div>
 
       {/* Recommendations List */}
@@ -149,19 +207,19 @@ export default function RecommendationSelector({
                     </div>
 
                     {/* Collapsible Why Section */}
-                    {rec.reason && (
+                    {rec.reason && rec.reason.trim().length > 0 && (
                       <button
                         onClick={() => updateDecision(category, { expandWhy: !decision.expandWhy })}
-                        className="mt-2 text-xs text-gray-500 hover:text-gray-400 flex items-center gap-1 transition-colors"
+                        className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors font-medium"
                       >
                         {decision.expandWhy ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                        Why?
+                        Why this recommendation?
                       </button>
                     )}
 
-                    {decision.expandWhy && rec.reason && (
-                      <div className="mt-2 p-2 bg-gray-900/50 rounded border border-gray-700/50">
-                        <p className="text-xs text-gray-300 leading-relaxed">
+                    {decision.expandWhy && rec.reason && rec.reason.trim().length > 0 && (
+                      <div className="mt-2 p-3 bg-blue-900/20 rounded border border-blue-700/30">
+                        <p className="text-xs text-blue-200 leading-relaxed whitespace-pre-wrap">
                           {rec.reason}
                         </p>
                       </div>
