@@ -2,6 +2,7 @@ import GrokServiceV2 from '../services/browser/grokServiceV2.js';
 import ZAIChatService from '../services/browser/zaiChatService.js';
 import ZAIImageService from '../services/browser/zaiImageService.js';
 import GoogleFlowService from '../services/browser/googleFlowService.js';
+import ChatGPTService from '../services/browser/chatgptService.js';
 import { runImageGeneration } from '../services/imageGenerationService.js'; // 💫 Image Generation Service
 import { runVideoGeneration } from '../services/videoGenerationServiceV2.js'; // 💫 Video Generation Service (V2 with image upload support)
 import VideoGeneration from '../models/VideoGeneration.js';
@@ -931,6 +932,10 @@ export async function analyzeWithBrowser(req, res) {
       case 'grok':
       case 'grok.com':
         browserService = new GrokServiceV2({ headless: false });
+        break;
+      case 'chatgpt':
+      case 'chatgpt-browser':
+        browserService = new ChatGPTService({ headless: false });
         break;
       case 'zai':
       case 'chat.z.ai':
