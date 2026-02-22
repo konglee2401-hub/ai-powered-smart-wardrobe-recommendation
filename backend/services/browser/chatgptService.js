@@ -620,9 +620,36 @@ class ChatGPTService extends BrowserService {
 
       // Step 7: Wait for response
       console.log('📍 STEP 7: Waiting for ChatGPT response...');
-      const response = await this.waitForResponse(60000);
+      console.log('⏳ This may take up to 60 seconds...\n');
       
-      console.log(`   ✅ Response received (${response.length} characters)`);
+      let response = '';
+      try {
+        response = await this.waitForResponse(60000);
+        console.log(`   ✅ Response received (${response.length} characters)`);
+      } catch (waitError) {
+        console.error('❌ Response wait failed:', waitError.message);
+        console.error('⚠️  Attempting fallback extraction...');
+        
+        // Fallback: Try direct extraction without waiting
+        try {
+          response = await this.page.evaluate(() => {
+            const assistant = document.querySelector('[data-message-author-role="assistant"]');
+            if (assistant) {
+              return assistant.innerText || assistant.textContent || '';
+            }
+            return '';
+          });
+          console.log(`   ⚠️  Fallback extracted: ${response.length} characters`);
+        } catch (fallbackError) {
+          console.error('❌ Fallback extraction also failed:', fallbackError.message);
+          response = '';
+        }
+      }
+      
+      if (!response || response.length === 0) {
+        throw new Error('Failed to extract any response from ChatGPT');
+      }
+      
       console.log('='.repeat(80));
       console.log('✅ MULTI-IMAGE ANALYSIS COMPLETE\n');
 
@@ -647,11 +674,26 @@ class ChatGPTService extends BrowserService {
    */
   async waitForResponse(maxWait = 120000) {
     console.log('⏳ Waiting for ChatGPT response...');
+    console.log(`⏱️  Timeout: ${maxWait}ms = ${Math.round(maxWait / 1000)}s`);
     
     const startTime = Date.now();
     let lastProgressLog = Date.now();
     let stableCount = 0;
-    const stabileThreshold = 3; // 3 consecutive checks with stable content = done
+    const stabileThreshold = 3;
+    
+    // Check initial state
+    try {
+      const initialState = await this.page.evaluate(() => {
+        const messages = document.querySelectorAll('[role="article"]');
+        return {
+          messageCount: messages.length,
+          lastMessageLength: messages.length > 0 ? (messages[messages.length - 1].innerText || '').length : 0
+        };
+      });
+      console.log(`📊 Initial state: ${initialState.messageCount} messages, last message: ${initialState.lastMessageLength}ch`);
+    } catch (e) {
+      console.warn(`⚠️  Could not get initial state: ${e.message}`);
+    }
     
     while (Date.now() - startTime < maxWait) {
       // Check page state
@@ -793,6 +835,40 @@ class ChatGPTService extends BrowserService {
     // Log extraction details in Node context
     console.log(`   📌 Method: ${response.method}`);
     console.log(`   📊 Length: ${response.length}ch`);
+    
+    if (response.length === 0) {
+      console.error('❌ CRITICAL: Response is EMPTY!');
+      console.error('   Extraction method:', response.method);
+      console.error('   This means page.evaluate() returned empty text');
+      
+      // Try to get page state for debugging
+      try {
+        const debugInfo = await this.page.evaluate(() => {
+          const assistant = document.querySelector('[data-message-author-role="assistant"]');
+          const markdown = document.querySelector('.markdown');
+          const paragraphs = Array.from(document.querySelectorAll('p'));
+          
+          return {
+            hasAssistantElement: !!assistant,
+            hasMarkdownElement: !!markdown,
+            paragraphCount: paragraphs.length,
+            bodyTextLength: (document.body.innerText || '').length,
+            firstParagraphText: paragraphs[0]?.innerText?.substring(0, 100) || 'N/A',
+            bodyText: (document.body.innerText || '').substring(0, 200)
+          };
+        });
+        
+        console.error('📋 Debug info from page:');
+        console.error('   Assistant element found:', debugInfo.hasAssistantElement);
+        console.error('   Markdown element found:', debugInfo.hasMarkdownElement);
+        console.error('   Paragraphs found:', debugInfo.paragraphCount);
+        console.error('   Body text length:', debugInfo.bodyTextLength);
+        console.error('   First 100ch of body:', debugInfo.bodyText);
+      } catch (debugErr) {
+        console.error('   Could not get debug info:', debugErr.message);
+      }
+    }
+    
     console.log(`✅ Response extracted: ${response.length} characters`);
     
     // Debug: Save screenshot if response seems incomplete
