@@ -377,15 +377,13 @@ export default function ImageGenerationPage() {
         }
         
         // Restructure data for components
-        // Backend parseRecommendations returns: {characterProfile, productDetails, recommendations: {...}, analysis}
-        const parsed = analysisResponse.data.recommendations || {};
-        
+        // Backend returns data.recommendations = {scene: {...}, lighting: {...}, ...}
         const analysisWithParsing = {
           analysis: analysisText,
-          recommendations: parsed.recommendations || {}, // Actual recommendations (scene, lighting, etc)
-          characterProfile: parsed.characterProfile || characterProfile,
-          productDetails: parsed.productDetails || productDetails,
-          analysisScore: parsed.analysis || {},
+          recommendations: analysisResponse.data.recommendations || {},
+          characterProfile: characterProfile,
+          productDetails: productDetails,
+          analysisScore: {},
         };
         
         setAnalysis(analysisWithParsing);
