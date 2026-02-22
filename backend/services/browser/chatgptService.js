@@ -707,14 +707,13 @@ class ChatGPTService extends BrowserService {
     console.log(`Response wait completed after ${totalSeconds}s`);
     
     // Extract response text using marker-based method (like Grok service)
+    console.log('📍 STEP 11: Extracting response...');
+    
     const response = await this.page.evaluate(() => {
-      console.log('🔍 Starting response extraction (marker-based)...');
-      
       let fullText = '';
       let extractMethod = 'none';
       
       // ===== METHOD 1: Get all text and find RESPONSE by markers =====
-      console.log('📌 Method 1: Searching for content markers...');
       const allText = document.body.innerText || document.body.textContent || '';
       
       // Key difference: Response has *** CHARACTER PROFILE START ***
@@ -726,15 +725,11 @@ class ChatGPTService extends BrowserService {
         // Found response marker - extract from there
         fullText = allText.substring(charProfileIndex);
         extractMethod = 'marker-body-split';
-        console.log(`   ✅ Found response by CHARACTER PROFILE START marker`);
-        console.log(`   Length from marker: ${fullText.length}ch`);
       }
       
       // ===== METHOD 2: Find all message elements and check for markers =====
       if (fullText.length < 300) {
-        console.log('📌 Method 2: Checking message elements for markers...');
         const messages = Array.from(document.querySelectorAll('[role="article"], [class*="message"], div[data-role="assistant"]'));
-        console.log(`   Found ${messages.length} message elements`);
         
         for (let i = messages.length - 1; i >= 0; i--) {
           const msg = messages[i];
@@ -744,7 +739,6 @@ class ChatGPTService extends BrowserService {
           if (text.includes('*** CHARACTER PROFILE START ***') && !text.includes('⛔ CRITICAL:')) {
             fullText = text;
             extractMethod = `message-with-marker[${i}]`;
-            console.log(`   ✅ Found response in message element ${i}`);
             break;
           }
         }
@@ -753,8 +747,6 @@ class ChatGPTService extends BrowserService {
       // ===== METHOD 3: Extract structured sections from response =====
       let sections = [];
       if (fullText.length > 300) {
-        console.log('📌 Method 3: Extracting structured sections...');
-        
         const charMatch = fullText.match(/\*\*\*\s*CHARACTER\s+PROFILE\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*CHARACTER\s+PROFILE\s+END\s*\*\*\*/i);
         const prodMatch = fullText.match(/\*\*\*\s*PRODUCT\s+DETAILS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*PRODUCT\s+DETAILS\s+END\s*\*\*\*/i);
         const analysisMatch = fullText.match(/\*\*\*\s*ANALYSIS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*ANALYSIS\s+END\s*\*\*\*/i);
@@ -766,27 +758,24 @@ class ChatGPTService extends BrowserService {
         if (analysisMatch) sections.push(analysisMatch[0]);
         if (recMatch) sections.push(recMatch[0]);
         
-        console.log(`   Found ${sections.length} structured sections (CHAR, PROD, ANALYSIS, REC)`);
-        
         // If we found sections, only return those (clean response)
         if (sections.length >= 2) {
           fullText = sections.join('\n\n');
           extractMethod = `structured-sections[${sections.length}]`;
-          console.log(`   ✅ Reconstructed response from ${sections.length} sections`);
         }
       }
       
-      console.log(`📊 Extract method: ${extractMethod}`);
-      console.log(`📊 Final length: ${fullText.length}ch`);
-      
-      if (fullText.length > 0) {
-        console.log(`📄 Preview (first 100ch): ${fullText.substring(0, 100)}...`);
-      }
-      
-      return fullText.trim();
+      return {
+        text: fullText.trim(),
+        method: extractMethod,
+        length: fullText.trim().length
+      };
     });
     
-    console.log(`📥 Response extracted: ${response.length} characters`);
+    // Log extraction details in Node context
+    console.log(`   📌 Method: ${response.method}`);
+    console.log(`   📊 Length: ${response.length}ch`);
+    console.log(`✅ Response extracted: ${response.length} characters`);
     
     // Debug: Save screenshot if response seems incomplete
     if (response.length < 200) {
@@ -810,7 +799,7 @@ class ChatGPTService extends BrowserService {
     }
     
     // Verify response is valid (has analysis sections)
-    if (response.length > 100 && response.includes('*** CHARACTER PROFILE START ***')) {
+    if (response.length > 100 && response.text.includes('*** CHARACTER PROFILE START ***')) {
       console.log('✅ Response validation: OK - contains expected structure');
     } else if (response.length > 0) {
       console.log('⚠️  Response validation: Incomplete - missing analysis structure');
@@ -818,7 +807,7 @@ class ChatGPTService extends BrowserService {
     
     console.log('='.repeat(80) + '\n');
     
-    return response;
+    return response.text;
   }
 }
 
