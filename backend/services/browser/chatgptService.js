@@ -706,97 +706,82 @@ class ChatGPTService extends BrowserService {
     const totalSeconds = Math.round((Date.now() - startTime) / 1000);
     console.log(`Response wait completed after ${totalSeconds}s`);
     
-    // Extract response text with multiple fallback methods
+    // Extract response text using marker-based method (like Grok service)
     const response = await this.page.evaluate(() => {
-      console.log('🔍 DEBUG: Starting response extraction...');
+      console.log('🔍 Starting response extraction (marker-based)...');
       
       let fullText = '';
-      let method = 'none';
+      let extractMethod = 'none';
       
-      // ===== METHOD 1: Try [role="article"] (ChatGPT's message bubble) =====
-      console.log('📌 Method 1: Looking for [role="article"]...');
-      const articles = document.querySelectorAll('[role="article"]');
-      console.log(`   Found ${articles.length} articles`);
+      // ===== METHOD 1: Get all text and find RESPONSE by markers =====
+      console.log('📌 Method 1: Searching for content markers...');
+      const allText = document.body.innerText || document.body.textContent || '';
       
-      if (articles.length >= 2) {
-        const lastArticle = articles[articles.length - 1];
-        fullText = lastArticle.innerText || lastArticle.textContent || '';
-        if (fullText.length > 100) {
-          method = `article[${articles.length}]`;
-          console.log(`   ✅ Got ${fullText.length}ch from last article`);
-        }
+      // Key difference: Response has *** CHARACTER PROFILE START ***
+      // Prompt has ⛔ CRITICAL: DO NOT REPEAT...
+      // So find the LAST occurrence of CHARACTER PROFILE START = response
+      const charProfileIndex = allText.lastIndexOf('*** CHARACTER PROFILE START ***');
+      
+      if (charProfileIndex > 0) {
+        // Found response marker - extract from there
+        fullText = allText.substring(charProfileIndex);
+        extractMethod = 'marker-body-split';
+        console.log(`   ✅ Found response by CHARACTER PROFILE START marker`);
+        console.log(`   Length from marker: ${fullText.length}ch`);
       }
       
-      // ===== METHOD 2: Try message container divs =====
-      if (fullText.length < 100) {
-        console.log('📌 Method 2: Looking for message containers...');
-        const messageContainers = document.querySelectorAll('[class*="message"], [class*="response"], [class*="message-bubble"]');
-        console.log(`   Found ${messageContainers.length} containers`);
+      // ===== METHOD 2: Find all message elements and check for markers =====
+      if (fullText.length < 300) {
+        console.log('📌 Method 2: Checking message elements for markers...');
+        const messages = Array.from(document.querySelectorAll('[role="article"], [class*="message"], div[data-role="assistant"]'));
+        console.log(`   Found ${messages.length} message elements`);
         
-        if (messageContainers.length > 0) {
-          const lastContainer = messageContainers[messageContainers.length - 1];
-          fullText = lastContainer.innerText || lastContainer.textContent || '';
-          if (fullText.length > 100) {
-            method = `message-container`;
-            console.log(`   ✅ Got ${fullText.length}ch from message container`);
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          const text = msg.innerText || msg.textContent || '';
+          
+          // Check if this element contains response marker
+          if (text.includes('*** CHARACTER PROFILE START ***') && !text.includes('⛔ CRITICAL:')) {
+            fullText = text;
+            extractMethod = `message-with-marker[${i}]`;
+            console.log(`   ✅ Found response in message element ${i}`);
+            break;
           }
         }
       }
       
-      // ===== METHOD 3: Try finding by content markers =====
-      if (fullText.length < 100) {
-        console.log('📌 Method 3: Looking for content by markers...');
-        const allText = document.body.innerText || document.body.textContent || '';
+      // ===== METHOD 3: Extract structured sections from response =====
+      let sections = [];
+      if (fullText.length > 300) {
+        console.log('📌 Method 3: Extracting structured sections...');
         
-        // Split by "You:" or "Assistant:" to get response part
-        if (allText.includes('Assistant:') || allText.includes('ChatGPT:')) {
-          const parts = allText.split(/(?:Assistant:|ChatGPT:)/gi);
-          if (parts.length > 1) {
-            fullText = parts[parts.length - 1].trim();
-            method = 'body-split';
-            console.log(`   ✅ Got ${fullText.length}ch from body split`);
-          }
+        const charMatch = fullText.match(/\*\*\*\s*CHARACTER\s+PROFILE\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*CHARACTER\s+PROFILE\s+END\s*\*\*\*/i);
+        const prodMatch = fullText.match(/\*\*\*\s*PRODUCT\s+DETAILS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*PRODUCT\s+DETAILS\s+END\s*\*\*\*/i);
+        const analysisMatch = fullText.match(/\*\*\*\s*ANALYSIS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*ANALYSIS\s+END\s*\*\*\*/i);
+        const recMatch = fullText.match(/\*\*\*\s*RECOMMENDATIONS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*RECOMMENDATIONS\s+END\s*\*\*\*/i);
+        
+        // Build sections array
+        if (charMatch) sections.push(charMatch[0]);
+        if (prodMatch) sections.push(prodMatch[0]);
+        if (analysisMatch) sections.push(analysisMatch[0]);
+        if (recMatch) sections.push(recMatch[0]);
+        
+        console.log(`   Found ${sections.length} structured sections (CHAR, PROD, ANALYSIS, REC)`);
+        
+        // If we found sections, only return those (clean response)
+        if (sections.length >= 2) {
+          fullText = sections.join('\n\n');
+          extractMethod = `structured-sections[${sections.length}]`;
+          console.log(`   ✅ Reconstructed response from ${sections.length} sections`);
         }
       }
       
-      // ===== METHOD 4: Get all divs and find largest text content =====
-      if (fullText.length < 100) {
-        console.log('📌 Method 4: Finding largest text element...');
-        const allDivs = document.querySelectorAll('div, section, article');
-        let maxText = '';
-        let maxDiv = null;
-        
-        for (const div of allDivs) {
-          const text = div.innerText || div.textContent || '';
-          // Skip if too small or if it's a control/button
-          if (text.length > maxText.length && text.length > 200 && !div.querySelector('button, input')) {
-            maxText = text;
-            maxDiv = div;
-          }
-        }
-        
-        if (maxText.length > 100) {
-          fullText = maxText;
-          method = 'largest-text';
-          console.log(`   ✅ Got ${fullText.length}ch from largest element`);
-        }
-      }
+      console.log(`📊 Extract method: ${extractMethod}`);
+      console.log(`📊 Final length: ${fullText.length}ch`);
       
-      // ===== METHOD 5: Get all visible text from main content area =====
-      if (fullText.length < 100) {
-        console.log('📌 Method 5: Extracting from main content area...');
-        const main = document.querySelector('main, [role="main"], .main-content');
-        if (main) {
-          fullText = main.innerText || main.textContent || '';
-          if (fullText.length > 100) {
-            method = 'main-element';
-            console.log(`   ✅ Got ${fullText.length}ch from main element`);
-          }
-        }
+      if (fullText.length > 0) {
+        console.log(`📄 Preview (first 100ch): ${fullText.substring(0, 100)}...`);
       }
-      
-      console.log(`📊 Final: Method=${method}, Length=${fullText.length}ch`);
-      console.log(`📄 Preview: ${fullText.substring(0, 100)}...`);
       
       return fullText.trim();
     });
@@ -804,17 +789,34 @@ class ChatGPTService extends BrowserService {
     console.log(`📥 Response extracted: ${response.length} characters`);
     
     // Debug: Save screenshot if response seems incomplete
-    if (response.length < 100) {
-      console.log('⚠️  WARNING: Response seems incomplete, saving screenshot for debugging...');
+    if (response.length < 200) {
+      console.log('⚠️  WARNING: Response seems incomplete, saving debug files...');
       try {
         const timestamp = Date.now();
+        
+        // Save screenshot
         const screenshotPath = path.join(process.cwd(), 'temp', `chatgpt-response-debug-${timestamp}.png`);
         await this.screenshot({ path: screenshotPath });
         console.log(`📸 Screenshot saved: ${screenshotPath}`);
+        
+        // Save page HTML for debugging
+        const html = await this.page.content();
+        const htmlPath = path.join(process.cwd(), 'temp', `chatgpt-response-debug-${timestamp}.html`);
+        fs.writeFileSync(htmlPath, html);
+        console.log(`📄 Page HTML saved: ${htmlPath}`);
       } catch (e) {
-        console.log(`❌ Could not save screenshot: ${e.message}`);
+        console.log(`❌ Could not save debug files: ${e.message}`);
       }
     }
+    
+    // Verify response is valid (has analysis sections)
+    if (response.length > 100 && response.includes('*** CHARACTER PROFILE START ***')) {
+      console.log('✅ Response validation: OK - contains expected structure');
+    } else if (response.length > 0) {
+      console.log('⚠️  Response validation: Incomplete - missing analysis structure');
+    }
+    
+    console.log('='.repeat(80) + '\n');
     
     return response;
   }
