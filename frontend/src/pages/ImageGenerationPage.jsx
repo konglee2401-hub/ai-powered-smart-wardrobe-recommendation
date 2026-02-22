@@ -247,28 +247,40 @@ export default function ImageGenerationPage() {
   };
 
   const handleSaveNewOption = async (category, value) => {
-    if (!value) return;
+    if (!value || !category) {
+      console.warn('❌ Cannot save option - missing category or value', { category, value });
+      return;
+    }
     
+    console.log(`💾 Saving new option: ${category} = ${value}`);
     setIsSaving(true);
     try {
-      await aiOptionsAPI.createOption(
+      console.log(`   📤 Sending POST request...`);
+      const result = await aiOptionsAPI.createOption(
         category,
         value,
         value,
         `AI recommended ${category}`,
         {}
       );
+      console.log(`   ✅ Option saved successfully:`, result);
 
-      // Mark category as saved - this will hide the save button for this category in NewOptionsDetected
+      // Mark category as saved
       if (!newOptions.includes(category)) {
+        console.log(`   📌 Marking category as saved: ${category}`);
         setNewOptions(prev => [...prev, category]);
       }
 
-      // Refresh options from database so newly saved options are in the list
+      // Refresh options from database
+      console.log(`   🔄 Refreshing options from database...`);
       const options = await aiOptionsAPI.getAllOptions();
+      console.log(`   ✅ Options refreshed:`, options);
       setPromptOptions(options);
+      
     } catch (error) {
-      console.error('Save failed:', error);
+      console.error(`❌ Failed to save option "${value}" in "${category}":`, error);
+      console.error('   Error details:', error.response?.data || error.message);
+      alert(`Failed to save option: ${error.response?.data?.message || error.message}`);
     } finally {
       setIsSaving(false);
     }
