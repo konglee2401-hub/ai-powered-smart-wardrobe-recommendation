@@ -418,6 +418,176 @@ class ChatGPTService extends BrowserService {
       throw error;
     }
   }
+
+  /**
+   * Upload multiple images and analyze
+   */
+  async analyzeMultipleImages(imagePaths, prompt) {
+    console.log('\n📊 ChatGPT BROWSER MULTI-IMAGE ANALYSIS');
+    console.log('='.repeat(80));
+    console.log(`Images: ${imagePaths.map(p => path.basename(p)).join(', ')}`);
+    console.log(`Prompt: ${prompt.substring(0, 80)}${prompt.length > 80 ? '...' : ''}`);
+    console.log('');
+
+    try {
+      // Verify all image files exist
+      for (const imagePath of imagePaths) {
+        if (!fs.existsSync(imagePath)) {
+          throw new Error(`Image file not found: ${imagePath}`);
+        }
+      }
+
+      // Step 1: Look for upload button
+      console.log('📍 STEP 1: Looking for attachment button...');
+      
+      const uploadSelectors = [
+        'button[aria-label*="attach"], button[aria-label*="Attach"]',
+        'button[aria-label*="image"], button[aria-label*="Image"]',
+        'input[type="file"]',
+        '[data-testid="attach-button"]'
+      ];
+
+      let uploadButton = null;
+
+      for (const selector of uploadSelectors) {
+        try {
+          uploadButton = await this.page.$(selector);
+          if (uploadButton) {
+            console.log(`   ✅ Found: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+
+      // Step 2: Upload all images
+      console.log('📍 STEP 2: Uploading images...');
+      for (const imagePath of imagePaths) {
+        try {
+          // Click upload button each time
+          if (uploadButton) {
+            await uploadButton.click();
+            await this.page.waitForTimeout(500);
+          }
+          
+          // Upload the file
+          await this.uploadFile('input[type="file"]', imagePath);
+          console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
+          
+          // Wait for image to process
+          await this.page.waitForTimeout(1500);
+        } catch (e) {
+          console.log(`   ❌ Failed to upload ${path.basename(imagePath)}: ${e.message}`);
+          throw e;
+        }
+      }
+
+      // Step 3: Handle login modal if appears
+      console.log('📍 STEP 3: Handling login modal...');
+      const modalClosed = await this.closeLoginModal();
+      if (!modalClosed) {
+        console.log('   ⚠️  Could not close modal, continuing anyway...');
+      }
+
+      // Step 4: Look for text input
+      console.log('📍 STEP 4: Looking for message input...');
+      
+      const textInputSelectors = [
+        'textarea[placeholder*="message"]',
+        'textarea[placeholder*="Ask"]',
+        'textarea[placeholder*="Message"]',
+        'textarea',
+        '[contenteditable="true"]'
+      ];
+
+      let textInputSelector = null;
+      
+      for (const selector of textInputSelectors) {
+        try {
+          const element = await this.page.waitForSelector(selector, {
+            timeout: 2000,
+            state: 'visible'
+          });
+          
+          if (element) {
+            const isVisible = await this.page.evaluate((sel) => {
+              const el = document.querySelector(sel);
+              return !!(el && el.offsetParent !== null);
+            }, selector);
+            
+            if (isVisible) {
+              textInputSelector = selector;
+              console.log(`   ✅ Found: ${selector}`);
+              break;
+            }
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+
+      if (!textInputSelector) {
+        throw new Error('Could not find message input');
+      }
+
+      // Step 5: Type prompt
+      console.log('📍 STEP 5: Entering prompt...');
+      await this.page.click(textInputSelector);
+      await this.page.waitForTimeout(500);
+      
+      // Clear and type
+      await this.page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) el.textContent = '';
+      }, textInputSelector);
+      
+      await this.page.waitForTimeout(300);
+      
+      // Type prompt character by character
+      for (const char of prompt) {
+        await this.page.keyboard.type(char);
+        await this.page.waitForTimeout(10);
+      }
+      
+      console.log(`   ✅ Prompt entered (${prompt.length} characters)`);
+
+      // Step 6: Send message
+      console.log('📍 STEP 6: Sending message...');
+      const enterKey = true;
+      if (enterKey) {
+        await this.page.keyboard.press('Enter');
+      } else {
+        const submitButton = await this.page.$('button[type="submit"], button[aria-label*="Send"], button[aria-label*="submit"]');
+        if (submitButton) {
+          await submitButton.click();
+        }
+      }
+      await this.page.waitForTimeout(2000);
+
+      // Step 7: Wait for response
+      console.log('📍 STEP 7: Waiting for ChatGPT response...');
+      const response = await this.waitForResponse(60000);
+      
+      console.log(`   ✅ Response received (${response.length} characters)`);
+      console.log('='.repeat(80));
+      console.log('✅ MULTI-IMAGE ANALYSIS COMPLETE\n');
+
+      return response;
+
+    } catch (error) {
+      console.error('❌ ChatGPT multi-image analysis failed:', error.message);
+      
+      // Save debug info on error
+      try {
+        await this.saveErrorDebugInfo('chatgpt');
+      } catch (e) {
+        console.log('⚠️  Could not save error debug info');
+      }
+      
+      throw error;
+    }
+  }
 }
 
 export default ChatGPTService;
