@@ -377,13 +377,32 @@ export default function ImageGenerationPage() {
         }
         
         // Restructure data for components
-        // Backend returns data.recommendations = {scene: {...}, lighting: {...}, ...}
+        // Backend parseRecommendations returns FLAT structure:
+        // { characterProfile, productDetails, scene, lighting, mood, cameraAngle, ..., analysis }
+        const backendData = analysisResponse.data.recommendations || {};
+        
+        // Extract recommendations (skip characterProfile, productDetails, analysis)
+        const recommendationKeys = ['scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'];
+        const recommendations = {};
+        recommendationKeys.forEach(key => {
+          if (backendData[key]) {
+            recommendations[key] = backendData[key];
+          }
+        });
+        
+        // Also capture any additional recommendation keys not in the list
+        Object.keys(backendData).forEach(key => {
+          if (!['characterProfile', 'productDetails', 'analysis'].includes(key) && !recommendationKeys.includes(key)) {
+            recommendations[key] = backendData[key];
+          }
+        });
+        
         const analysisWithParsing = {
           analysis: analysisText,
-          recommendations: analysisResponse.data.recommendations || {},
-          characterProfile: characterProfile,
-          productDetails: productDetails,
-          analysisScore: {},
+          recommendations: recommendations, // All recommendation fields
+          characterProfile: backendData.characterProfile || characterProfile,
+          productDetails: backendData.productDetails || productDetails,
+          analysisScore: backendData.analysis || {},
         };
         
         setAnalysis(analysisWithParsing);
