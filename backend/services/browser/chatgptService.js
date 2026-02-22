@@ -706,20 +706,115 @@ class ChatGPTService extends BrowserService {
     const totalSeconds = Math.round((Date.now() - startTime) / 1000);
     console.log(`Response wait completed after ${totalSeconds}s`);
     
-    // Extract response text
+    // Extract response text with multiple fallback methods
     const response = await this.page.evaluate(() => {
-      // Get all messages
-      const messages = document.querySelectorAll('[role=\"article\"]');
-      if (messages.length < 2) {
-        return 'No response found';
+      console.log('🔍 DEBUG: Starting response extraction...');
+      
+      let fullText = '';
+      let method = 'none';
+      
+      // ===== METHOD 1: Try [role="article"] (ChatGPT's message bubble) =====
+      console.log('📌 Method 1: Looking for [role="article"]...');
+      const articles = document.querySelectorAll('[role="article"]');
+      console.log(`   Found ${articles.length} articles`);
+      
+      if (articles.length >= 2) {
+        const lastArticle = articles[articles.length - 1];
+        fullText = lastArticle.innerText || lastArticle.textContent || '';
+        if (fullText.length > 100) {
+          method = `article[${articles.length}]`;
+          console.log(`   ✅ Got ${fullText.length}ch from last article`);
+        }
       }
       
-      // Get the last message (response)
-      const lastMessage = messages[messages.length - 1];
-      const text = lastMessage.innerText || lastMessage.textContent || '';
+      // ===== METHOD 2: Try message container divs =====
+      if (fullText.length < 100) {
+        console.log('📌 Method 2: Looking for message containers...');
+        const messageContainers = document.querySelectorAll('[class*="message"], [class*="response"], [class*="message-bubble"]');
+        console.log(`   Found ${messageContainers.length} containers`);
+        
+        if (messageContainers.length > 0) {
+          const lastContainer = messageContainers[messageContainers.length - 1];
+          fullText = lastContainer.innerText || lastContainer.textContent || '';
+          if (fullText.length > 100) {
+            method = `message-container`;
+            console.log(`   ✅ Got ${fullText.length}ch from message container`);
+          }
+        }
+      }
       
-      return text.trim();
+      // ===== METHOD 3: Try finding by content markers =====
+      if (fullText.length < 100) {
+        console.log('📌 Method 3: Looking for content by markers...');
+        const allText = document.body.innerText || document.body.textContent || '';
+        
+        // Split by "You:" or "Assistant:" to get response part
+        if (allText.includes('Assistant:') || allText.includes('ChatGPT:')) {
+          const parts = allText.split(/(?:Assistant:|ChatGPT:)/gi);
+          if (parts.length > 1) {
+            fullText = parts[parts.length - 1].trim();
+            method = 'body-split';
+            console.log(`   ✅ Got ${fullText.length}ch from body split`);
+          }
+        }
+      }
+      
+      // ===== METHOD 4: Get all divs and find largest text content =====
+      if (fullText.length < 100) {
+        console.log('📌 Method 4: Finding largest text element...');
+        const allDivs = document.querySelectorAll('div, section, article');
+        let maxText = '';
+        let maxDiv = null;
+        
+        for (const div of allDivs) {
+          const text = div.innerText || div.textContent || '';
+          // Skip if too small or if it's a control/button
+          if (text.length > maxText.length && text.length > 200 && !div.querySelector('button, input')) {
+            maxText = text;
+            maxDiv = div;
+          }
+        }
+        
+        if (maxText.length > 100) {
+          fullText = maxText;
+          method = 'largest-text';
+          console.log(`   ✅ Got ${fullText.length}ch from largest element`);
+        }
+      }
+      
+      // ===== METHOD 5: Get all visible text from main content area =====
+      if (fullText.length < 100) {
+        console.log('📌 Method 5: Extracting from main content area...');
+        const main = document.querySelector('main, [role="main"], .main-content');
+        if (main) {
+          fullText = main.innerText || main.textContent || '';
+          if (fullText.length > 100) {
+            method = 'main-element';
+            console.log(`   ✅ Got ${fullText.length}ch from main element`);
+          }
+        }
+      }
+      
+      console.log(`📊 Final: Method=${method}, Length=${fullText.length}ch`);
+      console.log(`📄 Preview: ${fullText.substring(0, 100)}...`);
+      
+      return fullText.trim();
     });
+    
+    console.log(`📥 Response extracted: ${response.length} characters`);
+    
+    // Debug: Save screenshot if response seems incomplete
+    if (response.length < 100) {
+      console.log('⚠️  WARNING: Response seems incomplete, saving screenshot for debugging...');
+      try {
+        const timestamp = Date.now();
+        const screenshotPath = path.join(process.cwd(), 'temp', `chatgpt-response-debug-${timestamp}.png`);
+        await this.screenshot({ path: screenshotPath });
+        console.log(`📸 Screenshot saved: ${screenshotPath}`);
+      } catch (e) {
+        console.log(`❌ Could not save screenshot: ${e.message}`);
+      }
+    }
     
     return response;
   }
