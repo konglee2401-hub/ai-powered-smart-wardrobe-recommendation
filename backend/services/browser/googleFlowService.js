@@ -21,6 +21,7 @@ class GoogleFlowService extends BrowserService {
     });
     
     this.baseUrl = 'https://labs.google/fx/vi/tools/flow';
+    this.projectUrl = 'https://labs.google/fx/vi/tools/flow/project/3ba9e02e-0a33-4cf2-9d55-4c396941d7b7';
     this.chromeProfile = options.chromeProfile; // e.g., 'Cong' for modluffy90@gmail.com
   }
 
@@ -100,12 +101,87 @@ class GoogleFlowService extends BrowserService {
       console.log('✅ Already logged in to Google!\n');
     }
     
-    // Navigate to editor/generator interface by clicking "Tạo bằng Flow" (Create with Flow)
-    console.log('📍 Navigating to generator interface...');
-    const navigatedToEditor = await this._navigateToEditorInterface();
+    // Navigate to project directly or create new project
+    console.log('📍 Navigating to project...');
     
-    if (!navigatedToEditor) {
-      console.warn('⚠️  Could not navigate to editor interface');
+    // First, try to navigate to the project URL directly
+    try {
+      console.log(`🔗 Opening project: ${this.projectUrl}`);
+      await this.goto(this.projectUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      
+      // Check if we're on the project page
+      const onProjectPage = await this.page.evaluate(() => {
+        // Look for project interface elements (text input, buttons, etc.)
+        return document.querySelector('textarea') !== null ||
+               document.querySelector('[contenteditable="true"]') !== null ||
+               document.querySelector('input[type="text"]') !== null ||
+               document.body.innerText.includes('Tạo') || 
+               document.body.innerText.includes('Create');
+      });
+      
+      if (onProjectPage) {
+        console.log('✅ Successfully navigated to project!');
+      } else {
+        throw new Error('Project page did not load correctly');
+      }
+    } catch (projectError) {
+      console.warn(`⚠️  Could not navigate to project directly: ${projectError.message}`);
+      console.log('📍 Attempting to create new project from landing page...');
+      
+      // Go back to landing page and click "Dự án mới" (New Project)
+      await this.goto(this.baseUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      await this.page.waitForTimeout(2000);
+      
+      // Click "Dự án mới" button
+      const clickedNewProject = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('dự án mới') || 
+              text.includes('new project') ||
+              text.includes('create project')) {
+            btn.scrollIntoView({ block: 'center' });
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      
+      if (!clickedNewProject) {
+        console.warn('⚠️  Could not find "Dự án mới" button, looking for alternative...');
+        
+        // Try clicking anything that looks like a create button
+        await this.page.evaluate(() => {
+          const buttons = document.querySelectorAll('button, [role="button"]');
+          for (const btn of buttons) {
+            if (btn.textContent.includes('+') || 
+                btn.textContent.toLowerCase().includes('create') ||
+                btn.textContent.toLowerCase().includes('new')) {
+              btn.click();
+              return true;
+            }
+          }
+        });
+      } else {
+        console.log('✅ Clicked "Dự án mới" button');
+      }
+      
+      // Wait for project page to load
+      await this.page.waitForTimeout(3000);
+      
+      // Verify we're on a project page
+      const onNewProjectPage = await this.page.evaluate(() => {
+        return document.querySelector('textarea') !== null ||
+               document.querySelector('[contenteditable="true"]') !== null ||
+               document.querySelector('input[type="text"]') !== null;
+      });
+      
+      if (!onNewProjectPage) {
+        console.warn('⚠️  Could not enter project interface');
+      } else {
+        console.log('✅ Successfully entered project interface');
+      }
     }
     
     console.log('✅ Google Flow initialized');
@@ -459,20 +535,48 @@ class GoogleFlowService extends BrowserService {
       if (createVideoButton) {
         console.log('✅ Clicked Create Video button');
         await this.page.waitForTimeout(2000);
+      } else {
+        console.warn('⚠️  Could not find Create Video button, attempting to find text input anyway');
       }
 
-      // Find text input
-      const textarea = await this.page.waitForSelector('textarea, [contenteditable="true"], input[type="text"]', { timeout: 10000 });
+      // Find text input with better handling (same as generateImage)
+      console.log('⌨️  Looking for text input...');
+      const textInputFound = await this.page.evaluate(() => {
+        // Try textarea
+        const textarea = document.querySelector('textarea');
+        if (textarea && textarea.offsetParent !== null) {
+          return { type: 'textarea', found: true };
+        }
+        
+        // Try contenteditable
+        const contentEditable = document.querySelector('[contenteditable="true"]');
+        if (contentEditable && contentEditable.offsetParent !== null) {
+          return { type: 'contenteditable', found: true };
+        }
+        
+        // Try text input
+        const textInput = document.querySelector('input[type="text"]');
+        if (textInput && textInput.offsetParent !== null) {
+          return { type: 'text-input', found: true };
+        }
+        
+        return { type: null, found: false };
+      });
+
+      if (!textInputFound.found) {
+        throw new Error(`Could not find text input (${textInputFound.type})`);
+      }
+
+      console.log(`⌨️  Found ${textInputFound.type}, typing prompt...`);
       
-      if (!textarea) {
-        throw new Error('Could not find text input');
-      }
-
-      // Type prompt
-      console.log('⌨️  Typing prompt...');
-      await textarea.click();
+      // Focus and type using page.type for more reliable input (same as generateImage)
+      const selector = textInputFound.type === 'textarea' ? 'textarea' :
+                      textInputFound.type === 'contenteditable' ? '[contenteditable="true"]' :
+                      'input[type="text"]';
+      
+      await this.page.focus(selector);
       await this.page.waitForTimeout(500);
-      await textarea.fill(prompt);
+      await this.page.type(selector, prompt, { delay: 10 }); // type with small delay
       await this.page.waitForTimeout(1000);
 
       // Submit by pressing Enter

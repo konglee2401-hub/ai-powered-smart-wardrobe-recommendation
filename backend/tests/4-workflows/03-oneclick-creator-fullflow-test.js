@@ -27,10 +27,10 @@ const TIMEOUT = 600000; // 10 minutes for full flow with video generation
 const TEST_CONFIG = {
   characterImage: 'test-images/anh-nhan-vat.jpeg',
   productImage: 'test-images/anh-san-pham.png',
-  quantity: 1,
+  quantity: 2,  // 2 images as per OneClick default
   useCase: 'change-clothes',
   productFocus: 'full-outfit',
-  imageProvider: 'grok', // Using Grok for image (Google API has quota issues)
+  imageProvider: 'google-flow',  // Google Flow for image generation
   videoProvider: 'google-flow', // Google Flow for video generation
   analysisProvider: 'chatgpt-browser', // ChatGPT for analysis
   settings: {
@@ -276,8 +276,9 @@ async function testStep3GenerateImage(analysisData, recommendedOptions) {
       `${API_BASE}/generate`,
       {
         prompt: imagePrompt,
-        imageCount: 1,
-        imageSize: '1024x1024'
+        imageCount: TEST_CONFIG.quantity,  // Use configured quantity
+        imageSize: '1024x1024',
+        imageProvider: TEST_CONFIG.imageProvider  // Specify provider
       },
       {
         timeout: TIMEOUT

@@ -207,7 +207,8 @@ export async function generateUnifiedEndpoint(req, res) {
       imageCount = 2,
       imageSize = '1024x1024',
       preferredProvider = null,
-      maxBudget = null
+      maxBudget = null,
+      imageProvider = null  // NEW: Support explicit image provider selection
     } = req.body;
 
     // Validate prompt
@@ -221,6 +222,9 @@ export async function generateUnifiedEndpoint(req, res) {
     console.log(`📝 Prompt: ${prompt.substring(0, 100)}...`);
     console.log(`🎨 Negative: ${negativePrompt || 'none'}`);
     console.log(`🖼️  Image count: ${imageCount}`);
+    if (imageProvider) {
+      console.log(`🎯 Image Provider: ${imageProvider}`);
+    }
 
     // ============================================================
     // IMAGE GENERATION
@@ -228,23 +232,110 @@ export async function generateUnifiedEndpoint(req, res) {
 
     console.log('\n🎨 Generating images...');
 
-    const generationResult = await generateImagesWithUnifiedService(
-      prompt,
-      negativePrompt,
-      'auto', // modelPreference
-      imageCount
-    );
+    let generatedImages = [];
+    let generationMetadata = {};
 
-    const generatedImages = generationResult.results || [];
-    const generationMetadata = {
-      total: generationResult.summary?.total || 0,
-      successful: generationResult.summary?.successful || 0,
-      failed: generationResult.summary?.failed || 0,
-      providers: generationResult.summary?.providers || [],
-      errors: generationResult.errors || []
-    };
+    // Handle Google Flow image generation
+    if (imageProvider === 'google-flow') {
+      console.log('🌐 Using Google Flow for image generation\n');
+      
+      let googleFlowService = null;
+      try {
+        const GoogleFlowService = (await import('../services/browser/googleFlowService.js')).default;
+        googleFlowService = new GoogleFlowService({ headless: false });
+        
+        await googleFlowService.initialize();
+        
+        const generatedUrls = [];
+        
+        // Generate requested number of images
+        for (let i = 0; i < imageCount; i++) {
+          try {
+            console.log(`\n📸 Generating image ${i + 1}/${imageCount}...`);
+            const result = await googleFlowService.generateImage(prompt, {
+              index: i + 1,
+              total: imageCount,
+              download: true  // 💫 Enable automatic download
+            });
+            
+            if (result && result.url) {
+              generatedUrls.push({
+                url: result.url,
+                path: result.path,  // 💫 Store local file path for video generation
+                provider: 'Google Flow',
+                model: 'Nano Banana'
+              });
+              console.log(`✅ Image ${i + 1} generated successfully`);
+              if (result.path) {
+                console.log(`💾 Saved to: ${result.path}`);
+              }
+            }
+          } catch (err) {
+            console.error(`❌ Failed to generate image ${i + 1}: ${err.message}`);
+          }
+        }
+        
+        // ✅ Close browser after all images are downloaded
+        if (googleFlowService) {
+          console.log('\n🔒 Closing browser automation...');
+          try {
+            await googleFlowService.close();
+            console.log('✅ Browser closed');
+          } catch (closeErr) {
+            console.warn(`⚠️  Browser close error: ${closeErr.message}`);
+          }
+        }
+        
+        generatedImages = generatedUrls;
+        generationMetadata = {
+          total: imageCount,
+          successful: generatedUrls.length,
+          failed: imageCount - generatedUrls.length,
+          providers: ['Google Flow'],
+          errors: []
+        };
+        
+        console.log(`\n✅ Google Flow generated ${generatedUrls.length}/${imageCount} images`);
+      } catch (googleFlowError) {
+        console.error('❌ Google Flow image generation failed:', googleFlowError.message);
+        
+        // 🔒 Close browser even if there's an error
+        if (googleFlowService) {
+          try {
+            await googleFlowService.close();
+          } catch (e) {
+            // ignore close errors during error handling
+          }
+        }
+        
+        generationMetadata = {
+          total: imageCount,
+          successful: 0,
+          failed: imageCount,
+          providers: [],
+          errors: [{ provider: 'Google Flow', error: googleFlowError.message }]
+        };
+      }
+    } else {
+      // Use standard unified service for other providers
+      const generationResult = await generateImagesWithUnifiedService(
+        prompt,
+        negativePrompt,
+        'auto', // modelPreference
+        imageCount
+      );
 
-    console.log(`   ✅ Generated ${generatedImages.length}/${imageCount} images`);
+      generatedImages = generationResult.results || [];
+      generationMetadata = {
+        total: generationResult.summary?.total || 0,
+        successful: generationResult.summary?.successful || 0,
+        failed: generationResult.summary?.failed || 0,
+        providers: generationResult.summary?.providers || [],
+        errors: generationResult.errors || []
+      };
+
+      console.log(`   ✅ Generated ${generatedImages.length}/${imageCount} images`);
+    }
 
     // ============================================================
     // RESPONSE
@@ -257,6 +348,7 @@ export async function generateUnifiedEndpoint(req, res) {
       data: {
         generatedImages: generatedImages.map(img => ({
           url: img.url,
+          path: img.path,  // 💫 Include local file path for post-processing
           provider: img.provider,
           model: img.model,
           timestamp: img.timestamp
