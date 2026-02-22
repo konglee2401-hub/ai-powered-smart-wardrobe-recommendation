@@ -377,17 +377,23 @@ export default function ImageGenerationPage() {
         }
         
         // Restructure data for components
+        // Backend parseRecommendations returns: {characterProfile, productDetails, recommendations: {...}, analysis}
+        const parsed = analysisResponse.data.recommendations || {};
+        
         const analysisWithParsing = {
           analysis: analysisText,
-          recommendations: recommendations,
-          characterProfile: characterProfile,
-          productDetails: productDetails,
-          analysisScore: analysisResponse.data.recommendations?.analysis || {},
+          recommendations: parsed.recommendations || {}, // Actual recommendations (scene, lighting, etc)
+          characterProfile: parsed.characterProfile || characterProfile,
+          productDetails: parsed.productDetails || productDetails,
+          analysisScore: parsed.analysis || {},
         };
         
         setAnalysis(analysisWithParsing);
+        console.log('📊 Full backend response data:', analysisResponse.data);
         console.log('📊 Analysis saved to state:', analysisWithParsing);
         console.log('🎯 Recommendations available:', analysisWithParsing.recommendations);
+        console.log('💾 Character Profile:', analysisWithParsing.characterProfile);
+        console.log('👕 Product Details:', analysisWithParsing.productDetails);
         
         // Store response length for display
         const responseLength = typeof analysisResponse.data.analysis === 'string' 
