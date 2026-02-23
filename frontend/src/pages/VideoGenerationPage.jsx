@@ -14,7 +14,15 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { browserAutomationAPI } from '../services/api';
-import { VIDEO_DURATIONS, VIDEO_SCENARIOS } from '../constants/videoGeneration';
+import { 
+  VIDEO_DURATIONS, 
+  VIDEO_SCENARIOS,
+  VIDEO_PROVIDER_LIMITS,
+  getAvailableDurations,
+  getMaxDurationForProvider,
+  calculateVideoCount
+} from '../constants/videoGeneration';
+import VideoPromptStepWithTemplates from '../components/VideoPromptStepWithTemplates';
 
 const STEPS = [
   { id: 1, name: 'Settings', icon: SettingsIcon },
@@ -31,6 +39,11 @@ const VIDEO_PROVIDERS = [
 // Step 1: Settings Component
 function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selectedScenario, onScenarioChange, onImageChange, videoProvider, onVideoProviderChange }) {
   const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
+  
+  // Get available durations based on provider
+  const availableDurations = getAvailableDurations(videoProvider);
+  const maxDuration = getMaxDurationForProvider(videoProvider);
+  const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
 
   return (
     <div className="space-y-4">
@@ -59,29 +72,47 @@ function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selecte
         </div>
       </div>
 
-      {/* Duration Selection */}
+      {/* Provider Info Banner */}
+      <div className={`rounded-lg p-3 border ${
+        videoProvider === 'google-flow' 
+          ? 'bg-blue-900/20 border-blue-700/50' 
+          : 'bg-green-900/20 border-green-700/50'
+      }`}>
+        <div className="text-xs">
+          <span className="text-gray-400">Max </span>
+          <span className="font-semibold text-white">{maxPerVideo}s</span>
+          <span className="text-gray-400"> per video • </span>
+          <span className="font-semibold text-white">{maxDuration}s</span>
+          <span className="text-gray-400"> total</span>
+        </div>
+      </div>
+
+      {/* Duration Selection - Filtered by Provider */}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <Play className="w-4 h-4 text-purple-400" />
           Video Duration
         </h3>
         <div className="grid grid-cols-1 gap-2">
-          {VIDEO_DURATIONS.map(duration => (
-            <button
-              key={duration.value}
-              onClick={() => onDurationChange(duration.value)}
-              className={`p-3 rounded-lg border-2 transition-all text-left ${
-                selectedDuration === duration.value
-                  ? 'border-purple-500 bg-purple-600/20 text-white'
-                  : 'border-gray-700 hover:border-gray-600 text-gray-300'
-              }`}
-            >
-              <div className="font-medium text-sm">{duration.label}</div>
-              <div className="text-xs text-gray-400 mt-1">
-                {duration.segments} × 10-second segments
-              </div>
-            </button>
-          ))}
+          {availableDurations.map(duration => {
+            const videoCount = calculateVideoCount(videoProvider, duration.value);
+            return (
+              <button
+                key={duration.value}
+                onClick={() => onDurationChange(duration.value)}
+                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                  selectedDuration === duration.value
+                    ? 'border-purple-500 bg-purple-600/20 text-white'
+                    : 'border-gray-700 hover:border-gray-600 text-gray-300'
+                }`}
+              >
+                <div className="font-medium text-sm">{duration.label}</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {videoCount} × {maxPerVideo}-second clips
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -155,10 +186,12 @@ function VideoPromptStep({
   prompts,
   onPromptsChange,
   selectedImage,
-  isGenerating
+  isGenerating,
+  videoProvider
 }) {
   const scen = VIDEO_SCENARIOS.find(s => s.value === scenario);
   const segments = VIDEO_DURATIONS.find(d => d.value === duration)?.segments || 3;
+  const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
   const [isGeneratingPrompts, setIsGeneratingPrompts] = React.useState(false);
   const [promptError, setPromptError] = React.useState(null);
 
@@ -175,16 +208,20 @@ function VideoPromptStep({
     }
   };
 
-  const handleGeneratePromptsFromGrok = async () => {
+  // Generate prompts using ChatGPT browser service (default)
+  const handleGeneratePromptsFromChatGPT = async () => {
     setIsGeneratingPrompts(true);
     setPromptError(null);
     
     try {
-      const response = await browserAutomationAPI.generateVideoPrompts(
+      const response = await browserAutomationAPI.generateVideoPromptsChatGPT(
         duration,
         scenario,
         segments,
-        'professional'
+        'professional',
+        videoProvider,
+        null,
+        '16:9'
       );
 
       if (response.success && response.data.prompts) {
@@ -195,7 +232,7 @@ function VideoPromptStep({
       }
     } catch (error) {
       console.error('Error generating prompts:', error);
-      setPromptError('Could not generate prompts from Grok. Using template instead.');
+      setPromptError('Could not generate prompts. Using template instead.');
       handleAutoFill();
     } finally {
       setIsGeneratingPrompts(false);
@@ -204,18 +241,20 @@ function VideoPromptStep({
 
   return (
     <div className="space-y-4">
-      {/* Help Text */}
+      {/* Help Text - Dynamic based on provider */}
       <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50">
         <p className="text-xs text-blue-300">
-          ✨ Each segment is ~10 seconds. Describe the action, camera movement, and details for each segment. 
-          Grok will generate a smooth transition between segments.
+          ✨ Each segment is ~{maxPerVideo} seconds. Describe the action, camera movement, and details for each segment. 
+          {videoProvider === 'grok' 
+            ? ' Grok will generate a smooth transition between segments.'
+            : ' Google Flow will generate high-quality video clips.'}
         </p>
       </div>
 
-      {/* Prompt Generation Buttons */}
+      {/* Prompt Generation Buttons - Use ChatGPT as default */}
       <div className="flex gap-2">
         <button
-          onClick={handleGeneratePromptsFromGrok}
+          onClick={handleGeneratePromptsFromChatGPT}
           disabled={isGeneratingPrompts}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-900/30 hover:bg-green-900/50 border border-green-700/50 rounded-lg text-xs font-medium text-green-300 transition-colors disabled:opacity-50"
         >
@@ -227,7 +266,7 @@ function VideoPromptStep({
           ) : (
             <>
               <Sparkles className="w-3 h-3" />
-              Generate with Grok AI
+              Generate with ChatGPT
             </>
           )}
         </button>
@@ -248,16 +287,16 @@ function VideoPromptStep({
         </div>
       )}
 
-      {/* Prompt Segments */}
+      {/* Prompt Segments - Dynamic segment duration */}
       <div className="space-y-3">
         {Array.from({ length: segments }).map((_, idx) => (
           <div key={idx} className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-purple-300">
-                Segment {idx + 1} / {segments} (~10s)
+                Segment {idx + 1} / {segments} (~{maxPerVideo}s)
               </label>
               <span className="text-xs text-gray-500">
-                {(idx + 1) * 10}s
+                {(idx + 1) * maxPerVideo}s
               </span>
             </div>
             <textarea
@@ -512,7 +551,7 @@ export default function VideoGenerationPage() {
               )}
 
               {currentStep === 2 && (
-                <VideoPromptStep
+                <VideoPromptStepWithTemplates
                   onNext={() => setCurrentStep(3)}
                   duration={selectedDuration}
                   scenario={selectedScenario}
@@ -520,6 +559,7 @@ export default function VideoGenerationPage() {
                   onPromptsChange={setPrompts}
                   selectedImage={currentImage}
                   isGenerating={isGenerating}
+                  videoProvider={videoProvider}
                 />
               )}
 
@@ -532,6 +572,7 @@ export default function VideoGenerationPage() {
                   onBack={() => setCurrentStep(2)}
                   isGenerating={isGenerating}
                   onGenerate={handleGenerateVideo}
+                  videoProvider={videoProvider}
                 />
               )}
             </div>

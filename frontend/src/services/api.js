@@ -569,7 +569,7 @@ export const browserAutomationAPI = {
   },
 
   /**
-   * Generate video segment prompts from Grok AI
+   * Generate video segment prompts from Grok AI (legacy)
    * @param {number} duration - Video duration (20, 30, 40, etc.)
    * @param {string} scenario - Video scenario (product-intro, fashion-show, styling-tips, unboxing)
    * @param {number} segments - Number of segments (default: 3)
@@ -583,6 +583,38 @@ export const browserAutomationAPI = {
       style
     };
     return api.post('/api/videos/generate-prompts', payload);
+  },
+
+  /**
+   * Generate video segment prompts using ChatGPT browser service
+   * This is the main endpoint for video prompt enhancement
+   * @param {number} duration - Video duration (20, 30, 40, etc.)
+   * @param {string} scenario - Video scenario
+   * @param {number} segments - Number of segments
+   * @param {string} style - Style of prompts
+   * @param {string} videoProvider - Video provider (grok or google-flow)
+   * @param {string} useCase - Optional content use case
+   * @param {string} aspectRatio - Video aspect ratio
+   */
+  generateVideoPromptsChatGPT: async (
+    duration, 
+    scenario, 
+    segments = 3, 
+    style = 'professional',
+    videoProvider = 'grok',
+    useCase = null,
+    aspectRatio = '16:9'
+  ) => {
+    const payload = {
+      duration,
+      scenario,
+      segments,
+      style,
+      videoProvider,
+      useCase,
+      aspectRatio
+    };
+    return api.post('/api/videos/generate-prompts-chatgpt', payload);
   },
 
   /**

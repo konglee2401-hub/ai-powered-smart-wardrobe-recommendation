@@ -227,8 +227,196 @@ router.post('/:id/feedback', protect, async (req, res) => {
 });
 
 /**
+ * POST /api/videos/generate-prompts-chatgpt
+ * Generate video segment prompts using ChatGPT browser service
+ * This is the main endpoint for video prompt enhancement using ChatGPT
+ */
+router.post('/generate-prompts-chatgpt', protect, async (req, res) => {
+  try {
+    const { 
+      duration, 
+      scenario, 
+      segments = 3, 
+      style = 'professional',
+      videoProvider = 'grok',
+      useCase = null,
+      aspectRatio = '16:9'
+    } = req.body;
+
+    if (!duration || !scenario) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duration and scenario are required'
+      });
+    }
+
+    const maxPerVideo = videoProvider === 'google-flow' ? 6 : 10;
+    const segmentDuration = Math.floor(duration / segments);
+
+    try {
+      const ChatGPTService = (await import('../services/browser/chatgptService.js')).default;
+      const chatgptService = new ChatGPTService({ headless: false });
+      
+      console.log('\n🤖 Generating video prompts with ChatGPT...');
+      await chatgptService.initialize();
+
+      const scenarioDescriptions = {
+        'product-intro': 'Product Introduction - showcasing a product with professional presentation',
+        'fashion-show': 'Fashion Walk - model walking and posing on runway',
+        'styling-tips': 'Styling Tips - demonstrating how to style and wear items',
+        'unboxing': 'Unboxing - revealing and examining a product',
+        'lip-sync': 'Lip Sync - person speaking or singing to camera',
+        'lifestyle': 'Lifestyle - everyday activities in the outfit',
+        'transition': 'Clothing Transition - changing between outfits'
+      };
+
+      const scenarioDesc = scenarioDescriptions[scenario] || scenario;
+      
+      const prompt = `You are a professional video script writer. Generate ${segments} detailed video prompts for a ${style} ${scenarioDesc}.
+
+Each segment should be approximately ${segmentDuration} seconds.
+For each segment, provide:
+1. The main action/movement (what the model does)
+2. Camera movement (pan, zoom, static, etc.)
+3. Clothing/details to highlight
+4. Facial expression or mood
+5. Background/setting
+
+Video context:
+- Total duration: ${duration}s (${segments} x ~${segmentDuration}s segments)
+- Aspect ratio: ${aspectRatio}
+- Style: ${style}
+- Video will be generated with ${videoProvider === 'google-flow' ? 'Google Flow' : 'Grok'} AI
+
+Format your response as:
+SEGMENT 1: [detailed description]
+SEGMENT 2: [detailed description]
+SEGMENT 3: [detailed description]
+
+Make each description 2-3 sentences, specific and actionable for video generation.`;
+
+      const response = await chatgptService.sendMessage(prompt);
+      const responseText = typeof response === 'string' ? response : response.text || JSON.stringify(response);
+      
+      const segmentPrompts = responseText
+        .split(/(?:SEGMENT|Segment|segment)\s*\d+/i)
+        .filter(p => p.trim().length > 10)
+        .map(p => p.replace(/^[\d\.\:\-\s]+/, '').trim())
+        .slice(0, segments);
+
+      if (segmentPrompts.length === 0) {
+        segmentPrompts.push(
+          `Professional ${scenarioDesc} with smooth camera movement, model showcasing the outfit confidently`,
+          `Continue with dynamic pose and movement, highlighting clothing details and fabric flow`,
+          `Final pose with professional finish, capturing the complete look`
+        );
+      }
+
+      await chatgptService.close();
+
+      res.json({
+        success: true,
+        data: {
+          prompts: segmentPrompts,
+          scenario,
+          duration,
+          segments,
+          segmentDuration,
+          style,
+          videoProvider,
+          aspectRatio,
+          useCase,
+          provider: 'chatgpt-browser'
+        },
+        message: 'Video prompts generated successfully via ChatGPT'
+      });
+
+    } catch (chatgptError) {
+      console.error('ChatGPT prompt generation error:', chatgptError.message);
+      const templatePrompts = generateTemplatePrompts(scenario, segments, segmentDuration, style);
+      
+      res.json({
+        success: true,
+        data: {
+          prompts: templatePrompts,
+          scenario,
+          duration,
+          segments,
+          segmentDuration,
+          style,
+          videoProvider,
+          aspectRatio,
+          isTemplate: true,
+          error: chatgptError.message
+        },
+        message: 'Using template prompts due to ChatGPT error'
+      });
+    }
+
+  } catch (error) {
+    console.error('Video prompt generation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Helper function to generate template-based prompts
+ */
+function generateTemplatePrompts(scenario, segments, segmentDuration, style) {
+  const templates = {
+    'product-intro': [
+      `Start with close-up of product details, slowly panning to show full item against clean white background. ${style} style photography with professional lighting.`,
+      `Model wearing product, walking or posing with confident movement, highlighting fit and fabric. Camera follows with smooth tracking shot.`,
+      `Transition to product showcase, rotating to show all angles with professional lighting. Final pose with confident smile.`
+    ],
+    'fashion-show': [
+      `Model walking down runway with energetic stride, showcasing outfit movement and drape. Dynamic camera angle from side.`,
+      `Pause and turn to display outfit from multiple angles, showing styling details and accessories. Eye contact with camera.`,
+      `Exit runway with confident walk, camera following to capture full outfit movement. Final wave to audience.`
+    ],
+    'styling-tips': [
+      `Start with full body shot of basic outfit, then zoom to highlight key styling element. Natural movement in studio setting.`,
+      `Show how to layer or accessorize, demonstrating styling techniques with clear visibility. Hands gesture to explain.`,
+      `Final shot of complete styled outfit from front and side, modeling natural movement. Confident pose with smile.`
+    ],
+    'unboxing': [
+      `Hands opening package or revealing product with excitement, showing packaging details. Close-up on hands.`,
+      `Close-up examination of product, handling it carefully with good lighting on details. Zoom to show texture.`,
+      `Final reveal of product in use or displayed, showing quality and craftsmanship. Hold product up to camera.`
+    ],
+    'lip-sync': [
+      `Person speaking or lip syncing with expression, looking directly at camera. Confident delivery with natural gestures.`,
+      `Change expression and emotion while speaking, showing versatility. Move slightly to add dynamism.`,
+      `Final pose with confident expression, looking at camera with smile. Sign off with friendly wave.`
+    ],
+    'lifestyle': [
+      `Walking casually in everyday setting, natural movement showing outfit in real context. Outdoor or indoor scene.`,
+      `Sitting or posing naturally in the outfit, interacting with environment. Relaxed but confident posture.`,
+      `Standing confidently showing the complete look from multiple angles. Final pose with smile.`
+    ],
+    'transition': [
+      `Start in initial outfit pose, looking at camera with confident expression. Static shot in studio.`,
+      `Transition or gesture showing outfit change, perhaps turning away and back or using prop. Smooth movement.`,
+      `Final look reveal in new styling, striking pose to showcase complete new outfit. Confident smile.`
+    ]
+  };
+
+  const selectedTemplates = templates[scenario] || templates['product-intro'];
+  const prompts = selectedTemplates.slice(0, segments);
+  
+  while (prompts.length < segments) {
+    prompts.push(`Continue showcasing the product with focused camera movement and professional ${style} lighting`);
+  }
+  
+  return prompts;
+}
+
+/**
  * POST /api/videos/generate-prompts
- * Generate video segment prompts from Grok AI
+ * Generate video segment prompts from Grok AI (legacy endpoint)
  */
 router.post('/generate-prompts', protect, async (req, res) => {
   try {
