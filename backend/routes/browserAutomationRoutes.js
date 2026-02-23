@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, generateVideo, analyzeAndGenerate, analyzeWithBrowser, generateWithBrowser, generateMultiVideoSequence } from '../controllers/browserAutomationController.js';
+import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, generateVideo, analyzeAndGenerate, analyzeWithBrowser, generateWithBrowser, generateMultiVideoSequence, serveGeneratedImage } from '../controllers/browserAutomationController.js';
 
 const router = express.Router();
 
@@ -45,5 +45,8 @@ router.post('/generate-video-with-provider', generateVideo);
 
 // 💫 NEW: Multi-video generation endpoint with content use cases
 router.post('/generate-multi-video-sequence', generateMultiVideoSequence);
+
+// 📸 NEW: Serve generated images endpoint
+router.get('/generated-image/:id', serveGeneratedImage);
 
 export default router;

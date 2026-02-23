@@ -46,13 +46,22 @@ const promptOptionSchema = new mongoose.Schema({
       'style', 
       'colorPalette', 
       'cameraAngle',
-      // NEW: Fashion categories for VTO
+      // Fashion categories for VTO
       'hairstyle',
       'makeup',
       'bottoms',
       'shoes',
       'accessories',
-      'outerwear'
+      'outerwear',
+      // NEW: Expanded accessory categories
+      'hairAccessories',
+      'hats',
+      'necklaces',
+      'earrings',
+      'bracelets',
+      'scarves',
+      'belts',
+      'socks'
     ],
     index: true
   },

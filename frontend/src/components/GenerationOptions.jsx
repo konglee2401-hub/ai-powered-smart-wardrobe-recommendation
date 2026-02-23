@@ -7,12 +7,19 @@ import React, { useState } from 'react';
 import { Upload, X, Info } from 'lucide-react';
 import AdvancedGenerationSettings from './AdvancedGenerationSettings';
 
-const ASPECT_RATIOS = [
+// All available aspect ratios
+const ALL_ASPECT_RATIOS = [
   { value: '1:1', label: 'Square', icon: '⬜' },
   { value: '16:9', label: 'Landscape', icon: '📺' },
   { value: '9:16', label: 'Portrait', icon: '📱' },
   { value: '4:3', label: 'Classic', icon: '🖼️' },
   { value: '3:2', label: 'Photo', icon: '📷' },
+];
+
+// Google Flow only supports 2 aspect ratios
+const GOOGLE_FLOW_ASPECT_RATIOS = [
+  { value: '9:16', label: 'Portrait', icon: '📱' },
+  { value: '16:9', label: 'Landscape', icon: '📺' },
 ];
 
 const IMAGE_COUNTS = [1, 2, 3, 4, 6];
@@ -49,9 +56,18 @@ export default function GenerationOptions({
   seed = null,
   onSeedChange,
   randomSeed = true,
-  onRandomSeedChange
+  onRandomSeedChange,
+  imageGenProvider = 'grok'  // 💫 NEW: Image generation provider
 }) {
   const [dragOver, setDragOver] = useState(false);
+
+  // Filter aspect ratios based on provider
+  const getAvailableAspectRatios = () => {
+    if (imageGenProvider === 'google-flow') {
+      return GOOGLE_FLOW_ASPECT_RATIOS;
+    }
+    return ALL_ASPECT_RATIOS;
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -121,7 +137,7 @@ export default function GenerationOptions({
           </Tooltip>
         </label>
         <div className="grid grid-cols-2 gap-2">
-          {ASPECT_RATIOS.map(ratio => (
+          {getAvailableAspectRatios().map(ratio => (
             <button
               key={ratio.value}
               onClick={() => onAspectRatioChange?.(ratio.value)}

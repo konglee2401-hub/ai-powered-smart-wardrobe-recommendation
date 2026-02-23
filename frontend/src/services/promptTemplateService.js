@@ -1,375 +1,385 @@
 /**
- * Prompt Template Service
- * Handles prompt template management API calls
+ * Prompt Template Service - ENHANCED
+ * Comprehensive template management with advanced features
  */
 
-import axiosInstance from './axios';
-import { API_ENDPOINTS, API_SUCCESS_MESSAGES } from '@/config/api';
+import { browserAutomationAPI } from './api';
 
-// ============================================
-// GET TEMPLATES
-// ============================================
+const BASE_URL = '/api/prompt-templates';
+
+// ============================================================
+// GET ENDPOINTS
+// ============================================================
 
 /**
- * Get all prompt templates
- * @param {Object} filters - Filter options
- * @returns {Promise<Object>} Templates data
+ * Get all templates with optional filtering
  */
-export async function getPromptTemplates(filters = {}) {
+export async function getAllTemplates(filters = {}) {
   try {
     const params = new URLSearchParams();
-    
-    if (filters.category) params.append('category', filters.category);
-    if (filters.search) params.append('search', filters.search);
-    if (filters.limit) params.append('limit', filters.limit);
-    if (filters.offset) params.append('offset', filters.offset);
-    
-    const response = await axiosInstance.get(
-      `${API_ENDPOINTS.PROMPT_TEMPLATES}?${params.toString()}`
-    );
-    
-    return {
-      success: true,
-      data: response.data.templates || response.data,
-    };
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value);
+      }
+    });
+
+    const queryString = params.toString();
+    const url = queryString ? `${BASE_URL}?${queryString}` : BASE_URL;
+    const response = await browserAutomationAPI.get(url);
+    return response.data;
   } catch (error) {
-    console.error('[Get Prompt Templates Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể lấy danh sách templates',
-      error,
-    };
+    console.error('Error fetching templates:', error);
+    throw error;
   }
 }
 
 /**
- * Get template by ID
- * @param {string} id - Template ID
- * @returns {Promise<Object>} Template data
+ * Get templates for specific use case
+ */
+export async function getTemplatesByUseCase(useCase) {
+  try {
+    const response = await browserAutomationAPI.get(`${BASE_URL}/usecase/${useCase}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching templates for ${useCase}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get core templates
+ */
+export async function getCoreTemplates() {
+  try {
+    const response = await browserAutomationAPI.get(`${BASE_URL}/core`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching core templates:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get templates used in specific page
+ */
+export async function getTemplatesByPage(page) {
+  try {
+    const response = await browserAutomationAPI.get(`${BASE_URL}/page/${page}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching templates for page ${page}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get templates for specific page and step
+ */
+export async function getTemplatesByPageStep(page, step) {
+  try {
+    const response = await browserAutomationAPI.get(`${BASE_URL}/page/${page}/step/${step}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching templates for ${page} step ${step}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get single template by ID
+ */
+export async function getTemplateById(id) {
+  try {
+    const response = await browserAutomationAPI.get(`${BASE_URL}/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching template ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get all templates (for backward compatibility)
+ */
+export async function getPromptTemplates(filters = {}) {
+  return getAllTemplates(filters);
+}
+
+/**
+ * Get template by ID (for backward compatibility)
  */
 export async function getPromptTemplateById(id) {
+  return getTemplateById(id);
+}
+
+// ============================================================
+// POST ENDPOINTS
+// ============================================================
+
+/**
+ * Create new template
+ */
+export async function createTemplate(templateData) {
   try {
-    const response = await axiosInstance.get(API_ENDPOINTS.PROMPT_TEMPLATE_BY_ID(id));
-    
-    return {
-      success: true,
-      data: response.data.template || response.data,
-    };
+    const response = await browserAutomationAPI.post(BASE_URL, templateData);
+    return response.data;
   } catch (error) {
-    console.error('[Get Prompt Template By ID Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể lấy template',
-      error,
-    };
+    console.error('Error creating template:', error);
+    throw error;
   }
 }
 
-// ============================================
-// CREATE TEMPLATE
-// ============================================
-
 /**
- * Create new prompt template
- * @param {Object} templateData - Template data
- * @returns {Promise<Object>} Created template
+ * Create template (for backward compatibility)
  */
 export async function createPromptTemplate(templateData) {
+  return createTemplate(templateData);
+}
+
+/**
+ * Clone template
+ */
+export async function cloneTemplate(id, name) {
   try {
-    const response = await axiosInstance.post(
-      API_ENDPOINTS.PROMPT_TEMPLATES,
-      templateData
-    );
-    
-    return {
-      success: true,
-      message: API_SUCCESS_MESSAGES.SAVE_SUCCESS,
-      data: response.data.template || response.data,
-    };
+    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/clone`, { name });
+    return response.data;
   } catch (error) {
-    console.error('[Create Prompt Template Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể tạo template',
-      error,
-    };
+    console.error(`Error cloning template ${id}:`, error);
+    throw error;
   }
 }
 
-// ============================================
-// UPDATE TEMPLATE
-// ============================================
+/**
+ * Render template with field values
+ */
+export async function renderTemplate(id, fieldValues = {}) {
+  try {
+    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/render`, {
+      fieldValues
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error rendering template ${id}:`, error);
+    throw error;
+  }
+}
 
 /**
- * Update existing prompt template
- * @param {string} id - Template ID
- * @param {Object} templateData - Updated template data
- * @returns {Promise<Object>} Updated template
+ * Track template usage
+ */
+export async function trackTemplateUsage(id) {
+  try {
+    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/usage`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error tracking usage for template ${id}:`, error);
+    throw error;
+  }
+}
+
+// ============================================================
+// PUT ENDPOINTS
+// ============================================================
+
+/**
+ * Update template
+ */
+export async function updateTemplate(id, templateData) {
+  try {
+    const response = await browserAutomationAPI.put(`${BASE_URL}/${id}`, templateData);
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating template ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Update template (for backward compatibility)
  */
 export async function updatePromptTemplate(id, templateData) {
-  try {
-    const response = await axiosInstance.put(
-      API_ENDPOINTS.PROMPT_TEMPLATE_BY_ID(id),
-      templateData
-    );
-    
-    return {
-      success: true,
-      message: API_SUCCESS_MESSAGES.UPDATE_SUCCESS,
-      data: response.data.template || response.data,
-    };
-  } catch (error) {
-    console.error('[Update Prompt Template Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể cập nhật template',
-      error,
-    };
-  }
+  return updateTemplate(id, templateData);
 }
-
-// ============================================
-// DELETE TEMPLATE
-// ============================================
 
 /**
- * Delete prompt template
- * @param {string} id - Template ID
- * @returns {Promise<Object>} Delete result
+ * Update template usage location
  */
-export async function deletePromptTemplate(id) {
+export async function updateUsageLocation(id, { page, step, context, field, action }) {
   try {
-    const response = await axiosInstance.delete(
-      API_ENDPOINTS.PROMPT_TEMPLATE_DELETE(id)
-    );
-    
-    return {
-      success: true,
-      message: API_SUCCESS_MESSAGES.DELETE_SUCCESS,
-      data: response.data,
-    };
+    const response = await browserAutomationAPI.put(`${BASE_URL}/${id}/usage-location`, {
+      page,
+      step,
+      context,
+      field,
+      action
+    });
+    return response.data;
   } catch (error) {
-    console.error('[Delete Prompt Template Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể xóa template',
-      error,
-    };
+    console.error(`Error updating usage location for template ${id}:`, error);
+    throw error;
   }
 }
 
-// ============================================
-// CATEGORIES
-// ============================================
+// ============================================================
+// DELETE ENDPOINTS
+// ============================================================
+
+/**
+ * Delete template
+ */
+export async function deleteTemplate(id) {
+  try {
+    const response = await browserAutomationAPI.delete(`${BASE_URL}/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error deleting template ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete template (for backward compatibility)
+ */
+export async function deletePromptTemplate(id) {
+  return deleteTemplate(id);
+}
+
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
 
 /**
  * Get template categories
- * @returns {Promise<Object>} Categories
  */
 export async function getTemplateCategories() {
   try {
-    const response = await axiosInstance.get(
-      `${API_ENDPOINTS.PROMPT_TEMPLATES}/categories`
-    );
-    
-    return {
-      success: true,
-      data: response.data.categories || response.data,
-    };
+    const templates = await getAllTemplates();
+    const categories = new Set();
+    templates.data?.forEach(t => {
+      if (t.useCase) categories.add(t.useCase);
+    });
+    return Array.from(categories);
   } catch (error) {
-    console.error('[Get Template Categories Error]', error);
-    
-    // Return default categories if API fails
-    return {
-      success: true,
-      data: [
-        'E-commerce',
-        'Fashion',
-        'Luxury',
-        'Lifestyle',
-        'Studio',
-        'Product',
-        'Custom',
-      ],
-    };
+    console.error('Error getting categories:', error);
+    return [];
   }
 }
-
-// ============================================
-// SEARCH & FILTER
-// ============================================
 
 /**
  * Search templates by keyword
- * @param {string} keyword - Search keyword
- * @returns {Promise<Object>} Search results
  */
 export async function searchPromptTemplates(keyword) {
   try {
-    return await getPromptTemplates({ search: keyword });
+    const allTemplates = await getAllTemplates();
+    const filtered = (allTemplates.data || []).filter(t =>
+      t.name?.toLowerCase().includes(keyword?.toLowerCase()) ||
+      t.description?.toLowerCase().includes(keyword?.toLowerCase()) ||
+      t.tags?.some(tag => tag?.toLowerCase().includes(keyword?.toLowerCase()))
+    );
+    return { success: true, data: filtered };
   } catch (error) {
-    console.error('[Search Prompt Templates Error]', error);
+    console.error('Error searching templates:', error);
     throw error;
   }
 }
 
 /**
- * Get templates by category
- * @param {string} category - Category name
- * @returns {Promise<Object>} Templates in category
+ * Get templates by category (for backward compatibility)
  */
 export async function getTemplatesByCategory(category) {
   try {
-    return await getPromptTemplates({ category });
+    return await getTemplatesByUseCase(category);
   } catch (error) {
-    console.error('[Get Templates By Category Error]', error);
+    console.error('Error getting templates by category:', error);
     throw error;
   }
 }
 
-// ============================================
-// IMPORT/EXPORT
-// ============================================
+// ============================================================
+// EXPORT/IMPORT
+// ============================================================
 
 /**
  * Export templates to JSON
- * @param {Array<string>} ids - Template IDs to export (optional)
- * @returns {Promise<Object>} Export data
  */
 export async function exportTemplates(ids = []) {
   try {
     let templates;
-    
+
     if (ids.length > 0) {
-      const results = await Promise.all(
-        ids.map(id => getPromptTemplateById(id))
-      );
+      const results = await Promise.all(ids.map(id => getTemplateById(id)));
       templates = results.map(r => r.data);
     } else {
-      const result = await getPromptTemplates({ limit: 1000 });
-      templates = result.data;
+      const result = await getAllTemplates({ isActive: true });
+      templates = result.data || [];
     }
-    
+
     return {
       success: true,
       data: templates,
-      exportDate: new Date().toISOString(),
+      exportDate: new Date().toISOString()
     };
   } catch (error) {
-    console.error('[Export Templates Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể export templates',
-      error,
-    };
+    console.error('Error exporting templates:', error);
+    throw error;
   }
 }
 
 /**
  * Import templates from JSON
- * @param {Array<Object>} templates - Templates to import
- * @returns {Promise<Object>} Import result
  */
 export async function importTemplates(templates) {
   try {
-    const results = await Promise.allSettled(
-      templates.map(template => createPromptTemplate(template))
-    );
-    
+    const results = await Promise.allSettled(templates.map(t => createTemplate(t)));
+
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
-    
+
     return {
       success: true,
-      message: `Import thành công ${successful} templates. ${failed > 0 ? `${failed} templates thất bại.` : ''}`,
+      message: `Import successful: ${successful}. Failed: ${failed}.`,
       results: {
         successful,
-        failed,
-        details: results,
-      },
+        failed
+      }
     };
   } catch (error) {
-    console.error('[Import Templates Error]', error);
-    throw {
-      success: false,
-      message: error.message || 'Không thể import templates',
-      error,
-    };
+    console.error('Error importing templates:', error);
+    throw error;
   }
 }
 
-// ============================================
-// PREDEFINED TEMPLATES
-// ============================================
-
-export const PREDEFINED_TEMPLATES = {
-  ecommerce: {
-    name: 'E-commerce Standard',
-    category: 'E-commerce',
-    prompt: 'Professional product photography, clean and professional, studio lighting, pure white background, eye-level perspective, centered composition, high quality, sharp details, vibrant colors, crisp details, realistic shadows',
-    negativePrompt: 'blurry, low quality, distorted, watermark, text, logo, colored background, busy background',
-    options: {
-      quality: 'high',
-      style: 'professional',
-      lighting: 'studio',
-      background: 'white',
-      cameraAngle: 'eye-level',
-      composition: 'centered',
-    },
-  },
-  fashion: {
-    name: 'Fashion Editorial',
-    category: 'Fashion',
-    prompt: 'Professional product photography, dramatic and artistic, natural daylight, lifestyle environment, slightly elevated angle, rule of thirds composition, high quality, sharp details, vibrant colors, crisp details, realistic shadows',
-    negativePrompt: 'blurry, low quality, distorted, watermark, text, logo, amateur, casual, messy',
-    options: {
-      quality: 'high',
-      style: 'dramatic',
-      lighting: 'natural',
-      background: 'lifestyle',
-      cameraAngle: 'slightly-above',
-      composition: 'rule-of-thirds',
-    },
-  },
-  luxury: {
-    name: 'Luxury Premium',
-    category: 'Luxury',
-    prompt: 'Professional product photography, minimalist and elegant, soft diffused lighting, subtle gradient background, eye-level perspective, centered composition, ultra high quality, 8K resolution, vibrant colors, crisp details',
-    negativePrompt: 'blurry, low quality, distorted, watermark, text, logo, amateur, casual, messy, noise, artifacts, compression',
-    options: {
-      quality: 'ultra',
-      style: 'minimalist',
-      lighting: 'soft',
-      background: 'gradient',
-      cameraAngle: 'eye-level',
-      composition: 'centered',
-    },
-  },
-};
-
-/**
- * Get predefined templates
- * @returns {Array<Object>} Predefined templates
- */
-export function getPredefinedTemplates() {
-  return Object.entries(PREDEFINED_TEMPLATES).map(([key, template]) => ({
-    id: key,
-    ...template,
-    isPredefined: true,
-  }));
-}
+// ============================================================
+// DEFAULT EXPORT OBJECT
+// ============================================================
 
 export default {
+  // Get
+  getAllTemplates,
+  getTemplatesByUseCase,
+  getCoreTemplates,
+  getTemplatesByPage,
+  getTemplatesByPageStep,
+  getTemplateById,
   getPromptTemplates,
   getPromptTemplateById,
+  // Create
+  createTemplate,
   createPromptTemplate,
+  cloneTemplate,
+  renderTemplate,
+  trackTemplateUsage,
+  // Update
+  updateTemplate,
   updatePromptTemplate,
+  updateUsageLocation,
+  // Delete
+  deleteTemplate,
   deletePromptTemplate,
+  // Helpers
   getTemplateCategories,
   searchPromptTemplates,
   getTemplatesByCategory,
   exportTemplates,
-  importTemplates,
-  getPredefinedTemplates,
-  PREDEFINED_TEMPLATES,
+  importTemplates
 };

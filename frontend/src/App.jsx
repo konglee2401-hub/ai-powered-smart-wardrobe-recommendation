@@ -17,6 +17,8 @@ import AdvancedCustomizationPage from './pages/AdvancedCustomizationPage';
 import PerformanceOptimizerPage from './pages/PerformanceOptimizerPage';
 import AIProviderManager from './pages/AIProviderManager';
 import { VideoProduction } from './pages/VideoProduction';
+import VideoScriptGenerator from './pages/VideoScriptGenerator';
+import PromptTemplateManager from './pages/PromptTemplateManager';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -88,6 +90,22 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-y-auto">
               <PromptBuilder />
+            </div>
+          </div>
+        } />
+        <Route path="/prompt-templates" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <PromptTemplateManager />
+            </div>
+          </div>
+        } />
+        <Route path="/video-script-generator" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <VideoScriptGenerator />
             </div>
           </div>
         } />

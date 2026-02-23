@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Copy, Share2, Loader2, RefreshCw, Eye, Video } from 'lucide-react';
+import { Download, Copy, Share2, Loader2, RefreshCw, Eye, Video, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function GenerationResult({
   images = [],
@@ -20,7 +20,11 @@ export default function GenerationResult({
 }) {
   const [selectedImage, setSelectedImage] = useState(0);
   const [downloadingIndex, setDownloadingIndex] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
   const navigate = useNavigate();
+
+  console.log('🎨 GenerationResult rendered with images:', images.length, images);
 
   const currentImage = images[selectedImage];
 
@@ -77,94 +81,163 @@ export default function GenerationResult({
 
   return (
     <div className="space-y-4">
-      {/* Main Preview */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300">Preview ({selectedImage + 1}/{images.length})</h3>
-        <div className="relative bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
-          <div className="aspect-square flex items-center justify-center bg-gray-950">
-            {currentImage?.url && (
-              <img
-                src={currentImage.url}
-                alt={`Generated ${selectedImage + 1}`}
-                className="w-full h-full object-cover"
-              />
-            )}
-          </div>
-
-          {/* Image Info Overlay */}
-          <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 rounded text-xs text-gray-300">
-            <span>{aspectRatio}</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => downloadImage(currentImage.url, selectedImage)}
-            disabled={downloadingIndex === selectedImage}
-            className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors disabled:opacity-50"
-          >
-            {downloadingIndex === selectedImage ? (
-              <>
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Downloading...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-3 h-3" />
-                <span>Download</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => copyImageUrl(currentImage.url)}
-            className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-          >
-            <Copy className="w-3 h-3" />
-            <span>Copy URL</span>
-          </button>
-          <button
-            onClick={() => window.open(currentImage.url, '_blank')}
-            className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-          >
-            <Eye className="w-3 h-3" />
-            <span>View Full</span>
-          </button>
-        </div>
-
-        {/* Start Video Generation Button */}
-        <button
-          onClick={handleStartVideoGeneration}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors font-medium text-white"
-        >
-          <Video className="w-3 h-3" />
-          <span>🎬 Start Create Video</span>
-        </button>
-      </div>
-
-      {/* Thumbnail Grid */}
+      {/* 💫 NEW: Thumbnail Grid - Click to View Full */}
       <div>
-        <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">All Generated Images</h3>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-300">Generated Images ({images.length})</h3>
+          <span className="text-xs text-gray-500">(Click to view full size)</span>
+        </div>
+        
+        {/* Responsive Grid - 2-4 columns based on count */}
+        <div className={`grid gap-2 ${
+          images.length === 1 ? 'grid-cols-1' :
+          images.length === 2 ? 'grid-cols-2' :
+          images.length <= 4 ? 'grid-cols-4' :
+          'grid-cols-4'
+        }`}>
           {images.map((image, idx) => (
-            <button
+            <div
               key={idx}
-              onClick={() => setSelectedImage(idx)}
-              className={`aspect-square rounded-lg border-2 transition-all overflow-hidden ${
-                selectedImage === idx
-                  ? 'border-purple-500 ring-2 ring-purple-500/50'
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
+              onClick={() => {
+                setModalImageIndex(idx);
+                setShowModal(true);
+              }}
+              className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-700 hover:border-purple-500 cursor-pointer bg-gray-900 group transition-all"
             >
               <img
                 src={image.url}
                 alt={`Generated ${idx + 1}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
               />
-            </button>
+              {/* Hover Overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              {/* Image Counter */}
+              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-xs text-white">
+                {idx + 1}/{images.length}
+              </div>
+            </div>
           ))}
         </div>
       </div>
+
+      {/* Quick Action Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => downloadImage(images[modalImageIndex || 0].url, modalImageIndex || 0)}
+          disabled={downloadingIndex !== null}
+          className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-green-600 hover:bg-green-700 rounded transition-colors disabled:opacity-50 font-medium text-white"
+        >
+          {downloadingIndex !== null ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>Downloading...</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-3 h-3" />
+              <span>Download All</span>
+            </>
+          )}
+        </button>
+        <button
+          onClick={handleStartVideoGeneration}
+          className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors font-medium text-white"
+        >
+          <Video className="w-3 h-3" />
+          <span>Generate Video</span>
+        </button>
+      </div>
+
+      {/* ✨ Modal for Full-Size Image Viewing */}
+      {showModal && images.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          {/* Modal Container */}
+          <div className="relative w-full h-full max-w-4xl max-h-screen flex flex-col p-4">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-lg text-gray-300 hover:text-white transition-colors z-10"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Main Image */}
+            <div className="flex-1 flex items-center justify-center">
+              <img
+                src={images[modalImageIndex]?.url}
+                alt={`Generated ${modalImageIndex + 1}`}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+
+            {/* Navigation & Info */}
+            <div className="flex items-center justify-between mt-4 px-4 py-3 bg-gray-900/80 rounded-lg border border-gray-700">
+              {/* Left Navigation */}
+              <button
+                onClick={() => setModalImageIndex((prev) => (prev - 1 + images.length) % images.length)}
+                className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-300 hover:text-white"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              {/* Image Counter & Info */}
+              <div className="flex-1 text-center">
+                <p className="text-sm font-semibold text-gray-300">
+                  {modalImageIndex + 1} / {images.length}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {images[modalImageIndex]?.filename || `Image ${modalImageIndex + 1}`}
+                </p>
+              </div>
+
+              {/* Right Navigation */}
+              <button
+                onClick={() => setModalImageIndex((prev) => (prev + 1) % images.length)}
+                className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-300 hover:text-white"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => downloadImage(images[modalImageIndex].url, modalImageIndex)}
+                disabled={downloadingIndex === modalImageIndex}
+                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-green-600 hover:bg-green-700 rounded transition-colors disabled:opacity-50 font-medium text-white"
+              >
+                {downloadingIndex === modalImageIndex ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Downloading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3 h-3" />
+                    <span>Download</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => copyImageUrl(images[modalImageIndex].url)}
+                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors font-medium text-white"
+              >
+                <Copy className="w-3 h-3" />
+                <span>Copy URL</span>
+              </button>
+              <button
+                onClick={() => window.open(images[modalImageIndex].url, '_blank')}
+                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors font-medium text-white"
+              >
+                <Eye className="w-3 h-3" />
+                <span>View Full</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Regenerate Button */}
       <button

@@ -19,7 +19,7 @@ if (!fs.existsSync(tempDir)) {
 
 /**
  * Build comprehensive analysis prompt with all VTO style options
- * Based on the test script prompt but expanded with all StyleCustomizer options
+ * RETURNS JSON FORMAT for clean parsing
  */
 function buildAnalysisPrompt(options = {}) {
   const {
@@ -100,149 +100,88 @@ function buildAnalysisPrompt(options = {}) {
     'over-shoulder': 'Over Shoulder View'
   };
 
-  // Build prompt with style customization
-  const promptText = `⛔ CRITICAL: DO NOT REPEAT OR ECHO BACK THIS PROMPT. Begin your response directly with *** CHARACTER PROFILE START *** and proceed with the analysis sections.
+  // Build prompt with IMPROVED JSON format for clean extraction
+  const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
 
-You are a professional fashion analyst for a Virtual Try-On system. Analyze these two images in STRUCTURED FORMAT exactly as specified below.
+{
+  "character": {
+    "gender": "string",
+    "age_range": "string",
+    "body_type": "string",
+    "body_type_short": "slim|athletic|curvy|petite|tall|average",
+    "skin_tone": "string",
+    "hair_color": "string",
+    "hair_length": "short|medium|long",
+    "hair_texture": "straight|wavy|curly",
+    "hair_style": "string - specific style name",
+    "face_shape": "oval|square|round|heart|oblong"
+  },
+  "product": {
+    "garment_type": "string - specific type",
+    "style_category": "string",
+    "primary_color": "string",
+    "secondary_color": "string or null",
+    "pattern": "solid|striped|floral|geometric|printed|plaid|other",
+    "fabric_type": "string - cotton, silk, wool, etc",
+    "fit_type": "tight|fitted|regular|loose|oversized",
+    "key_details": "string - 2-3 main features"
+  },
+  "analysis": {
+    "compatibility_score": 1-10,
+    "fit_assessment": "Does product fit body type well? Any issues?",
+    "color_harmony": "How does color work with skin tone?",
+    "styling_notes": "Key styling recommendations"
+  },
+  "recommendations": {
+    "scene": {
+      "choice": "ONE value from: studio, white-background, urban-street, minimalist-indoor, cafe, outdoor-park, office, luxury-interior, rooftop",
+      "reason": "2-3 sentences why this scene works best"
+    },
+    "lighting": {
+      "choice": "ONE from: soft-diffused, natural-window, golden-hour, dramatic-rembrandt, high-key, backlit, neon-colored, overcast-outdoor",
+      "reason": "why this lighting"
+    },
+    "mood": {
+      "choice": "ONE from: confident, relaxed, elegant, energetic, playful, mysterious, romantic, professional",
+      "reason": "why this mood"
+    },
+    "cameraAngle": {
+      "choice": "ONE from: eye-level, slight-angle, three-quarter, full-front, over-shoulder",
+      "reason": "why this angle"
+    },
+    "hairstyle": {
+      "choice": "specific style like ponytail, bun, waves, etc OR keep-current",
+      "reason": "why this hairstyle"
+    },
+    "makeup": {
+      "choice": "ONE from: natural, light-makeup, glowing-skin, smokey-eyes, bold-lips, winged-eyeliner, contoured, matte-finish, glossy-lips, bronzed, dramatic, minimalist, keep-current",
+      "reason": "why this makeup"
+    },
+    "bottoms": {
+      "choice": "specific like skinny-jeans, midi-skirt, etc OR not-applicable",
+      "reason": "why these bottoms"
+    },
+    "shoes": {
+      "choice": "specific like block-heels, white-sneakers, ballet-flats, etc OR not-applicable",
+      "reason": "why these shoes"
+    },
+    "accessories": {
+      "choice": "comma-separated list like: gold-necklace, hoop-earrings, crossbody-bag OR minimal OR none",
+      "reason": "how these accessories complete the look"
+    },
+    "outerwear": {
+      "choice": "specific like blazer, denim-jacket, wool-coat, etc OR not-needed",
+      "reason": "why or why not needed"
+    }
+  }
+}
 
-=== IMAGE 1: CHARACTER/PERSON ===
-First analyze the character/person in detail:
-- Gender and estimated age
-- Ethnicity and distinctive features
-- Body type classification (slim, athletic, curvy, petite, tall, etc.)
-- Skin tone (exact description)
-- Hair: color, texture, length, current style name
-- Face shape and proportions
-
-STYLE CUSTOMIZATION (User Selected):
-- Scene: ${sceneMap[scene] || scene}
-- Lighting: ${lightingMap[lighting] || lighting}
-- Mood: ${moodMap[mood] || mood}
-- Photography Style: ${styleMap[style] || style}
-- Color Palette: ${colorPaletteMap[colorPalette] || colorPalette}
-- Camera Angle: ${cameraAngleMap[cameraAngle] || cameraAngle}
-- Current outfit or clothing visible
-- Posture and natural pose
-
-Provide this EXACTLY in this format:
-
-*** CHARACTER PROFILE START ***
-Gender: [gender]
-Age Range: [e.g., 20-25 years]
-Body Type: [one specific type]
-Skin Tone: [one specific tone]
-Hair Length: [short/medium/long]
-Hair Color: [specific color]
-Hair Texture: [straight/wavy/curly/etc]
-Hair Style: [name of current style]
-Face Shape: [oval/square/round/heart/etc]
-Current Outfit: [description or "None visible"]
-*** CHARACTER PROFILE END ***
-
-=== IMAGE 2: PRODUCT/CLOTHING ===
-Now analyze the clothing product in detail:
-- Specific garment type
-- Style category
-- Exact colors
-- Pattern or texture
-- Fabric appearance
-- Fit type
-- Key design details
-
-Provide this EXACTLY in this format:
-
-*** PRODUCT DETAILS START ***
-Garment Type: [specific type]
-Style Category: [one category]
-Primary Color: [exact color]
-Secondary Color: [if any, or "None"]
-Pattern: [solid, striped, floral, etc.]
-Fabric Type: [apparent fabric]
-Fit Type: [one fit type]
-Key Details: [list 2-3 main design details]
-*** PRODUCT DETAILS END ***
-
-=== COMPATIBILITY & DETAILED ANALYSIS ===
-Analyze fit, compatibility, and styling for each element:
-
-*** ANALYSIS START ***
-
-**Compatibility Score:** [1-10]
-
-**Character-Product Fit:**
-- Does this product fit this character's body type?
-- Color harmony with skin tone?
-
-**Scene Styling (${sceneMap[scene] || scene}):**
-How should this product be styled in this scene? Poses, angles, props?
-
-**Lighting (${lightingMap[lighting] || lighting}):**
-How does product color/fabric look under this lighting? Adjustments needed?
-
-**Mood (${moodMap[mood] || mood}):**
-Does product convey this mood? What styling choices reinforce it?
-
-**Color Palette (${options.colorPalette}):**
-How does product fit the palette? What complementary colors work?
-
-**Camera Angle (${options.cameraAngle}):**
-Best angle to showcase this product?
-
-*** ANALYSIS END ***
-
-=== RECOMMENDATIONS ===
-Provide recommendations in EXACTLY this format. For EACH category, provide:
-1. PRIMARY_CHOICE - your top recommendation
-2. PRIMARY_REASON - 2-3 sentences explaining why
-3. TOP_3_ALTERNATIVES - top 3 alternative options ranked by suitability
-
-Format:
-
-*** RECOMMENDATIONS START ***
-
-SCENE_CHOICE: [ONE from: studio, white-background, urban-street, minimalist-indoor, cafe, outdoor-park, office, luxury-interior, rooftop]
-SCENE_REASON: [2-3 sentences why this is best]
-SCENE_ALTERNATIVES: [list top 3 alternatives in order like: urban-street, office, luxury-interior]
-
-LIGHTING_CHOICE: [ONE from: soft-diffused, natural-window, golden-hour, dramatic-rembrandt, high-key, backlit, neon-colored, overcast-outdoor]
-LIGHTING_REASON: [2-3 sentences why]
-LIGHTING_ALTERNATIVES: [top 3 alternatives]
-
-MOOD_CHOICE: [ONE from: confident, relaxed, elegant, energetic, playful, mysterious, romantic, professional]
-MOOD_REASON: [2-3 sentences why]
-MOOD_ALTERNATIVES: [top 3 alternatives]
-
-CAMERA_ANGLE: [ONE from: eye-level, slight-angle, three-quarter, full-front, over-shoulder]
-ANGLE_REASON: [2 sentences why]
-ANGLE_ALTERNATIVES: [top 3 alternatives]
-
-HAIRSTYLE: [specific style like: long-straight, medium-wavy, short-bob, half-up, ponytail, bun, braids, curled - OR "keep-current"]
-HAIRSTYLE_REASON: [why this works]
-HAIRSTYLE_ALTERNATIVES: [top 3 alternatives]
-
-MAKEUP: [ONE from: natural, light-makeup, glowing-skin, bold-lips, smokey-eyes, dramatic, minimalist, keep-current]
-MAKEUP_REASON: [why this completes look]
-MAKEUP_ALTERNATIVES: [top 3 alternatives]
-
-BOTTOMS: [suggestion - be VERY SPECIFIC with hyphenated names like: skinny-jeans, wide-leg-jeans, midi-skirt, cargo-pants, pleated-skirt, leather-leggings - OR "not-applicable"]
-BOTTOMS_REASON: [why these work]
-BOTTOMS_ALTERNATIVES: [top 3 alternatives]
-
-SHOES: [suggestion - be SPECIFIC like: block-heels, combat-boots, white-sneakers, ballet-flats, loafer-flats, nude-pumps - OR "not-applicable"]
-SHOES_REASON: [why works]
-SHOES_ALTERNATIVES: [top 3 alternatives]
-
-ACCESSORIES: [list as: item1, item2, item3 with specificity - examples: gold-necklace, chunky-earrings, crossbody-bag, cat-eye-sunglasses - OR "minimal" OR "none"]
-ACCESSORIES_REASON: [how these complete styling]
-ACCESSORIES_ALTERNATIVES: [3 alternative accessory combinations]
-
-OUTERWEAR: [specific like: oversized-blazer, denim-jacket, leather-jacket, wool-coat, cardigan - OR "not-needed"]
-OUTERWEAR_REASON: [why or why not needed]
-OUTERWEAR_ALTERNATIVES: [top 3 alternatives]
-
-*** RECOMMENDATIONS END ***
-
-⛔ CRITICAL REMINDER: Your response should ONLY contain the structured analysis sections (CHARACTER PROFILE, PRODUCT DETAILS, ANALYSIS, RECOMMENDATIONS). Do NOT include this instruction or the prompt text in your response.`;
+CRITICAL RULES:
+1. Return ONLY the JSON object - no other text before or after
+2. All choice values MUST be from the provided lists above
+3. Reasons must be 1-2 sentences max
+4. Use lowercase for all choice values with hyphens where shown
+5. If a recommendation is not applicable, use "not-applicable" or "not-needed"`;
 
   return promptText;
 }
@@ -582,8 +521,8 @@ function extractConversationId(url) {
 }
 
 /**
- * Parse structured recommendations from AI analysis response
- * Extracts recommendations from the === RECOMMENDATIONS === section
+ * Parse JSON recommendations from AI analysis response
+ * Much simpler and more reliable than regex-based parsing
  */
 function parseRecommendations(analysisText) {
   const recommendations = {
@@ -604,185 +543,132 @@ function parseRecommendations(analysisText) {
   };
 
   try {
-    // First, clean up the response - remove UI text and suggestions
-    // Find the actual Grok response sections
-    let cleanText = analysisText;
+    // Try to extract JSON from response
+    let jsonText = analysisText;
     
-    // ===== SMART CLEANUP: Handle prompt echo =====
-    // Find the first structured marker (character profile)
-    const charProfileMarker = '*** CHARACTER PROFILE START ***';
-    const charProfileIndex = cleanText.indexOf(charProfileMarker);
-    
-    if (charProfileIndex > 0) {
-      // Found marker - skip everything before it (this is the prompt echo)
-      console.log(`📝 Prompt echo detected: ${charProfileIndex}ch before first marker - removing`);
-      cleanText = cleanText.substring(charProfileIndex);
+    // If response contains extra text, try to find JSON block
+    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn(`⚠️  No JSON found in response, attempting text parsing fallback...`);
+      return recommendations;
     }
     
-    // Remove suggestion text at the end (after recommendation end)
-    const recEnd = cleanText.indexOf('*** RECOMMENDATIONS END ***');
-    if (recEnd !== -1) {
-      const endContent = cleanText.substring(recEnd + 27); // +27 = length of "*** RECOMMENDATIONS END ***"
-      // Keep only lines after END that might be time indicators, but clean noise
-      const nextNewline = endContent.indexOf('\n');
-      if (nextNewline !== -1) {
-        cleanText = cleanText.substring(0, recEnd + 27 + nextNewline);
-      } else {
-        // No newline after - just use up to END marker
-        cleanText = cleanText.substring(0, recEnd + 27);
+    jsonText = jsonMatch[0];
+    console.log(`📄 Found JSON block (${jsonText.length} chars)`);
+    
+    // Parse JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (jsonErr) {
+      // Try to fix common JSON issues
+      console.log(`   Attempting to fix JSON format...`);
+      jsonText = jsonText
+        .replace(/,\s*}/g, '}')  // Remove trailing commas
+        .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+        .replace(/'/g, '"');     // Single to double quotes
+      
+      try {
+        parsed = JSON.parse(jsonText);
+      } catch (retryErr) {
+        console.error(`❌ Failed to parse JSON:`, retryErr.message);
+        return recommendations;
       }
     }
     
-    console.log(`📄 Text prepared for parsing (${cleanText.length}ch)`);
-
-    // Validate we have the expected markers
-    const hasCharMarker = cleanText.includes('*** CHARACTER PROFILE START ***');
-    const hasProdMarker = cleanText.includes('*** PRODUCT DETAILS START ***');
-    const hasRecMarker = cleanText.includes('*** RECOMMENDATIONS START ***');
+    // Extract character profile
+    if (parsed.character && typeof parsed.character === 'object') {
+      recommendations.characterProfile = {
+        gender: parsed.character.gender || '',
+        age_range: parsed.character.age_range || '',
+        body_type: parsed.character.body_type || '',
+        skin_tone: parsed.character.skin_tone || '',
+        hair_color: parsed.character.hair_color || '',
+        hair_length: parsed.character.hair_length || '',
+        hair_texture: parsed.character.hair_texture || '',
+        hair_style: parsed.character.hair_style || '',
+        face_shape: parsed.character.face_shape || ''
+      };
+      console.log(`   ✅ Character profile extracted: ${Object.keys(recommendations.characterProfile).length} fields`);
+    }
     
-    if (!hasCharMarker || !hasProdMarker || !hasRecMarker) {
-      console.warn(`⚠️  Missing markers - CHAR: ${hasCharMarker}, PROD: ${hasProdMarker}, REC: ${hasRecMarker}`);
-    }
-
-    // ===== PARSE CHARACTER PROFILE =====
-    const charMatch = cleanText.match(/\*\*\*\s*CHARACTER\s*PROFILE\s*START\s*\*\*\*([\s\S]*?)\*\*\*\s*CHARACTER\s*PROFILE\s*END\s*\*\*\*/i);
-    if (charMatch && charMatch[1]) {
-      const charText = charMatch[1];
-      const fieldMap = {
-        'Gender': 'gender',
-        'Age Range': 'age_range',
-        'Body Type': 'body_type',
-        'Skin Tone': 'skin_tone',
-        'Hair Length': 'hair_length',
-        'Hair Color': 'hair_color',
-        'Hair Texture': 'hair_texture',
-        'Hair Style': 'hair_style',
-        'Face Shape': 'face_shape',
-        'Current Outfit': 'current_outfit'
+    // Extract product details
+    if (parsed.product && typeof parsed.product === 'object') {
+      recommendations.productDetails = {
+        garment_type: parsed.product.garment_type || '',
+        style_category: parsed.product.style_category || '',
+        primary_color: parsed.product.primary_color || '',
+        secondary_color: parsed.product.secondary_color || '',
+        pattern: parsed.product.pattern || '',
+        fabric_type: parsed.product.fabric_type || '',
+        fit_type: parsed.product.fit_type || '',
+        key_details: parsed.product.key_details || ''
       };
-      
-      Object.entries(fieldMap).forEach(([fieldName, jsonKey]) => {
-        const fieldRegex = new RegExp(`^\\s*${fieldName}\\s*:\\s*(.+?)$`, 'im');
-        const fieldMatch = charText.match(fieldRegex);
-        
-        if (fieldMatch && fieldMatch[1]) {
-          const value = fieldMatch[1].trim();
-          // Only save if not template/placeholder and has real content
-          if (value.length > 2 && !value.includes('[') && !value.startsWith('e.g.') && !value.startsWith('[') && value !== 'Description') {
-            recommendations.characterProfile[jsonKey] = value;
-            console.log(`   ✅ Char [${jsonKey}]: ${value.substring(0, 45)}`);
-          }
-        }
-      });
-    } else {
-      console.log(`   ⚠️  Character profile section not found`);
+      console.log(`   ✅ Product details extracted: ${Object.keys(recommendations.productDetails).length} fields`);
     }
-
-    // ===== PARSE PRODUCT DETAILS =====
-    const prodMatch = cleanText.match(/\*\*\*\s*PRODUCT\s*DETAILS\s*START\s*\*\*\*([\s\S]*?)\*\*\*\s*PRODUCT\s*DETAILS\s*END\s*\*\*\*/i);
-    if (prodMatch && prodMatch[1]) {
-      const prodText = prodMatch[1];
-      const fieldMap = {
-        'Garment Type': 'garment_type',
-        'Style Category': 'style_category',
-        'Primary Color': 'primary_color',
-        'Secondary Color': 'secondary_color',
-        'Pattern': 'pattern',
-        'Fabric Type': 'fabric_type',
-        'Fit Type': 'fit_type',
-        'Key Details': 'key_details'
+    
+    // Extract analysis
+    if (parsed.analysis && typeof parsed.analysis === 'object') {
+      recommendations.analysis = {
+        compatibilityScore: parsed.analysis.compatibility_score || 0,
+        fitAssessment: parsed.analysis.fit_assessment || '',
+        colorHarmony: parsed.analysis.color_harmony || '',
+        stylingNotes: parsed.analysis.styling_notes || ''
       };
+      console.log(`   ✅ Analysis extracted: score ${recommendations.analysis.compatibilityScore}`);
+    }
+    
+    // Extract recommendations
+    if (parsed.recommendations && typeof parsed.recommendations === 'object') {
+      const recs = parsed.recommendations;
       
-      Object.entries(fieldMap).forEach(([fieldName, jsonKey]) => {
-        const fieldRegex = new RegExp(`^\\s*${fieldName}\\s*:\\s*(.+?)$`, 'im');
-        const fieldMatch = prodText.match(fieldRegex);
-        
-        if (fieldMatch && fieldMatch[1]) {
-          const value = fieldMatch[1].trim();
-          // Only save if not template/placeholder and has real content
-          if (value.length > 2 && !value.includes('[') && !value.startsWith('e.g.') && value !== 'Description') {
-            recommendations.productDetails[jsonKey] = value;
-            console.log(`   ✅ Prod [${jsonKey}]: ${value.substring(0, 45)}`);
+      [
+        'scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 
+        'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'
+      ].forEach(key => {
+        if (recs[key] && typeof recs[key] === 'object') {
+          let choice = (recs[key].choice || '').toLowerCase().trim();
+          const reason = (recs[key].reason || '').trim();
+          
+          // ✅ NEW: Support comma-separated multiple values
+          // Example: "gold-bracelet, structured-handbag" → ["gold-bracelet", "structured-handbag"]
+          let choiceArray = [];
+          if (choice && choice.includes(',')) {
+            // Split by comma and clean each value
+            choiceArray = choice
+              .split(',')
+              .map(c => c.toLowerCase().trim())
+              .filter(c => c && c.length > 0 && c !== 'not-applicable');
+            console.log(`   ℹ️  ${key}: Multi-value (${choiceArray.length} items)`);
+          } else if (choice && choice.length > 0 && choice !== 'not-applicable') {
+            choiceArray = [choice];
+          }
+          
+          // Store as array (supports both single and multi-select)
+          recommendations[key] = {
+            choice: choiceArray.length === 1 ? choiceArray[0] : choiceArray, // Single string or array
+            choiceArray: choiceArray, // Always keep array version for components
+            reason: reason,
+            isMulti: choiceArray.length > 1, // Flag for multi-value
+            alternatives: recs[key].alternatives?.length > 0 
+              ? recs[key].alternatives.map(a => (typeof a === 'string' ? a.toLowerCase().trim() : '')) 
+              : []
+          };
+          
+          // Filter empty alternatives
+          recommendations[key].alternatives = recommendations[key].alternatives.filter(
+            a => a && a.length > 0 && a !== 'not-applicable'
+          );
+          
+          if (choiceArray.length > 0) {
+            const display = choiceArray.length > 1 ? choiceArray.join(' + ') : choiceArray[0];
+            console.log(`   ✅ ${key}: ${display}`);
           }
         }
       });
-    } else {
-      console.log(`   ⚠️  Product details section not found`);
     }
-
-    // ===== PARSE ANALYSIS =====
-    const analysisMatch = cleanText.match(/\*\*\*\s*ANALYSIS\s*START\s*\*\*\*([\s\S]*?)\*\*\*\s*ANALYSIS\s*END\s*\*\*\*/i);
-    if (analysisMatch && analysisMatch[1]) {
-      const analysisContent = analysisMatch[1];
-      const scoreMatch = analysisContent.match(/Compatibility\s*Score\s*:\s*(\d+)/i);
-      
-      if (scoreMatch && scoreMatch[1]) {
-        recommendations.analysis.compatibilityScore = parseInt(scoreMatch[1]);
-        console.log(`   ✅ Compatibility Score: ${scoreMatch[1]}`);
-      }
-    } else {
-      console.log(`   ⚠️  Analysis section not found`);
-    }
-
-    // ===== PARSE RECOMMENDATIONS =====
-    const recMatch = cleanText.match(/\*\*\*\s*RECOMMENDATIONS\s*START\s*\*\*\*([\s\S]*?)\*\*\*\s*RECOMMENDATIONS\s*END\s*\*\*\*/i);
-    if (recMatch && recMatch[1]) {
-      const recText = recMatch[1];
-      
-      // Define fields with their regex patterns - now extract choice, reason, and alternatives
-      const fieldMappings = [
-        { name: 'scene', choicePattern: /SCENE_CHOICE:\s*([^\n]+)/i, reasonPattern: /SCENE_REASON:\s*([^\n]+(?:\n(?!SCENE_|LIGHTING_)[^\n]*)*)/i, altPattern: /SCENE_ALTERNATIVES:\s*([^\n]+)/i, key: 'scene' },
-        { name: 'lighting', choicePattern: /LIGHTING_CHOICE:\s*([^\n]+)/i, reasonPattern: /LIGHTING_REASON:\s*([^\n]+(?:\n(?!LIGHTING_|MOOD_)[^\n]*)*)/i, altPattern: /LIGHTING_ALTERNATIVES:\s*([^\n]+)/i, key: 'lighting' },
-        { name: 'mood', choicePattern: /MOOD_CHOICE:\s*([^\n]+)/i, reasonPattern: /MOOD_REASON:\s*([^\n]+(?:\n(?!MOOD_|CAMERA_)[^\n]*)*)/i, altPattern: /MOOD_ALTERNATIVES:\s*([^\n]+)/i, key: 'mood' },
-        { name: 'cameraAngle', choicePattern: /CAMERA_ANGLE:\s*([^\n]+)/i, reasonPattern: /ANGLE_REASON:\s*([^\n]+(?:\n(?!ANGLE_|HAIRSTYLE_)[^\n]*)*)/i, altPattern: /ANGLE_ALTERNATIVES:\s*([^\n]+)/i, key: 'cameraAngle' },
-        { name: 'hairstyle', choicePattern: /HAIRSTYLE:\s*([^\n]+)/i, reasonPattern: /HAIRSTYLE_REASON:\s*([^\n]+(?:\n(?!HAIRSTYLE_|MAKEUP_)[^\n]*)*)/i, altPattern: /HAIRSTYLE_ALTERNATIVES:\s*([^\n]+)/i, key: 'hairstyle' },
-        { name: 'makeup', choicePattern: /MAKEUP:\s*([^\n]+)/i, reasonPattern: /MAKEUP_REASON:\s*([^\n]+(?:\n(?!MAKEUP_|BOTTOMS_)[^\n]*)*)/i, altPattern: /MAKEUP_ALTERNATIVES:\s*([^\n]+)/i, key: 'makeup' },
-        { name: 'bottoms', choicePattern: /BOTTOMS:\s*([^\n]+)/i, reasonPattern: /BOTTOMS_REASON:\s*([^\n]+(?:\n(?!BOTTOMS_|SHOES_)[^\n]*)*)/i, altPattern: /BOTTOMS_ALTERNATIVES:\s*([^\n]+)/i, key: 'bottoms' },
-        { name: 'shoes', choicePattern: /SHOES:\s*([^\n]+)/i, reasonPattern: /SHOES_REASON:\s*([^\n]+(?:\n(?!SHOES_|ACCESSORIES_)[^\n]*)*)/i, altPattern: /SHOES_ALTERNATIVES:\s*([^\n]+)/i, key: 'shoes' },
-        { name: 'accessories', choicePattern: /ACCESSORIES:\s*([^\n]+)/i, reasonPattern: /ACCESSORIES_REASON:\s*([^\n]+(?:\n(?!ACCESSORIES_|OUTERWEAR_)[^\n]*)*)/i, altPattern: /ACCESSORIES_ALTERNATIVES:\s*([\s\S]*?)(?=OUTERWEAR|$)/i, key: 'accessories' },
-        { name: 'outerwear', choicePattern: /OUTERWEAR:\s*([^\n]+)/i, reasonPattern: /OUTERWEAR_REASON:\s*([^\n]+(?:\n(?!OUTERWEAR_)[^\n]*)*)/i, altPattern: /OUTERWEAR_ALTERNATIVES:\s*([^\n]+)/i, key: 'outerwear' }
-      ];
-      
-      fieldMappings.forEach(({ name, choicePattern, reasonPattern, altPattern, key }) => {
-        const choiceMatch = recText.match(choicePattern);
-        const reasonMatch = recText.match(reasonPattern);
-        const altMatch = recText.match(altPattern);
-        
-        if (choiceMatch && choiceMatch[1]) {
-          let choice = choiceMatch[1].trim();
-          
-          // Validate and clean value
-          const skipPhrases = ['not-applicable', 'not-needed', 'keep-current', 'keep-existing', 'none', 'n/a', '[', 'description'];
-          const isSkipValue = skipPhrases.some(phrase => choice.toLowerCase().includes(phrase));
-          
-          if (!isSkipValue && choice.length >= 2 && !choice.includes('[') && !choice.includes('e.g.')) {
-            choice = choice.split('\n')[0].trim().toLowerCase();
-            
-            if (!/^[-\s]*$/.test(choice)) {
-              // Store recommendation with full details (choice + reason + alternatives)
-              const recommendation = {
-                choice: choice,
-                reason: reasonMatch && reasonMatch[1] ? reasonMatch[1].trim() : '',
-                alternatives: altMatch && altMatch[1] ? altMatch[1].trim().split(',').map(a => a.trim()).filter(a => a) : []
-              };
-              
-              recommendations[key] = recommendation;
-              console.log(`   ✅ [${key}]: ${choice} (reason: ${recommendation.reason.substring(0, 50)}...)`);
-            }
-          }
-        }
-      });
-    } else {
-      console.log(`   ⚠️  Recommendations section not found`);
-    }
-
-    console.log(`✅ Parsing complete:`, {
-      characterProfile: Object.keys(recommendations.characterProfile).length,
-      productDetails: Object.keys(recommendations.productDetails).length,
-      recommendations: ['scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'].filter(k => recommendations[k]).length,
-      analysis: Object.keys(recommendations.analysis).length
-    });
-
+    
+    console.log(`✅ JSON parsing complete!`);
     return recommendations;
 
   } catch (error) {
@@ -967,9 +853,65 @@ export async function analyzeWithBrowser(req, res) {
     console.log(`      Result: "${analysisText?.substring(0, 200) || 'N/A'}..."`);
 
     // ====================================
-    // STEP 5: Extract conversation ID from Grok URL
+    // STEP 4.5: Validate response is not empty
     // ====================================
-    console.log(`\n🔗 Extracting conversation ID from Grok URL...`);
+    if (!analysisText || (typeof analysisText === 'string' && analysisText.trim().length === 0)) {
+      console.error(`❌ CRITICAL: AI returned empty response!`);
+      console.error(`   Provider: ${analysisProvider}`);
+      console.error(`   Response length: ${analysisText?.length || 0} characters`);
+      
+      // Try to use fallback provider
+      console.warn(`⚠️  Attempting fallback provider...`);
+      if (analysisProvider !== 'grok') {
+        console.log(`   Trying Grok instead of ${analysisProvider}...`);
+        // Create new service for fallback
+        const fallbackService = new GrokServiceV2({ headless: false });
+        await fallbackService.initialize();
+        
+        const fallbackResult = await fallbackService.analyzeMultipleImages(
+          [charImagePath, prodImagePath],
+          analysisPrompt
+        );
+        
+        const fallbackText = fallbackResult?.text || fallbackResult;
+        
+        if (fallbackText && fallbackText.trim().length > 0) {
+          console.log(`   ✅ Fallback succeeded! Got ${fallbackText.length}ch from Grok`);
+          await fallbackService.close();
+          
+          // Continue with fallback result
+          const recommendations = parseRecommendations(fallbackText);
+          const characterDescription = extractCharacterDescription(fallbackText);
+          const newOptionsCreated = await autoSaveRecommendations(recommendations);
+          
+          cleanupTempFiles(tempFiles);
+          
+          return res.json({
+            success: true,
+            data: {
+              analysis: fallbackText,
+              recommendations,
+              newOptionsCreated,
+              grokConversationId: null,
+              grokUrl: null,
+              characterDescription,
+              providers: {
+                analysis: 'grok',
+                fallback: true,
+                originalProvider: analysisProvider
+              },
+              generatedImages: []
+            },
+            message: 'Analysis completed with fallback provider (original provider returned empty response)'
+          });
+        } else {
+          await fallbackService.close();
+          throw new Error(`Both ${analysisProvider} and Grok returned empty responses. Please try again.`);
+        }
+      } else {
+        throw new Error(`Grok returned empty response. Please check your internet connection and try again.`);
+      }
+    }
     const grokUrl = await browserService.getUrl();
     const conversationId = extractConversationId(grokUrl);
     console.log(`   📍 Grok URL: ${grokUrl}`);
@@ -983,6 +925,7 @@ export async function analyzeWithBrowser(req, res) {
     
     // 💫 NEW: Extract character description for generation
     const characterDescription = extractCharacterDescription(analysisText);
+    
     
     // ====================================
     // STEP 7: Auto-save new options to database
@@ -1108,6 +1051,18 @@ export async function generateWithBrowser(req, res) {
       characterDescription
     };
 
+    // 🔍 LOG: Show all options before sending to Google Flow
+    console.log(`\n📒 GOOGLE FLOW OPTIONS SUMMARY:`);
+    console.log(`   Scene: ${scene}`);
+    console.log(`   Lighting: ${lighting}`);
+    console.log(`   Mood: ${mood}`);
+    console.log(`   Style: ${style}`);
+    console.log(`   Color Palette: ${colorPalette}`);
+    console.log(`   Camera Angle: ${cameraAngle}`);
+    console.log(`   Aspect Ratio: ${aspectRatio}`);
+    console.log(`   Image Count: ${imageCount}`);
+    console.log(`   Negative Prompt: ${negativePrompt || '(none)'}\n`);
+
     // ====================================
     // 💫 NEW: Check if using Google Flow image generation
     // ====================================
@@ -1121,6 +1076,7 @@ export async function generateWithBrowser(req, res) {
           personImagePath: charImagePath,
           productImagePath: prodImagePath,
           prompt: prompt,
+          negativePrompt: negativePrompt,  // 💫 Include negative prompt
           imageCount: imageCount,
           aspectRatio: aspectRatio,
           outputDir: path.join(tempDir, 'image-gen-results')
@@ -1131,15 +1087,53 @@ export async function generateWithBrowser(req, res) {
 
         console.log(`✅ Google Flow image generation complete`);
         
+        // Store file paths temporarily for the GET endpoint to use
+        // (In production, use proper cache/session storage)
+        global.generatedImagePaths = global.generatedImagePaths || {};
+        
+        const generatedImages = (genResult.results?.files || []).map((filePath, idx) => {
+          const filename = path.basename(filePath);
+          // Create a unique key for this image
+          const imageKey = `${Date.now()}-${idx}-${filename}`;
+          // Create HTTP path for browser serving
+          const imageUrl = `/v1/browser-automation/generated-image/${imageKey}`;
+          
+          // Store the mapping immediately
+          global.generatedImagePaths[imageKey] = filePath;
+          // Auto-cleanup after 1 hour
+          setTimeout(() => delete global.generatedImagePaths[imageKey], 60 * 60 * 1000);
+          
+          try {
+            const size = fs.statSync(filePath).size;
+            console.log(`  Image ${idx + 1}: ${filename} (${size} bytes) → ${imageUrl}`);
+            return {
+              url: imageUrl,        // HTTP path for browser display
+              filename: filename,
+              provider: 'google-flow',
+              size: size
+            };
+          } catch (e) {
+            console.error(`⚠️ Failed to stat ${filePath}:`, e.message);
+            return {
+              url: imageUrl,
+              filename: filename,
+              provider: 'google-flow',
+              size: 0
+            };
+          }
+        });
+
+        console.log(`📤 Response: ${generatedImages.length} images ready for frontend`);
+        console.log(`   URLs: ${generatedImages.map(img => img.url).join(', ')}`);
+        console.log(`   Stored paths: ${Object.keys(global.generatedImagePaths).slice(-generatedImages.length).join(', ')}`);
+        
         return res.json({
           success: true,
           data: {
-            generatedImages: [{
-              filename: 'gen-result',
-              genResult: genResult,
-              provider: 'google-flow',
-              generatedAt: new Date().toISOString()
-            }],
+            generatedImages: generatedImages,
+            count: generatedImages.length,
+            expectedCount: imageCount,
+            aspectRatio: aspectRatio,
             providers: {
               generation: 'google-flow'
             }
@@ -1149,6 +1143,7 @@ export async function generateWithBrowser(req, res) {
 
       } catch (genError) {
         console.error(`❌ Google Flow Image Generation Error:`, genError.message);
+        console.error(`Stack:`, genError.stack);
         cleanupTempFiles(tempFiles);
         
         return res.status(500).json({
@@ -1641,6 +1636,73 @@ export async function analyzeBrowser(req, res) {
 
 export async function generateImageBrowser(req, res) {
     res.status(501).json({ error: "Use analyzeAndGenerate instead" });
+}
+
+/**
+ * 📸 Serve generated images from storage
+ * GET /v1/browser-automation/generated-image/:id
+ */
+export async function serveGeneratedImage(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Retrieve file path from temporary storage
+    const filePath = global.generatedImagePaths?.[id];
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+      console.warn(`⚠️ Generated image not found: ${id}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found or expired'
+      });
+    }
+    
+    // Security check: ensure path is within temp directory
+    const realPath = path.resolve(filePath);
+    const tempBasePath = path.resolve(tempDir);
+    
+    if (!realPath.startsWith(tempBasePath)) {
+      console.error(`🚨 Security violation: Attempted to access file outside temp dir:`, realPath);
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+    
+    // Determine content type
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypeMap = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp'
+    };
+    const contentType = contentTypeMap[ext] || 'image/jpeg';
+    
+    // Stream the image file
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.on('error', (err) => {
+      console.error(`❌ Error streaming file ${filePath}:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream image' });
+      }
+    });
+    
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Error serving generated image:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 }
 
 export async function generateVideoBrowser(req, res) {

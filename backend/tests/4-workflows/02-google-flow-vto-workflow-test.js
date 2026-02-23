@@ -38,9 +38,24 @@ async function testCompleteFlow() {
     }
 
     const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    
+    // Set up download directory
+    const downloadDir = path.join(__dirname, '../../temp/vto-downloads');
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true });
+    }
+    console.log(`📂 Download directory: ${downloadDir}\n`);
+    
     browser = await puppeteer.launch({ headless: false, args: ['--no-sandbox'] });
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
+    
+    // Set up download behavior
+    const client = await page.target().createCDPSession();
+    await client.send('Page.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: downloadDir
+    });
 
     for (const cookie of sessionData.cookies) {
       try { await page.setCookie(cookie); } catch (e) {}
@@ -147,7 +162,7 @@ async function testCompleteFlow() {
         continue;
       }
 
-      // Click add button - CORRECT: find in closest parent container
+      // Click add button - IMPROVED: search more flexibly
       const addBtnClicked = await page.evaluate(() => {
         const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
         if (!textarea) return false;
@@ -160,26 +175,80 @@ async function testCompleteFlow() {
 
         if (!container) return false;
 
-        // The add button is in the 3rd child (index 2) of this container
-        const children = container.children;
-        if (children.length < 3) return false;
-
-        const buttonContainer = children[2]; // Third child
-        const buttons = Array.from(buttonContainer.querySelectorAll('button'));
-        const addBtn = buttons.find(btn => {
+        // Search ALL buttons in container for "add" icon
+        // More flexible approach - check all children
+        const allButtons = Array.from(container.querySelectorAll('button'));
+        const addBtn = allButtons.find(btn => {
           const icon = btn.querySelector('i');
-          return icon && icon.textContent.trim() === 'add' && !btn.disabled;
+          if (!icon) return false;
+          const iconText = icon.textContent.trim();
+          return iconText === 'add' && !btn.disabled;
         });
 
         if (addBtn) {
           addBtn.click();
           return true;
         }
+
+        // If not found with icon === 'add', try different icon texts
+        const alternativeBtn = allButtons.find(btn => {
+          const icon = btn.querySelector('i');
+          if (!icon) return false;
+          const iconText = icon.textContent.trim().toLowerCase();
+          return (iconText.includes('add') || iconText.includes('plus') || iconText === 'add_photo') && !btn.disabled;
+        });
+
+        if (alternativeBtn) {
+          alternativeBtn.click();
+          return true;
+        }
+
+        // Last resort: look in children[2] area more carefully
+        const children = container.children;
+        for (let i = 1; i < Math.min(4, children.length); i++) {
+          const child = children[i];
+          const buttons = Array.from(child.querySelectorAll('button'));
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+              const txt = icon.textContent.trim().toLowerCase();
+              if ((txt === 'add' || txt.includes('add') || txt === 'add_photo') && !btn.disabled) {
+                btn.click();
+                return true;
+              }
+            }
+          }
+        }
+
         return false;
       });
 
       if (!addBtnClicked) {
+        // Debug: Log what buttons are actually available
+        const debugInfo = await page.evaluate(() => {
+          const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+          if (!textarea) return { error: 'textarea not found' };
+
+          let container = textarea.parentElement;
+          while (container && !container.className.includes('sc-77366d4e-2')) {
+            container = container.parentElement;
+          }
+
+          if (!container) return { error: 'container sc-77366d4e-2 not found' };
+
+          const allButtons = Array.from(container.querySelectorAll('button'));
+          return {
+            totalButtons: allButtons.length,
+            buttonDetails: allButtons.map(btn => ({
+              icon: btn.querySelector('i')?.textContent.trim() || 'NO_ICON',
+              disabled: btn.disabled,
+              visible: btn.offsetParent !== null
+            }))
+          };
+        });
+
         console.log(`  ❌ Could not click add button`);
+        console.log(`  Debug info:`, JSON.stringify(debugInfo, null, 2));
         continue;
       }
 
@@ -190,18 +259,48 @@ async function testCompleteFlow() {
       // Step 5: Directly upload file through the file input that appeared
       console.log(`  └─ 4.${imageIndex + 1}.2: Upload file through file input`);
 
-      const fileChooserPromise = page.waitForFileChooser({ timeout: 8000 });
+      // FIRST: Wait for file input to appear on the page
+      let fileInputFound = false;
+      let waitAttempts = 0;
+      while (!fileInputFound && waitAttempts < 30) {
+        await page.waitForTimeout(300);
+        waitAttempts++;
 
-      // Click the file input directly (it should appear after add button)
+        const fileInputs = await page.evaluate(() => {
+          return Array.from(document.querySelectorAll('input[type="file"]')).length;
+        });
+
+        if (fileInputs > 0) {
+          fileInputFound = true;
+          console.log(`  ✓ File input appeared (after ${waitAttempts * 300}ms)`);
+          break;
+        }
+      }
+
+      if (!fileInputFound) {
+        console.log(`  ❌ File input did not appear within 10 seconds`);
+        continue;
+      }
+
+      // SECOND: Set up file chooser promise
+      const fileChooserPromise = page.waitForFileChooser({ timeout: 15000 });
+
+      // THIRD: Click the file input
       const fileinputClicked = await page.evaluate(() => {
         const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
         for (const input of fileInputs) {
           const accept = (input.accept || '').toLowerCase();
           // Find file input that accepts images
-          if (accept.includes('jpg') || accept.includes('png') || accept.includes('image')) {
+          if (accept.includes('jpg') || accept.includes('png') || accept.includes('image') || accept === '') {
+            console.log('Clicking file input with accept:' + accept);
             input.click();
             return true;
           }
+        }
+        // If still no luck, click the first file input
+        if (fileInputs.length > 0) {
+          fileInputs[0].click();
+          return true;
         }
         return false;
       });
@@ -218,6 +317,21 @@ async function testCompleteFlow() {
         console.log(`  ✓ File selected: ${imageName}\n`);
       } catch (e) {
         console.log(`  ❌ File chooser error: ${e.message}`);
+        
+        // Debug: Check if file input is still on page
+        const fileInputStatus = await page.evaluate(() => {
+          const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+          return {
+            count: inputs.length,
+            details: inputs.map(inp => ({
+              accept: inp.accept,
+              visible: inp.offsetParent !== null,
+              disabled: inp.disabled
+            }))
+          };
+        });
+        
+        console.log(`  Debug - File inputs on page:`, JSON.stringify(fileInputStatus, null, 2));
         continue;
       }
 
@@ -354,7 +468,7 @@ async function testCompleteFlow() {
     // ═══════════════════════════════════════════════════════════════════════════════
     console.log('📍 Step 8: Enter VTO prompt');
 
-    // Wait for button count to be 4 (2 close + 1 add + 1 send)
+    // Wait for button count to be 4 (2 close + 1 add + 1 send) AND verify 2 components loaded
     try {
       await page.waitForFunction(
         () => {
@@ -368,38 +482,167 @@ async function testCompleteFlow() {
             if (icon.includes('arrow_forward') || icon.includes('send')) sendCount++;
           }
 
-          // Should have at least: 2 close (previews) + 1 add + 1 send
-          return closeCount >= 2 && addCount >= 1 && sendCount >= 1;
+          // Should have exactly: 2 close (previews) + 1 add + 1 send
+          return closeCount === 2 && addCount >= 1 && sendCount >= 1;
         },
         { timeout: 30000 }
       );
-      console.log('✓ Button count confirmed ready (4+ buttons)');
+      console.log('✓ Button count confirmed ready (2 components + add + send)');
     } catch (e) {
       console.log('⚠️  Button count not reached, but continuing with prompt');
     }
 
+    // Clean and split prompt
+    const cleanPrompt = VTO_PROMPT.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
+    const firstPart = cleanPrompt.substring(0, 10);
+    const secondPart = cleanPrompt.substring(10);
+    const expectedLength = cleanPrompt.length;
+
+    console.log(`  Prompt (cleaned): "${cleanPrompt}"`);
+    console.log(`  Split: "${firstPart}" + "${secondPart}"`);
+    console.log(`  Target length: ${expectedLength} characters`);
+
+    // Step 1: Focus and type first 10 characters
     await page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
     await page.waitForTimeout(300);
+    console.log(`  → Typing first 10 chars: "${firstPart}"`);
+    await page.keyboard.type(firstPart, { delay: 50 }); // Type each character slowly
+    await page.waitForTimeout(200);
 
-    await page.type('#PINHOLE_TEXT_AREA_ELEMENT_ID', VTO_PROMPT, { delay: 10 });
-    console.log(`✓ Prompt entered\n`);
+    // Step 2: Type remaining part (split into chunks for better React component recognition)
+    if (secondPart.length > 0) {
+      console.log(`  → Typing remaining ${secondPart.length} chars in chunks...`);
+      const chunkSize = 50; // Type in 50-char chunks
+      for (let i = 0; i < secondPart.length; i += chunkSize) {
+        const chunk = secondPart.substring(i, i + chunkSize);
+        await page.keyboard.type(chunk, { delay: 5 });
+        await page.waitForTimeout(50); // Small delay between chunks
+      }
+      // Trigger final events to ensure React component recognizes the full input
+      await page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (textarea) {
+          textarea.dispatchEvent(new Event('blur', { bubbles: true }));
+          textarea.dispatchEvent(new Event('focus', { bubbles: true }));
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          textarea.dispatchEvent(new Event('keyup', { bubbles: true }));
+        }
+      });
+      await page.waitForTimeout(300);
+    }
+
+    // Step 3: Wait for textarea content to match expected length
+    console.log(`  → Waiting for textarea to have ${expectedLength} characters...`);
+    let promptReady = false;
+    let waitAttempts = 0;
+    const maxWaitAttempts = 20; // 10 seconds max (500ms per attempt)
+
+    while (!promptReady && waitAttempts < maxWaitAttempts) {
+      const currentLength = await page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        return textarea ? textarea.value.length : 0;
+      });
+
+      if (currentLength >= expectedLength) {
+        promptReady = true;
+        console.log(`  ✓ Textarea ready (${currentLength}/${expectedLength} characters)`);
+      } else {
+        if (waitAttempts % 2 === 0) {
+          process.stdout.write(`  ⏱️  ${currentLength}/${expectedLength}...\r`);
+        }
+        await page.waitForTimeout(500);
+        waitAttempts++;
+      }
+    }
+
+    if (!promptReady) {
+      console.log(`\n  ⚠️  Timeout waiting for full prompt (got partial content)`);
+    }
+
+    console.log(`\n✓ Prompt entered (${expectedLength} characters)`);
 
     // ═══════════════════════════════════════════════════════════════════════════════
-    console.log('📍 Step 9: Submit & wait for generation');
+    console.log('📍 Step 9: Validate & Submit');
 
+    // Comprehensive validation BEFORE submission
+    const submitValidation = await page.evaluate((expectedLen) => {
+      const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+      if (!textarea) return { valid: false, reason: 'textarea not found', textareaLength: 0 };
+
+      let container = textarea.parentElement;
+      while (container && !container.className.includes('sc-77366d4e-2')) {
+        container = container.parentElement;
+      }
+
+      if (!container) return { valid: false, reason: 'container not found', textareaLength: textarea.value.length };
+
+      const buttons = Array.from(container.querySelectorAll('button'));
+      let closeCount = 0;
+      let sendBtn = null;
+
+      for (const btn of buttons) {
+        const icon = btn.querySelector('i');
+        if (!icon) continue;
+        const iconText = icon.textContent.trim();
+        if (iconText === 'close') closeCount++;
+        if (iconText === 'arrow_forward') sendBtn = btn;
+      }
+
+      const textareaLength = textarea.value.length;
+
+      // Check component count (must be exactly 2)
+      if (closeCount !== 2) {
+        return { valid: false, reason: `Expected 2 components, found ${closeCount}`, components: closeCount, textareaLength };
+      }
+
+      // Check send button exists
+      if (!sendBtn) {
+        return { valid: false, reason: 'send button not found', components: closeCount, textareaLength };
+      }
+
+      // Check textarea length matches expected
+      if (textareaLength < expectedLen) {
+        return { valid: false, reason: `Textarea incomplete (${textareaLength}/${expectedLen} chars)`, components: closeCount, textareaLength };
+      }
+
+      return { valid: true, components: closeCount, textareaLength, sendDisabled: sendBtn.disabled };
+    }, expectedLength);
+
+    if (!submitValidation.valid) {
+      console.log(`❌ Validation failed: ${submitValidation.reason}`);
+      console.log(`   Textarea: ${submitValidation.textareaLength}/${expectedLength} chars`);
+      console.log(`   Components: ${submitValidation.components}`);
+      throw new Error(`Cannot submit: ${submitValidation.reason}`);
+    }
+
+    if (submitValidation.sendDisabled) {
+      console.log(`⚠️  Send button disabled, enabling...`);
+      await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const sendBtn = buttons.find(btn => {
+          const icon = btn.querySelector('i');
+          return icon && icon.textContent.includes('arrow_forward');
+        });
+        if (sendBtn) sendBtn.disabled = false;
+      });
+    }
+
+    console.log(`✓ All checks passed (${submitValidation.components} components, ${submitValidation.textareaLength}/${expectedLength} chars)\n`);
+
+    // Final: Click send button
     await page.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll('button'));
       for (const btn of buttons) {
         const icon = btn.querySelector('i');
-        if (icon && (icon.textContent.includes('arrow_forward') || icon.textContent.includes('send'))) {
-          if (!btn.disabled) {
-            btn.click();
-            return;
-          }
+        if (icon && icon.textContent.includes('arrow_forward')) {
+          btn.click();
+          return;
         }
       }
     });
 
+    console.log('📍 Step 9: Submit & wait for generation');
     console.log('✓ Submitted\n');
 
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -452,6 +695,187 @@ async function testCompleteFlow() {
     console.log('━'.repeat(70) + '\n');
 
     // ═══════════════════════════════════════════════════════════════════════════════
+    console.log('📍 Step 11: Download generated images');
+
+    if (generated) {
+      const initialFiles = fs.readdirSync(downloadDir);
+      const generatedImages = [];
+
+      // Find download buttons and download images
+      const downloadBtns = await page.evaluate(() => {
+        const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+        if (!scroller) return [];
+
+        const items = scroller.querySelectorAll('[data-index]');
+        return items.length;
+      });
+
+      console.log(`\n📍 Found ${downloadBtns} generated items, downloading...\n`);
+
+      for (let d = 0; d < downloadBtns; d++) {
+        console.log(`  💾 Downloading item ${d + 1}/${downloadBtns}...`);
+
+        const downloadResult = await page.evaluate((idx) => {
+          const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+          if (!scroller) return { error: 'No scroller' };
+
+          const items = scroller.querySelectorAll('[data-index]');
+          const item = items[idx];
+          if (!item) return { error: 'Item not found' };
+
+          const buttons = item.querySelectorAll('button');
+          let downloadBtn = null;
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i');
+            if (icon && icon.textContent.includes('download')) {
+              downloadBtn = btn;
+              break;
+            }
+          }
+
+          if (!downloadBtn) return { error: 'No download button' };
+
+          downloadBtn.click();
+          return { success: true };
+        }, d);
+
+        if (!downloadResult.success) {
+          console.log(`    ❌ ${downloadResult.error}`);
+          continue;
+        }
+
+        // Wait for menu to appear (or auto-download for Banana model)
+        await page.waitForTimeout(500);
+
+        // Check if menu exists (Nano Banana Pro has menu, Banana model auto-downloads)
+        const menuCheckResult = await page.evaluate(() => {
+          let menuItems = document.querySelectorAll('[role="menuitem"]');
+          if (menuItems.length === 0) {
+            menuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
+          }
+          return {
+            hasMenu: menuItems.length > 0,
+            menuCount: menuItems.length
+          };
+        });
+
+        let modelType = 'Unknown';
+        let download2KSelected = false;
+
+        if (menuCheckResult.hasMenu) {
+          // Nano Banana Pro: has download menu with 2K option
+          modelType = 'Nano Banana Pro';
+          download2KSelected = await page.evaluate(() => {
+            let menuItems = document.querySelectorAll('[role="menuitem"]');
+            if (menuItems.length === 0) {
+              menuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
+            }
+
+            // Try to find 2K Tải xuống option
+            for (let i = 0; i < menuItems.length; i++) {
+              const text = menuItems[i].textContent.trim();
+              if (text.includes('2K') && text.includes('Tải xuống') && !text.includes('4K') && !text.includes('1K')) {
+                menuItems[i].click();
+                return true;
+              }
+            }
+
+            // Fallback: click second item if exists
+            if (menuItems.length >= 2) {
+              menuItems[1].click();
+              return true;
+            }
+
+            return false;
+          });
+
+          if (!download2KSelected) {
+            console.log(`    ⚠️  Could not select 2K option (${modelType})`);
+            continue;
+          }
+          console.log(`    ✓ Selected 2K download (${modelType})`);
+        } else {
+          // Banana model: auto-downloads without menu
+          modelType = 'Banana';
+          download2KSelected = true;
+          console.log(`    ✓ Auto-download triggered (${modelType})`);;
+        }
+
+        // Wait for upgrade message (nâng cấp hình ảnh) - mainly for Nano Banana Pro
+        let upgradeDetected = false;
+        let upgradeCheckTime = 0;
+        for (let i = 0; i < 10; i++) {
+          const hasUpgrade = await page.evaluate(() => {
+            const text = document.body.innerText.toLowerCase();
+            return text.includes('nâng cấp') || text.includes('upgrading') || text.includes('processing');
+          });
+
+          if (hasUpgrade) {
+            upgradeDetected = true;
+            upgradeCheckTime = (i + 1) * 500;
+            console.log(`    ✓ Image upgrading detected (after ${upgradeCheckTime}ms)...`);
+            break;
+          }
+
+          await page.waitForTimeout(500);
+        }
+
+        // For Banana model, upgrade message may not appear
+        if (!upgradeDetected) {
+          if (modelType === 'Banana') {
+            console.log(`    ⚠️  No upgrade message (${modelType} model may skip this)`);
+          } else {
+            console.log(`    ⚠️  No upgrade message detected (may still be downloading)`);
+          }
+        }
+
+        // Wait for file to download (max 15 seconds)
+        let fileDownloaded = false;
+        for (let i = 0; i < 30; i++) {
+          const currentFiles = fs.readdirSync(downloadDir);
+          const newFiles = currentFiles.filter(
+            f => !initialFiles.includes(f) && !f.endsWith('.crdownload')
+          );
+
+          if (newFiles.length > 0) {
+            const newFile = newFiles[newFiles.length - 1];
+            const filePath = path.join(downloadDir, newFile);
+            generatedImages.push({
+              filename: newFile,
+              path: filePath,
+              size: fs.statSync(filePath).size
+            });
+            initialFiles.push(newFile);
+            console.log(`    ✓ File saved: ${newFile} (${Math.round(fs.statSync(filePath).size / 1024)}KB)`);
+            fileDownloaded = true;
+            break;
+          }
+
+          await page.waitForTimeout(500);
+        }
+
+        if (!fileDownloaded) {
+          console.log(`    ⚠️  File download timeout (may still be downloading)`);
+        }
+
+        await page.waitForTimeout(1000);
+      }
+
+      console.log(`\n✓ Download complete! ${generatedImages.length} files saved to ${downloadDir}\n`);
+
+      // Show summary of downloaded files
+      if (generatedImages.length > 0) {
+        console.log('📊 Downloaded Files:');
+        generatedImages.forEach((img, idx) => {
+          console.log(`  ${idx + 1}. ${img.filename} (${Math.round(img.size / 1024)}KB)`);
+        });
+        console.log();
+      }
+    }
+
+    console.log('━'.repeat(70) + '\n');
+
+    // ═══════════════════════════════════════════════════════════════════════════════
     console.log('📍 RESULTS\n');
 
     if (generated) {
@@ -461,7 +885,8 @@ async function testCompleteFlow() {
       console.log('  2. ✅ Tab switched');
       console.log(`  3. ✅ ${imagesUploaded} images uploaded & cropped`);
       console.log('  4. ✅ Prompt entered');
-      console.log('  5. ✅ Generation complete\n');
+      console.log('  5. ✅ Generation complete');
+      console.log('  6. ✅ Images downloaded & saved\n');
     } else {
       console.log('⏱️  Generation timeout\n');
       console.log('✓ Completed steps:');

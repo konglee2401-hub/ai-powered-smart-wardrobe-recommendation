@@ -87,11 +87,15 @@ export default function UnifiedVideoGeneration() {
 
   // ==================== STATE: PHASE 4 - VIDEO GENERATION ====================
   const [selectedImagesForVideo, setSelectedImagesForVideo] = useState([]);
+  const [videoScenario, setVideoScenario] = useState('fashion-flow');
+  const [videoStyle, setVideoStyle] = useState('normal');
+  const [cameraMovement, setCameraMovement] = useState('following-pan');
+  const [lightingPreset, setLightingPreset] = useState('studio-bright');
   const [videoOptions, setVideoOptions] = useState({
-    duration: 5,
+    duration: 20,
     cameraMovement: 'static',
     transitionStyle: 'fade',
-    aspectRatio: '16:9',
+    aspectRatio: '9:16',
     fps: 24,
     loop: false,
     addMusic: false,

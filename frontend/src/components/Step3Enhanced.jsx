@@ -97,6 +97,142 @@ const STYLE_CATEGORIES = {
       { value: 'over-shoulder', label: 'Over Shoulder' },
     ],
   },
+  shotType: {
+    label: 'Loại chụp',
+    icon: '📷',
+    options: [
+      { value: 'headshot', label: 'Headshot (Chỉ mặt)' },
+      { value: 'half-body', label: 'Half Body (Nửa trên người)' },
+      { value: 'full-body', label: 'Full Body (Toàn thân)' },
+      { value: 'back-shot', label: 'Back Shot (Chụp từ phía sau)' },
+      { value: 'three-quarter-view', label: '3/4 View (3/4 người)' },
+      { value: 'close-up-detail', label: 'Close-up Detail (Cận cảnh chi tiết)' },
+      { value: 'sitting', label: 'Sitting (Ngồi)' },
+      { value: 'walking', label: 'Walking (Đi bộ)' },
+    ],
+  },
+  bodyPose: {
+    label: 'Dáng đứng/Tư thế',
+    icon: '🧍',
+    options: [
+      { value: 'neutral-standing', label: 'Neutral Standing (Đứng bình thường)' },
+      { value: 'crossed-arms', label: 'Crossed Arms (Cũi tay)' },
+      { value: 'hand-on-hip', label: 'Hand on Hip (Tay trên hông)' },
+      { value: 'hands-in-pocket', label: 'Hands in Pockets (Tay túi)' },
+      { value: 'dynamic-pose', label: 'Dynamic Pose (Dáng động)' },
+      { value: 'leaning', label: 'Leaning (Dựa)' },
+      { value: 'side-profile', label: 'Side Profile (Từ cạnh)' },
+      { value: 'seated', label: 'Seated (Ngồi)' },
+    ],
+  },
+  tops: {
+    label: 'Áo/Trên người',
+    icon: '👕',
+    options: [
+      { value: 'keep-current', label: 'Keep Current (Giữ áo hiện tại)' },
+      { value: 'shirt', label: 'Shirt' },
+      { value: 'tshirt', label: 'T-Shirt' },
+      { value: 'blouse', label: 'Blouse' },
+      { value: 'sweater', label: 'Sweater' },
+      { value: 'hoodie', label: 'Hoodie' },
+      { value: 'tank-top', label: 'Tank Top' },
+      { value: 'crop-top', label: 'Crop Top' },
+    ],
+  },
+  bottoms: {
+    label: 'Quần/Dưới người',
+    icon: '👖',
+    options: [
+      { value: 'keep-current', label: 'Keep Current (Giữ quần hiện tại)' },
+      { value: 'jeans', label: 'Jeans' },
+      { value: 'shorts', label: 'Shorts' },
+      { value: 'skirt', label: 'Skirt' },
+      { value: 'dress-pants', label: 'Dress Pants' },
+      { value: 'leggings', label: 'Leggings' },
+      { value: 'trousers', label: 'Trousers' },
+      { value: 'cargo-pants', label: 'Cargo Pants' },
+    ],
+  },
+  shoes: {
+    label: 'Giày',
+    icon: '👠',
+    options: [
+      { value: 'keep-current', label: 'Keep Current (Giữ giày hiện tại)' },
+      { value: 'sneakers', label: 'Sneakers' },
+      { value: 'heels', label: 'Heels' },
+      { value: 'boots', label: 'Boots' },
+      { value: 'loafers', label: 'Loafers' },
+      { value: 'flats', label: 'Flats' },
+      { value: 'sandals', label: 'Sandals' },
+      { value: 'oxford', label: 'Oxford' },
+    ],
+  },
+  outerwear: {
+    label: 'Áo khoác ngoài',
+    icon: '🧥',
+    options: [
+      { value: 'none', label: 'None (Không)' },
+      { value: 'blazer', label: 'Blazer' },
+      { value: 'jacket', label: 'Jacket' },
+      { value: 'coat', label: 'Coat' },
+      { value: 'cardigan', label: 'Cardigan' },
+      { value: 'denim-jacket', label: 'Denim Jacket' },
+      { value: 'leather-jacket', label: 'Leather Jacket' },
+      { value: 'kimono', label: 'Kimono' },
+    ],
+  },
+  accessories: {
+    label: 'Phụ kiện',
+    icon: '✨',
+    options: [
+      { value: 'none', label: 'None (Không có)' },
+      { value: 'rings', label: 'Rings (Nhẫn)' },
+      { value: 'bracelets', label: 'Bracelets (Vòng tay)' },
+      { value: 'watch', label: 'Watch (Đồng hồ)' },
+      { value: 'necklace', label: 'Necklace (Dây chuyền)' },
+      { value: 'earrings', label: 'Earrings (Khuyên tai)' },
+      { value: 'handbag', label: 'Handbag (Túi xách)' },
+      { value: 'backpack', label: 'Backpack (Ba lô)' },
+      { value: 'scarf', label: 'Scarf (Khăn quàng)' },
+      { value: 'belt', label: 'Belt (Thắt lưng)' },
+      { value: 'hat', label: 'Hat (Mũ)' },
+      { value: 'sunglasses', label: 'Sunglasses (Kính mát)' },
+    ],
+  },
+};
+
+// Helper to format shot type and body pose for prompts
+const formatShotAndPose = (shotType, bodyPose) => {
+  const shotLabels = {
+    'headshot': 'headshot',
+    'half-body': 'half-body shot',
+    'full-body': 'full body shot',
+    'back-shot': 'back shot',
+    'three-quarter-view': 'three-quarter view',
+    'close-up-detail': 'close-up detail shot',
+    'sitting': 'sitting shot',
+    'walking': 'walking shot'
+  };
+
+  const poseLabels = {
+    'neutral-standing': 'standing naturally',
+    'crossed-arms': 'with crossed arms',
+    'hand-on-hip': 'with hand on hip',
+    'hands-in-pocket': 'with hands in pockets',
+    'dynamic-pose': 'in dynamic pose',
+    'leaning': 'leaning',
+    'side-profile': 'in side profile',
+    'seated': 'seated'
+  };
+
+  const parts = [];
+  if (shotType && shotLabels[shotType]) {
+    parts.push(shotLabels[shotType]);
+  }
+  if (bodyPose && poseLabels[bodyPose]) {
+    parts.push(poseLabels[bodyPose]);
+  }
+  return parts.join(', ');
 };
 
 // Prompt Templates for different use cases
@@ -105,10 +241,12 @@ const PROMPT_TEMPLATES = {
     structure: 'product_on_character',
     instruction: 'Image 1: [CHARACTER_NAME]-character-[TIMESTAMP]\nImage 2: [PRODUCT_NAME]-product-[TIMESTAMP]\n\nPrompt: [MAIN_PROMPT]\nStyle notes: Exactly same face as image 1, product from image 2 on character',
     positive: (options, useCase) => {
+      const shotAndPose = formatShotAndPose(options.shotType, options.bodyPose);
       const parts = [
         'A fashion model wearing [PRODUCT_DESCRIPTION]',
         'exactly same face and body from reference character image',
         'wearing the product from reference product image',
+        shotAndPose && `${shotAndPose}`,
         options.scene && `in a ${options.scene} setting`,
         options.lighting && `with ${options.lighting} lighting`,
         options.mood && `with a ${options.mood} mood`,
@@ -144,8 +282,10 @@ const PROMPT_TEMPLATES = {
     structure: 'character_in_clothes',
     instruction: 'Create social media ready content with character and product',
     positive: (options, useCase) => {
+      const shotAndPose = formatShotAndPose(options.shotType, options.bodyPose);
       const parts = [
         'Attractive person wearing [PRODUCT_DESCRIPTION]',
+        shotAndPose && `${shotAndPose}`,
         options.mood && `looking ${options.mood}`,
         options.scene && `in a ${options.scene}`,
         options.lighting && `with ${options.lighting}`,
@@ -161,9 +301,11 @@ const PROMPT_TEMPLATES = {
     structure: 'editorial_shoot',
     instruction: 'Professional editorial fashion photography',
     positive: (options, useCase) => {
+      const shotAndPose = formatShotAndPose(options.shotType, options.bodyPose);
       const parts = [
         'High fashion editorial photography',
         'model wearing [PRODUCT_DESCRIPTION]',
+        shotAndPose && `${shotAndPose}`,
         options.mood && `${options.mood} expression and pose`,
         options.scene && `in a ${options.scene}`,
         options.lighting && `${options.lighting} lighting`,
@@ -179,9 +321,11 @@ const PROMPT_TEMPLATES = {
     structure: 'character_in_lifestyle',
     instruction: 'Lifestyle content showing product in everyday context',
     positive: (options, useCase) => {
+      const shotAndPose = formatShotAndPose(options.shotType, options.bodyPose);
       const parts = [
         'Person wearing [PRODUCT_DESCRIPTION]',
         'in a lifestyle scene',
+        shotAndPose && `${shotAndPose}`,
         options.scene && `${options.scene} setting`,
         options.mood && `with a ${options.mood} vibe`,
         options.lighting && `${options.lighting}`,

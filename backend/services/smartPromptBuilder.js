@@ -73,6 +73,11 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
     return { prompt: '', negativePrompt: buildNegativePromptGeneric(selectedOptions) };
   }
 
+  // Ensure product object exists
+  if (!analysis.product) {
+    analysis.product = {};
+  }
+
   let promptStr = '';
 
   // Route to appropriate prompt builder based on use case
@@ -336,7 +341,7 @@ function buildNegativePrompt(product, selectedOptions) {
   ];
   
   // Add product-specific negatives
-  if (product.type) {
+  if (product && product.type) {
     if (product.type.includes('dress') || product.type.includes('gown')) {
       negatives.push('torn fabric', 'stained', 'dirty hem');
     }
@@ -352,7 +357,7 @@ function buildNegativePrompt(product, selectedOptions) {
   }
   
   // Add scene-specific negatives
-  const scene = selectedOptions.scene;
+  const scene = selectedOptions?.scene;
   if (scene === 'studio') {
     negatives.push('busy background', 'cluttered', 'messy');
   } else if (scene === 'white-background') {
@@ -364,7 +369,7 @@ function buildNegativePrompt(product, selectedOptions) {
   }
   
   // Add lighting-specific negatives
-  const lighting = selectedOptions.lighting;
+  const lighting = selectedOptions?.lighting;
   if (lighting === 'soft-diffused') {
     negatives.push('harsh shadows', 'bright spots', 'uneven lighting');
   } else if (lighting === 'dramatic-rembrandt') {

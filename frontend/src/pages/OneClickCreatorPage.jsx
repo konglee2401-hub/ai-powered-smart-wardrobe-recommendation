@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { browserAutomationAPI, unifiedFlowAPI, aiOptionsAPI } from '../services/api';
+import promptTemplateService from '../services/promptTemplateService';
+import { calculateVideoCount, VIDEO_PROVIDER_LIMITS, getMaxDurationForProvider } from '../constants/videoGeneration';
 
 // Constants - Use cases and focus options from ImageGenerationPage
 const USE_CASES = [
@@ -50,6 +52,114 @@ const WORKFLOW_STEPS = [
   { id: 'generate-image', name: 'Generate Image', icon: ImageIcon },
   { id: 'generate-videos', name: 'Generate Videos', icon: Video },
 ];
+
+// ============================================================
+// HELPER FUNCTIONS FOR TEMPLATE-BASED PROMPT GENERATION
+// ============================================================
+
+/**
+ * Map OneClick use cases to template scenarios
+ */
+const mapUseCaseToTemplateUseCase = (useCase) => {
+  const mapping = {
+    'change-clothes': 'outfit-change',
+    'ecommerce-product': 'product-showcase',
+    'social-media': 'fashion-model',
+    'fashion-editorial': 'product-photography'
+  };
+  return mapping[useCase] || 'outfit-change';
+};
+
+/**
+ * Generate image prompt using templates
+ * Falls back to hardcoded prompt if templates not available
+ */
+async function generateImagePromptFromTemplate(useCase, productFocus, recommendedOptions, sessionId, addLog) {
+  try {
+    addLog(sessionId, 'Loading image template...');
+    
+    const templateUseCase = mapUseCaseToTemplateUseCase(useCase);
+    const templates = await promptTemplateService.getTemplatesByUseCase(templateUseCase);
+    
+    if (!templates.data || templates.data.length === 0) {
+      throw new Error('No templates found');
+    }
+
+    const template = templates.data[0]; // Use first template
+    addLog(sessionId, `Using template: ${template.name}`);
+
+    // Build field values from recommendations
+    const fieldValues = {
+      productFocus: productFocus || 'full outfit',
+      scene: recommendedOptions.scene || 'studio',
+      lighting: recommendedOptions.lighting || 'soft-diffused',
+      mood: recommendedOptions.mood || 'confident',
+      style: recommendedOptions.style || 'minimalist',
+      colorPalette: recommendedOptions.colorPalette || 'neutral',
+      cameraAngle: recommendedOptions.cameraAngle || 'eye-level',
+      useCase: useCase,
+    };
+
+    const result = await promptTemplateService.renderTemplate(template._id || template.id, fieldValues);
+    const prompt = result.data.renderedPrompt || result.data;
+    
+    addLog(sessionId, '✓ Image prompt generated from template');
+    return prompt;
+  } catch (templateError) {
+    console.warn('Template-based generation failed, using fallback:', templateError);
+    // Fallback to hardcoded prompt
+    const imagePrompt = `Professional fashion photo. Character wearing ${productFocus || 'full outfit'}. ` +
+      `Scene: ${recommendedOptions.scene}. Lighting: ${recommendedOptions.lighting}. ` +
+      `Mood: ${recommendedOptions.mood}. Style: ${recommendedOptions.style}. ` +
+      `Colors: ${recommendedOptions.colorPalette}. Camera: ${recommendedOptions.cameraAngle}. ` +
+      `Use case: ${useCase}. High quality, detailed, professional.`;
+    return imagePrompt;
+  }
+}
+
+/**
+ * Generate video prompt using templates
+ * Falls back to hardcoded prompt if templates not available
+ */
+async function generateVideoPromptFromTemplate(useCase, productFocus, recommendedOptions, videoDuration, sessionId, addLog) {
+  try {
+    addLog(sessionId, 'Loading video template...');
+    
+    const templateUseCase = mapUseCaseToTemplateUseCase(useCase);
+    const templates = await promptTemplateService.getTemplatesByUseCase('video-generation');
+    
+    if (!templates.data || templates.data.length === 0) {
+      throw new Error('No templates found');
+    }
+
+    const template = templates.data[0]; // Use first template
+    addLog(sessionId, `Using template: ${template.name}`);
+
+    // Build field values from recommendations
+    const fieldValues = {
+      productFocus: productFocus || 'full outfit',
+      duration: videoDuration,
+      style: recommendedOptions.style || 'minimalist',
+      mood: recommendedOptions.mood || 'confident',
+      cameraAngle: recommendedOptions.cameraAngle || 'eye-level',
+      scenario: 'Fashion shoot',
+    };
+
+    const result = await promptTemplateService.renderTemplate(template._id || template.id, fieldValues);
+    const prompt = result.data.renderedPrompt || result.data;
+    
+    addLog(sessionId, '✓ Video prompt generated from template');
+    return prompt;
+  } catch (templateError) {
+    console.warn('Template-based generation failed, using fallback:', templateError);
+    // Fallback to hardcoded prompt
+    const videoPrompt = `Professional fashion video. Model wearing ${productFocus}. ` +
+      `Duration: ${videoDuration}s. Scenario: Fashion shoot. ` +
+      `Style: ${recommendedOptions.style}. Mood: ${recommendedOptions.mood}. ` +
+      `Camera: ${recommendedOptions.cameraAngle}. High quality professional video.`;
+    return videoPrompt;
+  }
+}
 
 // Session component
 function SessionRow({ session, isGenerating, onCancel }) {
@@ -223,13 +333,17 @@ export default function OneClickCreatorPage() {
 
   // Initialize session
   const initSession = (id) => {
+    // Calculate video count based on provider and total duration (120s = 2 minutes)
+    const maxDuration = getMaxDurationForProvider(videoProvider);
+    const videosCount = calculateVideoCount(videoProvider, 120);
+    
     return {
       id,
       steps: WORKFLOW_STEPS.map(s => ({ id: s.id, completed: false, error: null, inProgress: false })),
       logs: [],
       image: null,
       videos: [],
-      videosCount: Math.ceil(120 / (aspectRatio === '16:9' ? 30 : 20)),
+      videosCount,
       completed: false,
       error: null
     };
@@ -335,12 +449,14 @@ export default function OneClickCreatorPage() {
 
         let generatedImage = null;
         try {
-          // Build detailed image prompt
-          const imagePrompt = `Professional fashion photo. Character wearing ${productFocus || 'full outfit'}. ` +
-            `Scene: ${recommendedOptions.scene}. Lighting: ${recommendedOptions.lighting}. ` +
-            `Mood: ${recommendedOptions.mood}. Style: ${recommendedOptions.style}. ` +
-            `Colors: ${recommendedOptions.colorPalette}. Camera: ${recommendedOptions.cameraAngle}. ` +
-            `Use case: ${useCase}. High quality, detailed, professional.`;
+          // Generate image prompt using templates (with fallback)
+          const imagePrompt = await generateImagePromptFromTemplate(
+            useCase,
+            productFocus,
+            recommendedOptions,
+            sessionId,
+            addLog
+          );
 
           addLog(sessionId, 'Calling image generation...');
 
@@ -386,18 +502,25 @@ export default function OneClickCreatorPage() {
         console.log(`🎬 [S${sessionId}] Step 4: Generate Videos`);
         updateSessionStep(sessionId, 'generate-videos', { inProgress: true });
 
-        const videosCount = Math.ceil(120 / (aspectRatio === '16:9' ? 30 : 20));
-        const videoDuration = Math.ceil(120 / videosCount);
+        // Calculate video count and duration based on provider
+        const videosCount = calculateVideoCount(videoProvider, 120);
+        const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
+        const videoDuration = maxPerVideo;
         const videos = [];
 
         for (let v = 0; v < videosCount; v++) {
           try {
             addLog(sessionId, `Generating video ${v + 1}/${videosCount}...`);
 
-            const videoPrompt = `Professional fashion video. Model wearing ${productFocus}. ` +
-              `Duration: ${videoDuration}s. Scenario: Fashion shoot. ` +
-              `Style: ${recommendedOptions.style}. Mood: ${recommendedOptions.mood}. ` +
-              `Camera: ${recommendedOptions.cameraAngle}. High quality professional video.`;
+            // Generate video prompt using templates (with fallback)
+            const videoPrompt = await generateVideoPromptFromTemplate(
+              useCase,
+              productFocus,
+              recommendedOptions,
+              videoDuration,
+              sessionId,
+              addLog
+            );
 
             const videoResponse = await browserAutomationAPI.generateVideoWithProvider({
               videoProvider,

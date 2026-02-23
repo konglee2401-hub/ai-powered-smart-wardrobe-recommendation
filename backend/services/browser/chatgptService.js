@@ -467,7 +467,7 @@ class ChatGPTService extends BrowserService {
         }
       }
 
-      // Step 1: Look for upload button
+      // Step 1: Look for upload button or file input
       console.log('📍 STEP 1: Looking for attachment button...');
       
       const uploadSelectors = [
@@ -478,13 +478,21 @@ class ChatGPTService extends BrowserService {
       ];
 
       let uploadButton = null;
+      let fileInput = null;
 
       for (const selector of uploadSelectors) {
         try {
-          uploadButton = await this.page.$(selector);
-          if (uploadButton) {
-            console.log(`   ✅ Found: ${selector}`);
-            break;
+          const element = await this.page.$(selector);
+          if (element) {
+            if (selector.includes('input')) {
+              fileInput = element;
+              console.log(`   ✅ Found file input: ${selector}`);
+              break;
+            } else {
+              uploadButton = element;
+              console.log(`   ✅ Found: ${selector}`);
+              break;
+            }
           }
         } catch (e) {
           // Continue to next selector
@@ -495,15 +503,36 @@ class ChatGPTService extends BrowserService {
       console.log('📍 STEP 2: Uploading images...');
       for (const imagePath of imagePaths) {
         try {
-          // Click upload button each time
-          if (uploadButton) {
-            await uploadButton.click();
-            await this.page.waitForTimeout(500);
+          // ✅ NEW: Try direct file input upload first (doesn't require click)
+          if (fileInput) {
+            console.log(`   📤 Uploading file: ${path.basename(imagePath)}`);
+            try {
+              await fileInput.uploadFile(imagePath);
+              console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
+              // Wait for image to process
+              await this.page.waitForTimeout(1500);
+              continue; // Move to next image
+            } catch (uploadErr) {
+              console.log(`   ⚠️  Direct upload failed: ${uploadErr.message}`);
+              // Fall through to button click method
+            }
           }
           
-          // Upload the file
-          await this.uploadFile('input[type="file"]', imagePath);
-          console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
+          // Fallback: Click upload button, then upload
+          if (uploadButton) {
+            try {
+              console.log(`   📤 Uploading file via button: ${path.basename(imagePath)}`);
+              await uploadButton.click();
+              await this.page.waitForTimeout(1000);
+              await this.uploadFile('input[type="file"]', imagePath);
+              console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
+            } catch (buttonErr) {
+              console.log(`   ⚠️  Button upload failed: ${buttonErr.message}`);
+              throw new Error(`Failed to upload ${path.basename(imagePath)}: ${buttonErr.message}`);
+            }
+          } else {
+            throw new Error(`No file input or upload button found for ${path.basename(imagePath)}`);
+          }
           
           // Wait for image to process
           await this.page.waitForTimeout(1500);
@@ -764,54 +793,75 @@ class ChatGPTService extends BrowserService {
     const totalSeconds = Math.round((Date.now() - startTime) / 1000);
     console.log(`Response wait completed after ${totalSeconds}s`);
     
-    // Extract response text using marker-based method (like Grok service)
+    // Extract response text - support both JSON (new format) and text (old format)
     console.log('📍 STEP 11: Extracting response...');
     
     const response = await this.page.evaluate(() => {
       let fullText = '';
       let extractMethod = 'none';
       
-      // ===== METHOD 1: Target ChatGPT assistant message element directly =====
+      // ===== METHOD 1: Get text directly from assistant message element =====
       const assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
       if (assistantMessage) {
-        const text = assistantMessage.innerText || assistantMessage.textContent || '';
-        if (text.includes('*** CHARACTER PROFILE START ***')) {
+        // Try innerText first (preserves formatting)
+        let text = assistantMessage.innerText || assistantMessage.textContent || '';
+        if (text.length > 100) {  // Require meaningful response
           fullText = text;
           extractMethod = 'direct-assistant-element';
         }
       }
       
-      // ===== METHOD 2: Get markdown prose div from assistant message =====
-      if (fullText.length < 300) {
+      // ===== METHOD 2: Try markdown container inside assistant message =====
+      if (fullText.length < 100) {
         const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
         if (assistantMsg) {
-          const markdownDiv = assistantMsg.querySelector('.markdown');
+          // Look for markdown prose container
+          const markdownDiv = assistantMsg.querySelector('.markdown, [class*="prose"], [class*="message-content"]');
           if (markdownDiv) {
             const text = markdownDiv.innerText || markdownDiv.textContent || '';
-            if (text.includes('*** CHARACTER PROFILE START ***')) {
+            if (text.length > 100) {
               fullText = text;
-              extractMethod = 'markdown-div-direct';
+              extractMethod = 'markdown-container';
             }
           }
         }
       }
       
-      // ===== METHOD 3: Extract from all <p> tags in assistant message =====
-      if (fullText.length < 300) {
+      // ===== METHOD 3: Try to extract from the main response div =====
+      if (fullText.length < 100) {
         const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
         if (assistantMsg) {
-          const paragraphs = Array.from(assistantMsg.querySelectorAll('p'));
-          const texts = paragraphs.map(p => (p.innerText || p.textContent || '').trim()).filter(t => t);
-          const combined = texts.join('\n');
-          if (combined.includes('*** CHARACTER PROFILE START ***')) {
-            fullText = combined;
-            extractMethod = 'combined-paragraphs';
+          // Get all paragraph text
+          const paragraphs = Array.from(assistantMsg.querySelectorAll('p, div, span'))
+            .map(el => {
+              const text = el.innerText || el.textContent || '';
+              return text.trim();
+            })
+            .filter(t => t.length > 10)
+            .join('\n');
+          
+          if (paragraphs.length > 100) {
+            fullText = paragraphs;
+            extractMethod = 'element-tree-combined';
           }
         }
       }
       
-      // ===== FALLBACK: Get all text and find RESPONSE by markers =====
-      if (fullText.length < 300) {
+      // ===== FALLBACK: Get all assistant message content =====
+      if (fullText.length < 100) {
+        const allMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
+        if (allMessages.length > 0) {
+          const lastMsg = allMessages[allMessages.length - 1];
+          const text = lastMsg.innerText || lastMsg.textContent || '';
+          if (text.length > 100) {
+            fullText = text;
+            extractMethod = 'last-assistant-message';
+          }
+        }
+      }
+      
+      // ===== FINAL FALLBACK: Search for response by markers (old format) =====
+      if (fullText.length < 100) {
         const allText = document.body.innerText || document.body.textContent || '';
         const charProfileIndex = allText.lastIndexOf('*** CHARACTER PROFILE START ***');
         if (charProfileIndex > 0) {
@@ -820,9 +870,9 @@ class ChatGPTService extends BrowserService {
         }
       }
       
-      // ===== METHOD 3: Extract structured sections from response =====
+      // ===== Clean up response: Extract structured sections from old format =====
       let sections = [];
-      if (fullText.length > 300) {
+      if (fullText.length > 300 && fullText.includes('***')) {
         const charMatch = fullText.match(/\*\*\*\s*CHARACTER\s+PROFILE\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*CHARACTER\s+PROFILE\s+END\s*\*\*\*/i);
         const prodMatch = fullText.match(/\*\*\*\s*PRODUCT\s+DETAILS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*PRODUCT\s+DETAILS\s+END\s*\*\*\*/i);
         const analysisMatch = fullText.match(/\*\*\*\s*ANALYSIS\s+START\s*\*\*\*([\s\S]*?)\*\*\*\s*ANALYSIS\s+END\s*\*\*\*/i);
@@ -837,7 +887,7 @@ class ChatGPTService extends BrowserService {
         // If we found sections, only return those (clean response)
         if (sections.length >= 2) {
           fullText = sections.join('\n\n');
-          extractMethod = `structured-sections[${sections.length}]`;
+          extractMethod += '-cleaned-to-sections';
         }
       }
       
@@ -909,10 +959,19 @@ class ChatGPTService extends BrowserService {
     }
     
     // Verify response is valid (has analysis sections)
-    if (response.length > 100 && response.text.includes('*** CHARACTER PROFILE START ***')) {
-      console.log('✅ Response validation: OK - contains expected structure');
-    } else if (response.length > 0) {
-      console.log('⚠️  Response validation: Incomplete - missing analysis structure');
+    try {
+      const hasJson = /\{[\s\S]*\}/.test(response.text);
+      const hasMarker = response.text.includes('*** CHARACTER PROFILE START ***');
+      
+      if (response.length > 100 && (hasJson || hasMarker)) {
+        console.log('✅ Response validation: OK - contains valid analysis');
+      } else if (response.length > 0 && hasJson) {
+        console.log('✅ Response validation: OK - contains JSON structure');
+      } else if (response.length > 0) {
+        console.log('⚠️  Response validation: Incomplete - may need restructuring');
+      }
+    } catch (e) {
+      // Validation check failed, but response still returned
     }
     
     console.log('='.repeat(80) + '\n');

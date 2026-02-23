@@ -1,9 +1,9 @@
 {
   "service": "google-flow",
-  "savedAt": "2026-02-22T00:52:36.411Z",
+  "savedAt": "2026-02-23T06:51:38.553Z",
   "method": "realtime-capture-from-logged-in-session",
   "userEmail": "modluffy90@gmail.com",
-  "capturedAt": "2/22/2026, 7:52:36 AM",
+  "capturedAt": "2/23/2026, 1:51:38 PM",
   "domains": [
     "labs.google",
     ".labs.google"
@@ -11,10 +11,10 @@
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..5bEekAUPR9KSSZ-X.q0K2OAmYLxiROncUpA1KhGBKLD0sc_qR2e8M8ViI43cvEVy9M6X9prQAgRJY8P704QLW8H5JrjFCGX0e9HmJtW5cjVj5gI7v3zjjObGubu1v9e8C2HZKIpOmfY-oZeRhYGbrvUpwc-Y8qBZEv15fHRJhsKxqcHN0JRxpr2Gs2y1thyxI_kNNOPej0LDYD_NPmkTUKOmC5CTGZrP3qiDCuT3npcwZH3_yD09P1aVNKBfL1uH99CMezNIyTlBOhDVw_qoxiybG270vG4Epn6qmYSld4VM5AniFQSi2imSbg6Ewpwa24zq0bnsQlHjgsSZzWJ66kUrHQ4kKCvu1tIqy2b0zxNVvR_s5Nr_-BfFUq3qtHw4o3mMMgO64Ttaj319kKkEh0pb2raQLo7DLRTCajOFyHY9fU6OZEB-qocYx9PwIQj2ngyH4Vlkm-iXVgBY9PuilgU2oGz1tbtH3GpzsAh_izzcpayPmXwa51b6k6l3j7IwP37U_Gl0dBJ0p6CfHWLhZOieGjOXi8AmykcLnjE6M1DlTYYdSIni7la22rtqTGY99ihvZOiM9m7Hfj7PxheonkcjzR6FFohJmCuDOJVyk8swPNMvaDKgFlXqVaQ66AcGRz5Fob_tJhoSXzpU4Dzb7FlQA-XHNwXRJhpLQp2tHtVshHxWtxJGVyCH3bwY3JuPcGrWlbjApy3Ma0365igmCKje2eawvrYqdj28aVSp-ciaMFyX1v03iUWyR9IsieJPkq2p4gqxBDeJUHvMGy6whfQAnHGVTEXw8Dpw0viztrgMNmu0-_kHmFSJ2yz1XKTikE5J-PWVTDPPrB2oWdLVNEYycvV8pe7ukp3tza6ghQBxS6aUmkYWf5aro4upZZO7wvtqM-QIXx44UqkWdnPC_DNftZG5adAhCRI5vkniivqIFSB7JtKxwTQ4Hv9tJQabUs3LBMRyJ6kRpWiysj4DpsJy48Z_-fgGnPQ19hW_5JMUcjQ.H4hFVGSP2dxYnvytAFFVLg",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..dDS2IYQ7NTS7ol1X.OqrNgQKPIjxADuJ1U2SUSleLqd7qoQpL3Q9RG33mX1wr97jGueekOPpX2ZZZ0HEP6EoQWASw4PNH09KKB4CfUHviW_RvhNEwaeMDCjftmevs3Dk4TlRWEAh2_fCfVituz-f9X1kQjbUGjZbHVsAlRRPpUGOtwP6U89iPE4tbUScWbQ8Ag7yZ1LOEr1toTVSCtEtlKMypAGa7kE-xM8jsJ8z_EaNIOm0-IOlxRXu-ieVFtXbyfEYmIBAwVyXqYnSyQl9cV-fkEJQ2rg4xQqfr5DoUVITMyi4FAzQuuFJEJT3a3rqozJ-sPueoJyPn9c_CfaKk_eloNHWR27ZZFwJ0NK4W7oiQJQ1ELnCEGp22bWaJ1BwChx0Rb9QxHQmeqKv2QHTwJIIU7WBv4JLJuQpSOXw1v38MMJ7E0SycLeihGdamfqihD8gEDyEUqOh8eUPL8XxdGyf425XOQy3sQNE2phgCO7VZBMrx0XI4QhTti8Jkwz2hRueCRcm6O5dWnT9CWb_GEwLNQfLXxvGMtlvpyq2-WXHEf9BpApH-fPByPCxpmrIK5zcGfVt9JwFR7nBJthjIFPL1SGri9wgw9Mc_b-6wo2HGaP6u9fXYSBqB_PcgXCN34_Kc9_XIyKe1qjCIyoGpyG_w3tZNhaQrPpY_bCrYT1sX6MNK9Y8SUI8m1FKDfQJ6L8uGI0n8v-xNyssJX1QP8bkwNzC7eE_KDvyLFxiqLhJfAiJdXKGlLZl3D09507_ftPNDpzKnwkBWCmF8Akx9KIsMQX3lk6jYjl5l7iNdXBmuiQvlBCUHm_3-e8ms-TpRV6wj2HP0VI6PvUHKESlzAc0dp6oIr-fspj9xzbThwXA_lk9XxtkkIrceBwPmSBchC4Q4st4pC-DpjN4bSakr-tVVFIPeOP3OZKEpc8cofT0yHN8R06JspBvA8BoSFy2pEgTdaejxA2RMpUcQI9BGw4wUtXfmFeFfJIyu8NxBKQNOiw.LE0oM72WIUVErbhxhv5XIA",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1774313555.780451,
+      "expires": 1774421498.510681,
       "size": 1103,
       "httpOnly": true,
       "secure": true,
@@ -26,11 +26,11 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1771721503$o1$g1$t1771721555$j8$l0$h319262885",
+      "value": "GS2.1.s1771829475$o1$g1$t1771829497$j38$l0$h1785148667",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1806281555.144403,
-      "size": 66,
+      "expires": 1806389497.634663,
+      "size": 68,
       "httpOnly": false,
       "secure": false,
       "session": false,
@@ -54,10 +54,10 @@
     },
     {
       "name": "_ga_5K7X2T4V16",
-      "value": "GS2.1.s1771721496$o1$g0$t1771721498$j58$l0$h0",
+      "value": "GS2.1.s1771829470$o1$g0$t1771829472$j58$l0$h0",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1806281498.234081,
+      "expires": 1806389472.8961,
       "size": 59,
       "httpOnly": false,
       "secure": false,
@@ -83,7 +83,7 @@
     },
     {
       "name": "__Host-next-auth.csrf-token",
-      "value": "776f8d003f409b80e8de9de6b99aa67b16c772dc0ce92bed6d750bc80d233af2%7Ce547419a81e398c7af93cfec73f198d5d5296d3db563532974f723fb09e7b0e1",
+      "value": "6654026eed43614d983dfe0212ec0d1151bdfb893bd4aa313e41332df59e5bb6%7C6cc23686ccdf80a9b6c22a4edf2c5ad7a22d43487e255169d16d3d5f54416b99",
       "domain": "labs.google",
       "path": "/",
       "expires": -1,
@@ -101,7 +101,7 @@
       "value": "%22modluffy90%40gmail.com%22",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1774313507,
+      "expires": 1774421479,
       "size": 33,
       "httpOnly": false,
       "secure": false,
@@ -112,10 +112,10 @@
     },
     {
       "name": "_ga",
-      "value": "GA1.1.156251271.1771721496",
+      "value": "GA1.1.574867034.1771829471",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1806281554.963118,
+      "expires": 1806389497.57577,
       "size": 29,
       "httpOnly": false,
       "secure": false,

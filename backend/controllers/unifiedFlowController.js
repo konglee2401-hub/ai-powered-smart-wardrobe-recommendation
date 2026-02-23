@@ -141,19 +141,49 @@ export async function buildPromptEndpoint(req, res) {
       });
     }
 
-    // Use provided options or AI recommendations
+    // Use provided options or AI recommendations - Include ALL selected options, not just hardcoded fields
     const finalOptions = {
-      scene: selectedOptions.scene || analysis?.recommendations?.scene?.primary || 'studio',
-      lighting: selectedOptions.lighting || analysis?.recommendations?.lighting?.primary || 'soft-diffused',
-      mood: selectedOptions.mood || analysis?.recommendations?.mood?.primary || 'elegant',
-      style: selectedOptions.style || analysis?.recommendations?.style?.primary || 'fashion-editorial',
-      colorPalette: selectedOptions.colorPalette || analysis?.recommendations?.colorPalette?.primary || 'neutral',
-      cameraAngle: selectedOptions.cameraAngle || analysis?.recommendations?.cameraAngle?.primary || 'three-quarter',
+      // Environment & Photography
+      scene: selectedOptions.scene || analysis?.recommendations?.scene?.choice || 'studio',
+      lighting: selectedOptions.lighting || analysis?.recommendations?.lighting?.choice || 'soft-diffused',
+      mood: selectedOptions.mood || analysis?.recommendations?.mood?.choice || 'elegant',
+      style: selectedOptions.style || analysis?.recommendations?.style?.choice || 'fashion-editorial',
+      colorPalette: selectedOptions.colorPalette || analysis?.recommendations?.colorPalette?.choice || 'neutral',
+      cameraAngle: selectedOptions.cameraAngle || analysis?.recommendations?.cameraAngle?.choice || 'three-quarter',
+      
+      // Appearance & Styling
       hairstyle: selectedOptions.hairstyle,
-      makeup: selectedOptions.makeup
+      makeup: selectedOptions.makeup,
+      
+      // Clothing & Accessories (PASS ALL CLOTHING OPTIONS, not hardcode)
+      tops: selectedOptions.tops,
+      bottoms: selectedOptions.bottoms,
+      shoes: selectedOptions.shoes,
+      accessories: selectedOptions.accessories,
+      outerwear: selectedOptions.outerwear,
+      
+      // 💫 NEW: Include all remaining selected options
+      ...Object.keys(selectedOptions).reduce((acc, key) => {
+        if (!['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'hairstyle', 'makeup', 'tops', 'bottoms', 'shoes', 'accessories', 'outerwear'].includes(key)) {
+          acc[key] = selectedOptions[key];
+        }
+        return acc;
+      }, {})
     };
 
     console.log(`🎯 UseCase: ${useCase}, ProductFocus: ${productFocus}`);
+
+    // 🔍 LOG: Show all selected options being used
+    console.log(`\n📊 OPTIONS SELECTED FOR GENERATION:`);
+    const optionEntries = Object.entries(finalOptions).filter(([_, val]) => val != null);
+    if (optionEntries.length > 0) {
+      optionEntries.forEach(([key, value]) => {
+        if (value) console.log(`   • ${key}: ${value}`);
+      });
+    } else {
+      console.log(`   (No options selected, using defaults)`);
+    }
+    console.log('');
 
     // Build smart prompt with use-case awareness
     const promptResult = await buildDetailedPrompt(

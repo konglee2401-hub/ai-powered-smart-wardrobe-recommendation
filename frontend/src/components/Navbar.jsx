@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard, Layers, Image, TrendingUp, Settings, Gauge,
-  Menu, X, ChevronDown, Video, Film
+  Menu, X, ChevronDown, Video, Film, BookOpen
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -45,6 +45,7 @@ export default function Navbar() {
   // Advanced Tools
   const advancedToolsNavItems = [
     { path: '/prompt-builder', label: 'Prompt Builder', icon: FileText },
+    { path: '/prompt-templates', label: 'Prompt Templates', icon: BookOpen },
     { path: '/tester', label: 'Provider Tester', icon: Zap },
     { path: '/performance', label: 'Performance', icon: Gauge },
     { path: '/video-production', label: 'Video Production', icon: Film },

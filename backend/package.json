@@ -9,6 +9,7 @@
     "start": "node server.js",
     "sync:models": "node sync-models.js",
     "seed-options": "node seedOptions.js",
+    "cleanup-options": "node cleanup-options.js",
     "list-models": "node list-all-models.js",
     "test": "node test-analysis-models.js",
     "test:gemini": "node test-gemini.js",
@@ -57,7 +58,8 @@
     "test:openrouter:api": "node test-openrouter-api.js",
     "seed:providers": "node scripts/seedImageProviders.js",
     "test:keys": "node scripts/testApiKeys.js",
-    "seed:image-providers": "node seedImageProviders.js"
+    "seed:image-providers": "node seedImageProviders.js",
+    "seed:templates": "node scripts/seedCorePromptTemplates.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",

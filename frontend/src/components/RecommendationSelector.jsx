@@ -31,12 +31,21 @@ export default function RecommendationSelector({
     // Add primary categories
     PRIMARY_CATEGORIES.forEach(k => keys.add(k));
     
-    // Add ALL other keys from analysis.recommendations that aren't characterProfile or productDetails
+    // Add ALL other keys from analysis.recommendations (skip characterProfile and productDetails)
     if (analysis?.recommendations) {
       Object.keys(analysis.recommendations).forEach(key => {
-        // Skip non-recommendation sections
-        if (key !== 'characterProfile' && key !== 'productDetails' && key !== 'analysis') {
-          keys.add(key);
+        // Skip metadata and structural keys already shown in sidebar
+        if (['analysis', 'newOptions', 'characterProfile', 'productDetails'].includes(key)) {
+          return;
+        }
+        
+        // Only add if the value is a non-empty recommendation object or has content
+        const value = analysis.recommendations[key];
+        if (value && typeof value === 'object') {
+          // Has keys - potentially displayable
+          if (Object.keys(value).length > 0) {
+            keys.add(key);
+          }
         }
       });
     }
@@ -71,19 +80,148 @@ export default function RecommendationSelector({
     const recs = {};
     allRecommendationKeys.forEach(key => {
       const rec = analysis?.recommendations?.[key];
-      if (rec) {
-        // Handle both nested {choice, reason} structure and simple strings
-        const choice = rec.choice || rec;
-        const reason = rec.reason || '';
-        
-        if (choice) {
-          recs[key] = {
-            choice: choice.toString().trim(),
-            reason: reason.toString().trim(),
-            current: currentValues[key] || 'Not set',
-            isNew: PRIMARY_CATEGORIES.indexOf(key) === -1 // Mark as new if not in primary list
-          };
+      
+      // Skip if null/undefined
+      if (!rec) return;
+      
+      // Skip truly empty objects (no choice and no other keys)
+      if (typeof rec === 'object' && !rec.choice && Object.keys(rec).length === 0) {
+        return;
+      }
+      
+      // Extract choice - handle multiple formats including arrays
+      let choiceArray = [];
+      let reason = '';
+      let isMulti = false;
+      
+      if (typeof rec === 'string') {
+        // Simple string recommendation
+        choiceArray = [rec];
+      } else if (typeof rec === 'object' && rec !== null) {
+        // Object with choice/reason fields
+        if (rec.choice) {
+          // ✅ NEW: Handle both string and array choice
+          if (Array.isArray(rec.choice)) {
+            // Already array (multi-select)
+            choiceArray = rec.choice
+              .map(c => typeof c === 'string' ? c : String(c || ''))
+              .filter(c => c && String(c).trim() !== '[object Object]');
+            isMulti = choiceArray.length > 1;
+          } else if (typeof rec.choice === 'string') {
+            // String choice
+            const choice = String(rec.choice).trim();
+            if (choice && String(choice).trim() !== '[object Object]') {
+              choiceArray = [choice];
+            }
+          }
+          reason = (typeof rec.reason === 'string') ? rec.reason : '';
         }
+        // Or use choiceArray field if available (backend provides this)
+        else if (rec.choiceArray && Array.isArray(rec.choiceArray)) {
+          choiceArray = rec.choiceArray;
+          isMulti = rec.isMulti || rec.choiceArray.length > 1;
+          reason = (typeof rec.reason === 'string') ? rec.reason : '';
+        }
+        // Or has value/label fields (option-like structure)
+        else if (rec.value) {
+          choiceArray = [typeof rec.value === 'string' ? rec.value : ''];
+          reason = (typeof rec.reason === 'string') ? rec.reason : (typeof rec.label === 'string' ? rec.label : '');
+        }
+        // For objects like characterProfile or productDetails with multiple fields
+        else if (Object.keys(rec).length > 0) {
+          // Format as "key1: value1 | key2: value2..."
+          const formatted = Object.entries(rec)
+            .filter(([k, v]) => v && typeof v === 'string' && String(v).trim() !== '[object Object]')
+            .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+            .join(' | ');
+          choiceArray = formatted.length > 0 ? [formatted] : [];
+          reason = `Auto-detected from analysis`;
+        }
+        // Or try to extract first meaningful key-value pair
+        else {
+          const firstKey = Object.keys(rec)[0];
+          if (firstKey && rec[firstKey] && typeof rec[firstKey] === 'string') {
+            const choice = String(rec[firstKey]).trim();
+            if (choice !== '[object Object]') {
+              choiceArray = [choice];
+            }
+          }
+        }
+      }
+      
+      // Format choice display - single or multiple
+      let choiceDisplay = '';
+      if (choiceArray.length === 1) {
+        choiceDisplay = choiceArray[0];
+      } else if (choiceArray.length > 1) {
+        choiceDisplay = choiceArray.join(' + ');
+        isMulti = true;
+      }
+      
+      // Only add if we have valid choice(s)
+      if (choiceDisplay && choiceDisplay.length > 0) {
+        // Extract current value - handle both string and object formats
+        let currentVal = 'Not set';
+        const currOption = currentValues[key];
+        
+        if (typeof currOption === 'string') {
+          // Simple string value
+          currentVal = currOption;
+        } else if (Array.isArray(currOption)) {
+          // If it's an array, extract clean values
+          if (currOption.length > 5) {
+            // Large array - likely all available options from DB
+            currentVal = `(${currOption.length} options available)`;
+          } else if (currOption.length > 0) {
+            // Small array - extract readable values
+            const values = currOption
+              .map(opt => {
+                if (typeof opt === 'string') return opt;
+                if (typeof opt === 'object' && opt !== null) {
+                  // Extract value or label, NOT the whole object
+                  const val = opt.value || opt.label || opt.description;
+                  return (val && typeof val === 'string') ? val : null;
+                }
+                return null;
+              })
+              .filter(v => v && String(v).trim() !== '[object Object]');
+            currentVal = values.length > 0 ? values.join(', ') : 'Not set';
+          }
+        } else if (typeof currOption === 'object' && currOption !== null) {
+          // Single object - extract value or label
+          currentVal = currOption.value || currOption.label || currOption.description || 'Not set';
+          // Ensure it's not "[object Object]"
+          if (String(currentVal).trim() === '[object Object]') {
+            currentVal = 'Not set';
+          }
+        } else if (currOption) {
+          currentVal = String(currOption);
+        }
+        
+        // ✅ NEW: Clean up currentVal - remove any corrupted text after delimiter
+        if (typeof currentVal === 'string') {
+          // Remove anything after common delimiters that indicate corrupted data
+          const delimiter = /\]|provide.*|suggest.*|or.*none/i;
+          const cleanedIndex = currentVal.search(delimiter);
+          if (cleanedIndex > 0) {
+            currentVal = currentVal.substring(0, cleanedIndex).trim();
+          }
+          // Remove outer brackets and quotes
+          currentVal = currentVal.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').trim();
+          // If empty after cleaning, mark as "Not set"
+          if (!currentVal || currentVal.length === 0) {
+            currentVal = 'Not set';
+          }
+        }
+        
+        recs[key] = {
+          choice: choiceDisplay,
+          choiceArray: choiceArray, // Keep array for multi-select scenarios
+          isMulti: isMulti,
+          reason: reason && typeof reason === 'string' ? reason.trim() : '',
+          current: currentVal,
+          isNew: PRIMARY_CATEGORIES.indexOf(key) === -1 // Mark as new if not in primary list
+        };
       }
     });
     return recs;
@@ -94,11 +232,40 @@ export default function RecommendationSelector({
   const getOptionsForCategory = (category) => {
     const catOptions = existingOptions?.[category];
     if (!catOptions) return [];
+    
     // Handle both array and single object
     if (Array.isArray(catOptions)) {
-      return catOptions.map(opt => opt.value || opt);
+      return catOptions
+        .map(opt => {
+          // If it's already a string, return as is (for clean values)
+          if (typeof opt === 'string') {
+            return opt && String(opt).trim() !== '[object Object]' ? opt : null;
+          }
+          // If it's an object, prefer value, then label, then description
+          if (typeof opt === 'object' && opt !== null) {
+            const val = opt.value || opt.label || opt.description;
+            // Only return if it's a valid string, not "[object Object]"
+            if (val && typeof val === 'string' && String(val).trim().length > 0) {
+              return String(val).trim();
+            }
+            return null;
+          }
+          return null;
+        })
+        .filter((opt) => {
+          // Remove null, empty strings, and "[object Object]" entries
+          return opt !== null && String(opt).trim() !== '' && String(opt) !== '[object Object]';
+        });
     } else {
-      return [catOptions.value || catOptions];
+      // Single object case
+      if (typeof catOptions === 'string') {
+        return String(catOptions).trim() !== '[object Object]' ? [catOptions] : [];
+      }
+      if (typeof catOptions === 'object' && catOptions !== null) {
+        const val = catOptions.value || catOptions.label || catOptions.description;
+        return val && typeof val === 'string' && String(val).trim().length > 0 ? [String(val).trim()] : [];
+      }
+      return [];
     }
   };
 
@@ -114,15 +281,24 @@ export default function RecommendationSelector({
   // Get final value based on decision
   const getFinalValue = (category, rec) => {
     const decision = decisions[category] || { action: 'keep', chosenOption: null, saveAsOption: false, expandWhy: false };
+    let finalVal = '';
+    
     switch(decision.action) {
       case 'apply':
-        return rec.choice;
+        // ✅ NEW: Return array if multi-select, string if single
+        finalVal = rec.isMulti ? rec.choiceArray : rec.choice;
+        break;
       case 'choose':
-        return decision.chosenOption || rec.current;
+        finalVal = decision.chosenOption || rec.current;
+        break;
       case 'keep':
       default:
-        return rec.current;
+        finalVal = rec.current;
+        break;
     }
+    
+    // Ensure it's always a string
+    return typeof finalVal === 'string' ? finalVal : String(finalVal || 'Not set');
   };
 
   // Build final recommendations object to pass back
@@ -171,6 +347,24 @@ export default function RecommendationSelector({
       newDecisions[cat] = { ...(decisions[cat] || defaultDecision), saveAsOption: false };
     });
     setDecisions(newDecisions);
+  };
+
+  // Sanitize reason text to prevent displaying corrupted data
+  const sanitizeReasonText = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Remove any "[object Object]" strings
+    let cleaned = text.replace(/\[object Object\]/g, '');
+    
+    // Truncate if too long (likely corrupted if > 2000 chars)
+    if (cleaned.length > 2000) {
+      cleaned = cleaned.substring(0, 2000) + '...';
+    }
+    
+    // Clean up extra whitespace
+    cleaned = cleaned.trim().replace(/\n\n+/g, '\n');
+    
+    return cleaned;
   };
 
   const recommendationsCount = allRecommendationKeys.length;
@@ -241,15 +435,15 @@ export default function RecommendationSelector({
                     {/* Current & Recommended Values */}
                     <div className="text-xs space-y-1">
                       <div className="text-gray-500">
-                        Current: <span className="text-gray-300 font-medium">{rec.current}</span>
+                        Current: <span className="text-gray-300 font-medium">{typeof rec.current === 'string' ? rec.current : String(rec.current || 'Not set')}</span>
                       </div>
                       <div className="text-purple-400">
-                        AI suggests: <span className="text-purple-300 font-medium">{rec.choice}</span>
+                        AI suggests: <span className="text-purple-300 font-medium">{typeof rec.choice === 'string' ? rec.choice : String(rec.choice || 'Unknown')}</span>
                       </div>
                     </div>
 
                     {/* Collapsible Why Section */}
-                    {rec.reason && rec.reason.trim().length > 0 && (
+                    {rec.reason && sanitizeReasonText(rec.reason).length > 0 && (
                       <button
                         onClick={() => updateDecision(category, { expandWhy: !decision.expandWhy })}
                         className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors font-medium"
@@ -259,10 +453,10 @@ export default function RecommendationSelector({
                       </button>
                     )}
 
-                    {decision.expandWhy && rec.reason && rec.reason.trim().length > 0 && (
+                    {decision.expandWhy && rec.reason && sanitizeReasonText(rec.reason).length > 0 && (
                       <div className="mt-2 p-3 bg-blue-900/20 rounded border border-blue-700/30">
                         <p className="text-xs text-blue-200 leading-relaxed whitespace-pre-wrap">
-                          {rec.reason}
+                          {sanitizeReasonText(rec.reason)}
                         </p>
                       </div>
                     )}
@@ -272,7 +466,7 @@ export default function RecommendationSelector({
                   <div className="text-right flex-shrink-0">
                     <div className="text-xs text-gray-500">Final:</div>
                     <div className="text-xs font-semibold text-green-400 mt-0.5 px-2 py-1 bg-green-900/20 rounded border border-green-700/30">
-                      {finalValue}
+                      {typeof finalValue === 'string' ? finalValue : String(finalValue || 'Not set')}
                     </div>
                   </div>
                 </div>

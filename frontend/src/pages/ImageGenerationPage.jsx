@@ -30,6 +30,7 @@ import GenerationOptions from '../components/GenerationOptions';
 import GenerationResult from '../components/GenerationResult';
 import PromptQualityIndicator from '../components/PromptQualityIndicator';
 import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
+import ImagePromptWithTemplates from '../components/ImagePromptWithTemplates';
 import GalleryPicker from '../components/GalleryPicker';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
@@ -111,6 +112,27 @@ export default function ImageGenerationPage() {
   const [selectedOptions, setSelectedOptions] = useState({});
   const [customOptions, setCustomOptions] = useState({});
   const [expandedCategories, setExpandedCategories] = useState({});
+
+  // 💫 Filter categories based on product focus
+  const getVisibleCategories = () => {
+    const baseCategories = ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'shotType', 'bodyPose'];
+    
+    // Add clothing categories based on product focus
+    if (productFocus === 'full-outfit') {
+      return [...baseCategories, 'tops', 'bottoms', 'shoes', 'outerwear', 'accessories'];
+    } else if (productFocus === 'top') {
+      return [...baseCategories, 'tops', 'accessories'];
+    } else if (productFocus === 'bottom') {
+      return [...baseCategories, 'bottoms', 'shoes'];
+    } else if (productFocus === 'shoes') {
+      return [...baseCategories, 'shoes'];
+    } else if (productFocus === 'accessories') {
+      return [...baseCategories, 'accessories'];
+    } else {
+      // default
+      return baseCategories;
+    }
+  };
 
   // Results
   const [analysis, setAnalysis] = useState(null);
@@ -320,90 +342,66 @@ export default function ImageGenerationPage() {
       if (analysisResponse.success && analysisResponse.data) {
         setAnalysisRaw(analysisResponse.data);
         
-        // Parse analysis text from backend to extract structured data
-        const analysisText = analysisResponse.data.analysis || analysisResponse.data;
+        // Get raw analysis text from backend (JSON or text format)
+        const analysisText = analysisResponse.data.analysis || '';
         
-        // Extract sections from analysis text
-        const parseSection = (text, startMarker, endMarker) => {
-          const start = text.indexOf(startMarker);
-          const end = text.indexOf(endMarker);
-          if (start !== -1 && end !== -1) {
-            return text.substring(start + startMarker.length, end).trim();
-          }
-          return '';
-        };
-        
-        // Parse CHARACTER PROFILE
-        const charProfileText = parseSection(analysisText, '*** CHARACTER PROFILE START ***', '*** CHARACTER PROFILE END ***');
-        const characterProfile = {};
-        if (charProfileText) {
-          const lines = charProfileText.split('\n').filter(l => l.includes(':'));
-          lines.forEach(line => {
-            const [key, value] = line.split(':').map(s => s.trim());
-            if (key && value) characterProfile[key.toLowerCase().replace(/\s+/g, '_')] = value;
-          });
-        }
-        
-        // Parse PRODUCT DETAILS
-        const prodText = parseSection(analysisText, '*** PRODUCT DETAILS START ***', '*** PRODUCT DETAILS END ***');
-        const productDetails = {};
-        if (prodText) {
-          const lines = prodText.split('\n').filter(l => l.includes(':'));
-          lines.forEach(line => {
-            const [key, value] = line.split(':').map(s => s.trim());
-            if (key && value) productDetails[key.toLowerCase().replace(/\s+/g, '_')] = value;
-          });
-        }
-        
-        // Parse RECOMMENDATIONS
-        const recText = parseSection(analysisText, '*** RECOMMENDATIONS START ***', '*** RECOMMENDATIONS END ***');
-        const recommendations = {};
-        if (recText) {
-          // Parse structured SCENE_CHOICE, LIGHTING_CHOICE, etc.
-          const patterns = [
-            { name: 'scene', pattern: /SCENE_CHOICE:\s*(\w+)/ },
-            { name: 'lighting', pattern: /LIGHTING_CHOICE:\s*([\w-]+)/ },
-            { name: 'mood', pattern: /MOOD_CHOICE:\s*(\w+)/ },
-            { name: 'cameraAngle', pattern: /CAMERA_ANGLE:\s*([\w-]+)/ },
-            { name: 'hairstyle', pattern: /HAIRSTYLE:\s*([\w-]+)/ },
-            { name: 'makeup', pattern: /MAKEUP:\s*([\w-]+)/ },
-          ];
-          patterns.forEach(({ name, pattern }) => {
-            const match = recText.match(pattern);
-            if (match) {
-              recommendations[name] = { choice: match[1], reason: 'From AI analysis' };
-            }
-          });
-        }
-        
-        // Restructure data for components
-        // Backend parseRecommendations returns FLAT structure:
-        // { characterProfile, productDetails, scene, lighting, mood, cameraAngle, ..., analysis }
+        // ✅ Backend already parses JSON and returns structured recommendations
         const backendData = analysisResponse.data.recommendations || {};
         
-        // Extract recommendations (skip characterProfile, productDetails, analysis)
+        // Verify we got valid data from backend
+        if (!backendData || Object.keys(backendData).length === 0) {
+          console.warn('⚠️  No recommendations returned from backend analysis');
+        }
+        
+        // Extract character profile & product details from backend (already parsed)
+        const characterProfile = backendData.characterProfile || {};
+        const productDetails = backendData.productDetails || {};
+        
+        // Extract all recommendations (both standard and custom categories)
         const recommendationKeys = ['scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'];
         const recommendations = {};
+        
+        // Add standard recommendations
         recommendationKeys.forEach(key => {
           if (backendData[key]) {
             recommendations[key] = backendData[key];
           }
         });
         
-        // Also capture any additional recommendation keys not in the list
+        // Also capture any additional keys not in primary list (supports dynamic recommendations)
         Object.keys(backendData).forEach(key => {
-          if (!['characterProfile', 'productDetails', 'analysis'].includes(key) && !recommendationKeys.includes(key)) {
+          if (!['characterProfile', 'productDetails', 'analysis', 'newOptions'].includes(key) && !recommendationKeys.includes(key)) {
             recommendations[key] = backendData[key];
           }
         });
         
+        // Add analysis score if available
+        const analysisScore = backendData.analysis || {};
+        
+        // Restructure data for components
         const analysisWithParsing = {
           analysis: analysisText,
-          recommendations: recommendations, // All recommendation fields
-          characterProfile: backendData.characterProfile || characterProfile,
-          productDetails: backendData.productDetails || productDetails,
-          analysisScore: backendData.analysis || {},
+          recommendations: recommendations,
+          characterProfile: characterProfile,
+          productDetails: productDetails,
+          analysisScore: analysisScore,
         };
+        
+        // 💡 FALLBACK: If no recommendations found, create defaults from analysis
+        if (Object.keys(analysisWithParsing.recommendations).length === 0) {
+          console.log('⚠️  No recommendations found, creating comprehensive defaults...');
+          
+          // Create educated defaults based on what we know
+          analysisWithParsing.recommendations = {
+            scene: { choice: 'studio', reason: 'Studio setting provides professional lighting control for product showcase' },
+            lighting: { choice: 'soft-diffused', reason: 'Soft lighting flatters the character and highlights product details' },
+            mood: { choice: 'confident', reason: 'Confident mood conveys the product\'s casual-chic aesthetic' },
+            cameraAngle: { choice: 'eye-level', reason: 'Direct eye-level framing creates engagement and shows fit accurately' },
+            hairstyle: { choice: 'keep-current', reason: 'Current hairstyle complements the product without distraction' },
+            makeup: { choice: 'light-makeup', reason: 'Light makeup maintains focus on the garment' },
+          };
+          console.log('✅ Created 6 default recommendations as fallback');
+        }
         
         setAnalysis(analysisWithParsing);
         console.log('📊 Full backend response data:', analysisResponse.data);
@@ -587,7 +585,7 @@ export default function ImageGenerationPage() {
       });
       
       const response = await unifiedFlowAPI.buildPrompt(
-        analysis.analysis,
+        analysis,
         selectedOptions,
         useCase,
         productFocus
@@ -673,12 +671,9 @@ export default function ImageGenerationPage() {
           generationProvider,  // 💫 Image generation provider selection (grok or google-flow)
           imageGenProvider,  // 💫 For backward compatibility
           negativePrompt: generatedPrompt.negative,
-          scene: selectedOptions.scene || 'studio',
-          lighting: selectedOptions.lighting || 'soft-diffused',
-          mood: selectedOptions.mood || 'confident',
-          style: selectedOptions.style || 'minimalist',
-          colorPalette: selectedOptions.colorPalette || 'neutral',
-          cameraAngle: selectedOptions.cameraAngle || 'eye-level',
+          // 💫 Pass ALL selected options, not just hardcoded ones
+          ...selectedOptions,
+          // Overrides for explicitly set values
           aspectRatio,
           characterImageBase64: storedImages.character,
           productImageBase64: storedImages.product,
@@ -719,6 +714,12 @@ export default function ImageGenerationPage() {
 
       if (response?.success && response?.data?.generatedImages) {
         console.log('✅ Generation successful! Generated images:', response.data.generatedImages);
+        console.log('   Count:', response.data.generatedImages.length);
+        console.log('   Details:', response.data.generatedImages.map((img, i) => ({
+          index: i,
+          url: img.url || img,
+          filename: img.filename || 'N/A'
+        })));
         setGeneratedImages(response.data.generatedImages);
         
         // Upload to Google Drive if enabled
@@ -1036,7 +1037,9 @@ export default function ImageGenerationPage() {
                   <Wand2 className="w-3 h-3" /> Style Options
                 </h3>
                 <div className="space-y-2">
-                  {Object.entries(STYLE_CATEGORIES).map(([key, category]) => (
+                  {Object.entries(STYLE_CATEGORIES)
+                    .filter(([key]) => getVisibleCategories().includes(key))
+                    .map(([key, category]) => (
                     <div key={key} className="border border-gray-700 rounded-lg overflow-hidden">
                       <button
                         onClick={() => setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }))}
@@ -1084,33 +1087,6 @@ export default function ImageGenerationPage() {
                   <Rocket className="w-3 h-3" /> Generation
                 </h3>
                 
-                {/* 💫 NEW: Image Generation Provider Selection */}
-                <div className="mb-4 pb-4 border-b border-gray-700">
-                  <label className="text-xs text-gray-400 mb-2 block">Image Generation Provider</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setImageGenProvider('grok')}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
-                        imageGenProvider === 'grok'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                      }`}
-                    >
-                      🤖 Grok
-                    </button>
-                    <button
-                      onClick={() => setImageGenProvider('lab-flow')}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
-                        imageGenProvider === 'lab-flow'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                      }`}
-                    >
-                      🎨 Google Lab Flow
-                    </button>
-                  </div>
-                </div>
-                
                 <GenerationOptions
                   imageCount={imageCount}
                   onImageCountChange={setImageCount}
@@ -1130,6 +1106,7 @@ export default function ImageGenerationPage() {
                   onSeedChange={setGenerationSeed}
                   randomSeed={generationRandomSeed}
                   onRandomSeedChange={setGenerationRandomSeed}
+                  imageGenProvider={imageGenProvider}
                 />
 
                 {/* 💫 NEW: Storage Configuration */}
@@ -1190,7 +1167,7 @@ export default function ImageGenerationPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* ==================== CENTER MAIN CONTENT ==================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 center-main overflow-hidden">
               {showUseCaseFocusInfo && (
                 <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
                   <div className="flex items-center gap-4 text-xs">
@@ -1282,13 +1259,13 @@ export default function ImageGenerationPage() {
                   {currentStep === 2 && analysis && (
                     <div className="space-y-4">
                       {/* Character & Product Summary at top */}
-                      <CharacterProductSummary
+                      {/* <CharacterProductSummary
                         analysis={analysis}
                         characterImage={characterImage}
                         productImage={productImage}
                         onSaveNewOption={handleSaveNewOption}
                         isSaving={isSaving}
-                      />
+                      /> */}
                       
                       {/* Recommendation Selector - unified per-category decisions */}
                       <RecommendationSelector
@@ -1302,8 +1279,7 @@ export default function ImageGenerationPage() {
 
             {/* Step 3: Style & Prompt (Merged) */}
             {currentStep === 3 && analysis && (
-              <Step3EnhancedWithSession
-                ref={step3ComponentRef}
+              <ImagePromptWithTemplates
                 characterImage={characterImage}
                 productImage={productImage}
                 selectedOptions={selectedOptions}
@@ -1485,18 +1461,18 @@ export default function ImageGenerationPage() {
             {/* ==================== RIGHT SIDEBAR ==================== */}
             <div className="w-60 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
               <div className="p-4 space-y-4">
-                {/* Step 2: Character & Product Info in Sidebar */}
+                {/* SIDEBAR-ANALYSIS-SECTION: Character & Product Info in Sidebar */}
                 {currentStep === 2 && analysis && (
-                  <div className="space-y-3">
+                  <div className="sidebar-analysis-summary space-y-3">
                     <h4 className="text-xs font-semibold text-gray-400 uppercase">Analysis Summary</h4>
-                    <div className="space-y-2">
-                      {/* Character Profile */}
-                      <div className="bg-gray-800/80 rounded p-2 border border-gray-700">
+                    <div className="sidebar-analysis-cards space-y-2">
+                      {/* CHARACTER-PROFILE-CARD: Character Profile */}
+                      <div className="card-character-profile bg-gray-800/80 rounded p-2 border border-gray-700">
                         <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
                           <span>👤</span> Character
                         </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {analysis?.recommendations?.characterProfile && Object.entries(analysis.recommendations.characterProfile).map(([key, value]) => {
+                        <div className="card-character-content text-xs text-gray-400 space-y-0.5">
+                          {analysis?.characterProfile && Object.entries(analysis.characterProfile).map(([key, value]) => {
                             if (!value) return null;
                             return (
                               <div key={key} className="truncate">
@@ -1507,13 +1483,13 @@ export default function ImageGenerationPage() {
                         </div>
                       </div>
 
-                      {/* Product Details */}
-                      <div className="bg-gray-800/80 rounded p-2 border border-gray-700">
+                      {/* PRODUCT-DETAILS-CARD: Product Details */}
+                      <div className="card-product-details bg-gray-800/80 rounded p-2 border border-gray-700">
                         <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
                           <span>👕</span> Product
                         </div>
-                        <div className="text-xs text-gray-400 space-y-0.5">
-                          {analysis?.recommendations?.productDetails && Object.entries(analysis.recommendations.productDetails).map(([key, value]) => {
+                        <div className="card-product-content text-xs text-gray-400 space-y-0.5">
+                          {analysis?.productDetails && Object.entries(analysis.productDetails).map(([key, value]) => {
                             if (!value) return null;
                             return (
                               <div key={key} className="truncate">

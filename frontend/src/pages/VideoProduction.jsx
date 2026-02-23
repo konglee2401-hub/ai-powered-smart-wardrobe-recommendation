@@ -8,7 +8,10 @@ import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import { SystemStatus } from '@/components/VideoProduction/SystemStatus';
 import { QueueStatus } from '@/components/VideoProduction/QueueStatus';
 import { AccountCard } from '@/components/VideoProduction/AccountCard';
-import { Video, Users, Library, Zap, Plus } from 'lucide-react';
+import { VideoMashupCreator } from '@/components/VideoProduction/VideoMashupCreator';
+import { ProcessingMonitor } from '@/components/VideoProduction/ProcessingMonitor';
+import { QueueScannerPanel } from '@/components/VideoProduction/QueueScannerPanel';
+import { Video, Users, Library, Zap, Plus, Play, BarChart3, Zap as Zap2 } from 'lucide-react';
 import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
 
@@ -65,9 +68,12 @@ export function VideoProduction() {
   };
 
   const tabButtons = [
-    { id: 'overview', label: 'Overview', icon: Video },
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'creator', label: 'Create Mashup', icon: Video },
+    { id: 'processing', label: 'Processing', icon: Play },
+    { id: 'scanner', label: 'Queue Scanner', icon: Zap },
+    { id: 'queue', label: 'Queue', icon: Zap2 },
     { id: 'accounts', label: 'Accounts', icon: Users },
-    { id: 'queue', label: 'Queue', icon: Zap },
     { id: 'media', label: 'Media Library', icon: Library },
   ];
 
@@ -106,17 +112,24 @@ export function VideoProduction() {
           <SystemStatus />
           <div>
             <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
-                onClick={() => setActiveTab('accounts')}
-                className="bg-purple-600 hover:bg-purple-700 p-4 rounded-lg transition flex items-center justify-between"
+                onClick={() => setActiveTab('creator')}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 p-4 rounded-lg transition flex items-center justify-between"
               >
-                <span className="font-semibold">Manage Accounts</span>
-                <Users className="w-5 h-5" />
+                <span className="font-semibold">Create Mashup</span>
+                <Video className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setActiveTab('processing')}
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 p-4 rounded-lg transition flex items-center justify-between"
+              >
+                <span className="font-semibold">Monitor Process</span>
+                <Play className="w-5 h-5" />
               </button>
               <button
                 onClick={() => setActiveTab('queue')}
-                className="bg-blue-600 hover:bg-blue-700 p-4 rounded-lg transition flex items-center justify-between"
+                className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 p-4 rounded-lg transition flex items-center justify-between"
               >
                 <span className="font-semibold">View Queue</span>
                 <Zap className="w-5 h-5" />
@@ -124,6 +137,21 @@ export function VideoProduction() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Creator Tab */}
+      {activeTab === 'creator' && (
+        <VideoMashupCreator />
+      )}
+
+      {/* Processing Tab */}
+      {activeTab === 'processing' && (
+        <ProcessingMonitor />
+      )}
+
+      {/* Queue Scanner Tab */}
+      {activeTab === 'scanner' && (
+        <QueueScannerPanel />
       )}
 
       {/* Accounts Tab */}

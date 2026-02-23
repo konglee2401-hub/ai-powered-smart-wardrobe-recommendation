@@ -3,16 +3,51 @@
  * Shared configuration for both frontend and backend
  * 
  * Updated to support multi-video generation with content use cases
+ * and provider-specific constraints
  */
+
+// ===== VIDEO PROVIDER CONSTRAINTS =====
+export const VIDEO_PROVIDER_LIMITS = {
+  'grok': {
+    maxDurationPerVideo: 10,
+    maxDurationTotal: 40,
+    description: 'Grok supports max 10 seconds per video clip',
+  },
+  'google-flow': {
+    maxDurationPerVideo: 6,
+    maxDurationTotal: 30,
+    description: 'Google Flow supports max 6 seconds per video clip',
+  }
+};
+
+// Helper function to calculate video count based on provider and total duration
+export const calculateVideoCount = (provider, totalDuration) => {
+  const limits = VIDEO_PROVIDER_LIMITS[provider] || VIDEO_PROVIDER_LIMITS['grok'];
+  const maxPerVideo = limits.maxDurationPerVideo;
+  return Math.ceil(totalDuration / maxPerVideo);
+};
+
+// Helper function to get max allowed duration for a provider
+export const getMaxDurationForProvider = (provider) => {
+  const limits = VIDEO_PROVIDER_LIMITS[provider] || VIDEO_PROVIDER_LIMITS['grok'];
+  return limits.maxDurationTotal;
+};
 
 // ===== DURATION & SEGMENT CONFIGURATIONS =====
 export const VIDEO_DURATIONS = [
+  { value: 10, label: '10 seconds', segments: 1, segmentDuration: 10 },
   { value: 20, label: '20 seconds', segments: 2, segmentDuration: 10 },
   { value: 30, label: '30 seconds', segments: 3, segmentDuration: 10 },
   { value: 40, label: '40 seconds', segments: 4, segmentDuration: 10 },
 ];
 
 export const SEGMENT_DURATION = 10; // Each segment is 10 seconds
+
+// Get durations available for a specific provider
+export const getAvailableDurations = (provider) => {
+  const maxDuration = getMaxDurationForProvider(provider);
+  return VIDEO_DURATIONS.filter(d => d.value <= maxDuration);
+};
 
 // ===== CONTENT USE CASES FOR MULTI-VIDEO GENERATION =====
 export const CONTENT_USE_CASES = {
