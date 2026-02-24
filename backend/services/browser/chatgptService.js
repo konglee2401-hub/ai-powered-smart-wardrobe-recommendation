@@ -978,6 +978,364 @@ class ChatGPTService extends BrowserService {
     
     return response.text;
   }
+
+  /**
+   * Send text-only prompt to ChatGPT (no image required)
+   * Perfect for video script generation, code generation, etc.
+   */
+  async sendPrompt(prompt, options = {}) {
+    console.log('\n📝 ChatGPT TEXT PROMPT');
+    console.log('='.repeat(80));
+    console.log(`Prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
+    console.log('');
+
+    const maxWait = options.maxWait || 120000; // 120 seconds default
+    const stabilityThreshold = options.stabilityThreshold || 50; // Characters to check for stability
+
+    try {
+      // Step 1: Find text input
+      console.log('📍 STEP 1: Looking for message input...');
+      
+      const textInputSelectors = [
+        'textarea[placeholder*="message"]',
+        'textarea[placeholder*="Ask"]',
+        'textarea[placeholder*="Message"]',
+        'textarea[placeholder*="Send a message"]',
+        'textarea',
+        'div[contenteditable="true"]',
+        '[contenteditable="true"]'
+      ];
+
+      let textInputSelector = null;
+      
+      for (const selector of textInputSelectors) {
+        try {
+          const element = await this.page.$(selector);
+          if (element) {
+            const isVisible = await this.page.evaluate((sel) => {
+              const el = document.querySelector(sel);
+              return !!(el && el.offsetParent !== null);
+            }, selector);
+            
+            if (isVisible) {
+              textInputSelector = selector;
+              console.log(`   ✅ Found input: ${selector}`);
+              break;
+            }
+          }
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+
+      if (!textInputSelector) {
+        throw new Error('Could not find message input field');
+      }
+
+      // Step 2: Focus input and clear existing text
+      console.log('📍 STEP 2: Preparing input field...');
+      try {
+        await this.page.click(textInputSelector);
+        await this.page.waitForTimeout(500);
+        
+        // Clear existing text
+        await this.page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          if (el) {
+            if (el.tagName === 'TEXTAREA') {
+              el.value = '';
+            } else if (el.contentEditable === 'true') {
+              el.textContent = '';
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }, textInputSelector);
+        
+        await this.page.waitForTimeout(300);
+        console.log('   ✅ Input cleared');
+      } catch (error) {
+        console.error(`   ❌ Error preparing input: ${error.message}`);
+        throw error;
+      }
+
+      // Step 3: Type prompt into input
+      console.log('📍 STEP 3: Entering prompt...');
+      try {
+        await this.page.evaluate((sel, text) => {
+          const el = document.querySelector(sel);
+          if (!el) throw new Error('Input field not found');
+          
+          // Set value directly
+          if (el.tagName === 'TEXTAREA') {
+            el.value = text;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (el.contentEditable === 'true') {
+            el.textContent = text;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          
+          return true;
+        }, textInputSelector, prompt);
+        
+        console.log(`   ✅ Prompt entered (${prompt.length} characters)`);
+        await this.page.waitForTimeout(1000);
+      } catch (error) {
+        console.error(`   ❌ Error entering prompt: ${error.message}`);
+        throw error;
+      }
+
+      // Step 4: Find and click send button
+      console.log('📍 STEP 4: Sending message...');
+      
+      const sendButtonSelectors = [
+        'button[aria-label*="send"]',
+        'button[aria-label*="Send"]',
+        'button[data-testid="send-button"]',
+        'button[type="submit"]',
+        'button:has-text("Send")',
+        'button svg[viewBox*="send"]'
+      ];
+
+      let sendClicked = false;
+      
+      for (const selector of sendButtonSelectors) {
+        try {
+          const buttons = await this.page.$$(selector);
+          for (const button of buttons) {
+            const isEnabled = await this.page.evaluate((el) => {
+              return !!(el && !el.disabled && el.offsetParent !== null);
+            }, button);
+
+            if (isEnabled) {
+              console.log(`   ✅ Found send button: ${selector}`);
+              await button.click();
+              sendClicked = true;
+              await this.page.waitForTimeout(500);
+              break;
+            }
+          }
+          if (sendClicked) break;
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+
+      if (!sendClicked) {
+        // Try pressing Ctrl+Enter or Enter
+        console.log('   ⌨️  Pressing Enter to send...');
+        await this.page.keyboard.press('Enter');
+      }
+
+      console.log('   ✅ Message sent');
+
+      // Step 5: Wait for response to appear
+      console.log('📍 STEP 5: Waiting for ChatGPT response...');
+      await this.page.waitForTimeout(2000);
+
+      // Step 6: Extract response with optimized completion detection
+      let lastLength = 0;
+      let stableCount = 0;
+      let readyCount = 0;
+      const startTime = Date.now();
+      const requiredStableChecks = 4; // 💫 FIXED: Increased from 2 to 4 - ensure strong stability
+      const requiredReadyChecks = 3;  // Keep stricter requirement
+      const checkInterval = 500;      // Check every 500ms
+      let consecutiveCompletionChecks = 0;
+
+      while (Date.now() - startTime < maxWait) {
+        try {
+          const status = await this.page.evaluate(() => {
+            // Find the last assistant message
+            const messages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+            
+            if (messages.length === 0) {
+              return { responseText: '', isComplete: false };
+            }
+
+            const lastMessage = messages[messages.length - 1];
+            const text = lastMessage?.innerText || '';
+            
+            if (!text || text.length === 0) {
+              return { responseText: '', isComplete: false };
+            }
+
+            // Multiple indicators that response is complete:
+            
+            // Indicator 1: No loading spinner/animation visible
+            const hasSpinner = lastMessage.querySelector(
+              '[class*="animate"], [class*="spinner"], [class*="loading"], .cursor-text'
+            ) !== null;
+            
+            // Indicator 2: Input field is enabled (user can type)
+            const inputSelectors = [
+              'textarea[placeholder*="message"]',
+              'textarea[placeholder*="Ask"]',
+              'div[contenteditable="true"]',
+              '[contenteditable="true"]'
+            ];
+            
+            let inputEnabled = false;
+            for (const sel of inputSelectors) {
+              const input = document.querySelector(sel);
+              if (input) {
+                inputEnabled = !input.disabled && input.offsetParent !== null;
+                break;
+              }
+            }
+            
+            // Indicator 3: Send button is enabled
+            const sendButtonSelectors = [
+              'button[aria-label*="send"]',
+              'button[aria-label*="Send"]',
+              'button[data-testid="send-button"]',
+              'button[type="submit"]'
+            ];
+            
+            let sendButtonEnabled = false;
+            for (const sel of sendButtonSelectors) {
+              const buttons = document.querySelectorAll(sel);
+              for (const btn of buttons) {
+                if (!btn.disabled && btn.offsetParent !== null) {
+                  sendButtonEnabled = true;
+                  break;
+                }
+              }
+              if (sendButtonEnabled) break;
+            }
+            
+            // Response is complete when:
+            // - No spinning animation
+            // - Input field is enabled
+            // - Send button is enabled
+            const isComplete = !hasSpinner && inputEnabled && sendButtonEnabled && text.length > 0;
+
+            return {
+              responseText: text,
+              isComplete,
+              indicators: {
+                hasSpinner,
+                inputEnabled,
+                sendButtonEnabled,
+                textLength: text.length
+              }
+            };
+          });
+
+          const { responseText, isComplete, indicators } = status;
+
+          if (responseText && responseText.length > 0) {
+            const currentLength = responseText.length;
+
+            // Check if text has stabilized (not changing)
+            if (Math.abs(currentLength - lastLength) < stabilityThreshold) {
+              stableCount++;
+            } else {
+              stableCount = 0;
+            }
+
+            // Check if all completion indicators are true
+            if (isComplete) {
+              readyCount++;
+              consecutiveCompletionChecks++;
+            } else {
+              readyCount = 0;
+              consecutiveCompletionChecks = 0;
+            }
+
+            // � FIXED: Stricter exit strategy to prevent cut-off segments
+            // For long content (scripts with multiple segments), require stronger stability
+            const isMediumContent = currentLength > 500 && currentLength <= 3000;
+            const isLongContent = currentLength > 3000;
+            
+            // Require MORE checks for longer content
+            const requiredStableForLength = isLongContent ? 5 : (isMediumContent ? 4 : 2);
+            
+            // Exit if ALL conditions are true:
+            // - Text has stabilized (not growing)
+            // - All completion indicators are true
+            // - Strong stability requirements based on content length
+            if (isComplete && stableCount >= requiredStableForLength && consecutiveCompletionChecks >= requiredReadyChecks) {
+              console.log(`   ✅ Response complete (${currentLength} characters) - Stable exit`);
+              console.log(`      - Required stability: ${requiredStableForLength}, achieved: ${stableCount}`);
+              console.log(`      - No spinner: ${!indicators.hasSpinner}`);
+              console.log(`      - Input enabled: ${indicators.inputEnabled}`);
+              console.log(`      - Send button enabled: ${indicators.sendButtonEnabled}`);
+              break;
+            }
+
+            // 💫 FIXED: Stricter fallback - only for very long responses
+            // Requires higher stability to prevent premature exit
+            if (isLongContent && currentLength > 2000 && stableCount >= 4) {
+              console.log(`   ✅ Response complete (${currentLength} characters) - Substantial + stable`);
+              break;
+            }
+
+            lastLength = currentLength;
+          }
+
+          await this.page.waitForTimeout(checkInterval); // Check every 500ms instead of 2000ms
+        } catch (e) {
+          console.warn('   ⚠️  Error checking completion status:', e.message);
+          await this.page.waitForTimeout(checkInterval);
+        }
+      }
+
+      // Step 7: Extract final response with better text capture
+      console.log('📍 STEP 7: Extracting response...');
+      
+      const response = await this.page.evaluate(() => {
+        // Try to find the last assistant message
+        const messages = Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+        
+        if (messages.length > 0) {
+          const lastMessage = messages[messages.length - 1];
+          // 💫 FIXED: Use combination of methods for more complete text capture
+          let text = lastMessage?.innerText || '';
+          
+          // Fallback: if innerText is empty or short, try textContent
+          if (!text || text.length < 100) {
+            text = lastMessage?.textContent || '';
+          }
+          
+          // Ensure we scroll the element into full view
+          if (lastMessage) {
+            lastMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          
+          return text;
+        }
+
+        return '';
+      });
+
+      if (!response || response.length === 0) {
+        throw new Error('Could not extract response from ChatGPT');
+      }
+
+      // 💫 NEW: Log response preview to diagnose cut-off issues
+      const preview = response.substring(0, 200) + (response.length > 200 ? '...' : '');
+      console.log(`   ✅ Response extracted (${response.length} characters)`);
+      console.log(`   📄 Preview: ${preview}`);
+      console.log('='.repeat(80));
+      console.log('✅ PROMPT COMPLETED\n');
+
+      return response;
+
+    } catch (error) {
+      console.error('❌ ChatGPT prompt failed:', error.message);
+      
+      // Save debug info on error
+      try {
+        await this.saveErrorDebugInfo('chatgpt-prompt');
+      } catch (e) {
+        console.log('⚠️  Could not save error debug info');
+      }
+      
+      throw error;
+    }
+  }
 }
 
 export default ChatGPTService;

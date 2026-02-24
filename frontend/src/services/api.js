@@ -554,6 +554,7 @@ export const browserAutomationAPI = {
    * @param {string} videoData.sourceImage - Source image URL
    * @param {string} videoData.characterImage - Character image URL
    * @param {string} videoData.productImage - Product image URL
+   * @param {string} videoData.videoProvider - Video provider (grok, google-flow, etc.)
    */
   generateVideo: async (videoData) => {
     const payload = {
@@ -563,8 +564,18 @@ export const browserAutomationAPI = {
       sourceImage: videoData.sourceImage,
       characterImage: videoData.characterImage,
       productImage: videoData.productImage,
-      provider: 'grok'  // Grok is the default video provider
+      videoProvider: videoData.videoProvider || 'google-flow',  // 💫 Primary field name for backend
+      provider: videoData.videoProvider || 'google-flow'  // Backward compatibility
     };
+    
+    console.log('🎬 [Frontend] Sending video generation:', {
+      videoProvider: payload.videoProvider,
+      provider: payload.provider,
+      duration: payload.duration,
+      scenario: payload.scenario,
+      segmentCount: payload.segments?.length || 0
+    });
+    
     return api.post('/v1/browser-automation/generate-video', payload);
   },
 
@@ -582,7 +593,7 @@ export const browserAutomationAPI = {
       segments,
       style
     };
-    return api.post('/api/videos/generate-prompts', payload);
+    return api.post('/videos/generate-prompts', payload);
   },
 
   /**
@@ -614,7 +625,17 @@ export const browserAutomationAPI = {
       useCase,
       aspectRatio
     };
-    return api.post('/api/videos/generate-prompts-chatgpt', payload);
+    return api.post('/videos/generate-prompts-chatgpt', payload);
+  },
+
+  /**
+   * 💫 NEW: Generate scenario-specific video prompts with image analysis
+   * @param {FormData} formData - FormData containing files and scenario config
+   */
+  generateScenarioPromptsWithImages: async (formData) => {
+    return api.post('/videos/generate-scenario-prompts', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   },
 
   /**

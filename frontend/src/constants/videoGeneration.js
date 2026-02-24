@@ -14,9 +14,9 @@ export const VIDEO_PROVIDER_LIMITS = {
     description: 'Grok supports max 10 seconds per video clip',
   },
   'google-flow': {
-    maxDurationPerVideo: 6,
-    maxDurationTotal: 30,
-    description: 'Google Flow supports max 6 seconds per video clip',
+    maxDurationPerVideo: 8,  // 💫 FIXED: Google Flow is 8s per video, not 6s
+    maxDurationTotal: 32,    // 4 × 8s clips
+    description: 'Google Flow supports max 8 seconds per video clip',
   }
 };
 
@@ -35,13 +35,23 @@ export const getMaxDurationForProvider = (provider) => {
 
 // ===== DURATION & SEGMENT CONFIGURATIONS =====
 export const VIDEO_DURATIONS = [
-  { value: 10, label: '10 seconds', segments: 1, segmentDuration: 10 },
-  { value: 20, label: '20 seconds', segments: 2, segmentDuration: 10 },
-  { value: 30, label: '30 seconds', segments: 3, segmentDuration: 10 },
-  { value: 40, label: '40 seconds', segments: 4, segmentDuration: 10 },
+  { value: 10, label: '10 seconds' },
+  { value: 20, label: '20 seconds' },
+  { value: 30, label: '30 seconds' },
+  { value: 40, label: '40 seconds' },
 ];
 
-export const SEGMENT_DURATION = 10; // Each segment is 10 seconds
+// 💫 Helper: Get segment duration per provider
+export const getSegmentDurationForProvider = (provider) => {
+  const limits = VIDEO_PROVIDER_LIMITS[provider] || VIDEO_PROVIDER_LIMITS['grok'];
+  return limits.maxDurationPerVideo;
+};
+
+// 💫 Helper: Calculate actual segment count based on provider
+export const calculateSegmentCount = (provider, totalDuration) => {
+  const segmentDuration = getSegmentDurationForProvider(provider);
+  return Math.ceil(totalDuration / segmentDuration);
+};
 
 // Get durations available for a specific provider
 export const getAvailableDurations = (provider) => {
@@ -200,6 +210,7 @@ export const CONTENT_USE_CASES = {
 };
 
 // ===== VIDEO SCENARIOS (TRADITIONAL SCRIPT-BASED) =====
+// 💫 UPDATED: Each scenario now defines image requirements and prompt templates
 export const VIDEO_SCENARIOS = [
   { 
     value: 'dancing', 
@@ -210,7 +221,14 @@ export const VIDEO_SCENARIOS = [
       'Close-up of outfit details while dancing',
       'Wide shot showing the complete look in motion'
     ],
-    isTraditional: true  // Uses script-based prompts, not ChatGPT
+    isTraditional: true,
+    // 💫 NEW: Image Schema
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit/product' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Person holding or displaying product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Standalone product photo' }
+    },
+    maxImages: 1  // Only needs character wearing - others optional
   },
   { 
     value: 'product-intro', 
@@ -221,7 +239,15 @@ export const VIDEO_SCENARIOS = [
       'Show the details and key features up close',
       'Full outfit reveal and final pose'
     ],
-    isTraditional: true
+    isTraditional: true,
+    // 💫 NEW: Image Schema - Product Introduction needs all 3 images
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Person handling/presenting the product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Close-up of product details' }
+    },
+    maxImages: 3,
+    usesChatGPT: true  // Product intro should use ChatGPT for detailed analysis
   },
   { 
     value: 'lifestyle', 
@@ -232,7 +258,13 @@ export const VIDEO_SCENARIOS = [
       'Sitting or posing naturally in the outfit',
       'Standing confidently showing the complete look'
     ],
-    isTraditional: true
+    isTraditional: true,
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Optional: Person with product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Optional: Product details' }
+    },
+    maxImages: 1
   },
   { 
     value: 'lip-sync', 
@@ -243,7 +275,13 @@ export const VIDEO_SCENARIOS = [
       'Change expression and emotion while speaking',
       'Final pose with confident expression'
     ],
-    isTraditional: true
+    isTraditional: true,
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Optional: Person with product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Optional: Product details' }
+    },
+    maxImages: 1
   },
   { 
     value: 'fashion-walk', 
@@ -254,7 +292,13 @@ export const VIDEO_SCENARIOS = [
       'Turn and walk away showing back view',
       'Return and final pose at camera with confidence'
     ],
-    isTraditional: true
+    isTraditional: true,
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Optional: Person with product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Optional: Product details' }
+    },
+    maxImages: 1
   },
   {
     value: 'transition',
@@ -265,7 +309,14 @@ export const VIDEO_SCENARIOS = [
       'Transition or gesture showing outfit change',
       'Final look reveal in new styling'
     ],
-    isTraditional: true
+    isTraditional: true,
+    imageSchema: {
+      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person in the outfit' },
+      characterHolding: { required: false, label: 'Character Holding Product', description: 'Optional: Person with product' },
+      productReference: { required: false, label: 'Product Reference', description: 'Optional: Product reference' }
+    },
+    maxImages: 3,
+    usesChatGPT: true  // Transition can use ChatGPT for complex scenarios
   }
 ];
 

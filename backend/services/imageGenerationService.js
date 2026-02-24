@@ -18,7 +18,7 @@ class ImageGenerationAutomation {
     this.options = {
       headless: false,
       sessionFilePath: path.join(__dirname, '../.sessions/google-flow-session.json'),
-      projectUrl: 'https://labs.google/fx/vi/tools/flow/project/3ba9e02e-0a33-4cf2-9d55-4c396941d7b7',
+      projectUrl: process.env.PROJECT_GOOGLE_FLOW_URL || 'https://labs.google/fx/vi/tools/flow/project/3ba9e02e-0a33-4cf2-9d55-4c396941d7b7',
       aspectRatio: options.aspectRatio || '9:16', // Default: 9:16
       imageCount: options.imageCount || 4,
       timeouts: {
@@ -75,11 +75,40 @@ class ImageGenerationAutomation {
     }
   }
 
+  async waitForPageFullyLoaded(maxWaitTime = 30000) {
+    console.log('⏳ Waiting for "đang tải" to disappear...');
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        const isLoading = await this.page.evaluate(() => {
+          const bodyText = document.body.innerText.toLowerCase();
+          return bodyText.includes('đang tải') || bodyText.includes('loading') || bodyText.includes('please wait');
+        });
+
+        if (!isLoading) {
+          console.log('✓ Loading complete');
+          return true;
+        }
+
+        await this.page.waitForTimeout(500);
+      } catch (error) {
+        console.warn(`⚠️ Error checking page load status: ${error.message}`);
+        await this.page.waitForTimeout(1000);
+      }
+    }
+
+    console.warn(`⚠️ Timeout waiting for page to load after ${maxWaitTime / 1000}s - proceeding anyway`);
+    return false;
+  }
+
   async navigateToProject() {
     console.log('📍 Navigating to image generation project...');
     await this.page.goto(this.options.projectUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    await this.page.waitForTimeout(2000);
-    console.log('✓ Project loaded');
+    
+    // Wait for loading text to disappear (30s)
+    await this.waitForPageFullyLoaded(30000);
+    console.log('✓ Project fully loaded and ready');
   }
 
   async configureModel() {
@@ -130,6 +159,15 @@ class ImageGenerationAutomation {
         const options = document.querySelectorAll('[role="option"], button, li');
         for (const option of options) {
           const text = option.textContent.trim();
+          // 💫 CHANGED: Prefer Nano Banana Pro (highest quality)
+          if (text.includes('Nano') && text.includes('Banana') && text.includes('Pro')) {
+            option.click();
+            return true;
+          }
+        }
+        // Fallback to regular Nano Banana if Pro not found
+        for (const option of options) {
+          const text = option.textContent.trim();
           if ((text.includes('Nano') && text.includes('Banana') && !text.includes('Pro')) ||
               text === 'Nano Banana') {
             option.click();
@@ -140,7 +178,7 @@ class ImageGenerationAutomation {
       });
 
       if (selectedNanoBanana) {
-        console.log('✓ Selected Nano Banana');
+        console.log('✓ Selected Nano Banana Pro (or Nano Banana as fallback)');
       }
     }
 
@@ -156,6 +194,7 @@ class ImageGenerationAutomation {
       if (tuneBtn) tuneBtn.click();
     });
 
+    await this.page.waitForTimeout(this.options.timeouts.modelConfig);
     console.log('✓ Config dialog closed');
   }
 
@@ -683,32 +722,10 @@ class ImageGenerationAutomation {
       console.log('⚠️ Generation timeout, continuing...\n');
     }
 
-    // Check for policy violation
-    const policyViolation = await this.page.evaluate(() => {
-      const text = document.body.innerText.toLowerCase();
-      return text.includes('chính sách') || text.includes('vi phạm');
-    });
 
-    if (policyViolation) {
-      console.log('⚠️ Policy violation detected, retrying...');
-      const retryClicked = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        const wrapTextBtn = buttons.find(btn => {
-          const icon = btn.querySelector('i');
-          return icon && icon.textContent.includes('wrap_text');
-        });
-        if (wrapTextBtn) {
-          wrapTextBtn.click();
-          return true;
-        }
-        return false;
-      });
-
-      if (retryClicked) {
-        console.log('✓ Retry initiated, waiting 3s...\n');
-        await this.page.waitForTimeout(3000);
-      }
-    }
+    // NOTE: Policy violation handling is now done in downloadResults() function
+    // This consolidation prevents conflicting retry logic between two phases
+    console.log('⏳ Results ready for download phase (policy check will occur there)\n');
   }
 
   async configureAspectRatio(aspectRatio = '9:16') {
@@ -747,215 +764,555 @@ class ImageGenerationAutomation {
     // Wait a moment for DOM to settle after generation
     await this.page.waitForTimeout(500);
 
-    // Wait for all expected items to appear in scroller
-    console.log(`⏳ Waiting for ${expectedItemCount} items to appear in scroller...`);
-    let itemsReady = false;
-    for (let i = 0; i < 30; i++) {
-      const itemCount = await this.page.evaluate((maxItems) => {
+    console.log(`⏳ Checking for policy violations...\n`);
+    
+    // Better policy violation detection - check the specific error container
+    let hasViolation = true;
+    let violationCheckAttempts = 0;
+    const maxViolationChecks = 3;
+
+    while (hasViolation && violationCheckAttempts < maxViolationChecks) {
+      violationCheckAttempts++;
+      
+      const violationCheckResult = await this.page.evaluate(() => {
         const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
-        if (!scroller) return 0;
+        if (!scroller) return { hasViolation: false, reason: 'no-scroller' };
 
-        const allItems = scroller.querySelectorAll('[data-index]');
-        let itemsWithImages = 0;
+        const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+        if (!itemList) return { hasViolation: false, reason: 'no-itemlist' };
 
-        allItems.forEach(item => {
-          const images = item.querySelectorAll('img');
-          if (images.length > 0) itemsWithImages++;
+        // Check index 1 for policy violation message
+        const newestItem = itemList.querySelector('[data-index="1"]');
+        if (!newestItem) return { hasViolation: false, reason: 'no-newest-item' };
+
+        // Strategy 1: Check specific violation div (class contains 'dXpkuj' or similar pattern)
+        const violationDivs = Array.from(newestItem.querySelectorAll('div')).filter(div => {
+          const text = div.textContent.toLowerCase();
+          return (text.includes('vi phạm chính sách') || 
+                  text.includes('policy violation') || 
+                  text.includes('violates'));
         });
 
-        return itemsWithImages;
-      }, expectedItemCount);
+        if (violationDivs.length > 0) {
+          return { hasViolation: true, reason: 'violation-div-found' };
+        }
 
-      console.log(`  Attempt ${i + 1}: Found ${itemCount} items with images...`);
-      
-      if (itemCount >= expectedItemCount) {
-        itemsReady = true;
-        console.log(`✓ All ${itemCount} items ready\n`);
+        // Strategy 2: Scan all text in item for violation keywords
+        const itemText = newestItem.textContent.toLowerCase();
+        const hasViolationMsg = itemText.includes('vi phạm chính sách') || 
+                               itemText.includes('policy violation') || 
+                               itemText.includes('violates') ||
+                               itemText.includes('violate');
+        
+        return { hasViolation: hasViolationMsg, reason: hasViolationMsg ? 'violation-found' : 'no-violation' };
+      });
+
+      if (!violationCheckResult.hasViolation) {
+        console.log(`✓ No policy violation detected\n`);
+        hasViolation = false;
         break;
       }
 
-      await this.page.waitForTimeout(500);
-    }
+      console.log(`⚠️  POLICY VIOLATION DETECTED! Attempting regeneration...\n`);
 
-    if (!itemsReady) {
-      console.log(`⚠️  Timeout waiting for all items. Proceeding with available items.\n`);
-    }
-    
-    // Re-query scroller to ensure fresh DOM state
-    await this.page.evaluate(() => {
-      const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
-      if (scroller) {
-        // Force a small scroll to trigger any lazy-loading
-        scroller.scrollTop = scroller.scrollTop;
+      // Retry regeneration up to 3 times
+      let regenerateCount = 0;
+      const maxRetries = 3;
+      let violationResolved = false;
+
+      for (regenerateCount = 1; regenerateCount <= maxRetries; regenerateCount++) {
+        console.log(`🔄 Retry attempt ${regenerateCount}/${maxRetries}...`);
+
+        // 💫 NEW: Click "Sử dụng lại câu lệnh" (reuse command) button
+        const reuseCommandFound = await this.page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          for (const btn of buttons) {
+            const btnText = btn.textContent.trim().toLowerCase();
+            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+            
+            // Look for "Sử dụng lại câu lệnh" button
+            if (btnText.includes('sử dụng lại') || ariaLabel.includes('sử dụng lại') || 
+                btnText.includes('reuse') || ariaLabel.includes('reuse')) {
+              console.log(`  → Found "Sử dụng lại câu lệnh" button, clicking...`);
+              btn.click();
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (!reuseCommandFound) {
+          console.log(`  ⚠️  "Sử dụng lại câu lệnh" button not found`);
+          continue;  // Try next attempt
+        }
+
+        // Wait for UI to update after clicking reuse button
+        await this.page.waitForTimeout(1500);
+
+        // 💫 NEW: Double check textarea has content
+        const textareaStatus = await this.page.evaluate(() => {
+          const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+          if (!textarea) return { hasContent: false, reason: 'textarea-not-found', length: 0 };
+          
+          const content = textarea.value.trim();
+          const hasContent = content.length > 20;  // Must have substantial content
+          
+          return { 
+            hasContent: hasContent, 
+            reason: hasContent ? 'content-ok' : 'empty-or-short',
+            length: content.length,
+            preview: content.substring(0, 50)
+          };
+        });
+
+        console.log(`  📝 Textarea check: ${textareaStatus.reason} (${textareaStatus.length} chars)`);
+
+        if (!textareaStatus.hasContent) {
+          console.log(`  ⚠️  Textarea content missing or too short`);
+          continue;  // Try next attempt
+        }
+
+        // 💫 NEW: Click "Tạo" (Create/Submit) button
+        const submitFound = await this.page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i');
+            if (!icon) continue;
+            
+            const iconText = icon.textContent.trim().toLowerCase();
+            const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+            
+            // Look for create/send button (arrow_forward icon)
+            if ((iconText === 'arrow_forward' || iconText === 'send') && !btn.disabled) {
+              console.log(`  → Found "Tạo" button, clicking...`);
+              btn.click();
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (!submitFound) {
+          console.log(`  ⚠️  "Tạo" button not found or disabled`);
+          continue;  // Try next attempt
+        }
+
+        console.log(`  ✓ Submitted - waiting for generation (max 3 min)...`);
+
+        // Wait for generation to complete (up to 3 minutes max per attempt)
+        let generationComplete = false;
+        for (let wait = 0; wait < 180; wait++) {
+          const genState = await this.page.evaluate(() => {
+            const itemList = document.querySelector('[data-testid="virtuoso-item-list"]');
+            if (!itemList) return 'unknown';
+
+            const text = itemList.textContent.toLowerCase();
+            
+            // Check if still generating
+            if (text.includes('generating') || text.includes('đang tạo') || text.includes('đang xử lý')) {
+              return 'generating';
+            }
+            
+            // Check if still has violation
+            if (text.includes('vi phạm') || text.includes('policy') || text.includes('violate')) {
+              return 'violation';
+            }
+            
+            return 'complete';
+          });
+
+          if (genState === 'complete') {
+            console.log(`  ✓ Generation complete (${wait}s)`);
+            generationComplete = true;
+            break;
+          } else if (genState === 'violation') {
+            console.log(`  ⚠️  Policy violation detected again`);
+            break;
+          }
+
+          if ((wait + 1) % 30 === 0) {
+            process.stdout.write(`  ⏳ ${wait + 1}s...\r`);
+          }
+
+          await this.page.waitForTimeout(1000);
+        }
+
+        if (!generationComplete) {
+          console.log(`  ⚠️  Generation timeout after 3 minutes`);
+          continue;  // Try next attempt
+        }
+
+        // Check if violation is resolved
+        const stillViolated = await this.page.evaluate(() => {
+          const itemList = document.querySelector('[data-testid="virtuoso-item-list"]');
+          if (!itemList) return false;
+          
+          const text = itemList.textContent.toLowerCase();
+          return text.includes('vi phạm') || text.includes('policy') || text.includes('violate');
+        });
+
+        if (!stillViolated) {
+          console.log(`  ✓ Policy violation resolved!\n`);
+          violationResolved = true;
+          hasViolation = false;
+          break;
+        } else if (regenerateCount < maxRetries) {
+          console.log(`  ⚠️  Policy violation persists, retrying...\n`);
+        } else {
+          console.log(`  ❌ Policy violation persists after ${maxRetries} retry attempts\n`);
+        }
       }
-    });
-    
-    await this.page.waitForTimeout(500);
 
-    const itemsData = await this.page.evaluate((maxItems) => {
-      const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
-      if (!scroller) return { items: [], totalItems: 0, lastItemIndices: [] };
-
-      const allItems = scroller.querySelectorAll('[data-index]');
-      const results = [];
-
-      allItems.forEach((item, idx) => {
-        const images = item.querySelectorAll('img');
-        if (images.length > 0) results.push(idx);
-      });
-
-      // Only take the last 'maxItems' items (the ones just generated)
-      const lastItemIndices = results.slice(-maxItems);
-      
-      return { 
-        items: Array.from(lastItemIndices),
-        totalItems: results.length,
-        totalItemsInScroller: allItems.length,
-        lastItemIndices: lastItemIndices
-      };
-    }, expectedItemCount);
-
-    const { items: itemsWithImages, totalItems, totalItemsInScroller, lastItemIndices } = itemsData;
-
-    if (itemsWithImages.length === 0) {
-      console.log('❌ No results found');
-      return [];
+      if (!violationResolved) {
+        throw new Error('Policy violation could not be resolved after 3 retry attempts - please change images and try again');
+      }
     }
 
-    console.log(`ℹ️  Total items in scroller: ${totalItemsInScroller}`);
-    console.log(`ℹ️  Total items with images: ${totalItems}`);
-    console.log(`✓ Processing last ${itemsWithImages.length} items (generated this session)\n`);
+
+    console.log(`📍 Downloading ${expectedItemCount} generated images...\n`);
 
     const downloadedFiles = [];
     const initialFiles = fs.readdirSync(this.downloadDir);
 
-    for (let d = 0; d < lastItemIndices.length; d++) {
-      const itemIdx = lastItemIndices[d];
-      console.log(`💾 Downloading item ${d + 1}/${lastItemIndices.length}...`);
+    // 💫 FIXED: Wait for all images to be ready (with timeout retries)
+    let imageCountReady = false;
+    let readyCheckAttempts = 0;
+    const maxReadyChecks = 30; // ~15 seconds with 500ms intervals
+    
+    while (!imageCountReady && readyCheckAttempts < maxReadyChecks) {
+      readyCheckAttempts++;
+      
+      const imageCountResult = await this.page.evaluate((expectedCount) => {
+        const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+        if (!scroller) return { count: 0, error: 'No scroller', ready: false };
 
-      let downloadSuccess = null;
-      let retries = 0;
+        const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+        if (!itemList) return { count: 0, error: 'No item list', ready: false };
 
-      while (retries < 3 && !downloadSuccess) {
-        if (retries > 0) {
-          await this.page.waitForTimeout(300);
+        // Get the newest item (index 1) which contains all generated images
+        const imageItem = itemList.querySelector('[data-index="1"]');
+        if (!imageItem) return { count: 0, error: 'No image item at index 1', ready: false };
+
+        // Count direct image containers (each has class like "sc-c6af9aa3-0")
+        const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+          return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+        });
+
+        // 💫 NEW: Consider ready only when we have all expected images
+        const isReady = imageContainers.length >= expectedCount;
+        const count = imageContainers.length;
+        
+        console.log(`📊 Found ${count}/${expectedCount} images (${isReady ? 'ready' : 'loading'})...`);
+        return { count: count, error: null, ready: isReady };
+      }, expectedItemCount);
+
+      if (imageCountResult.ready || readyCheckAttempts === maxReadyChecks) {
+        imageCountReady = true;
+        const actualImageCount = Math.max(imageCountResult.count, expectedItemCount);
+        console.log(`\n✅ Image count verified: ${actualImageCount} images (expected: ${expectedItemCount})\n`);
+      } else {
+        await this.page.waitForTimeout(500);
+      }
+    }
+
+    if (!imageCountReady) {
+      console.log(`  ⚠️ Timeout waiting for all ${expectedItemCount} images, proceeding with what's available...`);
+    }
+
+    // First, check how many images are actually generated in the item
+    const imageCountResult = await this.page.evaluate(() => {
+      const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+      if (!scroller) return { count: 0, error: 'No scroller' };
+
+      const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+      if (!itemList) return { count: 0, error: 'No item list' };
+
+      // Get the newest item (index 1) which contains all generated images
+      const imageItem = itemList.querySelector('[data-index="1"]');
+      if (!imageItem) return { count: 0, error: 'No image item at index 1' };
+
+      // Count direct image containers (each has class like "sc-c6af9aa3-0")
+      const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+        return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+      });
+
+      console.log(`📊 Final count: Found ${imageContainers.length} generated images in item`);
+      return { count: imageContainers.length, error: null };
+    });
+
+    const actualImageCount = Math.max(imageCountResult.count, expectedItemCount);
+    console.log(`📊 Downloading ${actualImageCount} images (expected: ${expectedItemCount})\n`);
+
+    // Download multiple images - all from the newest item (data-index="1")
+    for (let imageIdx = 0; imageIdx < actualImageCount; imageIdx++) {
+      console.log(`📍 Downloading image ${imageIdx + 1}/${actualImageCount}...`);
+
+      // 💫 RE-CHECK: Ensure image container exists before attempting download
+      const containerCheckResult = await this.page.evaluate((imgIdx, expectedTotal) => {
+        const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+        if (!scroller) return { exists: false, error: 'No scroller found', totalFound: 0 };
+
+        const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+        if (!itemList) return { exists: false, error: 'Item list not found', totalFound: 0 };
+
+        const imageItem = itemList.querySelector('[data-index="1"]');
+        if (!imageItem) return { exists: false, error: 'Image item not found at index 1', totalFound: 0 };
+
+        const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+          return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+        });
+
+        return {
+          exists: imageContainers.length > imgIdx,
+          totalFound: imageContainers.length,
+          error: imageContainers.length <= imgIdx ? `Only ${imageContainers.length} images found, need index ${imgIdx}` : null
+        };
+      }, imageIdx, actualImageCount);
+
+      if (!containerCheckResult.exists) {
+        console.log(`  ⚠️  Image ${imageIdx + 1} not ready yet (${containerCheckResult.totalFound}/${actualImageCount} available). Waiting...`);
+        
+        // Wait a bit longer for image to render
+        await this.page.waitForTimeout(1000);
+        
+        // Try again
+        const retryCheck = await this.page.evaluate((imgIdx) => {
+          const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+          if (!scroller) return { exists: false };
+          const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+          if (!itemList) return { exists: false };
+          const imageItem = itemList.querySelector('[data-index="1"]');
+          if (!imageItem) return { exists: false };
+          const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+            return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+          });
+          return { exists: imageContainers.length > imgIdx, totalFound: imageContainers.length };
+        }, imageIdx);
+
+        if (!retryCheck.exists) {
+          console.log(`  ❌ Image ${imageIdx + 1} still not found after retry. Skipping.`);
+          continue;
+        }
+      }
+
+      const downloadResult = await this.page.evaluate((imgIdx) => {
+        const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+        if (!scroller) return { error: 'No scroller found', success: false };
+
+        const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+        if (!itemList) return { error: 'Item list not found', success: false };
+
+        // Get the newest item (index 1) which contains all generated images
+        const imageItem = itemList.querySelector('[data-index="1"]');
+        if (!imageItem) return { error: 'Image item not found at index 1', success: false };
+
+        // Find all image containers with actual images
+        const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+          return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+        });
+
+        if (imageContainers.length <= imgIdx) {
+          return { error: `Image ${imgIdx + 1} not found (only ${imageContainers.length} images available)`, success: false };
         }
 
-        downloadSuccess = await this.page.evaluate((idx) => {
-          const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
-          if (!scroller) return { error: 'No scroller' };
-
-          const items = scroller.querySelectorAll('[data-index]');
-          const item = items[idx];
-          if (!item) return { error: 'Item not found' };
-
-          const buttons = item.querySelectorAll('button');
-          let downloadBtn = null;
-          for (const btn of buttons) {
-            const icon = btn.querySelector('i');
-            if (icon && icon.textContent.includes('download')) {
+        // Get the specific image container
+        const targetImageContainer = imageContainers[imgIdx];
+        
+        // Find download button in this specific image container
+        const buttons = targetImageContainer.querySelectorAll('button');
+        let downloadBtn = null;
+        
+        for (const btn of buttons) {
+          const icon = btn.querySelector('i');
+          if (icon && (icon.textContent.includes('download') || icon.textContent.includes('task_alt'))) {
+            // Scan more carefully for download button
+            const ariaLabel = btn.getAttribute('aria-label') || '';
+            const btnText = btn.textContent.toLowerCase();
+            if (ariaLabel.includes('tải') || ariaLabel.includes('download') || btnText.includes('tải') || btnText.includes('download')) {
               downloadBtn = btn;
               break;
             }
           }
+        }
 
-          if (!downloadBtn) return { error: 'No download button' };
+        // If not found by icon text, look for button with specific attributes
+        if (!downloadBtn) {
+          for (const btn of buttons) {
+            const ariaLabel = btn.getAttribute('aria-label') || '';
+            if (ariaLabel.includes('tải') || ariaLabel.includes('download')) {
+              downloadBtn = btn;
+              break;
+            }
+          }
+        }
 
-          downloadBtn.click();
+        if (!downloadBtn) {
+          return { error: 'Download button not found in image container', success: false, containerCount: imageContainers.length, targetIdx: imgIdx };
+        }
 
-          // Check if menu appears (Nano Banana Pro style)
-          let allMenuItems = document.querySelectorAll('[role="menuitem"]');
-          if (allMenuItems.length === 0) {
-            allMenuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
+        downloadBtn.click();
+        return { success: true };
+      }, imageIdx);
+
+      if (!downloadResult.success) {
+        console.log(`  ⚠️  Cannot download image ${imageIdx + 1}: ${downloadResult.error}`);
+        continue;
+      }
+
+      console.log(`  ✓ Download button clicked`);
+
+      // Wait for menu to appear (or auto-download for Banana model)
+      await this.page.waitForTimeout(500);
+
+      // Check if menu exists (Nano Banana Pro has menu, Banana model auto-downloads)
+      const menuCheckResult = await this.page.evaluate(() => {
+        let menuItems = document.querySelectorAll('[role="menuitem"]');
+        if (menuItems.length === 0) {
+          menuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
+        }
+        return {
+          hasMenu: menuItems.length > 0,
+          menuCount: menuItems.length
+        };
+      });
+
+      let modelType = 'Unknown';
+      let download2KSelected = false;
+
+      if (menuCheckResult.hasMenu) {
+        // Nano Banana Pro: has download menu with 2K option
+        modelType = 'Nano Banana Pro';
+        download2KSelected = await this.page.evaluate(() => {
+          let menuItems = document.querySelectorAll('[role="menuitem"]');
+          if (menuItems.length === 0) {
+            menuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
           }
 
-          // If no menu, it's Banana model (auto-downloads)
-          if (allMenuItems.length === 0) {
-            return { success: true, method: 'auto-download (Banana model)', modelType: 'Banana' };
-          }
-
-          // Nano Banana Pro: has menu, try to find 2K option
-          for (let i = 0; i < allMenuItems.length; i++) {
-            const text = allMenuItems[i].textContent.trim();
+          // Try to find 2K Tải xuống option
+          for (let i = 0; i < menuItems.length; i++) {
+            const text = menuItems[i].textContent.trim();
             if (text.includes('2K') && text.includes('Tải xuống') && !text.includes('4K') && !text.includes('1K')) {
-              allMenuItems[i].click();
-              return { success: true, method: '2K menu', modelType: 'Nano Banana Pro' };
+              menuItems[i].click();
+              return true;
             }
           }
 
-          // Fallback: click second menu item
-          if (allMenuItems.length >= 2) {
-            allMenuItems[1].click();
-            return { success: true, method: 'menu item 1', modelType: 'Nano Banana Pro' };
+          // Fallback: click second item if exists
+          if (menuItems.length >= 2) {
+            menuItems[1].click();
+            return true;
           }
 
-          return { error: 'Could not find 2K option' };
-        }, itemIdx);
+          return false;
+        });
 
-        if (!downloadSuccess.success && retries < 2) {
-          retries++;
+        if (!download2KSelected) {
+          console.log(`  ⚠️  Could not select 2K option (${modelType})`);
         } else {
-          break;
-        }
-      }
-
-      if (downloadSuccess?.success) {
-        console.log(`  ✓ Selected ${downloadSuccess.method}`);
-        
-        // Wait for upgrade message (nâng cấp hình ảnh) - mainly for Nano Banana Pro
-        let upgradeDetected = false;
-        for (let i = 0; i < 10; i++) {
-          const hasUpgrade = await this.page.evaluate(() => {
-            const text = document.body.innerText.toLowerCase();
-            return text.includes('nâng cấp') || text.includes('upgrading') || text.includes('processing');
-          });
-          
-          if (hasUpgrade) {
-            upgradeDetected = true;
-            console.log(`  ✓ Image upgrading detected...`);
-            break;
-          }
-          
-          await this.page.waitForTimeout(500);
-        }
-        
-        if (!upgradeDetected) {
-          if (downloadSuccess.modelType === 'Banana') {
-            console.log(`  ⚠️ No upgrade message (${downloadSuccess.modelType} model may skip this)`);
-          } else {
-            console.log(`  ⚠️ No upgrade message detected (may still be downloading)`);
-          }
-        }
-        
-        // Wait for file to be downloaded (max 15 seconds)
-        let downloadedFilePath = null;
-        for (let i = 0; i < 30; i++) {
-          const currentFiles = fs.readdirSync(this.downloadDir);
-          const newFiles = currentFiles.filter(f => !initialFiles.includes(f) && !f.endsWith('.crdownload'));
-          
-          if (newFiles.length > 0) {
-            downloadedFilePath = path.join(this.downloadDir, newFiles[0]);
-            console.log(`  ✓ File saved: ${newFiles[0]}`);
-            downloadedFiles.push(downloadedFilePath);
-            initialFiles.push(...newFiles);
-            break;
-          }
-          
-          await this.page.waitForTimeout(500);
-        }
-        
-        if (!downloadedFilePath) {
-          console.log(`  ⚠️ File download timeout (may still be downloading)`);
+          console.log(`  ✓ Selected 2K download (${modelType})`);
         }
       } else {
-        console.log(`  ❌ ${downloadSuccess?.error || 'Unknown error'}`);
+        // Banana model: auto-downloads without menu
+        modelType = 'Banana';
+        download2KSelected = true;
+        console.log(`  ✓ Auto-download triggered (${modelType})`);
       }
 
-      await this.page.waitForTimeout(500);
+      // Wait for upgrade messages - mainly for Nano Banana Pro
+      let upgradeDetected = false;
+      for (let i = 0; i < 15; i++) {
+        const hasUpgrade = await this.page.evaluate(() => {
+          const text = document.body.innerText.toLowerCase();
+          return text.includes('nâng cấp') || text.includes('upgrading') || text.includes('processing');
+        });
+
+        if (hasUpgrade) {
+          upgradeDetected = true;
+          console.log(`  ✓ Image upgrading detected...`);
+          break;
+        }
+
+        await this.page.waitForTimeout(500);
+      }
+
+      if (!upgradeDetected && modelType !== 'Banana') {
+        console.log(`  ⚠️  No upgrade message detected`);
+      }
+
+      // 💫 FIXED: Wait for file to download (max 60 seconds - increased from 15s for 2K upgrade)
+      let fileDownloaded = false;
+      let downloadError = null;
+
+      for (let i = 0; i < 120; i++) {  // 120 * 500ms = 60 seconds
+        const currentFiles = fs.readdirSync(this.downloadDir);
+        
+        // 💫 IMPROVED: Better handling of partial downloads
+        const newFiles = currentFiles.filter(f => {
+          // Skip in-progress downloads
+          if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
+            return false;
+          }
+          
+          // Check if it's a new file (not in initial list and not in downloaded list)
+          const isNew = !initialFiles.includes(f);
+          const notDownloaded = !downloadedFiles.some(df => df.includes(path.basename(f)));
+          
+          return isNew && notDownloaded;
+        });
+
+        if (newFiles.length > 0) {
+          const newFile = newFiles[newFiles.length - 1];
+          const filePath = path.join(this.downloadDir, newFile);
+          
+          try {
+            const stats = fs.statSync(filePath);
+            // 💫 IMPROVED: Check if file is valid (larger than 100KB for 2K images)
+            if (stats.size > 102400) {  // 100KB minimum for proper 2K image
+              downloadedFiles.push(filePath);
+              initialFiles.push(newFile);  // Mark as downloaded
+              console.log(`  ✓ File saved: ${newFile} (${Math.round(stats.size / 1024)}KB)`);
+              fileDownloaded = true;
+              break;
+            } else {
+              downloadError = `File too small (${Math.round(stats.size / 1024)}KB) - still upgrading or corrupted`;
+              if ((i + 1) % 10 === 0) {
+                console.log(`  ⏳ File upgrading (${Math.round(stats.size / 1024)}KB at ${(i + 1) * 500}ms)...`);
+              }
+              await this.page.waitForTimeout(500);
+              continue;
+            }
+          } catch (err) {
+            downloadError = `File access error: ${err.message}`;
+            await this.page.waitForTimeout(500);
+            continue;
+          }
+        }
+
+        // 💫 DEBUG: Log progress every 10 checks
+        if ((i + 1) % 20 === 0) {
+          console.log(`  ⏳ Waiting for file (${(i + 1) * 500}ms / 60000ms)... Files in dir: ${currentFiles.length}`);
+        }
+
+        await this.page.waitForTimeout(500);
+      }
+
+      if (!fileDownloaded) {
+        const errorMsg = downloadError || 'File download timeout';
+        console.log(`  ❌ Cannot download image ${imageIdx + 1}: ${errorMsg}`);
+        continue;
+      }
+
+      await this.page.waitForTimeout(1000);  // Delay between downloads
     }
 
-    console.log(`✓ Download process complete (${downloadedFiles.length} files saved)\n`);
-    console.log(`📊 Downloaded files:`, downloadedFiles);
+    console.log(`\n✓ Download complete! ${downloadedFiles.length}/${expectedItemCount} images downloaded.\n`);
+    console.log(`📊 Downloaded Images:`);
+    downloadedFiles.forEach((file, idx) => {
+      const stats = fs.statSync(file);
+      console.log(`  ${idx + 1}. ${path.basename(file)} (${Math.round(stats.size / 1024)}KB)`);
+    });
+    console.log();
+
     return downloadedFiles;
   }
 

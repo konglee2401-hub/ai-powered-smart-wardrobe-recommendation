@@ -9,15 +9,15 @@ import axiosInstance from './axios';
 // GALLERY API ENDPOINTS
 // ============================================
 const GALLERY_ENDPOINTS = {
-  IMAGES: '/api/gallery/images',
-  IMAGE_DETAIL: (id) => `/api/gallery/images/${id}`,
-  FAVORITES: '/api/gallery/favorites',
-  TOGGLE_FAVORITE: (id) => `/api/gallery/images/${id}/favorite`,
-  DELETE: (id) => `/api/gallery/images/${id}`,
-  EXPORT: '/api/gallery/export',
-  BATCH_EXPORT: '/api/gallery/batch-export',
-  CATEGORIES: '/api/gallery/categories',
-  SEARCH: '/api/gallery/search',
+  IMAGES: '/gallery/images',
+  IMAGE_DETAIL: (id) => `/gallery/images/${id}`,
+  FAVORITES: '/gallery/favorites',
+  TOGGLE_FAVORITE: (id) => `/gallery/images/${id}/favorite`,
+  DELETE: (id) => `/gallery/images/${id}`,
+  EXPORT: '/gallery/export',
+  BATCH_EXPORT: '/gallery/batch-export',
+  CATEGORIES: '/gallery/categories',
+  SEARCH: '/gallery/search',
 };
 
 /**

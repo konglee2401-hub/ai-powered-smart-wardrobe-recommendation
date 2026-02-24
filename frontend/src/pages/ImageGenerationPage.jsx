@@ -17,6 +17,9 @@ import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '
 // Import Google Drive API
 import driveAPI from '../services/driveAPI';
 
+// Import Asset Service
+import assetService from '../services/assetService';
+
 // New: Session tracking and advanced prompt engineering
 import SessionHistoryService from '../services/sessionHistoryService';
 import { SessionHistory, generateSessionId } from '../utils/sessionHistory';
@@ -41,6 +44,9 @@ const STEPS = [
   { id: 3, name: 'Style & Prompt', icon: Wand2 },
   { id: 4, name: 'Generate', icon: Rocket },
 ];
+
+// 📊 Image Generation Configuration
+const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per request
 
 // Use cases
 const USE_CASES = [
@@ -148,6 +154,8 @@ export default function ImageGenerationPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [generationError, setGenerationError] = useState(null);  // 💫 NEW: Error handling
+  const [retryable, setRetryable] = useState(false);  // 💫 NEW: Policy violation retry
 
   // Provider
   const [browserProvider, setBrowserProvider] = useState('chatgpt-browser');
@@ -158,7 +166,7 @@ export default function ImageGenerationPage() {
   const [promptOptions, setPromptOptions] = useState(null);
 
   // Generation options
-  const [imageCount, setImageCount] = useState(2);
+  const [imageCount, setImageCount] = useState(DESIRED_OUTPUT_COUNT);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [hasWatermark, setHasWatermark] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
@@ -439,6 +447,44 @@ export default function ImageGenerationPage() {
           console.log('📝 Saving character description:', analysisResponse.data.characterDescription.substring(0, 80));
           setCharacterDescription(analysisResponse.data.characterDescription);
         }
+
+        // 💫 NEW: Save uploaded source images as assets to gallery
+        try {
+          console.log('📷 Saving source images as gallery assets...');
+          
+          // Generate session ID for tracking
+          const sessionId = 'session-' + Date.now();
+          
+          // Save character image
+          const charAsset = await assetService.saveUploadedFileAsAsset(
+            characterImage.file,
+            'character-image',
+            sessionId,
+            {
+              width: characterProfile.estimatedWidth,
+              height: characterProfile.estimatedHeight,
+              description: characterProfile.description
+            }
+          );
+          console.log('✅ Character image saved as asset:', charAsset);
+          
+          // Save product image
+          const prodAsset = await assetService.saveUploadedFileAsAsset(
+            productImage.file,
+            'product-image',
+            sessionId,
+            {
+              width: productDetails.estimatedWidth,
+              height: productDetails.estimatedHeight,
+              description: productDetails.description,
+              focusArea: productFocus
+            }
+          );
+          console.log('✅ Product image saved as asset:', prodAsset);
+        } catch (assetError) {
+          console.warn('⚠️  Could not save source images as assets, but continuing...', assetError);
+          // Continue even if asset saving fails - it's not critical
+        }
         
         setCurrentStep(2);
       }
@@ -712,7 +758,7 @@ export default function ImageGenerationPage() {
         });
       }
 
-      if (response?.success && response?.data?.generatedImages) {
+      if (response?.success && response?.data?.generatedImages && response.data.generatedImages.length > 0) {
         console.log('✅ Generation successful! Generated images:', response.data.generatedImages);
         console.log('   Count:', response.data.generatedImages.length);
         console.log('   Details:', response.data.generatedImages.map((img, i) => ({
@@ -720,19 +766,82 @@ export default function ImageGenerationPage() {
           url: img.url || img,
           filename: img.filename || 'N/A'
         })));
+        setGenerationError(null);  // 💫 Clear error on success
+        setRetryable(false);  // 💫 Clear retry flag
         setGeneratedImages(response.data.generatedImages);
+
+        // 💫 NEW: Save generated images as assets to gallery
+        try {
+          const sessionId = 'session-' + Date.now();
+          console.log('📷 Saving generated images as gallery assets...');
+          
+          for (let i = 0; i < response.data.generatedImages.length; i++) {
+            const img = response.data.generatedImages[i];
+            const imageUrl = typeof img === 'string' ? img : img.url;
+            const filename = img.filename || `generated-image-${i + 1}.png`;
+            
+            try {
+              // 💫 FIXED: Convert prompt object to string for MongoDB schema
+              const promptString = typeof generatedPrompt === 'string' 
+                ? generatedPrompt 
+                : (generatedPrompt?.positive || '');
+
+              const asset = await assetService.saveGeneratedImageAsAsset(
+                imageUrl,
+                filename,
+                sessionId,
+                {
+                  prompt: promptString,
+                  model: 'google-flow',
+                  imageCount,
+                  aspectRatio,
+                  generationIndex: i + 1
+                }
+              );
+              console.log(`✅ Generated image ${i + 1} saved as asset:`, asset);
+            } catch (imgError) {
+              console.warn(`⚠️  Could not save generated image ${i + 1}:`, imgError);
+              // Continue with other images even if one fails
+            }
+          }
+        } catch (assetError) {
+          console.warn('⚠️  Could not save generated images as assets, but continuing...', assetError);
+        }
         
         // Upload to Google Drive if enabled
         if (uploadToDrive && response.data.generatedImages.length > 0) {
           handleUploadToGoogleDrive(response.data.generatedImages);
         }
+      } else if (response?.success === false && response?.data?.retryable) {
+        // 💫 Handle retryable error (from frontend retry button in UI)
+        console.error('❌ Generation failed (retryable):', response.data.error);
+        setGenerationError(response.data.error || response.message || 'Image generation failed');
+        setRetryable(true);  // Allow retry from frontend
+        alert(`⚠️ ${response.data.error}\n\nPlease click "Retry Generation" to try again.`);
+      } else if (response?.success === false && response?.data?.retryable === false) {
+        // 💫 CHANGED: Generation failed after 3 backend attempts - need to change images
+        console.error('❌ Generation failed after 3 attempts:', response.data.error);
+        setGenerationError(response.data.error || 'Generation failed after 3 attempts');
+        setRetryable(false);  // No retry - need different images
+        alert(`❌ ${response.data.error}\n\nPlease change your images and try again.`);
+      } else if (response?.success === false) {
+        // 💫 Generation failed - general error
+        console.error('❌ Generation failed:', response.message || response.error);
+        setGenerationError(response.message || response.error || 'Image generation failed');
+        setRetryable(false);
+        alert(`❌ Generation failed: ${response.message || response.error}`);
       } else {
         console.error('❌ Generation response missing expected data:', response);
+        setGenerationError('Invalid generation response - please try again');
+        setRetryable(false);
       }
     } catch (error) {
       console.error('❌ Generation failed:', error);
       console.error('   Error message:', error.message);
       console.error('   Error details:', error);
+      setGenerationError(error.message || 'Generation failed - please try again');
+      setRetryable(true);  // Allow retry on network/other errors
+      alert(`❌ Generation error: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
@@ -741,6 +850,9 @@ export default function ImageGenerationPage() {
   const handleUploadToGoogleDrive = async (images) => {
     try {
       setDriveUploadStatus('Uploading to Google Drive...');
+      
+      const successfulUploads = [];
+      let uploadError = null;
       
       for (const image of images) {
         try {
@@ -767,7 +879,7 @@ export default function ImageGenerationPage() {
           const fileName = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`;
           const file = new File([blob], fileName, { type: 'image/png' });
           
-          await driveAPI.uploadFile(file, {
+          const uploadResult = await driveAPI.uploadFile(file, {
             description: `Generated from Smart Wardrobe App\nPrompt: ${generatedPrompt?.positive?.slice(0, 100)}...`,
             metadata: {
               useCase: useCase,
@@ -775,14 +887,50 @@ export default function ImageGenerationPage() {
               generatedAt: new Date().toISOString(),
             }
           });
-          
-          console.log(`✅ Uploaded: ${fileName}`);
+
+          // 💫 FIXED: Check if upload is actually configured
+          if (uploadResult?.source === 'local' || uploadResult?.notice) {
+            console.warn(`⚠️  Google Drive not configured, file saved locally: ${fileName}`);
+            uploadError = uploadResult?.notice || 'Google Drive not configured';
+          } else {
+            console.log(`✅ Uploaded: ${fileName}`);
+            successfulUploads.push(image.url);
+          }
         } catch (error) {
-          console.error('❌ Failed to upload single image:', error);
+          console.warn(`⚠️  Could not upload to Google Drive:`, error.message);
+          uploadError = error.message;
         }
       }
       
-      setDriveUploadStatus(`✅ Successfully uploaded ${images.length} image(s) to Google Drive!`);
+      // Update status with result
+      if (uploadError && successfulUploads.length === 0) {
+        setDriveUploadStatus(`⚠️  ${uploadError}`);
+        console.warn('📍 Images displayed locally. Google Drive upload skipped.');
+      } else if (successfulUploads.length > 0) {
+        setDriveUploadStatus(`✅ Uploaded ${successfulUploads.length}/${images.length} images`);
+      } else {
+        setDriveUploadStatus(null);
+      }
+
+      // 💫 NEW: Remove temporary local files after successful upload
+      if (successfulUploads.length > 0) {
+        try {
+          for (const imageUrl of successfulUploads) {
+            // Extract filename from URL if it's a local path
+            const filename = imageUrl.split('/').pop() || imageUrl;
+            await fetch('/api/v1/browser-automation/delete-temp-file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename })
+            });
+            console.log(`🗑️  Removed temp file: ${filename}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️  Could not remove temp files: ${error.message}`);
+        }
+      }
+      
+      setDriveUploadStatus(`✅ Successfully uploaded ${successfulUploads.length} image(s) to Google Drive!`);
       setTimeout(() => setDriveUploadStatus(null), 5000);
     } catch (error) {
       console.error('❌ Google Drive upload failed:', error);
@@ -809,6 +957,8 @@ export default function ImageGenerationPage() {
     setReferenceImage(null);
     setReferenceImages([]);
     setCustomPrompt('');
+    setGenerationError(null);  // 💫 Clear error on reset
+    setRetryable(false);  // 💫 Clear retry flag on reset
     setNewOptions([]);
     setGenerationSteps(30);
     setGenerationCfgScale(7.5);
@@ -1430,9 +1580,41 @@ export default function ImageGenerationPage() {
                     {currentStep === 4 && generatedImages.length === 0 && (
                       <>
                         {console.log('✅ Step 4 render - showing Generate button (generatedImages.length:', generatedImages.length, ')')}
+                        
+                        {/* 💫 NEW: Error Display with Retry or Change Images */}
+                        {generationError && (
+                          <div className={`mb-4 p-3 rounded-lg border ${
+                            retryable 
+                              ? 'bg-orange-900/20 border-orange-700/50' 
+                              : 'bg-red-900/20 border-red-700/50'
+                          }`}>
+                            <p className={`text-sm mb-2 ${retryable ? 'text-orange-300' : 'text-red-300'}`}>
+                              {retryable ? '⚠️' : '❌'} {generationError}
+                            </p>
+                            {retryable && (
+                              <button
+                                onClick={handleStartGeneration}
+                                disabled={isGenerating}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50 text-white font-medium"
+                              >
+                                {isGenerating ? (
+                                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Retrying...</span></>
+                                ) : (
+                                  <><RefreshCw className="w-4 h-4" /><span>Retry Generation</span></>
+                                )}
+                              </button>
+                            )}
+                            {!retryable && (
+                              <p className="text-xs text-gray-400 mt-2">
+                                👆 Please select different images and try again
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        
                         <button
                           onClick={handleStartGeneration}
-                          disabled={isGenerating}
+                          disabled={isGenerating || !generatedPrompt}
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
                         >
                           {isGenerating ? (

@@ -17,6 +17,9 @@ const TEST_IMAGES = [
 ];
 const VTO_PROMPT = 'Vietnamese woman wearing the product shown in the other image, fashion photoshoot style, professional lighting, full body shot';
 
+// 🎨 GENERATION SETTINGS
+const DESIRED_OUTPUT_COUNT = 2;  // Số lượng ảnh muốn generate
+
 async function testCompleteFlow() {
   let browser;
   try {
@@ -701,16 +704,42 @@ async function testCompleteFlow() {
       const initialFiles = fs.readdirSync(downloadDir);
       const generatedImages = [];
 
+      // 🔄 Wait for expected number of images to be generated
+      console.log(`\n📍 Waiting for ${DESIRED_OUTPUT_COUNT} images to generate...\n`);
+      let foundCount = 0;
+      let waitAttempts = 0;
+      
+      while (foundCount < DESIRED_OUTPUT_COUNT && waitAttempts < 120) {
+        foundCount = await page.evaluate(() => {
+          const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+          if (!scroller) return 0;
+          const items = scroller.querySelectorAll('[data-index]');
+          return items.length;
+        });
+        
+        if (foundCount < DESIRED_OUTPUT_COUNT) {
+          if (waitAttempts % 10 === 0) {
+            process.stdout.write(`  ⏱️  Found ${foundCount}/${DESIRED_OUTPUT_COUNT} items\r`);
+          }
+          await page.waitForTimeout(500);
+          waitAttempts++;
+        }
+      }
+
+      console.log(`\n  ✓ Found ${foundCount} items (expected ${DESIRED_OUTPUT_COUNT})\n`);
+
+      // Download all items
+      const downloadCount = Math.min(foundCount, DESIRED_OUTPUT_COUNT);
+      console.log(`📍 Downloading ${downloadCount} images...\n`);
+
       // Find download buttons and download images
       const downloadBtns = await page.evaluate(() => {
         const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
-        if (!scroller) return [];
+        if (!scroller) return 0;
 
         const items = scroller.querySelectorAll('[data-index]');
         return items.length;
       });
-
-      console.log(`\n📍 Found ${downloadBtns} generated items, downloading...\n`);
 
       for (let d = 0; d < downloadBtns; d++) {
         console.log(`  💾 Downloading item ${d + 1}/${downloadBtns}...`);
@@ -861,7 +890,7 @@ async function testCompleteFlow() {
         await page.waitForTimeout(1000);
       }
 
-      console.log(`\n✓ Download complete! ${generatedImages.length} files saved to ${downloadDir}\n`);
+      console.log(`\n✓ Download complete! ${generatedImages.length}/${DESIRED_OUTPUT_COUNT} images downloaded\n`);
 
       // Show summary of downloaded files
       if (generatedImages.length > 0) {
@@ -870,6 +899,14 @@ async function testCompleteFlow() {
           console.log(`  ${idx + 1}. ${img.filename} (${Math.round(img.size / 1024)}KB)`);
         });
         console.log();
+      }
+
+      // ✅ Validate download count
+      if (generatedImages.length === DESIRED_OUTPUT_COUNT) {
+        console.log(`✅ SUCCESS: Downloaded all ${DESIRED_OUTPUT_COUNT} images!\n`);
+      } else if (generatedImages.length > 0) {
+        console.log(`⚠️  WARNING: Expected ${DESIRED_OUTPUT_COUNT} images, got ${generatedImages.length}`);
+        console.log(`   Please check DESIRED_OUTPUT_COUNT matches your Google Flow settings\n`);
       }
     }
 

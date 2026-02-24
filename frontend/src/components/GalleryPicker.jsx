@@ -1,79 +1,98 @@
 /**
  * Gallery Picker Component
  * Reusable modal dialog for selecting media from gallery in upload workflows
- * Integrates with image/video upload components throughout the app
+ * Integrates with Database records for proper asset tracking
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ChevronLeft, Grid3x3, List, Search, Filter } from 'lucide-react';
+import { X, Grid3x3, List, Search } from 'lucide-react';
 
 const GalleryPicker = ({ 
   isOpen, 
   onClose, 
   onSelect, 
   multiSelect = false,
-  mediaType = 'all', // 'all', 'image', 'video'
-  contentType = 'all', // 'all', 'generated', 'uploaded', 'drive'
+  assetType = 'all', // 'all', 'image', 'video'
+  assetCategory = 'all', // 'all', 'character-image', 'product-image', 'generated-image', etc.
   title = 'Select from Gallery'
 }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState(multiSelect ? [] : null);
   const [viewMode, setViewMode] = useState('grid');
   const [filters, setFilters] = useState({
-    contentType: contentType,
+    assetCategory: assetCategory,
     search: '',
-    sortBy: 'newest'
+    sortBy: 'newest',
+    page: 1
+  });
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pages: 0
   });
 
-  // Load gallery items based on type
+  // Load gallery items from API
   useEffect(() => {
     if (isOpen) {
       loadGalleryItems();
     }
-  }, [isOpen, mediaType, contentType]);
+  }, [isOpen, assetType, filters]);
 
   const loadGalleryItems = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Mock data - replace with actual API call
-      const mockItems = generateMockItems();
-      setItems(mockItems);
+      const params = new URLSearchParams({
+        assetType: assetType,
+        category: filters.assetCategory,
+        page: filters.page,
+        limit: 30,
+        sortBy: filters.sortBy
+      });
+
+      if (filters.search) {
+        params.append('query', filters.search);
+      }
+
+      const response = await fetch(`http://localhost:5000/api/assets/gallery?${params}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch gallery items');
+      }
+
+      const data = await response.json();
+      
+      // Transform API assets to component format
+      const transformedItems = data.assets.map(asset => ({
+        assetId: asset.assetId,
+        id: asset._id,
+        name: asset.filename,
+        url: asset.storage.url || `/temp/${asset.filename}`,
+        thumbnail: asset.storage.url || `/temp/${asset.filename}`,
+        type: asset.assetType,
+        category: asset.assetCategory,
+        createdAt: new Date(asset.createdAt),
+        size: asset.fileSize,
+        metadata: asset.metadata,
+        isFavorite: asset.isFavorite,
+        tags: asset.tags,
+        storage: asset.storage
+      }));
+
+      setItems(transformedItems);
+      setPagination({
+        total: data.pagination.total,
+        pages: data.pagination.pages
+      });
     } catch (error) {
       console.error('Failed to load gallery items:', error);
+      setError('Failed to load gallery. Please try again.');
+      setItems([]);
     } finally {
       setLoading(false);
     }
   };
-
-  const generateMockItems = () => {
-    const contentTypes = ['generated', 'uploaded', 'drive'];
-    const types = ['image', 'video'];
-    
-    return Array.from({ length: 25 }, (_, i) => ({
-      id: `item-${i + 1}`,
-      name: `Media ${i + 1}`,
-      url: mediaType === 'video' 
-        ? `https://via.placeholder.com/300x300?text=Video+${i + 1}`
-        : `https://picsum.photos/300/300?random=${i + 200}`,
-      thumbnail: `https://picsum.photos/150/150?random=${i + 200}`,
-      type: mediaType === 'all' ? types[i % types.length] : mediaType,
-      contentType: contentTypes[i % contentTypes.length],
-      createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-      size: Math.floor(Math.random() * 5000000) + 100000,
-    }));
-  };
-
-  const filteredItems = items.filter(item => {
-    if (filters.contentType !== 'all' && item.contentType !== filters.contentType) return false;
-    if (filters.search && !item.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
-    return true;
-  }).sort((a, b) => {
-    if (filters.sortBy === 'newest') return b.createdAt - a.createdAt;
-    if (filters.sortBy === 'oldest') return a.createdAt - b.createdAt;
-    if (filters.sortBy === 'name') return a.name.localeCompare(b.name);
-    return 0;
-  });
 
   const handleItemSelect = (item) => {
     if (multiSelect) {
@@ -102,6 +121,20 @@ const GalleryPicker = ({
       return selectedItems.some(s => s.id === item.id);
     }
     return selectedItems?.id === item.id;
+  };
+
+  const getCategoryLabel = (category) => {
+    const labels = {
+      'character-image': 'Character',
+      'product-image': 'Product',
+      'generated-image': 'Generated',
+      'reference-image': 'Reference',
+      'source-video': 'Source Video',
+      'generated-video': 'Generated Video',
+      'audio': 'Audio',
+      'thumbnail': 'Thumbnail'
+    };
+    return labels[category] || category;
   };
 
   if (!isOpen) return null;
@@ -154,7 +187,7 @@ const GalleryPicker = ({
               color: '#cbd5e1',
               fontSize: '0.9rem'
             }}>
-              {multiSelect ? `${selectedItems.length} selected` : 'Select one item'}
+              {error ? error : multiSelect ? `${selectedItems.length} selected` : 'Select one item'}
             </p>
           </div>
           <button
@@ -200,7 +233,7 @@ const GalleryPicker = ({
               type="text"
               placeholder="Search items..."
               value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value, page: 1 }))}
               style={{
                 flex: 1,
                 padding: '0.6rem 1rem',
@@ -214,8 +247,8 @@ const GalleryPicker = ({
           </div>
           
           <select
-            value={filters.contentType}
-            onChange={(e) => setFilters(prev => ({ ...prev, contentType: e.target.value }))}
+            value={filters.assetCategory}
+            onChange={(e) => setFilters(prev => ({ ...prev, assetCategory: e.target.value, page: 1 }))}
             style={{
               padding: '0.6rem 1rem',
               background: '#0f172a',
@@ -226,10 +259,13 @@ const GalleryPicker = ({
               cursor: 'pointer'
             }}
           >
-            <option value="all">All Sources</option>
-            <option value="generated">Generated</option>
-            <option value="uploaded">Uploaded</option>
-            <option value="drive">Cloud Drive</option>
+            <option value="all">All Categories</option>
+            <option value="character-image">Character Images</option>
+            <option value="product-image">Product Images</option>
+            <option value="generated-image">Generated Images</option>
+            <option value="reference-image">References</option>
+            <option value="source-video">Source Videos</option>
+            <option value="generated-video">Generated Videos</option>
           </select>
 
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -289,9 +325,9 @@ const GalleryPicker = ({
               minHeight: '300px',
               color: '#94a3b8'
             }}>
-              <div>Loading...</div>
+              <div>Loading gallery...</div>
             </div>
-          ) : filteredItems.length === 0 ? (
+          ) : items.length === 0 ? (
             <div style={{
               gridColumn: '1 / -1',
               display: 'flex',
@@ -300,10 +336,10 @@ const GalleryPicker = ({
               minHeight: '300px',
               color: '#94a3b8'
             }}>
-              <div>No items found</div>
+              <div>No items found in gallery</div>
             </div>
           ) : (
-            filteredItems.map(item => (
+            items.map(item => (
               <div
                 key={item.id}
                 onClick={() => handleItemSelect(item)}
@@ -316,7 +352,8 @@ const GalleryPicker = ({
                   transition: 'all 0.3s',
                   flex: viewMode === 'list' ? '1 0 auto' : 'unset',
                   display: viewMode === 'list' ? 'flex' : 'unset',
-                  gap: viewMode === 'list' ? '1rem' : 'unset'
+                  gap: viewMode === 'list' ? '1rem' : 'unset',
+                  position: 'relative'
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected(item)) {
@@ -339,7 +376,11 @@ const GalleryPicker = ({
                     height: viewMode === 'list' ? '100px' : 'auto',
                     aspectRatio: '1',
                     objectFit: 'cover',
-                    flexShrink: 0
+                    flexShrink: 0,
+                    background: '#0f172a'
+                  }}
+                  onError={(e) => {
+                    e.target.style.background = '#334155';
                   }}
                 />
                 {viewMode === 'list' && (
@@ -347,26 +388,21 @@ const GalleryPicker = ({
                     <div style={{ color: '#f1f5f9', fontWeight: '500', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
                       {item.name}
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
                       <span style={{
-                        background: item.contentType === 'generated' 
-                          ? 'rgba(139, 92, 246, 0.2)' 
-                          : item.contentType === 'uploaded'
-                          ? 'rgba(59, 130, 246, 0.2)'
-                          : 'rgba(16, 185, 129, 0.2)',
-                        color: item.contentType === 'generated' 
-                          ? '#c4b5fd' 
-                          : item.contentType === 'uploaded'
-                          ? '#93c5fd'
-                          : '#6ee7b7',
+                        background: 'rgba(99, 102, 241, 0.2)',
+                        color: '#c4b5fd',
                         padding: '0.2rem 0.6rem',
                         borderRadius: '4px',
                         fontSize: '0.75rem',
                         textTransform: 'uppercase',
                         fontWeight: '600'
                       }}>
-                        {item.contentType}
+                        {getCategoryLabel(item.category)}
                       </span>
+                    </div>
+                    <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                      {new Date(item.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 )}
@@ -393,6 +429,20 @@ const GalleryPicker = ({
             ))
           )}
         </div>
+
+        {/* Pagination info */}
+        {pagination.pages > 1 && (
+          <div style={{
+            textAlign: 'center',
+            padding: '0.75rem',
+            borderTop: '1px solid #334155',
+            background: '#1e293b',
+            color: '#94a3b8',
+            fontSize: '0.85rem'
+          }}>
+            Page {filters.page} of {pagination.pages} ({pagination.total} total)
+          </div>
+        )}
 
         {/* Footer */}
         <div style={{

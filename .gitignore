@@ -5,9 +5,39 @@ dist/
 build/
 *.log
 .DS_Store
+
+# Uploaded and temporary files
 uploads/
 temp/
-coverage/backend/config/*.json
-backend/sessions/
+backend/temp/
+backend/downloads/
+backend/uploads/
+
+# Generated media (images, videos, audio)
 backend/media/
+backend/test-images/
+backend/test-videos/
+backend/test-results/
+
+# Drive authentication
 drive-token.json
+lab-flow-auth.json
+backend/.sessions/
+
+# Environment and config
+coverage/
+backend/config/*.json
+
+# IDE and OS
+.vscode/
+.cursor*
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

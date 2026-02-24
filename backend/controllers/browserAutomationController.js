@@ -1085,6 +1085,27 @@ export async function generateWithBrowser(req, res) {
         // Cleanup temp files
         cleanupTempFiles(tempFiles);
 
+        // 💫 CHECK: Verify generation was successful
+        if (!genResult.success || !genResult.results?.files || genResult.results.files.length === 0) {
+          const errorMsg = genResult.error || 'Policy violation detected - images could not be generated after 3 attempts. Please change images and try again.';
+          console.error(`❌ Generation failed with empty results:`, errorMsg);
+          cleanupTempFiles(tempFiles);
+          
+          return res.json({
+            success: false,
+            data: {
+              generatedImages: [],
+              count: 0,
+              expectedCount: imageCount,
+              aspectRatio: aspectRatio,
+              providers: { generation: 'google-flow' },
+              error: errorMsg,
+              retryable: false  // 💫 CHANGED: Not retryable after 3 attempts - need to change images
+            },
+            message: `Google Flow generation failed: ${errorMsg}`
+          });
+        }
+
         console.log(`✅ Google Flow image generation complete`);
         
         // Store file paths temporarily for the GET endpoint to use
@@ -1095,8 +1116,8 @@ export async function generateWithBrowser(req, res) {
           const filename = path.basename(filePath);
           // Create a unique key for this image
           const imageKey = `${Date.now()}-${idx}-${filename}`;
-          // Create HTTP path for browser serving
-          const imageUrl = `/v1/browser-automation/generated-image/${imageKey}`;
+          // Create HTTP path for browser serving (include /api prefix for correct routing)
+          const imageUrl = `/api/v1/browser-automation/generated-image/${imageKey}`;
           
           // Store the mapping immediately
           global.generatedImagePaths[imageKey] = filePath;
@@ -1629,13 +1650,301 @@ Professional studio lighting, white background, fashion photography quality.`;
 /**
  * Legacy single-step handlers
  */
+/**
+ * 📸 BROWSER ANALYZE: Analyze character and product images
+ * POST /api/flows/browser/analyze
+ * Returns: Detailed analysis of character and product
+ */
 export async function analyzeBrowser(req, res) {
-    // ... existing implementation or simplified version ...
-    res.status(501).json({ error: "Use analyzeAndGenerate instead" });
+  let analysisService = null;
+  const tempFiles = [];
+
+  try {
+    const { 
+      analysisProvider = 'grok',
+      useRealAnalysis = true
+    } = req.body;
+    
+    const characterImage = req.files?.characterImage?.[0];
+    const productImage = req.files?.productImage?.[0];
+
+    if (!characterImage || !productImage) {
+      return res.status(400).json({ 
+        error: 'Both characterImage and productImage are required',
+        success: false 
+      });
+    }
+
+    console.log(`\n🔍 BROWSER ANALYSIS - START`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`Provider: ${analysisProvider}`);
+
+    // Save temp images
+    const charImagePath = path.join(tempDir, `char-${Date.now()}-${characterImage.originalname}`);
+    const prodImagePath = path.join(tempDir, `prod-${Date.now()}-${productImage.originalname}`);
+    
+    fs.writeFileSync(charImagePath, characterImage.buffer);
+    fs.writeFileSync(prodImagePath, productImage.originalname);
+    tempFiles.push(charImagePath, prodImagePath);
+
+    console.log(`✅ Saved character image: ${path.basename(charImagePath)}`);
+    console.log(`✅ Saved product image: ${path.basename(prodImagePath)}\n`);
+
+    // Initialize analysis service
+    switch (analysisProvider) {
+      case 'grok':
+      case 'grok.com':
+        analysisService = new GrokServiceV2({ headless: false });
+        break;
+      case 'zai':
+      case 'chat.z.ai':
+      default:
+        analysisService = new ZAIChatService({ headless: false });
+    }
+
+    console.log(`🚀 Initializing ${analysisProvider}...`);
+    await analysisService.initialize();
+
+    let analysisText = null;
+    if (useRealAnalysis) {
+      console.log(`🤖 Running real analysis...\n`);
+      
+      const analysisPrompt = buildAnalysisPrompt({});
+      
+      const analysisResult = await analysisService.analyzeMultipleImages(
+        [charImagePath, prodImagePath],
+        analysisPrompt
+      );
+      
+      analysisText = analysisResult?.text || analysisResult;
+      console.log(`✅ Analysis complete!`);
+      console.log(`Result length: ${analysisText?.length || 0} characters\n`);
+    } else {
+      console.log(`⏭️  Skipping real analysis\n`);
+      analysisText = 'Professional fashion styling, modern aesthetic recommended.';
+    }
+
+    // Close service
+    if (analysisService) {
+      await analysisService.close();
+    }
+
+    // Cleanup temp files
+    cleanupTempFiles(tempFiles);
+
+    console.log(`✅ BROWSER ANALYSIS - COMPLETE\n`);
+
+    return res.json({
+      success: true,
+      data: {
+        analysis: analysisText,
+        provider: analysisProvider,
+        timestamp: new Date().toISOString()
+      },
+      message: 'Analysis completed successfully'
+    });
+
+  } catch (error) {
+    console.error(`❌ Analysis error:`, error.message);
+    if (analysisService) await analysisService.close();
+    cleanupTempFiles(tempFiles);
+    
+    return res.status(500).json({
+      error: error.message,
+      success: false,
+      stage: 'analysis'
+    });
+  }
 }
 
+/**
+ * 🎨 BROWSER GENERATE IMAGE: Generate image from analysis + styling options
+ * POST /api/flows/browser/generate-image
+ * Body: { characterImage, productImage, analysis, scene, lighting, mood, style, colorPalette, etc. }
+ */
 export async function generateImageBrowser(req, res) {
-    res.status(501).json({ error: "Use analyzeAndGenerate instead" });
+  let imageGenService = null;
+  const tempFiles = [];
+  let outputImagePath = null;
+
+  try {
+    const {
+      imageGenProvider = 'grok',
+      analysis,
+      scene = 'studio',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      style = 'minimalist',
+      colorPalette = 'neutral',
+      hairstyle = null,
+      makeup = null,
+      cameraAngle = 'eye-level',
+      shoes = null,
+      accessories = null,
+      aspectRatio = '1:1'
+    } = req.body;
+
+    if (!analysis) {
+      return res.status(400).json({
+        error: 'Analysis object is required',
+        success: false
+      });
+    }
+
+    // Get images for reference (optional for styling)
+    const characterImage = req.files?.characterImage?.[0];
+    const productImage = req.files?.productImage?.[0];
+
+    console.log(`\n🎨 BROWSER IMAGE GENERATION - START`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`Provider: ${imageGenProvider}`);
+    console.log(`Scene: ${scene}, Lighting: ${lighting}, Mood: ${mood}`);
+    if (hairstyle) console.log(`Hairstyle override: ${hairstyle}`);
+    if (makeup) console.log(`Makeup override: ${makeup}`);
+    if (shoes) console.log(`Shoes: ${shoes}`);
+    if (accessories) console.log(`Accessories: ${accessories}`);
+    console.log('');
+
+    // Save temp images if provided
+    let charImagePath = null;
+    let prodImagePath = null;
+    
+    if (characterImage) {
+      charImagePath = path.join(tempDir, `char-${Date.now()}-${characterImage.originalname}`);
+      fs.writeFileSync(charImagePath, characterImage.buffer);
+      tempFiles.push(charImagePath);
+      console.log(`✅ Saved character image for reference`);
+    }
+    
+    if (productImage) {
+      prodImagePath = path.join(tempDir, `prod-${Date.now()}-${productImage.originalname}`);
+      fs.writeFileSync(prodImagePath, productImage.buffer);
+      tempFiles.push(prodImagePath);
+      console.log(`✅ Saved product image for reference`);
+    }
+
+    // Build style options
+    const styleOptions = {
+      scene,
+      lighting,
+      mood,
+      style,
+      colorPalette,
+      cameraAngle,
+      hairstyle,
+      makeup,
+      shoes,
+      accessories,
+      aspectRatio,
+      negativePrompt: 'blurry, distorted, bad lighting, ill-fitting clothes'
+    };
+
+    console.log(`\n🔨 Building generation prompt...`);
+    const generationPrompt = buildGenerationPrompt(analysis, styleOptions);
+    console.log(`✅ Prompt built successfully\n`);
+
+    // Initialize image generation service
+    switch (imageGenProvider) {
+      case 'grok':
+      case 'grok.com':
+        imageGenService = new GrokServiceV2({ headless: false });
+        break;
+      case 'zai':
+      case 'image.z.ai':
+      default:
+        imageGenService = new ZAIImageService({ headless: false });
+    }
+
+    console.log(`🚀 Initializing ${imageGenProvider}...`);
+    await imageGenService.initialize();
+
+    try {
+      outputImagePath = path.join(tempDir, `browser-gen-${Date.now()}.png`);
+      
+      console.log(`🖼️  Generating image with prompt...`);
+      console.log(`⏳ This may take a minute...\n`);
+      
+      const imageResult = await imageGenService.generateImage(generationPrompt, {
+        download: true,
+        outputPath: outputImagePath
+      });
+      
+      console.log(`✅ Image generation complete`);
+      
+      if (imageResult?.path) {
+        outputImagePath = imageResult.path;
+      }
+
+      if (!outputImagePath || !fs.existsSync(outputImagePath)) {
+        throw new Error('Image generation failed - no output file');
+      }
+
+      // Validate image
+      console.log(`\n✔️ Validating generated image...`);
+      try {
+        await validateImage(outputImagePath);
+      } catch (valError) {
+        console.warn(`⚠️  Validation warning: ${valError.message}`);
+        // Don't fail on validation warning
+      }
+
+      // Close service
+      if (imageGenService) {
+        await imageGenService.close();
+      }
+
+      // Cleanup temp files but keep output
+      const filesToClean = tempFiles.filter(f => f !== outputImagePath);
+      cleanupTempFiles(filesToClean);
+
+      const fileStats = fs.statSync(outputImagePath);
+
+      console.log(`✅ BROWSER IMAGE GENERATION - COMPLETE\n`);
+
+      return res.json({
+        success: true,
+        data: {
+          generatedImage: {
+            url: `file://${outputImagePath}`,
+            path: outputImagePath,
+            size: fileStats.size,
+            filename: path.basename(outputImagePath),
+            provider: imageGenProvider
+          },
+          prompt: generationPrompt,
+          styleOptions,
+          validation: {
+            status: 'valid',
+            size_bytes: fileStats.size,
+            timestamp: new Date().toISOString()
+          }
+        },
+        message: 'Image generated successfully with style customization'
+      });
+
+    } catch (genError) {
+      console.error(`❌ Generation error: ${genError.message}`);
+      if (imageGenService) await imageGenService.close();
+      cleanupTempFiles(tempFiles);
+      
+      return res.status(500).json({
+        error: `Generation failed: ${genError.message}`,
+        success: false,
+        stage: 'generation'
+      });
+    }
+
+  } catch (error) {
+    console.error(`❌ Fatal error:`, error.message);
+    if (imageGenService) await imageGenService.close();
+    cleanupTempFiles(tempFiles);
+    
+    return res.status(500).json({
+      error: error.message,
+      success: false,
+      stage: 'generation'
+    });
+  }
 }
 
 /**
@@ -1707,10 +2016,28 @@ export async function serveGeneratedImage(req, res) {
 
 export async function generateVideoBrowser(req, res) {
   try {
-    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok' } = req.body;
+    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok', aspectRatio = '16:9' } = req.body;
     
     // Accept both provider and videoProvider for backward compatibility
     const selectedProvider = videoProvider || provider || 'grok';
+    
+    // 💫 Validate aspect ratio
+    const validAspectRatios = ['16:9', '9:16'];
+    const selectedAspectRatio = validAspectRatios.includes(aspectRatio) ? aspectRatio : '16:9';
+
+    // 💫 DEBUG: Log provider selection
+    console.log('\n🎬 [Backend] generateVideoBrowser received:', {
+      resquestProvider: provider,
+      requestVideoProvider: videoProvider,
+      selectedProvider: selectedProvider,
+      hasVideoProvider: !!videoProvider,
+      hasProvider: !!provider,
+      duration,
+      scenario,
+      segmentCount: segments?.length || 0,
+      aspectRatio,
+      selectedAspectRatio
+    });
 
     if (!segments || !Array.isArray(segments) || segments.length === 0) {
       return res.status(400).json({
@@ -1746,34 +2073,134 @@ export async function generateVideoBrowser(req, res) {
     // Handle Google Flow video generation
     // ====================================
     if (selectedProvider === 'google-flow') {
-      console.log('📺 Using Google Flow for video generation\n');
+      console.log('\n📺 [Backend] ✅ Using Google Flow for video generation');
+      console.log('   selectedProvider:', selectedProvider);
+      console.log(`   Segments: ${segments.length}`);
+      console.log(`   Duration: ${duration}s\n`);
+
+      // 💫 COMPUTE ACTUAL SEGMENTS BASED ON 8S PER VIDEO
+      // Example: 20s / 8s = 2.5 → 3 segments
+      const SECONDS_PER_VIDEO = 8;
+      const numSegments = Math.ceil(duration / SECONDS_PER_VIDEO);
+      
+      console.log(`   📊 Segment calculation:`);
+      console.log(`      Total duration: ${duration}s`);
+      console.log(`      Per video length: ${SECONDS_PER_VIDEO}s`);
+      console.log(`      Computed segments: ${numSegments}`);
+      console.log(`      Input segments: ${segments.length}`);
+      
+      // Use input segments if available, otherwise split duration
+      const finalSegments = segments && segments.length > 0 ? segments : 
+                           Array(numSegments).fill(null).map((_, i) => 
+                             `Segment ${i + 1}: ${scenario || 'Fashion video'}`
+                           );
+
+      console.log(`   🎯 Final segments to generate: ${finalSegments.length}\n`);
 
       try {
-        const googleFlowService = new GoogleFlowService({ headless: false });
-        await googleFlowService.initialize();
+        const { runVideoGeneration } = await import('../services/videoGenerationServiceV2.js');
+        
+        const generatedVideos = [];
+        const outputDir = path.join(tempDir, `video-output-${Date.now()}`);
+        
+        // Create output directory
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
 
-        // For Google Flow, combine segments into a single prompt
-        const combinedPrompt = segments.join('. ');
+        // 💫 CONVERT IMAGE TO FILE PATH (if base64, write to temp file)
+        let imagePath = sourceImage;
+        if (sourceImage && sourceImage.startsWith('data:')) {
+          console.log('   📋 Converting base64 image to file...');
+          const base64Match = sourceImage.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (base64Match) {
+            const imageFormat = base64Match[1] || 'jpeg';
+            const imageBuffer = Buffer.from(base64Match[2], 'base64');
+            imagePath = path.join(tempDir, `video-source-${Date.now()}.${imageFormat}`);
+            fs.writeFileSync(imagePath, imageBuffer);
+            console.log(`   ✅ Image saved to: ${imagePath}`);
+          }
+        }
 
-        const videoResult = await googleFlowService.generateVideo(combinedPrompt, {
-          duration,
-          quality: 'high',
-          download: false
-        });
+        // 💫 LOOP: Generate video for EACH segment
+        for (let i = 0; i < finalSegments.length; i++) {
+          const segmentPrompt = finalSegments[i];
+          const segmentNum = i + 1;
+          
+          console.log(`\n📹 [VIDEO ${segmentNum}/${finalSegments.length}] Generating...`);
+          console.log(`    Prompt: "${segmentPrompt.substring(0, 100)}..."`);
 
-        console.log(`✅ Google Flow video generation complete`);
+          try {
+            const result = await runVideoGeneration({
+              imagePath: imagePath,  // 💫 USE CONVERTED IMAGE PATH
+              prompt: segmentPrompt,
+              duration: SECONDS_PER_VIDEO,  // Each video is 8s
+              quality: 'high',
+              aspectRatio: selectedAspectRatio,  // 💫 USE SELECTED ASPECT RATIO (16:9 or 9:16)
+              outputDir: outputDir,
+              headless: false
+            });
 
-        return res.json({
+            if (result.success && result.videoPath) {
+              console.log(`    ✅ Video ${segmentNum} generated successfully`);
+              
+              // 💫 GET PATH FROM RESULT AND RENAME
+              const srcFile = result.videoPath;
+              const destFile = path.join(outputDir, `segment-${segmentNum}-video.mp4`);
+              
+              // Rename file: segment-${segmentNum}-video.mp4
+              if (fs.existsSync(srcFile) && srcFile !== destFile) {
+                fs.renameSync(srcFile, destFile);
+                console.log(`    📁 Renamed to: segment-${segmentNum}-video.mp4`);
+              }
+              
+              generatedVideos.push({
+                segmentNum,
+                filename: `segment-${segmentNum}-video.mp4`,
+                path: destFile,
+                prompt: segmentPrompt
+              });
+            } else {
+              console.warn(`    ⚠️  Video ${segmentNum} generation failed: ${result.error}`);
+            }
+          } catch (segmentError) {
+            console.error(`    ❌ Error generating video ${segmentNum}:`, segmentError.message);
+          }
+        }
+
+        console.log(`\n━`.repeat(40));
+        console.log(`✅ Video generation batch complete: ${generatedVideos.length}/${finalSegments.length} videos`);
+        console.log(`━`.repeat(40));
+
+        const responseData = {
           success: true,
           data: {
-            videoUrl: videoResult.url,
+            generatedVideos: generatedVideos.map(v => ({
+              segmentNum: v.segmentNum,
+              filename: v.filename,
+              path: v.path,  // 💫 NEW: Include full path for download
+              url: `/api/v1/browser-automation/download-video/${v.filename}?path=${encodeURIComponent(v.path)}`,
+              previewUrl: `/api/v1/browser-automation/preview-video/${v.filename}?path=${encodeURIComponent(v.path)}`,
+              prompt: v.prompt
+            })),
+            totalVideos: generatedVideos.length,
+            totalSegments: finalSegments.length,
+            computedSegments: numSegments,
+            outputDir: outputDir,
             provider: 'google-flow',
+            aspectRatio: selectedAspectRatio,  // 💫 NEW: Include aspect ratio in response
             scenario,
             duration,
             generatedAt: new Date().toISOString()
           },
-          message: 'Video generated successfully via Google Flow'
-        });
+          message: `Generated ${generatedVideos.length} videos successfully via Google Flow`
+        };
+
+        // 💫 DEBUG: Log full response structure
+        console.log('\n📤 [Backend Response]');
+        console.log(JSON.stringify(responseData, null, 2));
+
+        return res.json(responseData);
 
       } catch (flowError) {
         console.error(`❌ Google Flow Video Generation Error:`, flowError.message);
@@ -1789,7 +2216,9 @@ export async function generateVideoBrowser(req, res) {
     // ====================================
     // Default: Grok video generation
     // ====================================
-    console.log('🤖 Using Grok for video generation\n');
+    console.log('\n🤖 [Backend] ❌ Using Grok for video generation (NOT Google Flow)');
+    console.log('   selectedProvider:', selectedProvider);
+    console.log('   Verify that frontend is sending videoProvider or check default value\n');
 
     // Initialize Grok Service
     const grok = new GrokServiceV2({

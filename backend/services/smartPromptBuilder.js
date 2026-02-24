@@ -85,6 +85,21 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
     case 'change-clothes':
       promptStr = buildChangeClothesPrompt(analysis, selectedOptions, productFocus);
       break;
+    case 'ecommerce-product':
+      promptStr = buildEcommerceProductPrompt(analysis, selectedOptions, productFocus);
+      break;
+    case 'social-media':
+      promptStr = buildSocialMediaPrompt(analysis, selectedOptions, productFocus);
+      break;
+    case 'fashion-editorial':
+      promptStr = buildFashionEditorialPrompt(analysis, selectedOptions, productFocus);
+      break;
+    case 'lifestyle-scene':
+      promptStr = buildLifestyleScenePrompt(analysis, selectedOptions, productFocus);
+      break;
+    case 'before-after':
+      promptStr = buildBeforeAfterPrompt(analysis, selectedOptions, productFocus);
+      break;
     case 'styling':
       promptStr = buildStylingPrompt(analysis, selectedOptions, productFocus);
       break;
@@ -112,53 +127,758 @@ function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
   const character = analysis.character || {};
   const product = analysis.product || {};
 
+  // ==========================================
+  // 🎯 NEW: IMAGE REFERENCE LABELING (CRITICAL)
+  // ==========================================
+  // This addresses the main issue: when both images have people, AI gets confused
+  // By explicitly labeling IMAGE 1 as CHARACTER and IMAGE 2 as PRODUCT,
+  // we force AI to understand which one to modify and which to preserve
+  parts.push('[IMAGE REFERENCE MAPPING]');
+  parts.push('Image 1 (First Upload) = CHARACTER REFERENCE - Person to be dressed');
+  parts.push('Image 2 (Second Upload) = PRODUCT/OUTFIT REFERENCE - Clothing to apply');
+  parts.push('CRITICAL: Do NOT swap these images. Keep character unchanged, change clothing only.\n');
+
   // 1. CHARACTER SECTION - Emphasize what STAYS THE SAME
-  parts.push('=== KEEP CHARACTER UNCHANGED ===');
-  if (character.age) parts.push(`${character.age} year old`);
-  if (character.gender) parts.push(character.gender);
-  if (character.skinTone) parts.push(`${character.skinTone} skin tone`);
+  parts.push('=== KEEP CHARACTER UNCHANGED (CRITICAL) ===');
+  parts.push('Preserve EXACTLY everything about the person from Image 1:');
+  
+  if (character.age) parts.push(`- Age: ${character.age} years old`);
+  if (character.gender) parts.push(`- Gender: ${character.gender}`);
+  if (character.skinTone) parts.push(`- Skin tone: ${character.skinTone}`);
   
   if (character.hair?.color && character.hair?.style) {
-    parts.push(`${character.hair.color} hair, ${character.hair.style} style, ${character.hair.length || 'medium length'}`);
+    parts.push(`- Hair: ${character.hair.color} hair, ${character.hair.style} style, ${character.hair.length || 'medium length'}`);
   }
   
-  parts.push(`SAME face with same expression`);
-  parts.push(`SAME body and body type`);
-  parts.push(`SAME pose and position exactly as reference image`);
-  parts.push(`SAME pose orientation and arm position`);
+  if (character.facialFeatures) {
+    parts.push(`- Facial features: ${character.facialFeatures}`);
+  }
+  
+  parts.push(`- SAME face with same expression and gaze`);
+  parts.push(`- SAME body and body type exactly`);
+  parts.push(`- SAME pose and position exactly as shown in Image 1`);
+  parts.push(`- SAME pose orientation and arm position`);
+  parts.push(`- SAME head tilt and neck angle`);
+  parts.push(`- Do NOT change: face shape, eye color, nose, mouth, body texture\n`);
 
-  // 2. CHANGE THIS - The new clothing
-  parts.push(`\n=== CHANGE CLOTHING TO ===`);
-  if (product.detailedDescription) {
-    parts.push(product.detailedDescription);
+  // 2. CHANGE THIS - The new clothing (ENHANCED with full product details from Image 2)
+  parts.push(`=== CHANGE CLOTHING TO (FROM IMAGE 2) ===`);
+  parts.push(`Replace what the person is wearing with the garment specifications from Image 2.\n`);
+  
+  // Product garment details - EXPANDED
+  if (product.garment_type) {
+    parts.push(`GARMENT TYPE: ${product.garment_type}`);
+  } else if (product.type) {
+    parts.push(`GARMENT TYPE: ${product.type}`);
+  } else if (product.detailedDescription) {
+    parts.push(`GARMENT: ${product.detailedDescription}`);
+  }
+  
+  // Product styling details
+  if (product.style_category) parts.push(`Style Category: ${product.style_category}`);
+  
+  // Colors - NOW COMPLETE (this was the missing part)
+  parts.push(`\n📍 COLORS (Distinguishing feature for garment identification):`);
+  if (product.primary_color) parts.push(`  Primary Color: ${product.primary_color}`);
+  if (product.secondary_color && product.secondary_color !== '') {
+    parts.push(`  Secondary Color: ${product.secondary_color}`);
+  } else if (!product.primary_color) {
+    parts.push(`  Color: As shown in Image 2`);
+  }
+  
+  // Fabric and material - NOW COMPLETE
+  parts.push(`\n🧵 MATERIAL & TEXTURE:`);
+  if (product.fabric_type) {
+    parts.push(`  Fabric: ${product.fabric_type}`);
+    parts.push(`  Appearance: Realistic ${product.fabric_type.toLowerCase()} texture`);
+  } else if (product.material) {
+    parts.push(`  Material: ${product.material}`);
   } else {
-    if (product.type) parts.push(`${product.type}`);
-    if (product.style) parts.push(`${product.style} style`);
-    if (product.colors?.length > 0) parts.push(`in ${product.colors.join(' and ')}`);
+    parts.push(`  Material: High-quality as shown in Image 2`);
   }
   
-  if (product.material) parts.push(`${product.material} material`);
-  if (product.fit) parts.push(`${product.fit} fit`);
+  // Pattern - NOW COMPLETE
+  parts.push(`\n🎨 PATTERN:`);
+  if (product.pattern) {
+    parts.push(`  Pattern: ${product.pattern}`);
+  } else {
+    parts.push(`  Pattern: Solid color`);
+  }
+  
+  // Fit - NOW COMPLETE
+  parts.push(`\n👕 FIT & SILHOUETTE:`);
+  if (product.fit_type) parts.push(`  Fit: ${product.fit_type}`);
+  else if (product.fit) parts.push(`  Fit: ${product.fit}`);
+  
+  // Design details - NOW COMPLETE
+  parts.push(`\n🎭 DESIGN DETAILS:`);
+  if (product.neckline) parts.push(`  Neckline: ${product.neckline}`);
+  if (product.sleeves) parts.push(`  Sleeves: ${product.sleeves}`);
+  if (product.key_details) parts.push(`  Special Details: ${product.key_details}`);
+  else parts.push(`  Details: As shown in Image 2 reference`);
+  
+  // Length & coverage
+  parts.push(`\n📏 LENGTH & COVERAGE:`);
+  if (product.length) parts.push(`  Length: ${product.length}`);
+  if (product.coverage) parts.push(`  Coverage: ${product.coverage}`);
+  else parts.push(`  Coverage: As shown in product image\n`);
 
-  // 3. HAIRSTYLE & MAKEUP (usually stay same for change-clothes, but include in case user customize)
+  // 3. HAIR & MAKEUP STYLING
+  parts.push(`\n=== HAIRSTYLE & MAKEUP ===`);
   if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
-    parts.push(`\n=== OPTIONAL ===`);
     parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
+  } else {
+    parts.push(`Hairstyle: Keep SAME as reference image - do NOT change`);
+  }
+  
+  // Makeup from selectedOptions or from character analysis
+  if (selectedOptions.makeup) {
+    parts.push(`Makeup: ${selectedOptions.makeup}`);
+  } else if (character.makeup) {
+    parts.push(`Makeup: ${character.makeup}`);
+  } else {
+    parts.push(`Makeup: Keep same as reference - professional, natural look`);
   }
 
-  // 4. ENVIRONMENT & LIGHTING
+  // 4. ACCESSORIES (NEW - from selectedOptions)
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`\n=== ACCESSORIES ===`);
+    const accessories = Array.isArray(selectedOptions.accessories) 
+      ? selectedOptions.accessories 
+      : selectedOptions.accessories.split(',');
+    
+    // Group accessories by category
+    const groupedAccessories = {};
+    for (const acc of accessories) {
+      const category = determineAccessoryCategory(acc);
+      if (!groupedAccessories[category]) groupedAccessories[category] = [];
+      groupedAccessories[category].push(acc);
+    }
+    
+    for (const [category, items] of Object.entries(groupedAccessories)) {
+      parts.push(`${category}: ${items.join(', ')}`);
+    }
+  }
+
+  // 5. FOOTWEAR (NEW - from selectedOptions)
+  if (selectedOptions.shoes) {
+    parts.push(`\n=== FOOTWEAR ===`);
+    parts.push(`Shoes: ${selectedOptions.shoes}`);
+  }
+
+  // 6. BOTTOM WEAR (NEW - if specified)
+  if (selectedOptions.bottom) {
+    parts.push(`\n=== BOTTOM WEAR ===`);
+    parts.push(`${selectedOptions.bottom}`);
+  }
+
+  // 7. GARMENT PLACEMENT INSTRUCTIONS (NEW - Critical for virtual try-on)
+  parts.push(`\n=== HOW TO APPLY THE GARMENT ===`);
+  parts.push(`1. Take the garment from Image 2 reference`);
+  parts.push(`2. Place it on the character's body with realistic draping`);
+  parts.push(`3. Ensure natural fabric folds and wrinkles`);
+  parts.push(`4. Match fabric behavior to material type`);
+  parts.push(`5. Ensure proper fit on character's body`);
+  parts.push(`6. Keep all gaps (neck, wrists, ankles) appropriate`);
+  parts.push(`7. Do NOT distort character's body to fit garment`);
+  parts.push(`8. Keep body proportions visible in shoulders/waist/hips\n`);
+
+  // 8. ENVIRONMENT & LIGHTING
   parts.push(`\n=== ENVIRONMENT ===`);
-  if (selectedOptions.scene) parts.push(`Setting: ${selectedOptions.scene}`);
+  if (selectedOptions.scene) {
+    parts.push(`Setting: ${selectedOptions.scene}`);
+    // Add technical details for specific scenes
+    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
+    if (sceneDetails) parts.push(sceneDetails);
+  }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Mood/Vibe: ${selectedOptions.mood}`);
 
-  // 5. PHOTO STYLE
-  parts.push(`\n=== PHOTOGRAPHY ===`);
+  // 9. PHOTO STYLE & TECHNICAL
+  parts.push(`\n=== PHOTOGRAPHY & QUALITY ===`);
   if (selectedOptions.style) parts.push(`Style: ${selectedOptions.style}`);
   if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
   if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}`);
   
-  parts.push(`Professional photography, 8k, sharp focus, ultra-detailed, photorealistic`);
+  parts.push(`Quality: Professional photography, 8k, sharp focus, ultra-detailed, photorealistic`);
+  parts.push(`Detail Level: Realistic fabric texture, proper draping, anatomically correct\n`);
+
+  // 10. FINAL CRITICAL REMINDER
+  parts.push(`=== EXECUTION CHECKLIST ===`);
+  parts.push(`✓ Photo of person from Image 1 with character details preserved`);
+  parts.push(`✓ Wearing garment from Image 2 with correct colors and materials`);
+  parts.push(`✓ Same face, body, pose, expression - UNCHANGED`);
+  parts.push(`✓ Realistic garment placement with natural draping`);
+  parts.push(`✓ Professional lighting and composition`);
+  parts.push(`✓ No distorted anatomy or bad proportions`);
+
+  return parts.join('\n');
+}
+
+/**
+ * Helper: Determine accessory category from accessory name
+ */
+function determineAccessoryCategory(accessory) {
+  const accessories = {
+    'necklaces': ['pendant', 'chain', 'choker', 'locket', 'layer', 'statement', 'pearl', 'name', 'zodiac'],
+    'earrings': ['stud', 'hoop', 'drop', 'chandelier', 'huggie', 'threader', 'cluster', 'tassel'],
+    'bracelets': ['bangle', 'cuff', 'chain', 'beaded', 'tennis', 'charm', 'wrap', 'minimalist'],
+    'hair-accessories': ['hairpins', 'clips', 'headband', 'scrunchie', 'claw', 'stick', 'wrap', 'barrette'],
+    'hats': ['beanie', 'cap', 'fedora', 'beret', 'bucket', 'brim', 'straw', 'visor'],
+    'belts': ['leather', 'chain', 'fabric', 'corset', 'obi', 'elastic', 'cinch'],
+    'scarves': ['knit', 'silk', 'shawl', 'infinity', 'bandana', 'tie', 'collar']
+  };
+  
+  const acc = accessory.toLowerCase();
+  for (const [category, keywords] of Object.entries(accessories)) {
+    if (keywords.some(kw => acc.includes(kw))) {
+      return category.replace('-', ' ').toUpperCase();
+    }
+  }
+  return 'ACCESSORIES';
+}
+
+/**
+ * Helper: Get technical details for specific scenes
+ */
+function getSceneTechnicalDetails(scene) {
+  const sceneDetails = {
+    'studio': 'White seamless background, professional studio setup, reflective floor',
+    'minimalist-studio': 'Clean white or neutral background, minimal props',
+    'outdoor': 'Natural daylight, outdoor setting, natural shadows',
+    'luxury': 'High-end luxury setting with elegant details, refined ambiance',
+    'casual': 'Relaxed, natural environment',
+    'urban': 'City setting, architectural elements in background'
+  };
+  
+  return sceneDetails[scene] || null;
+}
+
+// ============================================================
+// 🛍️ ECOMMERCE: Professional product photography for online stores
+// ============================================================
+
+function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const product = analysis.product || {};
+
+  parts.push('[ECOMMERCE PRODUCT PHOTOGRAPHY]');
+  parts.push('Purpose: Professional product photography for online retail');
+  parts.push('Focus: Product clarity, colors, details, and commercial appeal\n');
+
+  // 1. PRODUCT FOCUS (PRIMARY)
+  parts.push('=== PRODUCT (PRIMARY FOCUS) ===');
+  parts.push('Product is the MAIN SUBJECT - displayed clearly and prominently');
+  
+  if (product.garment_type) parts.push(`Item: ${product.garment_type}`);
+  if (product.detailedDescription) parts.push(`Description: ${product.detailedDescription}`);
+  
+  if (product.primary_color) parts.push(`Primary Color: ${product.primary_color}`);
+  if (product.secondary_color) parts.push(`Secondary Color: ${product.secondary_color}`);
+  if (product.pattern) parts.push(`Pattern: ${product.pattern}`);
+  if (product.fabric_type) parts.push(`Material: ${product.fabric_type}`);
+  if (product.fit_type) parts.push(`Fit: ${product.fit_type}`);
+  if (product.key_details) parts.push(`Key Details: ${product.key_details}`);
+  
+  parts.push('\nProduct Display Requirements:');
+  parts.push('- All details visible and clear');
+  parts.push('- True-to-life colors (not saturated)');
+  parts.push('- Realistic fabric appearance and texture');
+  parts.push('- Professional presentation suitable for retail\n');
+
+  // 2. BACKGROUND & SETTING (SUPPORTING)
+  parts.push('=== BACKGROUND ===');
+  if (selectedOptions.scene === 'white-background' || !selectedOptions.scene) {
+    parts.push('Background: Pure white (#FFFFFF) or very subtle neutral');
+    parts.push('Why: Ecommerce standard, allows easy background removal');
+    parts.push('Lighting: Even, no shadows on background');
+  } else {
+    parts.push(`Background: ${selectedOptions.scene}`);
+  }
+  parts.push('Context: Minimal - Focus on product\n');
+
+  // 3. PRESENTATION METHOD
+  parts.push('=== HOW TO DISPLAY THE PRODUCT ===');
+  
+  if (productFocus === 'full-outfit') {
+    parts.push('Display Method: ON A MODEL or REALISTIC FORM');
+    parts.push('- Model should be neutral and not distract from product');
+    parts.push('- Face should be calm, neutral expression');
+    parts.push('- Pose should showcase the garment');
+    parts.push('- Model is secondary to product visibility');
+  } else {
+    parts.push('Display Method: FLAT LAY or DETAIL CLOSE-UP');
+    parts.push('- Show product against clean background');
+    parts.push('- Multiple angles if possible');
+    parts.push('- Highlight key design elements');
+  }
+  parts.push('- All product edges visible and clear');
+  parts.push('- No distortion or wrinkles that hide details\n');
+
+  // 4. LIGHTING & TECHNICAL
+  parts.push('=== LIGHTING & TECHNICAL SPECS ===');
+  parts.push('Lighting: Bright, even studio lighting');
+  parts.push('- Soft diffused light (3-light setup standard)');
+  parts.push('- No harsh shadows');
+  parts.push('- Consistent color temperature (5500K daylight)');
+  parts.push('- High key (bright overall)');
+  
+  if (selectedOptions.lighting) parts.push(`Style: ${selectedOptions.lighting}`);
+  
+  parts.push('\nColor & Accuracy:');
+  parts.push('- Accurate color reproduction');
+  parts.push('- Neutral white balance');
+  parts.push('- True material appearance');
+  
+  parts.push('\nQuality:');
+  parts.push('- 8K resolution, ultra high quality');
+  parts.push('- Sharp focus on entire product');
+  parts.push('- Crisp details, clean edges');
+  parts.push('- Commercial photography standard\n');
+
+  // 5. NEGATIVE REQUIREMENTS
+  parts.push('=== WHAT NOT TO DO ===');
+  parts.push('- Do NOT have busy or distracting background');
+  parts.push('- Do NOT use excessive styling or decoration');
+  parts.push('- Do NOT distort or exaggerate product size');
+  parts.push('- Do NOT add watermarks or logos');
+  parts.push('- Do NOT use artistic filters or effects');
+  parts.push('- Do NOT hide any important product details');
+
+  return parts.join('\n');
+}
+
+// ============================================================
+// 📱 SOCIAL MEDIA: Engaging, trendy content for Instagram/TikTok
+// ============================================================
+
+function buildSocialMediaPrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('[SOCIAL MEDIA CONTENT]');
+  parts.push('Platform: Instagram/TikTok optimized');
+  parts.push('Purpose: Engaging, trendy, scroll-stopping content\n');
+
+  // 1. CHARACTER & ENERGY
+  parts.push('=== CHARACTER & ENERGY ===');
+  if (character.age) parts.push(`Age: ${character.age}`);
+  if (character.gender) parts.push(`Gender: ${character.gender}`);
+  
+  parts.push('Energy Level: HIGH - Confident, engaging, expressive');
+  parts.push('Expression: Natural smile or expressive emotion');
+  parts.push('Vibe: Relatable, trendy, aspirational');
+  parts.push('Pose: Dynamic and natural (not stiff)');
+  parts.push('Movement: Suggest motion or action\n');
+
+  // 2. OUTFIT STYLING (TRENDY)
+  parts.push('=== STYLING (CURRENT TRENDS) ===');
+  if (product.garment_type) parts.push(`Item: ${product.garment_type}`);
+  if (product.primary_color) parts.push(`Main Color: ${product.primary_color}`);
+  if (product.secondary_color) parts.push(`Accent Color: ${product.secondary_color}`);
+  if (product.style_category) parts.push(`Style: ${product.style_category} (on-trend)`);
+  
+  parts.push('Styling: Complete outfit looking, fashion-forward');
+  parts.push('Accessories: Strategic, Instagram-worthy accessories');
+  if (selectedOptions.shoes) parts.push(`Shoes: ${selectedOptions.shoes}`);
+  
+  parts.push('\nMakeup: Instagram-optimized');
+  if (selectedOptions.makeup) parts.push(`Style: ${selectedOptions.makeup}`);
+  else parts.push('Style: Camera-friendly, polished but natural looking');
+  
+  parts.push('Hair: On-trend, moving naturally (suggests motion)\n');
+
+  // 3. ENVIRONMENT (INSTAGRAM-WORTHY)
+  parts.push('=== ENVIRONMENT ===');
+  parts.push('Setting: Instagram-aesthetic location');
+  if (selectedOptions.scene) {
+    parts.push(`Location: ${selectedOptions.scene}`);
+  } else {
+    parts.push('Location: Urban, modern, aesthetic background');
+  }
+  
+  parts.push('Background: Visually interesting but not distracting');
+  parts.push('- Could include trendy cafe, street art, minimalist urban');
+  parts.push('- Soft focus background with depth');
+  parts.push('- Complementary to outfit colors');
+  
+  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
+  else parts.push('Mood: Joyful, aspirational, relatable\n');
+
+  // 4. PHOTOGRAPHY STYLE (SOCIAL MEDIA)
+  parts.push('=== PHOTOGRAPHY STYLE ===');
+  parts.push('Style: Social media photography (film/aesthetic look)');
+  parts.push('- Warm, appealing color grading');
+  parts.push('- Subtle film grain or digital clean');
+  parts.push('- Natural but slightly enhanced colors');
+  
+  parts.push('\nComposition:');
+  if (selectedOptions.cameraAngle) parts.push(`Angle: ${selectedOptions.cameraAngle}`);
+  else parts.push('Angle: Flattering three-quarter or full body');
+  
+  parts.push('- Composition: Rule of thirds or dynamic');
+  parts.push('- Leading lines: Optional but preferred');
+  parts.push('- Rule of thirds placement for engagement');
+  
+  parts.push('\nLighting:');
+  if (selectedOptions.lighting) parts.push(`Type: ${selectedOptions.lighting}`);
+  else parts.push('Type: Natural golden hour or nice studio light');
+  
+  parts.push('- Flattering: Enhances skin tone');
+  parts.push('- Warm: Inviting and engaging');
+  parts.push('- Even: No weird shadows\n');
+
+  // 5. HASHTAG-WORTHY ELEMENTS
+  parts.push('=== HASHTAG-WORTHY DETAILS ===');
+  parts.push('Make this image SHAREABLE:');
+  parts.push('- Aspirational but relatable');
+  parts.push('- Trendy yet timeless');
+  parts.push('- Clear product visibility');
+  parts.push('- Engaging composition');
+  parts.push('- Instagram-algorithm-friendly (vibrant, clear, engaging)');
+  parts.push('- Suitable for: Feed post, Reels thumbnail, Story\n');
+
+  // 6. QUALITY & TECHNICAL
+  parts.push('=== QUALITY ===');
+  parts.push('Resolution: High quality for social media');
+  parts.push('- 1080x1080 optimal or 1080x1350');
+  parts.push('- Sharp focus on subject');
+  parts.push('- Vibrant but natural colors');
+  parts.push('- Professional but approachable quality');
+
+  return parts.join('\n');
+}
+
+// ============================================================
+// 👗 FASHION EDITORIAL: Magazine-style, artistic fashion content
+// ============================================================
+
+function buildFashionEditorialPrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('[FASHION EDITORIAL PHOTOGRAPHY]');
+  parts.push("Style: High-fashion magazine editorial (Vogue, Harper's Bazaar level)");
+  parts.push('Purpose: Artistic, sophisticated fashion storytelling\n');
+
+  // 1. CHARACTER & STYLING
+  parts.push('=== CHARACTER & STYLING ===');
+  if (character.age) parts.push(`Model: ${character.age} year old`);
+  if (character.gender) parts.push(`Gender: ${character.gender}`);
+  parts.push('Look: Editorial, chic, sophisticated');
+  parts.push('Presence: Strong editorial presence, confident');
+  parts.push('Expression: Dramatic but editorial (not smiling necessarily)');
+  
+  parts.push('\nStyling Approach:');
+  parts.push('- Complete editorial look (hair, makeup, accessories all coordinated)');
+  parts.push('- High-fashion forward thinking');
+  if (product.style_category) parts.push(`- ${product.style_category} styled fashion-forward`);
+  
+  parts.push('\nMakeup: Editorial beauty');
+  if (selectedOptions.makeup) parts.push(`- ${selectedOptions.makeup}`);
+  else parts.push('- Artistic, bold but editorial-appropriate');
+  
+  parts.push('Hair: Editorial styling');
+  if (selectedOptions.hairstyle) parts.push(`- ${selectedOptions.hairstyle}`);
+  else parts.push('- Perfectly styled or artfully undone')
+  
+  parts.push('\nAccessories: Curated editorial selection');
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`- Featured: ${Array.isArray(selectedOptions.accessories) ? selectedOptions.accessories.join(', ') : selectedOptions.accessories}`);
+  }
+  parts.push('- Coordinated with outfit (not random)\n');
+
+  // 2. OUTFIT (ARTISTIC FOCUS)
+  parts.push('=== OUTFIT (ART DIRECTION) ===');
+  if (product.garment_type) parts.push(`Garment: ${product.garment_type}`);
+  if (product.style_category) parts.push(`Category: ${product.style_category}`);
+  
+  parts.push('Color Story:');
+  if (product.primary_color) parts.push(`- Primary: ${product.primary_color}`);
+  if (product.secondary_color) parts.push(`- Secondary: ${product.secondary_color}`);
+  if (product.pattern) parts.push(`- Pattern: ${product.pattern}`);
+  
+  parts.push('Material & Texture:');
+  if (product.fabric_type) parts.push(`- Fabric: ${product.fabric_type}`);
+  parts.push('- Realistic luxurious texture');
+  
+  parts.push('Design Elements:');
+  if (product.key_details) parts.push(`- Focus: ${product.key_details}`);
+  parts.push('- Show garment artfully (from interesting angle)\n');
+
+  // 3. ENVIRONMENT (EDITORIAL SETTING)
+  parts.push('=== ENVIRONMENT & SETTING ===');
+  parts.push('Setting: High-fashion editorial location');
+  if (selectedOptions.scene) {
+    parts.push(`Location: ${selectedOptions.scene}`);
+  } else {
+    parts.push('Location: Luxury, artistic, or minimalist editorial background');
+  }
+  
+  parts.push('Background Philosophy:');
+  parts.push("- Supports the story, doesn't distract");
+  parts.push('- Could be architectural, natural, or abstract');
+  parts.push('- Must have editorial aesthetic\n');
+
+  // 4. LIGHTING & MOOD (EDITORIAL)
+  parts.push('=== LIGHTING & MOOD ===');
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  else parts.push('Lighting: Dramatic and flattering');
+  
+  parts.push('Approach:');
+  parts.push('- Could be soft and dreamy');
+  parts.push('- Or dramatic and moody');
+  parts.push('- Or clean and minimal');
+  
+  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
+  else parts.push('Mood: Sophisticated, artistic');
+  
+  parts.push('Atmosphere: Tells a story\n');
+
+  // 5. PHOTOGRAPHY & COMPOSITION
+  parts.push('=== PHOTOGRAPHY DIRECTION ===');
+  parts.push('Style: High-fashion editorial photography');
+  parts.push('- Magazine-quality production');
+  parts.push('- Artistic composition');
+  parts.push('- Thoughtful use of space and negative space');
+  
+  if (selectedOptions.cameraAngle) parts.push(`Angle: ${selectedOptions.cameraAngle}`);
+  else parts.push('Angle: Dynamic - full body or artistic crop');
+  
+  parts.push('Direction:');
+  parts.push('- Artistic and creative');
+  parts.push('- Fashion-forward styling');
+  parts.push('- Story-driven imagery');
+  parts.push('- Suitable for: Magazine spread, lookbook, collection showcase\n');
+
+  // 6. TECHNICAL SPECIFICATIONS
+  parts.push('=== TECHNICAL SPECS ===');
+  parts.push('Quality: Editorial/magazine production quality');
+  parts.push('- 8K+ resolution');
+  parts.push('- Flawless execution');
+  parts.push('- Professional color grading');
+  parts.push('- Editorial finishing');
+  
+  if (selectedOptions.colorPalette) parts.push(`Color Palette: ${selectedOptions.colorPalette}`);
+  
+  parts.push('\nFinal Look: High-fashion, aspirational, magazine-ready');
+
+  return parts.join('\n');
+}
+
+// ============================================================
+// 🌿 LIFESTYLE: Real-world context, day-in-life styling
+// ============================================================
+
+function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('[LIFESTYLE PHOTOGRAPHY]');
+  parts.push('Purpose: Show how outfit works in real-world context');
+  parts.push('Approach: Authentic, relatable, aspirational\n');
+
+  // 1. CHARACTER IN CONTEXT
+  parts.push('=== CHARACTER IN LIFESTYLE ===');
+  if (character.age) parts.push(`Person: ${character.age} years old`);
+  if (character.gender) parts.push(`Gender: ${character.gender}`);
+  parts.push('Expression: Natural, genuine, often smiling');
+  parts.push('Attitude: Authentic, confident in their element');
+  parts.push('Posture: Natural, relaxed, comfortable');
+  
+  parts.push('\nActivity/Context:');
+  parts.push('- Suggest a real-world activity or moment');
+  parts.push('- Not posed (or naturally posed)');
+  parts.push('- Genuine living, not obviously modelling\n');
+
+  // 2. OUTFIT IN CONTEXT
+  parts.push("=== OUTFIT (HOW IT'S WORN) ===");
+  if (product.garment_type) parts.push(`Item: ${product.garment_type}`);
+  if (product.style_category) parts.push(`Style: ${product.style_category}`);
+  
+  parts.push('Wearing for: [Specific activity]');
+  parts.push('- Brunch outfit');
+  parts.push('- Work-to-weekend look');
+  parts.push('- Casual outing');
+  parts.push('- Day-in-life moment');
+  
+  if (product.primary_color) parts.push(`- Color: ${product.primary_color}`);
+  if (product.secondary_color) parts.push(`- With: ${product.secondary_color}`);
+  if (selectedOptions.shoes) parts.push(`- Shoes: ${selectedOptions.shoes}`);
+  
+  parts.push('Accessories:');
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`- Practical/stylish: ${Array.isArray(selectedOptions.accessories) ? selectedOptions.accessories.join(', ') : selectedOptions.accessories}`);
+  }
+  parts.push('- Fits naturally into the scene\n');
+
+  // 3. ENVIRONMENT (LIFESTYLE SETTING)
+  parts.push('=== ENVIRONMENT & LOCATION ===');
+  parts.push('Setting: Real-world lifestyle context');
+  if (selectedOptions.scene) {
+    parts.push(`Location: ${selectedOptions.scene}`);
+  } else {
+    parts.push('Location: Cafe, street, home, workplace, park, etc.');
+  }
+  
+  parts.push('Scene Elements:');
+  parts.push('- Natural props that make sense (coffee cup, phone, etc.)');
+  parts.push('- Real-world context visible');
+  parts.push('- Everyday luxury aesthetic');
+  parts.push('- Inviting and relatable\n');
+
+  // 4. MOOD & LIGHTING
+  parts.push('=== MOOD & ATMOSPHERE ===');
+  if (selectedOptions.mood) parts.push(`Vibe: ${selectedOptions.mood}`);
+  else parts.push('Vibe: Relaxed, authentic, aspirational');
+  
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  else parts.push('Lighting: Natural, warm, flattering');
+  
+  parts.push('Feel:');
+  parts.push('- Candid moment (or naturally candid-looking)');
+  parts.push('- Everyday life lived stylishly');
+  parts.push('- Achievable aspirational\n');
+
+  // 5. PHOTOGRAPHY STYLE
+  parts.push('=== PHOTOGRAPHY STYLE ===');
+  parts.push('Approach: Lifestyle photography');
+  parts.push('- Documentary-style with style');
+  parts.push('- Natural but polished');
+  
+  if (selectedOptions.cameraAngle) parts.push(`Angle: ${selectedOptions.cameraAngle}`);
+  else parts.push('Angle: Natural, authentic perspective');
+  
+  parts.push('Composition:');
+  parts.push('- Environmental (show the scene)');
+  parts.push('- Natural framing');
+  parts.push('- Focus on the moment and the outfit');
+  parts.push('- Suitable for: Blog post, social content, brand story\n');
+
+  // 6. COLOR & TONE
+  parts.push('=== COLOR & TONE ===');
+  if (selectedOptions.colorPalette) parts.push(`Palette: ${selectedOptions.colorPalette}`);
+  else parts.push('Palette: Warm, inviting, natural');
+  
+  parts.push('Processing:');
+  parts.push('- Natural color grading');
+  parts.push('- Warm undertones');
+  parts.push('- Film-like or clean digital');
+  parts.push('- Feels aspirational but achievable\n');
+
+  // 7. QUALITY & TECHNICAL
+  parts.push('=== TECHNICAL SPECS ===');
+  parts.push('Quality: High-quality lifestyle photography');
+  parts.push('- Sharp focus on subject');
+  parts.push('- Nice background blur (if applicable)');
+  parts.push('- Professional but natural');
+  parts.push('- 4K-8K quality');
+  parts.push('- Suitable for: Magazine spread, website, Instagram, blog');
+
+  return parts.join('\n');
+}
+
+// ============================================================
+// ⬅️➡️ BEFORE-AFTER: Transformation showcase (split concept)
+// ============================================================
+
+function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('[BEFORE & AFTER TRANSFORMATION]');
+  parts.push('[IMAGE 1 - BEFORE]');
+  parts.push('Scenario: Person WITHOUT the outfit (or in basic outfit)');
+  parts.push('Scenario: Solid neutral styling, baseline look\n');
+
+  parts.push('[IMAGE 2 - AFTER]');
+  parts.push('Scenario: SAME PERSON with the stylish outfit (from product image)');
+  parts.push('Scenario: Transformed, elevated, styled\n');
+
+  parts.push('=== TRANSFORMATION CONCEPT ===');
+  parts.push('Story: Show how this product/outfit transforms the look');
+  parts.push('Before State: Basic, neutral, baseline');
+  parts.push('After State: Stylish, confident, elevated\n');
+
+  // 1. BEFORE STATE (BASELINE)
+  parts.push('=== BEFORE (BASELINE LOOK) ===');
+  if (character.age) parts.push(`Person: ${character.age} years old`);
+  if (character.gender) parts.push(`Gender: ${character.gender}`);
+  
+  parts.push('Starting Point:');
+  parts.push('- Plain basics or neutral clothing');
+  parts.push('- Minimal styling');
+  parts.push('- Authentic/unpolished');
+  parts.push('- Relatable everyday look');
+  parts.push('- Same person, hairstyle, body as After\n');
+
+  parts.push('Expression: Natural, neutral');
+  parts.push('Setting: Simple, clean background');
+  parts.push('Lighting: Even, neutral lighting\n');
+
+  // 2. AFTER STATE (STYLED)
+  parts.push('=== AFTER (STYLED TRANSFORMATION) ===');
+  parts.push('Transformation Point: Outfit + styling');
+  parts.push('Same Person: Exact same face, body, everything - ONLY clothing changed');
+  parts.push('Added:');
+  
+  if (product.garment_type) parts.push(`- Stylish ${product.garment_type}`);
+  if (product.style_category) parts.push(`- ${product.style_category} styling`);
+  if (product.primary_color) parts.push(`- Color: ${product.primary_color}`);
+  if (selectedOptions.shoes) parts.push(`- ${selectedOptions.shoes}`);
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`- Accessories: ${Array.isArray(selectedOptions.accessories) ? selectedOptions.accessories.join(', ') : selectedOptions.accessories}`);
+  }
+  
+  parts.push('\nMakeup: Light enhancement (optional)');
+  if (selectedOptions.makeup) parts.push(`- ${selectedOptions.makeup}`);
+  
+  parts.push('Hair: Same or light refresh');
+  if (selectedOptions.hairstyle) parts.push(`- ${selectedOptions.hairstyle}`);
+  
+  parts.push('\nExpression: Confident, pleased');
+  parts.push('Setting: Similar to Before (consistency)');
+  parts.push('Impact: Clear visual transformation through styling\n');
+
+  // 3. LIGHTING & PHOTOGRAPHY
+  parts.push('=== PHOTOGRAPHY CONSISTENCY ===');
+  parts.push('Both images must be consistent:');
+  parts.push('- Same lighting style');
+  parts.push('- Same background (or very similar)');
+  parts.push('- Same camera angle');
+  parts.push('- Same background settings');
+  parts.push('- Only the outfit and minimal styling changes\n');
+
+  // 4. TRANSFORMATION STORY
+  parts.push('=== TRANSFORMATION NARRATIVE ===');
+  parts.push('Message: Look what this [product] does!');
+  parts.push('- Before: Everyday, relatable');
+  parts.push('- After: Transformed, elevated, stylish');
+  parts.push('- The power of: Great styling, quality pieces');
+  parts.push('- Outcome: Confidence through fashion\n');
+
+  // 5. DESIGN & LAYOUT
+  parts.push('=== BEFORE/AFTER LAYOUT ===');
+  parts.push('[LEFT SIDE - BEFORE] [RIGHT SIDE - AFTER]');
+  parts.push('or');
+  parts.push('[TOP - BEFORE] [BOTTOM - AFTER]');
+  parts.push('or');
+  parts.push('[SPLIT SCREEN] with clear visual comparison');
+  parts.push('or');
+  parts.push('[SLIDER] effect showing transformation\n');
+
+  // 6. QUALITY & STYLE
+  parts.push('=== QUALITY & IMPACT ===');
+  parts.push('Overall Look: Impactful and clear');
+  parts.push('- High quality professional before/after');
+  parts.push('- Clear transformation visible');
+  parts.push('- Compelling reason to stylize');
+  parts.push('- 8K resolution, sharp, professional');
+  parts.push('- Suitable for: Brand campaigns, lookbooks, social proof, styling posts');
 
   return parts.join('\n');
 }
@@ -178,22 +898,68 @@ function buildStylingPrompt(analysis, selectedOptions, productFocus) {
   }
   if (character.skinTone) parts.push(`${character.skinTone} skin`);
   
-  if (product.detailedDescription) {
+  if (product.garment_type) {
+    parts.push(`wearing ${product.garment_type}`);
+  } else if (product.detailedDescription) {
     parts.push(`wearing ${product.detailedDescription}`);
   } else if (product.type) {
     parts.push(`wearing a ${product.type}`);
   }
 
-  // 2. STYLING FOCUS
+  // Product styling details
+  if (product.primary_color) parts.push(`Color: ${product.primary_color}`);
+  if (product.fabric_type) parts.push(`Fabric: ${product.fabric_type}`);
+  if (product.key_details) parts.push(`Details: ${product.key_details}`);
+
+  // 2. STYLING FOCUS (UPDATED with full details)
   parts.push(`\n=== UPDATE STYLING ===`);
-  if (selectedOptions.hairstyle) parts.push(`New hairstyle: ${selectedOptions.hairstyle}`);
-  if (selectedOptions.makeup) parts.push(`Makeup look: ${selectedOptions.makeup}`);
+  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
+    parts.push(`New hairstyle: ${selectedOptions.hairstyle}`);
+  } else {
+    parts.push(`Hairstyle: same as reference`);
+  }
+  
+  if (selectedOptions.makeup) {
+    parts.push(`Makeup look: ${selectedOptions.makeup}`);
+  } else if (character.makeup) {
+    parts.push(`Makeup: ${character.makeup}`);
+  }
+  
   parts.push(`Same face expression as reference`);
   parts.push(`Same pose orientation as reference`);
 
+  // Accessories (NEW)
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`\n=== ACCESSORIES ===`);
+    const accessories = Array.isArray(selectedOptions.accessories) 
+      ? selectedOptions.accessories 
+      : selectedOptions.accessories.split(',');
+    
+    const groupedAccessories = {};
+    for (const acc of accessories) {
+      const category = determineAccessoryCategory(acc);
+      if (!groupedAccessories[category]) groupedAccessories[category] = [];
+      groupedAccessories[category].push(acc);
+    }
+    
+    for (const [category, items] of Object.entries(groupedAccessories)) {
+      parts.push(`${category}: ${items.join(', ')}`);
+    }
+  }
+
+  // Footwear (NEW)
+  if (selectedOptions.shoes) {
+    parts.push(`\n=== FOOTWEAR ===`);
+    parts.push(`Shoes: ${selectedOptions.shoes}`);
+  }
+
   // 3. ENVIRONMENT
   parts.push(`\n=== ENVIRONMENT ===`);
-  if (selectedOptions.scene) parts.push(`Scene: ${selectedOptions.scene}`);
+  if (selectedOptions.scene) {
+    parts.push(`Scene: ${selectedOptions.scene}`);
+    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
+    if (sceneDetails) parts.push(sceneDetails);
+  }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
 
@@ -228,27 +994,76 @@ function buildCompleteLookPrompt(analysis, selectedOptions, productFocus) {
     parts.push(`${hairDesc} hair`);
   }
 
-  // OUTFIT DESCRIPTION
+  // OUTFIT DESCRIPTION (ENHANCED)
   parts.push(`\n=== COMPLETE OUTFIT ===`);
+  if (product.garment_type) {
+    parts.push(`Garment: ${product.garment_type}`);
+  }
   if (product.detailedDescription) {
-    parts.push(product.detailedDescription);
+    parts.push(`Description: ${product.detailedDescription}`);
   } else {
-    if (product.type) parts.push(`${product.type}`);
-    if (product.style) parts.push(`${product.style} style`);
-    if (product.colors?.length > 0) parts.push(`in ${product.colors.join(' and ')}`);
+    if (product.type) parts.push(`Type: ${product.type}`);
+    if (product.style_category) parts.push(`Style: ${product.style_category}`);
   }
   
-  // STYLING
-  if (selectedOptions.hairstyle) parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
-  if (selectedOptions.makeup) parts.push(`Makeup: ${selectedOptions.makeup}`);
+  if (product.primary_color) parts.push(`Primary color: ${product.primary_color}`);
+  if (product.secondary_colors) parts.push(`Secondary colors: ${product.secondary_colors}`);
+  if (product.fabric_type) parts.push(`Fabric: ${product.fabric_type}`);
+  if (product.fit_type) parts.push(`Fit: ${product.fit_type}`);
+  if (product.pattern) parts.push(`Pattern: ${product.pattern}`);
+  if (product.key_details) parts.push(`Key details: ${product.key_details}`);
   
+  // STYLING
+  parts.push(`\n=== STYLING ===`);
+  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
+    parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
+  } else {
+    parts.push(`Hairstyle: same as reference image`);
+  }
+  
+  if (selectedOptions.makeup) {
+    parts.push(`Makeup: ${selectedOptions.makeup}`);
+  } else if (character.makeup) {
+    parts.push(`Makeup: ${character.makeup}`);
+  }
+
+  // Accessories (NEW - ENHANCED with grouping)
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`\n=== ACCESSORIES ===`);
+    const accessories = Array.isArray(selectedOptions.accessories)
+      ? selectedOptions.accessories
+      : selectedOptions.accessories.split(',');
+    
+    const groupedAccessories = {};
+    for (const acc of accessories) {
+      const category = determineAccessoryCategory(acc);
+      if (!groupedAccessories[category]) groupedAccessories[category] = [];
+      groupedAccessories[category].push(acc);
+    }
+    
+    for (const [category, items] of Object.entries(groupedAccessories)) {
+      parts.push(`${category}: ${items.join(', ')}`);
+    }
+  }
+
+  // Footwear (NEW)
+  if (selectedOptions.shoes) {
+    parts.push(`\n=== FOOTWEAR ===`);
+    parts.push(`Shoes: ${selectedOptions.shoes}`);
+  }
+
   parts.push(`Full body, standing, confident pose`);
 
   // ENVIRONMENT
   parts.push(`\n=== SETTING ===`);
-  if (selectedOptions.scene) parts.push(`Location: ${selectedOptions.scene}`);
+  if (selectedOptions.scene) {
+    parts.push(`Location: ${selectedOptions.scene}`);
+    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
+    if (sceneDetails) parts.push(sceneDetails);
+  }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Atmosphere: ${selectedOptions.mood}`);
+  if (selectedOptions.background) parts.push(`Background: ${selectedOptions.background}`);
 
   // TECHNICAL
   parts.push(`\n=== TECHNICAL ===`);
@@ -269,27 +1084,80 @@ function buildDefaultPrompt(analysis, selectedOptions) {
   const character = analysis.character || {};
   const product = analysis.product || {};
 
+  parts.push('=== CHARACTER ===');
   if (character.overallVibe) parts.push(character.overallVibe);
   if (character.age && character.gender) {
     parts.push(`${character.age} year old ${character.gender.toLowerCase()}`);
   }
   if (character.skinTone) parts.push(`${character.skinTone} skin`);
   
-  if (product.detailedDescription) {
-    parts.push(`wearing ${product.detailedDescription}`);
+  parts.push(`\n=== OUTFIT ===`);
+  if (product.garment_type) {
+    parts.push(`Garment: ${product.garment_type}`);
+  } else if (product.detailedDescription) {
+    parts.push(`Description: ${product.detailedDescription}`);
   } else if (product.type) {
-    parts.push(`wearing a ${product.type}`);
+    parts.push(`Type: ${product.type}`);
+  }
+  
+  if (product.primary_color) parts.push(`Color: ${product.primary_color}`);
+  if (product.fabric_type) parts.push(`Fabric: ${product.fabric_type}`);
+  if (product.fit_type) parts.push(`Fit: ${product.fit_type}`);
+  if (product.key_details) parts.push(`Details: ${product.key_details}`);
+  if (product.style_category) parts.push(`Style: ${product.style_category}`);
+
+  // Accessories (NEW - ENHANCED)
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`\n=== ACCESSORIES ===`);
+    const accessories = Array.isArray(selectedOptions.accessories)
+      ? selectedOptions.accessories
+      : selectedOptions.accessories.split(',');
+    
+    const groupedAccessories = {};
+    for (const acc of accessories) {
+      const category = determineAccessoryCategory(acc);
+      if (!groupedAccessories[category]) groupedAccessories[category] = [];
+      groupedAccessories[category].push(acc);
+    }
+    
+    for (const [category, items] of Object.entries(groupedAccessories)) {
+      parts.push(`${category}: ${items.join(', ')}`);
+    }
   }
 
-  if (selectedOptions.scene) parts.push(`in ${selectedOptions.scene}`);
-  if (selectedOptions.lighting) parts.push(`${selectedOptions.lighting} lighting`);
-  if (selectedOptions.mood) parts.push(`${selectedOptions.mood} mood`);
-  if (selectedOptions.style) parts.push(`${selectedOptions.style} photography`);
-  if (selectedOptions.colorPalette) parts.push(`${selectedOptions.colorPalette} color palette`);
+  // Footwear (NEW)
+  if (selectedOptions.shoes) {
+    parts.push(`\n=== FOOTWEAR ===`);
+    parts.push(`Shoes: ${selectedOptions.shoes}`);
+  }
 
-  parts.push(`8k, professional, sharp focus, ultra-detailed`);
+  // Makeup (NEW)
+  parts.push(`\n=== STYLING ===`);
+  if (selectedOptions.makeup) {
+    parts.push(`Makeup: ${selectedOptions.makeup}`);
+  } else if (character.makeup) {
+    parts.push(`Makeup: ${character.makeup}`);
+  }
+  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
+    parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
+  }
 
-  return parts.join(', ');
+  // Environment/Technical (ENHANCED)
+  parts.push(`\n=== ENVIRONMENT ===`);
+  if (selectedOptions.scene) {
+    parts.push(`Scene: ${selectedOptions.scene}`);
+    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
+    if (sceneDetails) parts.push(sceneDetails);
+  }
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
+  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
+  if (selectedOptions.style) parts.push(`Photography style: ${selectedOptions.style}`);
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
+  if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}`);
+
+  parts.push(`Professional photography, 8k, sharp focus, ultra-detailed`);
+
+  return parts.join('\n');
 }
 
 /**
@@ -309,6 +1177,22 @@ function buildNegativePromptGeneric(selectedOptions) {
 
 function buildNegativePrompt(product, selectedOptions) {
   const negatives = [
+    // CRITICAL FOR VIRTUAL TRY-ON: Prevent character changes
+    'changes to face',
+    'different face shape',
+    'modified body type',
+    'changed pose',
+    'different expression',
+    'altered eye appearance',
+    'different skin color',
+    'changed hair style',
+    'different hairstyle',
+    'different eye color',
+    'cropped head',
+    'damaged face',
+    'changed body',
+    
+    // General quality issues
     'blurry',
     'low quality',
     'distorted',
@@ -322,6 +1206,7 @@ function buildNegativePrompt(product, selectedOptions) {
     'poorly fitted clothing',
     'wrinkled clothing',
     'damaged clothing',
+    'torn clothing',
     'bad lighting',
     'overexposed',
     'underexposed',
@@ -337,7 +1222,16 @@ function buildNegativePrompt(product, selectedOptions) {
     'pixelated',
     'grainy',
     'noise',
-    'chromatic aberration'
+    'chromatic aberration',
+    
+    // Garment-specific issues
+    'floating garment',
+    'disconnected clothing',
+    'unrealistic draping',
+    'awkward fit',
+    'reversed colors',
+    'color bleeding',
+    'misaligned seams'
   ];
   
   // Add product-specific negatives

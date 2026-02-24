@@ -38,7 +38,10 @@ import cloudGalleryRoutes from './routes/cloudGalleryRoutes.js';
 import cloudBatchQueueRoutes from './routes/cloudBatchQueueRoutes.js';
 import videoProductionRoutes from './routes/videoProductionRoutes.js';
 import driveUploadRoutes from './routes/driveUploadRoutes.js';
+import driveFolderExplorerRoutes from './routes/driveFolderExplorerRoutes.js';
 import queueScannerRoutes from './routes/queueScannerRoutes.js';
+import videoScriptGenerationRoutes from './routes/videoScriptGenerationRoutes.js';
+import assetRoutes from './routes/assetRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -144,7 +147,10 @@ app.use('/api/cloud-gallery', cloudGalleryRoutes);
 app.use('/api/batch-queue', cloudBatchQueueRoutes);
 app.use('/api/video-production', videoProductionRoutes);
 app.use('/api/drive', driveUploadRoutes);
+app.use('/api/drive', driveFolderExplorerRoutes);
 app.use('/api/queue-scanner', queueScannerRoutes);
+app.use('/api/video', videoScriptGenerationRoutes);
+app.use('/api/assets', assetRoutes);
 
 app.use(errorHandler);
 

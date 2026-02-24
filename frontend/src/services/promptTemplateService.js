@@ -3,9 +3,9 @@
  * Comprehensive template management with advanced features
  */
 
-import { browserAutomationAPI } from './api';
+import { api } from './api';
 
-const BASE_URL = '/api/prompt-templates';
+const BASE_URL = '/prompt-templates';
 
 // ============================================================
 // GET ENDPOINTS
@@ -25,7 +25,7 @@ export async function getAllTemplates(filters = {}) {
 
     const queryString = params.toString();
     const url = queryString ? `${BASE_URL}?${queryString}` : BASE_URL;
-    const response = await browserAutomationAPI.get(url);
+    const response = await api.get(url);
     return response.data;
   } catch (error) {
     console.error('Error fetching templates:', error);
@@ -38,7 +38,7 @@ export async function getAllTemplates(filters = {}) {
  */
 export async function getTemplatesByUseCase(useCase) {
   try {
-    const response = await browserAutomationAPI.get(`${BASE_URL}/usecase/${useCase}`);
+    const response = await api.get(`${BASE_URL}/usecase/${useCase}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching templates for ${useCase}:`, error);
@@ -51,7 +51,7 @@ export async function getTemplatesByUseCase(useCase) {
  */
 export async function getCoreTemplates() {
   try {
-    const response = await browserAutomationAPI.get(`${BASE_URL}/core`);
+    const response = await api.get(`${BASE_URL}/core`);
     return response.data;
   } catch (error) {
     console.error('Error fetching core templates:', error);
@@ -64,7 +64,7 @@ export async function getCoreTemplates() {
  */
 export async function getTemplatesByPage(page) {
   try {
-    const response = await browserAutomationAPI.get(`${BASE_URL}/page/${page}`);
+    const response = await api.get(`${BASE_URL}/page/${page}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching templates for page ${page}:`, error);
@@ -77,7 +77,7 @@ export async function getTemplatesByPage(page) {
  */
 export async function getTemplatesByPageStep(page, step) {
   try {
-    const response = await browserAutomationAPI.get(`${BASE_URL}/page/${page}/step/${step}`);
+    const response = await api.get(`${BASE_URL}/page/${page}/step/${step}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching templates for ${page} step ${step}:`, error);
@@ -90,7 +90,7 @@ export async function getTemplatesByPageStep(page, step) {
  */
 export async function getTemplateById(id) {
   try {
-    const response = await browserAutomationAPI.get(`${BASE_URL}/${id}`);
+    const response = await api.get(`${BASE_URL}/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching template ${id}:`, error);
@@ -121,7 +121,7 @@ export async function getPromptTemplateById(id) {
  */
 export async function createTemplate(templateData) {
   try {
-    const response = await browserAutomationAPI.post(BASE_URL, templateData);
+    const response = await api.post(BASE_URL, templateData);
     return response.data;
   } catch (error) {
     console.error('Error creating template:', error);
@@ -141,7 +141,7 @@ export async function createPromptTemplate(templateData) {
  */
 export async function cloneTemplate(id, name) {
   try {
-    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/clone`, { name });
+    const response = await api.post(`${BASE_URL}/${id}/clone`, { name });
     return response.data;
   } catch (error) {
     console.error(`Error cloning template ${id}:`, error);
@@ -154,7 +154,7 @@ export async function cloneTemplate(id, name) {
  */
 export async function renderTemplate(id, fieldValues = {}) {
   try {
-    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/render`, {
+    const response = await api.post(`${BASE_URL}/${id}/render`, {
       fieldValues
     });
     return response.data;
@@ -169,7 +169,7 @@ export async function renderTemplate(id, fieldValues = {}) {
  */
 export async function trackTemplateUsage(id) {
   try {
-    const response = await browserAutomationAPI.post(`${BASE_URL}/${id}/usage`);
+    const response = await api.post(`${BASE_URL}/${id}/usage`);
     return response.data;
   } catch (error) {
     console.error(`Error tracking usage for template ${id}:`, error);
@@ -186,7 +186,7 @@ export async function trackTemplateUsage(id) {
  */
 export async function updateTemplate(id, templateData) {
   try {
-    const response = await browserAutomationAPI.put(`${BASE_URL}/${id}`, templateData);
+    const response = await api.put(`${BASE_URL}/${id}`, templateData);
     return response.data;
   } catch (error) {
     console.error(`Error updating template ${id}:`, error);
@@ -206,7 +206,7 @@ export async function updatePromptTemplate(id, templateData) {
  */
 export async function updateUsageLocation(id, { page, step, context, field, action }) {
   try {
-    const response = await browserAutomationAPI.put(`${BASE_URL}/${id}/usage-location`, {
+    const response = await api.put(`${BASE_URL}/${id}/usage-location`, {
       page,
       step,
       context,
@@ -229,7 +229,7 @@ export async function updateUsageLocation(id, { page, step, context, field, acti
  */
 export async function deleteTemplate(id) {
   try {
-    const response = await browserAutomationAPI.delete(`${BASE_URL}/${id}`);
+    const response = await api.delete(`${BASE_URL}/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error deleting template ${id}:`, error);

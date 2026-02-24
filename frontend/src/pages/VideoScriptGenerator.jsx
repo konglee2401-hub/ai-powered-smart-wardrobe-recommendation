@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Copy, Download, Send, Sparkles, Zap, BookOpen, PlayCircle } from 'lucide-react';
+import { Copy, Download, Send, Sparkles, Zap, BookOpen, PlayCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { api } from '../services/api';
+import { VIDEO_PRODUCTION_TEMPLATES } from '../constants/videoProductionTemplates';
 import {
   generateVideoScriptPrompt,
   generateStyleVariationPrompt,
@@ -12,6 +14,7 @@ import {
 
 export default function VideoScriptGenerator() {
   const [activeTab, setActiveTab] = useState('scenario-script');
+  const [generatedScript, setGeneratedScript] = useState(null);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -57,22 +60,30 @@ export default function VideoScriptGenerator() {
   });
 
   // Handlers
-  const handleGenerateScenario = () => {
+  const handleGenerateScenario = async () => {
     setIsLoading(true);
     try {
-      const prompt = generateVideoScriptPrompt(
-        scenarioForm.videoScenario,
-        scenarioForm.productType,
-        scenarioForm.productDetails,
-        scenarioForm.targetAudience,
-        scenarioForm.videoStyle,
-        scenarioForm.totalDuration,
-        scenarioForm.segmentCount
-      );
-      setGeneratedPrompt(prompt);
-      toast.success('Scenario prompt generated!');
+      const response = await api.post('/video/generate-video-scripts', {
+        scenarioId: scenarioForm.videoScenario.toLowerCase().replace(/ /g, '-'),
+        style: scenarioForm.videoStyle.toLowerCase().replace(/ /g, '-'),
+        duration: scenarioForm.totalDuration,
+        segments: scenarioForm.segmentCount,
+        productName: scenarioForm.productType,
+        productDescription: scenarioForm.productDetails,
+        productType: scenarioForm.productType,
+        targetAudience: scenarioForm.targetAudience
+      });
+
+      if (response.success) {
+        setGeneratedScript(response.data);
+        setGeneratedPrompt(response.data.rawContent);
+        toast.success('Video script generated successfully!');
+      } else {
+        throw new Error(response.error || 'Failed to generate script');
+      }
     } catch (error) {
-      toast.error('Failed to generate prompt');
+      console.error('Error generating scenario:', error);
+      toast.error(error.data?.error || error.message || 'Failed to generate script');
     } finally {
       setIsLoading(false);
     }
@@ -162,16 +173,18 @@ export default function VideoScriptGenerator() {
   };
 
   const copyToClipboard = () => {
-    if (!generatedPrompt) return;
-    navigator.clipboard.writeText(generatedPrompt);
+    const textToCopy = generatedScript?.rawContent || generatedPrompt;
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy);
     toast.success('Copied to clipboard!');
   };
 
   const downloadPrompt = () => {
-    if (!generatedPrompt) return;
+    const textToDownload = generatedScript?.rawContent || generatedPrompt;
+    if (!textToDownload) return;
     const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(generatedPrompt));
-    element.setAttribute('download', `video-prompt-${Date.now()}.txt`);
+    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(textToDownload));
+    element.setAttribute('download', `video-script-${Date.now()}.txt`);
     element.style.display = 'none';
     document.body.appendChild(element);
     element.click();
@@ -180,8 +193,9 @@ export default function VideoScriptGenerator() {
   };
 
   const openInChatGPT = () => {
-    if (!generatedPrompt) return;
-    const url = `https://chat.openai.com/?q=${encodeURIComponent(generatedPrompt)}`;
+    const textToSend = generatedScript?.rawContent || generatedPrompt;
+    if (!textToSend) return;
+    const url = `https://chat.openai.com/?q=${encodeURIComponent(textToSend)}`;
     window.open(url, '_blank');
   };
 
@@ -214,13 +228,15 @@ export default function VideoScriptGenerator() {
                 { id: 'movement-detail', label: '🚶 Movement Detail', icon: Zap },
                 { id: 'camera-guidance', label: '📹 Camera Guidance', icon: Sparkles },
                 { id: 'lighting-setup', label: '💡 Lighting Setup', icon: Sparkles },
-                { id: 'template-library', label: '📚 Template Library', icon: BookOpen }
+                { id: 'template-library', label: '📚 Template Library', icon: BookOpen },
+                { id: 'production-templates', label: '🎥 Production Templates', icon: PlayCircle }
               ].map(item => (
                 <button
                   key={item.id}
                   onClick={() => {
                     setActiveTab(item.id);
                     setGeneratedPrompt('');
+                    setGeneratedScript(null);
                   }}
                   className={`w-full text-left px-4 py-3 rounded-lg transition ${
                     activeTab === item.id
@@ -595,13 +611,55 @@ export default function VideoScriptGenerator() {
                   </button>
                 </div>
               )}
+
+              {/* Production Templates */}
+              {activeTab === 'production-templates' && (
+                <div className="space-y-4">
+                  <h2 className="text-xl font-semibold mb-6">Ready-to-Use Production Templates</h2>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Pre-generated scripts for common products and scenarios. Copy, customize, and produce immediately.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+                    {Object.entries(VIDEO_PRODUCTION_TEMPLATES).map(([templateId, template]) => (
+                      <button
+                        key={templateId}
+                        onClick={() => {
+                          setGeneratedScript(template);
+                          setGeneratedPrompt(JSON.stringify(template, null, 2));
+                        }}
+                        className="text-left p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition border border-gray-600"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-white">{template.title}</h3>
+                            <div className="text-sm text-gray-400 mt-1 space-y-1">
+                              <p>📦 {template.productType} • ⏱️ {template.duration}s • 📹 {template.scenarioId}</p>
+                              <p className="text-xs text-gray-500">{template.segments.length} segments • Style: {template.style}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded">Click to view</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-gray-400 text-xs mt-4">
+                    Click any template to load it. All templates include detailed segment breakdowns, camera work, lighting, and movement instructions.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Output Section */}
-            {generatedPrompt && (
+            {(generatedPrompt || generatedScript) && (
               <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">Generated Prompt</h2>
+                  <h2 className="text-xl font-semibold">
+                    {generatedScript ? 'Generated Video Script' : 'Generated Prompt'}
+                  </h2>
                   <div className="flex gap-2">
                     <button
                       onClick={copyToClipboard}
@@ -630,9 +688,79 @@ export default function VideoScriptGenerator() {
                   </div>
                 </div>
 
-                <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 max-h-96 overflow-y-auto">
-                  <pre className="text-sm text-gray-300 whitespace-pre-wrap">{generatedPrompt}</pre>
-                </div>
+                {/* Display Generated Script with Segments */}
+                {generatedScript && generatedScript.segments && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm text-gray-400">
+                      <div className="bg-gray-900 p-3 rounded-lg">
+                        <div className="text-gray-500">Duration</div>
+                        <div className="text-lg text-white font-semibold">{generatedScript.duration}s</div>
+                      </div>
+                      <div className="bg-gray-900 p-3 rounded-lg">
+                        <div className="text-gray-500">Segments</div>
+                        <div className="text-lg text-white font-semibold">{generatedScript.segments.length}</div>
+                      </div>
+                      <div className="bg-gray-900 p-3 rounded-lg">
+                        <div className="text-gray-500">Style</div>
+                        <div className="text-lg text-white font-semibold capitalize">{generatedScript.style}</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {generatedScript.segments.map((segment, index) => (
+                        <div key={index} className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h3 className="font-semibold text-lg">{segment.name || `Segment ${segment.number}`}</h3>
+                              <p className="text-sm text-gray-400">{segment.timeCode}</p>
+                            </div>
+                            <div className="text-right text-sm text-gray-400">
+                              {segment.duration}s
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 text-sm">
+                            {segment.cameraWork && (
+                              <div>
+                                <span className="text-gray-500">Camera:</span>
+                                <span className="text-gray-300 ml-2">{segment.cameraWork}</span>
+                              </div>
+                            )}
+                            {segment.lighting && (
+                              <div>
+                                <span className="text-gray-500">Lighting:</span>
+                                <span className="text-gray-300 ml-2">{segment.lighting}</span>
+                              </div>
+                            )}
+                            {segment.movements && segment.movements.length > 0 && (
+                              <div>
+                                <span className="text-gray-500">Movements:</span>
+                                <ul className="text-gray-300 ml-4 mt-1">
+                                  {segment.movements.map((movement, i) => (
+                                    <li key={i} className="list-disc">{movement}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {segment.script && (
+                              <div className="mt-3 pt-3 border-t border-gray-700">
+                                <span className="text-gray-500">Script:</span>
+                                <p className="text-gray-300 mt-2 whitespace-pre-wrap">{segment.script}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Display Raw Prompt */}
+                {!generatedScript && generatedPrompt && (
+                  <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 max-h-96 overflow-y-auto">
+                    <pre className="text-sm text-gray-300 whitespace-pre-wrap">{generatedPrompt}</pre>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 /**
- * 1-Click Creator - Full Flow Test with ChatGPT Integration
+ * 1-Click Creator - Full End-to-End Flow Test (UPDATED)
  * 
- * Tests complete workflow:
- * Step 1: Analyze with ChatGPT ✓ (NEW DEFAULT)
+ * Tests complete workflow with Headless Mode (ChatGPT stable):
+ * Step 1: Analyze with ChatGPT (Headless) ✓
  * Step 2: Apply Recommendations
- * Step 3: Generate Image with Google Flow
- * Step 4: Generate Videos with Grok
+ * Step 3: Generate Images with Google Flow (2 images) ✓
+ * Step 4: Generate Videos with Google Flow (20s scenarios) ✓
  * 
- * Usage: node test-one-click-full-flow.js
+ * Configuration:
+ * - ChatGPT analysis: HEADLESS MODE (no browser popup)
+ * - Image provider: Google Flow (default)
+ * - Video provider: Google Flow (now aligned with images)
+ * - Image quantity: 2 (DESIRED_OUTPUT_COUNT)
+ * - Video duration: 20 seconds (product-intro scenario)
+ * 
+ * Usage: node 03-oneclick-creator-fullflow-test.js
  */
 
 import axios from 'axios';
@@ -19,20 +26,31 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const API_BASE = 'http://localhost:5001/api/flows';
-const API_BASE_V1 = 'http://localhost:5001/api/v1';
+const API_BASE = 'http://localhost:5000/api/flows';
+const API_BASE_V1 = 'http://localhost:5000/api/v1';
 const TIMEOUT = 600000; // 10 minutes for full flow with video generation
 
-// Test configuration (simulating 1-Click Creator defaults)
+// Test configuration - Matches updated OneClickCreatorPage defaults
 const TEST_CONFIG = {
   characterImage: 'test-images/anh-nhan-vat.jpeg',
   productImage: 'test-images/anh-san-pham.png',
-  quantity: 2,  // 2 images as per OneClick default
+  
+  // Image Generation (aligned with ImageGenerationPage)
+  quantity: 2,  // DESIRED_OUTPUT_COUNT = 2
+  imageProvider: 'google-flow',  // Google Flow for consistent quality
+  
+  // Video Generation (now aligned with VideoGenerationPage)
+  videoDuration: 20,  // Total duration in seconds
+  videoScenario: 'product-intro',  // VIDEO_SCENARIOS default
+  videoProvider: 'google-flow',  // Aligned with image provider
+  
+  // Analysis & Settings
+  analysisProvider: 'chatgpt-browser', // Using ChatGPT
+  headless: true,  // 💫 NEW: Run ChatGPT in headless mode (stable service)
+  
   useCase: 'change-clothes',
   productFocus: 'full-outfit',
-  imageProvider: 'google-flow',  // Google Flow for image generation
-  videoProvider: 'google-flow', // Google Flow for video generation
-  analysisProvider: 'chatgpt-browser', // ChatGPT for analysis
+  
   settings: {
     scene: 'studio',
     lighting: 'soft-diffused',
@@ -250,35 +268,46 @@ async function testStep2ApplyRecommendations(analysisData) {
 }
 
 async function testStep3GenerateImage(analysisData, recommendedOptions) {
-  log.step(3, 'Generate Image', TEST_CONFIG.imageProvider);
+  log.step(3, 'Generate Images', TEST_CONFIG.imageProvider);
   
   testResults.steps['image-generation'] = {
     startTime: Date.now(),
     provider: TEST_CONFIG.imageProvider,
+    imageCount: TEST_CONFIG.quantity,
     status: 'running'
   };
 
   try {
-    log.info('Building image prompt...');
+    log.info('Preparing image generation with full analysis + styling options...');
 
-    const imagePrompt = `Professional fashion photo. Character wearing ${TEST_CONFIG.productFocus || 'full outfit'}. ` +
-      `Scene: ${recommendedOptions.scene}. Lighting: ${recommendedOptions.lighting}. ` +
-      `Mood: ${recommendedOptions.mood}. Style: ${recommendedOptions.style}. ` +
-      `Colors: ${recommendedOptions.colorPalette}. Camera: ${recommendedOptions.cameraAngle}. ` +
-      `Use case: ${TEST_CONFIG.useCase}. High quality, detailed, professional.`;
+    // Build selectedOptions from recommended options
+    const selectedOptions = {
+      scene: recommendedOptions.scene,
+      lighting: recommendedOptions.lighting,
+      mood: recommendedOptions.mood,
+      style: recommendedOptions.style,
+      colorPalette: recommendedOptions.colorPalette,
+      cameraAngle: recommendedOptions.cameraAngle,
+      hairstyle: 'same',  // Keep character same
+      // Add any additional styling from analysis
+      ...(analysisData?.analysis?.stylingNotes || {})
+    };
 
-    log.info(`Prompt: ${imagePrompt.substring(0, 100)}...`);
+    log.info(`Quantity: ${TEST_CONFIG.quantity} images (DESIRED_OUTPUT_COUNT)`);
     log.info(`Calling ${TEST_CONFIG.imageProvider} for image generation...`);
-
     console.log(`  ⏳ Image generation in progress... (typically 1-2 minutes)`);
 
+    // NEW: Pass analysis + selectedOptions to backend for proper prompt building
     const response = await axios.post(
       `${API_BASE}/generate`,
       {
-        prompt: imagePrompt,
-        imageCount: TEST_CONFIG.quantity,  // Use configured quantity
+        analysis: analysisData?.analysis,  // Pass full analysis object
+        selectedOptions: selectedOptions,  // Pass styling options
+        imageCount: TEST_CONFIG.quantity,
         imageSize: '1024x1024',
-        imageProvider: TEST_CONFIG.imageProvider  // Specify provider
+        imageProvider: TEST_CONFIG.imageProvider,
+        useCase: TEST_CONFIG.useCase,
+        productFocus: TEST_CONFIG.productFocus
       },
       {
         timeout: TIMEOUT
@@ -330,50 +359,67 @@ async function testStep4GenerateVideos(analysisData, generatedImage) {
   testResults.steps['video-generation'] = {
     startTime: Date.now(),
     provider: TEST_CONFIG.videoProvider,
+    videoDuration: TEST_CONFIG.videoDuration,
+    videoScenario: TEST_CONFIG.videoScenario,
     status: 'running'
   };
 
   try {
     log.info('Building video prompt from analysis...');
 
+    // Use scenario-based prompt (matching VideoGenerationPage behavior)
     const videoPrompt = `Professional fashion video showcasing ${TEST_CONFIG.productFocus}. ` +
+      `Scenario: ${TEST_CONFIG.videoScenario}. ` +
       `Scene: ${TEST_CONFIG.settings.scene}. ` +
       `Lighting: ${TEST_CONFIG.settings.lighting}. ` +
       `Mood: ${TEST_CONFIG.settings.mood}. ` +
       `Style: ${TEST_CONFIG.settings.style}. ` +
-      `Duration: 30 seconds. High quality, cinematic fashion video.`;
+      `Duration: ${TEST_CONFIG.videoDuration} seconds. High quality, professional fashion video.`;
 
     log.info(`Video Provider: ${TEST_CONFIG.videoProvider}`);
+    log.info(`Video Duration: ${TEST_CONFIG.videoDuration} seconds`);
+    log.info(`Video Scenario: ${TEST_CONFIG.videoScenario}`);
     log.info(`Prompt: ${videoPrompt.substring(0, 100)}...`);
     
     console.log(`\n  ⏳ Video generation in progress...`);
-    console.log(`  ℹ️  Note: Google Flow video generation requires browser interaction`);
-    console.log(`  (If headless mode, this will be limited)\n`);
+    console.log(`  ℹ️  Provider: ${TEST_CONFIG.videoProvider}`);
+    console.log(`  ℹ️  Duration: ${TEST_CONFIG.videoDuration}s`);
+    
+    if (!TEST_CONFIG.headless) {
+      console.log(`  ℹ️  Browser window will open for interaction\n`);
+    } else {
+      console.log(`  ℹ️  Headless mode enabled (ChatGPT stable)\n`);
+    }
 
-    // Google Flow requires manual/interactive video generation
+    // Google Flow requires browser interaction for video (but ChatGPT is headless)
     if (TEST_CONFIG.videoProvider === 'google-flow') {
-      log.warn(`📝 Google Flow video generation requires browser interaction`);
-      log.warn(`   Please follow prompts in the browser window to generate video`);
-      log.info(`   Expected time: 2-10 minutes depending on content complexity`);
+      log.info(`📝 Google Flow video generation via browser automation`);
       
-      // Format: Google Flow endpoint expects segments array for /generate-video endpoint
+      // Format matches /generate-video endpoint expectations
       const videoSegments = [
-        videoPrompt,  // Single segment (could be split into multiple)
+        videoPrompt,  // Single segment (could be split based on duration)
       ];
 
       const videoPayload = {
-        duration: 30,
-        scenario: 'fashion',
+        duration: TEST_CONFIG.videoDuration,
+        scenario: TEST_CONFIG.videoScenario,
         segments: videoSegments,
-        videoProvider: 'google-flow'
+        videoProvider: 'google-flow',
+        headless: TEST_CONFIG.headless || false  // Pass headless mode config
       };
 
       log.info(`Sending request to Google Flow video endpoint...`);
+      log.info(`Configuration: ${JSON.stringify({ 
+        duration: TEST_CONFIG.videoDuration,
+        scenario: TEST_CONFIG.videoScenario,
+        headless: TEST_CONFIG.headless
+      })}`);
+      
       const response = await axios.post(
         `${API_BASE_V1}/browser-automation/generate-video`,
         videoPayload,
         {
-          timeout: TIMEOUT,  // 10 min timeout
+          timeout: TIMEOUT,
           maxRedirects: 5
         }
       );
@@ -392,7 +438,8 @@ async function testStep4GenerateVideos(analysisData, generatedImage) {
       testResults.steps['video-generation'].result = {
         videoUrl: videoUrl,
         provider: 'google-flow',
-        duration: videoData.duration || 30,
+        duration: TEST_CONFIG.videoDuration,
+        scenario: TEST_CONFIG.videoScenario,
         status: videoData.status || 'generated'
       };
 
@@ -400,18 +447,19 @@ async function testStep4GenerateVideos(analysisData, generatedImage) {
       if (videoUrl && videoUrl !== 'Video generation started...') {
         log.info(`Video URL: ${videoUrl.substring(0, 100)}...`);
       }
-      log.info(`Full response keys: ${Object.keys(videoData).join(', ')}`);
+      log.info(`Response keys: ${Object.keys(videoData).join(', ')}`);
 
       return videoData;
     }
 
-    // Fallback for other providers
+    // Fallback for other providers (Grok, etc.)
     const videoPayload = {
       videoProvider: TEST_CONFIG.videoProvider,
       prompt: videoPrompt,
-      duration: 30,
+      duration: TEST_CONFIG.videoDuration,
+      scenario: TEST_CONFIG.videoScenario,
       quality: 'high',
-      aspectRatio: '16:9'
+      aspectRatio: TEST_CONFIG.settings.aspectRatio || '16:9'
     };
 
     const response = await axios.post(
@@ -426,6 +474,8 @@ async function testStep4GenerateVideos(analysisData, generatedImage) {
     
     log.success(`Video generated successfully!`);
     log.info(`Provider: ${videoData.provider || TEST_CONFIG.videoProvider}`);
+    log.info(`Duration: ${TEST_CONFIG.videoDuration}s`);
+    log.info(`Scenario: ${TEST_CONFIG.videoScenario}`);
 
     return videoData;
 
@@ -444,7 +494,7 @@ async function testStep4GenerateVideos(analysisData, generatedImage) {
 }
 
 async function printSummary() {
-  log.section('TEST SUMMARY');
+  log.section('TEST SUMMARY - 1-Click Creator Full Flow');
   
   let allSuccess = true;
   const totalDuration = Date.now() - testResults.startTime;
@@ -463,41 +513,57 @@ async function printSummary() {
       console.log(`  └─ Error: ${stepData.error}`);
       allSuccess = false;
     }
-    if (stepData.result) {
-      console.log(`  └─ Result: ${JSON.stringify(stepData.result).substring(0, 100)}...`);
+    
+    // Print relevant configuration for each step
+    if (stepName === 'image-generation' && stepData.imageCount) {
+      console.log(`  └─ Generated: ${stepData.imageCount} images (DESIRED_OUTPUT_COUNT)`);
+    }
+    if (stepName === 'video-generation' && stepData.videoDuration) {
+      console.log(`  └─ Config: ${stepData.videoDuration}s duration, ${stepData.videoScenario} scenario`);
     }
   }
 
   console.log('');
   console.log(`⏱️  Total Time: ${(totalDuration / 1000).toFixed(2)}s`);
   
+  // Summary with enhanced messaging
   if (testResults.steps['video-generation']?.status === 'completed') {
-    console.log(`\n${colors.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`✅ FULL FLOW TEST PASSED - All steps completed!`);
-    console.log(`✓ ChatGPT Analysis`);
-    console.log(`✓ Recommendations Applied`);
-    console.log(`✓ Image Generated`);
-    console.log(`✓ Videos Generated`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    console.log(`\n${colors.green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`✅ FULL END-TO-END TEST PASSED - All steps completed!`);
+    console.log(`\n✓ Step 1: ChatGPT Analysis (Headless Mode)`);
+    console.log(`✓ Step 2: Recommendations Applied`);
+    console.log(`✓ Step 3: ${TEST_CONFIG.quantity} Images Generated (${TEST_CONFIG.imageProvider})`);
+    console.log(`✓ Step 4: ${testResults.steps['video-generation']?.videoDuration || 20}s Videos Generated (${TEST_CONFIG.videoProvider})`);
+    console.log(`\n📝 Configuration Summary:`);
+    console.log(`   • Analysis: ChatGPT Browser (Headless: ${TEST_CONFIG.headless ? 'Enabled' : 'Disabled'})`);
+    console.log(`   • Images: ${TEST_CONFIG.quantity} × ${TEST_CONFIG.imageProvider}`);
+    console.log(`   • Videos: ${TEST_CONFIG.videoDuration}s × ${TEST_CONFIG.videoScenario} scenario`);
+    console.log(`\n🎯 All defaults match OneClickCreatorPage v2 configuration`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
   } else if (testResults.steps['image-generation']?.status === 'completed') {
-    console.log(`\n${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`⚠️  PARTIAL SUCCESS - Up to image generation completed`);
+    console.log(`\n${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`⚠️  PARTIAL SUCCESS - Image generation completed`);
     console.log(`✓ ChatGPT Analysis`);
     console.log(`✓ Recommendations Applied`);
-    console.log(`✓ Image Generated`);
-    console.log(`✗ Videos - check logs for details`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    console.log(`✓ ${TEST_CONFIG.quantity} Images Generated`);
+    console.log(`✗ Videos - check logs for details (optional step)`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
   } else if (testResults.steps['analysis']?.status === 'completed') {
-    console.log(`\n${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`\n${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`⚠️  PARTIAL SUCCESS - Analysis completed`);
     console.log(`✓ ChatGPT Analysis`);
     console.log(`✗ Image generation - check logs for details`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
   } else {
-    console.log(`\n${colors.red}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`\n${colors.red}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`❌ TEST FAILED - Check errors above`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
   }
+  
+  console.log('\n💡 Tips:');
+  console.log('   • For headless mode issues, check ChatGPT service logs');
+  console.log('   • Video generation time depends on content complexity (2-10 min)');
+  console.log('   • All configurations align with OneClickCreatorPage v2 defaults');
 }
 
 // ============================================================

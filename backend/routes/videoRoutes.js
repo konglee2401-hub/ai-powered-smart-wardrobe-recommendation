@@ -39,20 +39,26 @@ const upload = multer({
 /**
  * POST /api/videos/generate
  * Generate video with multi-stage AI pipeline
+ * 💫 UPDATED: Supports multiple scenario-specific images
  */
 router.post(
   '/generate',
   protect,
   upload.fields([
-    { name: 'character_image', maxCount: 1 },
-    { name: 'reference_media', maxCount: 1 }
+    { name: 'character_wearing_outfit', maxCount: 1 },      // 💫 NEW: Required - Character in outfit
+    { name: 'character_holding_product', maxCount: 1 },     // 💫 NEW: Optional - Character holding/presenting product
+    { name: 'product_reference', maxCount: 1 },              // 💫 NEW: Optional - Product close-up reference
+    { name: 'reference_media', maxCount: 1 }                 // Keep for backward compatibility
   ]),
   async (req, res) => {
     try {
-      if (!req.files || !req.files.character_image) {
+      // 💫 UPDATED: Check for character_wearing_outfit (new naming) OR character_image (old naming)
+      const characterImage = req.files?.character_wearing_outfit?.[0] || req.files?.character_image?.[0];
+      
+      if (!req.files || !characterImage) {
         return res.status(400).json({
           success: false,
-          message: 'Character image is required'
+          message: 'Character wearing outfit image is required'
         });
       }
 
@@ -65,15 +71,31 @@ router.post(
 
       const orchestrator = new VideoGenerationOrchestrator();
 
-      const referenceFile = req.files.reference_media?.[0];
+      // 💫 NEW: Handle multiple optional images
+      const characterHoldingFile = req.files?.character_holding_product?.[0];
+      const productReferenceFile = req.files?.product_reference?.[0];
+      const referenceMediaFile = req.files?.reference_media?.[0];
+
+      // Determine reference media type
+      const referenceFile = referenceMediaFile || productReferenceFile;
       const referenceMediaType = referenceFile?.mimetype.startsWith('video/') ? 'video' : 'image';
+
+      // 💫 NEW: Build image paths object for scenario-specific image analysis
+      const imagePaths = {
+        characterWearingOutfit: characterImage.path,
+        characterHoldingProduct: characterHoldingFile?.path || null,
+        productReference: productReferenceFile?.path || null
+      };
 
       const result = await orchestrator.generateVideo({
         userId: req.user._id,
-        characterImagePath: req.files.character_image[0].path,
+        characterImagePath: characterImage.path,  // Keep for backward compatibility
+        imagePaths: imagePaths,                    // 💫 NEW: New structured image paths
         referenceMediaPath: referenceFile?.path,
         referenceMediaType: referenceMediaType,
         userPrompt: req.body.prompt,
+        scenario: req.body.scenario,               // 💫 NEW: Video scenario for prompt template selection
+        productName: req.body.productName,         // 💫 NEW: For detailed product analysis
         stylePreferences: req.body.style_preferences ? JSON.parse(req.body.style_preferences) : {},
         targetModel: req.body.model || process.env.VIDEO_MODEL || 'runway'
       });
@@ -511,5 +533,166 @@ Format: Segment 1: [prompt] | Segment 2: [prompt] | Segment 3: [prompt]`;
     });
   }
 });
+
+/**
+ * POST /api/videos/generate-scenario-prompts
+ * 💫 NEW: Generate scenario-specific video prompts with image analysis
+ * Accepts up to 3 images and uses scenario-specific ChatGPT templates
+ */
+router.post(
+  '/generate-scenario-prompts',
+  protect,
+  upload.fields([
+    { name: 'character_wearing_outfit', maxCount: 1 },
+    { name: 'character_holding_product', maxCount: 1 },
+    { name: 'product_reference', maxCount: 1 }
+  ]),
+  async (req, res) => {
+    try {
+      const {
+        scenario = 'product-intro',
+        duration = 20,
+        segments = 3,
+        productName = 'product',
+        productFeatures = [],
+        additionalDetails = ''
+      } = req.body;
+
+      // 💫 Validate scenario
+      const validScenarios = ['dancing', 'product-intro', 'lifestyle', 'lip-sync', 'fashion-walk', 'transition'];
+      if (!validScenarios.includes(scenario)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid scenario. Must be one of: ' + validScenarios.join(', ')
+        });
+      }
+
+      // 💫 Check required image based on scenario
+      const characterWearingFile = req.files?.character_wearing_outfit?.[0];
+      if (!characterWearingFile) {
+        return res.status(400).json({
+          success: false,
+          message: 'Character wearing outfit image is required'
+        });
+      }
+
+      // Import scenario prompt templates
+      const { getScenarioPromptTemplate } = await import('../utils/scenarioPromptTemplates.js');
+
+      try {
+        const ChatGPTService = (await import('../services/browser/chatgptService.js')).default;
+        const chatgptService = new ChatGPTService({ headless: false });
+
+        console.log(`\n🤖 Generating ${scenario} video prompts with scenario-specific template and image analysis...`);
+        await chatgptService.initialize();
+
+        // 💫 Generate scenario-specific prompt with image references
+        const promptParams = {
+          duration: parseInt(duration),
+          segments: parseInt(segments),
+          characterWearingImage: characterWearingFile?.path,
+          characterHoldingImage: req.files?.character_holding_product?.[0]?.path || null,
+          productReferenceImage: req.files?.product_reference?.[0]?.path || null,
+          productName: productName,
+          productFeatures: typeof productFeatures === 'string' ? JSON.parse(productFeatures) : productFeatures,
+          additionalDetails: additionalDetails
+        };
+
+        const scenarioPrompt = getScenarioPromptTemplate(scenario, promptParams);
+
+        // 💫 Send prompt to ChatGPT
+        const response = await chatgptService.sendMessage(scenarioPrompt);
+        const responseText = typeof response === 'string' ? response : (response.text || JSON.stringify(response));
+
+        // 💫 Parse response to extract segments
+        const segmentPrompts = parseScenarioResponse(responseText, parseInt(segments));
+
+        await chatgptService.close();
+
+        res.json({
+          success: true,
+          data: {
+            prompts: segmentPrompts,
+            scenario,
+            duration: parseInt(duration),
+            segments: parseInt(segments),
+            images: {
+              characterWearing: !!characterWearingFile,
+              characterHolding: !!req.files?.character_holding_product?.[0],
+              productReference: !!req.files?.product_reference?.[0]
+            },
+            provider: 'chatgpt-browser-with-images'
+          },
+          message: `${scenario} video prompts generated with image analysis`
+        });
+
+      } catch (chatgptError) {
+        console.error('ChatGPT analysis error:', chatgptError.message);
+        
+        // 💫 Fallback to template prompts if ChatGPT fails
+        const templatePrompts = generateTemplatePrompts(scenario, parseInt(segments), Math.round(parseInt(duration) / parseInt(segments)), 'professional');
+
+        res.json({
+          success: true,
+          data: {
+            prompts: templatePrompts,
+            scenario,
+            duration: parseInt(duration),
+            segments: parseInt(segments),
+            images: {
+              characterWearing: !!characterWearingFile,
+              characterHolding: !!req.files?.character_holding_product?.[0],
+              productReference: !!req.files?.product_reference?.[0]
+            },
+            isTemplate: true,
+            error: chatgptError.message
+          },
+          message: 'Using template prompts (ChatGPT analysis unavailable)'
+        });
+      }
+
+    } catch (error) {
+      console.error('Scenario prompt generation error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+);
+
+/**
+ * Helper: Parse ChatGPT response for scenario prompts
+ */
+function parseScenarioResponse(responseText, expectedSegments) {
+  // Try to extract segments between markers
+  let segments = [];
+
+  // Try to split by "Segment X:" pattern
+  const segmentMatches = responseText.match(/Segment\s*\d+[\s\:]*([^\n]*(?:\n(?!Segment\s*\d+)[^\n]*)*)/gi);
+  
+  if (segmentMatches && segmentMatches.length > 0) {
+    segments = segmentMatches.map(match => 
+      match.replace(/^Segment\s*\d+[\s\:]*/i, '').trim()
+    );
+  }
+
+  // If no segments found, try to split by double newlines
+  if (segments.length === 0) {
+    const parts = responseText
+      .split(/\n\n+/)
+      .map(p => p.trim())
+      .filter(p => p.length > 10);
+    
+    segments = parts.slice(0, expectedSegments);
+  }
+
+  // Pad with default prompts if needed
+  while (segments.length < expectedSegments) {
+    segments.push(`Detailed segment ${segments.length + 1} with focused camera work and professional presentation`);
+  }
+
+  return segments.slice(0, expectedSegments);
+}
 
 export default router;

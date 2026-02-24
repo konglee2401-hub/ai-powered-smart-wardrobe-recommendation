@@ -45,7 +45,7 @@ axiosInstance.interceptors.request.use((config) => {
  */
 export async function enhancePrompt(prompt, options = {}) {
   try {
-    const response = await axiosInstance.post('/api/prompts/enhance', {
+    const response = await axiosInstance.post('/prompts/enhance', {
       prompt,
       options,
     });
@@ -63,7 +63,7 @@ export async function enhancePrompt(prompt, options = {}) {
  */
 export async function analyzePromptQuality(prompt) {
   try {
-    const response = await axiosInstance.post('/api/prompts/analyze', {
+    const response = await axiosInstance.post('/prompts/analyze', {
       prompt,
     });
     return response.data;
@@ -81,7 +81,7 @@ export async function analyzePromptQuality(prompt) {
  */
 export async function generatePromptVariations(prompt, count = 3) {
   try {
-    const response = await axiosInstance.post('/api/prompts/variations', {
+    const response = await axiosInstance.post('/prompts/variations', {
       prompt,
       count,
     });
@@ -99,7 +99,7 @@ export async function generatePromptVariations(prompt, count = 3) {
  */
 export async function checkPromptSafety(prompt) {
   try {
-    const response = await axiosInstance.post('/api/prompts/check-safety', {
+    const response = await axiosInstance.post('/prompts/check-safety', {
       prompt,
     });
     return response.data;
@@ -117,7 +117,7 @@ export async function checkPromptSafety(prompt) {
  */
 export async function optimizePrompt(prompt, type = 'image') {
   try {
-    const response = await axiosInstance.post('/api/prompts/optimize', {
+    const response = await axiosInstance.post('/prompts/optimize', {
       prompt,
       type,
     });
@@ -136,7 +136,7 @@ export async function optimizePrompt(prompt, type = 'image') {
  */
 export async function fullEnhancement(prompt, options = {}) {
   try {
-    const response = await axiosInstance.post('/api/prompts/full-enhancement', {
+    const response = await axiosInstance.post('/prompts/full-enhancement', {
       prompt,
       options: {
         generateVariations: options.generateVariations ?? true,
@@ -159,7 +159,7 @@ export async function fullEnhancement(prompt, options = {}) {
  */
 export async function getPromptHistory(params = {}) {
   try {
-    const response = await axiosInstance.get('/api/prompts/history', {
+    const response = await axiosInstance.get('/prompts/history', {
       params: {
         limit: params.limit || 20,
         page: params.page || 1,

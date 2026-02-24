@@ -7,7 +7,14 @@ import React, { useState } from 'react';
 import { Upload, X, Info } from 'lucide-react';
 import AdvancedGenerationSettings from './AdvancedGenerationSettings';
 
-// All available aspect ratios
+// 💫 FIXED: Image Generation supports only 2 aspect ratios (9:16 and 16:9)
+// Both Grok and Google Flow use the same aspect ratio options
+const IMAGE_GEN_ASPECT_RATIOS = [
+  { value: '9:16', label: 'Portrait', icon: '📱' },
+  { value: '16:9', label: 'Landscape', icon: '📺' },
+];
+
+// All available aspect ratios (reserved for future use)
 const ALL_ASPECT_RATIOS = [
   { value: '1:1', label: 'Square', icon: '⬜' },
   { value: '16:9', label: 'Landscape', icon: '📺' },
@@ -62,11 +69,9 @@ export default function GenerationOptions({
   const [dragOver, setDragOver] = useState(false);
 
   // Filter aspect ratios based on provider
+  // 💫 FIXED: Always use only 2 valid aspect ratios for Image Generation (9:16 and 16:9)
   const getAvailableAspectRatios = () => {
-    if (imageGenProvider === 'google-flow') {
-      return GOOGLE_FLOW_ASPECT_RATIOS;
-    }
-    return ALL_ASPECT_RATIOS;
+    return IMAGE_GEN_ASPECT_RATIOS;
   };
 
   const handleDragOver = (e) => {

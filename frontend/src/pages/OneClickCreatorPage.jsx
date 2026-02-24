@@ -11,9 +11,17 @@ import {
   AlertCircle, CheckCircle, Clock, FileText, Target, Wand2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { browserAutomationAPI, unifiedFlowAPI, aiOptionsAPI } from '../services/api';
+import { api } from '../services/api';
 import promptTemplateService from '../services/promptTemplateService';
-import { calculateVideoCount, VIDEO_PROVIDER_LIMITS, getMaxDurationForProvider } from '../constants/videoGeneration';
+import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
+import { 
+  calculateVideoCount, 
+  VIDEO_PROVIDER_LIMITS, 
+  getMaxDurationForProvider,
+  VIDEO_SCENARIOS,
+  VIDEO_DURATIONS,
+  getScenarioByValue
+} from '../constants/videoGeneration';
 
 // Constants - Use cases and focus options from ImageGenerationPage
 const USE_CASES = [
@@ -44,6 +52,9 @@ const ASPECT_RATIOS = [
   { id: '16:9', label: '16:9' },
   { id: '9:16', label: '9:16' },
 ];
+
+// 📊 Image Generation Configuration
+const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per session
 
 // Workflow steps
 const WORKFLOW_STEPS = [
@@ -288,8 +299,10 @@ export default function OneClickCreatorPage() {
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
   const [imageProvider, setImageProvider] = useState('google-flow');
-  const [videoProvider, setVideoProvider] = useState('grok');
-  const [quantity, setQuantity] = useState(2);
+  const [videoProvider, setVideoProvider] = useState('google-flow');  // Aligned with image provider
+  const [videoScenario, setVideoScenario] = useState('product-intro');  // Default scenario
+  const [videoDuration, setVideoDuration] = useState(20);  // Default 20 seconds
+  const [quantity, setQuantity] = useState(DESIRED_OUTPUT_COUNT);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isHeadless, setIsHeadless] = useState(true);
 
@@ -468,7 +481,7 @@ export default function OneClickCreatorPage() {
               characterImageBase64: charBase64,
               productImageBase64: prodBase64,
               aspectRatio,
-              imageCount: 1,
+              imageCount: DESIRED_OUTPUT_COUNT,
               grokConversationId: analysisResult?.grokConversationId,
               characterDescription: analysisResult?.characterDescription,
             }
@@ -502,26 +515,39 @@ export default function OneClickCreatorPage() {
         console.log(`🎬 [S${sessionId}] Step 4: Generate Videos`);
         updateSessionStep(sessionId, 'generate-videos', { inProgress: true });
 
-        // Calculate video count and duration based on provider
-        const videosCount = calculateVideoCount(videoProvider, 120);
+        // Get video settings from state
+        const scenario = getScenarioByValue(videoScenario);
         const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
-        const videoDuration = maxPerVideo;
+        const videosCount = calculateVideoCount(videoProvider, videoDuration);
         const videos = [];
+
+        addLog(sessionId, `📹 Video settings: ${videoDuration}s total, ${videosCount} × ${maxPerVideo}s clips`);
+        addLog(sessionId, `Scenario: ${scenario?.label || 'Unknown'} (${scenario?.description || ''})`);
 
         for (let v = 0; v < videosCount; v++) {
           try {
             addLog(sessionId, `Generating video ${v + 1}/${videosCount}...`);
 
-            // Generate video prompt using templates (with fallback)
-            const videoPrompt = await generateVideoPromptFromTemplate(
-              useCase,
-              productFocus,
-              recommendedOptions,
-              videoDuration,
-              sessionId,
-              addLog
-            );
+            // Use scenario's script template for video prompts
+            let videoPrompt = '';
+            
+            if (scenario && scenario.scriptTemplate && scenario.scriptTemplate[v]) {
+              // Use template from scenario
+              videoPrompt = scenario.scriptTemplate[v];
+              addLog(sessionId, `Using scenario template: "${videoPrompt}"`);
+            } else {
+              // Fallback: Generate prompt using template service
+              videoPrompt = await generateVideoPromptFromTemplate(
+                useCase,
+                productFocus,
+                recommendedOptions,
+                videoDuration,
+                sessionId,
+                addLog
+              );
+            }
 
+            // Generate video with proper settings
             const videoResponse = await browserAutomationAPI.generateVideoWithProvider({
               videoProvider,
               prompt: videoPrompt,
@@ -736,6 +762,20 @@ export default function OneClickCreatorPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Video Settings Info (Collapsed by default) */}
+            <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-purple-300 mb-2 flex items-center gap-2">
+                <Video className="w-4 h-4" />
+                Video Generation (Auto)
+              </h3>
+              <p className="text-xs text-purple-200 mb-2">
+                {videoDuration}s video with scenario: <span className="font-bold">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
+              </p>
+              <p className="text-xs text-purple-200">
+                {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
+              </p>
             </div>
           </div>
 

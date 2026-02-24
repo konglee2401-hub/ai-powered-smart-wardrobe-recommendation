@@ -46,6 +46,7 @@ export default function Navbar() {
   const advancedToolsNavItems = [
     { path: '/prompt-builder', label: 'Prompt Builder', icon: FileText },
     { path: '/prompt-templates', label: 'Prompt Templates', icon: BookOpen },
+    { path: '/video-script-generator', label: 'Video Script Generator', icon: Film },
     { path: '/tester', label: 'Provider Tester', icon: Zap },
     { path: '/performance', label: 'Performance', icon: Gauge },
     { path: '/video-production', label: 'Video Production', icon: Film },

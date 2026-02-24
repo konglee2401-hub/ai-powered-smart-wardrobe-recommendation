@@ -13,16 +13,22 @@ import {
 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { browserAutomationAPI } from '../services/api';
+import { api, browserAutomationAPI } from '../services/api';
+import GalleryPicker from '../components/GalleryPicker';
+import ScenarioImageUploadComponent from '../components/ScenarioImageUploadComponent';  // 💫 NEW
+import driveAPI from '../services/driveAPI';
 import { 
   VIDEO_DURATIONS, 
   VIDEO_SCENARIOS,
   VIDEO_PROVIDER_LIMITS,
   getAvailableDurations,
   getMaxDurationForProvider,
-  calculateVideoCount
+  calculateVideoCount,
+  calculateSegmentCount,  // 💫 NEW: Dynamic segment calculation
+  getSegmentDurationForProvider  // 💫 NEW: Get segment duration per provider
 } from '../constants/videoGeneration';
 import VideoPromptStepWithTemplates from '../components/VideoPromptStepWithTemplates';
+import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 
 const STEPS = [
   { id: 1, name: 'Settings', icon: SettingsIcon },
@@ -37,7 +43,21 @@ const VIDEO_PROVIDERS = [
 ];
 
 // Step 1: Settings Component
-function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selectedScenario, onScenarioChange, onImageChange, videoProvider, onVideoProviderChange }) {
+// 💫 UPDATED: Added scenarioImages parameter for multiple image uploads
+function VideoSettingsStep({ 
+  onNext, 
+  selectedDuration, 
+  onDurationChange, 
+  selectedScenario, 
+  onScenarioChange, 
+  onImageChange,
+  scenarioImages = {},  // 💫 NEW: Multiple scenario-specific images
+  onScenarioImagesChange = () => {},  // 💫 NEW: Handler for scenario images
+  videoProvider, 
+  onVideoProviderChange, 
+  selectedAspectRatio, 
+  onAspectRatioChange 
+}) {
   const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
   
   // Get available durations based on provider
@@ -84,6 +104,39 @@ function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selecte
           <span className="text-gray-400"> per video • </span>
           <span className="font-semibold text-white">{maxDuration}s</span>
           <span className="text-gray-400"> total</span>
+        </div>
+      </div>
+
+      {/* 💫 NEW: Aspect Ratio Selection */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <Play className="w-4 h-4 text-blue-400" />
+          Aspect Ratio
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onAspectRatioChange('16:9')}
+            className={`p-3 rounded-lg border-2 transition-all text-center ${
+              selectedAspectRatio === '16:9'
+                ? 'border-blue-500 bg-blue-600/20 text-white'
+                : 'border-gray-700 hover:border-gray-600 text-gray-300'
+            }`}
+          >
+            <div className="text-sm font-semibold">📺 16:9</div>
+            <div className="text-xs text-gray-400 mt-1">Widescreen</div>
+          </button>
+
+          <button
+            onClick={() => onAspectRatioChange('9:16')}
+            className={`p-3 rounded-lg border-2 transition-all text-center ${
+              selectedAspectRatio === '9:16'
+                ? 'border-blue-500 bg-blue-600/20 text-white'
+                : 'border-gray-700 hover:border-gray-600 text-gray-300'
+            }`}
+          >
+            <div className="text-sm font-semibold">📱 9:16</div>
+            <div className="text-xs text-gray-400 mt-1">Portrait</div>
+          </button>
         </div>
       </div>
 
@@ -142,43 +195,12 @@ function VideoSettingsStep({ onNext, selectedDuration, onDurationChange, selecte
         </div>
       </div>
 
-      {/* Scenario Details */}
-      {scenario && (
-        <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-700/50">
-          <h4 className="text-xs font-semibold text-blue-300 mb-3">📝 Script Template for {scenario.label}</h4>
-          <div className="space-y-2">
-            {scenario.scriptTemplate.map((template, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-xs text-gray-300">
-                <span className="text-blue-400 font-bold">Seg {idx + 1}:</span>
-                <span>{template}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Upload File Input (Hidden) */}
-      <input
-        type="file"
-        accept="image/*"
-        id="video-image-upload"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              onImageChange(evt.target?.result);
-            };
-            reader.readAsDataURL(file);
-          }
-        }}
-      />
     </div>
   );
 }
 
 // Step 2: Prompt Builder Component
+// 💫 UPDATED: Added scenarioImages parameter for scenario-specific prompt generation
 function VideoPromptStep({ 
   onNext, 
   duration, 
@@ -187,11 +209,12 @@ function VideoPromptStep({
   onPromptsChange,
   selectedImage,
   isGenerating,
-  videoProvider
+  videoProvider,
+  scenarioImages = {}  // 💫 NEW: Multiple scenario-specific images
 }) {
   const scen = VIDEO_SCENARIOS.find(s => s.value === scenario);
-  const segments = VIDEO_DURATIONS.find(d => d.value === duration)?.segments || 3;
-  const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
+  const segments = calculateSegmentCount(videoProvider, duration);  // 💫 FIXED: Dynamic based on provider
+  const maxPerVideo = getSegmentDurationForProvider(videoProvider);  // 💫 FIXED: Get correct duration per provider
   const [isGeneratingPrompts, setIsGeneratingPrompts] = React.useState(false);
   const [promptError, setPromptError] = React.useState(null);
 
@@ -208,32 +231,68 @@ function VideoPromptStep({
     }
   };
 
-  // Generate prompts using ChatGPT browser service (default)
+  // 💫 UPDATED: Generate scenario-specific prompts with image analysis
   const handleGeneratePromptsFromChatGPT = async () => {
     setIsGeneratingPrompts(true);
     setPromptError(null);
     
     try {
-      const response = await browserAutomationAPI.generateVideoPromptsChatGPT(
-        duration,
-        scenario,
-        segments,
-        'professional',
-        videoProvider,
-        null,
-        '16:9'
-      );
+      // 💫 NEW: Use scenario-specific prompt generation endpoint with image uploads
+      const formData = new FormData();
+      formData.append('scenario', scenario);
+      formData.append('duration', duration);
+      formData.append('segments', segments);
+      formData.append('productName', scenarioImages?.productName || 'Product');
+      formData.append('additionalDetails', scenarioImages?.additionalDetails || '');
+      
+      // 💫 Add uploaded images (Form Data handles files)
+      if (scenarioImages?.characterWearing?.file) {
+        formData.append('character_wearing_outfit', scenarioImages.characterWearing.file);
+      }
+      if (scenarioImages?.characterHolding?.file) {
+        formData.append('character_holding_product', scenarioImages.characterHolding.file);
+      }
+      if (scenarioImages?.productReference?.file) {
+        formData.append('product_reference', scenarioImages.productReference.file);
+      }
+
+      // 💫 Call new endpoint for scenario-based prompt generation
+      const response = await api.post('/videos/generate-scenario-prompts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
 
       if (response.success && response.data.prompts) {
         onPromptsChange(response.data.prompts);
       } else {
-        setPromptError('Failed to generate prompts. Using template instead.');
+        setPromptError('Failed to generate scenario prompts. Using template instead.');
         handleAutoFill();
       }
     } catch (error) {
-      console.error('Error generating prompts:', error);
-      setPromptError('Could not generate prompts. Using template instead.');
-      handleAutoFill();
+      console.error('Error generating scenario prompts:', error);
+      
+      // Fallback: Try old endpoint if scenario-specific fails
+      try {
+        const response = await browserAutomationAPI.generateVideoPromptsChatGPT(
+          duration,
+          scenario,
+          segments,
+          'professional',
+          videoProvider,
+          null,
+          '16:9'
+        );
+
+        if (response.success && response.data.prompts) {
+          onPromptsChange(response.data.prompts);
+        } else {
+          setPromptError('Failed to generate prompts. Using template instead.');
+          handleAutoFill();
+        }
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError);
+        setPromptError('Could not generate prompts. Using template instead.');
+        handleAutoFill();
+      }
     } finally {
       setIsGeneratingPrompts(false);
     }
@@ -246,8 +305,8 @@ function VideoPromptStep({
         <p className="text-xs text-blue-300">
           ✨ Each segment is ~{maxPerVideo} seconds. Describe the action, camera movement, and details for each segment. 
           {videoProvider === 'grok' 
-            ? ' Grok will generate a smooth transition between segments.'
-            : ' Google Flow will generate high-quality video clips.'}
+            ? ' Grok will generate videos with smooth transitions between segments.'
+            : ' Google Flow Veo will generate high-quality video clips optimized for each segment.'}
         </p>
       </div>
 
@@ -333,14 +392,48 @@ function VideoGenerationStep({
   selectedImage,
   onBack,
   isGenerating,
-  onGenerate
+  onGenerate,
+  videoProvider,  // 💫 NEW: Added parameter
+  generatedVideos = [],  // 💫 NEW: Display generated videos
+  uploadToDrive = false,  // 💫 NEW: Drive upload flag
+  onUploadToDriveChange = () => {}  // 💫 NEW: Drive upload handler
 }) {
-  const segments = VIDEO_DURATIONS.find(d => d.value === duration)?.segments || 3;
+  const segments = calculateSegmentCount(videoProvider, duration);  // 💫 FIXED: Dynamic based on provider
   const scen = VIDEO_SCENARIOS.find(s => s.value === scenario);
   const [expandedSegment, setExpandedSegment] = useState(0);
 
   return (
     <div className="space-y-4">
+      {/* 💫 NEW: Show generated videos if available */}
+      {generatedVideos.length > 0 && (
+        <div className="bg-green-900/20 rounded-lg p-4 border border-green-700/50">
+          <h3 className="text-sm font-semibold text-green-300 mb-3">✅ Generated Video Segments</h3>
+          <div className="space-y-2">
+            {generatedVideos.map((video) => (
+              <div key={video.segmentNum} className="bg-gray-800/50 rounded p-3 border border-green-700/30 flex items-center justify-between">
+                <div className="text-xs">
+                  <div className="text-green-300 font-semibold">
+                    📹 Segment {video.segmentNum}: {video.filename}
+                  </div>
+                  <div className="text-gray-400 mt-1">{video.prompt.substring(0, 60)}...</div>
+                </div>
+                <a
+                  href={video.url}
+                  download
+                  className="flex items-center gap-1 px-3 py-1 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white transition"
+                >
+                  <Download className="w-3 h-3" />
+                  Download
+                </a>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-green-300">
+            ✅ {generatedVideos.length} of {segments} videos ready | All files can be downloaded and merged
+          </div>
+        </div>
+      )}
+
       {/* Video Settings Summary */}
       <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-700/50">
         <h3 className="text-sm font-semibold text-purple-300 mb-3">📹 Video Configuration</h3>
@@ -356,16 +449,16 @@ function VideoGenerationStep({
         </div>
       </div>
 
-      {/* Source Image */}
+      {/* Source Image - FIXED: Changed object-cover to object-contain for proper fit */}
       {selectedImage && (
         <div className="space-y-2">
           <label className="text-xs font-semibold text-gray-400">Source Image</label>
           <div className="relative bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
-            <div className="aspect-video flex items-center justify-center bg-gray-950">
+            <div className="aspect-square flex items-center justify-center bg-gray-950">
               <img
                 src={selectedImage}
                 alt="Source"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </div>
           </div>
@@ -379,31 +472,51 @@ function VideoGenerationStep({
           Video Script ({segments} segments)
         </h3>
         <div className="space-y-2">
-          {prompts.map((prompt, idx) => (
-            <div key={idx} className="border border-gray-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setExpandedSegment(expandedSegment === idx ? -1 : idx)}
-                className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 transition flex items-center justify-between text-xs font-medium text-white"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-purple-400 font-bold">Seg {idx + 1}</span>
-                  <span className="text-gray-400">{prompt.substring(0, 40)}...</span>
-                </div>
-                {expandedSegment === idx ? (
-                  <ChevronUp className="w-3 h-3" />
-                ) : (
-                  <ChevronDown className="w-3 h-3" />
+          {prompts.map((prompt, idx) => {
+            // Handle both string and object formats
+            const scriptText = typeof prompt === 'string' ? prompt : (prompt?.script || '');
+            return (
+              <div key={idx} className="border border-gray-700 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setExpandedSegment(expandedSegment === idx ? -1 : idx)}
+                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 transition flex items-center justify-between text-xs font-medium text-white"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-purple-400 font-bold">Seg {idx + 1}</span>
+                    <span className="text-gray-400">{scriptText.substring(0, 40)}...</span>
+                  </div>
+                  {expandedSegment === idx ? (
+                    <ChevronUp className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
+                </button>
+                
+                {expandedSegment === idx && (
+                  <div className="bg-gray-800 p-3 border-t border-gray-700">
+                    <p className="text-xs text-gray-300 leading-relaxed">{scriptText}</p>
+                  </div>
                 )}
-              </button>
-              
-              {expandedSegment === idx && (
-                <div className="bg-gray-800 p-3 border-t border-gray-700">
-                  <p className="text-xs text-gray-300 leading-relaxed">{prompt}</p>
-                </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* 💫 NEW: Google Drive Upload Option */}
+      <div className="bg-gradient-to-r from-blue-900/50 to-cyan-900/50 rounded-lg p-3 border border-blue-700">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={uploadToDrive}
+            onChange={(e) => onUploadToDriveChange(e.target.checked)}
+            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600"
+          />
+          <div>
+            <div className="text-xs font-semibold text-white">☁️ Upload Generated Videos to Google Drive</div>
+            <div className="text-xs text-gray-300">Save videos to Drive: Uploaded → App → Videos</div>
+          </div>
+        </label>
       </div>
 
       {/* Generation Info */}
@@ -424,11 +537,33 @@ export default function VideoGenerationPage() {
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [selectedScenario, setSelectedScenario] = useState('product-intro');
   const [videoProvider, setVideoProvider] = useState('grok');  // 💫 NEW: Video provider selection
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9'); // 💫 NEW: Aspect ratio (16:9 or 9:16)
   const [prompts, setPrompts] = useState(['', '', '']);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showFinalPrompt, setShowFinalPrompt] = useState(true);
   const [currentImage, setCurrentImage] = useState(null);
+  const [promptType, setPromptType] = useState('enhanced'); // 'template' or 'enhanced' (ChatGPT)
+  const [selectedSegment, setSelectedSegment] = useState(null); // ✨ NEW: For ChatGPT segment detail view
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(-1); // ✨ NEW: Selected segment index
+  const [generatedVideos, setGeneratedVideos] = useState([]); // 💫 NEW: Store generated video segments
+  const [generated, setGenerated] = useState(false); // 💫 NEW: Track if videos were generated
   const imageInputRef = useRef(null);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false); // 💫 NEW: Gallery picker
+  const [uploadToDrive, setUploadToDrive] = useState(false); // 💫 NEW: Drive upload option
+  const [driveUploadStatus, setDriveUploadStatus] = useState(null); // 💫 NEW: Drive upload status
+  const [scenarioImages, setScenarioImages] = useState({  // 💫 NEW: Scenario-specific image uploads
+    characterWearing: null,
+    characterHolding: null,
+    productReference: null
+  });
+
+  // 💫 NEW: Get scenario config from selectedScenario
+  const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
+
+  // Handler for scenario images change
+  const handleScenarioImagesChange = (images) => {
+    setScenarioImages(images);
+  };
 
   // Get selected image from location state
   const initialImage = location.state?.image;
@@ -446,6 +581,12 @@ export default function VideoGenerationPage() {
     setCurrentImage(imageData);
   };
 
+  // ✨ NEW: Handle segment selection from ChatGPT component
+  const handleSegmentSelect = (segment, index) => {
+    setSelectedSegment(segment);
+    setSelectedSegmentIndex(index);
+  };
+
   const handleGenerateVideo = async () => {
     if (!currentImage) {
       alert('Please upload or select an image');
@@ -453,13 +594,22 @@ export default function VideoGenerationPage() {
     }
 
     setIsGenerating(true);
+    setGenerated(false);
     try {
+      // Extract scripts from prompts (handles both string and object formats)
+      const scripts = (prompts || []).map(p => {
+        if (typeof p === 'string') return p;
+        if (typeof p === 'object' && p?.script) return p.script;
+        return '';
+      });
+
       // Prepare video generation request
       const videoData = {
-        videoProvider,  // 💫 NEW: Include video provider selection
+        videoProvider,  // 💫 Include video provider selection
         duration: selectedDuration,
         scenario: selectedScenario,
-        segments: prompts,
+        aspectRatio: selectedAspectRatio, // 💫 NEW: Include aspect ratio
+        segments: scripts,
         sourceImage: currentImage,
         characterImage,
         productImage
@@ -468,17 +618,101 @@ export default function VideoGenerationPage() {
       console.log('📹 Starting video generation with provider:', videoProvider);
       console.log('   Video data:', videoData);
 
-      // Call backend API
+      // Call backend API using browserAutomationAPI
       const response = await browserAutomationAPI.generateVideo(videoData);
       
-      if (response?.success) {
-        console.log('✅ Video generation started:', response.data);
-        // TODO: Show video result or redirect to video view
+      if (response?.success && response?.data) {
+        console.log('✅ Video generation complete:', response.data);
+        
+        // 💫 Handle new segment-based response structure
+        const { generatedVideos = [], totalVideos, totalSegments, outputDir, message } = response.data;
+        
+        if (Array.isArray(generatedVideos) && generatedVideos.length > 0) {
+          console.log(`📊 Generated ${generatedVideos.length} video segments`);
+          console.log('   Segments:', generatedVideos);
+          
+          // Store generated videos info
+          setGeneratedVideos(generatedVideos);  // If you have this state
+          // 💫 NEW: Mark as generated
+          setGenerated(true);
+          
+          // 💫 NEW: Upload to Google Drive if enabled
+          if (uploadToDrive) {
+            await handleUploadVideosToGoogleDrive(generatedVideos);
+          }
+          
+          // Show success message with segment info
+          alert(`✅ Success! Generated ${totalVideos} of ${totalSegments} video segments.\n\nOutput directory: ${outputDir}`);
+          
+          // Optionally reset form and advance step
+          setCurrentStep(3);  // Move to generate step to show results
+        }
+      } else {
+        throw new Error(response?.error || 'Video generation failed');
       }
     } catch (error) {
       console.error('❌ Video generation failed:', error);
+      alert(`❌ Video generation error: ${error.message}`);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // 💫 NEW: Upload videos to Google Drive
+  const handleUploadVideosToGoogleDrive = async (videos) => {
+    try {
+      setDriveUploadStatus('Uploading videos to Google Drive...');
+      
+      const successfulUploads = [];
+      
+      for (const video of videos) {
+        try {
+          // Fetch video file from server
+          const response = await fetch(video.url);
+          if (!response.ok) throw new Error(`Failed to fetch video: ${response.statusText}`);
+          
+          const blob = await response.blob();
+          const file = new File([blob], video.filename, { type: 'video/mp4' });
+          
+          // Upload to Google Drive
+          await driveAPI.uploadFile(file, {
+            description: `Video segment ${video.segmentNum} from Smart Wardrobe\nPrompt: ${video.prompt.substring(0, 100)}...`,
+            metadata: {
+              type: 'video',
+              segmentNum: video.segmentNum,
+              generatedAt: new Date().toISOString(),
+              provider: videoProvider
+            }
+          });
+          
+          console.log(`✅ Uploaded video: ${video.filename}`);
+          successfulUploads.push(video.filename);
+        } catch (error) {
+          console.error(`❌ Failed to upload video ${video.filename}:`, error);
+        }
+      }
+      
+      // 💫 NEW: Remove temporary files after successful upload
+      if (successfulUploads.length > 0) {
+        try {
+          for (const filename of successfulUploads) {
+            await fetch('/api/v1/browser-automation/delete-temp-file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename })
+            });
+            console.log(`🗑️  Removed temp file: ${filename}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️  Could not remove temp files: ${error.message}`);
+        }
+      }
+      
+      setDriveUploadStatus(`✅ Successfully uploaded ${successfulUploads.length} video(s) to Google Drive!`);
+      setTimeout(() => setDriveUploadStatus(null), 5000);
+    } catch (error) {
+      console.error('❌ Google Drive upload failed:', error);
+      setDriveUploadStatus(`❌ Upload failed: ${error.message}`);
     }
   };
 
@@ -530,12 +764,24 @@ export default function VideoGenerationPage() {
         </div>
       </div>
 
+      {/* 💫 NEW: Gallery Picker Modal */}
+      <GalleryPicker
+        isOpen={showGalleryPicker}
+        onClose={() => setShowGalleryPicker(false)}
+        onSelect={(item) => {
+          handleImageChange(item.url);
+          setShowGalleryPicker(false);
+        }}
+        mediaType="image"
+        title="Select Image for Video"
+      />
+
       {/* Main Content - Flex container with scrollable content and fixed bottom buttons */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Main Content Area - Scrollable */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Settings */}
-          <div className="w-96 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
+          {/* Left Sidebar - Settings (Compact) */}
+          <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
             <div className="p-3 space-y-3">
               {currentStep === 1 && (
                 <VideoSettingsStep
@@ -547,20 +793,68 @@ export default function VideoGenerationPage() {
                   onImageChange={handleImageChange}
                   videoProvider={videoProvider}
                   onVideoProviderChange={setVideoProvider}
+                  selectedAspectRatio={selectedAspectRatio}  // 💫 NEW: Pass aspect ratio
+                  onAspectRatioChange={setSelectedAspectRatio}  // 💫 NEW: Pass aspect ratio handler
+                  scenarioImages={scenarioImages}  // 💫 NEW: Pass scenario images
+                  onScenarioImagesChange={handleScenarioImagesChange}  // 💫 NEW: Pass handler
                 />
               )}
 
               {currentStep === 2 && (
-                <VideoPromptStepWithTemplates
-                  onNext={() => setCurrentStep(3)}
-                  duration={selectedDuration}
-                  scenario={selectedScenario}
-                  prompts={prompts}
-                  onPromptsChange={setPrompts}
-                  selectedImage={currentImage}
-                  isGenerating={isGenerating}
-                  videoProvider={videoProvider}
-                />
+                <div className="space-y-3">
+                  {/* Prompt Type Selector */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold">📝 Prompt Generation Mode</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setPromptType('template')}
+                        className={`p-2 rounded-lg border-2 transition text-sm ${
+                          promptType === 'template'
+                            ? 'border-blue-500 bg-blue-600/20'
+                            : 'border-gray-600 hover:border-gray-500'
+                        }`}
+                      >
+                        📋 Template
+                      </button>
+                      <button
+                        onClick={() => setPromptType('enhanced')}
+                        className={`p-2 rounded-lg border-2 transition text-sm ${
+                          promptType === 'enhanced'
+                            ? 'border-purple-500 bg-purple-600/20'
+                            : 'border-gray-600 hover:border-gray-500'
+                        }`}
+                      >
+                        ✨ ChatGPT
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Render selected prompt generation component */}
+                  {promptType === 'template' ? (
+                    <VideoPromptStepWithTemplates
+                      onNext={() => setCurrentStep(3)}
+                      duration={selectedDuration}
+                      scenario={selectedScenario}
+                      prompts={prompts}
+                      onPromptsChange={setPrompts}
+                      selectedImage={currentImage}
+                      isGenerating={isGenerating}
+                      videoProvider={videoProvider}
+                    />
+                  ) : (
+                    <VideoPromptStep
+                      onNext={() => setCurrentStep(3)}
+                      duration={selectedDuration}
+                      scenario={selectedScenario}
+                      prompts={prompts}
+                      onPromptsChange={setPrompts}
+                      selectedImage={currentImage}
+                      isGenerating={isGenerating}
+                      videoProvider={videoProvider}
+                      scenarioImages={scenarioImages}  // 💫 NEW: Pass scenario images
+                    />
+                  )}
+                </div>
               )}
 
               {currentStep === 3 && (
@@ -573,166 +867,244 @@ export default function VideoGenerationPage() {
                   isGenerating={isGenerating}
                   onGenerate={handleGenerateVideo}
                   videoProvider={videoProvider}
+                  generatedVideos={generatedVideos}  // 💫 NEW: Pass generated videos
                 />
               )}
             </div>
           </div>
 
-          {/* Center - Preview */}
+          {/* Center - Main Content Area */}
           <div className="flex-1 bg-gray-900 overflow-y-auto">
-            <div className="p-6 max-w-4xl mx-auto">
+            <div className="p-4">
+              {/* Step 1 - Script Template & Image Upload */}
               {currentStep === 1 && (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-2">Step 1: Select Source Image</h2>
-                  <p className="text-gray-400">Choose or upload an image to create your video</p>
-                </div>
-
-                {/* Image Upload & Preview */}
-                <div className="space-y-3">
-                  {currentImage ? (
-                    <>
-                      {/* Image Preview */}
-                      <div className="relative bg-gray-800 rounded-lg overflow-hidden border-2 border-gray-700">
-                        <div className="h-48 flex items-center justify-center bg-gray-950">
-                          <img
-                            src={currentImage}
-                            alt="Video Source"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Replace Button */}
-                      <button
-                        onClick={() => imageInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium text-white"
-                      >
-                        <Upload className="w-4 h-4" />
-                        <span>Change Image</span>
-                      </button>
-
-                      {/* Image Info */}
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-2">
-                        <h4 className="text-xs font-semibold text-gray-400">📸 Image Information</h4>
-                        <div className="text-xs text-gray-400 space-y-1">
-                          <div>✓ Image loaded and ready</div>
-                          <div>✓ Configure settings in left panel</div>
-                          <div>✓ Click "Continue to Script" when ready</div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Upload Prompt */}
-                      <div
-                        onClick={() => imageInputRef.current?.click()}
-                        className="relative bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg border-2 border-dashed border-blue-500/50 hover:border-blue-400/70 transition-colors cursor-pointer overflow-hidden"
-                      >
-                        <div className="h-48 flex flex-col items-center justify-center gap-3 p-8">
-                          <Upload className="w-12 h-12 text-blue-400" />
-                          <div className="text-center">
-                            <h3 className="text-lg font-semibold text-white mb-2">Upload Source Image</h3>
-                            <p className="text-sm text-gray-400 mb-4">
-                              Click to select an image or drag and drop here
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Supported formats: JPEG, PNG | Max size: 5MB
-                            </p>
+                <div className="space-y-4">
+                  {/* Scenario Details - Script Template */}
+                  {scenario && (
+                    <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-700/50">
+                      <h4 className="text-sm font-semibold text-blue-300 mb-3">📝 Script Template for {scenario.label}</h4>
+                      <p className="text-xs text-blue-300 mb-3">This scenario needs {scenario.imageSchema ? Object.values(scenario.imageSchema).filter(img => img.required).length : 1} required + {scenario.imageSchema ? Object.values(scenario.imageSchema).filter(img => !img.required).length : 0} optional images</p>
+                      <div className="space-y-2">
+                        {scenario.scriptTemplate.map((template, idx) => (
+                          <div key={idx} className="flex items-start gap-2 text-xs text-gray-300">
+                            <span className="text-blue-400 font-bold">Seg {idx + 1}:</span>
+                            <span>{template}</span>
                           </div>
-                        </div>
+                        ))}
                       </div>
-
-                      {/* Or Use Existing */}
-                      {(characterImage || productImage) && (
-                        <>
-                          <div className="relative flex items-center gap-4">
-                            <div className="flex-1 h-px bg-gray-700" />
-                            <span className="text-xs text-gray-500 font-medium">OR USE EXISTING IMAGE</span>
-                            <div className="flex-1 h-px bg-gray-700" />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            {characterImage && (
-                              <button
-                                onClick={() => handleImageChange(characterImage)}
-                                className="p-3 rounded-lg border-2 border-gray-700 hover:border-purple-500 hover:bg-purple-900/20 transition-all group"
-                              >
-                                <div className="h-32 mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
-                                  <img
-                                    src={characterImage}
-                                    alt="Character"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <p className="text-xs font-medium text-gray-300 group-hover:text-purple-300">
-                                  👤 Character Image
-                                </p>
-                              </button>
-                            )}
-
-                            {productImage && (
-                              <button
-                                onClick={() => handleImageChange(productImage)}
-                                className="p-3 rounded-lg border-2 border-gray-700 hover:border-blue-500 hover:bg-blue-900/20 transition-all group"
-                              >
-                                <div className="h-32 mb-2 rounded overflow-hidden bg-gray-900 flex items-center justify-center">
-                                  <img
-                                    src={productImage}
-                                    alt="Product"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <p className="text-xs font-medium text-gray-300 group-hover:text-blue-300">
-                                  👕 Product Image
-                                </p>
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </>
+                    </div>
                   )}
 
-                  {/* File Input */}
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => {
-                          handleImageChange(evt.target?.result);
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+                  {/* Scenario-Based Image Upload Component */}
+                  <ScenarioImageUploadComponent
+                    scenario={selectedScenario}
+                    onImagesChange={handleScenarioImagesChange}
+                    imagePreviewUrls={scenarioImages}
+                    disabled={false}
                   />
                 </div>
+              )}
+              {currentStep === 2 && promptType === 'enhanced' && selectedSegment && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-1">
+                        Segment {selectedSegmentIndex + 1}: {selectedSegment.name || 'Unnamed'}
+                      </h2>
+                      <p className="text-gray-400 text-sm">Duration: {selectedSegment.duration}s</p>
+                    </div>
+                  </div>
+
+                  {/* Segment Details - 5 Column Layout */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Script */}
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">📝 Script</label>
+                      <textarea
+                        readOnly
+                        value={selectedSegment.script || ''}
+                        className="w-full h-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono resize-none"
+                        placeholder="Script content..."
+                      />
+                    </div>
+
+                    {/* Movements */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">🎬 Movements</label>
+                      <textarea
+                        readOnly
+                        value={selectedSegment.movements || ''}
+                        className="w-full h-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 resize-none"
+                        placeholder="Movement details..."
+                      />
+                    </div>
+
+                    {/* Camera Work */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">📸 Camera Work</label>
+                      <textarea
+                        readOnly
+                        value={selectedSegment.cameraWork || ''}
+                        className="w-full h-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 resize-none"
+                        placeholder="Camera angles..."
+                      />
+                    </div>
+
+                    {/* Lighting */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">💡 Lighting</label>
+                      <textarea
+                        readOnly
+                        value={selectedSegment.lighting || ''}
+                        className="w-full h-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 resize-none"
+                        placeholder="Lighting setup..."
+                      />
+                    </div>
+
+                    {/* Music/Audio */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">🎵 Music/Audio</label>
+                      <textarea
+                        readOnly
+                        value={selectedSegment.music || ''}
+                        className="w-full h-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 resize-none"
+                        placeholder="Music or audio details..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Segment Navigation */}
+                  <div className="flex gap-3 mt-6 pt-4 border-t border-gray-700">
+                    <button
+                      onClick={() => {
+                        const prevIdx = selectedSegmentIndex - 1;
+                        if (prompts && prevIdx >= 0 && prevIdx < prompts.length) {
+                          handleSegmentSelect(prompts[prevIdx], prevIdx);
+                        }
+                      }}
+                      disabled={selectedSegmentIndex === 0}
+                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
+                    >
+                      ← Previous Segment
+                    </button>
+                    <button
+                      onClick={() => {
+                        const nextIdx = selectedSegmentIndex + 1;
+                        if (prompts && nextIdx < prompts.length) {
+                          handleSegmentSelect(prompts[nextIdx], nextIdx);
+                        }
+                      }}
+                      disabled={!prompts || selectedSegmentIndex >= prompts.length - 1}
+                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
+                    >
+                      Next Segment →
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {currentStep === 2 && (
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-white mb-4">Step 2: Write Your Script</h2>
-                  <p className="text-gray-400">Create a detailed script for each segment of your video.</p>
+              {/* Default Step 2 Content - No Segment Selected */}
+              {currentStep === 2 && (!selectedSegment || promptType !== 'enhanced') && (
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-bold text-white mb-2">Step 2: Write Your Script</h2>
+                  <p className="text-gray-400 mb-4">Select a segment from the left panel to view or edit its details</p>
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 inline-block">
+                    <p className="text-gray-500 text-sm">👈 Click on a segment in the left sidebar to get started</p>
+                  </div>
                 </div>
               )}
 
-              {currentStep === 3 && (
+              {/* 💫 FIXED: Step 3 - Generated Videos in CENTER with Preview */}
+              {currentStep === 3 && generatedVideos.length > 0 && (
                 <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-white mb-4">Step 3: Generate Video</h2>
-                  <p className="text-gray-400">Review your video configuration and generate the video.</p>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">✅ Generated Video Segments</h2>
+                    <p className="text-gray-400">Preview your video clips or download them</p>
+                  </div>
+
+                  <div className="bg-green-900/20 rounded-lg p-4 border border-green-700/50">
+                    <div className="grid grid-cols-1 gap-4">
+                      {generatedVideos.map((video) => {
+                        // 💫 FIXED: Build preview URL with fallback using correct path
+                        const previewUrl = video.previewUrl || (
+                          video.path ? `/api/v1/browser-automation/preview-video/${video.filename}?path=${encodeURIComponent(video.path)}` : null
+                        );
+                        
+                        // 💫 DEBUG: Log URL for troubleshooting
+                        console.log(`📹 Segment ${video.segmentNum}:`, {
+                          filename: video.filename,
+                          path: video.path,
+                          previewUrl: video.previewUrl,
+                          fallbackUrl: previewUrl
+                        });
+
+                        return (
+                        <div key={video.segmentNum} className="bg-gray-800/50 rounded-lg border border-green-700/30 overflow-hidden">
+                          {/* Video Preview */}
+                          <div className="relative bg-black aspect-video flex items-center justify-center">
+                            {previewUrl ? (
+                              <>
+                                <video
+                                  key={previewUrl}
+                                  controls
+                                  className="w-full h-full object-contain"
+                                  src={previewUrl}
+                                  onError={(e) => {
+                                    console.error(`❌ Video load error for ${video.filename}:`, e);
+                                    console.error('   Tried URL:', previewUrl);
+                                  }}
+                                  onLoadStart={() => console.log(`✓ Loading ${video.filename}`)}
+                                  onCanPlay={() => console.log(`✓ Can play ${video.filename}`)}
+                                >
+                                  Your browser does not support the video tag.
+                                </video>
+                              </>
+                            ) : (
+                              <div className="text-gray-400 text-center p-4">
+                                <p className="text-lg mb-2">📹 Segment {video.segmentNum}</p>
+                                <p className="text-sm text-gray-500">{video.filename}</p>
+                                <p className="text-xs text-gray-600 mt-2">⚠️ No path available</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Video Details */}
+                          <div className="p-4 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="text-green-300 font-semibold flex items-center gap-2">
+                                  <span className="text-sm bg-green-700/30 px-2 py-1 rounded">Segment {video.segmentNum}</span>
+                                  <span className="text-xs text-gray-400 font-normal">{video.filename}</span>
+                                </div>
+                                <div className="text-gray-400 text-xs mt-2 line-clamp-2">
+                                  {video.prompt}
+                                </div>
+                              </div>
+                              <a
+                                href={video.url}
+                                download={video.filename}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 rounded text-sm font-medium text-white transition flex-shrink-0 ml-4 whitespace-nowrap"
+                              >
+                                <Download className="w-4 h-4" />
+                                Download
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-green-700/30 text-sm text-green-300">
+                      ✅ {generatedVideos.length} of {calculateSegmentCount(videoProvider, selectedDuration)} video segments ready
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-        {/* Right Sidebar - Summary */}
-        <div className="w-80 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0 p-4">
+          {/* Right Sidebar - Summary */}
+        <div className="w-56 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0 p-4">
           <div className="space-y-4">
             <div>
               <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3">Configuration</h3>
@@ -750,24 +1122,30 @@ export default function VideoGenerationPage() {
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">Segments:</span>
                   <span className="text-purple-300 font-medium">
-                    {VIDEO_DURATIONS.find(d => d.value === selectedDuration)?.segments}
+                    {calculateSegmentCount(videoProvider, selectedDuration)}  {/* 💫 FIXED: Dynamic calculation */}
                   </span>
                 </div>
               </div>
             </div>
 
-            {currentStep >= 2 && prompts.some(p => p.trim().length > 0) && (
+            {currentStep >= 2 && prompts && Array.isArray(prompts) && prompts.some(p => {
+              // Handle both string prompts and object prompts
+              if (typeof p === 'string') return p.trim().length > 0;
+              if (typeof p === 'object' && p?.script) return p.script.trim().length > 0;
+              return false;
+            }) && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3">Script Summary</h3>
                 <div className="bg-gray-700/30 rounded-lg p-3 space-y-2">
-                  {prompts.map((prompt, idx) => (
-                    prompt.trim().length > 0 && (
+                  {prompts.map((prompt, idx) => {
+                    const scriptText = typeof prompt === 'string' ? prompt : prompt?.script || '';
+                    return scriptText.trim().length > 0 && (
                       <div key={idx} className="text-xs">
                         <div className="text-gray-500 mb-1">Seg {idx + 1}:</div>
-                        <div className="text-gray-400 line-clamp-3">{prompt}</div>
+                        <div className="text-gray-400 line-clamp-3">{scriptText}</div>
                       </div>
-                    )
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -811,7 +1189,13 @@ export default function VideoGenerationPage() {
             {currentStep === 2 && (
               <button
                 onClick={() => setCurrentStep(3)}
-                disabled={isGenerating || prompts.some(p => !p || p.trim().length === 0)}
+                disabled={isGenerating || prompts.some(p => {
+                  // 💫 FIXED: Handle both string and object formats
+                  if (!p) return true;
+                  if (typeof p === 'string') return p.trim().length === 0;
+                  if (typeof p === 'object' && p?.script) return !p.script || p.script.trim().length === 0;
+                  return true;
+                })}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
               >
                 <span>Review & Generate</span>
@@ -833,7 +1217,7 @@ export default function VideoGenerationPage() {
                 ) : (
                   <>
                     <Rocket className="w-4 h-4" />
-                    <span>Create Video</span>
+                    <span>{generated ? 'Re-generate Video' : 'Create Video'}</span>
                   </>
                 )}
               </button>
