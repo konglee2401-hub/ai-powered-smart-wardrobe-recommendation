@@ -502,43 +502,59 @@ class ChatGPTService extends BrowserService {
       // Step 2: Upload all images
       console.log('📍 STEP 2: Uploading images...');
       for (const imagePath of imagePaths) {
-        try {
-          // ✅ NEW: Try direct file input upload first (doesn't require click)
-          if (fileInput) {
-            console.log(`   📤 Uploading file: ${path.basename(imagePath)}`);
-            try {
-              await fileInput.uploadFile(imagePath);
-              console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
-              // Wait for image to process
-              await this.page.waitForTimeout(1500);
-              continue; // Move to next image
-            } catch (uploadErr) {
-              console.log(`   ⚠️  Direct upload failed: ${uploadErr.message}`);
-              // Fall through to button click method
+        let uploadSucceeded = false;
+        let retries = 0;
+        const maxRetries = 3;
+
+        while (!uploadSucceeded && retries < maxRetries) {
+          try {
+            console.log(`   📤 Uploading file: ${path.basename(imagePath)} (attempt ${retries + 1}/${maxRetries})`);
+              
+            // 💫 IMPROVED: Use setInputFiles directly (most stable)
+            const inputElements = await this.page.$$('input[type="file"]');
+            if (inputElements.length > 0) {
+              try {
+                console.log(`   └─ Using setInputFiles (found ${inputElements.length} file input)...`);
+                await inputElements[0].uploadFile(imagePath);
+                
+                // Verify upload succeeded
+                await this.page.waitForTimeout(2000);
+                
+                // Confirm image is in DOM
+                const hasImage = await this.page.evaluate(() => {
+                  const imgs = document.querySelectorAll('img');
+                  return imgs.length > 0;
+                });
+                
+                if (hasImage) {
+                  console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
+                  uploadSucceeded = true;
+                } else {
+                  console.log(`   ⚠️  Upload processed but image not detected, retrying...`);
+                  retries++;
+                }
+              } catch (setInputErr) {
+                console.log(`   ⚠️  setInputFiles failed: ${setInputErr.message}`);
+                retries++;
+              }
+            } else {
+              console.log(`   ⚠️  No file input found, retrying...`);
+              retries++;
+            }
+          } catch (e) {
+            console.log(`   ⚠️  Attempt ${retries + 1} failed: ${e.message}`);
+            retries++;
+            
+            if (retries < maxRetries) {
+              console.log(`   ⏳ Waiting 2s before retry...`);
+              await this.page.waitForTimeout(2000);
             }
           }
-          
-          // Fallback: Click upload button, then upload
-          if (uploadButton) {
-            try {
-              console.log(`   📤 Uploading file via button: ${path.basename(imagePath)}`);
-              await uploadButton.click();
-              await this.page.waitForTimeout(1000);
-              await this.uploadFile('input[type="file"]', imagePath);
-              console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
-            } catch (buttonErr) {
-              console.log(`   ⚠️  Button upload failed: ${buttonErr.message}`);
-              throw new Error(`Failed to upload ${path.basename(imagePath)}: ${buttonErr.message}`);
-            }
-          } else {
-            throw new Error(`No file input or upload button found for ${path.basename(imagePath)}`);
-          }
-          
-          // Wait for image to process
-          await this.page.waitForTimeout(1500);
-        } catch (e) {
-          console.log(`   ❌ Failed to upload ${path.basename(imagePath)}: ${e.message}`);
-          throw e;
+        }
+
+        if (!uploadSucceeded) {
+          console.error(`   ❌ Failed to upload ${path.basename(imagePath)} after ${maxRetries} attempts`);
+          throw new Error(`Failed to upload ${path.basename(imagePath)} after ${maxRetries} attempts`);
         }
       }
 

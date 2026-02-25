@@ -58,12 +58,11 @@ const assetSchema = new mongoose.Schema({
     required: true
   },
   
-  // Storage location
+  // Storage location (legacy)
   storage: {
     location: {
       type: String,
       enum: ['local', 'google-drive', 'cloud'],
-      required: true
     },
     localPath: {
       type: String,
@@ -81,6 +80,53 @@ const assetSchema = new mongoose.Schema({
       type: String,
       description: 'Accessible URL (could be local server or Google Drive)'
     }
+  },
+  
+  // Hybrid Storage - Local
+  localStorage: {
+    location: {
+      type: String,
+      enum: ['local'],
+      description: 'Local disk storage'
+    },
+    path: String,
+    fileSize: Number,
+    savedAt: Date,
+    verified: Boolean
+  },
+  
+  // Hybrid Storage - Cloud
+  cloudStorage: {
+    location: {
+      type: String,
+      enum: ['google-drive'],
+      description: 'Google Drive storage'
+    },
+    googleDriveId: String,
+    thumbnailLink: String,
+    webViewLink: String,
+    status: {
+      type: String,
+      enum: ['pending', 'syncing', 'synced', 'failed'],
+      default: 'pending'
+    },
+    syncedAt: Date,
+    attempted: { type: Number, default: 0 }
+  },
+  
+  // Sync tracking
+  syncStatus: {
+    type: String,
+    enum: ['pending', 'synced', 'failed'],
+    default: 'pending'
+  },
+  nextRetryTime: Date,
+  
+  // Data retention
+  retention: {
+    deleteAfterDays: Number,
+    deleteLocalAt: Date,
+    keepCloudCopy: Boolean
   },
   
   // Media-specific metadata

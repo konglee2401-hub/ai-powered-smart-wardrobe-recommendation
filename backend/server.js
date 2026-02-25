@@ -42,6 +42,7 @@ import driveFolderExplorerRoutes from './routes/driveFolderExplorerRoutes.js';
 import queueScannerRoutes from './routes/queueScannerRoutes.js';
 import videoScriptGenerationRoutes from './routes/videoScriptGenerationRoutes.js';
 import assetRoutes from './routes/assetRoutes.js';
+import ttsRoutes from './routes/ttsRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -61,7 +62,7 @@ connectDB().then(async () => {
   modelSyncService.autoSyncOnStartup(); // Only one sync - runs after 5s
 });
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3002'] }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'] }));
 
 // Increase payload limits to handle base64-encoded images
 app.use(express.json({ limit: '50mb' }));
@@ -146,6 +147,7 @@ app.use('/api/affiliate', affiliateVideoRoutes);
 app.use('/api/cloud-gallery', cloudGalleryRoutes);
 app.use('/api/batch-queue', cloudBatchQueueRoutes);
 app.use('/api/video-production', videoProductionRoutes);
+app.use('/api/tts', ttsRoutes);
 app.use('/api/drive', driveUploadRoutes);
 app.use('/api/drive', driveFolderExplorerRoutes);
 app.use('/api/queue-scanner', queueScannerRoutes);
@@ -160,7 +162,7 @@ const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 const io = new SocketServer(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3002'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
     methods: ['GET', 'POST']
   }
 });
@@ -193,6 +195,17 @@ io.on('connection', (socket) => {
     console.log(`❌ Client disconnected: ${socket.id}`);
   });
 });
+
+// ✅ Start Hybrid Storage Sync Service
+import HybridStorage from './services/hybridStorageSync.js';
+
+try {
+  await HybridStorage.startSyncService();
+  console.log('✅ [HybridStorage] Sync service started (5-minute intervals)');
+} catch (error) {
+  console.error('⚠️ [HybridStorage] Failed to start sync service:', error.message);
+  // Continue anyway - local storage still works
+}
 
 server.listen(PORT, () => {
   console.log('\n' + '='.repeat(80));

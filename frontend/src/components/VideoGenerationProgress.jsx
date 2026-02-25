@@ -11,7 +11,7 @@ function VideoGenerationProgress({ sessionId, onComplete, onError }) {
 
   useEffect(() => {
     // Connect to Socket.IO
-    const socketInstance = io(process.env.REACT_APP_API_URL || 'http://localhost:5000', {
+    const socketInstance = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000', {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

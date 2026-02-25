@@ -495,32 +495,68 @@ async function testCompleteFlow() {
       console.log('⚠️  Button count not reached, but continuing with prompt');
     }
 
-    // Clean and split prompt
+    // Clean and split prompt (OPTIMIZED: paste main + type tail)
     const cleanPrompt = VTO_PROMPT.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
-    const firstPart = cleanPrompt.substring(0, 10);
-    const secondPart = cleanPrompt.substring(10);
+    const tailLength = 20; // Last 20 characters to type manually
+    
+    const mainPart = cleanPrompt.substring(0, cleanPrompt.length - tailLength);
+    const tailPart = cleanPrompt.substring(cleanPrompt.length - tailLength);
     const expectedLength = cleanPrompt.length;
 
     console.log(`  Prompt (cleaned): "${cleanPrompt}"`);
-    console.log(`  Split: "${firstPart}" + "${secondPart}"`);
+    console.log(`  Strategy: Paste (${mainPart.length} chars) + Type (${tailPart.length} chars)`);
     console.log(`  Target length: ${expectedLength} characters`);
 
-    // Step 1: Focus and type first 10 characters
+    // Step 1: Focus textarea
     await page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
     await page.waitForTimeout(300);
-    console.log(`  → Typing first 10 chars: "${firstPart}"`);
-    await page.keyboard.type(firstPart, { delay: 50 }); // Type each character slowly
-    await page.waitForTimeout(200);
 
-    // Step 2: Type remaining part (split into chunks for better React component recognition)
-    if (secondPart.length > 0) {
-      console.log(`  → Typing remaining ${secondPart.length} chars in chunks...`);
-      const chunkSize = 50; // Type in 50-char chunks
-      for (let i = 0; i < secondPart.length; i += chunkSize) {
-        const chunk = secondPart.substring(i, i + chunkSize);
-        await page.keyboard.type(chunk, { delay: 5 });
-        await page.waitForTimeout(50); // Small delay between chunks
-      }
+    // Step 2: Paste main part using clipboard (much faster than typing)
+    if (mainPart.length > 0) {
+      console.log(`  → Pasting ${mainPart.length} characters...`);
+      
+      // Use evaluate to set clipboard and paste
+      await page.evaluate((text) => {
+        // Set clipboard content
+        navigator.clipboard.writeText(text).then(() => {
+          // Trigger paste event
+          const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+          if (textarea) {
+            textarea.focus();
+            // Create and dispatch paste event manually
+            const pasteEvent = new ClipboardEvent('paste', {
+              clipboardData: new DataTransfer(),
+              bubbles: true,
+              cancelable: true
+            });
+            // Set the text content
+            textarea.value = text;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }, mainPart);
+      
+      await page.waitForTimeout(500);
+    }
+
+    // Step 3: Move cursor to end and type remaining characters
+    if (tailPart.length > 0) {
+      console.log(`  → Typing final ${tailPart.length} characters: "${tailPart}"`);
+      
+      // Move cursor to end
+      await page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (textarea) {
+          textarea.selectionStart = textarea.value.length;
+          textarea.selectionEnd = textarea.value.length;
+        }
+      });
+      
+      // Type the tail part character by character for React event recognition
+      await page.keyboard.type(tailPart, { delay: 50 });
+      await page.waitForTimeout(200);
+      
       // Trigger final events to ensure React component recognizes the full input
       await page.evaluate(() => {
         const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
@@ -535,7 +571,7 @@ async function testCompleteFlow() {
       await page.waitForTimeout(300);
     }
 
-    // Step 3: Wait for textarea content to match expected length
+    // Step 4: Wait for textarea content to match expected length
     console.log(`  → Waiting for textarea to have ${expectedLength} characters...`);
     let promptReady = false;
     let waitAttempts = 0;

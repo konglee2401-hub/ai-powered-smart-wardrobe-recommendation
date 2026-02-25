@@ -25,7 +25,6 @@ const promptOptionSchema = new mongoose.Schema({
   value: {
     type: String,
     required: true,
-    unique: true,
     index: true
   },
   label: {
@@ -78,6 +77,14 @@ const promptOptionSchema = new mongoose.Schema({
     default: {}
   },
 
+  // NEW: Contextual prompt suggestion for detailed generation
+  // Replaces generic option name with detailed description
+  // Example: "minimalist-indoor" → "Bedroom with organized fashion wardrobe and shelves"
+  promptSuggestion: {
+    type: String,
+    default: null
+  },
+
   // NEW: Preview image for UI
   previewImage: {
     type: String,
@@ -125,6 +132,8 @@ const promptOptionSchema = new mongoose.Schema({
 promptOptionSchema.index({ category: 1, isActive: 1 });
 promptOptionSchema.index({ usageCount: -1, category: 1 });
 promptOptionSchema.index({ keywords: 1, category: 1 });
+// Unique constraint on category+value combination (different categories can have same value)
+promptOptionSchema.index({ category: 1, value: 1 }, { unique: true });
 
 // ============================================================
 // INSTANCE METHODS

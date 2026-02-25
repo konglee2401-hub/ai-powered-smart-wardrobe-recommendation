@@ -317,7 +317,7 @@ SEGMENT 3: [detailed description]
 
 Make each description 2-3 sentences, specific and actionable for video generation.`;
 
-      const response = await chatgptService.sendMessage(prompt);
+      const response = await chatgptService.sendPrompt(prompt);
       const responseText = typeof response === 'string' ? response : response.text || JSON.stringify(response);
       
       const segmentPrompts = responseText
@@ -601,7 +601,7 @@ router.post(
         const scenarioPrompt = getScenarioPromptTemplate(scenario, promptParams);
 
         // 💫 Send prompt to ChatGPT
-        const response = await chatgptService.sendMessage(scenarioPrompt);
+        const response = await chatgptService.sendPrompt(scenarioPrompt);
         const responseText = typeof response === 'string' ? response : (response.text || JSON.stringify(response));
 
         // 💫 Parse response to extract segments

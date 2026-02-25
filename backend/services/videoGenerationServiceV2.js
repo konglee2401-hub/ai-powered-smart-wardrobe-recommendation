@@ -569,107 +569,160 @@ class VideoGenerationAutomationV2 {
   }
 
   async setAspectRatio(aspectRatio) {
-    const displayRatio = aspectRatio || '16:9';  // Default to 16:9
+    const displayRatio = aspectRatio || '16:9';
     console.log(`  └─ Setting aspect ratio to ${displayRatio}...`);
     
     try {
-      // Step 1: Map aspect ratio to Vietnamese text
       const aspectMapping = {
         '16:9': ['16:9', 'khổ ngang', 'landscape'],
         '9:16': ['9:16', 'khổ dọc', 'portrait'],
         'landscape': ['16:9', 'khổ ngang'],
         'portrait': ['9:16', 'khổ dọc']
       };
-
+      
       const targetRatio = aspectMapping[displayRatio] || aspectMapping['16:9'];
       
-      // Step 2: Find the aspect ratio button and check current value
-      const currentValue = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button[role="combobox"]'));
-        
-        for (const btn of buttons) {
-          const text = btn.innerText.toLowerCase();
-          // Look for the aspect ratio button (Tỷ lệ khung hình)
-          if (text.includes('tỷ lệ khung hình') || text.includes('ratio')) {
-            // Extract the current value
-            const valueSpan = btn.querySelector('span.sc-4b3fbad9-5, span');
-            if (valueSpan) {
-              const currentVal = valueSpan.innerText.trim().toLowerCase();
-              return { btn: btn, currentVal: currentVal };
-            }
-          }
-        }
-        return { btn: null, currentVal: null };
-      });
-
-      if (!currentValue.btn) {
-        console.log('  ⚠️  Could not find aspect ratio button');
-        return;
-      }
-
-      console.log(`  📍 Current aspect ratio: ${currentValue.currentVal}`);
-
-      // Step 3: Check if already set correctly
-      const isAlreadySet = targetRatio.some(val => currentValue.currentVal.includes(val));
-      if (isAlreadySet) {
-        console.log(`  ✓ Aspect ratio already set to ${displayRatio}`);
-        return;
-      }
-
-      // Step 4: Click the button to open dropdown
-      console.log(`  → Clicking aspect ratio button...`);
+      // Step 1: Wait for dialog to be fully visible
+      console.log(`  → Waiting for dialog to load (2s)...`);
+      await this.page.waitForTimeout(2000);
+      
+      // Step 2: Scroll to ensure button is in viewport
       await this.page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button[role="combobox"]'));
         for (const btn of buttons) {
           const text = btn.innerText.toLowerCase();
           if (text.includes('tỷ lệ khung hình') || text.includes('ratio')) {
-            btn.click();
-            return;
+            btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            break;
           }
         }
       });
+      
+      await this.page.waitForTimeout(1000);
+      
+      // Step 3: Find the aspect ratio button
+      const currentValue = await this.page.evaluate(() => {
+        // 💫 FIX: Look for button within dialog/popover visibility context
+        const buttons = Array.from(document.querySelectorAll('button[role="combobox"]'));
+        
+        for (const btn of buttons) {
+          const text = btn.innerText.toLowerCase();
+          if (text.includes('tỷ lệ khung hình') || text.includes('ratio')) {
+            // Check if button or its parent is visible
+            const style = window.getComputedStyle(btn);
+            if (style.display !== 'none' && style.visibility !== 'hidden') {
+              const valueSpan = btn.querySelector('[class*="sc-4b3fbad9-5"], span');
+              if (valueSpan) {
+                const currentVal = valueSpan.innerText.trim().toLowerCase();
+                return { found: true, currentVal: currentVal };
+              }
+            }
+          }
+        }
+        return { found: false, currentVal: null };
+      });
+      
+      if (!currentValue?.found) {
+        console.log(`  ⚠️  Aspect ratio button not visible. Trying alternative approach...`);
+        
+        // 💫 FIX: Try clicking via keyboard instead
+        console.log(`  → Trying keyboard navigation for aspect ratio...`);
+        await this.page.keyboard.press('Tab');
+        await this.page.keyboard.press('Tab');
+        await this.page.keyboard.press('Enter');
+        await this.page.waitForTimeout(1000);
+        
+        // Try finding the dropdown now
+        const dropdownFound = await this.page.evaluate((target) => {
+          const menus = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], [role="dialog"]'));
+          return menus.length > 0;
+        });
+        
+        if (!dropdownFound) {
+          console.log(`  ⚠️  Could not open aspect ratio dropdown`);
+          return;
+        }
+      }
+      
+      console.log(`  📍 Current aspect ratio: ${currentValue?.currentVal || 'unknown'}`);
+      
+      // Step 4: Check if already set correctly
+      const isAlreadySet = targetRatio.some(val => 
+        currentValue?.currentVal?.includes(val) || false
+      );
+      
+      if (isAlreadySet) {
+        console.log(`  ✓ Aspect ratio already set to ${displayRatio}`);
+        return;
+      }
+      
+      // Step 5: Click button to open dropdown
+      console.log(`  → Clicking aspect ratio button...`);
+      const clicked = await this.page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button[role="combobox"]'));
+        for (const btn of buttons) {
+          const text = btn.innerText.toLowerCase();
+          if (text.includes('tỷ lệ khung hình') || text.includes('ratio')) {
+            // 💫 FIX: Ensure button is clickable by forcing focus first
+            btn.focus();
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+      
+      if (!clicked) {
+        console.log(`  ⚠️  Could not find/click aspect ratio button`);
+        return;
+      }
+      
       await this.page.waitForTimeout(1500);
-
-      // Step 5: Find and click ONLY the valid aspect ratio options (filter out others)
-      // 💫 FIXED: Only accept the 2 valid aspect ratios (16:9 and 9:16)
-      console.log(`  → Looking for "${displayRatio}" option in dropdown (filtering to valid options)...`);
+      
+      // Step 6: Find and click the target aspect ratio in dropdown
+      console.log(`  → Looking for "${displayRatio}" in dropdown menu...`);
+      
       const optionClicked = await this.page.evaluate((target) => {
-        // 💫 FIXED: Only accept 2 valid aspect ratios (16:9 and 9:16)
         const validAspectRatios = ['16:9', '9:16', 'landscape', 'portrait', 'khổ ngang', 'khổ dọc'];
         
-        // Find the dropdown menu
-        const menus = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"]'));
+        // 💫 FIX: Look for dropdown in portals/modals
+        const menus = Array.from(document.querySelectorAll(
+          '[role="listbox"], [role="menu"], [role="dialog"] [role="option"], body > div'
+        ));
         
         for (const menu of menus) {
-          const options = Array.from(menu.querySelectorAll('[role="option"], button, div'));
+          const options = Array.from(menu.querySelectorAll('[role="option"], li, div'));
           
           for (const option of options) {
-            const text = option.innerText.toLowerCase().trim();
+            const text = option.innerText?.toLowerCase().trim() || '';
             
-            // Only process if this is a valid aspect ratio
-            // Skip any option that contains other UI elements like "Output", "Model", etc.
-            if (!validAspectRatios.some(ratio => text.includes(ratio))) {
-              continue; // Skip invalid options
+            // Only process valid aspect ratio options
+            if (!validAspectRatios.some(valid => text.includes(valid))) {
+              continue;
             }
             
-            // Check if this option matches any of the target ratios
-            if (target.some(val => text.includes(val))) {
-              option.click();
-              return true;
+            // Check if this matches our target
+            if (target.some(t => text.includes(t))) {
+              const style = window.getComputedStyle(option);
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
+                option.click();
+                option.focus();
+                return true;
+              }
             }
           }
         }
         
         return false;
       }, targetRatio);
-
+      
       if (optionClicked) {
-        console.log(`  ✓ Aspect ratio changed to ${displayRatio}`);
-        await this.page.waitForTimeout(1500);
+        console.log(`  ✓ Aspect ratio set to ${displayRatio}`);
+        await this.page.waitForTimeout(1000);
       } else {
-        console.log(`  ⚠️  Could not find "${displayRatio}" option in dropdown`);
+        console.log(`  ⚠️  Could not click aspect ratio option "${displayRatio}"`);
       }
-
+      
     } catch (error) {
       console.warn(`  ⚠️  Error setting aspect ratio: ${error.message}`);
     }
@@ -795,36 +848,95 @@ class VideoGenerationAutomationV2 {
   }
 
   async enterPrompt(prompt) {
-    console.log('📍 Entering prompt...');
+    console.log('📍 Entering prompt (3-part strategy: type + paste + type)...');
 
-    // 💫 ALIGNED WITH IMAGE GENERATION: Clean and split prompt
+    // Clean prompt
     const cleanPrompt = prompt.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
-    const firstPart = cleanPrompt.substring(0, 10);
-    const secondPart = cleanPrompt.substring(10);
+    const typeLength = 20; // First 20 chars and last 20 chars type manually
+    
+    // 💫 NEW 3-PART STRATEGY: Type (20) + Paste (middle) + Type (20)
+    const firstPart = cleanPrompt.substring(0, typeLength); // First 20 chars - TYPE
+    const pasteStart = typeLength;
+    const pasteEnd = cleanPrompt.length - typeLength;
+    const middlePart = cleanPrompt.substring(pasteStart, pasteEnd); // Middle part - PASTE
+    const lastPart = cleanPrompt.substring(cleanPrompt.length - typeLength); // Last 20 chars - TYPE
     const expectedLength = cleanPrompt.length;
 
     console.log(`  Prompt (cleaned): "${cleanPrompt}"`);
-    console.log(`  Split: "${firstPart}" + "${secondPart}"`);
+    console.log(`  Strategy: Type (${firstPart.length} chars) + Paste (${middlePart.length} chars) + Type (${lastPart.length} chars)`);
     console.log(`  Target length: ${expectedLength} characters`);
 
     try {
-      // 💫 ALIGNED: Focus and type first 10 characters (with 50ms delay)
+      // Step 1: Focus textarea and clear it
       await this.page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
       await this.page.waitForTimeout(300);
-      console.log(`  → Typing first 10 chars: "${firstPart}"`);
-      await this.page.keyboard.type(firstPart, { delay: 50 });
+      
+      // Clear existing content
+      await this.page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (textarea) {
+          textarea.value = '';
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
       await this.page.waitForTimeout(200);
 
-      // 💫 ALIGNED: Type remaining part in chunks (50-char chunks with 5ms delay)
-      if (secondPart.length > 0) {
-        console.log(`  → Typing remaining ${secondPart.length} chars in chunks...`);
-        const chunkSize = 50;  // Type in 50-char chunks
-        for (let i = 0; i < secondPart.length; i += chunkSize) {
-          const chunk = secondPart.substring(i, i + chunkSize);
-          await this.page.keyboard.type(chunk, { delay: 5 });
-          await this.page.waitForTimeout(50);  // Small delay between chunks
-        }
-        // 💫 ALIGNED: Trigger final events to ensure React component recognizes full input
+      // Step 2: Type first 20 characters (helps React component initialize)
+      if (firstPart.length > 0) {
+        console.log(`  → Typing first ${firstPart.length} characters: "${firstPart}"`);
+        
+        await this.page.keyboard.type(firstPart, { delay: 50 });
+        await this.page.waitForTimeout(300);
+      }
+
+      // Step 3: Paste middle part (most efficient for large content)
+      if (middlePart.length > 0) {
+        console.log(`  → Pasting ${middlePart.length} characters...`);
+        
+        // Keep focus on textarea
+        await this.page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
+        
+        // Paste using clipboard
+        await this.page.evaluate((text) => {
+          navigator.clipboard.writeText(text).then(() => {
+            const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+            if (textarea) {
+              // Get current length before paste
+              const beforeLength = textarea.value.length;
+              
+              // Paste the text
+              textarea.value = textarea.value + text;
+              textarea.selectionStart = textarea.value.length;
+              textarea.selectionEnd = textarea.value.length;
+              
+              // Trigger events
+              textarea.dispatchEvent(new Event('input', { bubbles: true }));
+              textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        }, middlePart);
+        
+        await this.page.waitForTimeout(500);
+      }
+
+      // Step 4: Type last 20 characters (ensures React event completion)
+      if (lastPart.length > 0) {
+        console.log(`  → Typing final ${lastPart.length} characters: "${lastPart}"`);
+        
+        // Move cursor to end
+        await this.page.evaluate(() => {
+          const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+          if (textarea) {
+            textarea.selectionStart = textarea.value.length;
+            textarea.selectionEnd = textarea.value.length;
+          }
+        });
+        
+        // Type the final part character by character
+        await this.page.keyboard.type(lastPart, { delay: 50 });
+        await this.page.waitForTimeout(200);
+        
+        // Trigger final events to ensure React component recognizes the full input
         await this.page.evaluate(() => {
           const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
           if (textarea) {
@@ -838,7 +950,7 @@ class VideoGenerationAutomationV2 {
         await this.page.waitForTimeout(300);
       }
 
-      // 💫 ALIGNED: Wait for textarea content to match expected length
+      // Step 5: Wait for textarea content to match expected length
       console.log(`  → Waiting for textarea to have ${expectedLength} characters...`);
       let promptReady = false;
       let waitAttempts = 0;
@@ -1409,6 +1521,129 @@ class VideoGenerationAutomationV2 {
 
   async close() {
     if (this.browser) await this.browser.close();
+  }
+
+  /**
+   * 💫 REUSE OPTIMIZATION: Click "wrap_text" button to reuse command from previous generation
+   * This copies the image and previous prompt into textarea, allowing segment update
+   */
+  async clickReuseCommandButton() {
+    console.log('📍 Clicking Reuse Command button (wrap_text)...');
+
+    try {
+      const clicked = await this.page.evaluate(() => {
+        // Find virtuoso container and item at index 1 (previous generation)
+        const container = document.querySelector('[data-testid*="virtuoso"], [class*="virtuoso"]');
+        if (!container) return false;
+
+        const item1 = container.querySelector('[data-index="1"]');
+        if (!item1) return false;
+
+        // Look for "Sử dụng lại câu lệnh" button (wrap_text icon)
+        const buttons = Array.from(item1.querySelectorAll('button'));
+        for (const btn of buttons) {
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+          const buttonText = btn.textContent.toLowerCase();
+          const icon = btn.querySelector('i')?.textContent.toLowerCase() || '';
+
+          if ((ariaLabel.includes('sử dụng') && ariaLabel.includes('câu')) ||
+              (buttonText.includes('sử dụng') && buttonText.includes('câu')) ||
+              icon.includes('wrap_text')) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (clicked) {
+        console.log('   ✅ Reuse command button clicked');
+        await this.page.waitForTimeout(1500);
+        return true;
+      } else {
+        console.log('   ⚠️  Reuse command button not found');
+        return false;
+      }
+    } catch (error) {
+      console.error(`   ❌ Error clicking reuse button: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 💫 REUSE OPTIMIZATION: Clear textarea and enter new segment script
+   * Call this AFTER clickReuseCommandButton() to replace the script
+   */
+  async updateSegmentScript(newScript) {
+    console.log(`📍 Updating segment script (${newScript.length} chars)...`);
+
+    try {
+      // Wait for textarea to be filled with previous command
+      await this.page.waitForTimeout(1000);
+
+      // Clear textarea
+      console.log('   └─ Clearing previous script...');
+      await this.page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (textarea) {
+          textarea.value = '';
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      await this.page.waitForTimeout(500);
+
+      // Enter new script using same 3-part strategy as enterPrompt
+      console.log(`   └─ Entering new script (${newScript.length} chars)...`);
+      await this.enterPrompt(newScript);
+
+      console.log('   ✅ Script updated');
+      return true;
+    } catch (error) {
+      console.error(`   ❌ Error updating script: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 💫 REUSE OPTIMIZATION: Generate video from segment using reuse button
+   * For 2nd, 3rd, 4th segments - avoids re-uploading images
+   */
+  async generateSegmentVideo(segmentScript) {
+    console.log(`\n📍 GENERATING SEGMENT VIDEO ${segmentScript.length} chars...`);
+
+    try {
+      // Step 1: Click reuse command button (copies previous generation)
+      const reuseClicked = await this.clickReuseCommandButton();
+      if (!reuseClicked) {
+        console.warn('   ⚠️  Could not click reuse button, falling back to manual entry');
+      }
+
+      // Step 2: Update segment script (clears and enters new script)
+      await this.updateSegmentScript(segmentScript);
+
+      // Step 3: Check send button
+      await this.checkSendButton();
+
+      // Step 4: Submit and monitor generation
+      await this.submit();
+
+      // Step 5: Monitor generation
+      const renderComplete = await this.monitorGeneration();
+      if (!renderComplete) {
+        console.warn('   ⚠️  Generation did not complete within timeout');
+        return null;
+      }
+
+      // Step 6: Download video
+      const videoPath = await this.downloadVideo();
+      console.log(`   ✅ Segment video generated and downloaded`);
+      return videoPath;
+
+    } catch (error) {
+      console.error(`   ❌ Error generating segment video: ${error.message}`);
+      throw error;
+    }
   }
 }
 

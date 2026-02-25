@@ -31,6 +31,7 @@ const promptOptions = [
       background: 'clean white or neutral',
       equipment: 'professional photography setup'
     },
+    promptSuggestion: 'Photography studio with white seamless backdrop, professional lighting setup, pristine clean floor, perfect for fashion photography displays',
     isActive: true,
     sortOrder: 1
   },
@@ -45,6 +46,7 @@ const promptOptions = [
       background: 'beach with ocean',
       atmosphere: 'relaxed summer vibes'
     },
+    promptSuggestion: 'Golden hour beach setting with ocean waves in background, sandy beach, warm sunlight creating golden tones, relaxed vacation aesthetic',
     isActive: true,
     sortOrder: 2
   },
@@ -59,6 +61,7 @@ const promptOptions = [
       background: 'city architecture',
       atmosphere: 'contemporary urban'
     },
+    promptSuggestion: 'Urban street setting with modern city architecture, brick walls or glass buildings, street-level perspective, contemporary metropolitan vibe',
     isActive: true,
     sortOrder: 3
   },
@@ -73,6 +76,7 @@ const promptOptions = [
       background: 'trees and plants',
       atmosphere: 'earthy and organic'
     },
+    promptSuggestion: 'Natural outdoor environment with lush green trees, plants, garden setting, organic natural lighting, earthy peaceful atmosphere',
     isActive: true,
     sortOrder: 4
   },
@@ -87,6 +91,7 @@ const promptOptions = [
       background: 'modern office setting',
       atmosphere: 'corporate professional'
     },
+    promptSuggestion: 'Modern office environment with sleek furniture, minimalist desk setup, professional ambiance, corporate professional aesthetic, business-ready setting',
     isActive: true,
     sortOrder: 5
   },
@@ -103,6 +108,7 @@ const promptOptions = [
       quality: 'soft and diffused',
       shadows: 'natural soft shadows'
     },
+    promptSuggestion: 'Soft natural daylight, warm and flattering tones, gentle shadows that define features without harsh contrast, creates authentic and relatable aesthetic',
     isActive: true,
     sortOrder: 1
   },
@@ -117,6 +123,7 @@ const promptOptions = [
       quality: 'controlled and even',
       shadows: 'minimal and controlled'
     },
+    promptSuggestion: 'Professional studio lighting with precise control, even illumination across subject, minimal shadows, perfect controlled light for fashion photography',
     isActive: true,
     sortOrder: 2
   },
@@ -131,6 +138,7 @@ const promptOptions = [
       quality: 'warm and soft',
       shadows: 'long and soft'
     },
+    promptSuggestion: 'Warm golden hour light creating magical warm tones, soft long shadows, romantic and dreamy atmosphere, perfect for editorial and lifestyle photography',
     isActive: true,
     sortOrder: 3
   },
@@ -145,6 +153,7 @@ const promptOptions = [
       quality: 'high contrast',
       shadows: 'deep and defined'
     },
+    promptSuggestion: 'High-contrast dramatic lighting with defined shadows, moody and intense atmosphere, creates powerful editorial aesthetic and strong visual impact',
     isActive: true,
     sortOrder: 4
   },
@@ -159,6 +168,7 @@ const promptOptions = [
       quality: 'diffused and even',
       shadows: 'minimal and soft'
     },
+    promptSuggestion: 'Soft diffused lighting creating flattering skin tones, minimal shadows, gentle and forgiving illumination, perfect for fashion and beauty photography',
     isActive: true,
     sortOrder: 5
   },
@@ -175,6 +185,7 @@ const promptOptions = [
       posture: 'relaxed and natural',
       energy: 'positive and lively'
     },
+    promptSuggestion: 'Playful and joyful mood with genuine smiling expression, relaxed natural posture, positive energy and lively movement, perfect for fun and lighthearted fashion showcases',
     isActive: true,
     sortOrder: 1
   },
@@ -189,6 +200,7 @@ const promptOptions = [
       posture: 'upright and professional',
       energy: 'focused and serious'
     },
+    promptSuggestion: 'Serious and focused professional mood with composed expression, upright posture, concentrated gaze, adds formality and corporate polish to the look',
     isActive: true,
     sortOrder: 2
   },
@@ -203,6 +215,7 @@ const promptOptions = [
       posture: 'intimate and close',
       energy: 'romantic and gentle'
     },
+    promptSuggestion: 'Romantic and dreamy mood with soft ethereal expression, intimate posture, gentle movement, creates elegant and luxurious editorial aesthetic',
     isActive: true,
     sortOrder: 3
   },
@@ -217,6 +230,7 @@ const promptOptions = [
       posture: 'active and dynamic',
       energy: 'high energy and movement'
     },
+    promptSuggestion: 'Energetic and dynamic mood with vibrant expression, active movement and bold poses, high energy and motion, perfect for contemporary and sporty fashion',
     isActive: true,
     sortOrder: 4
   },
@@ -231,6 +245,7 @@ const promptOptions = [
       posture: 'relaxed and composed',
       energy: 'tranquil and serene'
     },
+    promptSuggestion: 'Calm and serene mood with peaceful expression, relaxed composed posture, tranquil energy, creates zen-like and minimalist fashion aesthetic',
     isActive: true,
     sortOrder: 5
   },
@@ -245,6 +260,7 @@ const promptOptions = [
       posture: 'elegant and refined',
       energy: 'sophisticated and polished'
     },
+    promptSuggestion: 'Elegant and sophisticated mood with graceful poised expression, refined posture, sophisticated energy, exudes luxury and high-fashion editorial appeal',
     isActive: true,
     sortOrder: 6
   },
@@ -261,6 +277,7 @@ const promptOptions = [
       materials: 'comfortable fabrics',
       vibe: 'casual and comfortable'
     },
+    promptSuggestion: 'Casual relaxed fashion style with comfortable fabrics and relaxed fit, everyday approachable look, perfect for lifestyle and street fashion photography',
     isActive: true,
     sortOrder: 1
   },
@@ -275,6 +292,7 @@ const promptOptions = [
       materials: 'premium fabrics',
       vibe: 'professional and polished'
     },
+    promptSuggestion: 'Formal professional fashion with tailored fit and premium fabrics, polished corporate aesthetic, perfect for business and formal event photography',
     isActive: true,
     sortOrder: 2
   },
@@ -289,6 +307,7 @@ const promptOptions = [
       materials: 'luxury fabrics',
       vibe: 'sophisticated and refined'
     },
+    promptSuggestion: 'Elegant sophisticated fashion with flowing silhouettes and luxury materials, refined upscale aesthetic, perfect for editorial and high-fashion photography',
     isActive: true,
     sortOrder: 3
   },
@@ -303,6 +322,7 @@ const promptOptions = [
       materials: 'performance fabrics',
       vibe: 'active and sporty'
     },
+    promptSuggestion: 'Sporty athletic fashion with performance fabrics and dynamic silhouettes, energetic active aesthetic, perfect for activewear and lifestyle photography',
     isActive: true,
     sortOrder: 4
   },
@@ -317,6 +337,7 @@ const promptOptions = [
       materials: 'retro fabrics',
       vibe: 'nostalgic and classic'
     },
+    promptSuggestion: 'Vintage retro fashion with nostalgic inspiration and classic elements, timeless aesthetic, perfect for period and editorial fashion photography',
     isActive: true,
     sortOrder: 5
   },
@@ -331,6 +352,7 @@ const promptOptions = [
       materials: 'luxury materials',
       vibe: 'exclusive and premium'
     },
+    promptSuggestion: 'Luxury high-end fashion with premium tailored fit and exclusive materials, prestige and opulence, perfect for luxury brand and editorial photography',
     isActive: true,
     sortOrder: 6
   },
@@ -345,6 +367,7 @@ const promptOptions = [
       materials: 'natural fabrics',
       vibe: 'artistic and free-spirited'
     },
+    promptSuggestion: 'Bohemian free-spirited fashion with flowing forms and natural materials, artistic expressive aesthetic, perfect for lifestyle and artistic photography',
     isActive: true,
     sortOrder: 7
   },
@@ -359,6 +382,7 @@ const promptOptions = [
       materials: 'minimalist fabrics',
       vibe: 'simple and modern'
     },
+    promptSuggestion: 'Minimalist modern fashion with clean lines and simple aesthetic, contemporary elegant simplicity, perfect for minimalist and editorial photography',
     isActive: true,
     sortOrder: 8
   },
@@ -373,6 +397,7 @@ const promptOptions = [
       materials: 'alternative materials',
       vibe: 'rebellious and bold'
     },
+    promptSuggestion: 'Edgy alternative fashion with bold attitude and rebellious aesthetic, contemporary avant-garde style, perfect for fashion editorial and statement photography',
     isActive: true,
     sortOrder: 9
   },
@@ -389,6 +414,7 @@ const promptOptions = [
       contrast: 'high contrast',
       colors: 'vibrant and bold'
     },
+    promptSuggestion: 'Vibrant saturated color palette with high contrast bold colors, energetic and eye-catching aesthetic, perfect for contemporary and fun fashion photography',
     isActive: true,
     sortOrder: 1
   },
@@ -403,6 +429,7 @@ const promptOptions = [
       contrast: 'high contrast',
       colors: 'black and white only'
     },
+    promptSuggestion: 'Monochrome black and white color palette with high dramatic contrast, classic timeless aesthetic, perfect for sophisticated editorial photography',
     isActive: true,
     sortOrder: 2
   },
@@ -417,6 +444,7 @@ const promptOptions = [
       contrast: 'soft contrast',
       colors: 'pastel and gentle'
     },
+    promptSuggestion: 'Soft pastel muted color palette with gentle contrast, romantic dreamy aesthetic, perfect for lifestyle and artistic fashion photography',
     isActive: true,
     sortOrder: 3
   },
@@ -431,6 +459,7 @@ const promptOptions = [
       contrast: 'medium contrast',
       colors: 'jewel-toned and rich'
     },
+    promptSuggestion: 'Rich jewel-toned colors with luxurious deep saturation, opulent sophisticated aesthetic, perfect for luxury and high-fashion editorial photography',
     isActive: true,
     sortOrder: 4
   },
@@ -445,6 +474,7 @@ const promptOptions = [
       contrast: 'warm contrast',
       colors: 'earth and warm tones'
     },
+    promptSuggestion: 'Natural earth tone color palette with warm organic aesthetic, grounded authentic feel, perfect for lifestyle and sustainable fashion photography',
     isActive: true,
     sortOrder: 5
   },
@@ -459,6 +489,7 @@ const promptOptions = [
       contrast: 'high contrast',
       colors: 'black and white only'
     },
+    promptSuggestion: 'Classic black and white high contrast palette, timeless sophisticated aesthetic, perfect for formal and editorial fashion photography',
     isActive: true,
     sortOrder: 6
   },
@@ -475,6 +506,7 @@ const promptOptions = [
       focus: 'front facing',
       perspective: 'direct view'
     },
+    promptSuggestion: 'Direct front-facing camera angle showing full frontal view of the outfit and face, focuses on overall look and front-facing presentation, perfect for full-body fashion shots',
     isActive: true,
     sortOrder: 1
   },
@@ -489,6 +521,7 @@ const promptOptions = [
       focus: 'side profile',
       perspective: 'lateral view'
     },
+    promptSuggestion: 'Side profile camera angle showing silhouette and body contour, emphasizes fit and drape of clothing, perfect for showcasing garment shape and lines',
     isActive: true,
     sortOrder: 2
   },
@@ -503,6 +536,7 @@ const promptOptions = [
       focus: 'angled view',
       perspective: 'three-quarter angle'
     },
+    promptSuggestion: 'Three-quarter angled view balancing front and side perspective, shows depth and dimension of outfit, most flattering for general fashion photography',
     isActive: true,
     sortOrder: 3
   },
@@ -517,6 +551,7 @@ const promptOptions = [
       focus: 'top down',
       perspective: 'aerial view'
     },
+    promptSuggestion: 'Overhead top-down bird\'s eye view showing full outfit layout, unique perspective emphasizing silhouette, perfect for flat lay and overhead fashion photography',
     isActive: true,
     sortOrder: 4
   },
@@ -531,6 +566,7 @@ const promptOptions = [
       focus: 'upward perspective',
       perspective: 'worm\'s eye view'
     },
+    promptSuggestion: 'Low angle upward perspective looking up at subject, adds drama and makes outfit appear grander, flattering for leg and silhouette emphasis',
     isActive: true,
     sortOrder: 5
   },
@@ -545,6 +581,7 @@ const promptOptions = [
       focus: 'downward perspective',
       perspective: 'god\'s eye view'
     },
+    promptSuggestion: 'High angle downward perspective looking down on subject, shows proportions and waistline, perfect for emphasizing outfit detail and shoe display',
     isActive: true,
     sortOrder: 6
   },
@@ -561,6 +598,7 @@ const promptOptions = [
       texture: 'straight',
       style: 'sleek and polished'
     },
+    promptSuggestion: 'Long straight hair flowing smoothly, silky and polished appearance, perfect for elegant and sophisticated looks or editorial fashion shots',
     isActive: true,
     sortOrder: 1
   },
@@ -575,6 +613,7 @@ const promptOptions = [
       texture: 'wavy',
       style: 'natural and flowing'
     },
+    promptSuggestion: 'Long wavy hair with natural waves and movement, romantic and flowing appearance, adds softness and dimension to the overall aesthetic',
     isActive: true,
     sortOrder: 2
   },
@@ -589,6 +628,7 @@ const promptOptions = [
       texture: 'curly',
       style: 'bouncy and voluminous'
     },
+    promptSuggestion: 'Long curly hair with defined bouncy curls, voluminous and full-bodied, adds drama and personality to the outfit, very expressive and fashion-forward',
     isActive: true,
     sortOrder: 3
   },
@@ -603,6 +643,7 @@ const promptOptions = [
       texture: 'straight',
       style: 'clean and simple'
     },
+    promptSuggestion: 'Medium length straight hair with clean lines, versatile and modern look, flatters most face shapes and works with many outfit styles',
     isActive: true,
     sortOrder: 4
   },
@@ -617,6 +658,7 @@ const promptOptions = [
       texture: 'wavy',
       style: 'relaxed and natural'
     },
+    promptSuggestion: 'Medium length wavy hair with relaxed waves, casual yet polished, adds movement and texture while maintaining easy-to-style practicality',
     isActive: true,
     sortOrder: 5
   },
@@ -631,6 +673,7 @@ const promptOptions = [
       texture: 'straight to wavy',
       style: 'chic and modern'
     },
+    promptSuggestion: 'Chic short bob cut, modern and fashionable, frames the face beautifully, adds sophistication and editorial appeal to the overall look',
     isActive: true,
     sortOrder: 6
   },
@@ -645,6 +688,7 @@ const promptOptions = [
       texture: 'short cropped',
       style: 'edgy and bold'
     },
+    promptSuggestion: 'Edgy short pixie cut, bold and fashion-forward, shows confidence and modern aesthetic, perfect for androgynous or avant-garde styling',
     isActive: true,
     sortOrder: 7
   },
@@ -659,6 +703,7 @@ const promptOptions = [
       texture: 'braided',
       style: 'traditional and intricate'
     },
+    promptSuggestion: 'Intricate braided hairstyle, could be single braid, multiple braids, or complex plaited patterns, adds artistry and cultural sophistication',
     isActive: true,
     sortOrder: 8
   },
@@ -673,6 +718,7 @@ const promptOptions = [
       texture: 'pulled back',
       style: 'elegant and formal'
     },
+    promptSuggestion: 'Elegant bun updo, sleek and polished, perfect for formal occasions or editorial shoots, showcases neck and facial features beautifully',
     isActive: true,
     sortOrder: 9
   },
@@ -689,6 +735,7 @@ const promptOptions = [
       finish: 'natural',
       emphasis: 'skin clarity'
     },
+    promptSuggestion: 'Light natural makeup enhancing skin clarity, fresh and clean appearance, perfect for daytime or casual looks that focus on skin quality',
     isActive: true,
     sortOrder: 1
   },
@@ -703,6 +750,7 @@ const promptOptions = [
       finish: 'dewy',
       emphasis: 'healthy glow'
     },
+    promptSuggestion: 'Light dewy makeup with healthy glow, fresh and approachable appearance, adds radiance without heavy coverage, ideal for editorial and daytime shoots',
     isActive: true,
     sortOrder: 2
   },
@@ -717,6 +765,7 @@ const promptOptions = [
       finish: 'radiant',
       emphasis: 'highlighter and glow'
     },
+    promptSuggestion: 'Radiant glowing makeup with strategic highlight placement, beautiful luminous finish, captures light beautifully in photography, adds luxury and dimension',
     isActive: true,
     sortOrder: 3
   },
@@ -731,6 +780,7 @@ const promptOptions = [
       finish: 'matte or satin',
       emphasis: 'bold lip color'
     },
+    promptSuggestion: 'Bold statement lipstick in rich colors like red or burgundy, focal point of the makeup, exudes confidence and sophistication, perfect for editorial looks',
     isActive: true,
     sortOrder: 4
   },
@@ -745,6 +795,7 @@ const promptOptions = [
       finish: 'matte or shimmer',
       emphasis: 'dramatic eyes'
     },
+    promptSuggestion: 'Dramatic smokey eye makeup with blended dark eyeshadow tones, creates depth and mystery, draws attention to eyes, adds editorial and luxurious impact',
     isActive: true,
     sortOrder: 5
   },
@@ -759,6 +810,7 @@ const promptOptions = [
       finish: 'precise',
       emphasis: 'eyeliner wings'
     },
+    promptSuggestion: 'Precise winged eyeliner with sharp cat-eye flick, classic and fashion-forward, defines eyes and adds geometric sophistication to the face',
     isActive: true,
     sortOrder: 6
   },
@@ -773,6 +825,7 @@ const promptOptions = [
       finish: 'glamorous',
       emphasis: 'overall dramatic look'
     },
+    promptSuggestion: 'Full glamorous makeup with bold eyes and lips, luxurious and dramatic overall look, perfect for party photography and high-fashion editorial shoots',
     isActive: true,
     sortOrder: 7
   },
@@ -789,6 +842,7 @@ const promptOptions = [
       fit: 'various fits',
       style: 'casual versatile'
     },
+    promptSuggestion: 'Well-fitted denim jeans in classic wash or trendy style, could be skinny, straight-leg, or wide-leg, provides timeless casual foundation for the outfit',
     isActive: true,
     sortOrder: 1
   },
@@ -803,6 +857,7 @@ const promptOptions = [
       fit: 'tailored',
       style: 'formal professional'
     },
+    promptSuggestion: 'Tailored formal trousers in neutral colors or patterns, structured fit with crisp creases, elevates the look with professional polish and sophistication',
     isActive: true,
     sortOrder: 2
   },
@@ -817,6 +872,7 @@ const promptOptions = [
       length: 'above knee',
       style: 'casual summer'
     },
+    promptSuggestion: 'Stylish shorts in appropriate length and fabric, could be denim, linen, or tailored, perfect for summer looks and vacation-ready outfits',
     isActive: true,
     sortOrder: 3
   },
@@ -831,6 +887,7 @@ const promptOptions = [
       length: 'various',
       style: 'feminine versatile'
     },
+    promptSuggestion: 'Feminine skirt in flattering length and silhouette, could be pencil, A-line, or maxi, adds elegance and showcases leg line beautifully',
     isActive: true,
     sortOrder: 4
   },
@@ -845,6 +902,7 @@ const promptOptions = [
       fit: 'tight fitted',
       style: 'athletic comfortable'
     },
+    promptSuggestion: 'Sleek leggings in premium fabric, could be black, patterned, or trendy colors, provides comfortable fit while maintaining polished appearance',
     isActive: true,
     sortOrder: 5
   },
@@ -859,6 +917,7 @@ const promptOptions = [
       fit: 'relaxed',
       style: 'utility streetwear'
     },
+    promptSuggestion: 'Utilitarian cargo pants in neutral tones, features multiple pockets and relaxed fit, adds streetwear edge and practical functionality to the look',
     isActive: true,
     sortOrder: 6
   },
@@ -875,6 +934,7 @@ const promptOptions = [
       heel: 'flat',
       style: 'casual sporty'
     },
+    promptSuggestion: 'Trendy sneakers in neutral or style-matching colors, could be minimalist court shoes, chunky fashion sneakers, or designer trainer styles, adds casual cool vibe',
     isActive: true,
     sortOrder: 1
   },
@@ -889,6 +949,7 @@ const promptOptions = [
       heel: 'high',
       style: 'formal elegant'
     },
+    promptSuggestion: 'Elegant high heels complementing the outfit, could be classic pumps, strappy sandals, or statement heels, adds sophistication and defines the silhouette',
     isActive: true,
     sortOrder: 2
   },
@@ -903,6 +964,7 @@ const promptOptions = [
       heel: 'various',
       style: 'stylish versatile'
     },
+    promptSuggestion: 'Fashionable boots that elevate the look, could be ankle boots, knee-high, leather or suede, adds texture and editorial edge to the overall styling',
     isActive: true,
     sortOrder: 3
   },
@@ -917,6 +979,7 @@ const promptOptions = [
       heel: 'flat',
       style: 'comfortable casual'
     },
+    promptSuggestion: 'Comfortable flat shoes in coordinating colors, could be ballet flats, loafers, or minimalist slip-ons, provides effortless elegance and all-day comfort',
     isActive: true,
     sortOrder: 4
   },
@@ -931,6 +994,7 @@ const promptOptions = [
       heel: 'various',
       style: 'summer breathable'
     },
+    promptSuggestion: 'Stylish summer sandals, could be strappy heeled sandals, flat beach sandals, or designer thong sandals, perfect for warm-weather or vacation aesthetics',
     isActive: true,
     sortOrder: 5
   },
@@ -945,6 +1009,7 @@ const promptOptions = [
       heel: 'flat',
       style: 'smart casual classic'
     },
+    promptSuggestion: 'Classic loafers adding smart-casual polish, could be leather dress loafers or embellished designer styles, elevates casual wear with refined presentation',
     isActive: true,
     sortOrder: 6
   },
@@ -961,6 +1026,7 @@ const promptOptions = [
       placement: 'neck',
       style: 'decorative'
     },
+    promptSuggestion: 'Elegant necklace complementing the neckline, could be delicate chain, pendant style, or layered pieces, adds sophistication and draws attention to the face',
     isActive: true,
     sortOrder: 1
   },
@@ -975,6 +1041,7 @@ const promptOptions = [
       placement: 'ears',
       style: 'decorative'
     },
+    promptSuggestion: 'Statement or subtle earrings framing the face, could be studs, hoops, or dangles, matches the overall style aesthetic and face shape',
     isActive: true,
     sortOrder: 2
   },
@@ -989,6 +1056,7 @@ const promptOptions = [
       placement: 'wrist',
       style: 'functional decorative'
     },
+    promptSuggestion: 'Luxury timepiece on wrist, could be elegant dress watch, sporty smartwatch, or designer chronograph, complements arm gestures and overall styling',
     isActive: true,
     sortOrder: 3
   },
@@ -1003,6 +1071,7 @@ const promptOptions = [
       placement: 'hand or shoulder',
       style: 'functional decorative'
     },
+    promptSuggestion: 'Designer handbag that complements the outfit, could be luxury leather tote, crossbody bag, or clutch, adds polish and completes the look with texture and brand prestige',
     isActive: true,
     sortOrder: 4
   },
@@ -1017,6 +1086,7 @@ const promptOptions = [
       placement: 'eyes',
       style: 'protective fashionable'
     },
+    promptSuggestion: 'Fashionable sunglasses that enhance the face shape and style, could be cat-eye, oversized, round frames, or aviators, adds mystery and editorial edge',
     isActive: true,
     sortOrder: 5
   },
@@ -1031,6 +1101,7 @@ const promptOptions = [
       placement: 'neck or shoulders',
       style: 'decorative functional'
     },
+    promptSuggestion: 'Silk or luxury fabric scarf draped elegantly around neck or shoulders, could be patterned or solid, adds color accent and refined texture to the overall look',
     isActive: true,
     sortOrder: 6
   },
@@ -1045,6 +1116,7 @@ const promptOptions = [
       placement: 'waist',
       style: 'functional decorative'
     },
+    promptSuggestion: 'Statement belt defining the waist, could be leather, chain, or fabric with metallic buckle, creates silhouette and adds polished finishing touch',
     isActive: true,
     sortOrder: 7
   },
@@ -1059,6 +1131,7 @@ const promptOptions = [
       placement: 'head',
       style: 'protective fashionable'
     },
+    promptSuggestion: 'Fashionable hat style like beret, fedora, baseball cap, or wide-brim hat, complements face shape and overall aesthetic, adds personality and editorial flair',
     isActive: true,
     sortOrder: 8
   },
@@ -1075,6 +1148,7 @@ const promptOptions = [
       weight: 'light to medium',
       style: 'casual versatile'
     },
+    promptSuggestion: 'Casual lightweight jacket in various styles like denim, bomber, or leather, adds layer and personality, perfect for completing streetwear or casual looks',
     isActive: true,
     sortOrder: 1
   },
@@ -1089,6 +1163,7 @@ const promptOptions = [
       weight: 'heavy',
       style: 'formal elegant'
     },
+    promptSuggestion: 'Formal elegant coat in wool or premium fabric, sophisticated and protective silhouette, adds luxury and polish to professional or formal fashion looks',
     isActive: true,
     sortOrder: 2
   },
@@ -1103,6 +1178,7 @@ const promptOptions = [
       weight: 'light to medium',
       style: 'formal professional'
     },
+    promptSuggestion: 'Tailored structured blazer, instantly elevates any outfit to professional level, defines silhouette and adds polish, essential for business and editorial looks',
     isActive: true,
     sortOrder: 3
   },
@@ -1117,6 +1193,7 @@ const promptOptions = [
       weight: 'medium',
       style: 'casual comfortable'
     },
+    promptSuggestion: 'Cozy knitted cardigan, soft and layerable, adds comfort and dimension to casual outfits, perfect for relaxed fashion or layering over dresses',
     isActive: true,
     sortOrder: 4
   },
@@ -1131,6 +1208,7 @@ const promptOptions = [
       weight: 'medium',
       style: 'casual sporty'
     },
+    promptSuggestion: 'Sporty hooded sweatshirt, ultimate casual comfort, adds contemporary streetwear vibe to the look, perfect for athletic or urban fashion styling',
     isActive: true,
     sortOrder: 5
   },
@@ -1145,6 +1223,7 @@ const promptOptions = [
       weight: 'light',
       style: 'layering formal'
     },
+    promptSuggestion: 'Structured vest perfect for layering, adds dimension and interest without overwhelming, creates visual separation and formal sophistication',
     isActive: true,
     sortOrder: 6
   }

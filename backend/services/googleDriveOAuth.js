@@ -517,19 +517,23 @@ class GoogleDriveOAuthService {
     } catch (error) {
       console.error(`❌ Error uploading buffer ${fileName}:`, error.message);
       
-      // 💫 GRACEFUL: Return local file info instead of throwing
-      console.warn(`⚠️  Google Drive upload failed. Returning local file info.`);
+      // 💫 FIX: Return error object (not graceful fallback) so caller knows it failed
+      // This makes it clear to the caller that the upload didn't succeed
+      console.warn(`⚠️  Google Drive upload FAILED. File is NOT on Drive.`);
+      console.warn(`     Error details: ${error.message}`);
+      
       return {
-        id: `local-${Date.now()}`,
+        id: null,
         name: fileName,
         mimeType: this.getMimeType(fileName),
-        webViewLink: null,
+        webViewLink: null,  // 💫 KEY: This will be null if upload failed
         size: buffer.length,
         createdTime: new Date().toISOString(),
         contentType: 'local',
         source: 'local-storage',
-        notice: 'Google Drive upload failed. File saved locally.',
-        error: error.message
+        success: false,
+        error: error.message,
+        notice: 'Google Drive upload failed. File was NOT saved to Drive.'
       };
     }
   }

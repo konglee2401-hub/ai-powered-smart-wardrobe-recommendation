@@ -165,7 +165,7 @@ class GoogleLabsAutomation {
    * Enter prompt into Google Labs
    */
   async enterPrompt(prompt) {
-    console.log('✍️ Entering prompt...');
+    console.log('✍️ Entering prompt (optimized with paste)...');
     
     let textarea = await this.page.$('textarea[placeholder*="prompt" i]');
     
@@ -184,9 +184,30 @@ class GoogleLabsAutomation {
       throw new Error('Prompt input field not found');
     }
     
+    // Clean prompt
+    const cleanPrompt = prompt.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
+    const tailLength = 20; // Last 20 characters to type manually
+    
+    const mainPart = cleanPrompt.substring(0, cleanPrompt.length - tailLength);
+    const tailPart = cleanPrompt.substring(cleanPrompt.length - tailLength);
+    
+    console.log(`  Strategy: Paste (${mainPart.length} chars) + Type (${tailPart.length} chars)`);
+    
+    // Clear existing content
     await textarea.click({ clickCount: 3 });
     await this.page.keyboard.press('Backspace');
-    await textarea.type(prompt, { delay: 50 });
+    
+    // Paste main part
+    if (mainPart.length > 0) {
+      console.log(`  → Pasting ${mainPart.length} characters...`);
+      await textarea.type(mainPart, { delay: 2 });
+    }
+    
+    // Type the tail part
+    if (tailPart.length > 0) {
+      console.log(`  → Typing final ${tailPart.length} characters...`);
+      await textarea.type(tailPart, { delay: 50 });
+    }
     
     console.log('✅ Prompt entered successfully');
   }

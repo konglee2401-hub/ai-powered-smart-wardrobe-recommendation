@@ -12,9 +12,12 @@
 import PromptOption from '../models/PromptOption.js';
 
 // ============================================================
-// LOAD TECHNICAL DETAILS FOR OPTIONS
+// LOAD OPTION DETAILS: TECHNICAL DETAILS & PROMPT SUGGESTIONS
 // ============================================================
 
+/**
+ * Load technical details for an option
+ */
 async function loadOptionDetails(optionValue, category) {
   try {
     const option = await PromptOption.findOne({ value: optionValue, category });
@@ -27,6 +30,25 @@ async function loadOptionDetails(optionValue, category) {
   
   // Fallback to hardcoded technical details
   return getFallbackTechnicalDetails(category, optionValue);
+}
+
+/**
+ * Load prompt suggestion for an option (NEW)
+ * Returns contextual detailed text to replace generic option names
+ * Example: 'minimalist-indoor' -> 'Room with organized wardrobe and designer shoes'
+ */
+async function loadPromptSuggestion(optionValue, category) {
+  try {
+    const option = await PromptOption.findOne({ value: optionValue, category });
+    if (option && option.promptSuggestion) {
+      return option.promptSuggestion;
+    }
+  } catch (error) {
+    console.warn(`Could not load prompt suggestion for ${category}:${optionValue}:`, error.message);
+  }
+  
+  // Return fallback: just the option value if no promptSuggestion found
+  return optionValue;
 }
 
 function getFallbackTechnicalDetails(category, optionValue) {
@@ -63,6 +85,7 @@ function getFallbackTechnicalDetails(category, optionValue) {
 
 /**
  * Build smart, structured prompt based on use case and product focus
+ * NOW: Includes detailed contextual promptSuggestions for all options instead of generic names
  * @param {Object} analysis - Full analysis data from unified analysis
  * @param {Object} selectedOptions - User-selected options
  * @param {string} useCase - 'change-clothes', 'styling', 'complete-look', etc.
@@ -83,16 +106,19 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   // Route to appropriate prompt builder based on use case
   switch (useCase) {
     case 'change-clothes':
-      promptStr = buildChangeClothesPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildChangeClothesPrompt(analysis, selectedOptions, productFocus);
+      break;
+    case 'character-holding-product':
+      promptStr = await buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus);
       break;
     case 'ecommerce-product':
-      promptStr = buildEcommerceProductPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildEcommerceProductPrompt(analysis, selectedOptions, productFocus);
       break;
     case 'social-media':
-      promptStr = buildSocialMediaPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildSocialMediaPrompt(analysis, selectedOptions, productFocus);
       break;
     case 'fashion-editorial':
-      promptStr = buildFashionEditorialPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildFashionEditorialPrompt(analysis, selectedOptions, productFocus);
       break;
     case 'lifestyle-scene':
       promptStr = buildLifestyleScenePrompt(analysis, selectedOptions, productFocus);
@@ -122,7 +148,7 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
  * CHANGE CLOTHES: Keep character's face and body, ONLY change the clothing
  * Most important: Emphasize keeping face, body, pose identical
  */
-function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
+async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -226,14 +252,16 @@ function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
   // 3. HAIR & MAKEUP STYLING
   parts.push(`\n=== HAIRSTYLE & MAKEUP ===`);
   if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
-    parts.push(`Hairstyle: ${selectedOptions.hairstyle}`);
+    const hairstyleSuggestion = await loadPromptSuggestion(selectedOptions.hairstyle, 'hairstyle');
+    parts.push(`Hairstyle: ${hairstyleSuggestion}`);
   } else {
     parts.push(`Hairstyle: Keep SAME as reference image - do NOT change`);
   }
   
   // Makeup from selectedOptions or from character analysis
   if (selectedOptions.makeup) {
-    parts.push(`Makeup: ${selectedOptions.makeup}`);
+    const makeupSuggestion = await loadPromptSuggestion(selectedOptions.makeup, 'makeup');
+    parts.push(`Makeup: ${makeupSuggestion}`);
   } else if (character.makeup) {
     parts.push(`Makeup: ${character.makeup}`);
   } else {
@@ -260,16 +288,18 @@ function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
     }
   }
 
-  // 5. FOOTWEAR (NEW - from selectedOptions)
+  // 5. FOOTWEAR (NEW - from selectedOptions with promptSuggestion)
   if (selectedOptions.shoes) {
     parts.push(`\n=== FOOTWEAR ===`);
-    parts.push(`Shoes: ${selectedOptions.shoes}`);
+    const shoesSuggestion = await loadPromptSuggestion(selectedOptions.shoes, 'shoes');
+    parts.push(`Shoes: ${shoesSuggestion}`);
   }
 
-  // 6. BOTTOM WEAR (NEW - if specified)
+  // 6. BOTTOM WEAR (NEW - if specified with promptSuggestion)
   if (selectedOptions.bottom) {
     parts.push(`\n=== BOTTOM WEAR ===`);
-    parts.push(`${selectedOptions.bottom}`);
+    const bottomSuggestion = await loadPromptSuggestion(selectedOptions.bottom, 'bottoms');
+    parts.push(`${bottomSuggestion}`);
   }
 
   // 7. GARMENT PLACEMENT INSTRUCTIONS (NEW - Critical for virtual try-on)
@@ -283,22 +313,51 @@ function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
   parts.push(`7. Do NOT distort character's body to fit garment`);
   parts.push(`8. Keep body proportions visible in shoulders/waist/hips\n`);
 
-  // 8. ENVIRONMENT & LIGHTING
+  // 8. ENVIRONMENT & LIGHTING (WITH TECHNICAL DETAILS AND PROMPT SUGGESTIONS)
   parts.push(`\n=== ENVIRONMENT ===`);
   if (selectedOptions.scene) {
-    parts.push(`Setting: ${selectedOptions.scene}`);
+    const sceneSuggestion = await loadPromptSuggestion(selectedOptions.scene, 'scene');
+    parts.push(`Setting: ${sceneSuggestion}`);
     // Add technical details for specific scenes
-    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
-    if (sceneDetails) parts.push(sceneDetails);
+    const sceneDetails = getFallbackTechnicalDetails('scene', selectedOptions.scene);
+    if (sceneDetails && Object.keys(sceneDetails).length > 0) {
+      for (const [key, value] of Object.entries(sceneDetails)) {
+        parts.push(`  ${key}: ${value}`);
+      }
+    }
   }
-  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
-  if (selectedOptions.mood) parts.push(`Mood/Vibe: ${selectedOptions.mood}`);
+  
+  if (selectedOptions.lighting) {
+    const lightingSuggestion = await loadPromptSuggestion(selectedOptions.lighting, 'lighting');
+    parts.push(`\nLighting: ${lightingSuggestion}`);
+    // Add technical details for lighting setup
+    const lightingDetails = getFallbackTechnicalDetails('lighting', selectedOptions.lighting);
+    if (lightingDetails && Object.keys(lightingDetails).length > 0) {
+      for (const [key, value] of Object.entries(lightingDetails)) {
+        parts.push(`  ${key}: ${value}`);
+      }
+    }
+  }
+  
+  if (selectedOptions.mood) {
+    const moodSuggestion = await loadPromptSuggestion(selectedOptions.mood, 'mood');
+    parts.push(`\nMood/Atmosphere: ${moodSuggestion}`);
+  }
 
-  // 9. PHOTO STYLE & TECHNICAL
+  // 9. PHOTO STYLE & TECHNICAL (WITH PROMPT SUGGESTIONS)
   parts.push(`\n=== PHOTOGRAPHY & QUALITY ===`);
-  if (selectedOptions.style) parts.push(`Style: ${selectedOptions.style}`);
-  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
-  if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}`);
+  if (selectedOptions.style) {
+    const styleSuggestion = await loadPromptSuggestion(selectedOptions.style, 'style');
+    parts.push(`Style: ${styleSuggestion}`);
+  }
+  if (selectedOptions.cameraAngle) {
+    const angleSuggestion = await loadPromptSuggestion(selectedOptions.cameraAngle, 'cameraAngle');
+    parts.push(`Camera angle: ${angleSuggestion}`);
+  }
+  if (selectedOptions.colorPalette) {
+    const paletteSuggestion = await loadPromptSuggestion(selectedOptions.colorPalette, 'colorPalette');
+    parts.push(`Color palette: ${paletteSuggestion}`);
+  }
   
   parts.push(`Quality: Professional photography, 8k, sharp focus, ultra-detailed, photorealistic`);
   parts.push(`Detail Level: Realistic fabric texture, proper draping, anatomically correct\n`);
@@ -355,7 +414,254 @@ function getSceneTechnicalDetails(scene) {
 }
 
 // ============================================================
-// 🛍️ ECOMMERCE: Professional product photography for online stores
+// � CHARACTER HOLDING PRODUCT: Character looking at/presenting product in hand
+// ============================================================
+
+/**
+ * CHARACTER HOLDING PRODUCT: Character prominently holding or presenting the product
+ * 
+ * Key Focus:
+ * - Character is the PRIMARY SUBJECT (60%+ of image)
+ * - Product is VISIBLE in hands/displayed (40% of focus)
+ * - Natural pose of holding/presenting product
+ * - Character's expression shows the product or engagement with it
+ * 
+ * Best For:
+ * - Affiliate marketing (presenter + product)
+ * - Fashion styling (model showing outfit piece)
+ * - Product demonstration (how to use/wear)
+ * - Social media content (trending product showcase)
+ * - Unboxing-style content
+ */
+async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus) {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  parts.push('[CHARACTER HOLDING PRODUCT COMPOSITION]');
+  parts.push('Purpose: Character prominently holding or presenting product for affiliate/marketing content');
+  parts.push('Focus: Character (60%) + Product in hand (40%)\n');
+
+  // ==========================================
+  // IMAGE REFERENCE SETUP
+  // ==========================================
+  parts.push('[IMAGE REFERENCE MAPPING]');
+  parts.push('Image 1 (First Upload) = CHARACTER REFERENCE - Person to feature');
+  parts.push('Image 2 (Second Upload) = PRODUCT REFERENCE - Item to hold/present');
+  parts.push('CRITICAL: Character holds/presents product from Image 2 in hand or elevated position.\n');
+
+  // ==========================================
+  // CHARACTER SECTION (PRIMARY FOCUS)
+  // ==========================================
+  parts.push('=== CHARACTER (PRIMARY SUBJECT - 60% of focus) ===');
+  parts.push('The character is the MAIN SUBJECT - prominently featured\n');
+
+  // Physical appearance - KEEP SAME
+  parts.push('Character Description (KEEP FROM IMAGE 1):');
+  if (character.age) parts.push(`- Age: ${character.age} years old`);
+  if (character.gender) parts.push(`- Gender: ${character.gender}`);
+  if (character.skinTone) parts.push(`- Skin tone: ${character.skinTone}`);
+  
+  if (character.hair?.color && character.hair?.style) {
+    parts.push(`- Hair: ${character.hair.color} hair, ${character.hair.style} style`);
+  }
+  
+  if (character.facialFeatures) {
+    parts.push(`- Facial features: ${character.facialFeatures}`);
+  }
+  parts.push(`- SAME face, body, and overall appearance as Image 1\n`);
+
+  // Pose for holding product
+  parts.push('POSE & POSITIONING:');
+  parts.push('- Standing or seated, natural comfortable position');
+  parts.push(`- Hands/arms prominently HOLDING or PRESENTING the product`);
+  parts.push('- Product visible and well-placed in character\'s hands or near body');
+  parts.push('- Character looking at product OR toward camera with confident/engaging expression');
+  parts.push('- Posture: Open, approachable, product-focused pose');
+  parts.push('- Full body or close-up focusing on the hands holding product\n');
+
+  // Expression & Engagement
+  parts.push('EXPRESSION & ENGAGEMENT:');
+  parts.push('- Expression: Engaged, interested, possibly smiling or intrigued');
+  parts.push('- Focus: Looking at product or making eye contact while holding it');
+  parts.push('- Energy: Positive, confident, product-presentation energy');
+  parts.push('- NOT looking away from or ignoring the product\n');
+
+  // Outfit for character
+  parts.push('CHARACTER OUTFIT:');
+  if (selectedOptions.outfitColor) {
+    parts.push(`- Color: ${selectedOptions.outfitColor}`);
+  } else {
+    parts.push(`- Color: Neutral or complementary to product`);
+  }
+  if (selectedOptions.outfitStyle) {
+    parts.push(`- Style: ${selectedOptions.outfitStyle}`);
+  } else {
+    parts.push(`- Style: Casual, clean, professional casual`);
+  }
+  parts.push(`- Purpose: Does NOT compete with product - subtle background outfit\n`);
+
+  // ==========================================
+  // PRODUCT SECTION (SECONDARY FOCUS - IN HANDS)
+  // ==========================================
+  parts.push('=== PRODUCT (SECONDARY FOCUS - IN HANDS) ===');
+  parts.push('The product is PROMINENTLY VISIBLE, held or presented by character\n');
+
+  // Product identification
+  if (product.garment_type) {
+    parts.push(`Garment: ${product.garment_type}`);
+  } else if (product.detailedDescription) {
+    parts.push(`Item: ${product.detailedDescription}`);
+  } else if (product.type) {
+    parts.push(`Type: ${product.type}`);
+  }
+
+  // Product styling details
+  if (product.style_category) parts.push(`Style: ${product.style_category}`);
+
+  // Colors
+  parts.push(`\n📍 COLORS (Clear identification):`);
+  if (product.primary_color) parts.push(`  Primary: ${product.primary_color}`);
+  if (product.secondary_color && product.secondary_color !== '') {
+    parts.push(`  Secondary: ${product.secondary_color}`);
+  }
+
+  // Material
+  parts.push(`\n🧵 MATERIAL & TEXTURE:`);
+  if (product.fabric_type) {
+    parts.push(`  Fabric: ${product.fabric_type}`);
+    parts.push(`  Appearance: Realistic ${product.fabric_type.toLowerCase()} texture`);
+  } else if (product.material) {
+    parts.push(`  Material: ${product.material}`);
+  }
+
+  // Pattern
+  parts.push(`\n🎨 PATTERN & DESIGN:`);
+  if (product.pattern) {
+    parts.push(`  Pattern: ${product.pattern}`);
+  } else {
+    parts.push(`  Pattern: Solid color`);
+  }
+
+  // Design details
+  if (product.key_details) {
+    parts.push(`  Key details: ${product.key_details}`);
+  }
+
+  // HOW PRODUCT IS HELD
+  parts.push(`\n👐 HOW PRODUCT IS PRESENTED:`);
+  parts.push(`- Character HOLDS product clearly visible to camera`);
+  parts.push(`- Hand position: Comfortable natural holding position`);
+  parts.push(`- Product orientation: Clearly visible, not hidden or folded`);
+  parts.push(`- Angle: Best angle to show product details`);
+  if (productFocus === 'full-outfit') {
+    parts.push(`- Display: Garment held up, draped on arms, or worn by character`);
+  } else if (productFocus === 'top') {
+    parts.push(`- Display: Top piece held or draped, clearly visible`);
+  } else if (productFocus === 'bottom') {
+    parts.push(`- Display: Bottom piece held up, folded visible in hands`);
+  } else if (productFocus === 'shoes') {
+    parts.push(`- Display: Shoes held in hands showing front/side view`);
+  } else if (productFocus === 'accessory') {
+    parts.push(`- Display: Accessory prominently held or displayed near face/chest`);
+  }
+  parts.push(`- Lighting on product: Well-lit, colors true-to-life\n`);
+
+  // ==========================================
+  // HANDS & PLACEMENT
+  // ==========================================
+  parts.push('=== HANDS & PRODUCT PLACEMENT ===');
+  parts.push('- Hands: Natural, well-shaped, clearly visible');
+  parts.push('- Hand position: Comfortable holding or presenting pose');
+  parts.push('- Fingers: Visible but not distracting, natural posture');
+  parts.push('- Product placement: Center-right or slightly off-center for visual balance');
+  parts.push('- Hand-product relationship: Product clearly held/presented by character\n');
+
+  // ==========================================
+  // STYLING & APPEARANCE
+  // ==========================================
+  parts.push('=== STYLING & APPEARANCE ===');
+  
+  // Hairstyle
+  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
+    const hairstyleSuggestion = await loadPromptSuggestion(selectedOptions.hairstyle, 'hairstyle');
+    parts.push(`Hairstyle: ${hairstyleSuggestion}`);
+  } else {
+    parts.push(`Hairstyle: Keep from Image 1 reference`);
+  }
+
+  // Makeup
+  if (selectedOptions.makeup) {
+    const makeupSuggestion = await loadPromptSuggestion(selectedOptions.makeup, 'makeup');
+    parts.push(`Makeup: ${makeupSuggestion}`);
+  } else {
+    parts.push(`Makeup: Natural, fresh, professional look - enhances but not overpowering`);
+  }
+
+  // Accessories
+  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
+    parts.push(`\nAccessories: Minimal - does not compete with held product`);
+    const accessories = Array.isArray(selectedOptions.accessories)
+      ? selectedOptions.accessories
+      : selectedOptions.accessories.split(',');
+    parts.push(`- Featured: ${accessories.join(', ')}`);
+  }
+
+  // ==========================================
+  // ENVIRONMENT & SETTING
+  // ==========================================
+  parts.push(`\n=== ENVIRONMENT & SETTING ===`);
+  if (selectedOptions.scene) {
+    parts.push(`Location: ${selectedOptions.scene}`);
+    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
+    if (sceneDetails) parts.push(sceneDetails);
+  } else {
+    parts.push(`Location: Clean, uncluttered background - focus on character`);
+  }
+  parts.push(`Background: Slightly soft-focused or neutral to emphasize character\n`);
+
+  // ==========================================
+  // PHOTOGRAPHY STYLE & TECHNICAL
+  // ==========================================
+  parts.push('=== LIGHTING & PHOTOGRAPHY ===');
+  if (selectedOptions.lighting) {
+    parts.push(`Lighting style: ${selectedOptions.lighting}`);
+  } else {
+    parts.push(`Lighting: Soft, flattering, even lighting on character and product`);
+  }
+  parts.push('- Key light: Slightly front/45° for flattering character lighting');
+  parts.push('- Product lighting: Well-lit showing colors and texture clearly');
+  parts.push('- No harsh shadows on character or product');
+  
+  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
+  else parts.push(`Mood: Positive, engaging, professional presentation`);
+
+  parts.push(`\n=== COMPOSITION ===`);
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
+  else parts.push(`Camera angle: Eye-level or slightly below eye-level for engagement`);
+
+  if (selectedOptions.colorPalette) parts.push(`Color harmony: ${selectedOptions.colorPalette}`);
+  else parts.push(`Color harmony: Warm, inviting, product colors pop`);
+
+  parts.push(`\nFrame: Character from waist/hips up OR full-body showing hands clearly`);
+  parts.push(`Focus: Sharp and detailed on face and hands`);
+  parts.push(`Depth: Slight background blur to emphasize character and product\n`);
+
+  // ==========================================
+  // FINAL TECHNICAL SPECS
+  // ==========================================
+  parts.push('=== QUALITY & TECHNICAL SPECS ===');
+  parts.push('Resolution: 8K ultra high quality');
+  parts.push('Style: Professional marketing/affiliate photography');
+  parts.push('Finish: Magazine-quality, retail-ready');
+  parts.push('Details: Ultra-detailed, sharp focus, excellent clarity');
+  parts.push('Aesthetic: Clean, professional, product-focused marketing image');
+
+  return parts.join('\n');
+}
+
+// ============================================================
+// �🛍️ ECOMMERCE: Professional product photography for online stores
 // ============================================================
 
 function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus) {

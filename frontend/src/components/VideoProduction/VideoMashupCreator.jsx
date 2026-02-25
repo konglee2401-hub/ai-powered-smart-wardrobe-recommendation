@@ -442,8 +442,7 @@ export function VideoMashupCreator() {
         isOpen={showSubVideoGallery}
         onClose={() => setShowSubVideoGallery(false)}
         onSelect={handleSelectSubVideo}
-        mediaType="video"
-        contentType="video"
+        assetType="video"
         title="Select Sub-Video"
       />
     </div>

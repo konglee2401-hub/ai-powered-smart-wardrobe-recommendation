@@ -259,6 +259,28 @@ const PROMPT_TEMPLATES = {
     },
     negative: () => 'blurry, low quality, different face, distorted, multiple people, bad proportions',
   },
+  'character-holding-product': {
+    structure: 'character_holding_product',
+    instruction: 'Image 1: [CHARACTER]-character\nImage 2: [PRODUCT]\nCharacter holds/presents product in hand',
+    positive: (options, useCase) => {
+      const shotAndPose = formatShotAndPose(options.shotType, options.bodyPose);
+      const parts = [
+        'Professional character holding/presenting [PRODUCT_DESCRIPTION]',
+        'character from reference image',
+        'prominently holding or displaying product',
+        'hands clearly visible with product',
+        shotAndPose && `${shotAndPose}`,
+        options.scene && `in a ${options.scene}`,
+        options.lighting && `${options.lighting} lighting`,
+        options.mood && `${options.mood} engaging expression`,
+        options.style && `${options.style} photography`,
+        'marketing/affiliate quality, product showcase',
+        'high quality, sharp focus, products visible, professional'
+      ].filter(Boolean);
+      return parts.join(', ');
+    },
+    negative: () => 'blurry, low quality, different face, product hidden, hands deformed, multiple people',
+  },
   'ecommerce-product': {
     structure: 'product_focused',
     instruction: 'Focus on product showcase with optimal lighting for e-commerce',

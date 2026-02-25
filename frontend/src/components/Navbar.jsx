@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard, Layers, Image, TrendingUp, Settings, Gauge,
-  Menu, X, ChevronDown, Video, Film, BookOpen
+  Menu, X, ChevronDown, Video, Film, BookOpen, Volume2
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -23,6 +23,7 @@ export default function Navbar() {
       submenu: [
         { path: '/', label: 'Image', icon: Image },
         { path: '/video-generation', label: 'Video', icon: Video },
+        { path: '/voice-over', label: 'VoiceOver', icon: Volume2 },
         { path: '/generate/one-click', label: '1-Click Creator', icon: Sparkles },
       ]
     },

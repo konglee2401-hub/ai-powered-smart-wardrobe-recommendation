@@ -14,6 +14,10 @@
         "/^cd \"c:/Work/Affiliate-AI/smart-wardrobe/backend\" && node debug-entire-page-popup\\.js$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^pkill -f \"node server\\.js\" \\|\\| true; pkill -f \"nodemon\" \\|\\| true; sleep 3; echo \"All Node processes killed\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

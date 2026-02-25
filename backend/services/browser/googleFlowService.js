@@ -404,17 +404,41 @@ class GoogleFlowService extends BrowserService {
     try {
       // Find and click "Create image" button
       const createImageButton = await this.page.evaluate(() => {
+        // Try various button text patterns
         const buttons = document.querySelectorAll('button');
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          if (text.includes('tạo hình ảnh') || 
-              text.includes('create image') || 
-              text.includes('generate image')) {
-            btn.scrollIntoView({ block: 'center' });
-            btn.click();
-            return true;
+          // Match various languages and patterns
+          if (text.includes('tạo hình ảnh') ||      // Vietnamese
+              text.includes('create image') ||       // English
+              text.includes('generate image') ||     // English alt
+              text.includes('tạo') ||                // Vietnamese short
+              text.includes('create')) {             // Generic
+            try {
+              btn.scrollIntoView({ block: 'center' });
+              btn.click();
+              return true;
+            } catch (e) {
+              console.warn('  Button found but click failed:', e.message);
+              return false;
+            }
           }
         }
+        
+        // If button text not found, try looking for buttons with specific attributes
+        const createBtns = document.querySelectorAll('[aria-label*="create"], [aria-label*="Create"], [title*="create"], [title*="Create"]');
+        for (const btn of createBtns) {
+          if (btn.offsetParent !== null) {
+            try {
+              btn.scrollIntoView({ block: 'center' });
+              btn.click();
+              return true;
+            } catch (e) {
+              // continue
+            }
+          }
+        }
+        
         return false;
       });
 
@@ -423,46 +447,155 @@ class GoogleFlowService extends BrowserService {
         await this.page.waitForTimeout(2000);
       } else {
         console.warn('⚠️  Could not find Create Image button, attempting to find text input anyway');
+        // Don't fail here - sometimes we can type directly
       }
 
       // Find text input with better handling
       console.log('⌨️  Looking for text input...');
-      const textInputFound = await this.page.evaluate(() => {
-        // Try textarea
-        const textarea = document.querySelector('textarea');
-        if (textarea && textarea.offsetParent !== null) {
-          return { type: 'textarea', found: true };
+      
+      // Add more wait time for page to fully render
+      await this.page.waitForTimeout(1500);
+      
+      // Try the specific Google Flow textarea ID first (most reliable)
+      let textInputFound = await this.page.evaluate(() => {
+        // Check for specific textarea with ID (Google Flow uses this)
+        const specificTextarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (specificTextarea && specificTextarea.offsetParent !== null) {
+          return { type: 'pinhole-textarea', selector: '#PINHOLE_TEXT_AREA_ELEMENT_ID', found: true };
         }
-        
-        // Try contenteditable
-        const contentEditable = document.querySelector('[contenteditable="true"]');
-        if (contentEditable && contentEditable.offsetParent !== null) {
-          return { type: 'contenteditable', found: true };
-        }
-        
-        // Try text input
-        const textInput = document.querySelector('input[type="text"]');
-        if (textInput && textInput.offsetParent !== null) {
-          return { type: 'text-input', found: true };
-        }
-        
-        return { type: null, found: false };
+        return null;
       });
-
-      if (!textInputFound.found) {
-        throw new Error(`Could not find text input (${textInputFound.type})`);
+      
+      // If specific ID not found, try generic search
+      if (!textInputFound) {
+        textInputFound = await this.page.evaluate(() => {
+          // Try textarea first (most common)
+          const textarea = document.querySelector('textarea');
+          if (textarea && textarea.offsetParent !== null) {
+            return { type: 'textarea', selector: 'textarea', found: true };
+          }
+          
+          // Try contenteditable divs (Google uses these often)
+          const contentEditable = document.querySelector('[contenteditable="true"]');
+          if (contentEditable && contentEditable.offsetParent !== null) {
+            return { type: 'contenteditable', selector: '[contenteditable="true"]', found: true };
+          }
+          
+          // Try input[type="text"]
+          const textInput = document.querySelector('input[type="text"]');
+          if (textInput && textInput.offsetParent !== null) {
+            return { type: 'text-input', selector: 'input[type="text"]', found: true };
+          }
+          
+          // Try generic input without type
+          const genericInput = document.querySelector('input');
+          if (genericInput && genericInput.offsetParent !== null) {
+            const type = genericInput.getAttribute('type') || 'no-type';
+            return { type: `input-${type}`, selector: 'input', found: true };
+          }
+          
+          // Debug: show what elements exist
+          const textareas = document.querySelectorAll('textarea').length;
+          const contentEditables = document.querySelectorAll('[contenteditable="true"]').length;
+          const inputs = document.querySelectorAll('input').length;
+          const allInputLike = textareas + contentEditables + inputs;
+          
+          return { 
+            type: null, 
+            found: false,
+            debug: { textareas, contentEditables, inputs, total: allInputLike }
+          };
+        });
       }
 
-      console.log(`⌨️  Found ${textInputFound.type}, typing prompt...`);
+      console.log('  Search result:', textInputFound);
       
-      // Focus and type using page.type for more reliable input
-      const selector = textInputFound.type === 'textarea' ? 'textarea' :
-                      textInputFound.type === 'contenteditable' ? '[contenteditable="true"]' :
-                      'input[type="text"]';
+      if (!textInputFound || !textInputFound.found) {
+        // More detailed error message
+        const debugInfo = textInputFound?.debug ? 
+          ` (Found: ${textInputFound.debug.textareas} textareas, ${textInputFound.debug.contentEditables} contentEditables, ${textInputFound.debug.inputs} inputs)` :
+          '';
+        
+        // Try to take screenshot for debug
+        try {
+          const debugScreenshot = path.join(process.cwd(), 'backend/temp', `flow-debug-${Date.now()}.png`);
+          await this.screenshot({ path: debugScreenshot });
+          console.debug(`  📸 Debug screenshot: ${debugScreenshot}`);
+        } catch (e) {
+          // ignore screenshot errors
+        }
+        
+        throw new Error(`Could not find text input${debugInfo}`);
+      }
+
+      console.log(`✅ Found ${textInputFound.type} at selector: ${textInputFound.selector}`);
       
+      // Use enhanced prompt entry strategy (based on imageGenerationService.js)
+      const selector = textInputFound.selector;
+      
+      // Clear existing content first
+      await this.page.evaluate((sel) => {
+        const elem = document.querySelector(sel);
+        if (elem) {
+          if (elem.tagName === 'TEXTAREA' || elem.tagName === 'INPUT') {
+            elem.value = '';
+          } else {
+            elem.textContent = '';
+          }
+          elem.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, selector);
+      
+      await this.page.waitForTimeout(300);
+      
+      // Strategy: Type first 20 chars + paste middle + type last 20 chars (ensures better input handling)
+      const cleanPrompt = prompt.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
+      const typeLength = 20;
+      const firstPart = cleanPrompt.substring(0, typeLength);
+      const middlePart = cleanPrompt.substring(typeLength, cleanPrompt.length - typeLength);
+      const lastPart = cleanPrompt.substring(cleanPrompt.length - typeLength);
+      
+      console.log(`  → Prompt strategy: Type (${firstPart.length}ch) + Paste (${middlePart.length}ch) + Type (${lastPart.length}ch)`);
+      
+      // Step 1: Focus and type first part
       await this.page.focus(selector);
-      await this.page.waitForTimeout(500);
-      await this.page.type(selector, prompt, { delay: 10 }); // type with small delay
+      await this.page.waitForTimeout(300);
+      
+      if (firstPart.length > 0) {
+        await this.page.keyboard.type(firstPart, { delay: 50 });
+        await this.page.waitForTimeout(300);
+      }
+      
+      // Step 2: Paste middle part
+      if (middlePart.length > 0) {
+        await this.page.evaluate((sel, text) => {
+          const elem = document.querySelector(sel);
+          if (elem) {
+            elem.value = (elem.value || '') + text;
+            elem.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }, selector, middlePart);
+        await this.page.waitForTimeout(500);
+      }
+      
+      // Step 3: Type last part
+      if (lastPart.length > 0) {
+        await this.page.keyboard.type(lastPart, { delay: 50 });
+        await this.page.waitForTimeout(300);
+      }
+      
+      // Trigger final events
+      await this.page.evaluate((sel) => {
+        const elem = document.querySelector(sel);
+        if (elem) {
+          elem.dispatchEvent(new Event('blur', { bubbles: true }));
+          elem.dispatchEvent(new Event('focus', { bubbles: true }));
+          elem.dispatchEvent(new Event('input', { bubbles: true }));
+          elem.dispatchEvent(new Event('change', { bubbles: true }));
+          elem.dispatchEvent(new Event('keyup', { bubbles: true }));
+        }
+      }, selector);
+      
       await this.page.waitForTimeout(1000);
 
       // Submit by pressing Enter

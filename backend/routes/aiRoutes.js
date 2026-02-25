@@ -4,6 +4,7 @@ import optionsController from '../controllers/optionsController.js';
 import { protect } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { analyzeUnifiedEndpoint, buildPromptEndpoint, getProviderStatus, generateUnifiedEndpoint } from '../controllers/unifiedFlowController.js';
+import { executeAffiliateVideoTikTokEndpoint, generateVideoFromAnalysisEndpoint, generateVoiceoverEndpoint, finalizeAffiliateVideoEndpoint, getAffiliateVideoPreviewEndpoint } from '../controllers/affiliateVideoTikTokController.js';
 
 const router = express.Router();
 
@@ -28,6 +29,27 @@ router.post('/build-prompt-unified', buildPromptEndpoint);
 
 // Generate images from prompt only (no file upload needed)
 router.post('/generate-unified', generateUnifiedEndpoint);
+
+// ============================================================
+// AFFILIATE VIDEO TIKTOK FLOW
+// ============================================================
+
+router.post('/affiliate-video-tiktok', upload.fields([
+  { name: 'characterImage', maxCount: 1 },
+  { name: 'productImage', maxCount: 1 }
+]), executeAffiliateVideoTikTokEndpoint);
+
+// 💫 Get flow preview data (Step 2 images for real-time display)
+router.get('/affiliate-video-tiktok/preview/:flowId', getAffiliateVideoPreviewEndpoint);
+
+// Generate video from analysis
+router.post('/affiliate-video-tiktok/generate-video', generateVideoFromAnalysisEndpoint);
+
+// Generate voiceover
+router.post('/affiliate-video-tiktok/generate-voiceover', generateVoiceoverEndpoint);
+
+// Finalize package
+router.post('/affiliate-video-tiktok/finalize', finalizeAffiliateVideoEndpoint);
 
 // Image analysis with fallback
 router.post('/analyze-character', upload.single('image'), aiController.analyzeCharacterImage);

@@ -354,8 +354,7 @@ export function VideoProduction() {
         isOpen={showGalleryPicker}
         onClose={() => setShowGalleryPicker(false)}
         onSelect={handleGallerySelect}
-        mediaType="all"
-        contentType="all"
+        assetType="image"
         title="Select Media for Video Production"
       />
     </div>

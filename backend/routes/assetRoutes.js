@@ -2,6 +2,10 @@ import express from 'express';
 import Asset from '../models/Asset.js';
 import fs from 'fs';
 import path from 'path';
+import axios from 'axios';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const router = express.Router();
 
@@ -11,11 +15,37 @@ const router = express.Router();
  */
 router.get('/gallery', async (req, res) => {
   try {
-    const { userId = 'anonymous', assetType = 'all', category = 'all', page = 1, limit = 20 } = req.query;
+    const { userId, assetType = 'all', category = 'all', page = 1, limit = 20, storageLocation = 'all' } = req.query;
     
-    const query = { userId, status: 'active' };
+    // Build query - gallery shows assets from any user (shared gallery)
+    const query = { status: 'active' };
+    if (userId) query.userId = userId; // Optional: filter by userId if provided
     if (assetType !== 'all') query.assetType = assetType;
     if (category !== 'all') query.assetCategory = category;
+    
+    // ✅ Updated: Handle both new hybrid storage and legacy storage
+    if (storageLocation !== 'all') {
+      if (storageLocation === 'local') {
+        // Show assets with local storage
+        query.$or = [
+          { 'localStorage.path': { $exists: true, $ne: null } },
+          { 'storage.location': 'local' }
+        ];
+      } else if (storageLocation === 'google-drive') {
+        // Show assets with cloud storage
+        query.$or = [
+          { 'cloudStorage.googleDriveId': { $exists: true, $ne: null } },
+          { 'storage.location': 'google-drive' }
+        ];
+      }
+    } else {
+      // Default: show all assets that have either local or cloud storage
+      query.$or = [
+        { 'localStorage.path': { $exists: true, $ne: null } },
+        { 'cloudStorage.googleDriveId': { $exists: true, $ne: null } },
+        { 'storage.location': { $exists: true, $ne: null } }
+      ];
+    }
     
     const skip = (page - 1) * limit;
     const [assets, total] = await Promise.all([
@@ -26,6 +56,8 @@ router.get('/gallery', async (req, res) => {
         .lean(),
       Asset.countDocuments(query)
     ]);
+    
+    console.log(`📋 Gallery query: ${JSON.stringify(query)}, Found: ${assets.length} assets`);
     
     res.json({
       success: true,
@@ -39,6 +71,293 @@ router.get('/gallery', async (req, res) => {
     });
   } catch (error) {
     console.error('Gallery fetch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/assets/proxy/:assetId
+ * Proxy endpoint to download Google Drive images and serve them with proper headers
+ * Solves CORS issues and ensures images display correctly
+ */
+router.get('/proxy/:assetId', async (req, res) => {
+  try {
+    const { assetId } = req.params;
+    
+    // Find asset in database
+    const asset = await Asset.findOne({ assetId });
+    if (!asset) {
+      console.log(`❌ Asset not found: ${assetId}`);
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+    
+    console.log(`🖼️ Proxying asset: ${asset.filename}`);
+    console.log(`   Asset storage: ${JSON.stringify({local: !!asset.localStorage, cloud: !!asset.cloudStorage, legacy: !!asset.storage})}`);
+    
+    // Set CORS and caching headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
+    res.setHeader('Content-Type', asset.mimeType || 'image/jpeg');
+    res.setHeader('Content-Disposition', `inline; filename="${asset.filename}"`);
+    
+    // ✅ REFACTORED: Smarter storage priority with better fallbacks
+    
+    // STEP 1: Try hybrid local storage (new format)
+    if (asset.localStorage?.path) {
+      const filePath = asset.localStorage.path;
+      
+      if (fs.existsSync(filePath)) {
+        console.log(`💾 Serving hybrid local file: ${filePath}`);
+        res.setHeader('Content-Length', fs.statSync(filePath).size);
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.on('error', (err) => {
+          console.error(`Error streaming local file: ${err.message}`);
+          if (!res.headersSent) {
+            res.status(500).json({ success: false, error: 'Error streaming file' });
+          }
+        });
+        fileStream.pipe(res);
+        return;
+      }
+    }
+    
+    // STEP 2: Try legacy storage.url field (for backward compatibility)
+    if (asset.storage?.url) {
+      const filePath = asset.storage.url;
+      
+      if (fs.existsSync(filePath)) {
+        console.log(`💾 Serving legacy local file via storage.url: ${filePath}`);
+        res.setHeader('Content-Length', fs.statSync(filePath).size);
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.on('error', (err) => {
+          console.error(`Error streaming local file: ${err.message}`);
+          if (!res.headersSent) {
+            res.status(500).json({ success: false, error: 'Error streaming file' });
+          }
+        });
+        fileStream.pipe(res);
+        return;
+      }
+    }
+    
+    // STEP 3: Try hybrid cloud storage (new format)
+    if (asset.cloudStorage?.googleDriveId) {
+      try {
+        console.log(`☁️ Fetching from Google Drive (hybrid): ${asset.cloudStorage.googleDriveId}`);
+        
+        const fileId = asset.cloudStorage.googleDriveId;
+        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+        
+        const response = await axios.get(driveUrl, {
+          responseType: 'stream',
+          timeout: 30000,
+          maxRedirects: 5,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0',
+            'Referer': 'https://drive.google.com/'
+          }
+        });
+        
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('text/html')) {
+          console.warn(`⚠️  Google Drive returned HTML (${fileId}), retrying with confirm=d`);
+          const retryUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=d`;
+          const retryResponse = await axios.get(retryUrl, {
+            responseType: 'stream',
+            timeout: 30000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0'
+            }
+          });
+          
+          if (retryResponse.headers['content-length']) {
+            res.setHeader('Content-Length', retryResponse.headers['content-length']);
+          }
+          console.log(`✅ Retry succeeded`);
+          retryResponse.data.pipe(res);
+          retryResponse.data.on('error', (err) => {
+            console.error(`Error streaming from Google Drive: ${err.message}`);
+            if (!res.headersSent) {
+              res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
+            }
+          });
+          return;
+        }
+        
+        if (response.headers['content-length']) {
+          res.setHeader('Content-Length', response.headers['content-length']);
+        }
+        
+        console.log(`✅ Streaming Google Drive image`);
+        response.data.pipe(res);
+        response.data.on('error', (err) => {
+          console.error(`Error streaming from Google Drive: ${err.message}`);
+          if (!res.headersSent) {
+            res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
+          }
+        });
+        return;
+        
+      } catch (driveError) {
+        console.error(`❌ Google Drive hybrid fetch error: ${driveError.message}`);
+        // Fall through to legacy cloud storage below
+      }
+    }
+    
+    // STEP 4: Try legacy cloud storage fallback
+    if (asset.storage?.googleDriveId) {
+      try {
+        console.log(`☁️ Fetching from Google Drive (legacy): ${asset.storage.googleDriveId}`);
+        
+        const fileId = asset.storage.googleDriveId;
+        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+        
+        const response = await axios.get(driveUrl, {
+          responseType: 'stream',
+          timeout: 30000,
+          maxRedirects: 5,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0',
+            'Referer': 'https://drive.google.com/'
+          }
+        });
+        
+        const contentType = response.headers['content-type'] || '';
+        if (contentType.includes('text/html')) {
+          console.warn(`⚠️  Google Drive returned HTML (${fileId}), retrying with confirm=d`);
+          const retryUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=d`;
+          const retryResponse = await axios.get(retryUrl, {
+            responseType: 'stream',
+            timeout: 30000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0'
+            }
+          });
+          
+          if (retryResponse.headers['content-length']) {
+            res.setHeader('Content-Length', retryResponse.headers['content-length']);
+          }
+          console.log(`✅ Retry succeeded`);
+          retryResponse.data.pipe(res);
+          retryResponse.data.on('error', (err) => {
+            console.error(`Error streaming from Google Drive: ${err.message}`);
+            if (!res.headersSent) {
+              res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
+            }
+          });
+          return;
+        }
+        
+        if (response.headers['content-length']) {
+          res.setHeader('Content-Length', response.headers['content-length']);
+        }
+        
+        console.log(`✅ Streaming Google Drive image`);
+        response.data.pipe(res);
+        response.data.on('error', (err) => {
+          console.error(`Error streaming from Google Drive: ${err.message}`);
+          if (!res.headersSent) {
+            res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
+          }
+        });
+        return;
+        
+      } catch (driveError) {
+        console.error(`❌ Google Drive legacy fetch error: ${driveError.message}`);
+        // Fall through to final error below
+      }
+    }
+    
+    // STEP 5: No valid storage location found
+    console.log(`❌ No valid storage location found for asset ${assetId}`);
+    console.log(`   Asset structure: ${JSON.stringify({localStorage: asset.localStorage, cloudStorage: asset.cloudStorage, storage: asset.storage})}`);
+    res.status(400).json({ success: false, error: 'No valid storage location found', assetId, storageStatus: {
+      hasLocalPath: !!asset.localStorage?.path,
+      hasCloudId: !!asset.cloudStorage?.googleDriveId,
+      hasStorageUrl: !!asset.storage?.url,
+      hasStorageDriveId: !!asset.storage?.googleDriveId
+    }});
+    
+  } catch (error) {
+    console.error(`❌ Proxy error: ${error.message}`);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/assets/stream/:assetId
+ * Stream asset file - returns direct URLs for Google Drive, or streams local files
+ * Works for both Google Drive and local storage assets
+ */
+router.get('/stream/:assetId', async (req, res) => {
+  try {
+    const { assetId } = req.params;
+    
+    // Find asset in database
+    const asset = await Asset.findOne({ assetId });
+    if (!asset) {
+      console.log(`❌ Asset not found: ${assetId}`);
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+    
+    console.log(`📦 Redirecting asset: ${asset.filename} (${asset.storage.location})`);
+    
+    // Handle local storage files
+    if (asset.storage.location === 'local' && asset.storage.localPath) {
+      const filePath = asset.storage.localPath;
+      
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        console.log(`❌ Local file not found: ${filePath}`);
+        return res.status(404).json({ success: false, error: 'File not found on disk' });
+      }
+      
+      // Set content type
+      res.setHeader('Content-Type', asset.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Length', asset.fileSize);
+      res.setHeader('Content-Disposition', `inline; filename="${asset.filename}"`);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on('error', (err) => {
+        console.error(`Error streaming local file: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, error: 'Error streaming file' });
+        }
+      });
+      fileStream.pipe(res);
+      return;
+    }
+    
+    // Handle Google Drive files - return direct URL for client to fetch
+    if (asset.storage.location === 'google-drive' && asset.storage.googleDriveId) {
+      // Use direct Google Drive download URL with export format
+      const fileId = asset.storage.googleDriveId;
+      const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      
+      console.log(`☁️ Redirecting to Google Drive download: ${fileId}`);
+      
+      // Return a redirect or proxy info
+      return res.json({
+        success: true,
+        type: 'google-drive',
+        url: driveDownloadUrl,
+        fileId: fileId,
+        mimeType: asset.mimeType,
+        filename: asset.filename,
+        message: 'Please use this URL directly for streaming'
+      });
+    }
+    
+    // Unsupported storage location
+    console.log(`⚠️ Unsupported storage location: ${asset.storage.location}`);
+    res.status(400).json({ success: false, error: 'Unsupported storage location' });
+    
+  } catch (error) {
+    console.error(`❌ Stream endpoint error: ${error.message}`);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -90,7 +409,32 @@ router.get('/by-category/:category', async (req, res) => {
 
 /**
  * POST /api/assets/create
- * Create a new asset record (for uploaded or generated files)
+ * Create or update asset record (for uploaded or generated files)
+ * 
+ * Features:
+ * - Auto-detect duplicate files by filename or googleDriveId
+ * - Replace existing asset if same file is re-uploaded
+ * - Create new asset if it's a new file
+ * 
+ * Request body:
+ * {
+ *   filename: "image.jpg",
+ *   mimeType: "image/jpeg",
+ *   fileSize: 1024,
+ *   assetType: "image",
+ *   assetCategory: "generated-image",
+ *   userId: "user123",
+ *   sessionId: "session123",
+ *   storage: {
+ *     location: "google-drive",
+ *     googleDriveId: "file123",
+ *     googleDrivePath: "Affiliate AI/Images/Uploaded/App",
+ *     url: "https://drive.google.com/..."
+ *   },
+ *   metadata: { format: "jpg" },
+ *   tags: ["auto-generated"],
+ *   autoReplace: true  // If true, replace same filename; if false, error on duplicate
+ * }
  */
 router.post('/create', async (req, res) => {
   try {
@@ -105,14 +449,84 @@ router.post('/create', async (req, res) => {
       storage,
       metadata = {},
       tags = [],
-      generation = null
+      generation = null,
+      autoReplace = true  // Auto-replace if duplicate found
     } = req.body;
     
     if (!filename || !assetType || !assetCategory || !storage) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
     
-    // Generate unique assetId
+    // ===============================================
+    // CHECK FOR DUPLICATE FILES
+    // ===============================================
+    let existingAsset = null;
+    let isDuplicate = false;
+    let queryReason = '';
+    
+    // Check 1: If Google Drive ID provided, check by that
+    if (storage.googleDriveId) {
+      existingAsset = await Asset.findOne({ 'storage.googleDriveId': storage.googleDriveId });
+      if (existingAsset) {
+        isDuplicate = true;
+        queryReason = `Google Drive ID: ${storage.googleDriveId}`;
+      }
+    }
+    
+    // Check 2: If not found by Drive ID, check by filename
+    if (!existingAsset) {
+      existingAsset = await Asset.findOne({ filename: filename, userId: userId });
+      if (existingAsset) {
+        isDuplicate = true;
+        queryReason = `Filename: ${filename}`;
+      }
+    }
+    
+    // ===============================================
+    // HANDLE DUPLICATE LOGIC
+    // ===============================================
+    if (isDuplicate) {
+      console.log(`⚠️  Asset already exists - ${queryReason}`);
+      console.log(`   Existing ID: ${existingAsset.assetId}`);
+      
+      if (!autoReplace) {
+        // Return error if auto-replace disabled
+        return res.status(409).json({
+          success: false,
+          error: 'Asset with same filename already exists',
+          existingAsset: existingAsset,
+          action: 'use autoReplace=true to replace it'
+        });
+      }
+      
+      // Update existing asset with new file info
+      console.log(`   ✅ Replacing with new file information...`);
+      existingAsset.mimeType = mimeType;
+      existingAsset.fileSize = fileSize;
+      existingAsset.storage = storage;
+      existingAsset.metadata = metadata;
+      existingAsset.tags = [...new Set([...existingAsset.tags, ...tags])]; // Merge tags
+      
+      // Update update timestamp
+      existingAsset.updatedAt = new Date();
+      
+      await existingAsset.save();
+      
+      console.log(`   ✅ Asset updated: ${existingAsset.assetId}`);
+      
+      return res.json({
+        success: true,
+        asset: existingAsset,
+        action: 'updated',
+        message: `Existing asset replaced. ID: ${existingAsset.assetId}`
+      });
+    }
+    
+    // ===============================================
+    // CREATE NEW ASSET (NO DUPLICATE)
+    // ===============================================
+    console.log(`✅ Asset is new - creating record...`);
+    
     const assetId = `asset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const asset = new Asset({
@@ -127,14 +541,19 @@ router.post('/create', async (req, res) => {
       storage,
       metadata,
       tags,
-      generation
+      generation,
+      status: 'active'
     });
     
     await asset.save();
     
+    console.log(`   ✅ New asset created: ${asset.assetId}`);
+    
     res.json({
       success: true,
-      asset
+      asset,
+      action: 'created',
+      message: `New asset created. ID: ${asset.assetId}`
     });
   } catch (error) {
     console.error('Asset creation error:', error);

@@ -12,10 +12,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load .env from backend folder
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const CONFIG_FILE = path.join(__dirname, '../config/drive-folder-structure.json');
 

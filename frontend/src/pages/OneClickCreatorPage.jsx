@@ -4,15 +4,16 @@
  * With per-session management and real-time progress tracking
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload, Sparkles, Rocket, Loader2, ChevronDown, ChevronUp,
   Play, Video, X, Settings, Image as ImageIcon,
-  AlertCircle, CheckCircle, Clock, FileText, Target, Wand2
+  AlertCircle, CheckCircle, Clock, FileText, Target, Wand2, Volume2, Mic, Package
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/api';
+import { api, unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 import promptTemplateService from '../services/promptTemplateService';
+import GalleryPicker from '../components/GalleryPicker';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 import { 
   calculateVideoCount, 
@@ -26,6 +27,8 @@ import {
 // Constants - Use cases and focus options from ImageGenerationPage
 const USE_CASES = [
   { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
+  { value: 'character-holding-product', label: 'Character Holding Product', description: 'Nhân vật cầm sản phẩm trên tay' },
+  { value: 'affiliate-video-tiktok', label: 'Affiliate Video TikTok', description: 'Video Affiliate cho TikTok 9:16 (2 ảnh + Voiceover + Hashtag)' },
   { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
   { value: 'social-media', label: 'Social Media', description: 'Bài đăng mạng xã hội' },
   { value: 'fashion-editorial', label: 'Editorial', description: 'Bài báo thời trang chuyên nghiệp' },
@@ -64,9 +67,56 @@ const WORKFLOW_STEPS = [
   { id: 'generate-videos', name: 'Generate Videos', icon: Video },
 ];
 
+// TikTok Affiliate Specific Constants
+const TIKTOK_DURATIONS = [10, 15, 20, 30, 45, 60];
+const VOICE_OPTIONS = [
+  { label: 'Female - Slow', value: 'female-slow' },
+  { label: 'Female - Normal', value: 'female-normal' },
+  { label: 'Female - Fast', value: 'female-fast' },
+  { label: 'Male - Slow', value: 'male-slow' },
+  { label: 'Male - Normal', value: 'male-normal' },
+  { label: 'Male - Fast', value: 'male-fast' },
+];
+
+const WORKFLOW_STEPS_AFFILIATE_TIKTOK = [
+  { id: 'analyze', name: 'Analyze', icon: Sparkles },
+  { id: 'apply-recommendations', name: 'Apply Recommendations', icon: Wand2 },
+  { id: 'tiktok-options', name: 'Select Settings', icon: Volume2 },
+  { id: 'generate-images-parallel', name: 'Generate 2 Images', icon: ImageIcon },
+  { id: 'deep-analysis', name: 'Deep Analysis', icon: Wand2 },
+  { id: 'generate-video', name: 'Generate Video', icon: Video },
+  { id: 'generate-voiceover', name: 'Generate Voiceover', icon: Mic },
+  { id: 'finalize', name: 'Finalize Package', icon: Package },
+];
+
 // ============================================================
 // HELPER FUNCTIONS FOR TEMPLATE-BASED PROMPT GENERATION
 // ============================================================
+
+// ============================================================
+// HELPER: Filter categories based on product focus
+// ============================================================
+/**
+ * Get visible categories based on product focus
+ * Reused from ImageGenerationPage for consistency
+ */
+const getVisibleCategories = (focus = 'full-outfit') => {
+  const baseCategories = ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'shotType', 'bodyPose'];
+  
+  if (focus === 'full-outfit') {
+    return [...baseCategories, 'tops', 'bottoms', 'shoes', 'outerwear', 'accessories'];
+  } else if (focus === 'top') {
+    return [...baseCategories, 'tops', 'accessories'];
+  } else if (focus === 'bottom') {
+    return [...baseCategories, 'bottoms', 'shoes'];
+  } else if (focus === 'shoes') {
+    return [...baseCategories, 'shoes'];
+  } else if (focus === 'accessories') {
+    return [...baseCategories, 'accessories'];
+  } else {
+    return baseCategories;
+  }
+};
 
 /**
  * Map OneClick use cases to template scenarios
@@ -74,6 +124,7 @@ const WORKFLOW_STEPS = [
 const mapUseCaseToTemplateUseCase = (useCase) => {
   const mapping = {
     'change-clothes': 'outfit-change',
+    'character-holding-product': 'product-showcase',
     'ecommerce-product': 'product-showcase',
     'social-media': 'fashion-model',
     'fashion-editorial': 'product-photography'
@@ -172,6 +223,18 @@ async function generateVideoPromptFromTemplate(useCase, productFocus, recommende
   }
 }
 
+/**
+ * Helper: Get workflow steps based on use case
+ */
+const getWorkflowSteps = (useCase) => {
+  if (useCase === 'affiliate-video-tiktok') {
+    return WORKFLOW_STEPS_AFFILIATE_TIKTOK;
+  }
+  return WORKFLOW_STEPS;
+};
+
+
+
 // Session component
 function SessionRow({ session, isGenerating, onCancel }) {
   const [expandedLogs, setExpandedLogs] = useState(false);
@@ -214,16 +277,18 @@ function SessionRow({ session, isGenerating, onCancel }) {
       </div>
 
       {/* Steps Progress */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {WORKFLOW_STEPS.map(step => {
+      <div className={`grid gap-2 mb-4 ${session.steps?.length > 6 ? 'grid-cols-4' : 'grid-cols-4'}`}>
+        {session.steps?.map(step => {
+          // Find the step definition
+          const allSteps = [...WORKFLOW_STEPS, ...WORKFLOW_STEPS_AFFILIATE_TIKTOK];
+          const stepDef = allSteps.find(s => s.id === step.id);
           const status = getStepStatus(step.id);
-          const stepData = session.steps?.find(s => s.id === step.id);
           return (
             <div key={step.id} className="text-center">
               <div className="flex justify-center mb-1">
                 {getStepIcon(status)}
               </div>
-              <p className="text-xs text-gray-400 truncate">{step.name}</p>
+              <p className="text-xs text-gray-400 truncate">{stepDef?.name || step.id}</p>
             </div>
           );
         })}
@@ -234,6 +299,96 @@ function SessionRow({ session, isGenerating, onCancel }) {
         <div className="mb-4">
           <p className="text-xs text-gray-400 mb-2">Generated Image</p>
           <img src={session.image} alt="Generated" className="w-full h-32 object-cover rounded" />
+        </div>
+      )}
+
+      {/* Analysis Preview (Character, Product, Scripts, Voiceover) */}
+      {(session.analysis || session.characterAnalysis || session.scripts) && (
+        <div className="mb-4 bg-gray-900/30 rounded p-3 border border-gray-700">
+          <div className="text-xs text-gray-400 mb-2 font-semibold">📊 Analysis & Scripts</div>
+          
+          {/* Character & Product Info */}
+          {session.analysis && (
+            <div className="space-y-2 mb-3 text-xs">
+              {session.analysis.character && (
+                <div>
+                  <span className="text-gray-500">👤 Character:</span>
+                  <span className="text-gray-300 ml-2">{session.analysis.character.age}, {session.analysis.character.gender}, {session.analysis.character.style}</span>
+                </div>
+              )}
+              {session.analysis.product && (
+                <div>
+                  <span className="text-gray-500">📦 Product:</span>
+                  <span className="text-gray-300 ml-2">{session.analysis.product.garment_type} - {session.analysis.product.primary_color}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Video Scripts */}
+          {session.analysis?.videoScripts && session.analysis.videoScripts.length > 0 && (
+            <div className="mb-2">
+              <div className="text-gray-500 text-xs mb-1">🎬 Video Segments:</div>
+              <div className="space-y-1">
+                {session.analysis.videoScripts.slice(0, 3).map((seg, idx) => (
+                  <div key={idx} className="text-gray-400 text-xs truncate">
+                    [{seg.segment}] {seg.duration}s: "{seg.script.substring(0, 50)}..."
+                  </div>
+                ))}
+                {session.analysis.videoScripts.length > 3 && (
+                  <div className="text-gray-500 text-xs italic">... +{session.analysis.videoScripts.length - 3} more</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Voiceover Preview */}
+          {session.analysis?.voiceoverScript && (
+            <div className="mb-2">
+              <div className="text-gray-500 text-xs mb-1">🎙️ Voiceover:</div>
+              <div className="text-gray-400 text-xs line-clamp-2">"{session.analysis.voiceoverScript.substring(0, 100)}..."</div>
+            </div>
+          )}
+
+          {/* Hashtags */}
+          {session.analysis?.hashtags && session.analysis.hashtags.length > 0 && (
+            <div>
+              <div className="text-gray-500 text-xs mb-1">#️⃣ Hashtags:</div>
+              <div className="flex flex-wrap gap-1">
+                {session.analysis.hashtags.slice(0, 5).map((tag, idx) => (
+                  <span key={idx} className="text-gray-400 text-xs bg-gray-800 px-2 py-0.5 rounded">#{tag}</span>
+                ))}
+                {session.analysis.hashtags.length > 5 && (
+                  <span className="text-gray-500 text-xs px-2 py-0.5">+{session.analysis.hashtags.length - 5}</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 2 Preview Images (from polling) */}
+      {session.step2Images && (
+        <div className="mb-4">
+          <p className="text-xs text-gray-400 mb-2">📸 Step 2 Preview Images</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gray-900/50 rounded overflow-hidden">
+              <img 
+                src={session.step2Images.wearing} 
+                alt="Wearing" 
+                className="w-full h-32 object-cover"
+              />
+              <p className="text-xs text-gray-500 text-center py-1">Wearing</p>
+            </div>
+            <div className="bg-gray-900/50 rounded overflow-hidden">
+              <img 
+                src={session.step2Images.holding} 
+                alt="Holding" 
+                className="w-full h-32 object-cover"
+              />
+              <p className="text-xs text-gray-500 text-center py-1">Holding</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -295,6 +450,10 @@ export default function OneClickCreatorPage() {
   const [productImage, setProductImage] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Gallery Picker State
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [galleryPickerFor, setGalleryPickerFor] = useState(null); // 'character' or 'product'
+
   // Settings
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
@@ -305,10 +464,38 @@ export default function OneClickCreatorPage() {
   const [quantity, setQuantity] = useState(DESIRED_OUTPUT_COUNT);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isHeadless, setIsHeadless] = useState(true);
+  
+  // TikTok Affiliate Specific State (MUST come before useEffect that uses them!)
+  const [tiktokVideoDuration, setTiktokVideoDuration] = useState(20);
+  const [voiceOption, setVoiceOption] = useState('female-fast');
+  const [deepAnalysisResult, setDeepAnalysisResult] = useState(null);
+  const [generatedVideo, setGeneratedVideo] = useState(null);
+  const [generatedVoiceover, setGeneratedVoiceover] = useState(null);
+  const [suggestedHashtags, setSuggestedHashtags] = useState([]);
+  const [tiktokFlowId, setTiktokFlowId] = useState(null);
 
   // Workflow state
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessions, setSessions] = useState([]);
+
+  // 💫 NEW: Auto-set aspect ratio based on use case
+  useEffect(() => {
+    if (useCase === 'affiliate-video-tiktok') {
+      setAspectRatio('9:16');
+      console.log('📐 TikTok use case detected: Setting aspect ratio to 9:16 (vertical)');
+    } else {
+      setAspectRatio('16:9');
+    }
+  }, [useCase]);
+
+  // 💫 NEW: Start preview polling when flowId is set
+  useEffect(() => {
+    if (tiktokFlowId && sessions.length > 0) {
+      const currentSession = sessions[0]; // Poll for first/active session
+      console.log(`🔄 Starting preview polling for flowId: ${tiktokFlowId}, sessionId: ${currentSession.id}`);
+      startPreviewPolling(tiktokFlowId, currentSession.id);
+    }
+  }, [tiktokFlowId]);
 
   // Add log to session
   const addLog = (sessionId, message) => {
@@ -350,9 +537,12 @@ export default function OneClickCreatorPage() {
     const maxDuration = getMaxDurationForProvider(videoProvider);
     const videosCount = calculateVideoCount(videoProvider, 120);
     
+    // Get workflow steps based on use case
+    const workflowSteps = getWorkflowSteps(useCase);
+    
     return {
       id,
-      steps: WORKFLOW_STEPS.map(s => ({ id: s.id, completed: false, error: null, inProgress: false })),
+      steps: workflowSteps.map(s => ({ id: s.id, completed: false, error: null, inProgress: false })),
       logs: [],
       image: null,
       videos: [],
@@ -360,6 +550,208 @@ export default function OneClickCreatorPage() {
       completed: false,
       error: null
     };
+  };
+
+  /**
+   * Helper: Handle TikTok affiliate video workflow  
+   * Steps: 1-Analyze, 2-Recommend, 3-Select Settings, 4-Generate 2 Images Parallel, 
+   *        5-Deep Analysis, 6-Generate Video, 7-Generate Voiceover, 8-Finalize
+   */
+  const startPreviewPolling = (flowId, sessionId) => {
+    const pollPreview = async () => {
+      try {
+        const response = await fetch(`/api/ai/affiliate-video-tiktok/preview/${flowId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.preview?.step2) {
+            // Images are ready, update session
+            setSessions(prev => prev.map(s => {
+              if (s.id === sessionId) {
+                return {
+                  ...s,
+                  step2Images: {
+                    wearing: data.preview.step2.wearingImagePath,
+                    holding: data.preview.step2.holdingImagePath
+                  }
+                };
+              }
+              return s;
+            }));
+            addLog(sessionId, '📸 Step 2 preview images received');
+            return true; // Stop polling
+          }
+        }
+      } catch (e) {
+        // Polling endpoint not ready yet, continue
+      }
+      return false;
+    };
+
+    // Poll every 2 seconds for 2 minutes
+    let pollCount = 0;
+    const maxPolls = 60;
+    
+    const pollInterval = setInterval(async () => {
+      pollCount++;
+      const shouldStop = await pollPreview();
+      
+      if (shouldStop || pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+      }
+    }, 2000);
+  };
+
+  const handleAffiliateVideoTikTokFlow = async (
+    characterImageBase64,
+    productImageBase64,
+    recommendedOptions,
+    analysisResult
+  ) => {
+    try {
+      console.log('🎬 Starting Affiliate Video TikTok Flow');
+      console.log(`📋 Parameters received:`);
+      console.log(`  Character base64: ${characterImageBase64?.substring(0, 50)}...${characterImageBase64?.length}B`);
+      console.log(`  Product base64: ${productImageBase64?.substring(0, 50)}...${productImageBase64?.length}B`);
+      console.log(`  Options: ${JSON.stringify(recommendedOptions)}`);
+      console.log(`  Analysis: ${analysisResult ? 'present' : 'missing'}`);
+      
+      // Extract voice settings
+      const [voiceGender, voicePace] = voiceOption.split('-');
+      
+      // Construct payload from parameters
+      const payload = {
+        characterImage: characterImageBase64,
+        productImage: productImageBase64,
+        videoDuration: tiktokVideoDuration,
+        voiceGender,
+        voicePace,
+        productFocus: productFocus || 'full-outfit',
+        imageProvider: imageProvider || 'google-flow',
+        videoProvider: videoProvider || 'google-flow',
+        generateVideo: true,
+        generateVoiceover: true,
+        options: recommendedOptions || {}
+      };
+      
+      console.log(`📤 Sending request to /api/ai/affiliate-video-tiktok`);
+      const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!mainFlowResponse.ok) {
+        const errorData = await mainFlowResponse.json().catch(() => ({}));
+        console.error(`❌ Backend error response [${mainFlowResponse.status}]:`, errorData);
+        throw new Error(`Backend error: ${mainFlowResponse.status} - ${errorData.error || mainFlowResponse.statusText}`);
+      }
+
+      const mainFlowData = await mainFlowResponse.json();
+      console.log(`✅ Backend response received:`, mainFlowData);
+      
+      if (!mainFlowData.success) {
+        console.error(`❌ Backend returned error:`, mainFlowData);
+        throw new Error(mainFlowData.error || mainFlowData.message || 'Main flow failed');
+      }
+
+      console.log('✅ Main flow complete (Steps 1-3)');
+      console.log(`  Flow ID: ${mainFlowData.data?.flowId}`);
+      console.log(`  Step 2 results: ${mainFlowData.data?.step2 ? Object.keys(mainFlowData.data.step2).join(', ') : 'N/A'}`);
+      console.log(`  Step 3 results: ${mainFlowData.data?.step3 ? Object.keys(mainFlowData.data.step3).join(', ') : 'N/A'}`);
+      setTiktokFlowId(mainFlowData.data.flowId);
+      
+      // Extract results
+      const wearingImage = mainFlowData.data.step2.images?.wearing;
+      const holdingImage = mainFlowData.data.step2.images?.holding;
+      const analysisForVideoGen = mainFlowData.data.step3;
+
+      // Step 4: Deep analysis result
+      setDeepAnalysisResult(analysisForVideoGen);
+      setSuggestedHashtags(analysisForVideoGen.hashtags || []);
+
+      // Step 5: Generate video
+      console.log('🎬 Generating video...');
+      const videoResponse = await fetch('/api/ai/affiliate-video-tiktok/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wearingImageUrl: wearingImage,
+          holdingImageUrl: holdingImage,
+          videoScripts: analysisForVideoGen.videoScripts,
+          videoDuration: tiktokVideoDuration || 20,
+          aspectRatio: '9:16',
+        }),
+      });
+
+      if (!videoResponse.ok) {
+        throw new Error(`Video generation error: ${videoResponse.status}`);
+      }
+
+      const videoData = await videoResponse.json();
+      if (!videoData.success) {
+        throw new Error(videoData.message || 'Video generation failed');
+      }
+
+      setGeneratedVideo(videoData.data.video);
+      console.log('✅ Video generated');
+
+      // Step 6: Generate voiceover
+      console.log('🔊 Generating voiceover...');
+      
+      const voiceoverResponse = await fetch('/api/ai/affiliate-video-tiktok/generate-voiceover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voiceoverScript: analysisForVideoGen.voiceoverScript,
+          voiceGender: voiceGender,
+          voicePace: voicePace,
+          videoDuration: tiktokVideoDuration || 20,
+        }),
+      });
+
+      if (!voiceoverResponse.ok) {
+        throw new Error(`Voiceover generation error: ${voiceoverResponse.status}`);
+      }
+
+      const voiceoverData = await voiceoverResponse.json();
+      if (!voiceoverData.success) {
+        throw new Error(voiceoverData.message || 'Voiceover generation failed');
+      }
+
+      setGeneratedVoiceover(voiceoverData.data.audio);
+      console.log('✅ Voiceover generated');
+
+      // Step 7: Finalize package
+      console.log('📦 Finalizing package...');
+      const finalizeResponse = await fetch('/api/ai/affiliate-video-tiktok/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrl: videoData.data.video.url,
+          voiceoverUrl: voiceoverData.data.audio.url,
+          wearingImageUrl: wearingImage,
+          holdingImageUrl: holdingImage,
+          productImageUrl: productImageBase64,
+          hashtags: analysisForVideoGen.hashtags,
+          videoDuration: tiktokVideoDuration || 20,
+        }),
+      });
+
+      if (!finalizeResponse.ok) {
+        throw new Error(`Finalization error: ${finalizeResponse.status}`);
+      }
+
+      const finalData = await finalizeResponse.json();
+      if (!finalData.success) {
+        throw new Error(finalData.message || 'Finalization failed');
+      }
+
+      console.log('✅ Complete TikTok package ready!', finalData.data);
+      return finalData.data;
+    } catch (error) {
+      console.error('❌ TikTok flow error:', error);
+      throw error;
+    }
   };
 
   // Main generation flow
@@ -373,8 +765,17 @@ export default function OneClickCreatorPage() {
     setSessions([]);
 
     // Convert images to base64
+    console.log('📸 Converting images to base64...');
+    console.log(`Character image length: ${characterImage.length}B`);
+    console.log(`Product image length: ${productImage.length}B`);
+    
     const charBase64 = characterImage.split(',')[1];
     const prodBase64 = productImage.split(',')[1];
+    
+    // 💫 LOG: Verify base64 was extracted
+    console.log(`✅ Extracted base64 strings:`);
+    console.log(`  Character: ${charBase64?.substring(0, 50)}...${charBase64?.length}B`);
+    console.log(`  Product: ${prodBase64?.substring(0, 50)}...${prodBase64?.length}B`);
 
     // Create sessions for each quantity
     const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1));
@@ -386,73 +787,145 @@ export default function OneClickCreatorPage() {
       console.log(`\n🔄 Starting Session #${sessionId}`);
 
       try {
-        // ======== STEP 1: ANALYZE ========
-        console.log(`📊 [S${sessionId}] Step 1: Analyze`);
-        updateSessionStep(sessionId, 'analyze', { inProgress: true });
-        addLog(sessionId, 'Starting analysis...');
-
-        let analysisResult = null;
+        // ======== PRELOAD: Load all database options and filter by productFocus ========
+        console.log(`📂 [S${sessionId}] Preload: Loading and filtering database options...`);
+        addLog(sessionId, 'Loading and filtering style options from database...');
+        
+        const visibleCategories = getVisibleCategories(productFocus);
+        console.log(`📋 Visible categories for ${productFocus}:`, visibleCategories);
+        addLog(sessionId, `📋 Filtering for ${productFocus}: ${visibleCategories.length} categories`);
+        
+        let allDatabaseOptions = {};
+        let filteredDatabaseOptions = {};
+        
         try {
-          const analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
-            charBase64,
-            prodBase64,
-            {
-              provider: 'chatgpt-browser',
-              scene: 'studio',
-              lighting: 'soft-diffused',
-              mood: 'confident',
-              style: 'minimalist',
-              colorPalette: 'neutral',
-              cameraAngle: 'eye-level',
-              aspectRatio,
+          const allOptionsResponse = await aiOptionsAPI.getAllOptions();
+          if (allOptionsResponse.success && allOptionsResponse.data) {
+            // Group options by category
+            for (const option of allOptionsResponse.data) {
+              if (!allDatabaseOptions[option.category]) {
+                allDatabaseOptions[option.category] = [];
+              }
+              allDatabaseOptions[option.category].push(option);
             }
-          );
-
-          if (analysisResponse.success || analysisResponse.data) {
-            analysisResult = analysisResponse.data || analysisResponse;
-            addLog(sessionId, '✓ Analysis complete');
-            updateSessionStep(sessionId, 'analyze', { completed: true, inProgress: false });
-          } else {
-            throw new Error('Analysis failed: Invalid response');
+            
+            // Filter to only visible categories
+            for (const category of visibleCategories) {
+              if (allDatabaseOptions[category]) {
+                filteredDatabaseOptions[category] = allDatabaseOptions[category];
+              }
+            }
+            
+            console.log(`✅ Loaded ${Object.keys(allDatabaseOptions).length} categories, filtered to ${Object.keys(filteredDatabaseOptions).length}`);
+            addLog(sessionId, `✓ Loaded ${Object.keys(filteredDatabaseOptions).length} categories for ${productFocus}`);
           }
-        } catch (analyzeError) {
-          console.error(`❌ Analysis error [S${sessionId}]:`, analyzeError);
-          addLog(sessionId, `❌ Analysis failed: ${analyzeError.message}`);
-          updateSessionStep(sessionId, 'analyze', { error: analyzeError.message, inProgress: false });
-          throw analyzeError;
+        } catch (dbLoadError) {
+          console.warn('⚠️ Could not load database options:', dbLoadError.message);
+          addLog(sessionId, `⚠️ Database load failed, using AI recommendations only`);
         }
 
-        // ======== STEP 2: APPLY RECOMMENDATIONS ========
-        console.log(`✨ [S${sessionId}] Step 2: Apply Recommendations`);
-        updateSessionStep(sessionId, 'apply-recommendations', { inProgress: true });
-        addLog(sessionId, 'Applying AI recommendations...');
+        // ✅ NOTE: Analysis moved to affiliate-video-tiktok flow (STEP 1)
+        // This ensures single ChatGPT call per workflow stage
+        console.log(`📊 [S${sessionId}] Preparing filtered options for flow...`);
+        updateSessionStep(sessionId, 'analyze', { inProgress: true });
+        addLog(sessionId, 'Preparing filtered categories for TikTok workflow...');
 
-        let recommendedOptions = {
-          scene: 'studio',
-          lighting: 'soft-diffused',
-          mood: 'confident',
-          style: 'minimalist',
-          colorPalette: 'neutral',
-          cameraAngle: 'eye-level',
-        };
+        // STEP 2: APPLY RECOMMENDATIONS (set defaults)
+        console.log(`✨ [S${sessionId}] STEP 2: Set filtered category defaults`);
+        updateSessionStep(sessionId, 'apply-recommendations', { inProgress: true });
+        addLog(sessionId, 'Preparing filtered defaults for workflow...');
+
+        let recommendedOptions = {};
+        let analysisResult = null;
 
         try {
-          // Extract recommendations from analysis if available
-          if (analysisResult?.recommendations) {
-            const rec = analysisResult.recommendations;
-            if (rec.scene?.choice) recommendedOptions.scene = rec.scene.choice;
-            if (rec.lighting?.choice) recommendedOptions.lighting = rec.lighting.choice;
-            if (rec.mood?.choice) recommendedOptions.mood = rec.mood.choice;
-            if (rec.style?.choice) recommendedOptions.style = rec.style.choice;
-            if (rec.colorPalette?.choice) recommendedOptions.colorPalette = rec.colorPalette.choice;
-            if (rec.cameraAngle?.choice) recommendedOptions.cameraAngle = rec.cameraAngle.choice;
-            addLog(sessionId, `✓ Applied recommendations: ${JSON.stringify(recommendedOptions).substring(0, 80)}...`);
+          // Set defaults from filtered database options
+          const categoryDefaults = {};
+          for (const [category, options] of Object.entries(filteredDatabaseOptions)) {
+            if (options.length > 0) {
+              categoryDefaults[category] = options[0].value;
+            }
           }
+          recommendedOptions = { ...categoryDefaults };
+          console.log(`✅ Set defaults from ${Object.keys(categoryDefaults).length} categories`);
+          addLog(sessionId, `✓ Prepared ${Object.keys(categoryDefaults).length} filtered categories`);
+          
+          updateSessionStep(sessionId, 'analyze', { completed: true, inProgress: false });
           updateSessionStep(sessionId, 'apply-recommendations', { completed: true, inProgress: false });
+          console.log('📋 Final recommendedOptions:', JSON.stringify(recommendedOptions));
         } catch (recError) {
-          console.error(`⚠️ Recommendation error [S${sessionId}]:`, recError);
-          addLog(sessionId, `⚠️ Using default options`);
+          console.error(`⚠️ Options error [S${sessionId}]:`, recError);
+          addLog(sessionId, `⚠️ Using empty options, will use AI recommendations`);
+          updateSessionStep(sessionId, 'analyze', { completed: true, inProgress: false });
           updateSessionStep(sessionId, 'apply-recommendations', { completed: true, inProgress: false });
+        }
+
+        // ======== SPECIAL FLOW: AFFILIATE VIDEO TIKTOK ========
+        if (useCase === 'affiliate-video-tiktok') {
+          try {
+            addLog(sessionId, '🎬 Starting Affiliate Video TikTok workflow...');
+            updateSessionStep(sessionId, 'tiktok-options', { completed: true, inProgress: false });
+            
+            // Call the TikTok flow
+            // Note: tiktokFlowId will be set inside handleAffiliateVideoTikTokFlow,
+            // and useEffect will automatically start polling when flowId becomes available
+            const tiktokResult = await handleAffiliateVideoTikTokFlow(
+              charBase64,
+              prodBase64,
+              recommendedOptions,
+              analysisResult
+            );
+
+            // Update session with results
+            setSessions(prev => prev.map(sess => {
+              if (sess.id === sessionId) {
+                // Extract analysis data from deep analysis
+                const analysisData = tiktokResult.data?.step3?.analysis || {};
+                
+                // Extract video paths if multiple videos were generated
+                const videosList = tiktokResult.data?.step4?.videos || [];
+                const videoUrls = videosList.map(v => v.path).filter(p => p);
+                
+                return {
+                  ...sess,
+                  image: tiktokResult.data?.step2?.images?.wearing || 
+                          tiktokResult.images?.wearing || 
+                          tiktokResult.final_package?.images?.[0],
+                  // 💫 Store all videos from step4 (multiple segments)
+                  videos: videoUrls.length > 0 ? videoUrls : 
+                         tiktokResult.data?.step4?.video ? [tiktokResult.data.step4.video.path] : 
+                         tiktokResult.final_package?.video ? [tiktokResult.final_package.video] : 
+                         [],
+                  // 💫 Store analysis data including character, product, scripts, voiceover, hashtags
+                  analysis: {
+                    character: analysisData.character,
+                    product: analysisData.product,
+                    compatibility: analysisData.compatibility,
+                    videoScripts: analysisData.videoScripts,
+                    voiceoverScript: analysisData.voiceoverScript,
+                    hashtags: analysisData.hashtags || tiktokResult.final_package?.metadata?.hashtags || []
+                  },
+                  voiceover: tiktokResult.final_package?.audio,
+                  completed: true,
+                };
+              }
+              return sess;
+            }));
+
+            addLog(sessionId, '✅ TikTok package complete!');
+            updateSessionStep(sessionId, 'generate-images-parallel', { completed: true, inProgress: false });
+            updateSessionStep(sessionId, 'deep-analysis', { completed: true, inProgress: false });
+            updateSessionStep(sessionId, 'generate-video', { completed: true, inProgress: false });
+            updateSessionStep(sessionId, 'generate-voiceover', { completed: true, inProgress: false });
+            updateSessionStep(sessionId, 'finalize', { completed: true, inProgress: false });
+
+            continue; // Skip standard flow
+          } catch (tiktokError) {
+            console.error(`❌ TikTok workflow error [S${sessionId}]:`, tiktokError);
+            addLog(sessionId, `❌ TikTok workflow failed: ${tiktokError.message}`);
+            updateSessionStep(sessionId, 'generate-images-parallel', { error: tiktokError.message, inProgress: false });
+            throw tiktokError;
+          }
         }
 
         // ======== STEP 3: GENERATE IMAGE ========
@@ -460,7 +933,6 @@ export default function OneClickCreatorPage() {
         updateSessionStep(sessionId, 'generate-image', { inProgress: true });
         addLog(sessionId, 'Building image prompt...');
 
-        let generatedImage = null;
         try {
           // Generate image prompt using templates (with fallback)
           const imagePrompt = await generateImagePromptFromTemplate(
@@ -473,6 +945,15 @@ export default function OneClickCreatorPage() {
 
           addLog(sessionId, 'Calling image generation...');
 
+          // 💫 Determine aspect ratio for this generation
+          let generationAspectRatio = aspectRatio;
+          if (useCase === 'affiliate-video-tiktok') {
+            generationAspectRatio = '9:16';
+            addLog(sessionId, `📐 Using 9:16 aspect ratio (TikTok vertical format)`);
+          } else {
+            addLog(sessionId, `📐 Using ${generationAspectRatio} aspect ratio`);
+          }
+
           const imageResponse = await browserAutomationAPI.generateBrowserOnly(
             imagePrompt,
             {
@@ -480,29 +961,59 @@ export default function OneClickCreatorPage() {
               imageGenProvider: imageProvider,
               characterImageBase64: charBase64,
               productImageBase64: prodBase64,
-              aspectRatio,
+              aspectRatio: generationAspectRatio,
               imageCount: DESIRED_OUTPUT_COUNT,
               grokConversationId: analysisResult?.grokConversationId,
               characterDescription: analysisResult?.characterDescription,
             }
           );
 
-          if (imageResponse.success || imageResponse.images?.length > 0) {
-            generatedImage = imageResponse.images?.[0] || imageResponse.image;
-            if (generatedImage) {
-              setSessions(prev => prev.map(sess => {
-                if (sess.id === sessionId) {
-                  return { ...sess, image: generatedImage };
-                }
-                return sess;
-              }));
-              addLog(sessionId, '✓ Image generated successfully');
-              updateSessionStep(sessionId, 'generate-image', { completed: true, inProgress: false });
-            } else {
-              throw new Error('No image URL in response');
-            }
+          console.log('📸 Image API Response:', imageResponse);
+          addLog(sessionId, `Debug: Response structure - ${JSON.stringify(Object.keys(imageResponse))}`);
+          
+          // 💫 Store file paths from backend for video generation
+          const generatedImagePaths = imageResponse?.data?.filePaths?.generatedImages || [];
+          const inputImagePaths = imageResponse?.data?.filePaths || {};
+
+          // Handle different response formats
+          let imageUrl = null;
+          if (imageResponse?.images?.length > 0) {
+            imageUrl = imageResponse.images[0];
+          } else if (imageResponse?.image) {
+            imageUrl = imageResponse.image;
+          } else if (imageResponse?.url) {
+            imageUrl = imageResponse.url;
+          } else if (imageResponse?.data?.generatedImages?.length > 0) {
+            // Handle Google Flow response format
+            imageUrl = imageResponse.data.generatedImages[0]?.url || imageResponse.data.generatedImages[0];
+          } else if (imageResponse?.data?.images?.length > 0) {
+            imageUrl = imageResponse.data.images[0];
+          } else if (imageResponse?.data?.image) {
+            imageUrl = imageResponse.data.image;
+          } else if (typeof imageResponse === 'string') {
+            imageUrl = imageResponse;
+          }
+
+          if (imageUrl) {
+            setSessions(prev => prev.map(sess => {
+              if (sess.id === sessionId) {
+                return { 
+                  ...sess, 
+                  image: imageUrl,
+                  // 💫 Store paths from backend for next steps
+                  generatedImagePaths: generatedImagePaths,
+                  inputImagePaths: inputImagePaths
+                };
+              }
+              return sess;
+            }));
+            addLog(sessionId, '✓ Image generated successfully');
+            addLog(sessionId, `Generated image paths stored: ${generatedImagePaths.join(', ')}`);
+            updateSessionStep(sessionId, 'generate-image', { completed: true, inProgress: false });
           } else {
-            throw new Error('Image generation failed');
+            console.error('❌ Could not extract imageUrl from response:', imageResponse);
+            addLog(sessionId, `Full response: ${JSON.stringify(imageResponse)}`);
+            throw new Error('No image URL in response');
           }
         } catch (imageError) {
           console.error(`❌ Image generation error [S${sessionId}]:`, imageError);
@@ -547,6 +1058,11 @@ export default function OneClickCreatorPage() {
               );
             }
 
+            // 💫 Get generated image paths from session data (from image generation step)
+            const currentSession = sessions.find(s => s.id === sessionId);
+            const generatedPaths = currentSession?.generatedImagePaths || [];
+            const inputPaths = currentSession?.inputImagePaths || {};
+
             // Generate video with proper settings
             const videoResponse = await browserAutomationAPI.generateVideoWithProvider({
               videoProvider,
@@ -554,8 +1070,12 @@ export default function OneClickCreatorPage() {
               duration: videoDuration,
               quality: 'high',
               aspectRatio,
+              // 💫 NEW: Pass file paths instead of/in addition to base64
               characterImageBase64: charBase64,
               productImageBase64: prodBase64,
+              generatedImagePaths: generatedPaths,
+              characterImagePath: inputPaths.characterImage,
+              productImagePath: inputPaths.productImage,
             });
 
             const videoUrl = videoResponse?.videoUrl || videoResponse?.url;
@@ -623,10 +1143,10 @@ export default function OneClickCreatorPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-12 gap-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 h-[calc(100vh-120px)]">
+        <div className="grid grid-cols-12 gap-6 h-full">
           {/* LEFT SIDEBAR - Settings */}
-          <div className="col-span-3 space-y-4">
+          <div className="col-span-3 space-y-4 overflow-y-auto pr-2">
             {/* Use Case */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
@@ -777,105 +1297,222 @@ export default function OneClickCreatorPage() {
                 {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
               </p>
             </div>
+
+            {/* TikTok-Specific Settings */}
+            {useCase === 'affiliate-video-tiktok' && (
+              <>
+                {/* Video Duration Selector */}
+                <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-blue-300 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Video Duration
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIKTOK_DURATIONS.map(duration => (
+                      <button
+                        key={duration}
+                        onClick={() => setTiktokVideoDuration(duration)}
+                        disabled={isGenerating}
+                        className={`px-3 py-2 rounded text-sm font-semibold transition-all disabled:opacity-50 ${
+                          tiktokVideoDuration === duration
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                        }`}
+                      >
+                        {duration}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Voice Options Selector */}
+                <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-pink-300 mb-3 flex items-center gap-2">
+                    <Volume2 className="w-4 h-4" />
+                    Narrator Voice
+                  </h3>
+                  <div className="space-y-1.5">
+                    {VOICE_OPTIONS.map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => setVoiceOption(option.value)}
+                        disabled={isGenerating}
+                        className={`w-full px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 text-left ${
+                          voiceOption === option.value
+                            ? 'bg-pink-600 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* TikTok Info */}
+                {suggestedHashtags.length > 0 && (
+                  <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-green-300 mb-2 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Suggested Hashtags
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedHashtags.map((tag, i) => (
+                        <span key={i} className="bg-green-600/30 text-green-200 px-2 py-1 rounded text-xs">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* CENTER - Main Content */}
-          <div className="col-span-9 space-y-4">
-            {/* Upload Section */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <div className="col-span-9 space-y-0 flex flex-col overflow-hidden">
+            {/* Scrollable Content Container */}
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+              {/* Upload Section */}
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <Upload className="w-4 h-4" />
                 Upload Images (Step 1/2)
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 {/* Character Image */}
-                <div
-                  onClick={() => !isGenerating && fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50"
-                >
-                  {characterImage ? (
-                    <img src={characterImage} alt="Character" className="w-full h-40 object-cover rounded" />
-                  ) : (
-                    <div className="py-8">
-                      <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                      <p className="text-sm text-gray-400">Character Image</p>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={isGenerating}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => setCharacterImage(evt.target?.result);
-                        reader.readAsDataURL(file);
+                <div className="space-y-2">
+                  <div
+                    onClick={() => !isGenerating && fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50 relative group"
+                  >
+                    {characterImage ? (
+                      <>
+                        <img src={characterImage} alt="Character" className="w-full h-40 object-cover rounded" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                          <p className="text-white text-xs">Click to change</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-8">
+                        <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
+                        <p className="text-sm text-gray-400">Drag to upload</p>
+                        <p className="text-xs text-gray-500 mt-1">or click below</p>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isGenerating}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => setCharacterImage(evt.target?.result);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </div>
+                  {/* 💫 NEW: Gallery picker button for character image */}
+                  <button
+                    onClick={() => {
+                      if (!isGenerating) {
+                        setGalleryPickerFor('character');
+                        setShowGalleryPicker(true);
                       }
                     }}
-                  />
+                    disabled={isGenerating}
+                    className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    Choose from Gallery
+                  </button>
                 </div>
 
                 {/* Product Image */}
-                <div
-                  onClick={() => {
-                    if (isGenerating) return;
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => setProductImage(evt.target?.result);
-                        reader.readAsDataURL(file);
+                <div className="space-y-2">
+                  <div
+                    onClick={() => {
+                      if (isGenerating) return;
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => setProductImage(evt.target?.result);
+                          reader.readAsDataURL(file);
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50 relative group"
+                  >
+                    {productImage ? (
+                      <>
+                        <img src={productImage} alt="Product" className="w-full h-40 object-cover rounded" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                          <p className="text-white text-xs">Click to change</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-8">
+                        <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
+                        <p className="text-sm text-gray-400">Drag to upload</p>
+                        <p className="text-xs text-gray-500 mt-1">or click below</p>
+                      </div>
+                    )}
+                  </div>
+                  {/* 💫 NEW: Gallery picker button for product image */}
+                  <button
+                    onClick={() => {
+                      if (!isGenerating) {
+                        setGalleryPickerFor('product');
+                        setShowGalleryPicker(true);
                       }
-                    };
-                    input.click();
-                  }}
-                  className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50"
-                >
-                  {productImage ? (
-                    <img src={productImage} alt="Product" className="w-full h-40 object-cover rounded" />
-                  ) : (
-                    <div className="py-8">
-                      <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                      <p className="text-sm text-gray-400">Product Image</p>
-                    </div>
-                  )}
+                    }}
+                    disabled={isGenerating}
+                    className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    Choose from Gallery
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Sessions Display */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Generation Sessions ({sessions.length})
-              </h3>
-              
-              {sessions.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">Sessions will appear here after you start</p>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {sessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      isGenerating={isGenerating}
-                    />
-                  ))}
-                </div>
-              )}
+            {/* Sessions Display (now inside scrollable container) */}
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Generation Sessions ({sessions.length})
+                </h3>
+                
+                {sessions.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">Sessions will appear here after you start</p>
+                ) : (
+                  <div className="space-y-4">
+                    {sessions.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        isGenerating={isGenerating}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Action Button */}
+            {/* Sticky Action Button */}
             <button
               onClick={handleOneClickGeneration}
               disabled={!characterImage || !productImage || isGenerating}
-              className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
+              className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-all mt-4 flex-shrink-0 sticky bottom-0 z-10"
             >
               {isGenerating ? (
                 <>
@@ -892,6 +1529,26 @@ export default function OneClickCreatorPage() {
           </div>
         </div>
       </div>
+
+      {/* Gallery Picker Modal */}
+      <GalleryPicker
+        isOpen={showGalleryPicker}
+        onClose={() => {
+          setShowGalleryPicker(false);
+          setGalleryPickerFor(null);
+        }}
+        onSelect={(imageData) => {
+          if (galleryPickerFor === 'character') {
+            setCharacterImage(imageData);
+          } else if (galleryPickerFor === 'product') {
+            setProductImage(imageData);
+          }
+          setShowGalleryPicker(false);
+          setGalleryPickerFor(null);
+        }}
+        assetType="image"
+        title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+      />
     </div>
   );
 }

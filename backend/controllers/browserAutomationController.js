@@ -6,7 +6,10 @@ import ChatGPTService from '../services/browser/chatgptService.js';
 import { runImageGeneration } from '../services/imageGenerationService.js'; // 💫 Image Generation Service
 import { runVideoGeneration } from '../services/videoGenerationServiceV2.js'; // 💫 Video Generation Service (V2 with image upload support)
 import VideoGeneration from '../models/VideoGeneration.js';
+import Asset from '../models/Asset.js'; // 💫 Asset model for hybrid storage
 import uploadToImgBB from '../services/uploaders/imgbbUploader.js'; // 💫 NEW
+import AssetManager from '../utils/assetManager.js'; // 💫 Asset manager for saving generated assets
+import HybridStorage from '../services/hybridStorageSync.js'; // 💫 Hybrid storage (local + Drive sync)
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
@@ -1072,18 +1075,21 @@ export async function generateWithBrowser(req, res) {
       console.log(`${'='.repeat(80)}\n`);
 
       try {
+        // 💫 Ensure aspect ratio is correctly passed to Google Flow
+        console.log(`   🎯 Passing aspect ratio to Google Flow: ${aspectRatio}`);
         const genResult = await runImageGeneration({
           personImagePath: charImagePath,
           productImagePath: prodImagePath,
           prompt: prompt,
           negativePrompt: negativePrompt,  // 💫 Include negative prompt
           imageCount: imageCount,
-          aspectRatio: aspectRatio,
+          aspectRatio: aspectRatio,  // 💫 CRITICAL: Aspect ratio passed here
           outputDir: path.join(tempDir, 'image-gen-results')
         });
 
         // Cleanup temp files
-        cleanupTempFiles(tempFiles);
+        // 💫 IMPORTANT: CHANGED - Don't cleanup here! Files needed for video generation
+        // cleanupTempFiles(tempFiles);  // ✅ REMOVED - cleanup moved to end of response
 
         // 💫 CHECK: Verify generation was successful
         if (!genResult.success || !genResult.results?.files || genResult.results.files.length === 0) {
@@ -1108,27 +1114,27 @@ export async function generateWithBrowser(req, res) {
 
         console.log(`✅ Google Flow image generation complete`);
         
-        // Store file paths temporarily for the GET endpoint to use
-        // (In production, use proper cache/session storage)
+        // 💫 IMPROVED: Create full URL with backend domain so frontend can access from port 3000
+        // Files are saved to temp/google-flow-downloads/, and serveGeneratedImage endpoint serves them
         global.generatedImagePaths = global.generatedImagePaths || {};
         
         const generatedImages = (genResult.results?.files || []).map((filePath, idx) => {
           const filename = path.basename(filePath);
-          // Create a unique key for this image
-          const imageKey = `${Date.now()}-${idx}-${filename}`;
-          // Create HTTP path for browser serving (include /api prefix for correct routing)
-          const imageUrl = `/api/v1/browser-automation/generated-image/${imageKey}`;
           
-          // Store the mapping immediately
-          global.generatedImagePaths[imageKey] = filePath;
+          // 💫 FULL URL: Include backend domain so frontend (port 3000) can fetch from backend (5000)
+          // This resolves the ERR_FILE_NOT_FOUND issue when GalleryPicker tries to load images via blob URLs
+          const imageUrl = `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`;
+          
+          // Store full path in global for backwards compatibility
+          global.generatedImagePaths[filename] = filePath;
           // Auto-cleanup after 1 hour
-          setTimeout(() => delete global.generatedImagePaths[imageKey], 60 * 60 * 1000);
+          setTimeout(() => delete global.generatedImagePaths[filename], 60 * 60 * 1000);
           
           try {
             const size = fs.statSync(filePath).size;
-            console.log(`  Image ${idx + 1}: ${filename} (${size} bytes) → ${imageUrl}`);
+            console.log(`  Image ${idx + 1}: ${filename} (${Math.round(size / 1024)}KB) → ${imageUrl}`);
             return {
-              url: imageUrl,        // HTTP path for browser display
+              url: imageUrl,        // HTTP path with backend domain
               filename: filename,
               provider: 'google-flow',
               size: size
@@ -1144,9 +1150,26 @@ export async function generateWithBrowser(req, res) {
           }
         });
 
-        console.log(`📤 Response: ${generatedImages.length} images ready for frontend`);
+        console.log(`📤 Response: ${generatedImages.length} images ready`);
         console.log(`   URLs: ${generatedImages.map(img => img.url).join(', ')}`);
-        console.log(`   Stored paths: ${Object.keys(global.generatedImagePaths).slice(-generatedImages.length).join(', ')}`);
+        console.log(`   File paths: ${(genResult.results?.files || []).join(', ')}`);
+        
+        // 💫 IMPORTANT: Store file paths globally so video generation can access them
+        // This is a temporary solution - video generation will read from these paths
+        global.lastGeneratedImagePaths = genResult.results?.files || [];
+        global.lastInputImagePaths = {
+          character: charImagePath,
+          product: prodImagePath
+        };
+        
+        // Auto-cleanup after 30 minutes if not used
+        const cleanupTimeout = setTimeout(() => {
+          console.log('🧹 Auto-cleaning generated image paths (30 min timeout)');
+          delete global.lastGeneratedImagePaths;
+          delete global.lastInputImagePaths;
+        }, 30 * 60 * 1000);
+        
+        global.imageCleanupTimeout = cleanupTimeout;
         
         return res.json({
           success: true,
@@ -1157,6 +1180,12 @@ export async function generateWithBrowser(req, res) {
             aspectRatio: aspectRatio,
             providers: {
               generation: 'google-flow'
+            },
+            // 💫 NEW: Also return file paths for backend-to-backend communication
+            filePaths: {
+              generatedImages: genResult.results?.files || [],
+              characterImage: charImagePath,
+              productImage: prodImagePath
             }
           },
           message: `Images generated successfully via Google Labs Flow`
@@ -1264,15 +1293,62 @@ export async function generateWithBrowser(req, res) {
       // Validate image first
       await validateImage(outputImagePath);
       
-      // Get storage config from request
-      const storageConfig = {
-        storageType: req.body.storageType || 'cloud', // default to cloud
-        localFolder: req.body.localFolder,
-        cloudProvider: req.body.cloudProvider || 'imgbb'
+      // Read image buffer
+      const imageBuffer = fs.readFileSync(outputImagePath);
+      const filename = path.basename(outputImagePath);
+      
+      // ✅ STEP 1: Save locally (instant, non-blocking)
+      console.log(`\n💾 Saving image locally...`);
+      const localResult = await HybridStorage.saveImageLocally(imageBuffer, filename);
+      
+      if (!localResult.success) {
+        throw new Error(`Failed to save image locally: ${localResult.error}`);
+      }
+      console.log(`   ✅ Local saved: ${localResult.localPath}`);
+      
+      // ✅ STEP 2: Create asset with BOTH storage locations
+      const assetId = `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const asset = {
+        assetId: assetId,
+        filename: filename,
+        mimeType: 'image/png',
+        fileSize: localResult.fileSize,
+        assetType: 'image',
+        assetCategory: 'generated-image',
+        
+        // Local: Immediately available
+        localStorage: {
+          location: 'local',
+          path: localResult.localPath,
+          fileSize: localResult.fileSize,
+          savedAt: new Date(),
+          verified: true
+        },
+        
+        // Cloud: Will be synced in background
+        cloudStorage: {
+          location: 'google-drive',
+          status: 'pending'
+        },
+        
+        syncStatus: 'pending',
+        userId: 'anonymous',
+        generatedAt: new Date()
       };
       
-      // Handle storage
-      storageResult = await handleImageStorage(outputImagePath, storageConfig);
+      // Save to database
+      await Asset.create(asset);
+      console.log(`   ✅ Asset saved to DB: ${assetId}`);
+      
+      // ✅ Return immediately with LOCAL image URL
+      storageResult = {
+        success: true,
+        assetId: assetId,
+        localPath: localResult.localPath,
+        fileSize: localResult.fileSize,
+        url: `/api/assets/proxy/${assetId}?source=local`,
+        storage: 'hybrid-local'  // Indicates using hybrid storage
+      };
       
     } catch (storageError) {
       console.error(`⚠️  Storage error (image may not be saved):`, storageError.message);
@@ -1300,21 +1376,27 @@ export async function generateWithBrowser(req, res) {
       provider: imageGenProvider,
       grokConversationId, // Include conversation ID for session tracking
       // Storage information
-      storage: storageResult
+      storage: storageResult,
+      assetId: storageResult.assetId  // Add asset ID
     };
 
     // Add URL based on storage type
-    if (storageResult.cloudUrl) {
-      // Cloud: Already have HTTPS URL
+    if (storageResult.url) {
+      // Hybrid storage: Use the proxy URL (handles local + cloud fallback)
+      generatedImage.url = storageResult.url;
+      generatedImage.displayUrl = storageResult.url;
+      generatedImage.assetId = storageResult.assetId;
+    } else if (storageResult.cloudUrl) {
+      // Legacy cloud storage: HTTPS URL
       generatedImage.cloudUrl = storageResult.cloudUrl;
       generatedImage.displayUrl = storageResult.displayUrl;
       generatedImage.url = storageResult.cloudUrl;
     } else if (storageResult.localPath) {
-      // 💫 NEW: Local: Serve via HTTP endpoint instead of file:// URL
+      // Legacy local storage: HTTP endpoint
       const filename = path.basename(outputImagePath);
       const httpUrl = `/api/v1/browser-automation/serve-image/${filename}`;
       generatedImage.localPath = storageResult.localPath;
-      generatedImage.url = httpUrl;  // HTTP URL instead of file://
+      generatedImage.url = httpUrl;
       generatedImage.displayUrl = httpUrl;
     } else {
       // Fallback: Server temp file
@@ -1322,6 +1404,47 @@ export async function generateWithBrowser(req, res) {
       const httpUrl = `/api/v1/browser-automation/serve-image/${filename}`;
       generatedImage.url = httpUrl;
       generatedImage.displayUrl = httpUrl;
+    }
+
+    // ====================================
+    // STEP 7: 💫 AUTO-SAVE ASSET TO DATABASE
+    // ====================================
+    try {
+      console.log(`\n💾 Auto-saving asset to database...`);
+      const assetResult = await AssetManager.saveAsset({
+        filename: generatedImage.filename,
+        mimeType: 'image/jpeg',
+        fileSize: generatedImage.size,
+        assetType: 'image',
+        assetCategory: 'generated-image',
+        userId: req.body.userId || 'anonymous',
+        sessionId: req.body.sessionId,
+        storage: {
+          location: storageResult.storageType === 'cloud' ? 'google-drive' : 'local',
+          localPath: storageResult.localPath,
+          url: generatedImage.url,
+          ...storageResult.cloudMetadata && { cloudMetadata: storageResult.cloudMetadata }
+        },
+        metadata: {
+          format: 'jpeg',
+          provider: imageGenProvider,
+          grokConversationId: grokConversationId
+        },
+        tags: ['generated', 'browser-automation', imageGenProvider, scene, mood]
+      }, { verbose: true });
+
+      if (assetResult.success) {
+        generatedImage.assetId = assetResult.asset.assetId;
+        generatedImage.savedToDb = true;
+        generatedImage.assetAction = assetResult.action; // 'created' or 'updated'
+        console.log(`   ✅ Asset saved with ID: ${assetResult.asset.assetId}`);
+      } else {
+        console.warn(`   ⚠️  Asset save failed: ${assetResult.error}`);
+        generatedImage.savedToDb = false;
+      }
+    } catch (assetError) {
+      console.error(`   ❌ Error saving asset: ${assetError.message}`);
+      generatedImage.savedToDb = false;
     }
 
     return res.json({
@@ -1950,16 +2073,45 @@ export async function generateImageBrowser(req, res) {
 /**
  * 📸 Serve generated images from storage
  * GET /v1/browser-automation/generated-image/:id
+ * 
+ * ID format: This can be either:
+ * 1. A full path lookup via global.generatedImagePaths (backwards compat)
+ * 2. A direct filename (new approach - searches common locations)
  */
 export async function serveGeneratedImage(req, res) {
   try {
     const { id } = req.params;
     
-    // Retrieve file path from temporary storage
-    const filePath = global.generatedImagePaths?.[id];
+    console.log(`📍 serveGeneratedImage: Looking up ${id}`);
+    
+    let filePath = null;
+    
+    // 💫 NEW: First check if it's in global mapping (backwards compatibility)
+    if (global.generatedImagePaths && global.generatedImagePaths[id]) {
+      filePath = global.generatedImagePaths[id];
+      console.log(`✓ Found in global mapping: ${filePath}`);
+    } else {
+      // 💫 NEW: Try direct filename lookup in known locations
+      const searchPaths = [
+        path.join(tempDir, 'google-flow-downloads', id),
+        path.join(tempDir, 'image-gen-results', id),
+        path.join(tempDir, id)
+      ];
+      
+      console.log(`🔍 Global mapping miss. Searching in ${searchPaths.length} locations...`);
+      
+      for (const searchPath of searchPaths) {
+        if (fs.existsSync(searchPath)) {
+          filePath = searchPath;
+          console.log(`✓ Found at: ${searchPath}`);
+          break;
+        }
+      }
+    }
     
     if (!filePath || !fs.existsSync(filePath)) {
       console.warn(`⚠️ Generated image not found: ${id}`);
+      console.warn(`   Checked locations: temp/google-flow-downloads/${id}, temp/image-gen-results/${id}, temp/${id}`);
       return res.status(404).json({
         success: false,
         error: 'Image not found or expired'
@@ -1989,28 +2141,43 @@ export async function serveGeneratedImage(req, res) {
     };
     const contentType = contentTypeMap[ext] || 'image/jpeg';
     
+    // 💫 IMPROVED: Get file stats for logging
+    const stats = fs.statSync(filePath);
+    console.log(`📸 Streaming ${path.basename(filePath)} (${Math.round(stats.size / 1024)}KB)`);
+    
     // Stream the image file
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Content-Length', stats.size);
     
     const fileStream = fs.createReadStream(filePath);
+    
     fileStream.on('error', (err) => {
-      console.error(`❌ Error streaming file ${filePath}:`, err);
+      console.error(`❌ Error streaming file ${filePath}:`, err.message, err.code);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to stream image' });
+      } else {
+        res.end();
       }
+    });
+    
+    fileStream.on('end', () => {
+      console.log(`✓ File stream completed: ${path.basename(filePath)}`);
     });
     
     fileStream.pipe(res);
     
   } catch (error) {
-    console.error('❌ Error serving generated image:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    console.error('❌ Error serving generated image:', error.message);
+    console.error('   Stack:', error.stack);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 }
 
@@ -2108,9 +2275,38 @@ export async function generateVideoBrowser(req, res) {
           fs.mkdirSync(outputDir, { recursive: true });
         }
 
-        // 💫 CONVERT IMAGE TO FILE PATH (if base64, write to temp file)
+        // 💫 CONVERT IMAGE TO FILE PATH (handle base64, API URLs, or local paths)
         let imagePath = sourceImage;
-        if (sourceImage && sourceImage.startsWith('data:')) {
+        
+        // Handle API URLs like /api/v1/browser-automation/generated-image/...
+        if (sourceImage && sourceImage.startsWith('/api/')) {
+          console.log('   📋 Resolving API image URL to file path...');
+          const filename = path.basename(sourceImage);
+          const localPath = global.generatedImagePaths?.[filename];
+          
+          if (localPath && fs.existsSync(localPath)) {
+            imagePath = localPath;
+            console.log(`   ✅ Resolved API URL to local file: ${imagePath}`);
+          } else {
+            console.warn(`   ⚠️  API image URL not found in cache, searching downloads folder...`);
+            // Try common locations
+            const possiblePaths = [
+              path.join(tempDir, 'google-flow-downloads', filename),
+              path.join(tempDir, filename),
+              path.join(process.cwd(), 'temp', filename)
+            ];
+            
+            const foundPath = possiblePaths.find(p => fs.existsSync(p));
+            if (foundPath) {
+              imagePath = foundPath;
+              console.log(`   ✅ Found image at: ${imagePath}`);
+            } else {
+              console.warn(`   ⚠️  Could not resolve API URL: ${sourceImage}`);
+            }
+          }
+        }
+        // Handle base64 images
+        else if (sourceImage && sourceImage.startsWith('data:')) {
           console.log('   📋 Converting base64 image to file...');
           const base64Match = sourceImage.match(/^data:image\/(\w+);base64,(.+)$/);
           if (base64Match) {
@@ -2368,13 +2564,17 @@ export async function generateVideo(req, res) {
     const {
       videoProvider = 'grok',  // 💫 Video provider selection
       prompt,
-      imagePath,  // 💫 NEW: Path to image file for video generation
-      imageBase64,  // 💫 NEW: Base64 encoded image
+      imagePath,  // 💫 Path to image file for video generation
+      imageBase64,  // 💫 Base64 encoded image
       duration = 5,  // seconds
       quality = 'high',  // low, medium, high
       aspectRatio = '16:9',  // 16:9, 9:16, 1:1
       characterImageBase64,  // Optional: for Grok background generation
       productImageBase64,  // Optional: for context
+      // 💫 NEW: Accept file paths from frontend image generation step
+      generatedImagePaths = [],
+      characterImagePath,
+      productImagePath,
     } = req.body;
 
     if (!prompt) {
@@ -2400,8 +2600,47 @@ export async function generateVideo(req, res) {
       try {
         let finalImagePath = imagePath;
 
+        // 💫 PRIORITY: Use generated image from frontend (from image generation step)
+        if (generatedImagePaths && generatedImagePaths.length > 0) {
+          console.log(`   📷 Using generated image from frontend: ${generatedImagePaths[0]}`);
+          finalImagePath = generatedImagePaths[0];
+        }
+
+        // 💫 PRIORITY 2: Use passed characterImagePath
+        if (!finalImagePath && characterImagePath) {
+          console.log(`   📷 Using character image path: ${characterImagePath}`);
+          finalImagePath = characterImagePath;
+        }
+
+        // 💫 PRIORITY 3: Handle API image URLs (resolve to local file path)
+        if (!finalImagePath && imagePath && imagePath.startsWith('/api/')) {
+          console.log(`   📋 Resolving API image URL to file path...`);
+          const filename = path.basename(imagePath);
+          const localPath = global.generatedImagePaths?.[filename];
+          
+          if (localPath && fs.existsSync(localPath)) {
+            finalImagePath = localPath;
+            console.log(`   ✅ Resolved API URL to local file: ${finalImagePath}`);
+          } else {
+            console.warn(`   ⚠️  API image URL not found in cache, searching downloads folder...`);
+            // Try common locations
+            const possiblePaths = [
+              path.join(tempDir, 'google-flow-downloads', filename),
+              path.join(tempDir, filename),
+              path.join(process.cwd(), 'temp', filename)
+            ];
+            
+            const foundPath = possiblePaths.find(p => fs.existsSync(p));
+            if (foundPath) {
+              finalImagePath = foundPath;
+              console.log(`   ✅ Found image at: ${finalImagePath}`);
+            } else {
+              console.warn(`   ⚠️  Could not resolve API URL: ${imagePath}`);
+            }
+          }
+        }
         // 💫 NEW: Handle Base64 image upload
-        if (imageBase64 && !imagePath) {
+        else if (imageBase64 && !imagePath) {
           const base64Match = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
           if (!base64Match) {
             throw new Error('Invalid Base64 image format');

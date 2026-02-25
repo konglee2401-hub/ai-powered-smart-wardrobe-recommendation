@@ -25,6 +25,7 @@ import Navbar from './components/Navbar';
 import ImageGenerationPage from './pages/ImageGenerationPage';
 import VideoGenerationPage from './pages/VideoGenerationPage';
 import OneClickCreatorPage from './pages/OneClickCreatorPage';
+import VoiceOverPage from './pages/VoiceOverPage';
 
 function App() {
   return (
@@ -46,6 +47,16 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-hidden">
               <VideoGenerationPage />
+            </div>
+          </div>
+        } />
+
+        {/* VoiceOverPage - Full screen with Navbar */}
+        <Route path="/voice-over" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-hidden">
+              <VoiceOverPage />
             </div>
           </div>
         } />

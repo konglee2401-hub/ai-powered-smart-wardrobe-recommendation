@@ -21,6 +21,8 @@ const GalleryPicker = ({
   const [error, setError] = useState(null);
   const [selectedItems, setSelectedItems] = useState(multiSelect ? [] : null);
   const [viewMode, setViewMode] = useState('grid');
+  const [storageLocation, setStorageLocation] = useState('all'); // Changed to 'all' to show both local and Google Drive
+  const [imageErrors, setImageErrors] = useState({}); // Track failed image loads
   const [filters, setFilters] = useState({
     assetCategory: assetCategory,
     search: '',
@@ -31,31 +33,57 @@ const GalleryPicker = ({
     total: 0,
     pages: 0
   });
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const observerTarget = React.useRef(null);
 
   // Load gallery items from API
   useEffect(() => {
     if (isOpen) {
-      loadGalleryItems();
+      // Reset on filter change
+      if (filters.page === 1) {
+        setItems([]);
+        loadGalleryItems();
+      }
     }
-  }, [isOpen, assetType, filters]);
+  }, [isOpen, assetType, filters.assetCategory, filters.sortBy, storageLocation]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!observerTarget.current || !hasMore || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMoreItems();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(observerTarget.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore]);
 
   const loadGalleryItems = async () => {
     setLoading(true);
     setError(null);
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const params = new URLSearchParams({
         assetType: assetType,
         category: filters.assetCategory,
         page: filters.page,
-        limit: 30,
-        sortBy: filters.sortBy
+        limit: 60, // Load more per request for infinite scroll
+        sortBy: filters.sortBy,
+        storageLocation: storageLocation
       });
 
       if (filters.search) {
         params.append('query', filters.search);
       }
 
-      const response = await fetch(`http://localhost:5000/api/assets/gallery?${params}`);
+      const response = await fetch(`${apiUrl}/assets/gallery?${params}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch gallery items');
@@ -64,27 +92,35 @@ const GalleryPicker = ({
       const data = await response.json();
       
       // Transform API assets to component format
-      const transformedItems = data.assets.map(asset => ({
-        assetId: asset.assetId,
-        id: asset._id,
-        name: asset.filename,
-        url: asset.storage.url || `/temp/${asset.filename}`,
-        thumbnail: asset.storage.url || `/temp/${asset.filename}`,
-        type: asset.assetType,
-        category: asset.assetCategory,
-        createdAt: new Date(asset.createdAt),
-        size: asset.fileSize,
-        metadata: asset.metadata,
-        isFavorite: asset.isFavorite,
-        tags: asset.tags,
-        storage: asset.storage
-      }));
+      const transformedItems = data.assets.map(asset => {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const imageUrl = `${apiUrl}/assets/proxy/${asset.assetId}`;
+        
+        return {
+          assetId: asset.assetId,
+          id: asset._id,
+          name: asset.filename,
+          url: imageUrl,
+          thumbnail: imageUrl,
+          type: asset.assetType,
+          category: asset.assetCategory,
+          createdAt: new Date(asset.createdAt),
+          size: asset.fileSize,
+          metadata: asset.metadata,
+          isFavorite: asset.isFavorite,
+          tags: asset.tags,
+          storage: asset.storage
+        };
+      });
 
       setItems(transformedItems);
       setPagination({
         total: data.pagination.total,
         pages: data.pagination.pages
       });
+      
+      // Check if there are more pages to load
+      setHasMore(filters.page < data.pagination.pages);
     } catch (error) {
       console.error('Failed to load gallery items:', error);
       setError('Failed to load gallery. Please try again.');
@@ -92,6 +128,113 @@ const GalleryPicker = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMoreItems = async () => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const nextPage = filters.page + 1;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const params = new URLSearchParams({
+        assetType: assetType,
+        category: filters.assetCategory,
+        page: nextPage,
+        limit: 60,
+        sortBy: filters.sortBy,
+        storageLocation: storageLocation
+      });
+
+      if (filters.search) {
+        params.append('query', filters.search);
+      }
+
+      const response = await fetch(`${apiUrl}/assets/gallery?${params}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch more items');
+      }
+
+      const data = await response.json();
+      
+      const transformedItems = data.assets.map(asset => {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const imageUrl = `${apiUrl}/assets/proxy/${asset.assetId}`;
+        
+        return {
+          assetId: asset.assetId,
+          id: asset._id,
+          name: asset.filename,
+          url: imageUrl,
+          thumbnail: imageUrl,
+          type: asset.assetType,
+          category: asset.assetCategory,
+          createdAt: new Date(asset.createdAt),
+          size: asset.fileSize,
+          metadata: asset.metadata,
+          isFavorite: asset.isFavorite,
+          tags: asset.tags,
+          storage: asset.storage
+        };
+      });
+
+      // Append to existing items
+      setItems(prev => [...prev, ...transformedItems]);
+      setPagination({
+        total: data.pagination.total,
+        pages: data.pagination.pages
+      });
+      
+      // Update page number
+      setFilters(prev => ({ ...prev, page: nextPage }));
+      
+      // Check if there are more pages
+      setHasMore(nextPage < data.pagination.pages);
+    } catch (error) {
+      console.error('Failed to load more items:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // 💫 Get category options based on asset type
+  const getCategoryOptions = () => {
+    const imageCategories = [
+      { value: 'all', label: 'All Image Categories' },
+      { value: 'character-image', label: 'Character Images' },
+      { value: 'product-image', label: 'Product Images' },
+      { value: 'generated-image', label: 'Generated Images' },
+      { value: 'reference-image', label: 'Reference Images' }
+    ];
+
+    const videoCategories = [
+      { value: 'all', label: 'All Video Categories' },
+      { value: 'source-video', label: 'Source Videos' },
+      { value: 'generated-video', label: 'Generated Videos' }
+    ];
+
+    const audioCategories = [
+      { value: 'all', label: 'All Audio Categories' },
+      { value: 'audio', label: 'Audio Files' }
+    ];
+
+    const allCategories = [
+      { value: 'all', label: 'All Categories' },
+      { value: 'character-image', label: 'Character Images' },
+      { value: 'product-image', label: 'Product Images' },
+      { value: 'generated-image', label: 'Generated Images' },
+      { value: 'reference-image', label: 'Reference Images' },
+      { value: 'source-video', label: 'Source Videos' },
+      { value: 'generated-video', label: 'Generated Videos' },
+      { value: 'audio', label: 'Audio Files' }
+    ];
+
+    // Return filtered categories based on assetType
+    if (assetType === 'image') return imageCategories;
+    if (assetType === 'video') return videoCategories;
+    if (assetType === 'audio') return audioCategories;
+    return allCategories;
   };
 
   const handleItemSelect = (item) => {
@@ -248,7 +391,10 @@ const GalleryPicker = ({
           
           <select
             value={filters.assetCategory}
-            onChange={(e) => setFilters(prev => ({ ...prev, assetCategory: e.target.value, page: 1 }))}
+            onChange={(e) => {
+              setFilters(prev => ({ ...prev, assetCategory: e.target.value, page: 1 }));
+              setItems([]);
+            }}
             style={{
               padding: '0.6rem 1rem',
               background: '#0f172a',
@@ -259,13 +405,32 @@ const GalleryPicker = ({
               cursor: 'pointer'
             }}
           >
-            <option value="all">All Categories</option>
-            <option value="character-image">Character Images</option>
-            <option value="product-image">Product Images</option>
-            <option value="generated-image">Generated Images</option>
-            <option value="reference-image">References</option>
-            <option value="source-video">Source Videos</option>
-            <option value="generated-video">Generated Videos</option>
+            {getCategoryOptions().map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={storageLocation}
+            onChange={(e) => {
+              setStorageLocation(e.target.value);
+              setFilters(prev => ({ ...prev, page: 1 }));
+              setItems([]);
+            }}
+            style={{
+              padding: '0.6rem 1rem',
+              background: '#0f172a',
+              border: '1px solid #475569',
+              borderRadius: '6px',
+              color: '#f1f5f9',
+              fontSize: '0.95rem',
+              cursor: 'pointer'
+            }}
+            title="Filter by storage location"
+          >
+            <option value="google-drive">Google Drive</option>
+            <option value="local">Local Storage</option>
+            <option value="all">All Storage</option>
           </select>
 
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -312,11 +477,12 @@ const GalleryPicker = ({
           display: viewMode === 'grid' 
             ? 'grid'
             : 'flex',
-          gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(120px, 1fr))' : 'none',
+          gridTemplateColumns: viewMode === 'grid' ? 'repeat(4, 1fr)' : 'none',
           flexDirection: viewMode === 'list' ? 'column' : 'row',
-          gap: '1rem'
+          gap: '1rem',
+          alignContent: 'start'
         }}>
-          {loading ? (
+          {loading && items.length === 0 ? (
             <div style={{
               gridColumn: '1 / -1',
               display: 'flex',
@@ -377,10 +543,24 @@ const GalleryPicker = ({
                     aspectRatio: '1',
                     objectFit: 'cover',
                     flexShrink: 0,
-                    background: '#0f172a'
+                    background: imageErrors[item.assetId] ? '#475569' : '#0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative'
                   }}
                   onError={(e) => {
-                    e.target.style.background = '#334155';
+                    console.warn(`Image failed to load: ${item.name}`);
+                    setImageErrors(prev => ({ ...prev, [item.assetId]: true }));
+                    e.target.style.visibility = 'hidden';
+                    // Show error state in parent
+                    if (e.target.parentElement) {
+                      e.target.parentElement.style.display = 'flex';
+                      e.target.parentElement.style.alignItems = 'center';
+                      e.target.parentElement.style.justifyContent = 'center';
+                      e.target.parentElement.style.background = '#0f172a';
+                      e.target.parentElement.innerHTML = '<div style="text-align: center; color: #94a3b8; font-size: 0.8rem;"><div>⚠️</div><div>Image unavailable</div></div>';
+                    }
                   }}
                 />
                 {viewMode === 'list' && (
@@ -428,21 +608,40 @@ const GalleryPicker = ({
               </div>
             ))
           )}
+          
+          {/* Infinite scroll sentinel */}
+          <div ref={observerTarget} style={{
+            gridColumn: '1 / -1',
+            height: '1px',
+            visibility: 'hidden',
+            pointerEvents: 'none'
+          }} />
+          
+          {/* Loading indicator when fetching more items */}
+          {isLoadingMore && (
+            <div style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '1rem',
+              color: '#94a3b8'
+            }}>
+              <div>Loading more...</div>
+            </div>
+          )}
         </div>
 
-        {/* Pagination info */}
-        {pagination.pages > 1 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '0.75rem',
-            borderTop: '1px solid #334155',
-            background: '#1e293b',
-            color: '#94a3b8',
-            fontSize: '0.85rem'
-          }}>
-            Page {filters.page} of {pagination.pages} ({pagination.total} total)
-          </div>
-        )}
+        {/* Info bar showing total items */}
+        <div style={{
+          textAlign: 'center',
+          padding: '0.75rem',
+          borderTop: '1px solid #334155',
+          background: '#1e293b',
+          color: '#94a3b8',
+          fontSize: '0.85rem'
+        }}>
+          Showing {items.length} of {pagination.total} items {hasMore && '(scroll to load more)'}
+        </div>
 
         {/* Footer */}
         <div style={{

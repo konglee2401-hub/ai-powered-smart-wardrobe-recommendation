@@ -133,13 +133,49 @@ const Step3EnhancedWithSessionComponent = ({
   // Generate Prompt with Layering
   useEffect(() => {
     const generatePrompt = async () => {
-      if (Object.keys(selectedOptions).length === 0) {
-        console.log('⚠️ No selected options yet, skipping prompt generation');
-        return;
+      // Handle empty selectedOptions: build defaults from analysis or use sensible defaults
+      let optionsToUse = { ...selectedOptions };
+      
+      if (Object.keys(optionsToUse).length === 0) {
+        console.log('⚠️ No selected options, building defaults from analysis...');
+        
+        // Try to extract recommendations from analysis
+        if (analysis?.recommendations) {
+          const rec = analysis.recommendations;
+          
+          // Map analysis recommendations to options
+          if (rec.scene?.choice) optionsToUse.scene = rec.scene.choice;
+          if (rec.lighting?.choice) optionsToUse.lighting = rec.lighting.choice;
+          if (rec.mood?.choice) optionsToUse.mood = rec.mood.choice;
+          if (rec.cameraAngle?.choice) optionsToUse.cameraAngle = rec.cameraAngle.choice;
+          if (rec.hairstyle?.choice) optionsToUse.hairstyle = rec.hairstyle.choice;
+          if (rec.makeup?.choice) optionsToUse.makeup = rec.makeup.choice;
+          if (rec.style?.choice) optionsToUse.style = rec.style.choice;
+          if (rec.colorPalette?.choice) optionsToUse.colorPalette = rec.colorPalette.choice;
+          if (rec.bottoms?.choice) optionsToUse.bottoms = rec.bottoms.choice;
+          if (rec.shoes?.choice) optionsToUse.shoes = rec.shoes.choice;
+          if (rec.accessories?.choice) optionsToUse.accessories = rec.accessories.choice;
+          if (rec.outerwear?.choice) optionsToUse.outerwear = rec.outerwear.choice;
+          
+          console.log('✅ Extracted defaults from analysis:', optionsToUse);
+        }
+        
+        // If still empty after analysis, use sensible defaults
+        if (Object.keys(optionsToUse).length === 0) {
+          console.log('⚠️ No analysis recommendations, using sensible defaults...');
+          optionsToUse = {
+            scene: 'studio',
+            lighting: 'soft',
+            mood: 'elegant',
+            style: 'fashion-editorial',
+            cameraAngle: 'three-quarter',
+            colorPalette: 'neutral'
+          };
+        }
       }
 
       try {
-        console.log('📝 Generating prompt with options:', selectedOptions);
+        console.log('📝 Generating prompt with options:', optionsToUse);
         console.log('📝 Character description:', characterDescription);
         
         // Extract product information from analysis
@@ -149,7 +185,7 @@ const Step3EnhancedWithSessionComponent = ({
         
         const basePrompt = await generateAdvancedPrompt(
           useCase,
-          selectedOptions,
+          optionsToUse,
           {
             productName: productName,
             characterName: 'character-image'

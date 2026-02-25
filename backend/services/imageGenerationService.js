@@ -32,7 +32,7 @@ class ImageGenerationAutomation {
         downloadClick: 2000,
         upgradeWait: 10000,   // Wait for image upgrade message (nâng cấp hình ảnh)
         fileDownload: 15000,   // Wait for actual file to be saved
-        generation: 180000
+        generation: 60000
       },
       ...options
     };
@@ -184,18 +184,9 @@ class ImageGenerationAutomation {
 
     await this.page.waitForTimeout(this.options.timeouts.modelConfig);
 
-    // Close config dialog
-    await this.page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const tuneBtn = buttons.find(btn => {
-        const icon = btn.querySelector('i');
-        return icon && icon.textContent.includes('tune');
-      });
-      if (tuneBtn) tuneBtn.click();
-    });
-
-    await this.page.waitForTimeout(this.options.timeouts.modelConfig);
-    console.log('✓ Config dialog closed');
+    // 💫 CHANGED: Don't close config dialog here - let configureAspectRatio handle it
+    // This ensures aspect ratio can be set while the config dialog is still open
+    console.log('✓ Model configured - keeping config dialog open for aspect ratio selection');
   }
 
   async applyTabSwitchTrick() {
@@ -507,34 +498,93 @@ class ImageGenerationAutomation {
   }
 
   async enterPrompt(prompt) {
-    console.log('📍 Entering prompt...');
+    console.log('📍 Entering prompt (3-part strategy: type + paste + type)...');
 
-    // Clean and split prompt
+    // Clean prompt
     const cleanPrompt = prompt.trim().replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ');
-    const firstPart = cleanPrompt.substring(0, 10);
-    const secondPart = cleanPrompt.substring(10);
+    const typeLength = 20; // First 20 chars and last 20 chars type manually
+    
+    // 💫 NEW 3-PART STRATEGY: Type (20) + Paste (middle) + Type (20)
+    const firstPart = cleanPrompt.substring(0, typeLength); // First 20 chars - TYPE
+    const pasteStart = typeLength;
+    const pasteEnd = cleanPrompt.length - typeLength;
+    const middlePart = cleanPrompt.substring(pasteStart, pasteEnd); // Middle part - PASTE
+    const lastPart = cleanPrompt.substring(cleanPrompt.length - typeLength); // Last 20 chars - TYPE
     const expectedLength = cleanPrompt.length;
 
     console.log(`  Prompt (cleaned): "${cleanPrompt}"`);
-    console.log(`  Split: "${firstPart}" + "${secondPart}"`);
+    console.log(`  Strategy: Type (${firstPart.length} chars) + Paste (${middlePart.length} chars) + Type (${lastPart.length} chars)`);
     console.log(`  Target length: ${expectedLength} characters`);
 
-    // Step 1: Focus and type first 10 characters
+    // Step 1: Focus textarea and clear it
     await this.page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
     await this.page.waitForTimeout(300);
-    console.log(`  → Typing first 10 chars: "${firstPart}"`);
-    await this.page.keyboard.type(firstPart, { delay: 50 }); // Type each character slowly
+    
+    // Clear existing content
+    await this.page.evaluate(() => {
+      const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+      if (textarea) {
+        textarea.value = '';
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
     await this.page.waitForTimeout(200);
 
-    // Step 2: Type remaining part (split into chunks for better React component recognition)
-    if (secondPart.length > 0) {
-      console.log(`  → Typing remaining ${secondPart.length} chars in chunks...`);
-      const chunkSize = 50; // Type in 50-char chunks
-      for (let i = 0; i < secondPart.length; i += chunkSize) {
-        const chunk = secondPart.substring(i, i + chunkSize);
-        await this.page.keyboard.type(chunk, { delay: 5 });
-        await this.page.waitForTimeout(50); // Small delay between chunks
-      }
+    // Step 2: Type first 20 characters (helps React component initialize)
+    if (firstPart.length > 0) {
+      console.log(`  → Typing first ${firstPart.length} characters: "${firstPart}"`);
+      
+      await this.page.keyboard.type(firstPart, { delay: 50 });
+      await this.page.waitForTimeout(300);
+    }
+
+    // Step 3: Paste middle part (most efficient for large content)
+    if (middlePart.length > 0) {
+      console.log(`  → Pasting ${middlePart.length} characters...`);
+      
+      // Keep focus on textarea
+      await this.page.focus('#PINHOLE_TEXT_AREA_ELEMENT_ID');
+      
+      // Paste using clipboard
+      await this.page.evaluate((text) => {
+        navigator.clipboard.writeText(text).then(() => {
+          const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+          if (textarea) {
+            // Get current length before paste
+            const beforeLength = textarea.value.length;
+            
+            // Paste the text
+            textarea.value = textarea.value + text;
+            textarea.selectionStart = textarea.value.length;
+            textarea.selectionEnd = textarea.value.length;
+            
+            // Trigger events
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }, middlePart);
+      
+      await this.page.waitForTimeout(500);
+    }
+
+    // Step 4: Type last 20 characters (ensures React event completion)
+    if (lastPart.length > 0) {
+      console.log(`  → Typing final ${lastPart.length} characters: "${lastPart}"`);
+      
+      // Move cursor to end
+      await this.page.evaluate(() => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (textarea) {
+          textarea.selectionStart = textarea.value.length;
+          textarea.selectionEnd = textarea.value.length;
+        }
+      });
+      
+      // Type the final part character by character
+      await this.page.keyboard.type(lastPart, { delay: 50 });
+      await this.page.waitForTimeout(200);
+      
       // Trigger final events to ensure React component recognizes the full input
       await this.page.evaluate(() => {
         const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
@@ -549,7 +599,7 @@ class ImageGenerationAutomation {
       await this.page.waitForTimeout(300);
     }
 
-    // Step 3: Wait for textarea content to match expected length
+    // Step 5: Wait for textarea content to match expected length
     console.log(`  → Waiting for textarea to have ${expectedLength} characters...`);
     let promptReady = false;
     let waitAttempts = 0;
@@ -583,59 +633,123 @@ class ImageGenerationAutomation {
     this.expectedPromptLength = expectedLength;
   }
 
+  // 💫 NEW: Click "Sử dụng lại câu lệnh" (reuse command) button to restore components
+  async clickReuseCommandButton() {
+    console.log('🔄 Looking for "Sử dụng lại câu lệnh" (reuse command) button...');
+    
+    const reuseCommandFound = await this.page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      for (const btn of buttons) {
+        const btnText = btn.textContent.trim().toLowerCase();
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+        
+        // Look for "Sử dụng lại câu lệnh" button (Vietnamese or English)
+        if (btnText.includes('sử dụng lại') || ariaLabel.includes('sử dụng lại') || 
+            btnText.includes('reuse') || ariaLabel.includes('reuse')) {
+          console.log(`  → Found "Sử dụng lại câu lệnh" button, clicking...`);
+          btn.click();
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!reuseCommandFound) {
+      console.log(`  ⚠️  "Sử dụng lại câu lệnh" button not found - components may need to be re-uploaded`);
+      return false;
+    }
+
+    // Wait for UI to update after clicking reuse button
+    await this.page.waitForTimeout(1500);
+    console.log(`✅ Reuse button clicked, components restored`);
+    
+    // 💫 CRITICAL: Clear textarea after reuse button click
+    console.log(`🧹 Clearing textarea after reuse...`);
+    await this.page.evaluate(() => {
+      const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+      if (textarea) {
+        textarea.value = '';
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    
+    await this.page.waitForTimeout(500);
+    console.log(`✅ Textarea cleared, ready for new prompt`);
+    return true;
+  }
+
   async submitAndWaitForGeneration() {
     console.log('📍 Validating submission requirements...');
 
     // Comprehensive validation before submission
     const expectedLen = this.expectedPromptLength || 0;
-    const submitValidation = await this.page.evaluate((expectedLength) => {
-      const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
-      if (!textarea) return { valid: false, reason: 'textarea not found', textareaLength: 0 };
+    
+    // 💫 NEW: Retry logic for component detection (in case STEP 2B is slow)
+    let submitValidation = null;
+    let validationAttempts = 0;
+    const maxValidationAttempts = 3;
+    
+    while (!submitValidation?.valid && validationAttempts < maxValidationAttempts) {
+      validationAttempts++;
+      
+      submitValidation = await this.page.evaluate((expectedLength) => {
+        const textarea = document.getElementById('PINHOLE_TEXT_AREA_ELEMENT_ID');
+        if (!textarea) return { valid: false, reason: 'textarea not found', textareaLength: 0 };
 
-      let container = textarea.parentElement;
-      while (container && !container.className.includes('sc-77366d4e-2')) {
-        container = container.parentElement;
+        let container = textarea.parentElement;
+        while (container && !container.className.includes('sc-77366d4e-2')) {
+          container = container.parentElement;
+        }
+
+        if (!container) return { valid: false, reason: 'container not found', textareaLength: textarea.value.length };
+
+        const buttons = Array.from(container.querySelectorAll('button'));
+        let closeCount = 0;
+        let sendBtn = null;
+
+        for (const btn of buttons) {
+          const icon = btn.querySelector('i');
+          if (!icon) continue;
+          const iconText = icon.textContent.trim();
+          if (iconText === 'close') closeCount++;
+          if (iconText === 'arrow_forward') sendBtn = btn;
+        }
+
+        const textareaLength = textarea.value.length;
+
+        // 💫 CHANGED: More flexible component check (allow 1-3 components)
+        if (closeCount < 1 || closeCount > 3) {
+          return { valid: false, reason: `Expected 1-3 components, found ${closeCount}`, components: closeCount, textareaLength };
+        }
+
+        // Check send button exists
+        if (!sendBtn) {
+          return { valid: false, reason: 'send button not found', components: closeCount, textareaLength };
+        }
+
+        // Check textarea length matches expected
+        if (textareaLength < expectedLength) {
+          return { valid: false, reason: `Textarea incomplete (${textareaLength}/${expectedLength} chars)`, components: closeCount, textareaLength };
+        }
+
+        return { valid: true, components: closeCount, textareaLength, sendDisabled: sendBtn.disabled };
+      }, expectedLen);
+
+      if (!submitValidation.valid) {
+        console.log(`⚠️  Validation attempt ${validationAttempts}/${maxValidationAttempts} failed: ${submitValidation.reason}`);
+        console.log(`   Textarea: ${submitValidation.textareaLength}/${expectedLen} chars`);
+        console.log(`   Components: ${submitValidation.components}`);
+        
+        if (validationAttempts < maxValidationAttempts) {
+          console.log(`⏳ Retrying in 1s...`);
+          await this.page.waitForTimeout(1000);
+        } else {
+          throw new Error(`Cannot submit: ${submitValidation.reason}`);
+        }
+      } else {
+        console.log(`✓ Validation passed on attempt ${validationAttempts}`);
       }
-
-      if (!container) return { valid: false, reason: 'container not found', textareaLength: textarea.value.length };
-
-      const buttons = Array.from(container.querySelectorAll('button'));
-      let closeCount = 0;
-      let sendBtn = null;
-
-      for (const btn of buttons) {
-        const icon = btn.querySelector('i');
-        if (!icon) continue;
-        const iconText = icon.textContent.trim();
-        if (iconText === 'close') closeCount++;
-        if (iconText === 'arrow_forward') sendBtn = btn;
-      }
-
-      const textareaLength = textarea.value.length;
-
-      // Check component count (must be exactly 2)
-      if (closeCount !== 2) {
-        return { valid: false, reason: `Expected 2 components, found ${closeCount}`, components: closeCount, textareaLength };
-      }
-
-      // Check send button exists
-      if (!sendBtn) {
-        return { valid: false, reason: 'send button not found', components: closeCount, textareaLength };
-      }
-
-      // Check textarea length matches expected
-      if (textareaLength < expectedLength) {
-        return { valid: false, reason: `Textarea incomplete (${textareaLength}/${expectedLength} chars)`, components: closeCount, textareaLength };
-      }
-
-      return { valid: true, components: closeCount, textareaLength, sendDisabled: sendBtn.disabled };
-    }, expectedLen);
-
-    if (!submitValidation.valid) {
-      console.log(`❌ Validation failed: ${submitValidation.reason}`);
-      console.log(`   Textarea: ${submitValidation.textareaLength}/${expectedLen} chars`);
-      console.log(`   Components: ${submitValidation.components}`);
-      throw new Error(`Cannot submit: ${submitValidation.reason}`);
     }
 
     if (submitValidation.sendDisabled) {
@@ -670,12 +784,13 @@ class ImageGenerationAutomation {
     await this.page.waitForTimeout(this.options.timeouts.submitWait);
     console.log('✓ Submitted\n');
 
-    // Monitor generation
-    console.log('📍 Monitoring generation (max 3 min)...');
+    // Monitor generation (reduced to 60 seconds)
+    console.log('📍 Monitoring generation (max 60s, checking for download button)...');
     let generationComplete = false;
     let placeholdersDetected = false;
+    let monitoredStates = [];
 
-    for (let i = 0; i < 180; i++) {
+    for (let i = 0; i < 60; i++) {
       const state = await this.page.evaluate(() => {
         const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
         if (!scroller) return null;
@@ -689,37 +804,66 @@ class ImageGenerationAutomation {
           }
         });
 
+        // Check for download button in data-index="1" (the first generated image item)
+        const indexOne = scroller.querySelector('[data-index="1"]');
+        let hasDownloadButtonInIndex1 = false;
+        let hasImageInIndex1 = false;
+        
+        if (indexOne) {
+          // Check for download button (usually has aria-label or title containing 'download')
+          const downloadBtn = indexOne.querySelector('[aria-label*="download" i], [title*="download" i], button[aria-label*="tải" i]');
+          hasDownloadButtonInIndex1 = !!downloadBtn;
+          
+          // Check for actual preview image
+          const previewImg = indexOne.querySelector('img[alt]');
+          hasImageInIndex1 = !!previewImg;
+        }
+
         const images = scroller.querySelectorAll('img[alt]');
         return {
           itemCount: items.length,
           imageCount: images.length,
-          hasLoadingIndicators
+          hasLoadingIndicators,
+          hasDownloadButtonInIndex1,
+          hasImageInIndex1
         };
       });
 
       if (!state) {
-        if (i % 20 === 0) process.stdout.write('.');
+        if (i % 15 === 0) process.stdout.write('.');
         await this.page.waitForTimeout(1000);
         continue;
       }
 
-      if (state.hasLoadingIndicators && !placeholdersDetected) {
-        placeholdersDetected = true;
-        console.log(`\n✓ Generation started`);
+      if (i % 10 === 0 || state.hasLoadingIndicators || (monitoredStates.length < 3)) {
+        monitoredStates.push({ second: i, ...state });
       }
 
-      if (placeholdersDetected && !state.hasLoadingIndicators && state.imageCount > 0) {
+      if (state.hasLoadingIndicators && !placeholdersDetected) {
+        placeholdersDetected = true;
+        console.log(`\n✓ Generation started (at ${i}s)`);
+      }
+
+      // ✅ IMPROVED: Check for download button in index 1 + preview image (more specific detection)
+      if (placeholdersDetected && !state.hasLoadingIndicators && state.hasDownloadButtonInIndex1 && state.hasImageInIndex1) {
         generationComplete = true;
-        console.log(`✓ Generation complete (${state.imageCount} results)\n`);
+        console.log(`✓ Generation complete at ${i}s (download button detected in index 1, preview ready)`);
+        console.log(`  Monitoring summary: Started=${placeholdersDetected}, Complete=${generationComplete}, totalTime=${i}s`);
+        console.log(`\n`);
         break;
       }
 
-      if (i % 20 === 0 && i > 0) process.stdout.write('.');
+      if (i % 15 === 0 && i > 0) process.stdout.write('.');
       await this.page.waitForTimeout(1000);
     }
 
     if (!generationComplete) {
-      console.log('⚠️ Generation timeout, continuing...\n');
+      console.log('⚠️ Generation timeout at 60s, continuing anyway...');
+      console.log(`  State samples (${monitoredStates.length} checkpoints):`);
+      monitoredStates.slice(0, 5).forEach(s => {
+        console.log(`    @${s.second}s: items=${s.itemCount}, images=${s.imageCount}, loading=${s.hasLoadingIndicators}, btn@1=${s.hasDownloadButtonInIndex1}, img@1=${s.hasImageInIndex1}`);
+      });
+      console.log(`\n`);
     }
 
 
@@ -729,33 +873,153 @@ class ImageGenerationAutomation {
   }
 
   async configureAspectRatio(aspectRatio = '9:16') {
-    console.log(`📐 Configuring aspect ratio: ${aspectRatio}...`);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`📐 CONFIGURING ASPECT RATIO & OUTPUT COUNT`);
+    console.log(`${'='.repeat(80)}\n`);
+    console.log(`   Input aspect ratio: ${aspectRatio}`);
+    console.log(`   Output count: ${this.options.imageCount}\n`);
     
-    // For Google Labs Flow, aspect ratio is controlled via the "x2" button or similar
-    // 9:16 = vertical (1x aspect), 16:9 = horizontal (x2 aspect)
     const isHorizontal = aspectRatio.includes('16:9') || aspectRatio.startsWith('16');
-    
-    if (isHorizontal) {
-      // Click x2 button for horizontal aspect ratio
-      const clickedX2 = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        for (const btn of buttons) {
-          if (btn.textContent.includes('x2') || btn.textContent.includes('2x')) {
-            btn.click();
+    const targetFormat = isHorizontal ? 'horizontal (16:9)' : 'vertical (9:16)';
+    console.log(`   Target format: ${targetFormat}\n`);
+
+    // Step 1: Click "Tỷ lệ khung hình" button to open aspect ratio selector
+    console.log(`   🔍 Finding aspect ratio control button...`);
+    const aspectRatioOpened = await this.page.evaluate((isHorizontal) => {
+      // Search for all buttons - including those in the popover dialog
+      const buttons = Array.from(document.querySelectorAll('button[role="combobox"]'));
+      
+      for (const btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        // Look for button with aspect ratio label
+        if (text.includes('tỷ lệ khung hình') || text.includes('khổ dọc') || text.includes('khổ ngang')) {
+          // Click to open the dropdown
+          btn.click();
+          return true;
+        }
+      }
+      return false;
+    }, isHorizontal);
+
+    if (aspectRatioOpened) {
+      console.log(`   ✅ Aspect ratio control opened`);
+      await this.page.waitForTimeout(800);
+      
+      // Step 2: Select vertical or horizontal from the dropdown
+      const aspectSelected = await this.page.evaluate((isHorizontal) => {
+        // Look for the menu/dropdown that appeared
+        const options = Array.from(document.querySelectorAll('[role="option"], button, li, div[role="menuitem"]'));
+        
+        const keyword = isHorizontal ? 'khổ ngang' : 'khổ dọc';
+        
+        for (const opt of options) {
+          const text = opt.textContent.toLowerCase();
+          if (text.includes(keyword) && text.includes(':')) {  // Has aspect ratio like 9:16 or 16:9
+            opt.click();
             return true;
           }
         }
         return false;
-      });
-      
-      if (clickedX2) {
-        console.log('✓ Selected 16:9 (horizontal) aspect ratio');
-        await this.page.waitForTimeout(500);
+      }, isHorizontal);
+
+      if (aspectSelected) {
+        console.log(`   ✅ Selected ${targetFormat}`);
+      } else {
+        console.log(`   ⚠️  Could not select aspect ratio, using default`);
       }
+      await this.page.waitForTimeout(800);
     } else {
-      // Default 9:16 (vertical) - usually the default
-      console.log('✓ Using 9:16 (vertical) aspect ratio (default)');
+      console.log(`   ⚠️  Could not open aspect ratio control`);
     }
+    
+    
+    // 💫 CHANGED: Configure output count BEFORE closing dialog
+    console.log(`\n📊 CONFIGURING OUTPUT COUNT`);
+    console.log(`${'─'.repeat(80)}\n`);
+    console.log(`   Target output count: ${this.options.imageCount}\n`);
+
+    const outputCountConfigured = await this.page.evaluate((targetCount) => {
+      // Find "Câu trả lời đầu ra cho mỗi câu lệnh" button (output count control)
+      const buttons = Array.from(document.querySelectorAll('button'));
+      let outputBtn = null;
+      
+      for (const btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        if (text.includes('câu trả lời') && text.includes('đầu ra')) {
+          outputBtn = btn;
+          break;
+        }
+      }
+      
+      if (!outputBtn) {
+        console.log('   ℹ️  Output count button not found in current view');
+        return false;
+      }
+      
+      // Always click the button to open the dropdown
+      outputBtn.click();
+      return true;
+    }, this.options.imageCount);
+
+    if (outputCountConfigured) {
+      await this.page.waitForTimeout(800);
+      
+      // Now select the desired count from the dropdown
+      const countSelected = await this.page.evaluate((targetCount) => {
+        // Find the option that matches target count
+        const options = Array.from(document.querySelectorAll('[role="option"], button, li, div[role="menuitem"]'));
+        
+        for (const opt of options) {
+          const text = opt.textContent.trim();
+          // Look for the number that matches target count
+          if (text === targetCount.toString()) {
+            opt.click();
+            return true;
+          }
+        }
+        
+        // Fallback: try to find by looking for just the number
+        for (const opt of options) {
+          if (opt.textContent.includes(targetCount.toString()) && opt.textContent.length < 10) {
+            opt.click();
+            return true;
+          }
+        }
+        
+        return false;
+      }, this.options.imageCount);
+
+      if (countSelected) {
+        console.log(`   ✅ Output count set to ${this.options.imageCount}`);
+      } else {
+        console.log(`   ⚠️  Could not set output count, using default`);
+      }
+      await this.page.waitForTimeout(800);
+    }
+    
+    // 💫 CHANGED: Close config dialog after setting aspect ratio AND output count
+    console.log(`\n   🎫 Closing config dialog...`);
+    const dialogClosed = await this.page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const tuneBtn = buttons.find(btn => {
+        const icon = btn.querySelector('i');
+        return icon && icon.textContent.includes('tune');
+      });
+      if (tuneBtn) {
+        tuneBtn.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (dialogClosed) {
+      await this.page.waitForTimeout(500);
+      console.log(`   ✓ Config dialog closed\n`);
+    } else {
+      console.log(`   ⚠️  Could not find tune button to close dialog\n`);
+    }
+
+    console.log(`${'='.repeat(80)}\n`);
   }
 
   async downloadResults(outputDir, expectedItemCount = 2) {
@@ -1019,7 +1283,6 @@ class ImageGenerationAutomation {
       console.log(`  ⚠️ Timeout waiting for all ${expectedItemCount} images, proceeding with what's available...`);
     }
 
-    // First, check how many images are actually generated in the item
     const imageCountResult = await this.page.evaluate(() => {
       const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
       if (!scroller) return { count: 0, error: 'No scroller' };
@@ -1040,8 +1303,12 @@ class ImageGenerationAutomation {
       return { count: imageContainers.length, error: null };
     });
 
-    const actualImageCount = Math.max(imageCountResult.count, expectedItemCount);
-    console.log(`📊 Downloading ${actualImageCount} images (expected: ${expectedItemCount})\n`);
+    // 💫 FIX: Use expectedItemCount for download, not the actual count found
+    // The actual count might include previous generations still visible in the UI
+    // We only want to download the expected number for THIS generation
+    const actualImageCount = expectedItemCount;
+    console.log(`📊 Downloading ${actualImageCount} images (found ${imageCountResult.count} in UI, expecting ${expectedItemCount} for this generation)`);
+    console.log(`⏱️  2K Timeout: 120s | 1K Fallback: 30s | Preview Fallback: Enabled\n`);
 
     // Download multiple images - all from the newest item (data-index="1")
     for (let imageIdx = 0; imageIdx < actualImageCount; imageIdx++) {
@@ -1239,66 +1506,188 @@ class ImageGenerationAutomation {
         console.log(`  ⚠️  No upgrade message detected`);
       }
 
-      // 💫 FIXED: Wait for file to download (max 60 seconds - increased from 15s for 2K upgrade)
+      // 💫 IMPROVED: Wait for file to download with better timeout handling and 1K fallback
       let fileDownloaded = false;
       let downloadError = null;
+      let attempt2KDownload = true;
+      let maxWaitTime = 120000; // 120 seconds for 2K upsampling
+      let maxIterations = 240; // 240 * 500ms = 120 seconds
 
-      for (let i = 0; i < 120; i++) {  // 120 * 500ms = 60 seconds
-        const currentFiles = fs.readdirSync(this.downloadDir);
-        
-        // 💫 IMPROVED: Better handling of partial downloads
-        const newFiles = currentFiles.filter(f => {
-          // Skip in-progress downloads
-          if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
-            return false;
-          }
+      while (attempt2KDownload && !fileDownloaded) {
+        for (let i = 0; i < maxIterations; i++) {
+          const currentFiles = fs.readdirSync(this.downloadDir);
           
-          // Check if it's a new file (not in initial list and not in downloaded list)
-          const isNew = !initialFiles.includes(f);
-          const notDownloaded = !downloadedFiles.some(df => df.includes(path.basename(f)));
-          
-          return isNew && notDownloaded;
-        });
+          // 💫 IMPROVED: Better handling of partial downloads
+          const newFiles = currentFiles.filter(f => {
+            // Skip in-progress downloads
+            if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial') || f.endsWith('.download')) {
+              return false;
+            }
+            
+            // Skip system files
+            if (f.startsWith('.')) return false;
+            
+            // Check if it's a new file (not in initial list and not in downloaded list)
+            const isNew = !initialFiles.includes(f);
+            const notDownloaded = !downloadedFiles.some(df => df.includes(path.basename(f)));
+            
+            return isNew && notDownloaded;
+          });
 
-        if (newFiles.length > 0) {
-          const newFile = newFiles[newFiles.length - 1];
-          const filePath = path.join(this.downloadDir, newFile);
-          
-          try {
-            const stats = fs.statSync(filePath);
-            // 💫 IMPROVED: Check if file is valid (larger than 100KB for 2K images)
-            if (stats.size > 102400) {  // 100KB minimum for proper 2K image
-              downloadedFiles.push(filePath);
-              initialFiles.push(newFile);  // Mark as downloaded
-              console.log(`  ✓ File saved: ${newFile} (${Math.round(stats.size / 1024)}KB)`);
-              fileDownloaded = true;
-              break;
-            } else {
-              downloadError = `File too small (${Math.round(stats.size / 1024)}KB) - still upgrading or corrupted`;
-              if ((i + 1) % 10 === 0) {
-                console.log(`  ⏳ File upgrading (${Math.round(stats.size / 1024)}KB at ${(i + 1) * 500}ms)...`);
+          if (newFiles.length > 0) {
+            const newFile = newFiles[newFiles.length - 1];
+            const filePath = path.join(this.downloadDir, newFile);
+            
+            try {
+              const stats = fs.statSync(filePath);
+              // 💫 IMPROVED: Check if file is valid (larger than 100KB for 2K images)
+              if (stats.size > 102400) {  // 100KB minimum for proper 2K image
+                downloadedFiles.push(filePath);
+                initialFiles.push(newFile);  // Mark as downloaded
+                console.log(`  ✓ File saved: ${newFile} (${Math.round(stats.size / 1024)}KB)`);
+                fileDownloaded = true;
+                break;
+              } else {
+                downloadError = `File too small (${Math.round(stats.size / 1024)}KB) - still upgrading or corrupted`;
+                if ((i + 1) % 10 === 0) {
+                  console.log(`  ⏳ File upgrading (${Math.round(stats.size / 1024)}KB at ${(i + 1) * 500}ms)...`);
+                }
+                await this.page.waitForTimeout(500);
+                continue;
               }
+            } catch (err) {
+              downloadError = `File access error: ${err.message}`;
               await this.page.waitForTimeout(500);
               continue;
             }
-          } catch (err) {
-            downloadError = `File access error: ${err.message}`;
-            await this.page.waitForTimeout(500);
-            continue;
           }
+
+          // 💫 DEBUG: Log progress at key intervals
+          if ((i + 1) % 20 === 0) {
+            const elapsedSecs = ((i + 1) * 500) / 1000;
+            console.log(`  ⏳ Waiting for file (${elapsedSecs}s / ${maxWaitTime / 1000}s)... Files in dir: ${currentFiles.length}`);
+          }
+
+          // 💫 NEW: Monitor API calls and network activity
+          if ((i + 1) % 40 === 0) {
+            const networkMonitor = await this.page.evaluate(() => {
+              // Try to detect ongoing API calls or XHR requests
+              const resourceTiming = performance.getEntries().filter(entry => 
+                entry.name.includes('upsampleImage') || 
+                entry.name.includes('flow') ||
+                entry.initiatorType === 'xmlhttprequest' ||
+                entry.initiatorType === 'fetch'
+              );
+              return {
+                hasRecentRequests: resourceTiming.length > 0,
+                requestCount: resourceTiming.length,
+                lastRequestTime: resourceTiming.length > 0 ? Math.round(resourceTiming[resourceTiming.length - 1].responseEnd) : 0
+              };
+            });
+            
+            if (networkMonitor.hasRecentRequests) {
+              console.log(`  🌐 API activity detected: ${networkMonitor.requestCount} requests, last response at ${networkMonitor.lastRequestTime}ms`);
+            }
+          }
+
+          await this.page.waitForTimeout(500);
         }
 
-        // 💫 DEBUG: Log progress every 10 checks
-        if ((i + 1) % 20 === 0) {
-          console.log(`  ⏳ Waiting for file (${(i + 1) * 500}ms / 60000ms)... Files in dir: ${currentFiles.length}`);
-        }
+        // 💫 NEW: If 2K times out, try 1K fallback
+        if (!fileDownloaded && attempt2KDownload) {
+          console.log(`  ⏳ 2K download timeout (${maxWaitTime / 1000}s), attempting 1K fallback...`);
+          
+          // Try to find and click 1K option
+          const click1KResult = await this.page.evaluate(() => {
+            let menuItems = document.querySelectorAll('[role="menuitem"]');
+            if (menuItems.length === 0) {
+              menuItems = document.querySelectorAll('[role="option"], button[class*="menu"]');
+            }
 
-        await this.page.waitForTimeout(500);
+            // Try to find 1K Tải xuống option
+            for (let i = 0; i < menuItems.length; i++) {
+              const text = menuItems[i].textContent.trim();
+              if (text.includes('1K') && text.includes('Tải xuống') && !text.includes('2K')) {
+                menuItems[i].click();
+                return { success: true };
+              }
+            }
+
+            // Fallback: click first item if exists
+            if (menuItems.length >= 1) {
+              menuItems[0].click();
+              return { success: true };
+            }
+
+            return { success: false };
+          });
+
+          if (click1KResult.success) {
+            console.log(`  ✓ Clicked 1K fallback option`);
+            attempt2KDownload = false;  // Don't retry 2K
+            maxIterations = 60; // 60 * 500ms = 30 seconds for 1K
+            await this.page.waitForTimeout(500);
+            // Continue the loop to wait for 1K download
+          } else {
+            console.log(`  ⚠️  Could not find 1K option for fallback`);
+            break;
+          }
+        } else {
+          break;  // Exit the while loop if we got a download or can't retry
+        }
       }
 
       if (!fileDownloaded) {
         const errorMsg = downloadError || 'File download timeout';
         console.log(`  ❌ Cannot download image ${imageIdx + 1}: ${errorMsg}`);
+        
+        // 💫 NEW: Last resort - try to save preview image from the UI
+        console.log(`  💾 Attempting to save preview image as fallback...`);
+        const previewSaveResult = await this.page.evaluate((imgIdx) => {
+          try {
+            const scroller = document.querySelector('[data-testid="virtuoso-scroller"]');
+            if (!scroller) return { success: false, error: 'No scroller found' };
+
+            const itemList = scroller.querySelector('[data-testid="virtuoso-item-list"]');
+            if (!itemList) return { success: false, error: 'Item list not found' };
+
+            const imageItem = itemList.querySelector('[data-index="1"]');
+            if (!imageItem) return { success: false, error: 'Image item not found' };
+
+            const imageContainers = Array.from(imageItem.querySelectorAll('[class*="sc-c6af9aa3-0"]')).filter(el => {
+              return el.querySelector('img[src*="storage.googleapis.com"]') !== null;
+            });
+
+            if (imageContainers.length <= imgIdx) {
+              return { success: false, error: `Image ${imgIdx + 1} not found` };
+            }
+
+            const targetImageContainer = imageContainers[imgIdx];
+            const imgElement = targetImageContainer.querySelector('img[src*="storage.googleapis.com"]');
+            
+            if (!imgElement || !imgElement.src) {
+              return { success: false, error: 'Image element not found' };
+            }
+
+            // 💾 Return preview image URL for potential download
+            return {
+              success: true,
+              previewUrl: imgElement.src,
+              width: imgElement.naturalWidth || imgElement.width,
+              height: imgElement.naturalHeight || imgElement.height
+            };
+          } catch (err) {
+            return { success: false, error: err.message };
+          }
+        }, imageIdx);
+
+        if (previewSaveResult.success && previewSaveResult.previewUrl) {
+          console.log(`  ✅ Preview URL available: ${previewSaveResult.previewUrl.substring(0, 80)}... (${previewSaveResult.width}x${previewSaveResult.height})`);
+          console.log(`  💡 You can manually download this preview image if needed`);
+        } else {
+          console.log(`  ⚠️  Could not retrieve preview image: ${previewSaveResult.error}`);
+        }
+        
         continue;
       }
 
@@ -1312,6 +1701,33 @@ class ImageGenerationAutomation {
       console.log(`  ${idx + 1}. ${path.basename(file)} (${Math.round(stats.size / 1024)}KB)`);
     });
     console.log();
+
+    // 💫 NEW: Detect duplicate downloads (same image downloaded twice)
+    if (downloadedFiles.length >= 2) {
+      console.log(`🔍 Checking for duplicate downloads...`);
+      const fileSizes = downloadedFiles.map(f => ({
+        path: f,
+        name: path.basename(f),
+        size: fs.statSync(f).size
+      }));
+
+      for (let i = 0; i < fileSizes.length - 1; i++) {
+        for (let j = i + 1; j < fileSizes.length; j++) {
+          const file1 = fileSizes[i];
+          const file2 = fileSizes[j];
+          
+          // Check if files have same name or very similar size (likely duplicates)
+          if (file1.name === file2.name) {
+            console.log(`⚠️  DUPLICATE DETECTED: "${file1.name}" and "${file2.name}" have identical filenames!`);
+            console.log(`    File 1: ${file1.size} bytes`);
+            console.log(`    File 2: ${file2.size} bytes`);
+          } else if (Math.abs(file1.size - file2.size) < 10000) {
+            // Files within 10KB of each other - possible duplicates
+            console.log(`⚠️  POSSIBLE DUPLICATE: "${file1.name}" (${file1.size}B) and "${file2.name}" (${file2.size}B) have very similar sizes`);
+          }
+        }
+      }
+    }
 
     return downloadedFiles;
   }
@@ -1349,8 +1765,11 @@ export async function runImageGeneration(options = {}) {
     await imageGen.navigateToProject();
     await imageGen.configureModel();
     
-    // 💫 NEW: Apply aspect ratio configuration
+    // 💫 CHANGED: Configure aspect ratio IMMEDIATELY after model selection
+    // (while the config dialog is still open/accessible)
     if (config.aspectRatio) {
+      console.log('⏱️  Waiting before aspect ratio config...');
+      await imageGen.page.waitForTimeout(500);
       await imageGen.configureAspectRatio(config.aspectRatio);
     }
 

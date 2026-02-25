@@ -51,6 +51,7 @@ const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per request
 // Use cases
 const USE_CASES = [
   { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
+  { value: 'character-holding-product', label: 'Character Holding Product', description: 'Nhân vật cầm sản phẩm trên tay' },
   { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
   { value: 'social-media', label: 'Social Media', description: 'Bài đăng mạng xã hội' },
   { value: 'fashion-editorial', label: 'Editorial', description: 'Bài báo thời trang chuyên nghiệp' },
@@ -98,6 +99,50 @@ const getLabel = (list, value) => {
   const item = list.find(i => i.value === value);
   return item ? item.label : value;
 };
+
+// Get upload instructions by use case
+const getUploadInstructions = (useCase) => {
+  const instructions = {
+    'change-clothes': {
+      character: 'Person to try on clothes (face, body visible)',
+      product: 'Clothing/outfit to wear on the person',
+      hint: 'System will fit the product onto the character while keeping their face/body same'
+    },
+    'character-holding-product': {
+      character: 'Person to feature prominently (influencer/affiliate)',
+      product: 'Product to hold or present in hands',
+      hint: 'Character holds product; character is 60% focus, product is 40% focus'
+    },
+    'ecommerce-product': {
+      character: 'Optional: person for scale/styling reference',
+      product: 'Product to showcase (main focus)',
+      hint: 'Product is primary focus for retail applications'
+    },
+    'social-media': {
+      character: 'Person for social media appeal',
+      product: 'Product to wear or use',
+      hint: 'Optimized for Instagram, TikTok, social engagement'
+    },
+    'fashion-editorial': {
+      character: 'Model for editorial shoot',
+      product: 'Garment or styling piece',
+      hint: 'Magazine-style, high-fashion editorial composition'
+    },
+    'lifestyle-scene': {
+      character: 'Person in everyday scenario',
+      product: 'Product in lifestyle context',
+      hint: 'Real-world, relatable lifestyle setting'
+    },
+    'before-after': {
+      character: 'Before: original styling',
+      product: 'After: styling with product',
+      hint: 'Shows before/after comparison side-by-side'
+    }
+  };
+
+  return instructions[useCase] || instructions['change-clothes'];
+};
+
 
 export default function ImageGenerationPage() {
   // State
@@ -167,11 +212,11 @@ export default function ImageGenerationPage() {
 
   // Generation options
   const [imageCount, setImageCount] = useState(DESIRED_OUTPUT_COUNT);
-  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [aspectRatio, setAspectRatio] = useState('9:16');  // 💫 FIXED: Default to 9:16 (vertical)
   const [hasWatermark, setHasWatermark] = useState(false);
   const [referenceImage, setReferenceImage] = useState(null);
   const [customPrompt, setCustomPrompt] = useState('');
-  const [uploadToDrive, setUploadToDrive] = useState(false);
+  const [uploadToDrive, setUploadToDrive] = useState(true);  // 💫 FIXED: Default to true (enabled)
   const [driveUploadStatus, setDriveUploadStatus] = useState(null);
 
   // New options tracking
@@ -533,18 +578,41 @@ export default function ImageGenerationPage() {
       
       // Apply each decision
       Object.entries(decisions).forEach(([category, decision]) => {
-        if (decision.finalValue) {
+        if (decision.finalValue && decision.finalValue !== 'Not set') {
           newOpts[category] = decision.finalValue;
           console.log(`   ✓ ${category}: ${decision.finalValue}`);
         }
       });
+      
+      // If we have no options after applying decisions, use defaults from analysis or sensible defaults
+      if (Object.keys(newOpts).length === 0) {
+        console.log('⚠️ No valid options applied, using defaults from analysis...');
+        if (analysis?.recommendations) {
+          const rec = analysis.recommendations;
+          if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
+          if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
+          if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
+          if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
+          if (rec.hairstyle?.choice) newOpts.hairstyle = rec.hairstyle.choice;
+          if (rec.makeup?.choice) newOpts.makeup = rec.makeup.choice;
+          if (rec.style?.choice) newOpts.style = rec.style.choice;
+          if (rec.colorPalette?.choice) newOpts.colorPalette = rec.colorPalette.choice;
+          if (rec.bottoms?.choice) newOpts.bottoms = rec.bottoms.choice;
+          if (rec.shoes?.choice) newOpts.shoes = rec.shoes.choice;
+        }
+      }
+      
+      // Final fallback: ensure at least some defaults are set for critical options
+      if (!newOpts.scene) newOpts.scene = 'studio';
+      if (!newOpts.lighting) newOpts.lighting = 'soft';
+      if (!newOpts.mood) newOpts.mood = 'elegant';
       
       console.log('✅ Options updated:', newOpts);
       setSelectedOptions(newOpts);
       
       // Save new options where user checked "Save as":
       const toSave = Object.entries(decisions)
-        .filter(([_, d]) => d.saveAsOption)
+        .filter(([_, d]) => d.saveAsOption && d.finalValue && d.finalValue !== 'Not set')
         .map(([cat, d]) => ({ category: cat, value: d.finalValue }));
       
       if (toSave.length > 0) {
@@ -615,6 +683,55 @@ export default function ImageGenerationPage() {
     }
   }, [currentStep, analysis, selectedOptions]);
 
+  // 💫 NEW: Get default options based on product focus
+  const getDefaultOptionsByFocus = () => {
+    const defaults = {
+      // Common for all focuses
+      scene: 'studio',
+      lighting: 'soft-diffused',
+      mood: 'confident',
+      style: 'fashion-editorial',
+      colorPalette: 'neutral',
+      cameraAngle: 'three-quarter',
+    };
+
+    // Add focus-specific defaults
+    if (productFocus === 'full-outfit') {
+      return {
+        ...defaults,
+        tops: '', // Will be filled from analysis or user selection
+        bottoms: '',  // Will be filled from analysis or user selection
+        shoes: '',    // Will be filled from analysis or user selection
+        accessories: '', // Can be multi-value
+        outerwear: '',
+      };
+    } else if (productFocus === 'top') {
+      return {
+        ...defaults,
+        tops: '',
+        accessories: '',
+      };
+    } else if (productFocus === 'bottom') {
+      return {
+        ...defaults,
+        bottoms: '',
+        shoes: '',
+      };
+    } else if (productFocus === 'shoes') {
+      return {
+        ...defaults,
+        shoes: '',
+      };
+    } else if (productFocus === 'accessories') {
+      return {
+        ...defaults,
+        accessories: '',
+      };
+    }
+
+    return defaults;
+  };
+
   const handleBuildPrompt = async () => {
     if (!analysis?.analysis) {
       console.error('❌ Cannot build prompt: analysis.analysis is missing');
@@ -627,12 +744,21 @@ export default function ImageGenerationPage() {
       console.log('📝 Building prompt with:', { 
         optionsCount: Object.keys(selectedOptions).length,
         useCase,
-        productFocus 
+        productFocus,
+        focusSpecificDefaults: Object.keys(getDefaultOptionsByFocus())
       });
+      
+      // 💫 FIXED: Merge with defaults to ensure all clothing categories are included
+      const mergedOptions = {
+        ...getDefaultOptionsByFocus(),
+        ...selectedOptions  // User selections override defaults
+      };
+
+      console.log('📊 Merged options being sent:', mergedOptions);
       
       const response = await unifiedFlowAPI.buildPrompt(
         analysis,
-        selectedOptions,
+        mergedOptions,
         useCase,
         productFocus
       );
@@ -1334,6 +1460,33 @@ export default function ImageGenerationPage() {
                 <div className="max-w-4xl mx-auto">
                   {/* Step 1: Upload */}
                   {currentStep === 1 && (
+                    <>
+                      {/* Upload Instructions */}
+                      <div className="mb-4 p-4 bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-lg border border-purple-700/50">
+                        <div className="text-sm font-semibold text-purple-300 mb-3 flex items-center gap-2">
+                          <FileText className="w-4 h-4" />
+                          {getLabel(USE_CASES, useCase)} - Upload Instructions
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs text-gray-300">
+                          <div>
+                            <div className="text-purple-400 font-semibold mb-1">👤 Image 1:</div>
+                            <div>{getUploadInstructions(useCase).character}</div>
+                          </div>
+                          <div>
+                            <div className="text-purple-400 font-semibold mb-1">📦 Image 2:</div>
+                            <div>{getUploadInstructions(useCase).product}</div>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-purple-700/30 text-xs text-purple-300">
+                          💡 <span className="italic">{getUploadInstructions(useCase).hint}</span>
+                        </div>
+                      </div>
+
+                      {/* Upload Areas */}
+                    </>
+                  )}
+
+                  {currentStep === 1 && (
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
                         {characterImage?.preview ? (
@@ -1962,8 +2115,7 @@ export default function ImageGenerationPage() {
           setGalleryPickerFor(null);
         }}
         onSelect={handleGallerySelect}
-        mediaType="image"
-        contentType="all"
+        assetType="image"
         title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
       />
     </div>

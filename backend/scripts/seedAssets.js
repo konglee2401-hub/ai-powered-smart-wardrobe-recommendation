@@ -11,15 +11,16 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from backend folder
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 // Simple ID generator
 const generateAssetId = () => {
   return `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart-wardrobe';
 
@@ -179,17 +180,92 @@ async function seedInitialAssets() {
 async function main() {
   await connectDB();
 
-  // Clear existing asset records if needed (comment out if you want to preserve)
-  // const count = await Asset.deleteMany({});
-  // console.log(`🗑️  Cleared ${count.deletedCount} existing asset records`);
+  // Xoá sạch toàn bộ asset cũ
+  const count = await Asset.deleteMany({});
+  console.log(`🗑️  Cleared ${count.deletedCount} existing asset records`);
 
   // Seed initial templates
   await seedInitialAssets();
 
-  // Scan existing directories
-  console.log('\n📂 Scanning existing files...');
+  // Scan existing local directories
+  console.log('\n📂 Scanning existing local files...');
   for (const dirConfig of DIRECTORIES_TO_SCAN) {
     await scanAndSeedDirectory(dirConfig);
+  }
+
+  // --- Google Drive sync ---
+  // Load folder structure from config
+  const driveConfigPath = path.join(__dirname, '../config/drive-folder-structure.json');
+  let driveConfig = null;
+  if (fs.existsSync(driveConfigPath)) {
+    driveConfig = JSON.parse(fs.readFileSync(driveConfigPath, 'utf-8'));
+  }
+  if (driveConfig && driveConfig.folders) {
+    console.log('\n☁️  Scanning Google Drive folders...');
+    // Dynamically import driveService
+    const { default: driveService } = await import('../services/googleDriveOAuth.js');
+    await driveService.authenticate();
+    for (const [folderPath, folderId] of Object.entries(driveConfig.folders)) {
+      // Only scan folders under Affiliate AI root
+      if (!folderPath.startsWith('Affiliate AI')) continue;
+      // List all files in this folder
+      let files = [];
+      try {
+        files = await driveService.listFiles(folderId, 1000);
+      } catch (err) {
+        console.warn(`⚠️  Could not list files for ${folderPath}: ${err.message}`);
+        continue;
+      }
+      for (const file of files) {
+        // Check if asset already exists (by Google Drive fileId)
+        const existing = await Asset.findOne({ 'storage.googleDriveId': file.id });
+        if (existing) {
+          // Already seeded
+          continue;
+        }
+        // Determine asset type/category by folder path or mimeType
+        let assetType = 'image'; // default
+        if (file.mimeType.startsWith('video/')) {
+          assetType = 'video';
+        } else if (file.mimeType.startsWith('audio/')) {
+          assetType = 'audio';
+        } else if (!file.mimeType.startsWith('image/')) {
+          // Skip unsupported file types
+          continue;
+        }
+        
+        let assetCategory = 'reference-image';
+        if (folderPath.toLowerCase().includes('generated')) assetCategory = 'generated-image';
+        else if (folderPath.toLowerCase().includes('character')) assetCategory = 'character-image';
+        else if (folderPath.toLowerCase().includes('product')) assetCategory = 'product-image';
+        else if (folderPath.toLowerCase().includes('video')) assetCategory = 'source-video';
+
+        const asset = new Asset({
+          assetId: generateAssetId(),
+          filename: file.name,
+          mimeType: file.mimeType,
+          fileSize: file.size || 0, // Ensure fileSize is always set
+          assetType,
+          assetCategory,
+          userId: 'system',
+          storage: {
+            location: 'google-drive',
+            googleDriveId: file.id,
+            googleDrivePath: folderPath,
+            url: file.webViewLink || driveService.getDownloadUrl(file.id)
+          },
+          metadata: {
+            format: (file.name.split('.').pop() || '').toLowerCase()
+          },
+          tags: ['seeded', assetCategory, assetType, 'google-drive'],
+          status: 'active'
+        });
+        await asset.save();
+        console.log(`  ☁️  Added: ${file.name} (${file.mimeType}) in ${folderPath}`);
+      }
+    }
+  } else {
+    console.warn('⚠️  No Google Drive folder structure config found. Run detectDriveFolderStructure.js first.');
   }
 
   // Print statistics

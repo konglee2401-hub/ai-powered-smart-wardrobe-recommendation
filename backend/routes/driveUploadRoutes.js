@@ -115,12 +115,18 @@ router.post('/init-folders', async (req, res) => {
  */
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
+    console.log('📁 Upload endpoint called');
+    
+    // 💫 IMPROVED: Better file validation
     if (!req.file) {
+      console.warn('⚠️ No file provided in request');
       return res.status(400).json({
         success: false,
         message: 'No file provided',
       });
     }
+
+    console.log(`📦 File received: ${req.file.originalname} (${req.file.buffer?.length || 0} bytes)`);
 
     // 💫 FIXED: Check if Google Drive is configured before attempting upload
     const authResult = await driveService.authenticate();
@@ -133,7 +139,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         file: {
           id: `local-${Date.now()}`,
           name: req.file.originalname,
-          size: req.file.buffer.length,
+          size: req.file.buffer?.length || 0,
           mimeType: req.file.mimetype,
           source: 'local'
         },
@@ -141,7 +147,20 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    const { description, metadata } = req.body;
+    // 💫 IMPROVED: Safer metadata parsing
+    const { description } = req.body;
+    let metadata = {};
+    
+    if (req.body.metadata) {
+      try {
+        metadata = JSON.parse(req.body.metadata);
+      } catch (parseErr) {
+        console.warn('⚠️ Could not parse metadata JSON:', parseErr.message);
+        metadata = {};
+      }
+    }
+
+    console.log('📤 Uploading to Google Drive...');
 
     // Upload to Google Drive
     const result = await driveService.uploadBuffer(
@@ -149,18 +168,20 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       req.file.originalname,
       {
         description,
-        properties: metadata ? JSON.parse(metadata) : {},
+        properties: metadata,
       }
     );
 
+    console.log('✅ Upload successful');
     res.json({
       success: true,
       message: 'File uploaded successfully',
       file: result,
     });
   } catch (error) {
-    // 💫 IMPROVED: Handle errors gracefully
+    // 💫 IMPROVED: Handle errors gracefully with better logging
     console.error('❌ Upload error:', error.message);
+    console.error('   Stack:', error.stack);
     
     res.status(200).json({
       success: true,

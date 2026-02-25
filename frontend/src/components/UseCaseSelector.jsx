@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Shirt, ShoppingBag, Share2, Camera, Home, GitCompare } from 'lucide-react';
+import { Shirt, ShoppingBag, Share2, Camera, Home, GitCompare, Hand } from 'lucide-react';
 
 const USE_CASES = [
   {
@@ -13,6 +13,13 @@ const USE_CASES = [
     description: 'Mặc sản phẩm lên người mẫu',
     icon: Shirt,
     color: 'bg-blue-500',
+  },
+  {
+    value: 'character-holding-product',
+    label: 'Character Holding Product',
+    description: 'Nhân vật cầm sản phẩm trên tay',
+    icon: Hand,
+    color: 'bg-indigo-500',
   },
   {
     value: 'ecommerce-product',

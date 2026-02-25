@@ -16,31 +16,30 @@ router.get('/', async (req, res) => {
     
     const options = await PromptOption.find(query).sort({ category: 1, usageCount: -1, label: 1 });
     
-    // Group by category
-    const grouped = options.reduce((acc, option) => {
-      if (!acc[option.category]) {
-        acc[option.category] = [];
-      }
-      acc[option.category].push({
-        value: option.value,
-        label: option.label,
-        description: option.description,
-        isAiGenerated: option.isAiGenerated,
-        usageCount: option.usageCount
-      });
-      return acc;
-    }, {});
+    // 💫 Return flat array for compatibility with getAllOptions API
+    const formattedOptions = options.map(option => ({
+      id: option._id,
+      category: option.category,
+      value: option.value,
+      label: option.label,
+      description: option.description,
+      isAiGenerated: option.isAiGenerated || false,
+      usageCount: option.usageCount || 0
+    }));
     
     res.json({
       success: true,
-      data: {
-        options: grouped,
-        total: options.length
-      }
+      data: formattedOptions,
+      total: options.length
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Error loading prompt options:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      data: []  // Return empty array as fallback
+    });
   }
 });
 

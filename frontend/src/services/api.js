@@ -495,7 +495,11 @@ export const browserAutomationAPI = {
       quality: options.quality || 'high',
       aspectRatio: options.aspectRatio || '16:9',
       characterImageBase64: options.characterImageBase64,
-      productImageBase64: options.productImageBase64
+      productImageBase64: options.productImageBase64,
+      // 💫 NEW: Pass file paths from previous image generation step
+      generatedImagePaths: options.generatedImagePaths || [],
+      characterImagePath: options.characterImagePath,
+      productImagePath: options.productImagePath
     };
 
     return api.post('/v1/browser-automation/generate-video-with-provider', payload);
