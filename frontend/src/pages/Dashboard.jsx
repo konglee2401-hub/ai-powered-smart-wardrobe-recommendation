@@ -4,12 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   BarChart3, TrendingUp, Image, Clock, 
   CheckCircle, XCircle, AlertCircle, RefreshCw
 } from 'lucide-react';
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState({
     totalGenerations: 0,
     successfulGenerations: 0,
@@ -52,13 +54,13 @@ export default function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800">{t('dashboard.title')}</h1>
         <button 
           onClick={loadDashboardData}
           className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          {t('dashboard.refresh')}
         </button>
       </div>
 
@@ -75,7 +77,7 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="text-3xl font-bold text-gray-800">{stats.totalGenerations}</div>
-          <div className="text-gray-500 text-sm">Total Generations</div>
+          <div className="text-gray-500 text-sm">{t('dashboard.totalGenerations')}</div>
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6">
@@ -85,7 +87,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-800">{stats.successfulGenerations}</div>
-          <div className="text-gray-500 text-sm">Successful</div>
+          <div className="text-gray-500 text-sm">{t('dashboard.successful')}</div>
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6">
@@ -95,7 +97,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-800">{stats.failedGenerations}</div>
-          <div className="text-gray-500 text-sm">Failed</div>
+          <div className="text-gray-500 text-sm">{t('dashboard.failed')}</div>
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6">
@@ -105,13 +107,13 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-800">{stats.averageGenerationTime}s</div>
-          <div className="text-gray-500 text-sm">Avg. Generation Time</div>
+          <div className="text-gray-500 text-sm">{t('dashboard.avgGenerationTime')}</div>
         </div>
       </div>
 
       {/* Success Rate */}
       <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Success Rate</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">{t('dashboard.successRate')}</h2>
         <div className="flex items-center gap-4">
           <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden">
             <div 
@@ -125,15 +127,15 @@ export default function Dashboard() {
 
       {/* Recent Generations */}
       <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Generations</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">{t('dashboard.recentGenerations')}</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">Type</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">Provider</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">Status</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">Time</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-600">{t('dashboard.type')}</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-600">{t('dashboard.provider')}</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-600">{t('dashboard.status')}</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-600">{t('dashboard.time')}</th>
               </tr>
             </thead>
             <tbody>
@@ -150,12 +152,12 @@ export default function Dashboard() {
                     {gen.status === 'success' ? (
                       <span className="flex items-center gap-1 text-green-600">
                         <CheckCircle className="w-4 h-4" />
-                        Success
+                        {t('dashboard.success')}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-red-600">
                         <XCircle className="w-4 h-4" />
-                        Failed
+                        {t('dashboard.failedStatus')}
                       </span>
                     )}
                   </td>

@@ -14,6 +14,7 @@ import {
   formatGenerationTime
 } from '../services/statsService';
 import axiosInstance from '../services/axios';
+import { useTranslation } from 'react-i18next';
 import { 
   TrendingUp, 
   Database, 
@@ -38,6 +39,7 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function ModelStats() {
+  const { t } = useTranslation();
   // State management
   const [stats, setStats] = useState(null);
   const [providerStats, setProviderStats] = useState([]);
@@ -154,7 +156,7 @@ export default function ModelStats() {
             <div>
               <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
                 <BarChart3 className="w-8 h-8 text-purple-500" />
-                Thống Kê & Phân Tích
+                {t('modelStats.title')}
               </h1>
               <p className="text-gray-600 mt-2">
                 Theo dõi hiệu suất và sử dụng hệ thống

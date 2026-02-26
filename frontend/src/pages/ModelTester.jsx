@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../services/axios';
+import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../config/api';
 import { 
   testProvider,
@@ -32,6 +33,7 @@ import {
 } from 'lucide-react';
 
 export default function ModelTester() {
+  const { t } = useTranslation();
   // State management
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
@@ -245,7 +247,7 @@ export default function ModelTester() {
             <div>
               <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
                 <Brain className="w-8 h-8 text-purple-500" />
-                Model Tester
+                {t('modelTester.title')}
               </h1>
               <p className="text-gray-600 mt-2">
                 Test và so sánh hiệu suất các providers

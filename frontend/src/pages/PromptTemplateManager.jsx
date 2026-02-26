@@ -10,8 +10,10 @@ import {
   AlertCircle, CheckCircle, FileText, Settings, Tag
 } from 'lucide-react';
 import promptTemplateService from '../services/promptTemplateService';
+import { useTranslation } from 'react-i18next';
 
 const PromptTemplateManager = () => {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState([]);
   const [filteredTemplates, setFilteredTemplates] = useState([]);
   const [loading, setLoading] = useState(false);

@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import BatchProcessing from '../components/BatchProcessing';
 import productPhotoService from '../services/productPhotoService';
+import { useTranslation } from 'react-i18next';
 
 const BatchProcessingPage = () => {
+  const { t } = useTranslation();
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [results, setResults] = useState([]);

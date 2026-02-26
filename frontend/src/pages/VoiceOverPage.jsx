@@ -10,6 +10,7 @@ import VoiceSettings from '../components/VoiceSettings';
 import VideoUploadStep from '../components/VideoUploadStep';
 import ScriptGenerationStep from '../components/ScriptGenerationStep';
 import AudioGenerationStep from '../components/AudioGenerationStep';
+import { useTranslation } from 'react-i18next';
 
 const STEPS = [
   { id: 1, name: 'Upload Videos', icon: '📹' },
@@ -18,6 +19,7 @@ const STEPS = [
 ];
 
 export default function VoiceOverPage() {
+  const { t } = useTranslation();
   // Navigation
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -79,7 +81,7 @@ export default function VoiceOverPage() {
             <div className="flex items-center gap-2 mb-6">
               <Volume2 className="w-6 h-6 text-amber-400" />
               <div>
-                <h1 className="text-lg font-bold text-white">VoiceOver Pro</h1>
+                <h1 className="text-lg font-bold text-white">{t('voiceOver.title')}</h1>
                 <p className="text-xs text-gray-400">TTS Generation Studio</p>
               </div>
             </div>

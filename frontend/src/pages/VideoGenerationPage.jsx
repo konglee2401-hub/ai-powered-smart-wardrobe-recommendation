@@ -30,6 +30,7 @@ import {
 } from '../constants/videoGeneration';
 import VideoPromptStepWithTemplates from '../components/VideoPromptStepWithTemplates';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
+import { useTranslation } from 'react-i18next';
 
 const STEPS = [
   { id: 1, name: 'Settings', icon: SettingsIcon },
@@ -448,6 +449,7 @@ function VideoGenerationStep({
 
 // Main Component
 export default function VideoGenerationPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
@@ -742,7 +744,7 @@ export default function VideoGenerationPage() {
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-2">
             <Video className="w-5 h-5 text-blue-400" />
-            <span className="font-bold">Video Generation</span>
+            <span className="font-bold">{t('videoGeneration.title')}</span>
           </div>
 
           {/* Steps */}

@@ -5,11 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -105,8 +107,8 @@ export default function Login() {
           <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">AI Product Photo</h1>
-          <p className="text-gray-600 mt-2">Sign in to continue</p>
+          <h1 className="text-3xl font-bold text-gray-800">{t('login.title')}</h1>
+          <p className="text-gray-600 mt-2">{t('login.subtitle')}</p>
         </div>
 
         {/* Login Form */}
@@ -122,7 +124,7 @@ export default function Login() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                {t('login.emailLabel')}
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -130,7 +132,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t('login.emailPlaceholder')}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
               </div>
@@ -139,7 +141,7 @@ export default function Login() {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                {t('login.passwordLabel')}
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -147,7 +149,7 @@ export default function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={t('login.passwordPlaceholder')}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
                 <button
@@ -170,16 +172,16 @@ export default function Login() {
               disabled={loading}
               className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? t('login.signingIn') : t('login.signIn')}
             </button>
           </form>
 
           {/* Additional Links */}
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              Don't have an account?{' '}
+              {t('login.noAccount')}{' '}
               <Link to="/register" className="text-purple-600 hover:text-purple-700 font-medium">
-                Sign up
+                {t('login.signUp')}
               </Link>
             </p>
           </div>
@@ -188,7 +190,7 @@ export default function Login() {
         {/* Back to Home */}
         <div className="text-center mt-6">
           <Link to="/" className="text-gray-600 hover:text-gray-800">
-            ← Back to Home
+            {t('login.backToHome')}
           </Link>
         </div>
       </div>

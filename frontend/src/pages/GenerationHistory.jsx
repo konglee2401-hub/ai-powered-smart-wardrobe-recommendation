@@ -23,12 +23,14 @@ import {
 } from '../services/historyService';
 
 import { downloadFile } from '../services/axios';
+import { useTranslation } from 'react-i18next';
 
 // ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function GenerationHistory() {
+  const { t } = useTranslation();
   // ============================================
   // STATE MANAGEMENT
   // ============================================
@@ -352,7 +354,7 @@ export default function GenerationHistory() {
             <div>
               <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
                 <Clock className="w-8 h-8 text-purple-500" />
-                Lịch Sử Tạo Ảnh
+                {t('history.title')}
               </h1>
               <p className="text-gray-600 mt-2">
                 Quản lý và xem lại các ảnh đã tạo

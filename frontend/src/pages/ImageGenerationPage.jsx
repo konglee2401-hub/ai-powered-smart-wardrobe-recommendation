@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Upload, Sparkles, FileText, Rocket, Image,
   Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap, Database
@@ -40,10 +41,10 @@ import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
 // Steps - Style and Prompt merged into single step
 const STEPS = [
-  { id: 1, name: 'Upload', icon: Upload },
-  { id: 2, name: 'Analysis', icon: Sparkles },
-  { id: 3, name: 'Style & Prompt', icon: Wand2 },
-  { id: 4, name: 'Generate', icon: Rocket },
+  { id: 1, nameKey: 'imageGeneration.upload', icon: Upload },
+  { id: 2, nameKey: 'imageGeneration.analysis', icon: Sparkles },
+  { id: 3, nameKey: 'imageGeneration.stylePrompt', icon: Wand2 },
+  { id: 4, nameKey: 'imageGeneration.generate', icon: Rocket },
 ];
 
 // 📊 Image Generation Configuration
@@ -51,23 +52,23 @@ const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per request
 
 // Use cases
 const USE_CASES = [
-  { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
-  { value: 'character-holding-product', label: 'Character Holding Product', description: 'Nhân vật cầm sản phẩm trên tay' },
-  { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
-  { value: 'social-media', label: 'Social Media', description: 'Bài đăng mạng xã hội' },
-  { value: 'fashion-editorial', label: 'Editorial', description: 'Bài báo thời trang chuyên nghiệp' },
-  { value: 'lifestyle-scene', label: 'Lifestyle', description: 'Cảnh sống hàng ngày' },
-  { value: 'before-after', label: 'Before/After', description: 'So sánh trước/sau' },
+  { value: 'change-clothes', label: 'changeClothes', description: 'Mặc sản phẩm lên người mẫu' },
+  { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nhân vật cầm sản phẩm trên tay' },
+  { value: 'ecommerce-product', label: 'ecommerce', description: 'Ảnh sản phẩm thương mại' },
+  { value: 'social-media', label: 'socialMedia', description: 'Bài đăng mạng xã hội' },
+  { value: 'fashion-editorial', label: 'editorial', description: 'Bài báo thời trang chuyên nghiệp' },
+  { value: 'lifestyle-scene', label: 'lifestyle', description: 'Cảnh sống hàng ngày' },
+  { value: 'before-after', label: 'beforeAfter', description: 'So sánh trước/sau' },
 ];
 
 // Focus options
 const FOCUS_OPTIONS = [
-  { value: 'full-outfit', label: 'Full Outfit', description: 'Toàn bộ trang phục' },
-  { value: 'top', label: 'Top', description: 'Phần trên (áo)' },
-  { value: 'bottom', label: 'Bottom', description: 'Phần dưới (quần/váy)' },
-  { value: 'shoes', label: 'Shoes', description: 'Giày' },
-  { value: 'accessories', label: 'Accessories', description: 'Phụ kiện' },
-  { value: 'specific-item', label: 'Specific', description: 'Món đồ cụ thể' },
+  { value: 'full-outfit', label: 'fullOutfit', description: 'Toàn bộ trang phục' },
+  { value: 'top', label: 'top', description: 'Phần trên (áo)' },
+  { value: 'bottom', label: 'bottom', description: 'Phần dưới (quần/váy)' },
+  { value: 'shoes', label: 'shoes', description: 'Giày' },
+  { value: 'accessories', label: 'accessories', description: 'Phụ kiện' },
+  { value: 'specific-item', label: 'specific', description: 'Món đồ cụ thể' },
 ];
 
 // Helper to convert file to base64
@@ -146,6 +147,7 @@ const getUploadInstructions = (useCase) => {
 
 
 export default function ImageGenerationPage() {
+  const { t } = useTranslation();
   // State
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('image');
@@ -1219,7 +1221,7 @@ export default function ImageGenerationPage() {
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{step.name}</span>
+                    <span className="hidden sm:inline">{t(step.nameKey)}</span>
                   </button>
                   {idx < STEPS.length - 1 && (
                     <div className={`w-4 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-600'}`} />
@@ -1526,11 +1528,11 @@ export default function ImageGenerationPage() {
               {showUseCaseFocusInfo && (
                 <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
                   <div className="flex items-center gap-4 text-xs">
-                    <span className="text-gray-400">Use case:</span>
-                    <span className="text-purple-400 font-medium">{getLabel(USE_CASES, useCase)}</span>
+                    <span className="text-gray-400">{t('imageGeneration.useCase')}:</span>
+                    <span className="text-purple-400 font-medium">{t(`imageGeneration.${getLabel(USE_CASES, useCase)}`)}</span>
                     <span className="text-gray-600">|</span>
-                    <span className="text-gray-400">Focus:</span>
-                    <span className="text-purple-400 font-medium">{getLabel(FOCUS_OPTIONS, productFocus)}</span>
+                    <span className="text-gray-400">{t('imageGeneration.focus')}:</span>
+                    <span className="text-purple-400 font-medium">{t(`imageGeneration.${getLabel(FOCUS_OPTIONS, productFocus)}`)}</span>
                   </div>
                 </div>
               )}
@@ -1544,7 +1546,7 @@ export default function ImageGenerationPage() {
                       <div className="mb-4 p-4 bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-lg border border-purple-700/50">
                         <div className="text-sm font-semibold text-purple-300 mb-3 flex items-center gap-2">
                           <FileText className="w-4 h-4" />
-                          {getLabel(USE_CASES, useCase)} - Upload Instructions
+                          {t(`imageGeneration.${getLabel(USE_CASES, useCase)}`)} - {t('imageGeneration.uploadInstructions')}
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-xs text-gray-300">
                           <div>
@@ -1758,10 +1760,10 @@ export default function ImageGenerationPage() {
               <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
                 <div className="max-w-4xl mx-auto flex items-center justify-between">
                   <div className="text-xs text-gray-400">
-                    {currentStep === 1 && (isReadyForAnalysis ? '✅ Ready to analyze' : '⬆️ Upload 2 images')}
-                    {currentStep === 2 && '📊 Analysis complete'}
-                    {currentStep === 3 && '🎨 Style & Prompt editor'}
-                    {currentStep === 4 && '🚀 Generate images'}
+                    {currentStep === 1 && (isReadyForAnalysis ? `✅ ${t('imageGeneration.readyToAnalyze')}` : `⬆️ ${t('imageGeneration.upload2Images')}`)}
+                    {currentStep === 2 && `📊 ${t('imageGeneration.analysisComplete')}`}
+                    {currentStep === 3 && `🎨 ${t('imageGeneration.stylePromptEditor')}`}
+                    {currentStep === 4 && `🚀 ${t('imageGeneration.generateImages2')}`}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1772,9 +1774,9 @@ export default function ImageGenerationPage() {
                         className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isAnalyzing ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" /><span>Analyzing...</span></>
+                          <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.analyzing')}</span></>
                         ) : (
-                          <><Sparkles className="w-4 h-4" /><span>Start Analysis</span></>
+                          <><Sparkles className="w-4 h-4" /><span>{t('imageGeneration.startAnalysis')}</span></>
                         )}
                       </button>
                     )}
@@ -1788,14 +1790,14 @@ export default function ImageGenerationPage() {
                           className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-sm"
                         >
                           <Shuffle className="w-4 h-4" />
-                          <span>Variations</span>
+                          <span>{t('imageGeneration.variations')}</span>
                         </button>
                         <button
                           onClick={() => step3ComponentRef.current?.triggerOptimize()}
                           className="flex items-center gap-2 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-700 text-sm"
                         >
                           <Zap className="w-4 h-4" />
-                          <span>Optimize</span>
+                          <span>{t('imageGeneration.optimize')}</span>
                         </button>
                         <div className="flex-1" />
                         <button
@@ -1804,7 +1806,7 @@ export default function ImageGenerationPage() {
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
                         >
                           <ChevronRight className="w-4 h-4" />
-                          <span>{isLoading ? 'Building...' : 'Next Step'}</span>
+                          <span>{isLoading ? t('imageGeneration.building') : t('imageGeneration.nextStep')}</span>
                         </button>
                       </div>
                     )}
@@ -1830,9 +1832,9 @@ export default function ImageGenerationPage() {
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50 text-white font-medium"
                               >
                                 {isGenerating ? (
-                                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Retrying...</span></>
+                                  <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
                                 ) : (
-                                  <><RefreshCw className="w-4 h-4" /><span>Retry Generation</span></>
+                                  <><RefreshCw className="w-4 h-4" /><span>{t('imageGeneration.retryGeneration')}</span></>
                                 )}
                               </button>
                             )}
@@ -1850,9 +1852,9 @@ export default function ImageGenerationPage() {
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
                         >
                           {isGenerating ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /><span>Generating...</span></>
+                            <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
                           ) : (
-                            <><Rocket className="w-4 h-4" /><span>Generate Images</span></>
+                            <><Rocket className="w-4 h-4" /><span>{t('imageGeneration.generateImages')}</span></>
                           )}
                         </button>
                       </>
@@ -1865,7 +1867,7 @@ export default function ImageGenerationPage() {
                           className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
                         >
                           <RefreshCw className="w-4 h-4" />
-                          <span>Start New</span>
+                          <span>{t('imageGeneration.startNew')}</span>
                         </button>
                         {selectedFlowId && (
                           <button
@@ -1876,7 +1878,7 @@ export default function ImageGenerationPage() {
                             title="View generation session log"
                           >
                             <Database className="w-4 h-4" />
-                            <span>Session Log</span>
+                            <span>{t('imageGeneration.sessionLog')}</span>
                           </button>
                         )}
                       </div>

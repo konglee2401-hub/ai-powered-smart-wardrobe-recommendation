@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import { 
   getAIInsights, 
@@ -8,6 +9,7 @@ import {
 } from '../services/analyticsService';
 
 const AnalyticsPage = () => {
+  const { t } = useTranslation();
   const [timeRange, setTimeRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
   const [dashboardData, setDashboardData] = useState(null);
@@ -17,10 +19,10 @@ const AnalyticsPage = () => {
   const [loading, setLoading] = useState(false);
 
   const tabs = [
-    { id: 'overview', label: '📊 Overview', icon: '📊' },
-    { id: 'ai-insights', label: '🤖 AI Insights', icon: '🤖' },
-    { id: 'predictions', label: '🔮 Predictions', icon: '🔮' },
-    { id: 'recommendations', label: '💡 Recommendations', icon: '💡' },
+    { id: 'overview', label: `📊 ${t('analytics.overview')}`, icon: '📊' },
+    { id: 'ai-insights', label: `🤖 ${t('analytics.aiInsights')}`, icon: '🤖' },
+    { id: 'predictions', label: `🔮 ${t('analytics.predictions')}`, icon: '🔮' },
+    { id: 'recommendations', label: `💡 ${t('analytics.recommendations')}`, icon: '💡' },
   ];
 
   useEffect(() => {
@@ -71,7 +73,7 @@ const AnalyticsPage = () => {
       return (
         <div className="loading-container">
           <div className="loading-spinner">🤖</div>
-          <p>Analyzing your data...</p>
+          <p>{t('analytics.analyzingData')}</p>
         </div>
       );
     }
@@ -79,7 +81,7 @@ const AnalyticsPage = () => {
     if (!aiInsights) {
       return (
         <div className="empty-state">
-          <p>Loading AI insights...</p>
+          <p>{t('analytics.loadingInsights')}</p>
         </div>
       );
     }
@@ -88,7 +90,7 @@ const AnalyticsPage = () => {
       <div className="ai-insights-container">
         {/* User Profile */}
         <div className="profile-section">
-          <h3>👤 Your AI Profile</h3>
+          <h3>👤 {t('analytics.yourAIProfile')}</h3>
           <div className="profile-card">
             <div className="profile-type">
               {aiInsights.userProfile?.type || 'standard'}
@@ -99,7 +101,7 @@ const AnalyticsPage = () => {
 
         {/* Key Insights */}
         <div className="insights-section">
-          <h3>💡 AI Insights</h3>
+          <h3>💡 {t('analytics.keyInsights')}</h3>
           <div className="insights-grid">
             {(aiInsights.insights || []).map((insight, index) => (
               <div key={index} className={`insight-card ${insight.priority}`}>
@@ -117,7 +119,7 @@ const AnalyticsPage = () => {
 
         {/* Recommendations */}
         <div className="recommendations-preview">
-          <h3>🎯 Top Recommendations</h3>
+          <h3>🎯 {t('analytics.topRecommendations')}</h3>
           <div className="recommendations-list">
             {(aiInsights.recommendations || []).slice(0, 3).map((rec, index) => (
               <div key={index} className="recommendation-item">
@@ -140,7 +142,7 @@ const AnalyticsPage = () => {
       return (
         <div className="loading-container">
           <div className="loading-spinner">🔮</div>
-          <p>Generating predictions...</p>
+          <p>{t('analytics.generatingPredictions')}</p>
         </div>
       );
     }
@@ -148,7 +150,7 @@ const AnalyticsPage = () => {
     if (!predictions) {
       return (
         <div className="empty-state">
-          <p>Loading predictions...</p>
+          <p>{t('analytics.loadingInsights')}</p>
         </div>
       );
     }
@@ -156,15 +158,15 @@ const AnalyticsPage = () => {
     return (
       <div className="predictions-container">
         <div className="predictions-header">
-          <h3>🔮 Usage Predictions</h3>
-          <p>AI-powered forecasts for your future usage</p>
+          <h3>🔮 {t('analytics.usagePredictions')}</h3>
+          <p>{t('analytics.generatingPredictions')}</p>
         </div>
 
         {/* Usage Prediction */}
         <div className="prediction-card highlight">
           <div className="prediction-icon">📈</div>
           <div className="prediction-content">
-            <h4>Next Month Usage</h4>
+            <h4>{t('analytics.nextMonthUsage')}</h4>
             <div className="prediction-value">
               {Math.round(predictions.nextMonthUsage || 0)} generations
             </div>
@@ -178,11 +180,11 @@ const AnalyticsPage = () => {
         <div className="prediction-card">
           <div className="prediction-icon">💰</div>
           <div className="prediction-content">
-            <h4>Cost Projection</h4>
+            <h4>{t('analytics.costProjection')}</h4>
             <div className="prediction-value">
               ${Math.round(predictions.costProjection || 0)}
             </div>
-            <div className="prediction-period">Next 30 days</div>
+            <div className="prediction-period">{t('analytics.next30Days')}</div>
           </div>
         </div>
 
@@ -207,7 +209,7 @@ const AnalyticsPage = () => {
       return (
         <div className="loading-container">
           <div className="loading-spinner">💡</div>
-          <p>Loading personalized recommendations...</p>
+          <p>{t('analytics.loadingRecommendations')}</p>
         </div>
       );
     }
@@ -215,7 +217,7 @@ const AnalyticsPage = () => {
     if (!recommendations) {
       return (
         <div className="empty-state">
-          <p>Loading recommendations...</p>
+          <p>{t('analytics.loadingRecommendations')}</p>
         </div>
       );
     }
@@ -223,14 +225,14 @@ const AnalyticsPage = () => {
     return (
       <div className="recommendations-container">
         <div className="rec-header">
-          <h3>🎯 Personalized Recommendations</h3>
-          <p>AI-powered suggestions to optimize your workflow</p>
+          <h3>🎯 {t('analytics.personalizedRecommendations')}</h3>
+          <p>{t('analytics.loadingRecommendations')}</p>
         </div>
 
         {/* Provider Recommendations */}
         {recommendations.providers?.length > 0 && (
           <div className="rec-section">
-            <h4>🚀 Recommended Providers</h4>
+            <h4>🚀 {t('analytics.recommendedProviders')}</h4>
             <div className="providers-grid">
               {recommendations.providers.map((provider, index) => (
                 <div key={index} className="provider-card">
@@ -249,7 +251,7 @@ const AnalyticsPage = () => {
         {/* Workflow Recommendations */}
         {recommendations.workflows?.length > 0 && (
           <div className="rec-section">
-            <h4>⚙️ Workflow Optimizations</h4>
+            <h4>⚙️ {t('analytics.workflowOptimizations')}</h4>
             <div className="workflows-grid">
               {recommendations.workflows.map((workflow, index) => (
                 <div key={index} className="workflow-card">
@@ -269,7 +271,7 @@ const AnalyticsPage = () => {
         {/* Next Steps */}
         {recommendations.nextSteps?.length > 0 && (
           <div className="rec-section">
-            <h4>🎯 Next Steps</h4>
+            <h4>🎯 {t('analytics.nextSteps')}</h4>
             <div className="next-steps-list">
               {recommendations.nextSteps.map((step, index) => (
                 <div key={index} className={`next-step ${step.priority}`}>

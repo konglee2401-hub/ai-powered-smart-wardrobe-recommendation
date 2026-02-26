@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import GalleryManagement from '../components/GalleryManagement';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Grid3x3, List } from 'lucide-react';
 
 const GalleryPage = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState('grid');
   const [selectedImages, setSelectedImages] = useState([]);
 
@@ -45,14 +47,14 @@ const GalleryPage = () => {
               fontWeight: '700',
               color: '#f1f5f9'
             }}>
-              🖼️ Media Gallery
+              🖼️ {t('gallery.title')}
             </h1>
             <p style={{
               margin: '0',
               color: '#cbd5e1',
               fontSize: '1rem'
             }}>
-              Browse, organize, and manage your generated, uploaded, and cloud-stored media
+              {t('gallery.subtitle')}
             </p>
           </div>
           
@@ -92,7 +94,7 @@ const GalleryPage = () => {
                 }
               }}
             >
-              <Grid3x3 size={18} /> Grid
+              <Grid3x3 size={18} /> {t('gallery.grid')}
             </button>
             <button 
               onClick={() => setViewMode('list')}
@@ -125,7 +127,7 @@ const GalleryPage = () => {
                 }
               }}
             >
-              <List size={18} /> List
+              <List size={18} /> {t('gallery.list')}
             </button>
           </div>
         </div>
@@ -157,18 +159,18 @@ const GalleryPage = () => {
           {[
             { 
               icon: '✨', 
-              title: 'Generated Media', 
-              desc: 'AI-generated images and videos from all providers' 
+              title: t('gallery.generatedMedia'), 
+              desc: t('gallery.generatedMediaDesc')
             },
             { 
               icon: '📤', 
-              title: 'Uploaded Files', 
-              desc: 'Your manually uploaded media files' 
+              title: t('gallery.uploadedFiles'), 
+              desc: t('gallery.uploadedFilesDesc')
             },
             { 
               icon: '☁️', 
-              title: 'Cloud Drive', 
-              desc: 'Media synced from Google Drive and other cloud services' 
+              title: t('gallery.cloudDrive'), 
+              desc: t('gallery.cloudDriveDesc')
             }
           ].map((card, idx) => (
             <div

@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, X, Image as ImageIcon, Check, AlertCircle } from 'lucide-react';
 import { VIDEO_SCENARIOS } from '../constants/videoGeneration';
 
@@ -14,6 +15,7 @@ export default function ScenarioImageUploadComponent({
   imagePreviewUrls = {},
   disabled = false
 }) {
+  const { t } = useTranslation();
   // 💫 Get scenario config with image requirements
   const scenarioConfig = useMemo(() => {
     return VIDEO_SCENARIOS.find(s => s.value === scenario);
@@ -21,11 +23,11 @@ export default function ScenarioImageUploadComponent({
 
   const imageSchema = useMemo(() => {
     return scenarioConfig?.imageSchema || {
-      characterWearing: { required: true, label: 'Character in Outfit', description: 'Person wearing the outfit' },
-      characterHolding: { required: false, label: 'Character Holding Product', description: 'Optional' },
-      productReference: { required: false, label: 'Product Reference', description: 'Optional' }
+      characterWearing: { required: true, label: t('scenarioUpload.characterInOutfit'), description: t('scenarioUpload.personWearingOutfit') },
+      characterHolding: { required: false, label: t('scenarioUpload.characterHoldingProduct'), description: t('common.optional') },
+      productReference: { required: false, label: t('scenarioUpload.productReference'), description: t('common.optional') }
     };
-  }, [scenarioConfig]);
+  }, [scenarioConfig, t]);
 
   // File input refs
   const fileInputRefs = {
@@ -52,7 +54,7 @@ export default function ScenarioImageUploadComponent({
     if (!file.type.startsWith('image/')) {
       setErrors(prev => ({
         ...prev,
-        [imageType]: 'Only image files are allowed'
+        [imageType]: t('scenarioUpload.onlyImagesAllowed')
       }));
       return;
     }
@@ -61,7 +63,7 @@ export default function ScenarioImageUploadComponent({
     if (file.size > 10 * 1024 * 1024) {
       setErrors(prev => ({
         ...prev,
-        [imageType]: 'File size must be less than 10MB'
+        [imageType]: t('scenarioUpload.fileSizeTooLarge')
       }));
       return;
     }
@@ -145,17 +147,17 @@ export default function ScenarioImageUploadComponent({
       <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-lg p-4 border border-blue-700/50">
         <p className="text-xs text-blue-300 font-medium flex items-center gap-2 mb-2">
           <ImageIcon className="w-4 h-4" />
-          Image Upload for <strong>{scenarioConfig?.label}</strong>
+          {t('scenarioUpload.imageUploadFor')} <strong>{scenarioConfig?.label}</strong>
         </p>
         <p className="text-xs text-blue-300">
           {imageCount === 1 
-            ? 'This scenario needs 1 image' 
-            : `This scenario needs ${requiredCount} required + ${imageCount - requiredCount} optional images`}
+            ? t('scenarioUpload.needsOneImage')
+            : t('scenarioUpload.needsImagesCount', { required: requiredCount, optional: imageCount - requiredCount })}
         </p>
         {uploadedCount > 0 && (
           <p className="text-xs text-green-300 mt-2 flex items-center gap-1">
             <Check className="w-3 h-3" />
-            {uploadedCount}/{imageCount} uploaded
+            {t('scenarioUpload.uploadedCount', { current: uploadedCount, total: imageCount })}
           </p>
         )}
       </div>
@@ -174,7 +176,7 @@ export default function ScenarioImageUploadComponent({
                 {imageSchema.characterWearing.label}
               </label>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700">
-                {imageSchema.characterWearing.required ? 'Required' : 'Optional'}
+                {imageSchema.characterWearing.required ? t('common.required') : t('common.optional')}
               </span>
             </div>
             <p className="text-xs text-gray-400">{imageSchema.characterWearing.description}</p>
@@ -196,7 +198,7 @@ export default function ScenarioImageUploadComponent({
                 </button>
                 <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 bg-green-600 rounded text-xs text-white font-medium">
                   <Check className="w-3 h-3" />
-                  Uploaded
+                  {t('common.uploaded')}
                 </div>
               </div>
             ) : (
@@ -207,7 +209,7 @@ export default function ScenarioImageUploadComponent({
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="w-6 h-6 text-blue-400" />
-                  <span className="text-sm font-medium text-gray-300">Click to upload</span>
+                  <span className="text-sm font-medium text-gray-300">{t('scenarioUpload.clickToUpload')}</span>
                   <span className="text-xs text-gray-500">PNG, JPG, GIF (max 10MB)</span>
                 </div>
               </button>
@@ -237,7 +239,7 @@ export default function ScenarioImageUploadComponent({
                 {imageSchema.characterHolding.label}
               </label>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700">
-                {imageSchema.characterHolding.required ? 'Required' : 'Optional'}
+                {imageSchema.characterHolding.required ? t('common.required') : t('common.optional')}
               </span>
             </div>
             <p className="text-xs text-gray-400">{imageSchema.characterHolding.description}</p>
@@ -258,7 +260,7 @@ export default function ScenarioImageUploadComponent({
                 </button>
                 <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 bg-green-600 rounded text-xs text-white font-medium">
                   <Check className="w-3 h-3" />
-                  Uploaded
+                  {t('common.uploaded')}
                 </div>
               </div>
             ) : (
@@ -269,8 +271,8 @@ export default function ScenarioImageUploadComponent({
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="w-6 h-6 text-blue-400" />
-                  <span className="text-sm font-medium text-gray-300">Click to upload (optional)</span>
-                  <span className="text-xs text-gray-500">Helps ChatGPT understand product handling</span>
+                  <span className="text-sm font-medium text-gray-300">{t('scenarioUpload.clickToUploadOptional')}</span>
+                  <span className="text-xs text-gray-500">{t('scenarioUpload.helpsUnderstandProduct')}</span>
                 </div>
               </button>
             )}
@@ -299,7 +301,7 @@ export default function ScenarioImageUploadComponent({
                 {imageSchema.productReference.label}
               </label>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700">
-                {imageSchema.productReference.required ? 'Required' : 'Optional'}
+                {imageSchema.productReference.required ? t('common.required') : t('common.optional')}
               </span>
             </div>
             <p className="text-xs text-gray-400">{imageSchema.productReference.description}</p>
@@ -320,7 +322,7 @@ export default function ScenarioImageUploadComponent({
                 </button>
                 <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 bg-green-600 rounded text-xs text-white font-medium">
                   <Check className="w-3 h-3" />
-                  Uploaded
+                  {t('common.uploaded')}
                 </div>
               </div>
             ) : (
@@ -331,8 +333,8 @@ export default function ScenarioImageUploadComponent({
               >
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="w-6 h-6 text-blue-400" />
-                  <span className="text-sm font-medium text-gray-300">Click to upload (optional)</span>
-                  <span className="text-xs text-gray-500">Close-up of product details</span>
+                  <span className="text-sm font-medium text-gray-300">{t('scenarioUpload.clickToUploadOptional')}</span>
+                  <span className="text-xs text-gray-500">{t('scenarioUpload.closeUpProductDetails')}</span>
                 </div>
               </button>
             )}
@@ -358,8 +360,8 @@ export default function ScenarioImageUploadComponent({
       <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700">
         <p className="text-xs text-gray-400">
           {requiredCount > uploadedCount
-            ? `⚠️ Missing ${requiredCount - uploadedCount} required image(s)`
-            : `✅ All required images uploaded`}
+            ? t('scenarioUpload.missingImages', { count: requiredCount - uploadedCount })
+            : t('scenarioUpload.allImagesUploaded')}
         </p>
       </div>
     </div>
