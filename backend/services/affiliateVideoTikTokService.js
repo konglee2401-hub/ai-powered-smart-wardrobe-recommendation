@@ -1032,7 +1032,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
 
     // ============================================================
-    // STEP 4: VIDEO GENERATION (Using VideoGenerationAutomationV2)
+    // STEP 4: VIDEO GENERATION (Using GoogleFlowAutomationService)
     // 💫 OPTIMIZED: Single browser session for multiple segments (if needed)
     // ============================================================
 
@@ -1059,12 +1059,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       }
 
       // ========== INITIALIZE SINGLE BROWSER SESSION ==========
-      const videoGen = new VideoGenerationAutomationV2({
-        imagePath: wearingImageResult.screenshotPath,
-        duration: videoDuration,
-        aspectRatio: '9:16',
-        quality: 'high',
-        outputDir: tempDir
+      const videoGen = new GoogleFlowAutomationService({
+        type: 'video',
+        headless: false,
+        outputDir: tempDir,
+        timeouts: {
+          pageLoad: 30000,
+          generation: Math.max(180000, (videoDuration + 60) * 1000)
+        }
       });
 
       console.log(`\n📝 VIDEO GENERATION PARAMETERS:`);

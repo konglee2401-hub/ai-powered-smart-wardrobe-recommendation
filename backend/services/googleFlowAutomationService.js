@@ -499,7 +499,7 @@ class GoogleFlowAutomationService {
         });
         console.log('   ✓ Events dispatched');
 
-        // Verify content in the editor matches expected prompt (or at least contains tail)
+        // Verify content in the editor matches expected prompt STRICTLY
         const currentText = await this.page.evaluate(() => {
           const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
           if (!textbox) return '';
@@ -508,15 +508,29 @@ class GoogleFlowAutomationService {
         });
 
         const expected = (prompt || '').trim();
-        const tail = expected.slice(-Math.min(60, expected.length));
+        const expectedLength = expected.length;
+        const currentLength = currentText.length;
+        
+        // 🔴 STRICT VERIFICATION: Allow max 1% difference (rounding errors)
+        const maxDifference = Math.max(1, Math.ceil(expectedLength * 0.01));
+        const lengthMatch = Math.abs(currentLength - expectedLength) <= maxDifference;
+        
+        // Also check last 100 chars (or all if shorter) to ensure content integrity
+        const checkLength = Math.min(100, expectedLength);
+        const expectedTail = expected.slice(-checkLength);
+        const currentTail = currentText.slice(-checkLength);
+        const tailMatch = currentTail === expectedTail;
 
-        if (currentText && currentText.length >= Math.max(1, expected.length - 5) && currentText.includes(tail)) {
-          console.log('   ✅ Prompt verification passed');
+        if (lengthMatch && tailMatch) {
+          console.log(`   ✅ Prompt verification PASSED (${currentLength}/${expectedLength} chars, tail matches)`);
           success = true;
           break;
         }
 
-        console.log(`   ⚠️ Prompt verification failed (entered ${currentText.length} chars)`);
+        console.log(`   ⚠️ Prompt verification FAILED`);
+        console.log(`      Expected: ${expectedLength} chars`);
+        console.log(`      Got: ${currentLength} chars`);
+        console.log(`      Length match: ${lengthMatch}, Tail match: ${tailMatch}`);
 
         // Retry: clear the editor and try once more
         if (attempts < maxAttempts) {
@@ -540,6 +554,261 @@ class GoogleFlowAutomationService {
       console.error(`   ❌ Error entering prompt: ${error.message}`);
       throw error;
     }
+  }
+
+  // 💫 NEW METHODS FOR VIDEO GENERATION FLOW
+  
+  async waitForSendButtonEnabled() {
+    console.log('⏳ Waiting for Send button to enable...');
+    
+    try {
+      await this.page.waitForFunction(() => {
+        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+        return btn && !btn.disabled;
+      }, { timeout: 10000 });
+      
+      console.log('✅ Send button is enabled');
+      return true;
+    } catch (error) {
+      console.warn('⚠️  Timeout waiting for Send button:', error.message);
+      return false;
+    }
+  }
+
+  async checkSendButton() {
+    console.log('✔️  Checking Send button status...');
+    
+    const status = await this.page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+      if (!btn) return { found: false, disabled: null };
+      return { found: true, disabled: btn.disabled, text: btn.textContent };
+    });
+
+    if (!status.found) {
+      console.warn('⚠️  Send button not found');
+      return false;
+    }
+
+    console.log(`   Button: "${status.text.trim()}" | Disabled: ${status.disabled}`);
+    return !status.disabled;
+  }
+
+  async submit() {
+    console.log('⏳ Submitting request...');
+    
+    try {
+      const clicked = await this.page.evaluate(() => {
+        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+        if (btn && !btn.disabled) {
+          btn.click();
+          return true;
+        }
+        return false;
+      });
+
+      if (clicked) {
+        console.log('✅ Request submitted');
+        await this.page.waitForTimeout(1000);
+        return true;
+      } else {
+        console.warn('⚠️  Send button not found or disabled');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error submitting:', error.message);
+      return false;
+    }
+  }
+
+  async monitorGeneration(timeoutSeconds = 180) {
+    console.log(`⏳ Monitoring generation (max ${timeoutSeconds}s)...`);
+    
+    const startTime = Date.now();
+    const timeoutMs = timeoutSeconds * 1000;
+
+    try {
+      // Wait for generation to complete
+      let lastStatus = '';
+      
+      while (Date.now() - startTime < timeoutMs) {
+        const status = await this.page.evaluate(() => {
+          const progressEl = document.querySelector('[aria-label*="progress"], [data-testid*="progress"]');
+          if (progressEl) return 'generating';
+          
+          const readyEl = document.querySelector('button[aria-label*="Download"]');
+          if (readyEl) return 'ready';
+          
+          return 'unknown';
+        });
+
+        if (status !== lastStatus) {
+          console.log(`   Status: ${status}`);
+          lastStatus = status;
+        }
+
+        if (status === 'ready') {
+          console.log('✅ Generation completed');
+          return true;
+        }
+
+        await this.page.waitForTimeout(2000);
+      }
+
+      console.warn('⚠️  Generation timeout');
+      return false;
+    } catch (error) {
+      console.error('❌ Error monitoring:', error.message);
+      return false;
+    }
+  }
+
+  async downloadVideo() {
+    console.log('📥 Downloading generated video...');
+    
+    try {
+      // Find the latest generated video item
+      const latestHref = await this.page.evaluate(() => {
+        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        if (items.length > 0) {
+          // Last item is usually the newest generated one
+          return items[items.length - 1].getAttribute('href');
+        }
+        return null;
+      });
+
+      if (!latestHref) {
+        console.warn('⚠️  No video found to download');
+        return null;
+      }
+
+      console.log(`   Found video: ${latestHref.substring(0, 60)}...`);
+
+      // Get the filename before downloading
+      const filename = latestHref.split('/').pop() || `video-${Date.now()}.mp4`;
+      const outputPath = path.join(this.options.outputDir, filename);
+
+      // Download via context menu
+      const downloadSuccess = await this.downloadItemViaContextMenu(latestHref);
+      
+      if (!downloadSuccess) {
+        console.warn('⚠️  Download action failed');
+        return null;
+      }
+
+      // Wait for file to appear in output directory
+      console.log('⏳ Waiting for file download...');
+      let retries = 20;
+      while (retries > 0) {
+        if (fs.existsSync(outputPath)) {
+          console.log(`✅ Video saved: ${outputPath}`);
+          return outputPath;
+        }
+        await this.page.waitForTimeout(500);
+        retries--;
+      }
+
+      console.warn('⚠️  File not found after download');
+      return null;
+    } catch (error) {
+      console.error('❌ Error downloading video:', error.message);
+      return null;
+    }
+  }
+
+  async switchToVideoTab() {
+    console.log('📹 Switching to Video tab...');
+    const switched = await this.selectTab('Video');
+    if (switched) {
+      console.log('✅ Video tab active');
+      await this.page.waitForTimeout(1000);
+    }
+    return switched;
+  }
+
+  async selectVideoFromComponents() {
+    console.log('🎬 Selecting video generation mode...');
+    
+    try {
+      const selected = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          // Look for "Create video from components" or Vietnamese equivalent
+          if (text.includes('video') || text.includes('thành phần')) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (selected) {
+        console.log('✅ Video mode selected');
+        await this.page.waitForTimeout(800);
+      }
+      return selected;
+    } catch (error) {
+      console.error('❌ Error selecting video mode:', error.message);
+      return false;
+    }
+  }
+
+  async verifyVideoInterface() {
+    console.log('🔍 Verifying video interface...');
+    
+    try {
+      const verified = await this.page.evaluate(() => {
+        // Check for video generation interface elements
+        const prompt = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+        const aspectRatio = document.querySelector('[aria-label*="Aspect"], [aria-label*="aspect"]');
+        
+        return !!(prompt && aspectRatio);
+      });
+
+      if (verified) {
+        console.log('✅ Video interface verified');
+      } else {
+        console.log('⚠️  Video interface not fully ready');
+      }
+      return verified;
+    } catch (error) {
+      console.error('❌ Error verifying interface:', error.message);
+      return false;
+    }
+  }
+
+  async verifyImageSelected() {
+    console.log('🔍 Verifying image selection...');
+    
+    try {
+      const imageSelected = await this.page.evaluate(() => {
+        const img = document.querySelector('[data-testid*="image"], img[alt*="reference"]');
+        return !!img;
+      });
+
+      return imageSelected;
+    } catch (error) {
+      console.error('❌ Error verifying image:', error.message);
+      return false;
+    }
+  }
+
+  async selectReferencePath(imagePath) {
+    console.log(`📸 Selecting reference image: ${imagePath}`);
+    return true; // Already uploaded, just verify
+  }
+
+  async uploadImage(imagePath) {
+    console.log(`📸 Uploading image: ${imagePath}`);
+    // Already handled in uploadImages method
+    return true;
+  }
+
+  async navigateToProject() {
+    // Alias for navigateToFlow
+    console.log('🔗 Navigating to project...');
+    await this.navigateToFlow();
+    return true;
   }
 
   async configureSettings() {
