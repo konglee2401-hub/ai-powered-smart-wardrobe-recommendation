@@ -31,9 +31,19 @@ const promptOptionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Vietnamese translation
+  labelVi: {
+    type: String,
+    default: ''
+  },
   description: {
     type: String,
     required: true
+  },
+  // Vietnamese translation
+  descriptionVi: {
+    type: String,
+    default: ''
   },
   category: {
     type: String,

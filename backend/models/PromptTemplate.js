@@ -10,7 +10,21 @@ const promptTemplateSchema = new mongoose.Schema(
       maxlength: 100,
       index: true
     },
+    // Vietnamese translation
+    nameVi: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: ''
+    },
     description: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: ''
+    },
+    // Vietnamese translation
+    descriptionVi: {
       type: String,
       trim: true,
       maxlength: 500,

@@ -23,8 +23,10 @@ const promptOptions = [
   {
     category: 'scene',
     label: 'Studio',
+    labelVi: 'Phòng Studio',
     value: 'studio',
     description: 'Professional studio setting with controlled lighting',
+    descriptionVi: 'Cài đặt phòng studio chuyên nghiệp với ánh sáng kiểm soát được',
     keywords: ['studio', 'professional', 'controlled', 'lighting'],
     technicalDetails: {
       lighting: 'controlled studio lighting',
@@ -38,8 +40,10 @@ const promptOptions = [
   {
     category: 'scene',
     label: 'Beach',
+    labelVi: 'Bãi Biển',
     value: 'beach',
     description: 'Natural beach environment with golden hour lighting',
+    descriptionVi: 'Môi trường bãi biển tự nhiên với ánh sáng golden hour',
     keywords: ['beach', 'ocean', 'golden hour', 'natural'],
     technicalDetails: {
       lighting: 'natural golden hour',
@@ -53,8 +57,10 @@ const promptOptions = [
   {
     category: 'scene',
     label: 'Urban',
+    labelVi: 'Đô Thị',
     value: 'urban',
     description: 'Urban street environment with city aesthetics',
+    descriptionVi: 'Môi trường đường phố đô thị với thẩm mỹ thành phố',
     keywords: ['urban', 'city', 'street', 'modern'],
     technicalDetails: {
       lighting: 'natural street lighting',
@@ -68,8 +74,10 @@ const promptOptions = [
   {
     category: 'scene',
     label: 'Nature',
+    labelVi: 'Thiên Nhiên',
     value: 'nature',
     description: 'Natural outdoor environment with organic elements',
+    descriptionVi: 'Môi trường ngoài trời tự nhiên với các yếu tố hữu cơ',
     keywords: ['nature', 'organic', 'outdoor', 'natural'],
     technicalDetails: {
       lighting: 'natural outdoor',
