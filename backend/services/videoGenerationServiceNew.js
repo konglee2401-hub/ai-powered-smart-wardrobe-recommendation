@@ -749,7 +749,7 @@ class VideoGenerationServiceNew {
   async downloadMediaFromEditPage() {
     /**
      * NEW: Download from edit page
-     * Click download button → select 1K (original) → wait for download
+     * Click download button → select 1080p (upscaled) → wait for download
      */
     console.log('⬇️  DOWNLOADING VIDEO\n');
     console.log('   Opening download menu...');
@@ -774,12 +774,13 @@ class VideoGenerationServiceNew {
     console.log('   ✓ Download menu opened');
     await this.page.waitForTimeout(800);
 
-    // Click "1K" (Original size) option
-    console.log('   Selecting 1K (original size)...');
-    const selected1K = await this.page.evaluate(() => {
+    // Click "1080p Upscaled" option
+    console.log('   Selecting 1080p (upscaled)...');
+    const selected1080p = await this.page.evaluate(() => {
       const buttons = document.querySelectorAll('[role="menuitem"]');
       for (const btn of buttons) {
-        if (btn.textContent.includes('1K') && btn.textContent.includes('Original')) {
+        // Look for 1080p option - must not be disabled
+        if (btn.textContent.includes('1080p') && !btn.hasAttribute('aria-disabled')) {
           btn.click();
           return true;
         }
@@ -787,14 +788,14 @@ class VideoGenerationServiceNew {
       return false;
     });
 
-    if (!selected1K) {
-      console.warn('   ⚠️  Could not find 1K option, trying alternative selector...');
-      // Try alternative: find buttons within menu with "1K" text
+    if (!selected1080p) {
+      console.warn('   ⚠️  Could not find 1080p option, trying alternative selector...');
+      // Try alternative: find buttons within menu with "1080p" text
       const altSelect = await this.page.evaluate(() => {
         const menuItems = document.querySelectorAll('button');
         for (const item of menuItems) {
           const text = item.textContent;
-          if (text.includes('1K') && !item.hasAttribute('aria-disabled')) {
+          if (text.includes('1080p') && !item.hasAttribute('aria-disabled')) {
             item.click();
             return true;
           }
@@ -803,11 +804,11 @@ class VideoGenerationServiceNew {
       });
 
       if (!altSelect) {
-        throw new Error('Could not select 1K download option');
+        throw new Error('Could not select 1080p download option');
       }
     }
 
-    console.log('   ✓ 1K selected');
+    console.log('   ✓ 1080p selected');
     
     // Wait for download to complete
     await this.page.waitForTimeout(3000);
