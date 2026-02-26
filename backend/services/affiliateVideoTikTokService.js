@@ -1499,8 +1499,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 /**
  * Perform deep ChatGPT analysis with all 3 images
  * Returns: video scripts, voiceover script, hashtags
+ * 
+ * 🔴 CRITICAL: Ensures ChatGPT browser is always closed, even on errors
  */
 async function performDeepChatGPTAnalysis(analysis, images, config) {
+  let chatGPTService = null;  // 🔴 Declare outside try so finally can access it
+  
   try {
     const { wearingImage, holdingImage, productImage } = images;
     const { videoDuration, voiceGender, voicePace, productFocus } = config;
@@ -1527,10 +1531,9 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     console.log(deepAnalysisPrompt);
     console.log(`${'─'.repeat(80)}\n`);
 
-    // Use ChatGPT Browser Automation for deep analysis
-    let chatGPTService = new ChatGPTService({ headless: true });
-    
+    // 🔴 CRITICAL: Initialize BEFORE content that might error
     console.log(`   🚀 Initializing ChatGPT Browser Automation...`);
+    chatGPTService = new ChatGPTService({ headless: true });
     await chatGPTService.initialize();
     
     // Analyze all 3 images for video script generation
@@ -1557,8 +1560,6 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       [wearingPath, holdingPath, productPath],
       deepAnalysisPrompt
     );
-
-    await chatGPTService.close();
 
     // 💫 NEW: Log the raw response received from ChatGPT
     console.log(`\n📥 CHATGPT RAW RESPONSE RECEIVED:`);
@@ -1625,6 +1626,17 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       source: 'fallback-error-catch',
       error: error.message  // Include error for debugging
     };
+  } finally {
+    // 🔴 CRITICAL: ALWAYS close ChatGPT browser, even if error occurred
+    if (chatGPTService) {
+      try {
+        console.log(`\n🔒 Closing ChatGPT browser...`);
+        await chatGPTService.close();
+        console.log(`✅ ChatGPT browser closed successfully`);
+      } catch (closeError) {
+        console.error(`⚠️  Error closing ChatGPT browser: ${closeError.message}`);
+      }
+    }
   }
 }
 
