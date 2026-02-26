@@ -612,25 +612,27 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`\n📝 Creating Asset for character image...`);
         
         const characterAssetResult = await AssetManager.saveAsset({
-          filePath: characterFilePath,
-          displayName: `Character-${flowId}`,
+          filename: `Character-${flowId}.jpg`,  // 🔴 FIX: Use filename not filePath
           assetType: 'image',
           assetCategory: 'character-image',
           mimeType: 'image/jpeg',
-          flowId,
+          fileSize: fs.statSync(characterFilePath).size,  // 🔴 FIX: Get file size
+          userId: 'system',  // 🔴 FIX: Required by AssetManager
           sessionId: flowId,
+          // 🔴 FIX: Add required storage object
+          storage: {
+            location: 'local',
+            filePath: characterFilePath,
+            ...(characterDriveUrl && {
+              location: 'google-drive',
+              googleDriveId: characterDriveUrl
+            })
+          },
           metadata: {
             source: 'user-uploaded',
             uploadedFor: 'character',
             timestamp: new Date().toISOString(),
-          },
-          // Include Drive upload info if available
-          ...(characterDriveUrl && {
-            driveInfo: {
-              googleDriveId: characterDriveUrl,
-              uploadedAt: new Date().toISOString(),
-            }
-          })
+          }
         });
 
         if (characterAssetResult?.assetId) {
@@ -649,25 +651,27 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`\n📝 Creating Asset for product image...`);
         
         const productAssetResult = await AssetManager.saveAsset({
-          filePath: productFilePath,
-          displayName: `Product-${flowId}`,
+          filename: `Product-${flowId}.jpg`,  // 🔴 FIX: Use filename not filePath
           assetType: 'image',
           assetCategory: 'product-image',
           mimeType: 'image/jpeg',
-          flowId,
+          fileSize: fs.statSync(productFilePath).size,  // 🔴 FIX: Get file size
+          userId: 'system',  // 🔴 FIX: Required by AssetManager
           sessionId: flowId,
+          // 🔴 FIX: Add required storage object
+          storage: {
+            location: 'local',
+            filePath: productFilePath,
+            ...(productDriveUrl && {
+              location: 'google-drive',
+              googleDriveId: productDriveUrl
+            })
+          },
           metadata: {
             source: 'user-uploaded',
             uploadedFor: 'product',
             timestamp: new Date().toISOString(),
-          },
-          // Include Drive upload info if available
-          ...(productDriveUrl && {
-            driveInfo: {
-              googleDriveId: productDriveUrl,
-              uploadedAt: new Date().toISOString(),
-            }
-          })
+          }
         });
 
         if (productAssetResult?.assetId) {
