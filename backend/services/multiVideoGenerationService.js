@@ -32,6 +32,26 @@ class MultiVideoGenerationService {
   }
 
   /**
+   * Convert base64 image to temporary file for browser automation
+   * Used for frame chaining (when previous video's end frame is passed as base64)
+   * @param {string} imageBase64 - Base64 image data (with or without data URI prefix)
+   * @returns {string} - Path to temporary file
+   */
+  _createTempImageFile(imageBase64) {
+    const tempDir = path.join(this.outputDir, 'temp-frames');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const tempPath = path.join(tempDir, `frame-${Date.now()}.jpg`);
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(tempPath, buffer);
+    
+    return tempPath;
+  }
+
+  /**
    * Generate multi-video sequence for a use case
    * @param {Object} params - Generation parameters
    * @returns {Promise<Object>} - { success, videos, metadata }
@@ -115,24 +135,54 @@ class MultiVideoGenerationService {
         console.log(`│ Prompt: ${segmentPrompt.substring(0, 76)} ${segmentPrompt.length > 76 ? '...' : ''}`);
         console.log('└' + '─'.repeat(78) + '┘');
 
-        // Generate video with Google Flow using unified service
-        const videoResult = await this.googleFlow.generateSingleVideo(segmentPrompt, {
-          imageBase64: currentRefImage,
-          quality: quality,
-          aspectRatio: aspectRatio
-        });
+        // For video generation, use generateMultiple with single prompt (count=1)
+        // Convert reference images to file paths if needed (base64 -> temp file)
+        let charImagePath = null;
+        let prodImagePath = null;
 
-        if (!videoResult || !videoResult.success || !videoResult.href) {
+        if (currentRefImage) {
+          // If reference image is base64 (from frame extraction), convert to temp file
+          if (currentRefImage.includes(',') || !fs.existsSync(currentRefImage)) {
+            charImagePath = this._createTempImageFile(currentRefImage);
+            prodImagePath = charImagePath; // Use same image for both
+          } else {
+            // Reference image is already a file path
+            charImagePath = currentRefImage;
+            prodImagePath = currentRefImage;
+          }
+        } else {
+          // No reference image - create dummy paths (generateMultiple will skip if needed)
+          // For now, throw error if no reference image
+          throw new Error(`No reference image for segment ${segmentIndex} - frame chaining requires reference`);
+        }
+
+        console.log(`📝 Using reference images for segment ${segmentIndex}`);
+        
+        // Generate video using generateMultiple (with x1 count)
+        const videoResult = await this.googleFlow.generateMultiple(
+          charImagePath,
+          prodImagePath,
+          [segmentPrompt] // Single prompt
+        );
+
+        if (!videoResult || !videoResult.success || videoResult.results.length === 0) {
           throw new Error(`Failed to generate video segment ${segmentIndex}`);
         }
 
-        console.log(`✅ Video generated: ${videoResult.href}`);
+        // Get first (only) result
+        const segmentResult = videoResult.results[0];
+        
+        if (!segmentResult.success) {
+          throw new Error(`Video segment ${segmentIndex} generation failed: ${segmentResult.error}`);
+        }
+
+        console.log(`✅ Video generated: ${segmentResult.href}`);
 
         // Store video info
         const videoInfo = {
           index: segmentIndex,
-          href: videoResult.href,
-          downloadSuccess: videoResult.downloadSuccess,
+          href: segmentResult.href,
+          downloadSuccess: segmentResult.downloadSuccess,
           duration: Math.ceil(duration / useCaseConfig.videoCount),
           generatedAt: new Date().toISOString()
         };
@@ -146,7 +196,7 @@ class MultiVideoGenerationService {
           // Note: videoResult no longer has .path with new service
           // Frame extraction may need adjustment based on how videos are stored
           // For now, log a note
-          console.log(`ℹ️  Video stored at href: ${videoResult.href}`);
+          console.log(`ℹ️  Video stored at href: ${segmentResult.href}`);
           
           if (frameChaining && i < useCaseConfig.videoCount - 1) {
             console.log('⚠️  Frame chaining requires video file path - may need adjustment');
@@ -199,47 +249,6 @@ class MultiVideoGenerationService {
   }
 
   /**
-   * Quick video generation without use case (backward compatibility)
-   * Still supports frame chaining if enabled
-   * @param {Object} params - Generation parameters
-   * @returns {Promise<Object>} - { success, video }
-   */
-  async generateSingleVideo(params) {
-    const {
-      prompt,
-      duration = 10,
-      imageBase64 = null,
-      quality = 'high',
-      aspectRatio = '16:9'
-    } = params;
-
-    try {
-      const videoResult = await this.googleFlow.generateSingleVideo(prompt, {
-        imageBase64: imageBase64,
-        quality: quality,
-        aspectRatio: aspectRatio
-      });
-
-      if (!videoResult || !videoResult.success) {
-        throw new Error('Video generation failed');
-      }
-
-      return {
-        success: true,
-        video: videoResult,
-        duration: duration
-      };
-
-    } catch (error) {
-      console.error(`Single video generation error: ${error.message}`);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
    * Get sequence summary (without re-generating)
    * @param {string} sessionId - Session ID
    * @returns {Object} - Session summary with all generated videos
@@ -268,8 +277,7 @@ class MultiVideoGenerationService {
 
   /**
    * Close browser (cleanup for GoogleFlowAutomationService)
-   * Note: generateSingleVideo() already handles browser lifecycle,
-   * but this is available for explicit cleanup if needed
+   * Automatically handled during generateMultiVideoSequence() but available for explicit cleanup
    */
   async close() {
     try {
