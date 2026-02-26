@@ -13,6 +13,7 @@ import {
   Loader2, AlertCircle, Zap, RotateCcw, Upload
 } from 'lucide-react';
 import { promptsAPI } from '../services/api';
+import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
 
 // Style Categories Configuration
 const STYLE_CATEGORIES = {
@@ -417,6 +418,7 @@ const Step3Enhanced = ({
   analysis
 }) => {
   const { t } = useTranslation();
+  const { i18n } = useTranslation();
   const [customPrompt, setCustomPrompt] = useState('');
   const [showOptimizerModal, setShowOptimizerModal] = useState(false);
   const [maxPromptLength, setMaxPromptLength] = useState(300);
@@ -424,13 +426,14 @@ const Step3Enhanced = ({
   const [expandedCategories, setExpandedCategories] = useState({});
   const [copiedText, setCopiedText] = useState('');
   const [columns, setColumns] = useState(1);
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
 
   // Auto-generate prompt when selections change
   useEffect(() => {
     if (Object.keys(selectedOptions).length > 0) {
       generatePromptFromOptions();
     }
-  }, [selectedOptions, useCase]);
+  }, [selectedOptions, useCase, i18n.language]);
 
   // Calculate columns based on number of options
   useEffect(() => {
@@ -442,7 +445,34 @@ const Step3Enhanced = ({
   }, [expandedCategories]);
 
   const generatePromptFromOptions = useCallback(async () => {
+    if (isGeneratingPrompt) return;
+    
     try {
+      setIsGeneratingPrompt(true);
+      
+      // Try to use language-aware to builder first
+      if (analysis) {
+        try {
+          const response = await buildLanguageAwarePrompt({
+            analysis,
+            selectedOptions: selectedOptions || {},
+            language: i18n.language || 'en'
+          });
+          
+          if (response?.success || response?.positive) {
+            onPromptChange({
+              positive: response.positive || response.data?.positive || '',
+              negative: response.negative || response.data?.negative || ''
+            });
+            setIsGeneratingPrompt(false);
+            return;
+          }
+        } catch (apiError) {
+          console.warn('Language-aware prompt builder failed, using fallback', apiError);
+        }
+      }
+      
+      // Fallback to template-based prompt generation
       const template = PROMPT_TEMPLATES[useCase] || PROMPT_TEMPLATES['change-clothes'];
       const promptText = template.positive(selectedOptions, useCase);
       
@@ -452,8 +482,10 @@ const Step3Enhanced = ({
       });
     } catch (error) {
       console.error('Error generating prompt:', error);
+    } finally {
+      setIsGeneratingPrompt(false);
     }
-  }, [selectedOptions, useCase, onPromptChange]);
+  }, [selectedOptions, useCase, analysis, i18n.language, onPromptChange]);
 
   const toggleCategory = (categoryKey) => {
     setExpandedCategories(prev => ({
