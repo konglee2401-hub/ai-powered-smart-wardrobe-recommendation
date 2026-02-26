@@ -265,9 +265,45 @@
     "accounts": "Accounts",
     "mediaLibrary": "Media Library"
   },
+  "promptBuilder": {
+    "title": "🎨 Smart Fashion Prompt Builder",
+    "subtitle": "Generate professional fashion photography prompts in seconds",
+    "fashionParameters": "📋 Fashion Parameters",
+    "ageRange": "Age Range",
+    "gender": "Gender",
+    "fashionStyle": "Fashion Style",
+    "colorScheme": "Color Scheme",
+    "fabricMaterial": "Fabric Material",
+    "photographySetting": "Photography Setting",
+    "mood": "Mood/Atmosphere",
+    "generating": "⏳ Generating...",
+    "generatePrompt": "✨ Generate Prompt",
+    "reset": "🔄 Reset",
+    "generatedPrompt": "📝 Generated Prompt",
+    "stats": "Stats",
+    "chars": "chars",
+    "words": "words",
+    "sentences": "sentences",
+    "draftPrompt": "Draft Prompt",
+    "promptWillAppear": "Your prompt will appear here...",
+    "copied": "✅ Copied!",
+    "copyDraft": "📋 Copy Draft",
+    "customizePrompt": "✏️ Customize Prompt",
+    "wordToReplace": "Word to replace (e.g., 'silk')",
+    "replaceWith": "Replace with (e.g., 'cotton')",
+    "enhancing": "⏳ Enhancing...",
+    "enhancePrompt": "🚀 Enhance Prompt",
+    "enhancedPrompt": "Enhanced Prompt",
+    "copyEnhanced": "📋 Copy Enhanced",
+    "exportAsJSON": "💾 Export as JSON"
+  },
   "common": {
     "required": "Required",
     "optional": "Optional",
-    "uploaded": "Uploaded"
+    "uploaded": "Uploaded",
+    "hide": "Hide",
+    "show": "Show",
+    "error": "Error",
+    "success": "Success"
   }
 }

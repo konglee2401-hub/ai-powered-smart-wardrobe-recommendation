@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import axiosInstance from '../services/axios';
 import { API_BASE_URL } from '../config/api';
 import { 
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function UnifiedVideoGeneration() {
+  const { t } = useTranslation();
   // ==================== REFS ====================
   const sessionId = useRef(`session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 

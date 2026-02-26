@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function OptionsManagement() {
+  const { t } = useTranslation();
   const [options, setOptions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newOption, setNewOption] = useState({ category: 'scene', value: '' });

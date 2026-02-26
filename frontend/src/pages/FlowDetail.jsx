@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import axiosInstance from '../services/axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function FlowDetail() {
+  const { t } = useTranslation();
   const { flowId } = useParams();
   const navigate = useNavigate();
   const [flow, setFlow] = useState(null);

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PerformanceOptimizer from '../components/PerformanceOptimizer';
 
 const PerformanceOptimizerPage = () => {
+  const { t } = useTranslation();
   const [currentSettings, setCurrentSettings] = useState({
     imageCount: 2,
     resolution: '1024x1024',

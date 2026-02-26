@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   Server, Shield, Key, RefreshCw, ChevronDown, ChevronUp, 
   Trash2, Plus, GripVertical, CheckCircle, XCircle 
@@ -11,6 +12,7 @@ import { api, providersAPI } from '../services/api';
  * Allows managing providers, models, API keys, and priority.
  */
 export default function AIProviderManager() {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);

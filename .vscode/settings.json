@@ -18,6 +18,8 @@
         "/^pkill -f \"node server\\.js\" \\|\\| true; pkill -f \"nodemon\" \\|\\| true; sleep 3; echo \"All Node processes killed\"$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "git add": true,
+        "git commit": true
     }
 }

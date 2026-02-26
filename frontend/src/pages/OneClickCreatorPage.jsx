@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Upload, Sparkles, Rocket, Loader2, ChevronDown, ChevronUp,
   Play, Video, X, Settings, Image as ImageIcon,
@@ -461,6 +462,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
 }
 
 export default function OneClickCreatorPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   // Modal States

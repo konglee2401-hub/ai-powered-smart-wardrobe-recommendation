@@ -265,9 +265,45 @@
     "accounts": "Tài khoản",
     "mediaLibrary": "Thư viện Media"
   },
+  "promptBuilder": {
+    "title": "🎨 Trợ lý Tạo Prompt Thời trang Thông minh",
+    "subtitle": "Tạo các prompt chụp ảnh thời trang chuyên nghiệp trong vài giây",
+    "fashionParameters": "📋 Tham số Thời trang",
+    "ageRange": "Khoảng Tuổi",
+    "gender": "Giới tính",
+    "fashionStyle": "Phong cách Thời trang",
+    "colorScheme": "Lược đồ Màu sắc",
+    "fabricMaterial": "Chất liệu Vải",
+    "photographySetting": "Cài đặt Chụp ảnh",
+    "mood": "Tâm trạng/Không khí",
+    "generating": "⏳ Đang tạo...",
+    "generatePrompt": "✨ Tạo Prompt",
+    "reset": "🔄 Đặt lại",
+    "generatedPrompt": "📝 Prompt Được tạo",
+    "stats": "Thống kê",
+    "chars": "ký tự",
+    "words": "từ",
+    "sentences": "câu",
+    "draftPrompt": "Prompt Nháp",
+    "promptWillAppear": "Prompt của bạn sẽ xuất hiện ở đây...",
+    "copied": "✅ Đã sao chép!",
+    "copyDraft": "📋 Sao chép Nháp",
+    "customizePrompt": "✏️ Tùy chỉnh Prompt",
+    "wordToReplace": "Từ cần thay thế (ví dụ: 'lụa')",
+    "replaceWith": "Thay thế bằng (ví dụ: 'coton')",
+    "enhancing": "⏳ Đang nâng cao...",
+    "enhancePrompt": "🚀 Nâng cao Prompt",
+    "enhancedPrompt": "Prompt Được nâng cao",
+    "copyEnhanced": "📋 Sao chép Nâng cao",
+    "exportAsJSON": "💾 Xuất dưới dạng JSON"
+  },
   "common": {
     "required": "Bắt buộc",
     "optional": "Tùy chọn",
-    "uploaded": "Đã tải lên"
+    "uploaded": "Đã tải lên",
+    "hide": "Ẩn",
+    "show": "Hiển thị",
+    "error": "Lỗi",
+    "success": "Thành công"
   }
 }

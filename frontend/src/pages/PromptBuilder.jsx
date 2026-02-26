@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   generateDynamicPrompt,
   validateInputs,
@@ -19,6 +20,8 @@ import {
 } from '../utils/promptTemplates';
 
 const PromptBuilder = () => {
+  const { t } = useTranslation();
+  
   // ============ STATE MANAGEMENT ============
 
   const [formInputs, setFormInputs] = useState({
@@ -500,19 +503,19 @@ const PromptBuilder = () => {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h1 style={styles.title}>🎨 Smart Fashion Prompt Builder</h1>
-        <p style={styles.subtitle}>Generate professional fashion photography prompts in seconds</p>
+        <h1 style={styles.title}>{t('promptBuilder.title')}</h1>
+        <p style={styles.subtitle}>{t('promptBuilder.subtitle')}</p>
       </div>
 
       {/* Alerts */}
       {error && (
         <div style={{ ...styles.alert, ...styles.errorAlert }}>
-          ❌ {error}
+          ❌ {t('common.error', { defaultValue: error })}
         </div>
       )}
       {success && (
         <div style={{ ...styles.alert, ...styles.successAlert }}>
-          ✅ {success}
+          ✅ {t('common.success', { defaultValue: success })}
         </div>
       )}
 
@@ -520,11 +523,11 @@ const PromptBuilder = () => {
       <div style={styles.mainContent}>
         {/* Form Section */}
         <div style={styles.formSection}>
-          <h2 style={styles.sectionTitle}>📋 Fashion Parameters</h2>
+          <h2 style={styles.sectionTitle}>{t('promptBuilder.fashionParameters')}</h2>
 
           {/* Age */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Age Range</label>
+            <label style={styles.label}>{t('promptBuilder.ageRange')}</label>
             <select
               name="age"
               value={formInputs.age}
@@ -541,7 +544,7 @@ const PromptBuilder = () => {
 
           {/* Gender */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Gender</label>
+            <label style={styles.label}>{t('promptBuilder.gender')}</label>
             <select
               name="gender"
               value={formInputs.gender}
@@ -558,7 +561,7 @@ const PromptBuilder = () => {
 
           {/* Style */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Fashion Style</label>
+            <label style={styles.label}>{t('promptBuilder.fashionStyle')}</label>
             <select
               name="style"
               value={formInputs.style}
@@ -575,7 +578,7 @@ const PromptBuilder = () => {
 
           {/* Colors */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Color Scheme</label>
+            <label style={styles.label}>{t('promptBuilder.colorScheme')}</label>
             <select
               name="colors"
               value={formInputs.colors}
@@ -592,7 +595,7 @@ const PromptBuilder = () => {
 
           {/* Material */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Fabric Material</label>
+            <label style={styles.label}>{t('promptBuilder.fabricMaterial')}</label>
             <select
               name="material"
               value={formInputs.material}
@@ -609,7 +612,7 @@ const PromptBuilder = () => {
 
           {/* Setting */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Photography Setting</label>
+            <label style={styles.label}>{t('promptBuilder.photographySetting')}</label>
             <select
               name="setting"
               value={formInputs.setting}
@@ -626,7 +629,7 @@ const PromptBuilder = () => {
 
           {/* Mood */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Mood/Atmosphere</label>
+            <label style={styles.label}>{t('promptBuilder.mood')}</label>
             <select
               name="mood"
               value={formInputs.mood}
@@ -653,7 +656,7 @@ const PromptBuilder = () => {
               onMouseEnter={e => e.target.style.backgroundColor = '#0056b3'}
               onMouseLeave={e => e.target.style.backgroundColor = '#007bff'}
             >
-              {loading ? '⏳ Generating...' : '✨ Generate Prompt'}
+              {loading ? t('promptBuilder.generating') : t('promptBuilder.generatePrompt')}
             </button>
             <button
               onClick={resetForm}
@@ -664,32 +667,32 @@ const PromptBuilder = () => {
               onMouseEnter={e => e.target.style.backgroundColor = '#c82333'}
               onMouseLeave={e => e.target.style.backgroundColor = '#dc3545'}
             >
-              🔄 Reset
+              {t('promptBuilder.reset')}
             </button>
           </div>
         </div>
 
         {/* Prompt Section */}
         <div style={styles.promptSection}>
-          <h2 style={styles.sectionTitle}>📝 Generated Prompt</h2>
+          <h2 style={styles.sectionTitle}>{t('promptBuilder.generatedPrompt')}</h2>
 
           {/* Stats */}
           {promptStats && (
             <div style={styles.statsBox}>
-              📊 <strong>Stats:</strong> {promptStats.characters} chars | {promptStats.words} words | {promptStats.sentences} sentences
+              📊 <strong>{t('promptBuilder.stats')}:</strong> {promptStats.characters} {t('promptBuilder.chars')} | {promptStats.words} {t('promptBuilder.words')} | {promptStats.sentences} {t('promptBuilder.sentences')}
             </div>
           )}
 
           {/* Draft Prompt */}
           <div>
-            <label style={styles.label}>Draft Prompt</label>
+            <label style={styles.label}>{t('promptBuilder.draftPrompt')}</label>
             <div
               style={{
                 ...styles.promptBox,
                 ...(draftPrompt ? {} : styles.emptyPrompt)
               }}
             >
-              {draftPrompt || 'Your prompt will appear here...'}
+              {draftPrompt || t('promptBuilder.promptWillAppear')}
             </div>
             {draftPrompt && (
               <button
@@ -699,7 +702,7 @@ const PromptBuilder = () => {
                   ...(copiedText === 'draft' ? styles.copyButtonCopied : {})
                 }}
               >
-                {copiedText === 'draft' ? '✅ Copied!' : '📋 Copy Draft'}
+                {copiedText === 'draft' ? t('promptBuilder.copied') : t('promptBuilder.copyDraft')}
               </button>
             )}
           </div>
@@ -708,7 +711,7 @@ const PromptBuilder = () => {
           {draftPrompt && (
             <div style={styles.customizeSection}>
               <div style={styles.customizeTitle}>
-                ✏️ Customize Prompt
+                {t('promptBuilder.customizePrompt')}
                 <button
                   onClick={() => setShowCustomize(!showCustomize)}
                   style={{
@@ -722,7 +725,7 @@ const PromptBuilder = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {showCustomize ? '▼ Hide' : '▶ Show'}
+                  {showCustomize ? '▼ ' + t('common.hide') : '▶ ' + t('common.show')}
                 </button>
               </div>
 
@@ -730,7 +733,7 @@ const PromptBuilder = () => {
                 <div>
                   <input
                     type="text"
-                    placeholder="Word to replace (e.g., 'silk')"
+                    placeholder={t('promptBuilder.wordToReplace')}
                     style={styles.customizeInput}
                     onChange={(e) => {
                       const key = e.target.value;
@@ -743,7 +746,7 @@ const PromptBuilder = () => {
                   <input
                     id="replaceWith"
                     type="text"
-                    placeholder="Replace with (e.g., 'cotton')"
+                    placeholder={t('promptBuilder.replaceWith')}
                     style={styles.customizeInput}
                   />
                   <button
@@ -756,7 +759,7 @@ const PromptBuilder = () => {
                     onMouseEnter={e => e.target.style.backgroundColor = '#218838'}
                     onMouseLeave={e => e.target.style.backgroundColor = '#28a745'}
                   >
-                    {loading ? '⏳ Enhancing...' : '🚀 Enhance Prompt'}
+                    {loading ? t('promptBuilder.enhancing') : t('promptBuilder.enhancePrompt')}
                   </button>
                 </div>
               )}
@@ -766,7 +769,7 @@ const PromptBuilder = () => {
           {/* Enhanced Prompt */}
           {enhancedPrompt && (
             <div style={{ marginTop: '15px' }}>
-              <label style={styles.label}>Enhanced Prompt</label>
+              <label style={styles.label}>{t('promptBuilder.enhancedPrompt')}</label>
               <div style={styles.promptBox}>
                 {enhancedPrompt}
               </div>
@@ -777,7 +780,7 @@ const PromptBuilder = () => {
                   ...(copiedText === 'enhanced' ? styles.copyButtonCopied : {})
                 }}
               >
-                {copiedText === 'enhanced' ? '✅ Copied!' : '📋 Copy Enhanced'}
+                {copiedText === 'enhanced' ? t('promptBuilder.copied') : t('promptBuilder.copyEnhanced')}
               </button>
             </div>
           )}
@@ -794,7 +797,7 @@ const PromptBuilder = () => {
               onMouseEnter={e => e.target.style.backgroundColor = '#545b62'}
               onMouseLeave={e => e.target.style.backgroundColor = '#6c757d'}
             >
-              💾 Export as JSON
+              {t('promptBuilder.exportAsJSON')}
             </button>
           )}
         </div>
