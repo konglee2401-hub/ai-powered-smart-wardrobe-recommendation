@@ -731,7 +731,8 @@ export default function OneClickCreatorPage() {
     productImageBase64,
     recommendedOptions,
     analysisResult,
-    flowId  // 💫 Accept flowId from caller to ensure session continuity
+    flowId,  // 💫 Accept flowId from caller to ensure session continuity
+    language = 'en'  // 💫 Accept language parameter for prompt generation
   ) => {
     try {
       console.log('🎬 Starting Affiliate Video TikTok Flow');
@@ -741,6 +742,7 @@ export default function OneClickCreatorPage() {
       console.log(`  Options: ${JSON.stringify(recommendedOptions)}`);
       console.log(`  Analysis: ${analysisResult ? 'present' : 'missing'}`);
       console.log(`  Flow ID: ${flowId}`);  // 💫 Log flowId
+      console.log(`  Language: ${language}`);  // 💫 Log language
       
       // Extract voice settings
       const [voiceGender, voicePace] = voiceOption.split('-');
@@ -758,6 +760,7 @@ export default function OneClickCreatorPage() {
         generateVideo: true,
         generateVoiceover: true,
         flowId,  // 💫 Pass flowId in payload to maintain session
+        language: language || 'en',  // 💫 Pass language for prompt generation (STEP 1, 3, 4)
         options: recommendedOptions || {}
       };
       
@@ -1045,7 +1048,8 @@ export default function OneClickCreatorPage() {
               prodBase64,
               recommendedOptions,
               analysisResult,
-              flowId  // 💫 Pass flowId to the flow
+              flowId,  // 💫 Pass flowId to the flow
+              i18n.language || 'en'  // 💫 Pass language for Vietnamese prompt support
             );
 
             // Update session with results

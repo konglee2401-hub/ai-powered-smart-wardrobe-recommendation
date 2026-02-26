@@ -1142,12 +1142,22 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
             try {
               // Build prompt for this specific segment
-              const segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
-                videoDuration: segment.duration,
-                voiceGender,
-                voicePace,
-                productFocus
-              });
+              // 💫 Use Vietnamese prompts if language='vi'
+              let segmentPrompt;
+              if (language === 'vi') {
+                segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+                  segment.segment,
+                  productFocus,
+                  { name: analysis.product?.garment_type, details: analysis.product?.key_details }
+                );
+              } else {
+                segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
+                  videoDuration: segment.duration,
+                  voiceGender,
+                  voicePace,
+                  productFocus
+                });
+              }
 
               console.log(`   Script length: ${segment.script.length} chars`);
               console.log(`   Prompt length: ${segmentPrompt.length} chars`);
@@ -1228,11 +1238,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           // SINGLE SEGMENT: Normal flow
           console.log(`\n📹 Generating single video from integrated prompt...`);
 
-          const videoPrompt = buildVideoPromptFromAnalysis(
-            deepAnalysis.data,
-            analysis,
-            { videoDuration, voiceGender, voicePace, productFocus }
-          );
+          // 💫 Use Vietnamese prompts if language='vi'
+          let videoPrompt;
+          if (language === 'vi') {
+            videoPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+              'Hook',
+              productFocus,
+              { name: analysis.product?.garment_type, details: analysis.product?.key_details }
+            );
+          } else {
+            videoPrompt = buildVideoPromptFromAnalysis(
+              deepAnalysis.data,
+              analysis,
+              { videoDuration, voiceGender, voicePace, productFocus }
+            );
+          }
 
           console.log(`✅ Video prompt generated (${videoPrompt.length} chars)`);
 
@@ -1591,15 +1611,26 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     console.log(`   Duration: ${videoDuration}s`);
 
     // Build detailed prompt for ChatGPT video analysis
-    const deepAnalysisPrompt = buildDeepAnalysisPrompt(
-      analysis,
-      {
-        wearing: typeof wearingImage === 'string' ? wearingImage : wearingImage.url,
-        holding: typeof holdingImage === 'string' ? holdingImage : holdingImage.url,
-        product: productImage
-      },
-      { videoDuration, voiceGender, voicePace, productFocus }
-    );
+    // 💫 Use Vietnamese prompts if language='vi'
+    let deepAnalysisPrompt;
+    if (language === 'vi') {
+      console.log(`\n📝 Using VIETNAMESE deep analysis prompt`);
+      deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
+        productFocus,
+        { videoDuration, voiceGender, voicePace }
+      );
+    } else {
+      console.log(`\n📝 Using ENGLISH deep analysis prompt`);
+      deepAnalysisPrompt = buildDeepAnalysisPrompt(
+        analysis,
+        {
+          wearing: typeof wearingImage === 'string' ? wearingImage : wearingImage.url,
+          holding: typeof holdingImage === 'string' ? holdingImage : holdingImage.url,
+          product: productImage
+        },
+        { videoDuration, voiceGender, voicePace, productFocus }
+      );
+    }
 
     // 💫 NEW: Log the prompt being sent to ChatGPT
     console.log(`\n📤 CHATGPT PROMPT BEING SENT:`);

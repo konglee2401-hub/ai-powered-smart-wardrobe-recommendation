@@ -814,51 +814,124 @@ class GoogleFlowAutomationService {
   async configureSettings() {
     console.log('⚙️  CONFIGURING SETTINGS\n');
 
-    // First, click settings button to open menu (with retry)
-    console.log('   🔧 Opening settings menu...');
-    let settingsOpened = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      console.log(`   Attempt ${attempt}/3 to click settings button...`);
-      const clicked = await this.clickSettingsButton();
-      if (clicked) {
-        settingsOpened = true;
-        console.log('   ✓ Settings menu opened\n');
-        break;
+    try {
+      // STEP 1: Select Image/Video Tab
+      console.log('   📋 STEP 1: Select Image/Video Tab');
+      if (this.type === 'image') {
+        console.log('   > Selecting IMAGE tab...');
+        const imageTabClicked = await this.page.evaluate(() => {
+          const btn = document.querySelector('button[id*="IMAGE"][role="tab"]');
+          if (btn) {
+            btn.click();
+            return true;
+          }
+          return false;
+        });
+        if (!imageTabClicked) {
+          console.warn('   ⚠️  IMAGE tab click may have failed, continuing...');
+        } else {
+          console.log('   ✓ IMAGE tab selected');
+        }
+      } else {
+        console.log('   > Selecting VIDEO tab...');
+        const videoTabClicked = await this.page.evaluate(() => {
+          const btn = document.querySelector('button[id*="VIDEO"][role="tab"]');
+          if (btn) {
+            btn.click();
+            return true;
+          }
+          return false;
+        });
+        if (!videoTabClicked) {
+          console.warn('   ⚠️  VIDEO tab click may have failed, continuing...');
+        } else {
+          console.log('   ✓ VIDEO tab selected');
+        }
       }
-      if (attempt < 3) {
-        console.log('   ⏳ Settings button click failed, retrying in 800ms...');
-        await this.page.waitForTimeout(800);
+      await this.page.waitForTimeout(800);
+
+      // STEP 2: Select Aspect Ratio (Portrait 9:16 for TikTok)
+      console.log('\n   📐 STEP 2: Select Aspect Ratio');
+      const isVertical = this.options.aspectRatio.includes('9:16');
+      const targetRatio = isVertical ? 'PORTRAIT' : 'LANDSCAPE';
+      console.log(`   > Selecting ${targetRatio} (${this.options.aspectRatio})...`);
+      
+      const aspectRatioSelected = await this.page.evaluate((target) => {
+        const btn = document.querySelector(`button[id*="${target}"][role="tab"]`);
+        if (btn) {
+          btn.click();
+          return true;
+        }
+        return false;
+      }, targetRatio);
+      
+      if (!aspectRatioSelected) {
+        console.warn(`   ⚠️  ${targetRatio} selection may have failed, continuing...`);
+      } else {
+        console.log(`   ✓ ${targetRatio} selected`);
       }
+      await this.page.waitForTimeout(800);
+
+      // STEP 3: Select Image/Video Count
+      console.log('\n   🔢 STEP 3: Select Count');
+      const count = this.type === 'image' ? this.options.imageCount : this.options.videoCount;
+      console.log(`   > Selecting x${count}...`);
+      
+      const countSelected = await this.page.evaluate((targetCount) => {
+        // Look for button with text like "x1", "x2", "x3", "x4"
+        const buttons = document.querySelectorAll('button[role="tab"]');
+        for (const btn of buttons) {
+          if (btn.textContent.trim() === `x${targetCount}`) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      }, count);
+      
+      if (!countSelected) {
+        console.warn(`   ⚠️  x${count} selection may have failed, continuing...`);
+      } else {
+        console.log(`   ✓ x${count} selected`);
+      }
+      await this.page.waitForTimeout(800);
+
+      // STEP 4: Select Model
+      if (this.type === 'image') {
+        console.log('\n   🤖 STEP 4: Select Model');
+        const targetModel = this.options.model || 'Nano Banana Pro';
+        console.log(`   > Selecting ${targetModel}...`);
+        
+        const modelSelected = await this.page.evaluate((model) => {
+          // The model button has multiple descendant elements, search for text content
+          const buttons = document.querySelectorAll('button[aria-haspopup="menu"], button[aria-expanded]');
+          
+          for (const btn of buttons) {
+            const text = btn.textContent || '';
+            if (text.includes('Banana') || text.includes(model)) {
+              btn.click();
+              return true;
+            }
+          }
+          return false;
+        }, targetModel);
+        
+        if (!modelSelected) {
+          console.log(`   ℹ️  Model selection not performed (may already be set), continuing...`);
+        } else {
+          console.log(`   ✓ ${targetModel} selected`);
+          await this.page.waitForTimeout(500);
+        }
+      }
+
+      console.log('\n   ✅ Settings configuration complete\n');
+      return true;
+
+    } catch (error) {
+      console.error('   ❌ Error configuring settings:', error.message);
+      console.warn('   ⚠️  Continuing with current settings...');
+      return false;
     }
-
-    if (!settingsOpened) {
-      console.log('   ❌ CRITICAL: Could not open settings menu after 3 attempts!');
-      throw new Error('Failed to open settings menu');
-    }
-
-    // Select Image or Video tab based on type
-    if (this.type === 'image') {
-      console.log('   📸 Ensuring IMAGE mode is selected...');
-      await this.selectTab('Image');
-    } else {
-      console.log('   🎬 Ensuring VIDEO mode is selected...');
-      await this.selectTab('Video');
-    }
-    await this.page.waitForTimeout(500);
-
-    const isVertical = this.options.aspectRatio.includes('9:16');
-    const orientationLabel = isVertical ? 'Dọc' : 'Ngang';
-    console.log(`   📱 Selecting ${orientationLabel} (${this.options.aspectRatio})...`);
-    await this.selectTab(orientationLabel);
-    await this.page.waitForTimeout(this.options.timeouts.tabSwitch);
-
-    const count = this.type === 'image' ? this.options.imageCount : this.options.videoCount;
-    const quantityLabel = `x${count}`;
-    console.log(`   📊 Selecting quantity: ${quantityLabel}...`);
-    await this.selectTab(quantityLabel);
-    await this.page.waitForTimeout(this.options.timeouts.tabSwitch);
-
-    console.log('   ✓ Settings configured\n');
   }
 
   async clickSettingsButton() {
