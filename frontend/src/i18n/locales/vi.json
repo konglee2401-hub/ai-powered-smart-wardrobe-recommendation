@@ -254,6 +254,17 @@
     "missingImages": "⚠️ Thiếu {{count}} ảnh bắt buộc",
     "allImagesUploaded": "✅ Tất cả ảnh bắt buộc đã tải lên"
   },
+  "videoProduction": {
+    "title": "Hệ thống Sản xuất Video",
+    "subtitle": "Quản lý tạo video tự động và phân phối",
+    "overview": "Tổng quan",
+    "createMashup": "Tạo Video Mashup",
+    "processing": "Đang xử lý",
+    "queueScanner": "Quét Hàng đợi",
+    "queue": "Hàng đợi",
+    "accounts": "Tài khoản",
+    "mediaLibrary": "Thư viện Media"
+  },
   "common": {
     "required": "Bắt buộc",
     "optional": "Tùy chọn",

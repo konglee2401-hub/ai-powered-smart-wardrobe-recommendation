@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import { SystemStatus } from '@/components/VideoProduction/SystemStatus';
 import { QueueStatus } from '@/components/VideoProduction/QueueStatus';
@@ -16,6 +17,7 @@ import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
 
 export function VideoProduction() {
+  const { t } = useTranslation();
   const {
     getAllAccounts,
     getAccountStats,
@@ -83,21 +85,21 @@ export function VideoProduction() {
   };
 
   const tabButtons = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'creator', label: 'Create Mashup', icon: Video },
-    { id: 'processing', label: 'Processing', icon: Play },
-    { id: 'scanner', label: 'Queue Scanner', icon: Zap },
-    { id: 'queue', label: 'Queue', icon: Zap2 },
-    { id: 'accounts', label: 'Accounts', icon: Users },
-    { id: 'media', label: 'Media Library', icon: Library },
+    { id: 'overview', label: t('videoProduction.overview'), icon: BarChart3 },
+    { id: 'creator', label: t('videoProduction.createMashup'), icon: Video },
+    { id: 'processing', label: t('videoProduction.processing'), icon: Play },
+    { id: 'scanner', label: t('videoProduction.queueScanner'), icon: Zap },
+    { id: 'queue', label: t('videoProduction.queue'), icon: Zap2 },
+    { id: 'accounts', label: t('videoProduction.accounts'), icon: Users },
+    { id: 'media', label: t('videoProduction.mediaLibrary'), icon: Library },
   ];
 
   return (
     <div className="w-full h-full bg-gray-900 text-white p-6 overflow-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Video Production System</h1>
-        <p className="text-gray-400">Manage automated video generation and distribution</p>
+        <h1 className="text-3xl font-bold mb-2">{t('videoProduction.title')}</h1>
+        <p className="text-gray-400">{t('videoProduction.subtitle')}</p>
       </div>
 
       {/* Tabs */}

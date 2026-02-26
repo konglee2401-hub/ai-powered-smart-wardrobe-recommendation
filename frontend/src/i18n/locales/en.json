@@ -254,6 +254,17 @@
     "missingImages": "⚠️ Missing {{count}} required image(s)",
     "allImagesUploaded": "✅ All required images uploaded"
   },
+  "videoProduction": {
+    "title": "Video Production System",
+    "subtitle": "Manage automated video generation and distribution",
+    "overview": "Overview",
+    "createMashup": "Create Mashup",
+    "processing": "Processing",
+    "queueScanner": "Queue Scanner",
+    "queue": "Queue",
+    "accounts": "Accounts",
+    "mediaLibrary": "Media Library"
+  },
   "common": {
     "required": "Required",
     "optional": "Optional",
