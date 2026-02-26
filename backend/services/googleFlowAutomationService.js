@@ -1129,78 +1129,74 @@ class GoogleFlowAutomationService {
     }
   }
 
-  async downloadMediaFromEditPage() {
+  async downloadItemViaContextMenu(newHref) {
     /**
-     * Download media (image or video) from edit page
-     * Image: select 1K Original Size
-     * Video: select 1080p Upscaled
+     * Download generated item by right-clicking and selecting download option
+     * Item: Image or Video based on type
      */
     const mediaType = this.type === 'image' ? 'image' : 'video';
-    const qualityLabel = this.type === 'image' ? '1K' : '1080p';
     
-    console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()}\\n`);
-    console.log('   Opening download menu...');
+    console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
 
-    // Click the download button
-    const downloadClicked = await this.page.evaluate(() => {
-      const buttons = document.querySelectorAll('button');
-      for (const btn of buttons) {
-        const icon = btn.querySelector('[font-size="1.125rem"]');
-        if (icon && icon.textContent.includes('download')) {
-          btn.click();
-          return true;
+    try {
+      // Find the item with this href and right-click it
+      const linkData = await this.page.evaluate((targetHref) => {
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        
+        for (const link of links) {
+          const href = link.getAttribute('href');
+          if (href === targetHref) {
+            const rect = link.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
         }
+        
+        return { found: false };
+      }, newHref);
+
+      if (!linkData.found) {
+        console.warn('   ⚠️  Item with href not found for download\n');
+        return false;
       }
+
+      console.log(`   🖱️  Right-clicking on ${mediaType}...`);
+      await this.page.mouse.click(linkData.x, linkData.y, { button: 'right' });
+      await this.page.waitForTimeout(800);
+
+      // Find and click download option from context menu
+      const downloadClicked = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button[role="menuitem"]');
+        
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          // Look for download / tải xuống button
+          if (text.includes('tải') || text.includes('download')) {
+            btn.click();
+            return true;
+          }
+        }
+        
+        return false;
+      });
+
+      if (!downloadClicked) {
+        console.warn('   ⚠️  Download option not found in context menu\n');
+        return false;
+      }
+
+      console.log('   ✓ Download started\n');
+      await this.page.waitForTimeout(2000);
+      
+      return true;
+
+    } catch (error) {
+      console.error(`   ❌ Error downloading: ${error.message}\n`);
       return false;
-    });
-
-    if (!downloadClicked) {
-      throw new Error('Download button not found');
     }
-
-    console.log('   ✓ Download menu opened');
-    await this.page.waitForTimeout(800);
-
-    // Click appropriate quality option
-    if (this.type === 'image') {
-      console.log('   Selecting 1K (original size)...');
-      const selected1K = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('[role="menuitem"]');
-        for (const btn of buttons) {
-          if (btn.textContent.includes('1K') && btn.textContent.includes('Original')) {
-            btn.click();
-            return true;
-          }
-        }
-        return false;
-      });
-
-      if (!selected1K) {
-        throw new Error('Could not select 1K download option');
-      }
-      console.log('   ✓ 1K selected');
-    } else {
-      console.log('   Selecting 1080p (upscaled)...');
-      const selected1080p = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('[role="menuitem"]');
-        for (const btn of buttons) {
-          if (btn.textContent.includes('1080p') && !btn.hasAttribute('aria-disabled')) {
-            btn.click();
-            return true;
-          }
-        }
-        return false;
-      });
-
-      if (!selected1080p) {
-        throw new Error('Could not select 1080p download option');
-      }
-      console.log('   ✓ 1080p selected');
-    }
-    
-    // Wait for download to complete
-    await this.page.waitForTimeout(3000);
-    console.log('   ✓ Download initiated\\n');
   }
 
   async close() {
@@ -1333,32 +1329,34 @@ class GoogleFlowAutomationService {
 
           console.log('✅ Generation complete\n');
 
-          // Get final image URL
-          const imageUrl = await this.page.evaluate(() => {
-            const img = document.querySelector('[data-testid="virtuoso-item-list"] [data-index="1"] img');
-            return img ? img.src : null;
+          // Get href of newly generated item for download
+          console.log('📎 Finding generated item href...');
+          const generatedHref = await this.page.evaluate(() => {
+            // Find the first <a> tag in the list (which should be the newest)
+            const link = document.querySelector('[data-testid="virtuoso-item-list"] a[href]');
+            return link ? link.getAttribute('href') : null;
           });
 
-          if (!imageUrl) {
-            throw new Error('Could not capture image URL');
+          if (!generatedHref) {
+            throw new Error('Could not find generated item href');
           }
 
-          // Download image to local file
-          console.log('📥 Downloading generated image...');
-          const downloadedPath = await this.downloadImageUrl(imageUrl, i + 1);
-          console.log(`✓ Downloaded to: ${downloadedPath}\n`);
+          console.log(`✓ Found href: ${generatedHref}\n`);
 
+          // Download via context menu right-click
+          const downloadSuccess = await this.downloadItemViaContextMenu(generatedHref);
+          
           // Store result
           results.push({
             success: true,
             imageNumber: i + 1,
-            imageUrl: imageUrl,
-            screenshotPath: downloadedPath,
+            href: generatedHref,
+            downloadSuccess: downloadSuccess,
             downloadedAt: new Date().toISOString(),
             prompt: prompt
           });
 
-          console.log(`✅ Image ${i + 1} generated and downloaded\n`);
+          console.log(`✅ ${this.type === 'image' ? 'Image' : 'Video'} ${i + 1} generated and downloaded\n`);
 
           // Wait before next generation
           if (i < prompts.length - 1) {
@@ -1413,37 +1411,6 @@ class GoogleFlowAutomationService {
         totalGenerated: results.filter(r => r.success).length,
         totalRequested: prompts.length
       };
-    }
-  }
-
-  /**
-   * Download image from URL and save to local file
-   */
-  async downloadImageUrl(imageUrl, imageIndex) {
-    try {
-      const axiosModule = await import('axios');
-      const axios = axiosModule.default;
-      
-      // Create filename
-      const filename = `generated-image-${imageIndex}-${Date.now()}.png`;
-      const filepath = path.join(this.options.outputDir, filename);
-
-      // Download image
-      const response = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 30000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-
-      // Write to file
-      fs.writeFileSync(filepath, response.data);
-      console.log(`   Saved to: ${filepath}`);
-
-      return filepath;
-    } catch (error) {
-      throw new Error(`Failed to download image: ${error.message}`);
     }
   }
 }
