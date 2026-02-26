@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { api, unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 import promptTemplateService from '../services/promptTemplateService';
+import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
 import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
@@ -136,13 +137,51 @@ const mapUseCaseToTemplateUseCase = (useCase) => {
 };
 
 /**
- * Generate image prompt using templates
- * Falls back to hardcoded prompt if templates not available
+ * Generate image prompt using language-aware service
+ * Supports Vietnamese and English based on current UI language
+ * Falls back to template service if language-aware fails
  */
-async function generateImagePromptFromTemplate(useCase, productFocus, recommendedOptions, sessionId, addLog) {
+async function generateImagePromptFromTemplate(useCase, productFocus, recommendedOptions, language, sessionId, addLog) {
   try {
-    addLog(sessionId, 'Loading image template...');
+    addLog(sessionId, `📝 Building prompt in ${language === 'vi' ? 'Vietnamese' : 'English'}...`);
     
+    // Try language-aware prompt builder first
+    const analysis = {
+      character: {},
+      product: {
+        type: productFocus || 'full outfit',
+        category: 'clothing'
+      }
+    };
+
+    const selectedOptions = {
+      scene: recommendedOptions.scene || 'studio',
+      lighting: recommendedOptions.lighting || 'soft-diffused',
+      mood: recommendedOptions.mood || 'confident',
+      style: recommendedOptions.style || 'minimalist',
+      colorPalette: recommendedOptions.colorPalette || 'neutral',
+      cameraAngle: recommendedOptions.cameraAngle || 'eye-level',
+    };
+
+    try {
+      const response = await buildLanguageAwarePrompt({
+        analysis,
+        selectedOptions,
+        language: language || 'en',
+        useCase: useCase || 'change-clothes'
+      });
+
+      if (response?.success || response?.positive) {
+        const prompt = response.positive || response.data?.positive || '';
+        addLog(sessionId, `✓ Image prompt generated (${language}, ${prompt.length} chars)`);
+        return prompt;
+      }
+    } catch (langError) {
+      console.warn('Language-aware prompt builder failed, trying template service:', langError);
+      addLog(sessionId, '⚠️  Language-aware builder failed, using template service...');
+    }
+
+    // Fallback to template service
     const templateUseCase = mapUseCaseToTemplateUseCase(useCase);
     const templates = await promptTemplateService.getTemplatesByUseCase(templateUseCase);
     
@@ -464,7 +503,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
 }
 
 export default function OneClickCreatorPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
   // Get translated workflow steps
@@ -1043,11 +1082,12 @@ export default function OneClickCreatorPage() {
         addLog(sessionId, 'Building image prompt...');
 
         try {
-          // Generate image prompt using templates (with fallback)
+          // Generate image prompt using language-aware builder (with fallback to templates)
           const imagePrompt = await generateImagePromptFromTemplate(
             useCase,
             productFocus,
             recommendedOptions,
+            i18n.language || 'en',
             sessionId,
             addLog
           );
