@@ -4,6 +4,8 @@ import React, { useState } from 'react';
  * Negative Prompt Component
  * Allows users to specify what they DON'T want in generated images
  */
+import { useTranslation } from 'react-i18next';
+
 export default function NegativePrompt({ 
   negativePrompt, 
   onNegativePromptChange,

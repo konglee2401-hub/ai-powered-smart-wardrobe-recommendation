@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
 /**
  * VideoHistoryAndAnalytics - Show generation history and analytics dashboard
  */
 function VideoHistoryAndAnalytics({ userId }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('history'); // 'history', 'analytics'
   const [videos, setVideos] = useState([]);
   const [analytics, setAnalytics] = useState(null);
