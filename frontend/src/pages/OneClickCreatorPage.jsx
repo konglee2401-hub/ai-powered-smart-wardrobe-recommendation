@@ -731,7 +731,7 @@ export default function OneClickCreatorPage() {
     productImageBase64,
     recommendedOptions,
     analysisResult,
-    flowId  // 💫 NEW: Accept flowId from caller
+    flowId  // 💫 Accept flowId from caller to ensure session continuity
   ) => {
     try {
       console.log('🎬 Starting Affiliate Video TikTok Flow');
@@ -757,7 +757,7 @@ export default function OneClickCreatorPage() {
         videoProvider: videoProvider || 'google-flow',
         generateVideo: true,
         generateVoiceover: true,
-        flowId,  // 💫 Pass flowId in payload
+        flowId,  // 💫 Pass flowId in payload to maintain session
         options: recommendedOptions || {}
       };
       

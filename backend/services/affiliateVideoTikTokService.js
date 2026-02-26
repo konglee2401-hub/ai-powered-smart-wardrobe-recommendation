@@ -63,7 +63,9 @@ function updateFlowPreview(flowId, updates) {
 
 export async function executeAffiliateVideoTikTokFlow(req, res) {
   const startTime = Date.now();
-  const flowId = `flow-${Date.now()}`;
+  // 🔴 FIX: Accept flowId from request body if provided (for session continuity)
+  // If not provided, generate new flowId
+  const flowId = req.body.flowId || `flow-${Date.now()}`;
   const tempDir = path.join(process.cwd(), 'temp', 'tiktok-flows', flowId);
   
   // Initialize session logging
