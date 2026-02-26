@@ -359,16 +359,16 @@ router.post('/step-2-generate-images', async (req, res) => {
       negativePrompt = ''
     } = req.body;
 
-    // 💡 REUSE: Use ImageGenerationAutomationNew service
-    const imageGenService = new ImageGenerationAutomationNew({
+    // 💡 REUSE: Use GoogleFlowAutomationService for image generation
+    const imageGenService = new GoogleFlowAutomationService({
+      type: 'image',
       aspectRatio,
       imageCount: 2,
       headless: true
     });
 
-    await imageGenService.init();
-    console.log('🌐 Browser initialized for image generation');
-
+    console.log('📝 Building prompts from analysis...');
+    
     // Build prompts from analysis
     const wearingPrompt = affiliateVideoTikTokService.buildWearingPrompt(analysis);
     const holdingPrompt = affiliateVideoTikTokService.buildHoldingPrompt(analysis);
@@ -377,36 +377,32 @@ router.post('/step-2-generate-images', async (req, res) => {
     console.log(`  Wearing: ${wearingPrompt.substring(0, 100)}...`);
     console.log(`  Holding: ${holdingPrompt.substring(0, 100)}...`);
 
-    // Generate wearing image
-    console.log(`🎨 Generating wearing image...`);
-    const wearingResult = await imageGenService.generateImage(
-      wearingPrompt,
-      characterImageBuffer,
-      productImageBuffer
+    // Generate both images using generateMultiple
+    console.log(`🎨 Generating both images in parallel...`);
+    const multiGenResult = await imageGenService.generateMultiple(
+      characterImagePath,
+      productImagePath,
+      [wearingPrompt, holdingPrompt]
     );
+
+    if (!multiGenResult?.success || !multiGenResult?.results || multiGenResult.results.length < 2) {
+      throw new Error(`Image generation failed: ${multiGenResult?.error || 'No results'}`);
+    }
+
+    const wearingResult = multiGenResult.results[0];
+    const holdingResult = multiGenResult.results[1];
 
     if (!wearingResult?.success) {
       throw new Error(`Wearing image generation failed: ${wearingResult?.error}`);
     }
 
-    console.log(`✅ Wearing image generated: ${wearingResult.path}`);
-
-    // Generate holding image
-    console.log(`🎨 Generating holding image...`);
-    const holdingResult = await imageGenService.generateImage(
-      holdingPrompt,
-      characterImageBuffer,
-      productImageBuffer
-    );
+    console.log(`✅ Wearing image generated: ${wearingResult.imageUrl}`);
 
     if (!holdingResult?.success) {
       throw new Error(`Holding image generation failed: ${holdingResult?.error}`);
     }
 
-    console.log(`✅ Holding image generated: ${holdingResult.path}`);
-
-    // Close browser
-    await imageGenService.close();
+    console.log(`✅ Holding image generated: ${holdingResult.imageUrl}`);
 
     const step2Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -414,16 +410,16 @@ router.post('/step-2-generate-images', async (req, res) => {
     flowStates.set(flowId, {
       ...flowState,
       step2: {
-        wearingImagePath: wearingResult.path,
-        holdingImagePath: holdingResult.path,
+        wearingImagePath: wearingResult.screenshotPath || wearingResult.imageUrl,
+        holdingImagePath: holdingResult.screenshotPath || holdingResult.imageUrl,
         duration: parseFloat(step2Duration)
       }
     });
 
     // Log
     await logger.info(`Step 2 image generation complete`, 'step-2-complete', {
-      wearing: wearingResult.path,
-      holding: holdingResult.path,
+      wearing: wearingResult.screenshotPath || wearingResult.imageUrl,
+      holding: holdingResult.screenshotPath || holdingResult.imageUrl,
       duration: parseFloat(step2Duration)
     });
 
@@ -433,8 +429,8 @@ router.post('/step-2-generate-images', async (req, res) => {
       success: true,
       flowId,
       step: 2,
-      wearingImage: wearingResult.path,
-      holdingImage: holdingResult.path,
+      wearingImage: wearingResult.screenshotPath || wearingResult.imageUrl,
+      holdingImage: holdingResult.screenshotPath || holdingResult.imageUrl,
       step_duration: parseFloat(step2Duration)
     });
 

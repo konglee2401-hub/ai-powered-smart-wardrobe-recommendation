@@ -737,10 +737,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     let holdingImageResult = null;
     
     try {
-      // ✅ OPTIMIZED: Use generateMultiple() for efficient component reuse
-      const imageGen = new ImageGenerationAutomationNew({
+      // ✅ OPTIMIZED: Use GoogleFlowAutomationService for efficient component reuse
+      const imageGen = new GoogleFlowAutomationService({
+        type: 'image',
         projectId: 'c9d5fea9-63e5-4d21-ac72-6830091fdbc0',  // Required: navigate to project page
-        imageCount: 1,  // TikTok flow only needs 1 image output
+        imageCount: 2,  // TikTok flow generates 2 images (wearing + holding)
         headless: false
       });
       
