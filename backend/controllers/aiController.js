@@ -15,6 +15,7 @@ import {
 } from '../services/openRouterService.js';
 import { parseAnalysis, generateImagePrompt } from '../services/analysisParser.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
+import PromptOption from '../models/PromptOption.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1116,65 +1117,61 @@ const buildPrompt = async (req, res) => {
   try {
     const { characterAnalysis, productAnalysis, mode, useCase, userSelections, customPrompt, maxLength, language = 'en' } = req.body;
 
-    // Import language-aware builder
-    const { buildLanguageAwarePrompt, buildVietnamesePrompt } = await import('../services/languageAwarePromptBuilder.js');
-
-    // Build prompt based on analysis and selections
-    let prompt = '';
-
+    // If custom prompt provided, use it directly
     if (customPrompt) {
-      prompt = customPrompt;
-    } else {
-      // Build from analysis and selections using language-aware function
-      if (language === 'vi' && (characterAnalysis || userSelections)) {
-        // Use Vietnamese prompt builder
-        const analysis = {
-          character: characterAnalysis || {},
-          product: productAnalysis || {}
-        };
-        const viPrompt = buildVietnamesePrompt(analysis, userSelections, useCase);
-        prompt = viPrompt.positive;
-      } else {
-        // Use English (default)
-        const parts = [];
-
-        if (characterAnalysis) {
-          parts.push(`Character: ${characterAnalysis}`);
+      res.json({
+        success: true,
+        data: {
+          positive: customPrompt,
+          negative: '',
+          language,
+          mode,
+          useCase
         }
-
-        if (productAnalysis) {
-          parts.push(`Product/Clothing: ${productAnalysis}`);
-        }
-
-        if (userSelections) {
-          const selections = [];
-          if (userSelections.scene) selections.push(`Scene: ${userSelections.scene}`);
-          if (userSelections.lighting) selections.push(`Lighting: ${userSelections.lighting}`);
-          if (userSelections.mood) selections.push(`Mood: ${userSelections.mood}`);
-          if (userSelections.style) selections.push(`Style: ${userSelections.style}`);
-          if (userSelections.colorPalette) selections.push(`Color Palette: ${userSelections.colorPalette}`);
-
-          if (selections.length > 0) {
-            parts.push(`Settings: ${selections.join(', ')}`);
-          }
-        }
-
-        prompt = parts.join('\n\n');
-      }
+      });
+      return;
     }
 
+    // Import language-aware builder
+    const { buildLanguageAwarePrompt } = await import('../services/languageAwarePromptBuilder.js');
+
+    // Build prompt using language-aware service
+    const analysis = {
+      character: characterAnalysis || {},
+      product: productAnalysis || {}
+    };
+
+    // Call async buildLanguageAwarePrompt
+    const promptResult = await buildLanguageAwarePrompt(
+      analysis,
+      userSelections || {},
+      language,
+      useCase || 'change-clothes'
+    );
+
+    // Ensure we have positive and negative prompts
+    let positive = promptResult?.positive || '';
+    let negative = promptResult?.negative || '';
+    
     // Truncate if needed
-    if (maxLength && prompt.length > maxLength) {
-      prompt = prompt.substring(0, maxLength) + '...';
+    if (maxLength) {
+      if (positive.length > maxLength) {
+        positive = positive.substring(0, maxLength) + '...';
+      }
+      if (negative.length > maxLength) {
+        negative = negative.substring(0, maxLength) + '...';
+      }
     }
 
     res.json({
       success: true,
       data: {
-        prompt,
+        positive,
+        negative,
+        language,
         mode,
         useCase,
-        length: prompt.length
+        length: positive.length
       }
     });
 
@@ -1197,6 +1194,53 @@ const deleteOption = async (req, res) => {
 };
 
 // Export
+/**
+ * Get prompt options with language support
+ * Returns options in specified language (EN/VI)
+ */
+const getPromptOptionsTranslated = async (req, res) => {
+  try {
+    const { category, language = 'en' } = req.query;
+
+    // Validate category
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category parameter required'
+      });
+    }
+
+    // Fetch options from DB
+    const options = await PromptOption.find({ category }).lean();
+
+    if (!options || options.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Format response based on language
+    const formatted = options.map(opt => ({
+      value: opt.value,
+      label: language === 'vi' && opt.labelVi ? opt.labelVi : opt.label,
+      description: language === 'vi' && opt.descriptionVi ? opt.descriptionVi : opt.description,
+      category: opt.category
+    }));
+
+    res.json({
+      success: true,
+      data: formatted
+    });
+  } catch (error) {
+    console.error('Error fetching translated options:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 export {
   analyzeCharacterImage,
   analyzeProductImage,
@@ -1209,6 +1253,7 @@ export {
   getOptionsByCategory,
   exportOptions,
   buildPrompt,
+  getPromptOptionsTranslated,
   discoverOptions,
   deleteOption,
   VISION_PROVIDERS
@@ -1227,6 +1272,7 @@ export default {
   getOptionsByCategory,
   exportOptions,
   buildPrompt,
+  getPromptOptionsTranslated,
   discoverOptions,
   deleteOption,
   VISION_PROVIDERS

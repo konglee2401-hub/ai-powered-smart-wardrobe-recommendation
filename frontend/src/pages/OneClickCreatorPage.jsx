@@ -27,20 +27,21 @@ import {
 } from '../constants/videoGeneration';
 
 // Constants - Use cases and focus options from ImageGenerationPage
+// Note: Labels will be set dynamically using translations in the component
 const USE_CASES = [
-  { value: 'change-clothes', label: 'Change Clothes', description: 'Mặc sản phẩm lên người mẫu' },
-  { value: 'character-holding-product', label: 'Character Holding Product', description: 'Nhân vật cầm sản phẩm trên tay' },
-  { value: 'affiliate-video-tiktok', label: 'Affiliate Video TikTok', description: 'Video Affiliate cho TikTok 9:16 (2 ảnh + Voiceover + Hashtag)' },
-  { value: 'ecommerce-product', label: 'E-commerce', description: 'Ảnh sản phẩm thương mại' },
-  { value: 'social-media', label: 'Social Media', description: 'Bài đăng mạng xã hội' },
-  { value: 'fashion-editorial', label: 'Editorial', description: 'Bài báo thời trang chuyên nghiệp' },
+  { value: 'change-clothes', labelKey: 'oneClickCreator.scenarios.changeClothes', description: 'Mặc sản phẩm lên người mẫu' },
+  { value: 'character-holding-product', labelKey: 'oneClickCreator.scenarios.characterHoldingProduct', description: 'Nhân vật cầm sản phẩm trên tay' },
+  { value: 'affiliate-video-tiktok', labelKey: 'oneClickCreator.scenarios.affiliateVideoTikTok', description: 'Video Affiliate cho TikTok 9:16 (2 ảnh + Voiceover + Hashtag)' },
+  { value: 'ecommerce-product', labelKey: 'oneClickCreator.scenarios.ecommerceProduct', description: 'Ảnh sản phẩm thương mại' },
+  { value: 'social-media', labelKey: 'oneClickCreator.scenarios.socialMedia', description: 'Bài đăng mạng xã hội' },
+  { value: 'fashion-editorial', labelKey: 'oneClickCreator.scenarios.fashionEditorial', description: 'Bài báo thời trang chuyên nghiệp' },
 ];
 
 const FOCUS_OPTIONS = [
-  { value: 'full-outfit', label: 'Full Outfit', description: 'Toàn bộ trang phục' },
-  { value: 'top', label: 'Top', description: 'Áo' },
-  { value: 'bottom', label: 'Bottom', description: 'Quần/váy' },
-  { value: 'shoes', label: 'Shoes', description: 'Giày' },
+  { value: 'full-outfit', labelKey: 'oneClickCreator.focusOptions.fullOutfit', description: 'Toàn bộ trang phục' },
+  { value: 'top', labelKey: 'oneClickCreator.focusOptions.top', description: 'Áo' },
+  { value: 'bottom', labelKey: 'oneClickCreator.focusOptions.bottom', description: 'Quần/váy' },
+  { value: 'shoes', labelKey: 'oneClickCreator.focusOptions.shoes', description: 'Giày' },
 ];
 
 const IMAGE_PROVIDERS = [
@@ -61,8 +62,8 @@ const ASPECT_RATIOS = [
 // 📊 Image Generation Configuration
 const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per session
 
-// Workflow steps
-const WORKFLOW_STEPS = [
+// Workflow steps - will be set dynamically in component using translations
+let WORKFLOW_STEPS = [
   { id: 'analyze', name: 'Analyze', icon: Sparkles },
   { id: 'apply-recommendations', name: 'Apply Recommendations', icon: Wand2 },
   { id: 'generate-image', name: 'Generate Image', icon: ImageIcon },
@@ -72,15 +73,15 @@ const WORKFLOW_STEPS = [
 // TikTok Affiliate Specific Constants
 const TIKTOK_DURATIONS = [10, 15, 20, 30, 45, 60];
 const VOICE_OPTIONS = [
-  { label: 'Female - Slow', value: 'female-slow' },
-  { label: 'Female - Normal', value: 'female-normal' },
-  { label: 'Female - Fast', value: 'female-fast' },
-  { label: 'Male - Slow', value: 'male-slow' },
-  { label: 'Male - Normal', value: 'male-normal' },
-  { label: 'Male - Fast', value: 'male-fast' },
+  { labelKey: 'oneClickCreator.voiceOptions.femaleSlow', value: 'female-slow' },
+  { labelKey: 'oneClickCreator.voiceOptions.femaleNormal', value: 'female-normal' },
+  { labelKey: 'oneClickCreator.voiceOptions.femaleFast', value: 'female-fast' },
+  { labelKey: 'oneClickCreator.voiceOptions.maleSlow', value: 'male-slow' },
+  { labelKey: 'oneClickCreator.voiceOptions.maleNormal', value: 'male-normal' },
+  { labelKey: 'oneClickCreator.voiceOptions.maleFast', value: 'male-fast' },
 ];
 
-const WORKFLOW_STEPS_AFFILIATE_TIKTOK = [
+let WORKFLOW_STEPS_AFFILIATE_TIKTOK = [
   { id: 'analyze', name: 'Analyze', icon: Sparkles },
   { id: 'apply-recommendations', name: 'Apply Recommendations', icon: Wand2 },
   { id: 'tiktok-options', name: 'Select Settings', icon: Volume2 },
@@ -226,9 +227,10 @@ async function generateVideoPromptFromTemplate(useCase, productFocus, recommende
 }
 
 /**
- * Helper: Get workflow steps based on use case
+ * Helper: Get workflow steps based on use case (used in SessionRow)
+ * Note: The main component uses a local function that applies translations
  */
-const getWorkflowSteps = (useCase) => {
+const getWorkflowStepsRaw = (useCase) => {
   if (useCase === 'affiliate-video-tiktok') {
     return WORKFLOW_STEPS_AFFILIATE_TIKTOK;
   }
@@ -238,7 +240,7 @@ const getWorkflowSteps = (useCase) => {
 
 
 // Session component
-function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
+function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
   const [expandedLogs, setExpandedLogs] = useState(false);
   
   const getStepStatus = (stepId) => {
@@ -268,7 +270,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-semibold text-gray-200">
-          Session #{session.id}{session.completed && ' ✓'}
+          {t('oneClickCreator.session')} #{session.id}{session.completed && ' ✓'}
           {session.error && ' ✗'}
         </h4>
         {session.error && (
@@ -299,7 +301,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
       {/* Image Preview */}
       {session.image && (
         <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">Generated Image</p>
+          <p className="text-xs text-gray-400 mb-2">{t('oneClickCreator.generatedImage')}</p>
           <img src={session.image} alt="Generated" className="w-full h-32 object-cover rounded" />
         </div>
       )}
@@ -307,20 +309,20 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
       {/* Analysis Preview (Character, Product, Scripts, Voiceover) */}
       {(session.analysis || session.characterAnalysis || session.scripts) && (
         <div className="mb-4 bg-gray-900/30 rounded p-3 border border-gray-700">
-          <div className="text-xs text-gray-400 mb-2 font-semibold">📊 Analysis & Scripts</div>
+          <div className="text-xs text-gray-400 mb-2 font-semibold">📊 {t('oneClickCreator.analysisScripts')}</div>
           
           {/* Character & Product Info */}
           {session.analysis && (
             <div className="space-y-2 mb-3 text-xs">
               {session.analysis.character && (
                 <div>
-                  <span className="text-gray-500">👤 Character:</span>
+                  <span className="text-gray-500">👤 {t('oneClickCreator.characterLabel')}:</span>
                   <span className="text-gray-300 ml-2">{session.analysis.character.age}, {session.analysis.character.gender}, {session.analysis.character.style}</span>
                 </div>
               )}
               {session.analysis.product && (
                 <div>
-                  <span className="text-gray-500">📦 Product:</span>
+                  <span className="text-gray-500">📦 {t('oneClickCreator.productLabel')}:</span>
                   <span className="text-gray-300 ml-2">{session.analysis.product.garment_type} - {session.analysis.product.primary_color}</span>
                 </div>
               )}
@@ -330,7 +332,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
           {/* Video Scripts */}
           {session.analysis?.videoScripts && session.analysis.videoScripts.length > 0 && (
             <div className="mb-2">
-              <div className="text-gray-500 text-xs mb-1">🎬 Video Segments:</div>
+              <div className="text-gray-500 text-xs mb-1">🎬 {t('oneClickCreator.videoSegments')}:</div>
               <div className="space-y-1">
                 {session.analysis.videoScripts.slice(0, 3).map((seg, idx) => (
                   <div key={idx} className="text-gray-400 text-xs truncate">
@@ -338,7 +340,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
                   </div>
                 ))}
                 {session.analysis.videoScripts.length > 3 && (
-                  <div className="text-gray-500 text-xs italic">... +{session.analysis.videoScripts.length - 3} more</div>
+                  <div className="text-gray-500 text-xs italic">... +{session.analysis.videoScripts.length - 3} {t('oneClickCreator.more')}</div>
                 )}
               </div>
             </div>
@@ -347,7 +349,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
           {/* Voiceover Preview */}
           {session.analysis?.voiceoverScript && (
             <div className="mb-2">
-              <div className="text-gray-500 text-xs mb-1">🎙️ Voiceover:</div>
+              <div className="text-gray-500 text-xs mb-1">🎙️ {t('oneClickCreator.voiceover')}:</div>
               <div className="text-gray-400 text-xs line-clamp-2">"{session.analysis.voiceoverScript.substring(0, 100)}..."</div>
             </div>
           )}
@@ -355,7 +357,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
           {/* Hashtags */}
           {session.analysis?.hashtags && session.analysis.hashtags.length > 0 && (
             <div>
-              <div className="text-gray-500 text-xs mb-1">#️⃣ Hashtags:</div>
+              <div className="text-gray-500 text-xs mb-1">#️⃣ {t('oneClickCreator.hashtags')}:</div>
               <div className="flex flex-wrap gap-1">
                 {session.analysis.hashtags.slice(0, 5).map((tag, idx) => (
                   <span key={idx} className="text-gray-400 text-xs bg-gray-800 px-2 py-0.5 rounded">#{tag}</span>
@@ -372,7 +374,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
       {/* Step 2 Preview Images (from polling) */}
       {session.step2Images && (
         <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">📸 Step 2 Preview Images</p>
+          <p className="text-xs text-gray-400 mb-2">📸 {t('oneClickCreator.step2PreviewImages')}</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-gray-900/50 rounded overflow-hidden">
               <img 
@@ -380,7 +382,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
                 alt="Wearing" 
                 className="w-full h-32 object-cover"
               />
-              <p className="text-xs text-gray-500 text-center py-1">Wearing</p>
+              <p className="text-xs text-gray-500 text-center py-1">{t('oneClickCreator.wearing')}</p>
             </div>
             <div className="bg-gray-900/50 rounded overflow-hidden">
               <img 
@@ -388,7 +390,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
                 alt="Holding" 
                 className="w-full h-32 object-cover"
               />
-              <p className="text-xs text-gray-500 text-center py-1">Holding</p>
+              <p className="text-xs text-gray-500 text-center py-1">{t('oneClickCreator.holding')}</p>
             </div>
           </div>
         </div>
@@ -398,7 +400,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
       {session.videos?.length > 0 && (
         <div className="mb-4">
           <p className="text-xs text-gray-400 mb-2">
-            Generated Videos ({session.videos.filter(v => v).length}/{session.videosCount})
+            {t('oneClickCreator.generatedVideos')} ({session.videos.filter(v => v).length}/{session.videosCount})
           </p>
           <div className="grid grid-cols-3 gap-2">
             {session.videos.map((video, idx) => (
@@ -408,7 +410,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
                 ) : (
                   <div className="text-gray-500 text-xs text-center">
                     <Clock className="w-4 h-4 mx-auto mb-1" />
-                    Pending...
+                    {t('oneClickCreator.pending')}
                   </div>
                 )}
               </div>
@@ -423,7 +425,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
           onClick={() => setExpandedLogs(!expandedLogs)}
           className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
         >
-          <span>Logs ({session.logs?.length || 0})</span>
+          <span>{t('oneClickCreator.logs')} ({session.logs?.length || 0})</span>
           {expandedLogs ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
         {expandedLogs && (
@@ -435,7 +437,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
                 </div>
               ))
             ) : (
-              <p className="text-xs text-gray-600 italic">No logs yet...</p>
+              <p className="text-xs text-gray-600 italic">{t('oneClickCreator.noLogsYet')}</p>
             )}
           </div>
         )}
@@ -448,13 +450,13 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
           className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
         >
           <Database className="w-4 h-4" />
-          View Session Log
+          {t('oneClickCreator.viewSessionLog')}
         </button>
         <button
           onClick={() => setExpandedLogs(false)}
           className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
         >
-          Collapse All
+          {t('oneClickCreator.collapseAll')}
         </button>
       </div>
     </div>
@@ -464,6 +466,33 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
 export default function OneClickCreatorPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // Get translated workflow steps
+  const getWorkflowSteps = () => {
+    const workflowMap = {
+      'analyze': 'analyze',
+      'apply-recommendations': 'applyRecommendations',
+      'generate-image': 'generateImage',
+      'generate-videos': 'generateVideos',
+      'tiktok-options': 'selectSettings',
+      'generate-images-parallel': 'generate2Images',
+      'deep-analysis': 'deepAnalysis',
+      'generate-video': 'generateVideo',
+      'generate-voiceover': 'generateVoiceover',
+      'finalize': 'finalizePackage'
+    };
+    
+    if (useCase === 'affiliate-video-tiktok') {
+      return WORKFLOW_STEPS_AFFILIATE_TIKTOK.map(step => ({
+        ...step,
+        name: t(`oneClickCreator.workflow.${workflowMap[step.id] || step.id}`) || step.name
+      }));
+    }
+    return WORKFLOW_STEPS.map(step => ({
+      ...step,
+      name: t(`oneClickCreator.workflow.${workflowMap[step.id] || step.id}`) || step.name
+    }));
+  };
 
   // Modal States
   const [showSessionLogModal, setShowSessionLogModal] = useState(false);
@@ -561,8 +590,8 @@ export default function OneClickCreatorPage() {
     const maxDuration = getMaxDurationForProvider(videoProvider);
     const videosCount = calculateVideoCount(videoProvider, 120);
     
-    // Get workflow steps based on use case
-    const workflowSteps = getWorkflowSteps(useCase);
+    // Get workflow steps based on use case (using raw version without translation for session init)
+    const workflowSteps = useCase === 'affiliate-video-tiktok' ? WORKFLOW_STEPS_AFFILIATE_TIKTOK : WORKFLOW_STEPS;
     
     return {
       id,
@@ -813,7 +842,7 @@ export default function OneClickCreatorPage() {
   // Main generation flow
   const handleOneClickGeneration = async () => {
     if (!characterImage || !productImage) {
-      alert('Please upload both images first');
+      alert(t('oneClickCreator.uploadBothImagesFirst'));
       return;
     }
 
@@ -1210,8 +1239,8 @@ export default function OneClickCreatorPage() {
           <div className="flex items-center gap-3">
             <Sparkles className="w-6 h-6 text-amber-400" />
             <div>
-              <h1 className="text-2xl font-bold">1-Click Creator</h1>
-              <p className="text-sm text-gray-400">Step-by-step: Analyze → Recommend → Generate</p>
+              <h1 className="text-2xl font-bold">{t('oneClickCreator.title')}</h1>
+              <p className="text-sm text-gray-400">{t('oneClickCreator.subtitle')}</p>
             </div>
           </div>
           <button
@@ -1231,7 +1260,7 @@ export default function OneClickCreatorPage() {
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <Target className="w-4 h-4" />
-                Use Case
+                {t('oneClickCreator.useCase')}
               </h3>
               <select
                 value={useCase}
@@ -1240,7 +1269,7 @@ export default function OneClickCreatorPage() {
                 className="w-full px-3 py-2 rounded bg-gray-700 text-gray-200 text-sm border border-gray-600 focus:border-amber-500 outline-none disabled:opacity-50"
               >
                 {USE_CASES.map(uc => (
-                  <option key={uc.value} value={uc.value}>{uc.label}</option>
+                  <option key={uc.value} value={uc.value}>{t(uc.labelKey)}</option>
                 ))}
               </select>
             </div>
@@ -1249,7 +1278,7 @@ export default function OneClickCreatorPage() {
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                Product Focus
+                {t('oneClickCreator.productFocus')}
               </h3>
               <select
                 value={productFocus}
@@ -1258,7 +1287,7 @@ export default function OneClickCreatorPage() {
                 className="w-full px-3 py-2 rounded bg-gray-700 text-gray-200 text-sm border border-gray-600 focus:border-amber-500 outline-none disabled:opacity-50"
               >
                 {FOCUS_OPTIONS.map(fo => (
-                  <option key={fo.value} value={fo.value}>{fo.label}</option>
+                  <option key={fo.value} value={fo.value}>{t(fo.labelKey)}</option>
                 ))}
               </select>
             </div>
@@ -1267,10 +1296,10 @@ export default function OneClickCreatorPage() {
             <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
-                Analysis (Auto)
+                {t('oneClickCreator.analysisAuto')}
               </h3>
               <p className="text-xs text-blue-200">
-                🤖 Always uses <span className="font-bold">Grok.com</span> for image analysis
+                🤖 {t('oneClickCreator.analysisProvider')}
               </p>
             </div>
 
@@ -1278,7 +1307,7 @@ export default function OneClickCreatorPage() {
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <ImageIcon className="w-4 h-4" />
-                Image Provider
+                {t('oneClickCreator.imageProvider')}
               </h3>
               <div className="space-y-2">
                 {IMAGE_PROVIDERS.map(p => (
@@ -1302,7 +1331,7 @@ export default function OneClickCreatorPage() {
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <Video className="w-4 h-4" />
-                Video Provider
+                {t('oneClickCreator.videoProvider')}
               </h3>
               <div className="space-y-2">
                 {VIDEO_PROVIDERS.map(p => (
@@ -1324,7 +1353,7 @@ export default function OneClickCreatorPage() {
 
             {/* Quantity */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">Quantity (Sessions)</h3>
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.quantity')}</h3>
               <div className="grid grid-cols-5 gap-1">
                 {[1, 2, 3, 4, 5].map(q => (
                   <button
@@ -1345,7 +1374,7 @@ export default function OneClickCreatorPage() {
 
             {/* Aspect Ratio */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">Aspect Ratio</h3>
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.aspectRatio')}</h3>
               <div className="space-y-2">
                 {ASPECT_RATIOS.map(ar => (
                   <button
@@ -1368,7 +1397,7 @@ export default function OneClickCreatorPage() {
             <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-purple-300 mb-2 flex items-center gap-2">
                 <Video className="w-4 h-4" />
-                Video Generation (Auto)
+                {t('oneClickCreator.videoGenerationAuto')}
               </h3>
               <p className="text-xs text-purple-200 mb-2">
                 {videoDuration}s video with scenario: <span className="font-bold">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
@@ -1385,7 +1414,7 @@ export default function OneClickCreatorPage() {
                 <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-700/50 rounded-lg p-4">
                   <h3 className="text-sm font-semibold text-blue-300 mb-3 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    Video Duration
+                    {t('oneClickCreator.videoDuration')}
                   </h3>
                   <div className="grid grid-cols-3 gap-2">
                     {TIKTOK_DURATIONS.map(duration => (
@@ -1409,7 +1438,7 @@ export default function OneClickCreatorPage() {
                 <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-700/50 rounded-lg p-4">
                   <h3 className="text-sm font-semibold text-pink-300 mb-3 flex items-center gap-2">
                     <Volume2 className="w-4 h-4" />
-                    Narrator Voice
+                    {t('oneClickCreator.narratorVoice')}
                   </h3>
                   <div className="space-y-1.5">
                     {VOICE_OPTIONS.map(option => (
@@ -1423,7 +1452,7 @@ export default function OneClickCreatorPage() {
                             : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
                         }`}
                       >
-                        {option.label}
+                        {t(option.labelKey)}
                       </button>
                     ))}
                   </div>
@@ -1434,7 +1463,7 @@ export default function OneClickCreatorPage() {
                   <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-green-300 mb-2 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
-                      Suggested Hashtags
+                      {t('oneClickCreator.suggestedHashtags')}
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {suggestedHashtags.map((tag, i) => (
@@ -1457,7 +1486,7 @@ export default function OneClickCreatorPage() {
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <Upload className="w-4 h-4" />
-                Upload Images (Step 1/2)
+                {t('oneClickCreator.uploadImagesStep')}
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 {/* Character Image */}
@@ -1470,14 +1499,14 @@ export default function OneClickCreatorPage() {
                       <>
                         <img src={characterImage} alt="Character" className="w-full h-40 object-cover rounded" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
-                          <p className="text-white text-xs">Click to change</p>
+                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
                       <div className="py-8">
                         <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                        <p className="text-sm text-gray-400">Drag to upload</p>
-                        <p className="text-xs text-gray-500 mt-1">or click below</p>
+                        <p className="text-sm text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
+                        <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
                     <input
@@ -1508,7 +1537,7 @@ export default function OneClickCreatorPage() {
                     className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <ImageIcon className="w-4 h-4" />
-                    Choose from Gallery
+                    {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
 
@@ -1536,14 +1565,14 @@ export default function OneClickCreatorPage() {
                       <>
                         <img src={productImage} alt="Product" className="w-full h-40 object-cover rounded" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
-                          <p className="text-white text-xs">Click to change</p>
+                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
                       <div className="py-8">
                         <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                        <p className="text-sm text-gray-400">Drag to upload</p>
-                        <p className="text-xs text-gray-500 mt-1">or click below</p>
+                        <p className="text-sm text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
+                        <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
                   </div>
@@ -1559,7 +1588,7 @@ export default function OneClickCreatorPage() {
                     className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <ImageIcon className="w-4 h-4" />
-                    Choose from Gallery
+                    {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
               </div>
@@ -1569,11 +1598,11 @@ export default function OneClickCreatorPage() {
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
                 <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                   <Clock className="w-4 h-4" />
-                  Generation Sessions ({sessions.length})
+                  {t('oneClickCreator.generationSessions')} ({sessions.length})
                 </h3>
                 
                 {sessions.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">Sessions will appear here after you start</p>
+                  <p className="text-center text-gray-500 py-8">{t('oneClickCreator.sessionsWillAppear')}</p>
                 ) : (
                   <div className="space-y-4">
                     {sessions.map((session) => (
@@ -1581,6 +1610,7 @@ export default function OneClickCreatorPage() {
                         key={session.id}
                         session={session}
                         isGenerating={isGenerating}
+                        t={t}
                         onViewLog={(flowId) => {
                           setSelectedFlowId(flowId);
                           setShowSessionLogModal(true);
@@ -1601,12 +1631,12 @@ export default function OneClickCreatorPage() {
               {isGenerating ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Generating... ({sessions.filter(s => s.completed).length}/{quantity})
+                  {t('oneClickCreator.generating')} ({sessions.filter(s => s.completed).length}/{quantity})
                 </>
               ) : (
                 <>
                   <Rocket className="w-5 h-5" />
-                  1-Click Generation (Step 2/2)
+                  {t('oneClickCreator.oneClickGeneration')}
                 </>
               )}
             </button>
@@ -1624,7 +1654,7 @@ export default function OneClickCreatorPage() {
         onSelect={(imageData) => {
           if (!imageData || !imageData.url) {
             console.error('❌ Invalid image data from gallery:', imageData);
-            alert('Error: Selected image is missing URL');
+            alert(t('oneClickCreator.imageMissingUrl'));
             return;
           }
           
@@ -1654,7 +1684,7 @@ export default function OneClickCreatorPage() {
               })
               .catch(err => {
                 console.error('❌ Failed to load gallery image:', err);
-                alert(`Failed to load image: ${err.message}`);
+                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
               });
           } else if (galleryPickerFor === 'product') {
             console.log(`⏳ Loading product image from gallery...`);
@@ -1680,14 +1710,14 @@ export default function OneClickCreatorPage() {
               })
               .catch(err => {
                 console.error('❌ Failed to load gallery image:', err);
-                alert(`Failed to load image: ${err.message}`);
+                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
               });
           }
           setShowGalleryPicker(false);
           setGalleryPickerFor(null);
         }}
         assetType="image"
-        title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+        title={galleryPickerFor === 'character' ? t('oneClickCreator.selectCharacterImage') : t('oneClickCreator.selectProductImage')}
       />
 
       {/* Session Log Modal */}

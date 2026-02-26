@@ -1,11 +1,13 @@
 /**
  * Prompt Builder Component
  * View and edit generated prompts before image generation
+ * Supports Vietnamese language prompts
  */
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, Copy, Check, Edit3, Save, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
 
 export default function PromptBuilder({
   analysis,
@@ -18,11 +20,39 @@ export default function PromptBuilder({
   const [showPrompt, setShowPrompt] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [copied, setCopied] = useState({ positive: false, negative: false });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [builtPrompt, setBuiltPrompt] = useState({ positive: '', negative: '' });
 
-  // Build prompt from analysis and options
-  const buildPrompt = () => {
+  // Build prompt from analysis using language-aware service
+  const buildPrompt = async () => {
     if (!analysis) return { positive: '', negative: '' };
 
+    try {
+      setIsGenerating(true);
+      
+      // Use language-aware service to build prompt
+      const response = await buildLanguageAwarePrompt({
+        analysis,
+        selectedOptions: selectedOptions || {},
+        language: i18n.language || 'en'
+      });
+
+      if (response.success) {
+        return response.data;
+      } else {
+        // Fallback to English if service fails
+        return buildPromptFallback();
+      }
+    } catch (error) {
+      console.warn('Language-aware prompt building failed, using fallback:', error);
+      return buildPromptFallback();
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Fallback English prompt builder
+  const buildPromptFallback = () => {
     const { character, product } = analysis;
     const positiveParts = [];
     const negativeParts = [];
@@ -106,13 +136,30 @@ export default function PromptBuilder({
     };
   };
 
-  const prompts = generatedPrompt || buildPrompt();
-
+  // Effect: Generate or regenerate prompt when analysis or language changes
   useEffect(() => {
-    if (generatedPrompt !== prompts.positive && !editingPrompt) {
+    if (!analysis) {
+      setBuiltPrompt({ positive: '', negative: '' });
+      return;
+    }
+
+    const generatePrompt = async () => {
+      const result = await buildPrompt();
+      setBuiltPrompt(result);
+    };
+
+    generatePrompt();
+  }, [analysis, selectedOptions, i18n.language]);
+
+  // Use generated prompt if provided, otherwise use built prompt
+  const prompts = generatedPrompt || builtPrompt;
+
+  // Notify parent when prompt changes
+  useEffect(() => {
+    if (generatedPrompt !== prompts.positive && !editingPrompt && prompts.positive) {
       onPromptChange?.(prompts);
     }
-  }, [prompts]);
+  }, [prompts, editingPrompt, generatedPrompt, onPromptChange]);
 
   const handleCopy = async (type) => {
     const text = type === 'positive' ? prompts.positive : prompts.negative;
@@ -151,9 +198,17 @@ export default function PromptBuilder({
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <FileText className="w-6 h-6" />
               Xây Dựng Prompt Thông Minh
+              {isGenerating && (
+                <span className="ml-2 inline-block animate-spin">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+              )}
             </h2>
             <p className="text-blue-100 mt-1">
-              Prompt được tạo tự động từ phân tích AI. Bạn có thể xem và chỉnh sửa.
+              {isGenerating 
+                ? 'Đang tạo prompt trong ngôn ngữ ' + (i18n.language === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh') + '...'
+                : 'Prompt được tạo tự động từ phân tích AI. Bạn có thể xem và chỉnh sửa.'
+              }
             </p>
           </div>
 

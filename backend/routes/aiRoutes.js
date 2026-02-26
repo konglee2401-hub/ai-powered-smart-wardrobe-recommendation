@@ -62,6 +62,7 @@ router.post('/build-prompt', aiController.buildPrompt);
 router.post('/options', optionsController.addOption);
 router.post('/options/save-extracted', optionsController.saveExtractedOptions);
 router.delete('/options/:category/:value', protect, optionsController.deleteOption);
+router.get('/prompt-options', aiController.getPromptOptionsTranslated);
 
 // Protected routes (cần đăng nhập để thêm/xóa options)
 router.post('/discover-options', protect, aiController.discoverOptions);

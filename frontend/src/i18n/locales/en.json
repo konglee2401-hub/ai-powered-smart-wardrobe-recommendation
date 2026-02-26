@@ -563,8 +563,8 @@
     "workflow": {
       "analyze": "Analyze",
       "applyRecommendations": "Apply Recommendations",
-      "generateImage": "Generate Image",
-      "generateVideos": "Generate Videos",
+      "generate-image": "Generate Image",
+      "generate-videos": "Generate Videos",
       "selectSettings": "Select Settings",
       "generate2Images": "Generate 2 Images",
       "deepAnalysis": "Deep Analysis",

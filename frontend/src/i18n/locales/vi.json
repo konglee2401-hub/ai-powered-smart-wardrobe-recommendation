@@ -563,8 +563,8 @@
     "workflow": {
       "analyze": "Phân tích",
       "applyRecommendations": "Áp dụng gợi ý",
-      "generateImage": "Tạo hình ảnh",
-      "generateVideos": "Tạo video",
+      "generate-image": "Tạo hình ảnh",
+      "generate-videos": "Tạo video",
       "selectSettings": "Chọn cài đặt",
       "generate2Images": "Tạo 2 hình ảnh",
       "deepAnalysis": "Phân tích sâu",

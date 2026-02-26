@@ -6,16 +6,7 @@
  * const prompt = buildLanguageAwarePrompt(analysis, options, language='vi');
  */
 
-import { 
-  buildSmartPrompt, 
-  generateDynamicPrompt,
-  USE_CASE_TEMPLATES,
-  AGE_ADJUSTMENTS,
-  MATERIAL_ADJUSTMENTS,
-  SETTING_ADJUSTMENTS,
-  MOOD_ADJUSTMENTS,
-  COLOR_ADJUSTMENTS
-} from './promptTemplates.js';
+import { buildDetailedPrompt } from './smartPromptBuilder.js';
 
 import {
   getTranslatedOptionLabel,
@@ -75,20 +66,21 @@ Thành phố sang trọng, thành phần nghệ thuật, chi tiết cao.`
  * @param {string} productFocus - Product focus area
  * @returns {Object} {positive, negative} prompt strings
  */
-export function buildLanguageAwarePrompt(
+export async function buildLanguageAwarePrompt(
   analysis,
   selectedOptions = {},
   language = 'en',
   useCase = 'change-clothes',
   productFocus = 'full-outfit'
 ) {
-  // Build English prompt first
-  const englishPrompt = buildSmartPrompt({
-    analysis,
-    selectedOptions,
-    useCase,
-    productFocus
-  });
+  // Build English prompt first using the detailed prompt builder
+  const detailedPrompt = await buildDetailedPrompt(analysis, selectedOptions, useCase, productFocus);
+  
+  // Map detailed prompt format to standard format {positive, negative}
+  const englishPrompt = {
+    positive: detailedPrompt.prompt || '',
+    negative: detailedPrompt.negativePrompt || ''
+  };
 
   // If English requested, return as-is
   if (language === 'en') {
