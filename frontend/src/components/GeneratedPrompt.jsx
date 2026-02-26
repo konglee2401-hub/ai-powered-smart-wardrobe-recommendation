@@ -1,5 +1,4 @@
 import React from 'react';
-
 import { useTranslation } from 'react-i18next';
 
 export default function GeneratedPrompt({
@@ -10,12 +9,13 @@ export default function GeneratedPrompt({
   generateImage,
   loading
 }) {
+  const { t } = useTranslation();
   if (!previewPrompt) return null;
 
   return (
     <div className="bg-yellow-600/80 p-3 rounded-xl">
       <div className="flex items-center justify-between mb-2">
-        <span className="font-bold text-sm">Generated Prompt</span>
+        <span className="font-bold text-sm">{t('generatedPrompt.title')}</span>
         <div className="flex gap-1">
           <button
             onClick={() => setPromptLang('vi')}
@@ -41,7 +41,7 @@ export default function GeneratedPrompt({
         disabled={loading}
         className="mt-2 w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white py-2 px-4 rounded font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
       >
-        {loading ? 'Generating...' : 'Generate 9:16 Image'}
+        {loading ? t('generatedPrompt.generating') : t('generatedPrompt.generateImage')}
       </button>
     </div>
   );

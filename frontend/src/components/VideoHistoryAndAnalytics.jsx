@@ -32,7 +32,7 @@ function VideoHistoryAndAnalytics({ userId }) {
       });
       setVideos(response.data.videos || []);
     } catch (err) {
-      setError('Failed to load video history');
+      setError(t('videoHistory.loadFailed'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -48,7 +48,7 @@ function VideoHistoryAndAnalytics({ userId }) {
       });
       setAnalytics(response.data);
     } catch (err) {
-      setError('Failed to load analytics');
+      setError(t('videoHistory.loadFailed'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -56,13 +56,13 @@ function VideoHistoryAndAnalytics({ userId }) {
   };
 
   const handleDeleteVideo = async (videoId) => {
-    if (window.confirm('Are you sure you want to delete this video?')) {
+    if (window.confirm(t('videoHistory.confirmDelete'))) {
       try {
         await axios.delete(`/api/v1/video/${videoId}`);
         setVideos(videos.filter(v => v._id !== videoId));
         setSelectedVideo(null);
       } catch (err) {
-        alert('Failed to delete video');
+        alert(t('videoHistory.deleteFailed'));
       }
     }
   };
@@ -73,7 +73,7 @@ function VideoHistoryAndAnalytics({ userId }) {
       // Refresh videos
       fetchHistory();
     } catch (err) {
-      alert('Failed to submit feedback');
+      alert(t('videoHistory.feedbackFailed'));
     }
   };
 

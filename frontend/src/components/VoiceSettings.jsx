@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Volume2, Sparkles, BookOpen } from 'lucide-react';
 import {
   GENDER_OPTIONS,
@@ -24,6 +25,7 @@ export default function VoiceSettings({
   onVoiceChange,
   className = '',
 }) {
+  const { t } = useTranslation();
   const [expandedSection, setExpandedSection] = useState('gender');
 
   // Get voices filtered by gender
@@ -46,7 +48,7 @@ export default function VoiceSettings({
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <Volume2 className="w-5 h-5 text-amber-400" />
-        <h2 className="text-lg font-bold text-white">Voice Settings</h2>
+        <h2 className="text-lg font-bold text-white">{t('voiceSettings.title')}</h2>
       </div>
 
       {/* Gender Selection */}
@@ -55,7 +57,7 @@ export default function VoiceSettings({
           onClick={() => toggleSection('gender')}
           className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-700/40 hover:bg-gray-700/60 transition-colors"
         >
-          <span className="text-sm font-semibold text-gray-300">Gender</span>
+          <span className="text-sm font-semibold text-gray-300">{t('voiceSettings.gender')}</span>
           <ChevronDown
             className={`w-4 h-4 transition-transform ${
               expandedSection === 'gender' ? 'rotate-180' : ''
@@ -96,7 +98,7 @@ export default function VoiceSettings({
           onClick={() => toggleSection('language')}
           className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-700/40 hover:bg-gray-700/60 transition-colors"
         >
-          <span className="text-sm font-semibold text-gray-300">Language</span>
+          <span className="text-sm font-semibold text-gray-300">{t('voiceSettings.language')}</span>
           <ChevronDown
             className={`w-4 h-4 transition-transform ${
               expandedSection === 'language' ? 'rotate-180' : ''
@@ -130,7 +132,7 @@ export default function VoiceSettings({
           onClick={() => toggleSection('style')}
           className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-700/40 hover:bg-gray-700/60 transition-colors"
         >
-          <span className="text-sm font-semibold text-gray-300">Reading Style</span>
+          <span className="text-sm font-semibold text-gray-300">{t('voiceSettings.readingStyle')}</span>
           <ChevronDown
             className={`w-4 h-4 transition-transform ${
               expandedSection === 'style' ? 'rotate-180' : ''
@@ -167,7 +169,7 @@ export default function VoiceSettings({
           onClick={() => toggleSection('voice')}
           className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-700/40 hover:bg-gray-700/60 transition-colors"
         >
-          <span className="text-sm font-semibold text-gray-300">Voice</span>
+          <span className="text-sm font-semibold text-gray-300">{t('voiceSettings.voice')}</span>
           <ChevronDown
             className={`w-4 h-4 transition-transform ${
               expandedSection === 'voice' ? 'rotate-180' : ''

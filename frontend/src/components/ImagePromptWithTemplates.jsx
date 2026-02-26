@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Wand2, FileText, Loader2, Sparkles, AlertCircle, Check, Settings
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const ImagePromptWithTemplates = ({
   analysis,
   characterDescription
 }) => {
+  const { t } = useTranslation();
   const [mode, setMode] = useState('step3'); // 'template' or 'step3'
   const [templates, setTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(null);
@@ -75,7 +77,7 @@ const ImagePromptWithTemplates = ({
 
   const handleRenderTemplate = async () => {
     if (!selectedTemplateId) {
-      setRenderingError('Please select a template');
+      setRenderingError(t('imagePromptTemplates.selectTemplate'));
       return;
     }
 
@@ -111,7 +113,7 @@ const ImagePromptWithTemplates = ({
           }`}
         >
           <Wand2 className="w-4 h-4" />
-          Template Mode
+          {t('imagePromptTemplates.useTemplateMode')}
         </button>
         <button
           onClick={() => setMode('step3')}
@@ -122,7 +124,7 @@ const ImagePromptWithTemplates = ({
           }`}
         >
           <Settings className="w-4 h-4" />
-          Step 3 Mode
+          {t('imagePromptTemplates.useStep3Mode')}
         </button>
       </div>
 

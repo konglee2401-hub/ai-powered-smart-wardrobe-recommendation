@@ -12,33 +12,34 @@ export default function NegativePrompt({
   showAdvanced = false,
   onToggleAdvanced
 }) {
+  const { t } = useTranslation();
   const [localNegative, setLocalNegative] = useState(negativePrompt || '');
 
   // Preset negative prompts for quick selection
   const presets = [
     {
       id: 'basic-quality',
-      label: '🎨 Basic Quality',
+      label: t('negativePrompt.basicQuality'),
       value: 'low quality, blurry, distorted, deformed, ugly, bad anatomy'
     },
     {
       id: 'safe-content',
-      label: '🛡️ Safe Content',
+      label: t('negativePrompt.safeContent'),
       value: 'nsfw, nude, explicit, adult content, inappropriate'
     },
     {
       id: 'clean-image',
-      label: '🧹 Clean Image',
+      label: t('negativePrompt.cleanImage'),
       value: 'text, watermark, signature, logo, username, artist name'
     },
     {
       id: 'character-fix',
-      label: '👤 Character Fix',
+      label: t('negativePrompt.characterFix'),
       value: 'extra limbs, missing limbs, bad hands, bad face, mutation, deformed hands'
     },
     {
       id: 'anatomy',
-      label: '💪 Better Anatomy',
+      label: t('negativePrompt.betterAnatomy'),
       value: 'bad anatomy, deformed, disfigured, mutation, mutated, extra fingers, fewer fingers, bad hands'
     }
   ];
@@ -82,7 +83,7 @@ export default function NegativePrompt({
         }}
       >
         <span>⚙️</span>
-        <span>Advanced Options</span>
+        <span>{t('negativePrompt.advancedOptions')}</span>
         <span style={{ 
           transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)', 
           transition: 'transform 0.3s',
@@ -110,12 +111,12 @@ export default function NegativePrompt({
               color: '#e2e8f0',
               fontSize: '14px'
             }}>
-              🚫 Negative Prompt (What to avoid):
+              🚫 {t('negativePrompt.subtitle')}
             </label>
             <textarea
               value={localNegative}
               onChange={handleChange}
-              placeholder="low quality, blurry, distorted, bad anatomy..."
+              placeholder={t('negativePrompt.placeholder')}
               rows={3}
               style={{
                 width: '100%',
@@ -134,7 +135,7 @@ export default function NegativePrompt({
               color: '#a0aec0', 
               marginTop: '5px' 
             }}>
-              Specify elements you want to avoid in the generated image
+              {t('negativePrompt.description')}
             </p>
           </div>
           
@@ -146,7 +147,7 @@ export default function NegativePrompt({
               fontSize: '13px',
               color: '#a0aec0'
             }}>
-              Quick Presets:
+              {t('negativePrompt.quickPresets')}
             </label>
             <div style={{ 
               display: 'flex', 

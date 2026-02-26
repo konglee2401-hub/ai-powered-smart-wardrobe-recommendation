@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import './AnalyticsDashboard.css';
 
 const AnalyticsDashboard = ({ 
   timeRange = 'week',
   onTimeRangeChange 
 }) => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState('generations');
@@ -103,7 +105,7 @@ const AnalyticsDashboard = ({
     return (
       <div className="analytics-loading">
         <div className="loading-spinner"></div>
-        <p>Loading analytics...</p>
+        <p>{t('common.loading')}</p>
       </div>
     );
   }
@@ -113,8 +115,8 @@ const AnalyticsDashboard = ({
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-info">
-          <h2>📊 Analytics Dashboard</h2>
-          <p>Track your image generation performance and insights</p>
+          <h2>📊 {t('analyticsDashboard.overview')}</h2>
+          <p>{t('analytics.title')}</p>
         </div>
 
         <div className="time-range-selector">
@@ -122,19 +124,19 @@ const AnalyticsDashboard = ({
             className={timeRange === 'week' ? 'active' : ''}
             onClick={() => onTimeRangeChange?.('week')}
           >
-            7 Days
+            {t('analyticsDashboard.thisWeek')}
           </button>
           <button 
             className={timeRange === 'month' ? 'active' : ''}
             onClick={() => onTimeRangeChange?.('month')}
           >
-            30 Days
+            {t('analyticsDashboard.thisMonth')}
           </button>
           <button 
             className={timeRange === 'quarter' ? 'active' : ''}
             onClick={() => onTimeRangeChange?.('quarter')}
           >
-            90 Days
+            {t('analyticsDashboard.last90Days')}
           </button>
         </div>
       </div>
@@ -145,7 +147,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon generations">🖼️</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalGenerations)}</div>
-            <div className="card-label">Total Generations</div>
+            <div className="card-label">{t('analyticsDashboard.totalGenerations')}</div>
             <div className={`card-trend ${stats.trends.generations >= 0 ? 'positive' : 'negative'}`}>
               {stats.trends.generations >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.generations)}%
             </div>
@@ -156,7 +158,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon images">📷</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalImages)}</div>
-            <div className="card-label">Images Generated</div>
+            <div className="card-label">{t('analyticsDashboard.totalImages')}</div>
             <div className={`card-trend ${stats.trends.images >= 0 ? 'positive' : 'negative'}`}>
               {stats.trends.images >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.images)}%
             </div>
@@ -167,7 +169,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon videos">🎬</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalVideos)}</div>
-            <div className="card-label">Videos Generated</div>
+            <div className="card-label">{t('analyticsDashboard.totalVideos')}</div>
             <div className={`card-trend ${stats.trends.videos >= 0 ? 'positive' : 'negative'}`}>
               {stats.trends.videos >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.videos)}%
             </div>
@@ -178,7 +180,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon success">✅</div>
           <div className="card-content">
             <div className="card-value">{stats.overview.avgSuccessRate}%</div>
-            <div className="card-label">Success Rate</div>
+            <div className="card-label">{t('analyticsDashboard.avgSuccessRate')}</div>
             <div className="card-trend positive">Excellent</div>
           </div>
         </div>
@@ -187,7 +189,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon time">⏱️</div>
           <div className="card-content">
             <div className="card-value">{stats.overview.avgProcessingTime}s</div>
-            <div className="card-label">Avg. Processing Time</div>
+            <div className="card-label">{t('analyticsDashboard.avgProcessingTime')}</div>
             <div className="card-trend">Per generation</div>
           </div>
         </div>
@@ -196,7 +198,7 @@ const AnalyticsDashboard = ({
           <div className="card-icon cost">💰</div>
           <div className="card-content">
             <div className="card-value">${stats.overview.totalCost}</div>
-            <div className="card-label">Total Cost</div>
+            <div className="card-label">{t('analyticsDashboard.totalCost')}</div>
             <div className={`card-trend ${stats.trends.cost >= 0 ? 'negative' : 'positive'}`}>
               {stats.trends.cost >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.cost)}%
             </div>
@@ -208,25 +210,25 @@ const AnalyticsDashboard = ({
       <div className="charts-section">
         {/* Main Chart */}
         <div className="chart-card main-chart">
-          <h3>📈 Generation Trends</h3>
+          <h3>📈 {t('analyticsDashboard.trends')}</h3>
           <div className="chart-tabs">
             <button 
               className={selectedMetric === 'generations' ? 'active' : ''}
               onClick={() => setSelectedMetric('generations')}
             >
-              Generations
+              {t('analyticsDashboard.generations')}
             </button>
             <button 
               className={selectedMetric === 'images' ? 'active' : ''}
               onClick={() => setSelectedMetric('images')}
             >
-              Images
+              {t('analyticsDashboard.images')}
             </button>
             <button 
               className={selectedMetric === 'cost' ? 'active' : ''}
               onClick={() => setSelectedMetric('cost')}
             >
-              Cost
+              {t('analyticsDashboard.costs')}
             </button>
           </div>
           
@@ -258,7 +260,7 @@ const AnalyticsDashboard = ({
 
         {/* Provider Usage */}
         <div className="chart-card">
-          <h3>🔌 Provider Distribution</h3>
+          <h3>🔌 {t('analyticsDashboard.providerUsage')}</h3>
           <div className="donut-chart">
             {stats.providerUsage.map((provider, index) => {
               const total = stats.providerUsage.reduce((sum, p) => sum + p.count, 0);
@@ -289,7 +291,7 @@ const AnalyticsDashboard = ({
 
         {/* Category Distribution */}
         <div className="chart-card">
-          <h3>📂 Category Distribution</h3>
+          <h3>📂 {t('analyticsDashboard.categoryDistribution')}</h3>
           <div className="category-chart">
             {stats.categoryDistribution.map((category, index) => (
               <div key={index} className="category-item">
@@ -314,7 +316,7 @@ const AnalyticsDashboard = ({
 
         {/* Top Templates */}
         <div className="chart-card">
-          <h3>📋 Top Templates</h3>
+          <h3>📋 {t('analyticsDashboard.topTemplates')}</h3>
           <div className="templates-list">
             {stats.topTemplates.map((template, index) => (
               <div key={index} className="template-item">
@@ -322,8 +324,8 @@ const AnalyticsDashboard = ({
                 <div className="template-info">
                   <div className="template-name">{template.name}</div>
                   <div className="template-stats">
-                    <span>Usage: {template.usage}</span>
-                    <span>Avg: {template.avgTime}s</span>
+                    <span>{t('analyticsDashboard.generations')}: {template.usage}</span>
+                    <span>{t('analyticsDashboard.avgProcessingTime')}: {template.avgTime}s</span>
                   </div>
                 </div>
                 <div className="template-bar">

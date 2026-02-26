@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Sliders, Image, Plus, X, Wand2, Copy, Check, ChevronDown, ChevronUp,
   Loader2, AlertCircle, Zap, RotateCcw, Upload
@@ -415,6 +416,7 @@ const Step3Enhanced = ({
   onReferenceImagesChange,
   analysis
 }) => {
+  const { t } = useTranslation();
   const [customPrompt, setCustomPrompt] = useState('');
   const [showOptimizerModal, setShowOptimizerModal] = useState(false);
   const [maxPromptLength, setMaxPromptLength] = useState(300);

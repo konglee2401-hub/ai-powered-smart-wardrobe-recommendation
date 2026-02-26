@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle, TrendingUp, Zap } from 'lucide-react';
 
 const QUALITY_FACTORS = {
@@ -81,6 +82,7 @@ export default function PromptQualityIndicator({
   positivePrompt = '',
   negativePrompt = ''
 }) {
+  const { t } = useTranslation();
   const [posScore, setPosScore] = useState(0);
   const [negScore, setNegScore] = useState(0);
 
@@ -103,7 +105,7 @@ export default function PromptQualityIndicator({
       {/* Overall Score */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-400">Overall Quality</span>
+          <span className="text-xs font-semibold text-gray-400">{t('promptQuality.overallQuality')}</span>
           <span className="text-xs font-bold text-gray-300">{Math.round(avgScore * 100)}%</span>
         </div>
         <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
@@ -123,7 +125,7 @@ export default function PromptQualityIndicator({
       {/* Positive Prompt */}
       <div className="space-y-1 pt-2 border-t border-gray-700">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-green-400">Positive</span>
+          <span className="text-xs font-semibold text-green-400">{t('promptQuality.positivePrompt')}</span>
           <span className="text-xs text-gray-500">{Math.round(posScore * 100)}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
@@ -137,7 +139,7 @@ export default function PromptQualityIndicator({
       {/* Negative Prompt */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-red-400">Negative</span>
+          <span className="text-xs font-semibold text-red-400">{t('promptQuality.negativePrompt')}</span>
           <span className="text-xs text-gray-500">{Math.round(negScore * 100)}%</span>
         </div>
         <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">

@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, Database, Star, TrendingUp } from 'lucide-react';
 
 const CATEGORY_ICONS = {
@@ -19,19 +20,6 @@ const CATEGORY_ICONS = {
   outerwear: '🧥'
 };
 
-const CATEGORY_LABELS = {
-  scene: 'Scene',
-  lighting: 'Lighting',
-  mood: 'Mood',
-  cameraAngle: 'Camera Angle',
-  makeup: 'Makeup',
-  hairstyle: 'Hairstyle',
-  bottoms: 'Bottoms',
-  shoes: 'Shoes',
-  accessories: 'Accessories',
-  outerwear: 'Outerwear'
-};
-
 export default function NewOptionsDetected({
   analysis,
   existingOptions,
@@ -39,6 +27,21 @@ export default function NewOptionsDetected({
   onSaveOption,
   isSaving = false
 }) {
+  const { t } = useTranslation();
+  
+  const CATEGORY_LABELS = {
+    scene: t('newOptionsDetected.scene'),
+    lighting: t('newOptionsDetected.lighting'),
+    mood: t('newOptionsDetected.mood'),
+    cameraAngle: t('newOptionsDetected.cameraAngle'),
+    makeup: t('newOptionsDetected.makeup'),
+    hairstyle: t('newOptionsDetected.hairstyle'),
+    bottoms: t('newOptionsDetected.bottoms'),
+    shoes: t('newOptionsDetected.shoes'),
+    accessories: t('newOptionsDetected.accessories'),
+    outerwear: t('newOptionsDetected.outerwear')
+  };
+  
   if (!analysis || Object.keys(analysis).length === 0) {
     return null;
   }
