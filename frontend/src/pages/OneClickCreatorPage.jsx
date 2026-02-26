@@ -939,10 +939,6 @@ export default function OneClickCreatorPage() {
     const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1));
     setSessions(newSessions);
 
-    // 💫 Create single flowId for entire workflow BEFORE processing sessions
-    const mainFlowId = `flow-${Date.now()}`;
-    setSelectedFlowId(mainFlowId);
-
     // Process each session sequentially
     for (let s of newSessions) {
       const sessionId = s.id;
@@ -1028,9 +1024,10 @@ export default function OneClickCreatorPage() {
             addLog(sessionId, '🎬 Starting Affiliate Video TikTok workflow...');
             updateSessionStep(sessionId, 'tiktok-options', { completed: true, inProgress: false });
             
-            // 💫 Use the main flowId created before the session loop
-            const flowId = mainFlowId;
+            // 💫 Create UNIQUE flowId for this session
+            const flowId = `flow-${Date.now()}-${sessionId}`;
             addLog(sessionId, `📝 Flow ID: ${flowId}`);
+            setSelectedFlowId(flowId);
             
             // 💫 Update session state with flowId for modal viewing
             setSessions(prev => prev.map(sess => {
