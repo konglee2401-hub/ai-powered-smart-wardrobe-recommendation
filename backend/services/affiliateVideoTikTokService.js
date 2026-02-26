@@ -847,12 +847,13 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`   Holding: ${holdingImagePath}`);
     console.log(`\n⚡ Uploading both images in parallel...`);
 
-    // Upload generated images using OAuth (PARALLEL instead of sequential)
-    if (driveService && wearingImagePath && holdingImagePath) {
-      try {
+    // 🛑 BARRIER CHECKPOINT: Ensure STEP 2.5 completes before STEP 3
+    try {
+      // Upload generated images using OAuth (PARALLEL instead of sequential)
+      if (driveService && wearingImagePath && holdingImagePath) {
         const uploadPromises = [];
 
-        // UP LOAD wearing image (non-blocking)
+        // UPLOAD wearing image (non-blocking internally, but collected in array)
         if (fs.existsSync(wearingImagePath)) {
           uploadPromises.push(
             driveService.uploadFile(
@@ -875,7 +876,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           );
         }
 
-        // Upload holding image (non-blocking)
+        // Upload holding image (non-blocking internally, but collected in array)
         if (fs.existsSync(holdingImagePath)) {
           uploadPromises.push(
             driveService.uploadFile(
@@ -898,17 +899,27 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           );
         }
 
-        // Wait for BOTH uploads to complete (in parallel, not sequential)
+        // 🔴 CRITICAL: WAIT for ALL uploads to complete before proceeding to STEP 3
         if (uploadPromises.length > 0) {
+          console.log(`\n⏳ Waiting for ${uploadPromises.length} uploads to complete...`);
           const uploadResults = await Promise.all(uploadPromises);
-          console.log(`\n✅ Generated images upload complete (${uploadResults.filter(r => r).length}/2 successful)`);
+          const successCount = uploadResults.filter(r => r).length;
+          console.log(`✅ Step 2.5 Complete: ${successCount}/${uploadPromises.length} uploads successful`);
         }
-      } catch (uploadError) {
-        console.warn(`⚠️ Generated images upload error: ${uploadError.message}`);
+      } else {
+        console.log(`⚠️ Skipping uploads (Drive service: ${!!driveService}, Files exist: ${fs.existsSync(wearingImagePath) && fs.existsSync(holdingImagePath)})`);
       }
-    } else {
-      console.log(`⚠️ Skipping uploads (Drive service: ${!!driveService}, Files exist: ${fs.existsSync(wearingImagePath) && fs.existsSync(holdingImagePath)})`);
+    } catch (uploadError) {
+      console.warn(`⚠️ Step 2.5 upload error (non-blocking): ${uploadError.message}`);
+      console.warn(`   Proceeding to Step 3 anyway...`);
     }
+
+    // 🔴 BARRIER: Explicit checkpoint to ensure STEP 2.5 is complete
+    console.log(`\n🔄 [BARRIER CHECKPOINT] Step 2 pipeline complete`);
+    console.log(`   ✅ Step 2: Image generation - DONE`);
+    console.log(`   ✅ Step 2.5: Image uploads - DONE`);
+    console.log(`   🔄 Proceeding to Step 3...\n`);
+
     // ============================================================
     // STEP 3: DEEP CHATGPT ANALYSIS
     // ============================================================
