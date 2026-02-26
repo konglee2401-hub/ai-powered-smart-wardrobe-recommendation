@@ -225,8 +225,40 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
  * Generate video prompt using templates
  * Falls back to hardcoded prompt if templates not available
  */
-async function generateVideoPromptFromTemplate(useCase, productFocus, recommendedOptions, videoDuration, sessionId, addLog) {
+async function generateVideoPromptFromTemplate(useCase, productFocus, recommendedOptions, videoDuration, language, sessionId, addLog) {
   try {
+    // Try language-aware prompt generation first (Priority 1)
+    try {
+      addLog(sessionId, `📝 Building video prompt in ${language === 'vi' ? 'Vietnamese' : 'English'}...`);
+      
+      const response = await buildLanguageAwarePrompt({
+        analysis: { 
+          character: {}, 
+          product: { type: productFocus, category: 'clothing' } 
+        },
+        selectedOptions: { 
+          scene: 'fashion shoot',
+          lighting: 'professional',
+          mood: recommendedOptions.mood || 'confident',
+          style: recommendedOptions.style || 'minimalist',
+          colorPalette: 'vibrant',
+          cameraAngle: recommendedOptions.cameraAngle || 'eye-level',
+          duration: videoDuration
+        },
+        language: language || 'en',
+        useCase: 'video-generation'
+      });
+
+      if (response?.success || response?.positive) {
+        const prompt = response.positive || response.data?.positive || '';
+        addLog(sessionId, `✓ Video prompt generated (${language}, ${prompt.length} chars)`);
+        return prompt;
+      }
+    } catch (langError) {
+      console.warn('Language-aware video prompt generation failed, trying template...', langError);
+    }
+
+    // Priority 2: Try template service
     addLog(sessionId, 'Loading video template...');
     
     const templateUseCase = mapUseCaseToTemplateUseCase(useCase);
@@ -256,11 +288,12 @@ async function generateVideoPromptFromTemplate(useCase, productFocus, recommende
     return prompt;
   } catch (templateError) {
     console.warn('Template-based generation failed, using fallback:', templateError);
-    // Fallback to hardcoded prompt
+    // Priority 3: Fallback to hardcoded prompt
     const videoPrompt = `Professional fashion video. Model wearing ${productFocus}. ` +
       `Duration: ${videoDuration}s. Scenario: Fashion shoot. ` +
       `Style: ${recommendedOptions.style}. Mood: ${recommendedOptions.mood}. ` +
       `Camera: ${recommendedOptions.cameraAngle}. High quality professional video.`;
+    addLog(sessionId, `✓ Video prompt generated (fallback, ${videoPrompt.length} chars)`);
     return videoPrompt;
   }
 }
@@ -1202,6 +1235,7 @@ export default function OneClickCreatorPage() {
                 productFocus,
                 recommendedOptions,
                 videoDuration,
+                i18n.language || 'en',
                 sessionId,
                 addLog
               );
