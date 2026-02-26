@@ -470,31 +470,71 @@ class GoogleFlowAutomationService {
         }
       });
       await this.page.waitForTimeout(300);
+      // Attempt typing with verification and a single retry if the editor content
+      // does not match the expected prompt (handles flaky slate input in the UI)
+      let attempts = 0;
+      let success = false;
+      const maxAttempts = 2; // 1 initial try + 1 retry
 
-      // Type using keyboard (with 15ms delay between characters)
-      // This triggers Slate editor's native input handlers
-      console.log('   ⌨️  Typing prompt via keyboard...');
-      await this.page.keyboard.type(prompt, { delay: 15 });
-      console.log(`   ✓ Typed ${prompt.length} characters\n`);
+      while (attempts < maxAttempts && !success) {
+        attempts++;
+        console.log(`   ⌨️  Typing prompt via keyboard (attempt ${attempts}/${maxAttempts})...`);
+        // Type slowly to trigger framework handlers
+        await this.page.keyboard.type(prompt, { delay: 15 });
+        console.log(`   ✓ Typed attempt ${attempts}: ${prompt.length} chars`);
 
-      // Wait for React/Vue framework to process keyboard input
-      console.log('   ⏳ Waiting for framework to process input...');
-      await this.page.waitForTimeout(2000);
-      console.log('   ✓ Framework processing complete\n');
+        // Allow framework to process input
+        console.log('   ⏳ Waiting for framework to process input...');
+        await this.page.waitForTimeout(2000);
 
-      // Dispatch events to finalize input
-      console.log('   📤 Dispatching blur/input/change events...');
-      await this.page.evaluate(() => {
-        const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
-        if (textbox) {
-          textbox.dispatchEvent(new Event('blur', { bubbles: true }));
-          textbox.dispatchEvent(new Event('input', { bubbles: true }));
-          textbox.dispatchEvent(new Event('change', { bubbles: true }));
+        // Dispatch events to finalize input
+        console.log('   📤 Dispatching blur/input/change events...');
+        await this.page.evaluate(() => {
+          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+          if (textbox) {
+            textbox.dispatchEvent(new Event('blur', { bubbles: true }));
+            textbox.dispatchEvent(new Event('input', { bubbles: true }));
+            textbox.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+        console.log('   ✓ Events dispatched');
+
+        // Verify content in the editor matches expected prompt (or at least contains tail)
+        const currentText = await this.page.evaluate(() => {
+          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+          if (!textbox) return '';
+          // Slate often stores content in innerText/textContent
+          return (textbox.innerText || textbox.textContent || '').trim();
+        });
+
+        const expected = (prompt || '').trim();
+        const tail = expected.slice(-Math.min(60, expected.length));
+
+        if (currentText && currentText.length >= Math.max(1, expected.length - 5) && currentText.includes(tail)) {
+          console.log('   ✅ Prompt verification passed');
+          success = true;
+          break;
         }
-      });
-      console.log('   ✓ Events dispatched\n');
 
-      console.log('   ✓ Prompt entered and submitted to framework\n');
+        console.log(`   ⚠️ Prompt verification failed (entered ${currentText.length} chars)`);
+
+        // Retry: clear the editor and try once more
+        if (attempts < maxAttempts) {
+          console.log('   🔁 Retrying: clearing editor and retyping...');
+          // Focus and select-all then delete to clear Slate editor
+          await this.page.focus('[role="textbox"][data-slate-editor="true"]');
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('KeyA');
+          await this.page.keyboard.up('Control');
+          await this.page.keyboard.press('Backspace');
+          await this.page.waitForTimeout(400);
+        }
+      }
+
+      if (!success) {
+        console.warn('   ❌ Prompt entry verification failed after retries');
+        throw new Error('Prompt not fully entered into editor');
+      }
 
     } catch (error) {
       console.error(`   ❌ Error entering prompt: ${error.message}`);
