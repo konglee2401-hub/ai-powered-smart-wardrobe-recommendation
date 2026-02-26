@@ -91,7 +91,35 @@ function getFallbackTechnicalDetails(category, optionValue) {
  * @param {string} useCase - 'change-clothes', 'styling', 'complete-look', etc.
  * @param {string} productFocus - 'full-outfit', 'top', 'bottom', 'accessory'
  */
-export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit') {
+export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en') {
+  // 💫 NEW: Support Vietnamese language for image generation
+  if (language === 'vi') {
+    try {
+      console.log(`\n🇻🇳 Using Vietnamese prompts for image generation...`);
+      const VietnamesePromptBuilder = require('./vietnamesePromptBuilder.js');
+      
+      // Build Vietnamese prompt based on use case
+      let vietnamesePrompt = '';
+      if (useCase === 'change-clothes' || useCase === 'character-holding-product') {
+        // Use character analysis prompt which includes detailed instructions
+        vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
+        console.log(`✅ Using Vietnamese character analysis prompt`);
+      } else {
+        // Fallback to default behavior for other use cases
+        vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
+        console.log(`⚠️ No specific Vietnamese prompt for use case '${useCase}', using character analysis prompt`);
+      }
+      
+      return {
+        prompt: vietnamesePrompt.trim(),
+        negativePrompt: buildNegativePromptGeneric(selectedOptions)
+      };
+    } catch (error) {
+      console.warn(`⚠️ Vietnamese prompt builder error, falling back to English:`, error.message);
+      // Fall through to English prompts if Vietnamese fails
+    }
+  }
+
   if (!analysis) {
     return { prompt: '', negativePrompt: buildNegativePromptGeneric(selectedOptions) };
   }

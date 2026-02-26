@@ -1006,7 +1006,8 @@ export async function generateWithBrowser(req, res) {
       characterImageBase64,
       productImageBase64,
       characterImagePath,
-      productImagePath
+      productImagePath,
+      language = 'en'  // 💫 Accept language parameter for Vietnamese support
     } = req.body;
 
     // Get image paths - either from temp files or convert base64
@@ -2182,10 +2183,12 @@ export async function serveGeneratedImage(req, res) {
 
 export async function generateVideoBrowser(req, res) {
   try {
-    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok', aspectRatio = '16:9' } = req.body;
+    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok', aspectRatio = '16:9', language = 'en' } = req.body;
     
     // Accept both provider and videoProvider for backward compatibility
     const selectedProvider = videoProvider || provider || 'grok';
+    
+    console.log(`📝 Language: ${language}`);  // 💫 Log language
     
     // 💫 Validate aspect ratio
     const validAspectRatios = ['16:9', '9:16'];
@@ -2202,7 +2205,8 @@ export async function generateVideoBrowser(req, res) {
       scenario,
       segmentCount: segments?.length || 0,
       aspectRatio,
-      selectedAspectRatio
+      selectedAspectRatio,
+      language  // 💫 Log language
     });
 
     if (!segments || !Array.isArray(segments) || segments.length === 0) {

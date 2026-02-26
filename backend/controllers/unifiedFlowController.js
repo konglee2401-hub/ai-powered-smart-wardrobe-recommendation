@@ -134,7 +134,8 @@ export async function buildPromptEndpoint(req, res) {
       analysis, 
       selectedOptions = {},
       useCase = 'change-clothes',
-      productFocus = 'full-outfit'
+      productFocus = 'full-outfit',
+      language = 'en'  // 💫 Extract language from request
     } = req.body;
 
     if (!analysis) {
@@ -143,6 +144,8 @@ export async function buildPromptEndpoint(req, res) {
         error: 'Analysis data is required'
       });
     }
+
+    console.log(`📝 Language: ${language}`);  // 💫 Log language
 
     // Use provided options or AI recommendations - Include ALL selected options, not just hardcoded fields
     const finalOptions = {
@@ -188,12 +191,13 @@ export async function buildPromptEndpoint(req, res) {
     }
     console.log('');
 
-    // Build smart prompt with use-case awareness
+    // 💫 Build smart prompt with language support
     const promptResult = await buildDetailedPrompt(
       analysis, 
       finalOptions,
       useCase,
-      productFocus
+      productFocus,
+      language  // 💫 Pass language to prompt builder
     );
 
     // Track option usage

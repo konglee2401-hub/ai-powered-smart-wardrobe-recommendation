@@ -262,7 +262,8 @@ router.post('/generate-prompts-chatgpt', protect, async (req, res) => {
       style = 'professional',
       videoProvider = 'grok',
       useCase = null,
-      aspectRatio = '16:9'
+      aspectRatio = '16:9',
+      language = 'en'  // 💫 Accept language parameter for Vietnamese support
     } = req.body;
 
     if (!duration || !scenario) {
@@ -270,6 +271,58 @@ router.post('/generate-prompts-chatgpt', protect, async (req, res) => {
         success: false,
         message: 'Duration and scenario are required'
       });
+    }
+
+    console.log(`📝 Language: ${language}`);  // 💫 Log language
+
+    // 💫 NEW: Support Vietnamese language for video prompts
+    if (language === 'vi') {
+      try {
+        const VietnamesePromptBuilder = require('../services/vietnamesePromptBuilder.js');
+        console.log(`\n🇻🇳 Using Vietnamese prompts for video generation...`);
+        
+        // Map segment indices to segment names for Vietnamese prompt builder
+        const vietnameseSegments = ['Hook', 'Introduction', 'Features'];  // Standard segments
+        let vietnamesePrompts = [];
+        
+        for (let i = 0; i < Math.min(segments, vietnameseSegments.length); i++) {
+          try {
+            const vietnamesePrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+              vietnameseSegments[i],
+              'full-outfit',  // Default product focus
+              {}
+            );
+            vietnamesePrompts.push(vietnamesePrompt);
+            console.log(`✅ Generated Vietnamese prompt for segment ${i + 1}: ${vietnameseSegments[i]}`);
+          } catch (e) {
+            console.warn(`⚠️ Failed to generate Vietnamese prompt for segment ${i + 1}`);
+          }
+        }
+        
+        // If we successfully got Vietnamese prompts, return them
+        if (vietnamesePrompts.length > 0) {
+          return res.json({
+            success: true,
+            data: {
+              prompts: vietnamesePrompts,
+              scenario,
+              duration,
+              segments: Math.min(segments, vietnamesePrompts.length),
+              segmentDuration: Math.floor(duration / Math.min(segments, vietnamesePrompts.length)),
+              style,
+              videoProvider,
+              aspectRatio,
+              useCase,
+              language: 'vi'  // 💫 Include language in response
+            }
+          });
+        }
+        
+        console.warn(`⚠️ Vietnamese prompts empty, falling back to English...`);
+      } catch (error) {
+        console.warn(`⚠️ Vietnamese prompt builder error, falling back to English:`, error.message);
+        // Fall through to English prompts if Vietnamese fails
+      }
     }
 
     const maxPerVideo = videoProvider === 'google-flow' ? 6 : 10;
@@ -555,8 +608,64 @@ router.post(
         segments = 3,
         productName = 'product',
         productFeatures = [],
-        additionalDetails = ''
+        additionalDetails = '',
+        language = 'en'  // 💫 Accept language parameter for Vietnamese support
       } = req.body;
+
+      console.log(`📝 Language: ${language}`);  // 💫 Log language
+
+      // 💫 NEW: Support Vietnamese language for scenario prompts
+      if (language === 'vi') {
+        try {
+          const VietnamesePromptBuilder = require('../services/vietnamesePromptBuilder.js');
+          console.log(`\n🇻🇳 Using Vietnamese prompts for scenario-based video generation...`);
+          
+          let vietnamesePrompts = [];
+          const segmentDuration = Math.floor(parseInt(duration) / parseInt(segments));
+          
+          // Generate Vietnamese prompts for each segment
+          const scenarioSegments = ['Hook', 'Introduction', 'Features'];
+          for (let i = 0; i < Math.min(parseInt(segments), scenarioSegments.length); i++) {
+            try {
+              const vietnamesePrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+                scenarioSegments[i],
+                'full-outfit',
+                { scenario }
+              );
+              vietnamesePrompts.push(vietnamesePrompt);
+              console.log(`✅ Generated Vietnamese prompt for segment ${i + 1}: ${scenarioSegments[i]}`);
+            } catch (e) {
+              console.warn(`⚠️ Failed to generate Vietnamese prompt for segment ${i + 1}`);
+            }
+          }
+          
+          // If we successfully got Vietnamese prompts, return them
+          if (vietnamesePrompts.length > 0) {
+            return res.json({
+              success: true,
+              data: {
+                prompts: vietnamesePrompts,
+                scenario,
+                duration: parseInt(duration),
+                segments: vietnamesePrompts.length,
+                images: {
+                  characterWearing: !!characterWearingFile,
+                  characterHolding: !!req.files?.character_holding_product?.[0],
+                  productReference: !!req.files?.product_reference?.[0]
+                },
+                provider: 'vietnamese-prompts',
+                language: 'vi'  // 💫 Include language in response
+              },
+              message: `Vietnamese ${scenario} video prompts generated`
+            });
+          }
+          
+          console.warn(`⚠️ Vietnamese prompts empty, falling back to English...`);
+        } catch (error) {
+          console.warn(`⚠️ Vietnamese prompt builder error, falling back to English:`, error.message);
+          // Fall through to English prompts if Vietnamese fails
+        }
+      }
 
       // 💫 Validate scenario
       const validScenarios = ['dancing', 'product-intro', 'lifestyle', 'lip-sync', 'fashion-walk', 'transition'];
