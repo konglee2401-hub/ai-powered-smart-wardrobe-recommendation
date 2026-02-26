@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText, Copy, Check, Edit3, Save, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 export default function PromptBuilder({
@@ -13,6 +14,7 @@ export default function PromptBuilder({
   generatedPrompt,
   onRegeneratePrompt,
 }) {
+  const { i18n } = useTranslation();
   const [showPrompt, setShowPrompt] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [copied, setCopied] = useState({ positive: false, negative: false });

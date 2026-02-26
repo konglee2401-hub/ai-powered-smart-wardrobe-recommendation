@@ -1114,7 +1114,10 @@ const exportOptions = async (req, res) => {
 
 const buildPrompt = async (req, res) => {
   try {
-    const { characterAnalysis, productAnalysis, mode, useCase, userSelections, customPrompt, maxLength } = req.body;
+    const { characterAnalysis, productAnalysis, mode, useCase, userSelections, customPrompt, maxLength, language = 'en' } = req.body;
+
+    // Import language-aware builder
+    const { buildLanguageAwarePrompt, buildVietnamesePrompt } = await import('../services/languageAwarePromptBuilder.js');
 
     // Build prompt based on analysis and selections
     let prompt = '';
@@ -1122,31 +1125,42 @@ const buildPrompt = async (req, res) => {
     if (customPrompt) {
       prompt = customPrompt;
     } else {
-      // Build from analysis and selections
-      const parts = [];
+      // Build from analysis and selections using language-aware function
+      if (language === 'vi' && (characterAnalysis || userSelections)) {
+        // Use Vietnamese prompt builder
+        const analysis = {
+          character: characterAnalysis || {},
+          product: productAnalysis || {}
+        };
+        const viPrompt = buildVietnamesePrompt(analysis, userSelections, useCase);
+        prompt = viPrompt.positive;
+      } else {
+        // Use English (default)
+        const parts = [];
 
-      if (characterAnalysis) {
-        parts.push(`Character: ${characterAnalysis}`);
-      }
-
-      if (productAnalysis) {
-        parts.push(`Product/Clothing: ${productAnalysis}`);
-      }
-
-      if (userSelections) {
-        const selections = [];
-        if (userSelections.scene) selections.push(`Scene: ${userSelections.scene}`);
-        if (userSelections.lighting) selections.push(`Lighting: ${userSelections.lighting}`);
-        if (userSelections.mood) selections.push(`Mood: ${userSelections.mood}`);
-        if (userSelections.style) selections.push(`Style: ${userSelections.style}`);
-        if (userSelections.colorPalette) selections.push(`Color Palette: ${userSelections.colorPalette}`);
-
-        if (selections.length > 0) {
-          parts.push(`Settings: ${selections.join(', ')}`);
+        if (characterAnalysis) {
+          parts.push(`Character: ${characterAnalysis}`);
         }
-      }
 
-      prompt = parts.join('\n\n');
+        if (productAnalysis) {
+          parts.push(`Product/Clothing: ${productAnalysis}`);
+        }
+
+        if (userSelections) {
+          const selections = [];
+          if (userSelections.scene) selections.push(`Scene: ${userSelections.scene}`);
+          if (userSelections.lighting) selections.push(`Lighting: ${userSelections.lighting}`);
+          if (userSelections.mood) selections.push(`Mood: ${userSelections.mood}`);
+          if (userSelections.style) selections.push(`Style: ${userSelections.style}`);
+          if (userSelections.colorPalette) selections.push(`Color Palette: ${userSelections.colorPalette}`);
+
+          if (selections.length > 0) {
+            parts.push(`Settings: ${selections.join(', ')}`);
+          }
+        }
+
+        prompt = parts.join('\n\n');
+      }
     }
 
     // Truncate if needed
