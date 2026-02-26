@@ -334,16 +334,73 @@ Use Case: TikTok Affiliate Video (9:16 vertical format, engaging styling)
 CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no additional text.
       `;
 
-      // Call ChatGPT via browser automation
-      let chatGPTService = new ChatGPTService({ headless: true });
-      
-      await chatGPTService.initialize();
-      const rawResponse = await chatGPTService.analyzeMultipleImages(
-        [characterFilePath, productFilePath],
-        analysisPrompt
-      );
-      
-      await chatGPTService.close();
+      // 🔴 CRITICAL: Use try-finally to GUARANTEE browser cleanup
+      let chatGPTService = null;
+      let rawResponse = null;  // 🔴 Declare outside try so it's accessible after finally
+      try {
+        chatGPTService = new ChatGPTService({ headless: true });
+        await chatGPTService.initialize();
+        
+        rawResponse = await chatGPTService.analyzeMultipleImages(
+          [characterFilePath, productFilePath],
+          analysisPrompt
+        );
+        
+        // Save rawResponse to use in fallback if parsing fails
+        if (!rawResponse || rawResponse.length === 0) {
+          analysisError = 'ChatGPT analysis returned empty response';
+          console.warn(`⚠️  Analysis failed (non-blocking): ${analysisError}`);
+          console.warn(`   Continuing with default recommendations...`);
+          analysis = null;
+        } else {
+          // Parse response
+          try {
+            console.log(`📝 Parsing ChatGPT JSON response...`);
+            console.log(`   Response length: ${rawResponse.length} characters`);
+            
+            let jsonStr = rawResponse.trim();
+            if (jsonStr.startsWith('```json')) {
+              jsonStr = jsonStr.substring(7);
+            } else if (jsonStr.startsWith('```')) {
+              jsonStr = jsonStr.substring(3);
+            }
+            if (jsonStr.endsWith('```')) {
+              jsonStr = jsonStr.substring(0, jsonStr.length - 3);
+            }
+            jsonStr = jsonStr.trim();
+            
+            analysis = JSON.parse(jsonStr);
+            console.log(`✅ JSON parsed successfully`);
+            
+            if (!analysis.character || !analysis.product || !analysis.recommendations) {
+              console.warn(`⚠️  Incomplete analysis structure, but processing anyway`);
+            }
+            
+            step1Duration = ((Date.now() - step1Start) / 1000).toFixed(2);
+            console.log(`✅ Analysis complete in ${step1Duration}s`);
+            console.log(`\n📊 ANALYSIS RESULTS:`);
+            console.log(`  Character profile: ${analysis.character?.age || 'N/A'}`);
+            console.log(`  Product type: ${analysis.product?.garment_type || 'N/A'}`);
+            console.log(`  Key recommendations: ${Object.keys(analysis.recommendations || {}).join(', ')}`);
+          } catch (parseError) {
+            analysisError = `JSON parse error: ${parseError.message}`;
+            console.warn(`⚠️  Failed to parse ChatGPT JSON (non-blocking): ${analysisError}`);
+            console.warn(`   Raw response preview: ${rawResponse.substring(0, 200)}...`);
+            analysis = null;
+          }
+        }
+      } finally {
+        // 🔴 GUARANTEE: Always close ChatGPT browser
+        if (chatGPTService) {
+          try {
+            console.log(`\n🔒 Closing ChatGPT browser (STEP 1)...`);
+            await chatGPTService.close();
+            console.log(`✅ ChatGPT browser closed`);
+          } catch (closeError) {
+            console.error(`⚠️  Error closing ChatGPT browser: ${closeError.message}`);
+          }
+        }
+      }
 
       if (!rawResponse || rawResponse.length === 0) {
         analysisError = 'ChatGPT analysis returned empty response';
