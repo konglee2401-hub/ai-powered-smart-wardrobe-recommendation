@@ -939,6 +939,10 @@ export default function OneClickCreatorPage() {
     const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1));
     setSessions(newSessions);
 
+    // 💫 Create single flowId for entire workflow BEFORE processing sessions
+    const mainFlowId = `flow-${Date.now()}`;
+    setSelectedFlowId(mainFlowId);
+
     // Process each session sequentially
     for (let s of newSessions) {
       const sessionId = s.id;
@@ -1024,26 +1028,17 @@ export default function OneClickCreatorPage() {
             addLog(sessionId, '🎬 Starting Affiliate Video TikTok workflow...');
             updateSessionStep(sessionId, 'tiktok-options', { completed: true, inProgress: false });
             
-            // 💫 NEW: Initialize backend session to get flowId
-            let flowId = null;
-            try {
-              flowId = await initializeBackendSession(sessionId);
-              addLog(sessionId, `📝 Backend session created: ${flowId}`);
-              
-              // 💫 Update session state with flowId for modal viewing
-              setSelectedFlowId(flowId);
-              setSessions(prev => prev.map(sess => {
-                if (sess.id === sessionId) {
-                  return { ...sess, flowId };
-                }
-                return sess;
-              }));
-            } catch (sessionInitError) {
-              console.error(`❌ Failed to initialize backend session [S${sessionId}]:`, sessionInitError);
-              addLog(sessionId, `❌ Session initialization failed: ${sessionInitError.message}`);
-              updateSessionStep(sessionId, 'tiktok-options', { error: sessionInitError.message, inProgress: false });
-              throw sessionInitError; // Stop processing this session
-            }
+            // 💫 Use the main flowId created before the session loop
+            const flowId = mainFlowId;
+            addLog(sessionId, `📝 Flow ID: ${flowId}`);
+            
+            // 💫 Update session state with flowId for modal viewing
+            setSessions(prev => prev.map(sess => {
+              if (sess.id === sessionId) {
+                return { ...sess, flowId };
+              }
+              return sess;
+            }));
             
             // Call the TikTok flow
             // Note: tiktokFlowId will be set inside handleAffiliateVideoTikTokFlow,
