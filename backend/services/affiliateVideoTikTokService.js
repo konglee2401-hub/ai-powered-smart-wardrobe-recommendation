@@ -19,6 +19,7 @@ import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
 import SessionLogService from './sessionLogService.js';
+import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
 import axios from 'axios';
 import path from 'path';
 import fs from 'fs';
@@ -123,6 +124,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       voiceGender = 'female',
       voicePace = 'fast',
       productFocus = 'full-outfit',
+      language = 'en',  // 💫 Support language selection: 'en' or 'vi'
       options = {}
     } = req.body;
 
@@ -144,7 +146,15 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
 
     try {
       // Use ChatGPT Browser Automation (not OpenAI API, not Gemini)
-      const analysisPrompt = `
+      // 💫 Get appropriate prompt based on language
+      let analysisPrompt;
+      
+      if (language === 'vi') {
+        console.log(`\n📝 Using VIETNAMESE analysis prompt`);
+        analysisPrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
+      } else {
+        console.log(`\n📝 Using ENGLISH analysis prompt`);
+        analysisPrompt = `
 You are an expert fashion stylist and virtual try-on specialist. Analyze these two images extensively to provide detailed styling recommendations.
 
 ===== IMAGE LABELING =====
@@ -335,6 +345,7 @@ Use Case: TikTok Affiliate Video (9:16 vertical format, engaging styling)
 
 CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no additional text.
       `;
+      }
 
       // 🔴 CRITICAL: Use try-finally to GUARANTEE browser cleanup
       let chatGPTService = null;
