@@ -246,6 +246,7 @@ function VideoPromptStep({
       formData.append('segments', segments);
       formData.append('productName', scenarioImages?.productName || 'Product');
       formData.append('additionalDetails', scenarioImages?.additionalDetails || '');
+      formData.append('language', i18n.language || 'en');  // 💫 Pass language for Vietnamese support
       
       // 💫 Add uploaded images (Form Data handles files)
       if (scenarioImages?.characterWearing?.file) {
@@ -281,7 +282,8 @@ function VideoPromptStep({
           'professional',
           videoProvider,
           null,
-          '16:9'
+          '16:9',
+          i18n.language || 'en'  // 💫 Pass language for Vietnamese support
         );
 
         if (response.success && response.data.prompts) {
@@ -449,7 +451,7 @@ function VideoGenerationStep({
 
 // Main Component
 export default function VideoGenerationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
@@ -572,7 +574,8 @@ export default function VideoGenerationPage() {
         sourceImage: currentImage,
         characterImage,
         productImage,
-        flowId  // 💫 Pass flowId to backend
+        flowId,  // 💫 Pass flowId to backend
+        language: i18n.language || 'en'  // 💫 Pass language for Vietnamese support
       };
 
       console.log('📹 Starting video generation with provider:', videoProvider);

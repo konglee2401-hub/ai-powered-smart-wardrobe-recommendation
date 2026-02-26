@@ -324,12 +324,13 @@ export const unifiedFlowAPI = {
    * @param {string} useCase - Use case (change-clothes, styling, complete-look, etc.)
    * @param {string} productFocus - Product focus (full-outfit, top, bottom, etc.)
    */
-  buildPrompt: async (analysis, selectedOptions = {}, useCase = 'change-clothes', productFocus = 'full-outfit') => {
+  buildPrompt: async (analysis, selectedOptions = {}, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en') => {
     return api.post('/ai/build-prompt-unified', {
       analysis,
       selectedOptions,
       useCase,
-      productFocus
+      productFocus,
+      language  // 💫 Pass language for Vietnamese support
     });
   },
   
@@ -477,7 +478,8 @@ export const browserAutomationAPI = {
       // Storage configuration
       storageType: options.storageType || 'cloud',
       localFolder: options.localFolder,
-      cloudProvider: options.cloudProvider || 'imgbb'
+      cloudProvider: options.cloudProvider || 'imgbb',
+      language: options.language || 'en'  // 💫 Pass language for Vietnamese support
     };
     
     return api.post('/v1/browser-automation/generate-browser', payload);
@@ -569,7 +571,8 @@ export const browserAutomationAPI = {
       characterImage: videoData.characterImage,
       productImage: videoData.productImage,
       videoProvider: videoData.videoProvider || 'google-flow',  // 💫 Primary field name for backend
-      provider: videoData.videoProvider || 'google-flow'  // Backward compatibility
+      provider: videoData.videoProvider || 'google-flow',  // Backward compatibility
+      language: videoData.language || 'en'  // 💫 Pass language for Vietnamese support
     };
     
     console.log('🎬 [Frontend] Sending video generation:', {
@@ -577,7 +580,8 @@ export const browserAutomationAPI = {
       provider: payload.provider,
       duration: payload.duration,
       scenario: payload.scenario,
-      segmentCount: payload.segments?.length || 0
+      segmentCount: payload.segments?.length || 0,
+      language: payload.language  // 💫 Log language
     });
     
     return api.post('/v1/browser-automation/generate-video', payload);
@@ -618,7 +622,8 @@ export const browserAutomationAPI = {
     style = 'professional',
     videoProvider = 'grok',
     useCase = null,
-    aspectRatio = '16:9'
+    aspectRatio = '16:9',
+    language = 'en'  // 💫 Pass language for Vietnamese support
   ) => {
     const payload = {
       duration,
@@ -627,7 +632,8 @@ export const browserAutomationAPI = {
       style,
       videoProvider,
       useCase,
-      aspectRatio
+      aspectRatio,
+      language  // 💫 Include language in payload
     };
     return api.post('/videos/generate-prompts-chatgpt', payload);
   },

@@ -147,7 +147,7 @@ const getUploadInstructions = (useCase) => {
 
 
 export default function ImageGenerationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // State
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('image');
@@ -813,7 +813,8 @@ export default function ImageGenerationPage() {
         analysis,
         mergedOptions,
         useCase,
-        productFocus
+        productFocus,
+        i18n.language || 'en'  // 💫 Pass language for prompt generation
       );
 
       if (response.success && response.data?.prompt) {
@@ -938,7 +939,8 @@ export default function ImageGenerationPage() {
           // Storage configuration
           storageType,
           localFolder,
-          flowId  // 💫 Pass flowId to backend
+          flowId,  // 💫 Pass flowId to backend
+          language: i18n.language || 'en'  // 💫 Pass language for Vietnamese support
         };
         
         console.log('📤 Sending generation request to backend...');
