@@ -75,11 +75,30 @@ export function VideoMashupCreator() {
 
   // ===== STEP 2: Select Sub-Video =====
   const handleSelectSubVideo = (video) => {
+    if (!video) {
+      console.error('❌ No video selected from gallery');
+      toast.error('Failed to select video');
+      return;
+    }
+    
+    // Gallery picker returns video with: {assetId, id, name, url, thumbnail, type, category, ...}
+    const mediaId = video.assetId || video.mediaId || video.id;
+    const name = video.name;
+    const thumbnail = video.thumbnail || video.url || 'https://via.placeholder.com/120x90?text=Video';
+    
+    if (!mediaId || !name) {
+      console.error('❌ Invalid video item from gallery:', video);
+      toast.error('Selected video is missing required fields');
+      return;
+    }
+    
+    console.log(`🎬 Sub-video selected from gallery:`, { mediaId, name, thumbnail });
+    
     setSubVideo({
-      mediaId: video.mediaId || video.id,
-      name: video.name || video.title,
+      mediaId,
+      name,
       duration: video.duration || 30,
-      thumbnail: video.thumbnail || 'https://via.placeholder.com/120x90?text=Video'
+      thumbnail
     });
     setShowSubVideoGallery(false);
     toast.success('Sub-video selected!');

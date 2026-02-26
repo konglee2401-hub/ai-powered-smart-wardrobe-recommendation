@@ -12,13 +12,13 @@
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
 import { buildDetailedPrompt } from './smartPromptBuilder.js';
-import ImageGenerationAutomation from './imageGenerationService.js';
-import VideoGenerationAutomationV2 from './videoGenerationServiceV2.js';
+import GoogleFlowAutomationService from './googleFlowAutomationService.js';
 import ChatGPTService from './browser/chatgptService.js';
 import GoogleDriveOAuthService from './googleDriveOAuth.js';
 import PromptOption from '../models/PromptOption.js';
-import Asset from '../models/Asset.js'; // 💫 Asset model for checking duplicates
-import AssetManager from '../utils/assetManager.js'; // 💫 Asset manager for saving generated assets
+import Asset from '../models/Asset.js';
+import AssetManager from '../utils/assetManager.js';
+import SessionLogService from './sessionLogService.js';
 import axios from 'axios';
 import path from 'path';
 import fs from 'fs';
@@ -66,15 +66,17 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
   const flowId = `flow-${Date.now()}`;
   const tempDir = path.join(process.cwd(), 'temp', 'tiktok-flows', flowId);
   
+  // Initialize session logging
+  const logger = new SessionLogService(flowId, 'one-click');
+  await logger.init();
+  
   // Initialize preview store for this flow
   updateFlowPreview(flowId, { status: 'started', step2Images: null });
 
   try {
-    console.log('\n' + '═'.repeat(80));
-    console.log('🎬 AFFILIATE VIDEO TIKTOK FLOW: Starting comprehensive flow');
-    console.log('═'.repeat(80));
-    console.log(`Flow ID: ${flowId}`);
-    console.log(`Temp Dir: ${tempDir}`);
+    await logger.startStage('initialization');
+    await logger.info(`Starting affiliate video TikTok flow`, 'flow-init', {flowId});
+    console.log(`\n🎬 Affiliate TikTok Flow [${flowId}]`);
 
     // Validate files
     if (!req.files || !req.files.characterImage || !req.files.productImage) {
@@ -659,6 +661,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log('  ├─ Image 1: change-clothes (character wearing product)');
     console.log('  └─ Image 2: character-holding-product (holding in hand)');
 
+    await logger.startStage('image-generation');
     const step2Start = Date.now();
 
     // Build options for both use cases
@@ -734,124 +737,93 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     let holdingImageResult = null;
     
     try {
-      // ✅ OPTIMIZED: Use ONE browser instance for both images
-      const imageGen = new ImageGenerationAutomation({
-        imageCount: 1  // TikTok flow only needs 1 image output
+      // ✅ OPTIMIZED: Use generateMultiple() for efficient component reuse
+      const imageGen = new ImageGenerationAutomationNew({
+        projectId: 'c9d5fea9-63e5-4d21-ac72-6830091fdbc0',  // Required: navigate to project page
+        imageCount: 1,  // TikTok flow only needs 1 image output
+        headless: false
       });
       
-      try {
-        // Initialize browser ONCE
-        await imageGen.init();
-        console.log('✅ Browser initialized');
-        
-        await imageGen.navigateToProject();
-        console.log('✅ Navigated to Google Flow project');
-        
-        await imageGen.configureModel();
-        console.log('✅ Model configured (Nano Banana Pro)');
-        
-        await imageGen.configureAspectRatio('9:16');
-        console.log('✅ Aspect ratio set to 9:16 (TikTok)');
-        
-        // Upload reference images ONCE (will be reused)
-        console.log('\n📸 Uploading reference images...');
-        await imageGen.uploadAndCropImage(characterFilePath, 'person', 0);
-        console.log('✅ Character image uploaded and cropped');
-        
-        await imageGen.uploadAndCropImage(productFilePath, 'product', 1);
-        console.log('✅ Product image uploaded and cropped');
-        
-        // ===== IMAGE 1: WEARING PRODUCT =====
-        console.log('\n📝 IMAGE 1: Generating wearing-product image...');
-        imageGen.expectedPromptLength = wearingPromptData.prompts.prompt.length;
-        await imageGen.enterPrompt(wearingPromptData.prompts.prompt);
-        console.log('✅ Wearing prompt entered');
-        
-        console.log('⏳ Submitting and waiting for generation...');
-        await imageGen.submitAndWaitForGeneration();
-        console.log('✅ Wearing generation completed');
-        
-        // Download wearing image
-        const tempDir = path.join(process.cwd(), 'backend/temp');
-        const wearingDownloads = await imageGen.downloadResults(tempDir, 1);
-        
-        if (wearingDownloads && wearingDownloads.length > 0) {
-          wearingImageResult = {
-            path: wearingDownloads[0],
-            url: wearingDownloads[0]
-          };
-          console.log(`✅ Wearing image downloaded: ${wearingImageResult.path}`);
-        } else {
-          throw new Error('No wearing image returned from downloadResults');
-        }
+      console.log('🚀 Initializing image generation service...');
+      
+      // Generate both images in single browser session with component reuse
+      const multiGenResult = await imageGen.generateMultiple(
+        characterFilePath,
+        productFilePath,
+        [
+          wearingPromptData.prompts.prompt,    // Image 1: wearing product
+          holdingPromptData.prompts.prompt     // Image 2: holding product
+        ]
+      );
 
-        // ===== IMAGE 2: HOLDING PRODUCT (Reusing Same Browser + Images) =====
-        console.log('\n📝 IMAGE 2: Generating holding-product image...');
-        console.log('💡 Reusing browser + reference images (no re-upload needed)');
-        
-        // 💫 CRITICAL: Click "Sử dụng lại câu lệnh" button FIRST to restore components/reference images
-        console.log('\n🔄 Clicking "Sử dụng lại câu lệnh" button to restore reference images...');
-        const reuseSuccess = await imageGen.clickReuseCommandButton();
-        if (!reuseSuccess) {
-          console.log('⚠️  Warning: Could not click reuse button. Components may be missing.');
-        }
-        
-        // 💫 NOW enter new prompt (after reuse button click and textarea clear)
-        console.log('\n📝 Entering holding prompt...');
-        imageGen.expectedPromptLength = holdingPromptData.prompts.prompt.length;
-        await imageGen.enterPrompt(holdingPromptData.prompts.prompt);
-        console.log('✅ Holding prompt entered');
-        
-        console.log('⏳ Submitting and waiting for generation...');
-        await imageGen.submitAndWaitForGeneration();
-        console.log('✅ Holding generation completed');
-        
-        // Download holding image
-        const holdingDownloads = await imageGen.downloadResults(tempDir, 1);
-        
-        if (holdingDownloads && holdingDownloads.length > 0) {
-          holdingImageResult = {
-            path: holdingDownloads[0],
-            url: holdingDownloads[0]
-          };
-          console.log(`✅ Holding image downloaded: ${holdingImageResult.path}`);
-        } else {
-          throw new Error('No holding image returned from downloadResults');
-        }
-        
-      } finally {
-        // Close browser ONCE after both images
-        try {
-          await imageGen.close();
-          console.log(`✅ Browser closed (both images generated)`);
-        } catch (closeError) {
-          console.warn('⚠️  Warning closing browser:', closeError.message);
-        }
+      if (!multiGenResult.success || !multiGenResult.results || multiGenResult.results.length < 2) {
+        throw new Error('Multi-generation failed or did not produce enough results');
       }
+
+      // Extract results
+      const wearingResult = multiGenResult.results[0];
+      const holdingResult = multiGenResult.results[1];
+
+      if (!wearingResult.success) {
+        throw new Error(`Wearing image generation failed: ${wearingResult.error}`);
+      }
+      if (!holdingResult.success) {
+        throw new Error(`Holding image generation failed: ${holdingResult.error}`);
+      }
+
+      // Map to expected format
+      wearingImageResult = {
+        imageUrl: wearingResult.imageUrl,
+        screenshotPath: wearingResult.screenshotPath,
+        downloadedAt: wearingResult.downloadedAt
+      };
+      
+      holdingImageResult = {
+        imageUrl: holdingResult.imageUrl,
+        screenshotPath: holdingResult.screenshotPath,
+        downloadedAt: holdingResult.downloadedAt
+      };
+
+      console.log(`✅ Wearing image generated: ${wearingResult.imageUrl.substring(0, 80)}...`);
+      console.log(`✅ Holding image generated: ${holdingResult.imageUrl.substring(0, 80)}...`);
+        
     } catch (imageGenError) {
       console.error('❌ Image generation failed:', imageGenError.message);
       throw new Error(`Image generation failed: ${imageGenError.message}`);
     }
 
-    if (!wearingImageResult || !wearingImageResult.path) {
-      throw new Error('Wearing image generation failed - no output file');
+    if (!wearingImageResult || !wearingImageResult.imageUrl) {
+      throw new Error('Wearing image generation failed - no output URL');
     }
-    if (!holdingImageResult || !holdingImageResult.path) {
-      throw new Error('Holding image generation failed - no output file');
+    if (!holdingImageResult || !holdingImageResult.imageUrl) {
+      throw new Error('Holding image generation failed - no output URL');
     }
 
     const step2Duration = ((Date.now() - step2Start) / 1000).toFixed(2);
 
+    await logger.endStage('image-generation', true);
+    await logger.info('Both images generated successfully', 'image-generation-complete', {
+      duration: step2Duration,
+      wearingImage: wearingImageResult.screenshotPath,
+      holdingImage: holdingImageResult.screenshotPath
+    });
+    await logger.storeArtifacts({
+      images: {
+        wearing: wearingImageResult.screenshotPath,
+        holding: holdingImageResult.screenshotPath
+      }
+    });
+
     console.log(`\n✅ STEP 2 COMPLETE: Both images generated in ${step2Duration}s`);
-    console.log(`  ├─ Change-clothes (wearing): ${wearingImageResult.path}`);
-    console.log(`  └─ Holding-product: ${holdingImageResult.path}`);
+    console.log(`  ├─ Change-clothes (wearing): ${wearingImageResult.screenshotPath}`);
+    console.log(`  └─ Holding-product: ${holdingImageResult.screenshotPath}`);
 
     // 💫 SAVE STEP 2 IMAGES TO PREVIEW STORE (for frontend polling)
     updateFlowPreview(flowId, {
       status: 'step2-complete',
       step2: {
-        wearingImagePath: wearingImageResult.path,
-        holdingImagePath: holdingImageResult.path,
+        wearingImagePath: wearingImageResult.screenshotPath,
+        holdingImagePath: holdingImageResult.screenshotPath,
         duration: step2Duration
       }
     });
@@ -866,8 +838,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log('─'.repeat(80));
 
     // Google Flow downloads images directly, so use the paths from the results
-    let wearingImagePath = wearingImageResult?.path;
-    let holdingImagePath = holdingImageResult?.path;
+    let wearingImagePath = wearingImageResult?.screenshotPath;  // ✅ Fixed: use screenshotPath not path
+    let holdingImagePath = holdingImageResult?.screenshotPath;  // ✅ Fixed: use screenshotPath not path
 
     console.log(`📁 Image paths from Google Flow:`);
     console.log(`   Wearing: ${wearingImagePath}`);
@@ -971,6 +943,13 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     const step3Duration = ((Date.now() - step3Start) / 1000).toFixed(2);
+    await logger.endStage('deep-analysis', true);
+    await logger.storeAnalysis({
+      videoScripts: deepAnalysis.data.videoScripts?.length || 0,
+      voiceoverScript: deepAnalysis.data.voiceoverScript ? deepAnalysis.data.voiceoverScript.substring(0, 500) : '',
+      hashtags: deepAnalysis.data.hashtags || [],
+      duration: step3Duration
+    });
     console.log(`\n✅ Deep analysis complete in ${step3Duration}s`);
     console.log(`📊 ANALYSIS OUTPUT:`);
     console.log(`  Video scripts: ${deepAnalysis.data.videoScripts?.length || 0} segments`);
@@ -985,6 +964,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log('\n' + '─'.repeat(80));
     console.log('🎬 STEP 4: Video Generation');
     console.log('─'.repeat(80));
+    await logger.startStage('video-generation');
     const step4Start = Date.now();
 
     let videoGenerationResult = null;
@@ -1005,7 +985,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
       // ========== INITIALIZE SINGLE BROWSER SESSION ==========
       const videoGen = new VideoGenerationAutomationV2({
-        imagePath: wearingImageResult.path,
+        imagePath: wearingImageResult.screenshotPath,
         duration: videoDuration,
         aspectRatio: '9:16',
         quality: 'high',
@@ -1029,9 +1009,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log('✅ Navigated to Google Flow project');
 
         // Upload wearing image reference ONCE for all segments
-        if (fs.existsSync(wearingImageResult.path)) {
+        if (fs.existsSync(wearingImageResult.screenshotPath)) {
           console.log('\n📸 Uploading image reference (will be reused for all segments)...');
-          await videoGen.uploadImage(wearingImageResult.path);
+          await videoGen.uploadImage(wearingImageResult.screenshotPath);
           console.log('✅ Reference image uploaded');
         }
 
@@ -1052,6 +1032,17 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           console.log(`\n${'═'.repeat(70)}`);
           console.log(`🎯 MULTI-SEGMENT VIDEO GENERATION (${videoSegments.length} videos)`);
           console.log(`${'═'.repeat(70)}`);
+          
+          // 🔴 CRITICAL: Verify image is still selected before generation
+          console.log(`\n✅ PRE-FLIGHT CHECKS:`);
+          const imageStillSelected = await videoGen.verifyImageSelected();
+          if (!imageStillSelected) {
+            console.warn(`⚠️  WARNING: Image selection lost! Attempting to reselect...`);
+            await videoGen.selectReferencePath(referenceImagePath);
+            console.log(`   Reselection complete`);
+          } else {
+            console.log(`   ✅ Reference image still selected`);
+          }
 
           for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
             const segment = videoSegments[segIdx];
@@ -1079,6 +1070,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
                 await videoGen.enterPrompt(segmentPrompt);
                 console.log(`   ✓ Prompt entered`);
+
+                await videoGen.waitForSendButtonEnabled();
+                console.log(`   ✓ Send button enabled`);
 
                 await videoGen.checkSendButton();
                 console.log(`   ✓ Send button verified`);
@@ -1159,6 +1153,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           await videoGen.enterPrompt(videoPrompt);
           console.log('✅ Prompt entered');
 
+          // Wait for send button to be enabled
+          console.log('\n⏳ Waiting for send button to enable...');
+          await videoGen.waitForSendButtonEnabled();
+          console.log('✅ Send button enabled');
+
           // Check send button
           console.log('\n✔️  Checking send button...');
           await videoGen.checkSendButton();
@@ -1224,6 +1223,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     const step4Duration = ((Date.now() - step4Start) / 1000).toFixed(2);
+    await logger.endStage('video-generation', allGeneratedVideos.length > 0);
+    await logger.info(`Video generation completed`, 'video-generation-complete', {
+      generatedCount: allGeneratedVideos.length,
+      duration: step4Duration
+    });
+    await logger.storeArtifacts({
+      videos: allGeneratedVideos.map(v => ({ segment: v.segment, path: v.path, size: v.size }))
+    });
     console.log(`\n✅ STEP 4 COMPLETE: Generated ${allGeneratedVideos.length} video(s) in ${step4Duration}s`);
 
     // ============================================================
@@ -1242,7 +1249,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // 5.1: Save wearing image
     try {
       // 💫 CHECK: Wearing image - skip if already exists
-      const wearingFilename = path.basename(wearingImageResult.path);
+      const wearingFilename = path.basename(wearingImageResult.screenshotPath);
       let wearingAssetExists = await checkExistingAsset(wearingFilename, 'generated-image');
       
       if (wearingAssetExists) {
@@ -1287,7 +1294,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // 5.2: Save holding image
     try {
       // 💫 CHECK: Holding image - skip if already exists
-      const holdingFilename = path.basename(holdingImageResult.path);
+      const holdingFilename = path.basename(holdingImageResult.screenshotPath);
       let holdingAssetExists = await checkExistingAsset(holdingFilename, 'generated-image');
       
       if (holdingAssetExists) {
@@ -1431,12 +1438,19 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         }
       };
 
-      console.log(`\n✅ Response object built successfully`);
-      console.log(`📤 Sending response to client...`);
+      // Mark session as completed and store final artifacts
+      await logger.storeArtifacts({
+        characterImagePath: characterFilePath,
+        productImagePath: productFilePath,
+        generatedImagePaths: images,
+        videoSegmentPaths: savedAssets.videos
+      });
+      await logger.markCompleted();
+      
+      console.log(`✅ Flow completed [${flowId}]`);
       
       // Send response
       res.json(responseData);
-      console.log(`✅ Response sent to client`);
     } catch (responseError) {
       console.error(`💥 ERROR building/sending response: ${responseError.message}`);
       console.error(`Stack: ${responseError.stack}`);
@@ -1451,18 +1465,17 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
   } catch (error) {
-    console.error('💥 AFFILIATE VIDEO TIKTOK FLOW ERROR:', error);
+    console.error('❌ Error:', error.message);
+    await logger.markFailed(error.message);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     res.status(500).json({
       success: false,
       error: error.message,
-      metadata: {
-        duration: `${duration}s`,
-        flowId,
-        timestamp: new Date().toISOString()
-      }
+      flowId,
+      duration: `${duration}s`,
+      timestamp: new Date().toISOString()
     });
   }
 }
@@ -2026,37 +2039,23 @@ function buildSegmentVideoPrompt(segment, characterAnalysis, config) {
   const productMaterial = product.fabric_type || product.material || 'quality fabric';
 
   const segmentDirections = {
-    intro: `Start with an engaging hook that captures attention in 1 second. Make it exciting and TikTok-worthy. Use trendy language. The product ${productName} in ${productColor} is the star.`,
-    wearing: `Show the ${productName} being worn. Focus on fit, comfort, and style. Make it aspirational. The character looks amazing wearing this. Emphasize why followers should want this look.`,
-    holding: `Close-up shot of the ${productName} being held/presented. Highlight quality and details. Made with ${productMaterial}. Show the product features clearly. Create desire.`,
-    cta: `Strong call-to-action. Tell viewers to buy now or click the link. Create urgency. Limited stock, exclusive deal, etc. End with hashtag.`,
-    outro: `Wrap up with final thoughts or repeat CTA. Leave them wanting more.`
+    intro: `Start with an engaging hook. Make it exciting and TikTok-worthy. The ${productName} in ${productColor} is the star.`,
+    wearing: `Show the ${productName} being worn. Focus on fit, comfort, and style. The character looks amazing.`,
+    holding: `Close-up of the ${productName}. Highlight quality and details. Made with ${productMaterial}.`,
+    cta: `Strong call-to-action. Tell viewers to buy now or click the link. Create urgency.`,
+    outro: `Wrap up with final thoughts. Leave them wanting more.`
   };
 
   const direction = segmentDirections[segment.segment] || 'Create an engaging video segment';
 
-  return `
-📺 VIDEO SEGMENT GENERATION
-
-SEGMENT: ${segment.segment.toUpperCase()}
+  // 🔴 IMPROVED: Simpler, more concise prompt that Veo can handle better
+  return `VIDEO: ${segment.segment.toUpperCase()}
 Duration: ${videoDuration}s
-Image used: ${segment.image}
+Script: "${segment.script}"
 
-DIRECTION:
-${direction}
+Direction: ${direction}
 
-SCRIPT TO FOLLOW:
-"${segment.script}"
-
-REQUIREMENTS:
-- Fast-paced, engaging narration
-- ${voiceGender} voice narrator (${voicePace} pace)
-- TikTok viral style
-- Product focus: ${productFocus}
-- Authenticity matters
-- Conversion-focused but natural
-
-OUTPUT: Create a video that brings this script to life. Make it scroll-stopping.`;
+Style: Fast-paced TikTok video, ${voiceGender} voice (${voicePace} pace), product focus: ${productFocus}`;
 }
 
 /**
@@ -2121,5 +2120,173 @@ export default {
   performDeepChatGPTAnalysis,
   formatVoiceoverForTTS,
   buildVideoPromptFromAnalysis,
-  getFlowPreview
+  getFlowPreview,
+  
+  // 💫 NEW: Helper functions for modular step endpoints
+  /**
+   * Build analysis prompt for Step 1
+   */
+  buildAnalysisPrompt: () => {
+    return `
+You are an expert fashion stylist and virtual try-on specialist. Analyze these two images extensively to provide detailed styling recommendations.
+
+===== IMAGE LABELING =====
+Image 1 = CHARACTER (Person to be dressed)
+Image 2 = PRODUCT (Garment/Outfit to be applied)
+
+===== TASK =====
+1. ANALYZE CHARACTER (Image 1) - Extract profile details
+2. ANALYZE PRODUCT (Image 2) - Extract garment specifications  
+3. GENERATE RECOMMENDATIONS - Scene, lighting, mood, styling for virtual try-on
+4. RETURN STRUCTURED JSON - Formatted for image generation systems
+
+===== CHARACTER PROFILE ANALYSIS =====
+From Image 1, extract and describe:
+
+Age & Demographics:
+- Estimated age range
+- Gender identification
+- Complexion/skin tone
+
+Physical Characteristics:
+- Hair: Color, style, length
+- Facial features: Notable characteristics
+- Body type: Build description
+- Height indication: Apparent height
+
+Current Pose & Position:
+- Body position: Standing, sitting, walking
+- Arm position
+- Head position
+- Leg position
+- Overall pose orientation
+
+Current Styling:
+- Current clothing
+- Accessories
+- Hairstyle details
+- Makeup appearance
+
+===== PRODUCT SPECIFICATION ANALYSIS =====
+From Image 2, extract and describe:
+
+Garment Basics:
+- Type: What is it?
+- Category: Casual, formal, athletic, etc.
+- Color Information
+
+Material & Construction:
+- Fabric type
+- Appearance texture
+- Weight: Heavy, medium, light
+- Stretch: Form-fitting or relaxed?
+
+Design Details:
+- Neckline
+- Sleeves
+- Fit style
+- Length
+- Key features
+
+===== RECOMMENDATION GENERATION =====
+Based on character × product compatibility, recommend:
+
+1. SCENE/SETTING
+2. LIGHTING  
+3. MOOD/ATMOSPHERE
+4. CAMERA ANGLE
+
+Return as JSON with clear sections.
+    `;
+  },
+
+  /**
+   * Build wearing prompt for Step 2
+   */
+  buildWearingPrompt: (analysis) => {
+    if (!analysis) return "Generate a professional image of a model wearing the product";
+    
+    const character = analysis.character || {};
+    const product = analysis.product || {};
+    const recommendations = analysis.recommendations || {};
+
+    let prompt = `Professional fashion image of a ${character.age_range || 'elegant'} person`;
+    
+    if (character.hair) prompt += `, with ${character.hair}`;
+    if (character.body_type) prompt += `, ${character.body_type} figure`;
+    
+    prompt += ` wearing ${product.garment_type || 'beautiful outfit'}`;
+    
+    if (product.primary_color) prompt += ` in ${product.primary_color}`;
+    if (product.fabric_type) prompt += ` made of ${product.fabric_type}`;
+    
+    prompt += `. Setting: ${recommendations.scene || 'studio'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
+    
+    return prompt;
+  },
+
+  /**
+   * Build holding prompt for Step 2
+   */
+  buildHoldingPrompt: (analysis) => {
+    if (!analysis) return "Generate a professional image of a model holding the product";
+    
+    const character = analysis.character || {};
+    const product = analysis.product || {};
+    const recommendations = analysis.recommendations || {};
+
+    let prompt = `Professional fashion image of a ${character.age_range || 'elegant'} person`;
+    
+    if (character.hair) prompt += `, with ${character.hair}`;
+    if (character.body_type) prompt += `, ${character.body_type} figure`;
+    
+    prompt += ` holding ${product.garment_type || 'beautiful product'}`;
+    
+    if (product.primary_color) prompt += ` in ${product.primary_color}`;
+    
+    prompt += `. Close-up focus on the product to show details and quality. Setting: ${recommendations.scene || 'studio'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
+    
+    return prompt;
+  },
+
+  /**
+   * Build deep analysis prompt for Step 3
+   */
+  buildDeepAnalysisPrompt: (analysis, productFocus) => {
+    return `
+You are a TikTok content strategist and fashion expert. Based on the character and product analysis, create compelling TikTok content.
+
+ANALYSIS PROVIDED:
+${JSON.stringify(analysis, null, 2)}
+
+TASK:
+1. Generate 3-5 short video scripts (each 15-30 seconds for TikTok)
+2. Create engaging hashtags (10-15 relevant ones)
+3. Suggest video segments and flow
+4. Provide copy for each segment
+
+SCRIPT REQUIREMENTS:
+- Concise and engaging (TikTok style)
+- Focus on: ${productFocus || 'full outfit appeal'}
+- Include call-to-action
+- Make it shareable and relatable
+
+Return as JSON with:
+{
+  "videoScripts": [
+    { "segment": "intro", "text": "...", "duration": 5 },
+    { "segment": "wearing", "text": "...", "duration": 10 },
+    { "segment": "holding", "text": "...", "duration": 10 },
+    { "segment": "cta", "text": "...", "duration": 5 }
+  ],
+  "hashtags": ["#fashion", ...],
+  "metadata": {
+    "tone": "engaging, energetic",
+    "hook": "strong visual + trending audio",
+    "message": "main selling point"
+  }
+}
+    `;
+  }
 };
+

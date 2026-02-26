@@ -8,12 +8,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload, Sparkles, Rocket, Loader2, ChevronDown, ChevronUp,
   Play, Video, X, Settings, Image as ImageIcon,
-  AlertCircle, CheckCircle, Clock, FileText, Target, Wand2, Volume2, Mic, Package
+  AlertCircle, CheckCircle, Clock, FileText, Target, Wand2, Volume2, Mic, Package, Database
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
 import promptTemplateService from '../services/promptTemplateService';
 import GalleryPicker from '../components/GalleryPicker';
+import SessionLogModal from '../components/SessionLogModal';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 import { 
   calculateVideoCount, 
@@ -236,7 +237,7 @@ const getWorkflowSteps = (useCase) => {
 
 
 // Session component
-function SessionRow({ session, isGenerating, onCancel }) {
+function SessionRow({ session, isGenerating, onCancel, onViewLog }) {
   const [expandedLogs, setExpandedLogs] = useState(false);
   
   const getStepStatus = (stepId) => {
@@ -438,12 +439,33 @@ function SessionRow({ session, isGenerating, onCancel }) {
           </div>
         )}
       </div>
+
+      {/* View Session Log Button */}
+      <div className="border-t border-gray-700 pt-3 flex gap-2">
+        <button
+          onClick={() => onViewLog && onViewLog(session.flowId)}
+          className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+        >
+          <Database className="w-4 h-4" />
+          View Session Log
+        </button>
+        <button
+          onClick={() => setExpandedLogs(false)}
+          className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+        >
+          Collapse All
+        </button>
+      </div>
     </div>
   );
 }
 
 export default function OneClickCreatorPage() {
   const navigate = useNavigate();
+
+  // Modal States
+  const [showSessionLogModal, setShowSessionLogModal] = useState(false);
+  const [selectedFlowId, setSelectedFlowId] = useState(null);
 
   // Upload states
   const [characterImage, setCharacterImage] = useState(null);
@@ -605,7 +627,8 @@ export default function OneClickCreatorPage() {
     characterImageBase64,
     productImageBase64,
     recommendedOptions,
-    analysisResult
+    analysisResult,
+    flowId  // 💫 NEW: Accept flowId from caller
   ) => {
     try {
       console.log('🎬 Starting Affiliate Video TikTok Flow');
@@ -614,6 +637,7 @@ export default function OneClickCreatorPage() {
       console.log(`  Product base64: ${productImageBase64?.substring(0, 50)}...${productImageBase64?.length}B`);
       console.log(`  Options: ${JSON.stringify(recommendedOptions)}`);
       console.log(`  Analysis: ${analysisResult ? 'present' : 'missing'}`);
+      console.log(`  Flow ID: ${flowId}`);  // 💫 Log flowId
       
       // Extract voice settings
       const [voiceGender, voicePace] = voiceOption.split('-');
@@ -630,6 +654,7 @@ export default function OneClickCreatorPage() {
         videoProvider: videoProvider || 'google-flow',
         generateVideo: true,
         generateVoiceover: true,
+        flowId,  // 💫 Pass flowId in payload
         options: recommendedOptions || {}
       };
       
@@ -754,6 +779,35 @@ export default function OneClickCreatorPage() {
     }
   };
 
+  // 💫 NEW: Initialize backend session to get flowId
+  const initializeBackendSession = async (sessionNumber) => {
+    try {
+      console.log(`\n📝 Initializing backend session for Session #${sessionNumber}...`);
+      
+      const response = await fetch('/api/sessions/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flowType: 'one-click',
+          useCase: useCase
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend session creation failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const flowId = data.data?.flowId || data.data?.sessionId;
+      
+      console.log(`✅ Backend session created: ${flowId}`);
+      return flowId;
+    } catch (error) {
+      console.error(`❌ Failed to create backend session:`, error);
+      throw error;
+    }
+  };
+
   // Main generation flow
   const handleOneClickGeneration = async () => {
     if (!characterImage || !productImage) {
@@ -763,6 +817,7 @@ export default function OneClickCreatorPage() {
 
     setIsGenerating(true);
     setSessions([]);
+    let sessionCreationFailed = false;
 
     // Convert images to base64
     console.log('📸 Converting images to base64...');
@@ -866,6 +921,27 @@ export default function OneClickCreatorPage() {
             addLog(sessionId, '🎬 Starting Affiliate Video TikTok workflow...');
             updateSessionStep(sessionId, 'tiktok-options', { completed: true, inProgress: false });
             
+            // 💫 NEW: Initialize backend session to get flowId
+            let flowId = null;
+            try {
+              flowId = await initializeBackendSession(sessionId);
+              addLog(sessionId, `📝 Backend session created: ${flowId}`);
+              
+              // 💫 Update session state with flowId for modal viewing
+              setSelectedFlowId(flowId);
+              setSessions(prev => prev.map(sess => {
+                if (sess.id === sessionId) {
+                  return { ...sess, flowId };
+                }
+                return sess;
+              }));
+            } catch (sessionInitError) {
+              console.error(`❌ Failed to initialize backend session [S${sessionId}]:`, sessionInitError);
+              addLog(sessionId, `❌ Session initialization failed: ${sessionInitError.message}`);
+              updateSessionStep(sessionId, 'tiktok-options', { error: sessionInitError.message, inProgress: false });
+              throw sessionInitError; // Stop processing this session
+            }
+            
             // Call the TikTok flow
             // Note: tiktokFlowId will be set inside handleAffiliateVideoTikTokFlow,
             // and useEffect will automatically start polling when flowId becomes available
@@ -873,7 +949,8 @@ export default function OneClickCreatorPage() {
               charBase64,
               prodBase64,
               recommendedOptions,
-              analysisResult
+              analysisResult,
+              flowId  // 💫 Pass flowId to the flow
             );
 
             // Update session with results
@@ -888,6 +965,7 @@ export default function OneClickCreatorPage() {
                 
                 return {
                   ...sess,
+                  flowId, // 💫 Store flowId with session
                   image: tiktokResult.data?.step2?.images?.wearing || 
                           tiktokResult.images?.wearing || 
                           tiktokResult.final_package?.images?.[0],
@@ -1501,6 +1579,10 @@ export default function OneClickCreatorPage() {
                         key={session.id}
                         session={session}
                         isGenerating={isGenerating}
+                        onViewLog={(flowId) => {
+                          setSelectedFlowId(flowId);
+                          setShowSessionLogModal(true);
+                        }}
                       />
                     ))}
                   </div>
@@ -1538,16 +1620,83 @@ export default function OneClickCreatorPage() {
           setGalleryPickerFor(null);
         }}
         onSelect={(imageData) => {
+          if (!imageData || !imageData.url) {
+            console.error('❌ Invalid image data from gallery:', imageData);
+            alert('Error: Selected image is missing URL');
+            return;
+          }
+          
+          console.log(`🖼️ Gallery image selected:`, { assetId: imageData.assetId, name: imageData.name, url: imageData.url });
+          
           if (galleryPickerFor === 'character') {
-            setCharacterImage(imageData);
+            console.log(`⏳ Loading character image from gallery...`);
+            fetch(imageData.url, {
+              method: 'GET',
+              headers: { 'Accept': 'image/*' }
+            })
+              .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                return res.blob();
+              })
+              .then(blob => {
+                if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                // Convert blob to data URL for consistent storage
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  const dataUrl = evt.target?.result;
+                  setCharacterImage(dataUrl);
+                  console.log(`✨ Character image updated as data URL (${dataUrl?.length}B)`);
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(err => {
+                console.error('❌ Failed to load gallery image:', err);
+                alert(`Failed to load image: ${err.message}`);
+              });
           } else if (galleryPickerFor === 'product') {
-            setProductImage(imageData);
+            console.log(`⏳ Loading product image from gallery...`);
+            fetch(imageData.url, {
+              method: 'GET',
+              headers: { 'Accept': 'image/*' }
+            })
+              .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                return res.blob();
+              })
+              .then(blob => {
+                if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                // Convert blob to data URL for consistent storage
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  const dataUrl = evt.target?.result;
+                  setProductImage(dataUrl);
+                  console.log(`✨ Product image updated as data URL (${dataUrl?.length}B)`);
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(err => {
+                console.error('❌ Failed to load gallery image:', err);
+                alert(`Failed to load image: ${err.message}`);
+              });
           }
           setShowGalleryPicker(false);
           setGalleryPickerFor(null);
         }}
         assetType="image"
         title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+      />
+
+      {/* Session Log Modal */}
+      <SessionLogModal
+        isOpen={showSessionLogModal}
+        onClose={() => {
+          setShowSessionLogModal(false);
+          setSelectedFlowId(null);
+        }}
+        sessionId={selectedFlowId}
+        flowId={selectedFlowId}
       />
     </div>
   );

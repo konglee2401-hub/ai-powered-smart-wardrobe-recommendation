@@ -6,8 +6,63 @@
 import express from 'express';
 import SessionHistoryController from '../controllers/sessionHistoryController.js';
 import { protect } from '../middleware/auth.js';
+import SessionLog from '../models/SessionLog.js';
 
 const router = express.Router();
+
+/**
+ * POST /api/sessions/create
+ * Create a new session/flowId for generation tracking
+ * 💫 NEW: Quick session creation without userId requirement
+ */
+router.post('/create', async (req, res) => {
+  try {
+    const { flowType = 'one-click', useCase } = req.body;
+    
+    // Generate unique session ID
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    console.log(`\n📝 Creating session: ${sessionId}`);
+    console.log(`   Type: ${flowType}`);
+    console.log(`   Use Case: ${useCase}`);
+    
+    // Create session record in database immediately
+    const sessionLog = new SessionLog({
+      sessionId,
+      flowType,
+      status: 'in-progress',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      logs: [{
+        timestamp: new Date(),
+        level: 'info',
+        category: 'session-init',
+        message: `Session initialized for ${useCase || flowType}`,
+        details: { flowType, useCase }
+      }]
+    });
+    
+    await sessionLog.save();
+    
+    console.log(`✅ Session created: ${sessionId}`);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        sessionId,
+        flowId: sessionId,
+        flowType,
+        createdAt: sessionLog.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error creating session:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 /**
  * POST /api/sessions

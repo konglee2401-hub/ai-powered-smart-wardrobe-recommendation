@@ -3,7 +3,7 @@
  * Tests the new video generation flow with segment calculation and file handling
  */
 
-import { runVideoGeneration } from '../../services/videoGenerationServiceV2.js';
+import { runVideoGeneration } from '../../../backend/services/googleFlowAutomationService.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';

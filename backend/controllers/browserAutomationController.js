@@ -3,8 +3,7 @@ import ZAIChatService from '../services/browser/zaiChatService.js';
 import ZAIImageService from '../services/browser/zaiImageService.js';
 import GoogleFlowService from '../services/browser/googleFlowService.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
-import { runImageGeneration } from '../services/imageGenerationService.js'; // 💫 Image Generation Service
-import { runVideoGeneration } from '../services/videoGenerationServiceV2.js'; // 💫 Video Generation Service (V2 with image upload support)
+import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import VideoGeneration from '../models/VideoGeneration.js';
 import Asset from '../models/Asset.js'; // 💫 Asset model for hybrid storage
 import uploadToImgBB from '../services/uploaders/imgbbUploader.js'; // 💫 NEW
@@ -2265,7 +2264,7 @@ export async function generateVideoBrowser(req, res) {
       console.log(`   🎯 Final segments to generate: ${finalSegments.length}\n`);
 
       try {
-        const { runVideoGeneration } = await import('../services/videoGenerationServiceV2.js');
+        const { default: GoogleFlowAutomationService } = await import('../services/googleFlowAutomationService.js');
         
         const generatedVideos = [];
         const outputDir = path.join(tempDir, `video-output-${Date.now()}`);

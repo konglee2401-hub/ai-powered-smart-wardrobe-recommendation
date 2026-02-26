@@ -63,6 +63,21 @@ export function VideoProduction() {
   const handleGallerySelect = (items) => {
     // If single item (not multiselect), items will be an object
     const item = Array.isArray(items) ? items[0] : items;
+    
+    if (!item || !item.url || !item.name) {
+      console.error('❌ Invalid gallery item selected:', item);
+      toast.error('Error: Selected item is missing required data');
+      return;
+    }
+    
+    console.log(`🎬 Media selected for video production:`, { 
+      assetId: item.assetId, 
+      name: item.name, 
+      url: item.url,
+      type: item.type,
+      category: item.category
+    });
+    
     setSelectedMediaForVideo(item);
     toast.success(`Selected: ${item.name}`);
   };

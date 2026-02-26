@@ -2,10 +2,10 @@
 
 /**
  * Test Script for Google Flow Video Generation
- * Tests the videoGenerationServiceV2 with various scenarios
+ * Tests the googleFlowAutomationService with video type
  */
 
-import { runVideoGeneration } from './services/videoGenerationServiceV2.js';
+import { runVideoGeneration } from '../../services/googleFlowAutomationService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

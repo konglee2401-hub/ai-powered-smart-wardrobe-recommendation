@@ -43,6 +43,8 @@ import queueScannerRoutes from './routes/queueScannerRoutes.js';
 import videoScriptGenerationRoutes from './routes/videoScriptGenerationRoutes.js';
 import assetRoutes from './routes/assetRoutes.js';
 import ttsRoutes from './routes/ttsRoutes.js';
+import sessionLogRoutes from './routes/sessionLogRoutes.js';
+import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -153,6 +155,8 @@ app.use('/api/drive', driveFolderExplorerRoutes);
 app.use('/api/queue-scanner', queueScannerRoutes);
 app.use('/api/video', videoScriptGenerationRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api/debug-sessions', sessionLogRoutes);
+app.use('/api/ai/affiliate-video-tiktok', affiliateVideoTikTokRoutes);
 
 app.use(errorHandler);
 
@@ -205,6 +209,21 @@ try {
 } catch (error) {
   console.error('⚠️ [HybridStorage] Failed to start sync service:', error.message);
   // Continue anyway - local storage still works
+}
+
+// 🔐 Pre-authenticate Google Drive on startup
+// This ensures drive-token.json is written BEFORE any uploads happen
+// So nodemon won't restart when token refresh occurs during step execution
+import GoogleDriveIntegration from './services/googleDriveIntegration.js';
+
+try {
+  console.log('\n🔐 Pre-authenticating Google Drive...');
+  const drive = new GoogleDriveIntegration();
+  await drive.authenticate();
+  console.log('✅ Google Drive authenticated (token cached)');
+} catch (error) {
+  console.warn('⚠️ Google Drive authentication skipped:', error.message);
+  // Continue anyway - will authenticate on first upload
 }
 
 server.listen(PORT, () => {

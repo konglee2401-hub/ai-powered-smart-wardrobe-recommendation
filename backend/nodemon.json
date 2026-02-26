@@ -1,0 +1,9 @@
+{
+  "watch": ["*.js", "routes/", "services/", "controllers/", "middleware/", "models/", "config/", "utils/", "scripts/", "constants/"],
+  "ignore": ["temp/**", "uploads/**", "downloads/**", "media/**", "test-results/**", "config/*.json", "*.json"],
+  "ext": "js,mjs,cjs",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

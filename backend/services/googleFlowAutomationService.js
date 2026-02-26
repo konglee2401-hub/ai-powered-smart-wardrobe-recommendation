@@ -1,5 +1,6 @@
 /**
- * ImageGenerationService - Updated for NEW Google Flow UI
+ * GoogleFlowAutomationService - Unified service for Image and Video generation
+ * Supports both image and video workflows through single service
  */
 
 import puppeteer from 'puppeteer-extra';
@@ -11,19 +12,21 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
 
-class ImageGenerationAutomationNew {
+class GoogleFlowAutomationService {
   constructor(options = {}) {
     this.browser = null;
     this.page = null;
+    this.type = options.type || 'image'; // 'image' or 'video'
     this.options = {
       headless: false,
       sessionFilePath: path.join(__dirname, '../.sessions/google-flow-session.json'),
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
-      projectId: options.projectId || null,
+      projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
       aspectRatio: options.aspectRatio || '9:16',
-      imageCount: options.imageCount || 1,
-      model: options.model || 'Nano Banana Pro',
-      outputDir: options.outputDir || path.join(__dirname, '../temp/image-generation-outputs'),
+      imageCount: this.type === 'image' ? (options.imageCount || 1) : undefined,
+      videoCount: this.type === 'video' ? (options.videoCount || 1) : undefined,
+      model: options.model || (this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast'),
+      outputDir: options.outputDir || path.join(__dirname, `../temp/${this.type}-generation-outputs`),
       timeouts: {
         pageLoad: 30000,
         tabSwitch: 1500,
@@ -37,7 +40,8 @@ class ImageGenerationAutomationNew {
   }
 
   async init() {
-    console.log('🚀 Initializing Image Generation Service...\n');
+    const typeLabel = this.type === 'image' ? 'Image' : 'Video';
+    console.log(`🚀 Initializing ${typeLabel} Generation Service...\n`);
 
     if (!fs.existsSync(this.options.outputDir)) {
       fs.mkdirSync(this.options.outputDir, { recursive: true });
@@ -523,8 +527,14 @@ class ImageGenerationAutomationNew {
       throw new Error('Failed to open settings menu');
     }
 
-    console.log('   📸 Ensuring IMAGE mode is selected...');
-    await this.selectTab('Image');
+    // Select Image or Video tab based on type
+    if (this.type === 'image') {
+      console.log('   📸 Ensuring IMAGE mode is selected...');
+      await this.selectTab('Image');
+    } else {
+      console.log('   🎬 Ensuring VIDEO mode is selected...');
+      await this.selectTab('Video');
+    }
     await this.page.waitForTimeout(500);
 
     const isVertical = this.options.aspectRatio.includes('9:16');
@@ -533,7 +543,8 @@ class ImageGenerationAutomationNew {
     await this.selectTab(orientationLabel);
     await this.page.waitForTimeout(this.options.timeouts.tabSwitch);
 
-    const quantityLabel = `x${this.options.imageCount}`;
+    const count = this.type === 'image' ? this.options.imageCount : this.options.videoCount;
+    const quantityLabel = `x${count}`;
     console.log(`   📊 Selecting quantity: ${quantityLabel}...`);
     await this.selectTab(quantityLabel);
     await this.page.waitForTimeout(this.options.timeouts.tabSwitch);
@@ -1070,6 +1081,128 @@ class ImageGenerationAutomationNew {
     }
   }
 
+  async clickIngredientsButton() {
+    /**
+     * Click Ingredients button for video upload
+     * Finds button with chrome_extension icon or "Thành phần" text
+     */
+    try {
+      console.log('[INGREDIENTS] Looking for Ingredients button...');
+      
+      const buttonClicked = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        
+        for (const btn of buttons) {
+          // Look for button containing "Thành phần" (Vietnamese for "Ingredients") or with chrome_extension icon
+          const text = btn.textContent.toLowerCase();
+          const hasIcon = btn.innerHTML.includes('chrome_extension') || btn.innerHTML.includes('google_symbols');
+          
+          if (text.includes('thành phần') || text.includes('ingredients') || 
+              (hasIcon && (text.includes('thành phần') || text.includes('phần')))) {
+            
+            const box = btn.getBoundingClientRect();
+            if (box.width > 0 && box.height > 0) {
+              // Found it - simulate click
+              btn.click();
+              console.log('[INGREDIENTS] ✓ Button clicked');
+              return true;
+            }
+          }
+        }
+        
+        return false;
+      });
+
+      if (!buttonClicked) {
+        console.log('[INGREDIENTS] ❌ Ingredients button not found');
+        return false;
+      }
+
+      // Wait for dialog to appear
+      await this.page.waitForTimeout(1000);
+      console.log('[INGREDIENTS] ✓ Ingredients dialog opened');
+      return true;
+
+    } catch (error) {
+      console.log(`[INGREDIENTS] ❌ Error: ${error.message}`);
+      return false;
+    }
+  }
+
+  async downloadMediaFromEditPage() {
+    /**
+     * Download media (image or video) from edit page
+     * Image: select 1K Original Size
+     * Video: select 1080p Upscaled
+     */
+    const mediaType = this.type === 'image' ? 'image' : 'video';
+    const qualityLabel = this.type === 'image' ? '1K' : '1080p';
+    
+    console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()}\\n`);
+    console.log('   Opening download menu...');
+
+    // Click the download button
+    const downloadClicked = await this.page.evaluate(() => {
+      const buttons = document.querySelectorAll('button');
+      for (const btn of buttons) {
+        const icon = btn.querySelector('[font-size="1.125rem"]');
+        if (icon && icon.textContent.includes('download')) {
+          btn.click();
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!downloadClicked) {
+      throw new Error('Download button not found');
+    }
+
+    console.log('   ✓ Download menu opened');
+    await this.page.waitForTimeout(800);
+
+    // Click appropriate quality option
+    if (this.type === 'image') {
+      console.log('   Selecting 1K (original size)...');
+      const selected1K = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('[role="menuitem"]');
+        for (const btn of buttons) {
+          if (btn.textContent.includes('1K') && btn.textContent.includes('Original')) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!selected1K) {
+        throw new Error('Could not select 1K download option');
+      }
+      console.log('   ✓ 1K selected');
+    } else {
+      console.log('   Selecting 1080p (upscaled)...');
+      const selected1080p = await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('[role="menuitem"]');
+        for (const btn of buttons) {
+          if (btn.textContent.includes('1080p') && !btn.hasAttribute('aria-disabled')) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!selected1080p) {
+        throw new Error('Could not select 1080p download option');
+      }
+      console.log('   ✓ 1080p selected');
+    }
+    
+    // Wait for download to complete
+    await this.page.waitForTimeout(3000);
+    console.log('   ✓ Download initiated\\n');
+  }
+
   async close() {
     if (this.browser) {
       await this.browser.close();
@@ -1315,5 +1448,5 @@ class ImageGenerationAutomationNew {
   }
 }
 
-export default ImageGenerationAutomationNew;
+export default GoogleFlowAutomationService;
 

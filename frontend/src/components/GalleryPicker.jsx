@@ -238,23 +238,51 @@ const GalleryPicker = ({
   };
 
   const handleItemSelect = (item) => {
+    console.log(`🖼️  Item clicked:`, {
+      assetId: item.assetId,
+      name: item.name,
+      id: item.id,
+      url: item.url,
+      type: item.type,
+      category: item.category
+    });
+    
     if (multiSelect) {
       setSelectedItems(prev => {
         const isSelected = prev.some(s => s.id === item.id);
-        return isSelected 
+        const newSelection = isSelected 
           ? prev.filter(s => s.id !== item.id)
           : [...prev, item];
+        console.log(`   ${isSelected ? '❌ Deselected' : '✅ Selected'} | Total: ${newSelection.length}`);
+        return newSelection;
       });
     } else {
+      console.log(`   ✅ Single select mode - item will be selected`);
       setSelectedItems(item);
     }
   };
 
   const handleConfirm = () => {
     if (multiSelect) {
+      console.log(`✅ Gallery: Confirming multiselect with ${selectedItems.length} items`);
+      selectedItems.forEach(item => {
+        console.log(`   - ${item.name} (${item.assetId}): url=${item.url}`);
+      });
       onSelect(selectedItems);
     } else {
-      if (selectedItems) onSelect(selectedItems);
+      if (selectedItems) {
+        console.log(`✅ Gallery: Confirming single select:`, {
+          assetId: selectedItems.assetId,
+          name: selectedItems.name,
+          url: selectedItems.url,
+          thumbnail: selectedItems.thumbnail,
+          type: selectedItems.type,
+          category: selectedItems.category
+        });
+        onSelect(selectedItems);
+      } else {
+        console.warn('⚠️  Gallery: No item selected');
+      }
     }
     onClose();
   };
@@ -477,7 +505,8 @@ const GalleryPicker = ({
           display: viewMode === 'grid' 
             ? 'grid'
             : 'flex',
-          gridTemplateColumns: viewMode === 'grid' ? 'repeat(4, 1fr)' : 'none',
+          gridTemplateColumns: viewMode === 'grid' ? 'repeat(4, minmax(150px, 1fr))' : 'none',
+          gridAutoRows: viewMode === 'grid' ? 'minmax(150px, auto)' : 'unset',
           flexDirection: viewMode === 'list' ? 'column' : 'row',
           gap: '1rem',
           alignContent: 'start'
@@ -517,9 +546,11 @@ const GalleryPicker = ({
                   cursor: 'pointer',
                   transition: 'all 0.3s',
                   flex: viewMode === 'list' ? '1 0 auto' : 'unset',
-                  display: viewMode === 'list' ? 'flex' : 'unset',
+                  display: viewMode === 'list' ? 'flex' : 'block',
                   gap: viewMode === 'list' ? '1rem' : 'unset',
-                  position: 'relative'
+                  position: 'relative',
+                  width: viewMode === 'list' ? '100%' : '100%',
+                  height: viewMode === 'list' ? 'auto' : '100%'
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected(item)) {
@@ -539,30 +570,42 @@ const GalleryPicker = ({
                   alt={item.name}
                   style={{
                     width: viewMode === 'list' ? '100px' : '100%',
-                    height: viewMode === 'list' ? '100px' : 'auto',
-                    aspectRatio: '1',
+                    height: viewMode === 'list' ? '100px' : '100%',
+                    aspectRatio: viewMode === 'list' ? 'unset' : '1',
                     objectFit: 'cover',
+                    objectPosition: 'center',
                     flexShrink: 0,
-                    background: imageErrors[item.assetId] ? '#475569' : '#0f172a',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative'
+                    background: '#0f172a',
+                    display: 'block',
+                    backgroundColor: imageErrors[item.assetId] ? '#475569' : '#0f172a'
                   }}
                   onError={(e) => {
                     console.warn(`Image failed to load: ${item.name}`);
                     setImageErrors(prev => ({ ...prev, [item.assetId]: true }));
-                    e.target.style.visibility = 'hidden';
-                    // Show error state in parent
-                    if (e.target.parentElement) {
-                      e.target.parentElement.style.display = 'flex';
-                      e.target.parentElement.style.alignItems = 'center';
-                      e.target.parentElement.style.justifyContent = 'center';
-                      e.target.parentElement.style.background = '#0f172a';
-                      e.target.parentElement.innerHTML = '<div style="text-align: center; color: #94a3b8; font-size: 0.8rem;"><div>⚠️</div><div>Image unavailable</div></div>';
-                    }
                   }}
                 />
+                {imageErrors[item.assetId] && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#0f172a',
+                    color: '#94a3b8',
+                    fontSize: '0.8rem',
+                    textAlign: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <div>
+                      <div>⚠️</div>
+                      <div>Image unavailable</div>
+                    </div>
+                  </div>
+                )}
                 {viewMode === 'list' && (
                   <div style={{ flex: 1, padding: '0.75rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div style={{ color: '#f1f5f9', fontWeight: '500', fontSize: '0.95rem', marginBottom: '0.25rem' }}>

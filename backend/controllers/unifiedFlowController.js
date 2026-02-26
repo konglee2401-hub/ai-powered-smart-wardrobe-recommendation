@@ -14,6 +14,7 @@ import { analyzeUnified } from '../services/unifiedAnalysisService.js';
 import { buildDetailedPrompt } from '../services/smartPromptBuilder.js';
 import { generateImages as generateImagesWithUnifiedService } from '../services/imageGenService.js'; // Use the new unified service
 import { buildImageGenerationPrompt } from '../services/imagePromptBuilder.js'; // Import the new builder
+import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import PromptOption from '../models/PromptOption.js';
 import path from 'path';
 import fs from 'fs';
@@ -293,8 +294,8 @@ export async function generateUnifiedEndpoint(req, res) {
       console.log('🌐 Using Google Flow with enhanced image service\n');
       
       try {
-        // Import and use the enhanced image generation service
-        const { runImageGeneration } = await import('../services/imageGenerationService.js');
+        // Import and use the unified Google Flow service
+        const { default: GoogleFlowAutomationService } = await import('../services/googleFlowAutomationService.js');
         
         // Create sample images if needed for testing
         const tempDir = path.join(process.cwd(), 'temp');

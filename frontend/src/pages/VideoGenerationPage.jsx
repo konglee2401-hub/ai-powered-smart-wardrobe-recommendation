@@ -9,13 +9,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Wand2, RefreshCw, Settings as SettingsIcon, FileText, Rocket,
   Loader2, ChevronRight, ChevronUp, ChevronDown, Save, Video,
-  Play, Pause, Volume2, VolumeX, Download, Copy, Sparkles, Plus, X, Upload
+  Play, Pause, Volume2, VolumeX, Download, Copy, Sparkles, Plus, X, Upload, Database
 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, browserAutomationAPI } from '../services/api';
 import GalleryPicker from '../components/GalleryPicker';
 import ScenarioImageUploadComponent from '../components/ScenarioImageUploadComponent';  // 💫 NEW
+import SessionLogModal from '../components/SessionLogModal';
 import driveAPI from '../services/driveAPI';
 import { 
   VIDEO_DURATIONS, 
@@ -474,6 +475,8 @@ export default function VideoGenerationPage() {
     characterHolding: null,
     productReference: null
   });
+  const [showSessionLogModal, setShowSessionLogModal] = useState(false);
+  const [selectedFlowId, setSelectedFlowId] = useState(null);
 
   // 💫 NEW: Get scenario config from selectedScenario
   const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
@@ -524,6 +527,32 @@ export default function VideoGenerationPage() {
     setIsGenerating(true);
     setGenerated(false);
     try {
+      // 💫 NEW: Initialize backend session to get flowId
+      console.log('\n📝 Initializing backend session...');
+      let flowId = null;
+      try {
+        const sessionResponse = await fetch('/api/sessions/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            flowType: 'video-generation',
+            useCase: 'video'
+          })
+        });
+
+        if (!sessionResponse.ok) {
+          throw new Error(`Session creation failed: ${sessionResponse.status}`);
+        }
+
+        const sessionData = await sessionResponse.json();
+        flowId = sessionData.data?.flowId || sessionData.data?.sessionId;
+        console.log(`✅ Session created: ${flowId}`);
+        setSelectedFlowId(flowId);  // Enable View Session Log button
+      } catch (sessionError) {
+        console.warn(`⚠️ Could not create backend session (non-blocking):`, sessionError.message);
+        // Continue without session logging
+      }
+
       // Extract scripts from prompts (handles both string and object formats)
       const scripts = (prompts || []).map(p => {
         if (typeof p === 'string') return p;
@@ -540,7 +569,8 @@ export default function VideoGenerationPage() {
         segments: scripts,
         sourceImage: currentImage,
         characterImage,
-        productImage
+        productImage,
+        flowId  // 💫 Pass flowId to backend
       };
 
       console.log('📹 Starting video generation with provider:', videoProvider);
@@ -771,6 +801,12 @@ export default function VideoGenerationPage() {
         isOpen={showGalleryPicker}
         onClose={() => setShowGalleryPicker(false)}
         onSelect={(item) => {
+          if (!item || !item.url) {
+            console.error('❌ Invalid gallery item selected:', item);
+            alert('Error: Selected item is missing image URL');
+            return;
+          }
+          console.log(`📷 Gallery image selected for video:`, { assetId: item.assetId, name: item.name, url: item.url });
           handleImageChange(item.url);
           setShowGalleryPicker(false);
         }}
@@ -1143,6 +1179,19 @@ export default function VideoGenerationPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* 💫 NEW: Session Log Button */}
+                    {selectedFlowId && (
+                      <div className="mt-4 pt-4 border-t border-purple-700/30">
+                        <button
+                          onClick={() => setShowSessionLogModal(true)}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium text-white transition"
+                        >
+                          <Database className="w-4 h-4" />
+                          <span>View Session Log</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1271,6 +1320,17 @@ export default function VideoGenerationPage() {
           </div>
         </div>
       </div>
+
+      {/* 💫 NEW: Session Log Modal */}
+      <SessionLogModal
+        isOpen={showSessionLogModal}
+        onClose={() => {
+          setShowSessionLogModal(false);
+          setSelectedFlowId(null);
+        }}
+        sessionId={selectedFlowId}
+        flowId={selectedFlowId}
+      />
     </div>
   );
 }

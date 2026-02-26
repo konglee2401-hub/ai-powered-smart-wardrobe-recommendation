@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Upload, Sparkles, FileText, Rocket, Image,
-  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap
+  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap, Database
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
@@ -35,6 +35,7 @@ import PromptQualityIndicator from '../components/PromptQualityIndicator';
 import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
 import ImagePromptWithTemplates from '../components/ImagePromptWithTemplates';
 import GalleryPicker from '../components/GalleryPicker';
+import SessionLogModal from '../components/SessionLogModal';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
 // Steps - Style and Prompt merged into single step
@@ -197,6 +198,10 @@ export default function ImageGenerationPage() {
   // Loading
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Session Log Modal
+  const [showSessionLogModal, setShowSessionLogModal] = useState(false);
+  const [selectedFlowId, setSelectedFlowId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [generationError, setGenerationError] = useState(null);  // 💫 NEW: Error handling
@@ -287,26 +292,72 @@ export default function ImageGenerationPage() {
     // If single item (not multiselect), items will be an object
     const item = Array.isArray(items) ? items[0] : items;
     
+    if (!item || !item.url) {
+      console.error('❌ Invalid item selected from gallery:', item);
+      alert('Error: Selected item is missing image URL');
+      return;
+    }
+
+    console.log(`📷 Gallery item selected:`, { assetId: item.assetId, name: item.name, url: item.url });
+    
     if (galleryPickerFor === 'character') {
       // Fetch image from URL and convert to file
-      fetch(item.url)
-        .then(res => res.blob())
+      console.log(`⏳ Loading character image from gallery...`);
+      fetch(item.url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'image/*'
+        }
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+          }
+          return res.blob();
+        })
         .then(blob => {
-          const file = new File([blob], 'character-from-gallery.jpg', { type: blob.type });
+          if (!blob || blob.size === 0) {
+            throw new Error('Received empty blob from server');
+          }
+          console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+          const file = new File([blob], item.name || 'character-from-gallery.jpg', { type: blob.type || 'image/jpeg' });
           const preview = URL.createObjectURL(file);
           setCharacterImage({ file, preview });
+          console.log(`✨ Character image updated with preview`);
         })
-        .catch(err => console.error('Failed to load gallery image:', err));
+        .catch(err => {
+          console.error('❌ Failed to load gallery image:', err);
+          alert(`Failed to load image: ${err.message}`);
+        });
     } else if (galleryPickerFor === 'product') {
       // Fetch image from URL and convert to file
-      fetch(item.url)
-        .then(res => res.blob())
+      console.log(`⏳ Loading product image from gallery...`);
+      fetch(item.url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'image/*'
+        }
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+          }
+          return res.blob();
+        })
         .then(blob => {
-          const file = new File([blob], 'product-from-gallery.jpg', { type: blob.type });
+          if (!blob || blob.size === 0) {
+            throw new Error('Received empty blob from server');
+          }
+          console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+          const file = new File([blob], item.name || 'product-from-gallery.jpg', { type: blob.type || 'image/jpeg' });
           const preview = URL.createObjectURL(file);
           setProductImage({ file, preview });
+          console.log(`✨ Product image updated with preview`);
         })
-        .catch(err => console.error('Failed to load gallery image:', err));
+        .catch(err => {
+          console.error('❌ Failed to load gallery image:', err);
+          alert(`Failed to load image: ${err.message}`);
+        });
     }
   };
 
@@ -825,6 +876,32 @@ export default function ImageGenerationPage() {
     setCurrentStep(4);
 
     try {
+      // 💫 NEW: Initialize backend session to get flowId
+      console.log('\n📝 Initializing backend session...');
+      let flowId = null;
+      try {
+        const sessionResponse = await fetch('/api/sessions/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            flowType: 'image-generation',
+            useCase: useCase
+          })
+        });
+
+        if (!sessionResponse.ok) {
+          throw new Error(`Session creation failed: ${sessionResponse.status}`);
+        }
+
+        const sessionData = await sessionResponse.json();
+        flowId = sessionData.data?.flowId || sessionData.data?.sessionId;
+        console.log(`✅ Session created: ${flowId}`);
+        setSelectedFlowId(flowId);  // Enable View Session Log button
+      } catch (sessionError) {
+        console.warn(`⚠️ Could not create backend session (non-blocking):`, sessionError.message);
+        // Continue without session logging
+      }
+
       const finalPrompt = generatedPrompt.positive + (customPrompt ? '\n' + customPrompt : '');
       
       console.log('🎨 Starting generation...');
@@ -858,7 +935,8 @@ export default function ImageGenerationPage() {
           characterDescription,
           // Storage configuration
           storageType,
-          localFolder
+          localFolder,
+          flowId  // 💫 Pass flowId to backend
         };
         
         console.log('📤 Sending generation request to backend...');
@@ -879,7 +957,8 @@ export default function ImageGenerationPage() {
             imageCount,
             aspectRatio,
             hasWatermark,
-            referenceImage: refBase64
+            referenceImage: refBase64,
+            flowId  // 💫 Pass flowId to backend
           }
         });
       }
@@ -1780,13 +1859,27 @@ export default function ImageGenerationPage() {
                     )}
 
                     {generatedImages.length > 0 && (
-                      <button
-                        onClick={handleReset}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        <span>Start New</span>
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleReset}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          <span>Start New</span>
+                        </button>
+                        {selectedFlowId && (
+                          <button
+                            onClick={() => {
+                              setShowSessionLogModal(true);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
+                            title="View generation session log"
+                          >
+                            <Database className="w-4 h-4" />
+                            <span>Session Log</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2117,6 +2210,17 @@ export default function ImageGenerationPage() {
         onSelect={handleGallerySelect}
         assetType="image"
         title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+      />
+
+      {/* Session Log Modal */}
+      <SessionLogModal
+        isOpen={showSessionLogModal}
+        onClose={() => {
+          setShowSessionLogModal(false);
+          setSelectedFlowId(null);
+        }}
+        sessionId={selectedFlowId}
+        flowId={selectedFlowId}
       />
     </div>
   );

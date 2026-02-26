@@ -105,40 +105,56 @@ router.get('/proxy/:assetId', async (req, res) => {
     // STEP 1: Try hybrid local storage (new format)
     if (asset.localStorage?.path) {
       const filePath = asset.localStorage.path;
+      console.log(`   🔍 Checking local storage: ${filePath}`);
       
-      if (fs.existsSync(filePath)) {
-        console.log(`💾 Serving hybrid local file: ${filePath}`);
-        res.setHeader('Content-Length', fs.statSync(filePath).size);
-        
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.on('error', (err) => {
-          console.error(`Error streaming local file: ${err.message}`);
-          if (!res.headersSent) {
-            res.status(500).json({ success: false, error: 'Error streaming file' });
-          }
-        });
-        fileStream.pipe(res);
-        return;
+      try {
+        if (fs.existsSync(filePath)) {
+          console.log(`   ✅ Found local file: ${filePath}`);
+          const fileSize = fs.statSync(filePath).size;
+          res.setHeader('Content-Length', fileSize);
+          console.log(`   💾 Serving hybrid local file (${fileSize} bytes)`);
+          
+          const fileStream = fs.createReadStream(filePath);
+          fileStream.on('error', (err) => {
+            console.error(`   ❌ Error streaming local file: ${err.message}`);
+            if (!res.headersSent) {
+              res.status(500).json({ success: false, error: 'Error streaming file' });
+            }
+          });
+          fileStream.pipe(res);
+          return;
+        } else {
+          console.log(`   ⚠️  Local file not found: ${filePath}`);
+        }
+      } catch (err) {
+        console.error(`   ❌ Error checking local file: ${err.message}`);
       }
     }
     
     // STEP 2: Try legacy storage.url field (for backward compatibility)
-    if (asset.storage?.url) {
+    if (asset.storage?.url && typeof asset.storage.url === 'string' && asset.storage.url.startsWith('/')) {
       const filePath = asset.storage.url;
+      console.log(`   🔍 Checking legacy local storage: ${filePath}`);
       
-      if (fs.existsSync(filePath)) {
-        console.log(`💾 Serving legacy local file via storage.url: ${filePath}`);
-        res.setHeader('Content-Length', fs.statSync(filePath).size);
-        
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.on('error', (err) => {
-          console.error(`Error streaming local file: ${err.message}`);
-          if (!res.headersSent) {
-            res.status(500).json({ success: false, error: 'Error streaming file' });
-          }
-        });
-        fileStream.pipe(res);
-        return;
+      try {
+        if (fs.existsSync(filePath)) {
+          console.log(`   ✅ Found legacy local file: ${filePath}`);
+          const fileSize = fs.statSync(filePath).size;
+          res.setHeader('Content-Length', fileSize);
+          console.log(`   💾 Serving legacy local file (${fileSize} bytes)`);
+          
+          const fileStream = fs.createReadStream(filePath);
+          fileStream.on('error', (err) => {
+            console.error(`   ❌ Error streaming legacy local file: ${err.message}`);
+            if (!res.headersSent) {
+              res.status(500).json({ success: false, error: 'Error streaming file' });
+            }
+          });
+          fileStream.pipe(res);
+          return;
+        }
+      } catch (err) {
+        console.error(`   ❌ Error checking legacy local file: ${err.message}`);
       }
     }
     
