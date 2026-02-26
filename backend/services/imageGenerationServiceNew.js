@@ -22,7 +22,7 @@ class ImageGenerationAutomationNew {
       projectId: options.projectId || null,
       aspectRatio: options.aspectRatio || '9:16',
       imageCount: options.imageCount || 1,
-      model: options.model || 'Nano Banana',
+      model: options.model || 'Nano Banana Pro',
       outputDir: options.outputDir || path.join(__dirname, '../temp/image-generation-outputs'),
       timeouts: {
         pageLoad: 30000,
