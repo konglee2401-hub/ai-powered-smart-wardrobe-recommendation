@@ -2305,28 +2305,62 @@ class GoogleFlowAutomationService {
           await this.enterPrompt(normalizedPrompt);
           console.log('[STEP A] ✓ Prompt entered\n');
 
+          // STEP B: Capture initial hrefs BEFORE clicking generate
+          console.log('[STEP B] 📎 Capturing initial hrefs...');
+          const initialHrefs = await this.page.evaluate(() => {
+            const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+            const hrefs = {};
+            for (const item of items) {
+              const index = item.getAttribute('data-index');
+              const link = item.querySelector('a[href]');
+              if (link) {
+                hrefs[index] = link.getAttribute('href');
+              }
+            }
+            return hrefs;
+          });
+          console.log(`[STEP B] ✓ Captured \${Object.keys(initialHrefs).length} initial hrefs`);
+
           // STEP B: Click generate button
           console.log('[STEP B] 🚀 Clicking generate button...');
           await this.clickCreate();
 
-          // STEP C: Wait for generation to complete
-          console.log('[STEP C] ⏳ Waiting for generation to complete (max 120s)...');
+          // STEP C: Wait for NEW generation to complete with href monitoring
+          console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
+          console.log('[STEP C] 📊 Monitoring hrefs for NEW image...');
           
           const startTime = Date.now();
           const timeoutMs = this.options.timeouts.generation || 120000;
 
-          // Wait for NEW image link to appear in collection
+          // Wait for NEW image link to appear (NEW href not in initial list)
           await this.page.waitForFunction(
             async () => {
-              const links = await this.page.evaluate(() => {
-                const listItems = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-                return Array.from(listItems).map(link => ({
-                  href: link.getAttribute('href')
-                }));
-              });
-
-              if (links.length > 0) {
-                lastGeneratedHref = links[0].href;
+              const result = await this.page.evaluate((oldHrefs) => {
+                const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+                
+                for (const item of items) {
+                  const index = item.getAttribute('data-index');
+                  const link = item.querySelector('a[href]');
+                  
+                  if (!link) continue;
+                  
+                  const currentHref = link.getAttribute('href');
+                  const oldHref = oldHrefs[index];
+                  
+                  // If href changed OR is new item (not in oldHrefs)
+                  if (!oldHref || oldHref !== currentHref) {
+                    // Check if this href is NEW (not in any old values)
+                    const isNewHref = !Object.values(oldHrefs).includes(currentHref);
+                    if (isNewHref) {
+                      return { found: true, newHref: currentHref };
+                    }
+                  }
+                }
+                return { found: false };
+              }, initialHrefs);
+              
+              if (result.found) {
+                lastGeneratedHref = result.newHref;
                 return true;
               }
               return false;
@@ -2335,7 +2369,8 @@ class GoogleFlowAutomationService {
           );
 
           const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
-          console.log(`[STEP C] ✅ Generation complete in \${elapsedSecs}s\n`);
+          console.log(`[STEP C] ✅ NEW generation detected in \${elapsedSecs}s`);
+          console.log(`[STEP C] ✓ Generated href: \${lastGeneratedHref?.substring(0, 60)}...\n`);
 
           // STEP D or E: Different logic for last vs non-last prompt
           if (!isLastPrompt) {
