@@ -31,7 +31,7 @@ async function testSettingsInteractive() {
 
     // Step 2: Navigate to Google Flow
     console.log('📍 Step 2: Navigating to Google Flow...');
-    const url = service.options.baseUrl.replace('vi', 'vi') || 'https://labs.google/fx/vi/tools/flow';
+    const url = 'https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0';
     console.log(`   URL: ${url}`);
     
     try {
