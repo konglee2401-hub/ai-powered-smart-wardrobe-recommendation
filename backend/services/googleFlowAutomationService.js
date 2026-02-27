@@ -1870,13 +1870,28 @@ class GoogleFlowAutomationService {
   async downloadItemViaContextMenu(newHref) {
     /**
      * Download generated item by right-clicking and selecting download option
-     * Handles the submenu (1K for image, 1080p for video)
+     * Handles the submenu with smart quality selection:
+     * - Nano Banana Pro: Prefer 2K, fallback to 1K
+     * - Other models for image: 1K
+     * - Videos: 1080p (or highest available)
      * Returns the downloaded file path, or null if download failed
      * Waits for file to appear in output directory
      */
     const mediaType = this.type === 'image' ? 'image' : 'video';
     const mediaExt = this.type === 'image' ? '.jpg' : '.mp4';
-    const downloadOption = this.type === 'image' ? '1K' : '1080p';
+    
+    // Determine preferred quality options based on model
+    let qualityOptions = [];
+    if (this.type === 'image' && this.options.model === 'Nano Banana Pro') {
+      // Nano Banana Pro supports 2K for images
+      qualityOptions = ['2k', '2K', '1k', '1K'];  // Try 2K first, fallback to 1K
+      console.log(`   ℹ️  Model: ${this.options.model} (trying 2K first)`);
+    } else if (this.type === 'image') {
+      qualityOptions = ['1k', '1K'];
+    } else {
+      // Video
+      qualityOptions = ['1080p', '1080P'];
+    }
     
     console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
 
@@ -1954,40 +1969,47 @@ class GoogleFlowAutomationService {
       await this.page.mouse.up();
 
       // Wait for submenu to appear
-      console.log(`   ⏳ Waiting for submenu (${downloadOption})...`);
+      console.log('   ⏳ Waiting for submenu...');
       await this.page.waitForTimeout(1500);
 
-      // Click the specific download quality option (1K for image, 1080p for video)
-      const qualityInfo = await this.page.evaluate((targetQuality) => {
-        const buttons = document.querySelectorAll('[role="menuitem"]');
-        
-        for (const btn of buttons) {
-          const text = btn.textContent.toLowerCase();
+      // Try to find and click the best quality option
+      let selectedQuality = null;
+      for (const quality of qualityOptions) {
+        const qualityInfo = await this.page.evaluate((targetQuality) => {
+          const buttons = document.querySelectorAll('[role="menuitem"]');
           
-          // Look for the right quality option
-          if (targetQuality === '1K' && text.includes('1k')) {
-            const rect = btn.getBoundingClientRect();
-            return {
-              found: true,
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
-            };
-          } else if (targetQuality === '1080p' && text.includes('1080')) {
-            const rect = btn.getBoundingClientRect();
-            return {
-              found: true,
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
-            };
+          for (const btn of buttons) {
+            const text = btn.textContent.toLowerCase();
+            
+            // Look for the right quality option (case-insensitive)
+            if (text.includes(targetQuality.toLowerCase())) {
+              const rect = btn.getBoundingClientRect();
+              return {
+                found: true,
+                quality: targetQuality,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }
           }
-        }
-        
-        return { found: false };
-      }, downloadOption);
+          
+          return { found: false };
+        }, quality);
 
-      if (!qualityInfo.found) {
-        console.warn(`   ⚠️  ${downloadOption} option not found in submenu\n`);
-        console.log('   ℹ️  Trying first available option...');
+        if (qualityInfo.found) {
+          selectedQuality = quality;
+          console.log(`   🖱️  Clicking ${quality}...`);
+          await this.page.mouse.move(qualityInfo.x, qualityInfo.y);
+          await this.page.waitForTimeout(150);
+          await this.page.mouse.down();
+          await this.page.waitForTimeout(100);
+          await this.page.mouse.up();
+          break;
+        }
+      }
+
+      if (!selectedQuality) {
+        console.warn('   ⚠️  No quality option found, trying first available...\n');
         
         // Fallback: just click first submenu button
         const firstOption = await this.page.evaluate(() => {
@@ -1999,7 +2021,8 @@ class GoogleFlowAutomationService {
           
           if (buttons.length === 0) return { found: false };
           
-          const rect = buttons[0].getBoundingClientRect();
+          const firstBtn = buttons[0];
+          const rect = firstBtn.getBoundingClientRect();
           return {
             found: true,
             x: Math.round(rect.left + rect.width / 2),
@@ -2020,13 +2043,7 @@ class GoogleFlowAutomationService {
         await this.page.waitForTimeout(100);
         await this.page.mouse.up();
       } else {
-        // Click the quality option with Method 2
-        console.log(`   🖱️  Clicking ${downloadOption}...`);
-        await this.page.mouse.move(qualityInfo.x, qualityInfo.y);
-        await this.page.waitForTimeout(150);
-        await this.page.mouse.down();
-        await this.page.waitForTimeout(100);
-        await this.page.mouse.up();
+        console.log(`   ✓ Selected quality: ${selectedQuality}`);
       }
 
       console.log('   ✓ Download started, waiting for file...');
