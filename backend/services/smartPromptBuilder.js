@@ -113,9 +113,13 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
         console.log(`⚠️ No specific Vietnamese prompt for use case '${useCase}', using character analysis prompt`);
       }
       
+      // Ensure prompt is a valid string
+      const finalPrompt = (vietnamesePrompt || '').toString().trim();
+      const negPrompt = (buildNegativePromptGeneric(selectedOptions) || '').toString().trim();
+      
       return {
-        prompt: vietnamesePrompt.trim(),
-        negativePrompt: buildNegativePromptGeneric(selectedOptions)
+        prompt: finalPrompt,
+        negativePrompt: negPrompt
       };
     } catch (error) {
       console.warn(`⚠️ Vietnamese prompt builder error, falling back to English:`, error.message);
@@ -170,8 +174,8 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   const negativePrompt = buildNegativePrompt(analysis?.product, selectedOptions);
 
   return {
-    prompt: promptStr.trim(),
-    negativePrompt: negativePrompt.trim()
+    prompt: (promptStr || '').toString().trim(),
+    negativePrompt: (negativePrompt || '').toString().trim()
   };
 }
 

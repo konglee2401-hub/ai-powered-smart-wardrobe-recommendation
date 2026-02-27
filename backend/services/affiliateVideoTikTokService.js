@@ -801,8 +801,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     ]);
 
     console.log(`\n✅ PROMPTS BUILT:`);
-    console.log(`  Change-clothes prompt: ${wearingPromptData.prompt.substring(0, 80)}...`);
-    console.log(`  Holding-product prompt: ${holdingPromptData.prompt.substring(0, 80)}...`);
+    try {
+      console.log(`  Change-clothes prompt: ${wearingPromptData?.prompt?.substring(0, 80) || 'N/A'}...`);
+      console.log(`  Holding-product prompt: ${holdingPromptData?.prompt?.substring(0, 80) || 'N/A'}...`);
+    } catch (logErr) {
+      console.log(`  ⚠️ Could not display prompt preview:`, logErr.message);
+      console.log(`  Wearing data type: ${typeof wearingPromptData}, keys: ${Object.keys(wearingPromptData || {}).join(', ')}`);
+      console.log(`  Holding data type: ${typeof holdingPromptData}, keys: ${Object.keys(holdingPromptData || {}).join(', ')}`);
+    }
 
     // ============================================================
     // STEP 2: GENERATE BOTH IMAGES (Optimized - Single Browser)
@@ -863,8 +869,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         downloadedAt: holdingResult.downloadedAt
       };
 
-      console.log(`✅ Wearing image generated: ${wearingResult?.imageUrl?.substring(0, 80) || wearingResult?.imageUrl || 'N/A'}...`);
-      console.log(`✅ Holding image generated: ${holdingResult?.imageUrl?.substring(0, 80) || holdingResult?.imageUrl || 'N/A'}...`);
+      console.log(`✅ Wearing image generated: ${wearingResult?.imageUrl?.substring(0, 80) || 'N/A'}...`);
+      console.log(`✅ Holding image generated: ${holdingResult?.imageUrl?.substring(0, 80) || 'N/A'}...`);
         
     } catch (imageGenError) {
       console.error('❌ Image generation failed:', imageGenError.message);
