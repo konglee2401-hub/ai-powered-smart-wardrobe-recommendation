@@ -470,19 +470,12 @@ class GoogleFlowAutomationService {
       }
       console.log('   ✓ Found prompt textbox\n');
 
-      // Focus the textbox and block Enter key to prevent accidental submit
-      console.log('   🖱️  Focusing textbox + blocking Enter key...');
+      // Focus the textbox
+      console.log('   🖱️  Focusing textbox...');
       await this.page.evaluate(() => {
         const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
         if (textbox) {
           textbox.focus();
-          // Block Enter key to prevent accidental prompt submission
-          textbox.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              console.log('[BLOCK] Blocked Enter key');
-            }
-          }, true);
         }
       });
       await this.page.waitForTimeout(300);
@@ -565,6 +558,12 @@ class GoogleFlowAutomationService {
         console.warn('   ❌ Prompt entry verification failed after retries');
         throw new Error('Prompt not fully entered into editor');
       }
+
+      // Press Enter to submit the prompt
+      console.log('   ⌨️  Pressing Enter to submit prompt...');
+      await this.page.keyboard.press('Enter');
+      console.log('   ✓ Prompt submitted with Enter key\n');
+      await this.page.waitForTimeout(500);
 
     } catch (error) {
       console.error(`   ❌ Error entering prompt: ${error.message}`);
