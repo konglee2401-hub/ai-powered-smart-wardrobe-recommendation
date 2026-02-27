@@ -1,0 +1,12 @@
+🚀 Test Settings Buttons - Starting...
+
+📍 Navigating to Google Flow...
+
+❌ Error: net::ERR_NAME_NOT_RESOLVED at https://lab.google.com/flows
+Error: net::ERR_NAME_NOT_RESOLVED at https://lab.google.com/flows
+    at navigate (C:\Work\Affiliate-AI\node_modules\puppeteer-core\lib\cjs\puppeteer\cdp\Frame.js:170:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async Deferred.race (C:\Work\Affiliate-AI\node_modules\puppeteer-core\lib\cjs\puppeteer\util\Deferred.js:31:20)
+    at async CdpFrame.goto (C:\Work\Affiliate-AI\node_modules\puppeteer-core\lib\cjs\puppeteer\cdp\Frame.js:136:25)
+    at async CdpPage.goto (C:\Work\Affiliate-AI\node_modules\puppeteer-core\lib\cjs\puppeteer\api\Page.js:603:20)
+    at async testSettingsButtons (C:\Work\Affiliate-AI\smart-wardrobe\test-settings-buttons.js:24:5)

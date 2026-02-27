@@ -1086,6 +1086,175 @@ class GoogleFlowAutomationService {
     }
   }
 
+  /**
+   * Debug method to inspect all settings menu buttons and tabs
+   * Run this to see why settings buttons might not be clickable
+   */
+  async debugSettingsButtons() {
+    console.log('\n🔍 DEBUG: SETTINGS BUTTONS INSPECTION\n');
+
+    try {
+      // First check if settings menu is open
+      const menuInfo = await this.page.evaluate(() => {
+        const menu = document.querySelector('[role="menu"]');
+        if (!menu) {
+          return { menuOpen: false };
+        }
+
+        console.log('[DEBUG] Settings menu is open');
+        const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
+        const dropdowns = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'));
+        
+        const tabDetails = buttons.map((btn, idx) => {
+          const rect = btn.getBoundingClientRect();
+          return {
+            idx,
+            type: 'tab',
+            text: btn.textContent.trim(),
+            ariaSelected: btn.getAttribute('aria-selected'),
+            ariaControls: btn.getAttribute('aria-controls'),
+            dataState: btn.getAttribute('data-state'),
+            visible: rect.width > 0 && rect.height > 0 && rect.top >= 0,
+            x: Math.round(rect.left),
+            y: Math.round(rect.top),
+            w: Math.round(rect.width),
+            h: Math.round(rect.height),
+            enabled: !btn.hasAttribute('disabled'),
+            className: btn.className
+          };
+        });
+
+        const dropdownDetails = dropdowns.map((btn, idx) => {
+          const rect = btn.getBoundingClientRect();
+          return {
+            idx,
+            type: 'dropdown',
+            text: btn.textContent.trim().substring(0, 50),
+            ariaExpanded: btn.getAttribute('aria-expanded'),
+            dataState: btn.getAttribute('data-state'),
+            visible: rect.width > 0 && rect.height > 0 && rect.top >= 0,
+            x: Math.round(rect.left),
+            y: Math.round(rect.top),
+            w: Math.round(rect.width),
+            h: Math.round(rect.height),
+            enabled: !btn.hasAttribute('disabled'),
+            className: btn.className
+          };
+        });
+
+        return {
+          menuOpen: true,
+          tabs: tabDetails,
+          dropdowns: dropdownDetails
+        };
+      });
+
+      console.log(JSON.stringify(menuInfo, null, 2));
+
+      if (!menuInfo.menuOpen) {
+        console.log('\n⚠️  Settings menu is not open. Opening it first...\n');
+        await this.clickSettingsButton();
+        await this.page.waitForTimeout(800);
+        
+        // Try debug again
+        return await this.debugSettingsButtons();
+      }
+
+      // Now try clicking each tab and see what happens
+      console.log('\n\n📍 TESTING TAB CLICKS\n');
+
+      if (menuInfo.tabs && menuInfo.tabs.length > 0) {
+        for (const tabInfo of menuInfo.tabs) {
+          console.log(`\n${tabInfo.idx}. Tab: "${tabInfo.text}"`);
+          console.log(`   State: aria-selected=${tabInfo.ariaSelected}, data-state=${tabInfo.dataState}`);
+          console.log(`   Position: (${tabInfo.x}, ${tabInfo.y}) | Size: ${tabInfo.w}x${tabInfo.h}`);
+          console.log(`   Visible: ${tabInfo.visible}, Enabled: ${tabInfo.enabled}`);
+
+          if (tabInfo.visible && tabInfo.enabled) {
+            console.log(`   🖱️  Attempting click...`);
+            try {
+              // Scroll into view and click
+              await this.page.evaluate((controls) => {
+                const btn = document.querySelector(`button[aria-controls="${controls}"]`);
+                if (btn) {
+                  btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }, tabInfo.ariaControls);
+
+              await this.page.waitForTimeout(200);
+
+              // Use mouse click
+              await this.page.mouse.move(tabInfo.x + tabInfo.w / 2, tabInfo.y + tabInfo.h / 2);
+              await this.page.waitForTimeout(100);
+              await this.page.mouse.down();
+              await this.page.waitForTimeout(50);
+              await this.page.mouse.up();
+
+              await this.page.waitForTimeout(300);
+
+              // Check new state
+              const newState = await this.page.evaluate((controls) => {
+                const btn = document.querySelector(`button[aria-controls="${controls}"]`);
+                if (!btn) return null;
+                return {
+                  ariaSelected: btn.getAttribute('aria-selected'),
+                  dataState: btn.getAttribute('data-state')
+                };
+              }, tabInfo.ariaControls);
+
+              console.log(`   ✓ Clicked. New state: ${JSON.stringify(newState)}`);
+            } catch (e) {
+              console.log(`   ❌ Click failed: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      // Test dropdowns
+      console.log('\n\n📍 TESTING DROPDOWN CLICKS\n');
+
+      if (menuInfo.dropdowns && menuInfo.dropdowns.length > 0) {
+        for (const ddInfo of menuInfo.dropdowns) {
+          console.log(`\n${ddInfo.idx}. Dropdown: "${ddInfo.text}"`);
+          console.log(`   State: aria-expanded=${ddInfo.ariaExpanded}`);
+          console.log(`   Position: (${ddInfo.x}, ${ddInfo.y}) | Size: ${ddInfo.w}x${ddInfo.h}`);
+          console.log(`   Visible: ${ddInfo.visible}, Enabled: ${ddInfo.enabled}`);
+
+          if (ddInfo.visible && ddInfo.enabled) {
+            console.log(`   🖱️  Attempting click...`);
+            try {
+              await this.page.mouse.move(ddInfo.x + ddInfo.w / 2, ddInfo.y + ddInfo.h / 2);
+              await this.page.waitForTimeout(100);
+              await this.page.mouse.down();
+              await this.page.waitForTimeout(50);
+              await this.page.mouse.up();
+
+              await this.page.waitForTimeout(300);
+
+              const newExpanded = await this.page.evaluate((idx) => {
+                const dropdowns = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'));
+                if (dropdowns[idx]) {
+                  return dropdowns[idx].getAttribute('aria-expanded');
+                }
+                return null;
+              }, ddInfo.idx);
+
+              console.log(`   ✓ Clicked. New aria-expanded: ${newExpanded}`);
+            } catch (e) {
+              console.log(`   ❌ Click failed: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      console.log('\n✅ Debug inspection complete\n');
+
+    } catch (error) {
+      console.error(`❌ Debug error: ${error.message}`);
+      console.error(error.stack);
+    }
+  }
+
   async selectTab(label) {
     const selected = await this.page.evaluate((targetLabel) => {
       const buttons = document.querySelectorAll('button[role="tab"]');
