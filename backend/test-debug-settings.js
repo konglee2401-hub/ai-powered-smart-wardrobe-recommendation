@@ -65,6 +65,35 @@ async function testAllInteractive() {
       methods: ['click', 'mouse', 'mouseDownUp']
     });
 
+    // Step 5b: Test all IMAGE tab options
+    console.log('\n📍 Step 5b: Testing all IMAGE tab options\n');
+    
+    // Test PORTRAIT
+    await testButtonClick(service, {
+      selector: 'button[id*="PORTRAIT"][role="tab"]',
+      name: 'PORTRAIT (Dọc)',
+      methods: ['mouse']
+    });
+    
+    // Test LANDSCAPE
+    await testButtonClick(service, {
+      selector: 'button[id*="LANDSCAPE"][role="tab"]',
+      name: 'LANDSCAPE (Ngang)',
+      methods: ['mouse']
+    });
+
+    // Test counts x1, x2, x3, x4
+    for (const count of ['x1', 'x2', 'x3', 'x4']) {
+      await testButtonClick(service, {
+        text: count,
+        name: `${count} count`,
+        methods: ['mouse']
+      });
+      await service.page.waitForTimeout(300);
+    }
+
+    console.log('\n✓ IMAGE tab options tested\n');
+
     // Step 6: Test VIDEO tab with 3 methods
     console.log('📍 Step 6: Testing VIDEO tab with 3 methods\n');
     
@@ -73,6 +102,35 @@ async function testAllInteractive() {
       name: 'VIDEO tab',
       methods: ['click', 'mouse', 'mouseDownUp']
     });
+
+    // Step 6b: Test all VIDEO tab options
+    console.log('\n📍 Step 6b: Testing all VIDEO tab options\n');
+    
+    // Test PORTRAIT
+    await testButtonClick(service, {
+      selector: 'button[id*="PORTRAIT"][role="tab"]',
+      name: 'PORTRAIT (Dọc)',
+      methods: ['mouse']
+    });
+    
+    // Test LANDSCAPE
+    await testButtonClick(service, {
+      selector: 'button[id*="LANDSCAPE"][role="tab"]',
+      name: 'LANDSCAPE (Ngang)',
+      methods: ['mouse']
+    });
+
+    // Test counts x1, x2, x3, x4
+    for (const count of ['x1', 'x2', 'x3', 'x4']) {
+      await testButtonClick(service, {
+        text: count,
+        name: `${count} count`,
+        methods: ['mouse']
+      });
+      await service.page.waitForTimeout(300);
+    }
+
+    console.log('\n✓ VIDEO tab options tested\n');
 
     // Step 7: Test model dropdown button
     console.log('📍 Step 7: Testing MODEL DROPDOWN button\n');
@@ -93,7 +151,7 @@ async function testAllInteractive() {
       console.log(`\n   Testing model: "${model}"`);
       console.log('   ═'.repeat(40));
       
-      // First, open the dropdown
+      // First, check if dropdown is open
       const isOpen = await service.page.evaluate(() => {
         const dropdown = document.querySelector('button[id^="radix-"][aria-haspopup="menu"]');
         return dropdown?.getAttribute('aria-expanded') === 'true';
@@ -109,16 +167,25 @@ async function testAllInteractive() {
         await service.page.waitForTimeout(800);
       }
 
-      // Find and test model menu item
+      // Find model menu using the unique menu ID pattern [role="menu"]
       const found = await service.page.evaluate((modelName) => {
-        const menuItems = document.querySelectorAll('[role="menuitem"] button');
-        for (const item of menuItems) {
-          if (item.textContent.includes(modelName)) {
-            return {
-              found: true,
-              text: item.textContent.trim(),
-              selector: item.className
-            };
+        // Find all menu containers
+        const menus = document.querySelectorAll('[role="menu"]');
+        
+        for (const menu of menus) {
+          // Look for buttons inside this menu that match the model name
+          const buttons = menu.querySelectorAll('button');
+          for (const btn of buttons) {
+            if (btn.textContent.includes(modelName)) {
+              const rect = btn.getBoundingClientRect();
+              return {
+                found: true,
+                text: btn.textContent.trim(),
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                visible: rect.width > 0 && rect.height > 0
+              };
+            }
           }
         }
         return { found: false };
@@ -126,11 +193,13 @@ async function testAllInteractive() {
 
       if (found.found) {
         console.log(`   ✓ Found menu item: "${found.text}"`);
+        console.log(`   Position: (${found.x}, ${found.y})`);
+        console.log(`   Visible: ${found.visible}`);
         
         // Test clicking model menu item with 3 methods
         await testModelMenuItem(service, model);
       } else {
-        console.log(`   ❌ Menu item not found`);
+        console.log(`   ❌ Menu item not found - menu may be closed`);
       }
       
       await service.page.waitForTimeout(800);
@@ -268,15 +337,21 @@ async function testModelMenuItem(service, modelName) {
   for (const method of methods) {
     try {
       const btnInfo = await service.page.evaluate((name) => {
-        const menuItems = document.querySelectorAll('[role="menuitem"] button');
-        for (const item of menuItems) {
-          if (item.textContent.includes(name)) {
-            const rect = item.getBoundingClientRect();
-            return {
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2),
-              found: true
-            };
+        // Find all menu containers
+        const menus = document.querySelectorAll('[role="menu"]');
+        
+        for (const menu of menus) {
+          const buttons = menu.querySelectorAll('button');
+          for (const btn of buttons) {
+            if (btn.textContent.includes(name)) {
+              const rect = btn.getBoundingClientRect();
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                text: btn.textContent.trim()
+              };
+            }
           }
         }
         return { found: false };
@@ -289,11 +364,14 @@ async function testModelMenuItem(service, modelName) {
 
       if (method === 'click') {
         await service.page.evaluate((name) => {
-          const menuItems = document.querySelectorAll('[role="menuitem"] button');
-          for (const item of menuItems) {
-            if (item.textContent.includes(name)) {
-              item.click();
-              break;
+          const menus = document.querySelectorAll('[role="menu"]');
+          for (const menu of menus) {
+            const buttons = menu.querySelectorAll('button');
+            for (const btn of buttons) {
+              if (btn.textContent.includes(name)) {
+                btn.click();
+                return;
+              }
             }
           }
         }, modelName);
@@ -307,14 +385,17 @@ async function testModelMenuItem(service, modelName) {
       } 
       else if (method === 'mouseDownUp') {
         await service.page.evaluate((name) => {
-          const menuItems = document.querySelectorAll('[role="menuitem"] button');
-          for (const item of menuItems) {
-            if (item.textContent.includes(name)) {
-              const downEvent = new MouseEvent('mousedown', { bubbles: true });
-              const upEvent = new MouseEvent('mouseup', { bubbles: true });
-              item.dispatchEvent(downEvent);
-              item.dispatchEvent(upEvent);
-              break;
+          const menus = document.querySelectorAll('[role="menu"]');
+          for (const menu of menus) {
+            const buttons = menu.querySelectorAll('button');
+            for (const btn of buttons) {
+              if (btn.textContent.includes(name)) {
+                const downEvent = new MouseEvent('mousedown', { bubbles: true });
+                const upEvent = new MouseEvent('mouseup', { bubbles: true });
+                btn.dispatchEvent(downEvent);
+                btn.dispatchEvent(upEvent);
+                return;
+              }
             }
           }
         }, modelName);
