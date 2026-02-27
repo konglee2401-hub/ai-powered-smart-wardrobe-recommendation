@@ -66,23 +66,15 @@ class GoogleFlowAutomationService {
 
     // Store absolute path for later use
     this.options.outputDir = outputDirAbsolute;
-
-    // Set up CDP download listener
-    const client = await this.page.target().createCDPSession();
     
-    // Normalize path for CDP command
-    const normalizedPath = outputDirAbsolute.replace(/\\/g, '/');
+    // Store Windows user Downloads folder path for file monitoring
+    // Chrome will save downloads to user's Downloads folder by default
+    const userDownloadsDir = process.platform === 'win32' 
+      ? path.join(process.env.USERPROFILE || '', 'Downloads')
+      : path.join(process.env.HOME || '', 'Downloads');
     
-    try {
-      console.log(`   📥 Configuring downloads to: ${normalizedPath}`);
-      await client.send('Page.setDownloadBehavior', {
-        behavior: 'allow',
-        downloadPath: normalizedPath
-      });
-      console.log('   ✅ Download path set');
-    } catch (err) {
-      console.warn(`   ⚠️  Download path config failed: ${err.message} (using default)`);
-    }
+    this.options.userDownloadsDir = userDownloadsDir;
+    console.log(`   📥 Monitoring downloads in: ${userDownloadsDir}`);
 
     await this.loadSession();
     console.log('✅ Initialized\n');
@@ -2110,44 +2102,108 @@ class GoogleFlowAutomationService {
       while (waitAttempts < maxWaitAttempts) {
         waitAttempts++;
         
-        // Check for new finished files AND in-progress files
-        const currentFiles = fs.readdirSync(this.options.outputDir);
+        // Check output directory first
+        let currentFiles = fs.readdirSync(this.options.outputDir);
         
-        // First, check for finished files (new files without download markers)
-        const newFiles = currentFiles.filter(f => {
+        // Image extensions to look for
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'];
+        
+        // First, check for finished files in output directory
+        let newFiles = currentFiles.filter(f => {
           // Exclude download-in-progress files
           if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
             return false;
           }
-          // Only include files that are new
+          // Only include image files that are new
+          const hasImageExt = imageExtensions.some(ext => f.toLowerCase().endsWith(ext));
+          if (!hasImageExt) {
+            return false;
+          }
           return !initialFiles.includes(f);
         });
 
+        // If not in output dir, check user's Downloads folder
+        if (newFiles.length === 0 && fs.existsSync(this.options.userDownloadsDir)) {
+          const downloadsFiles = fs.readdirSync(this.options.userDownloadsDir);
+          const downloadedImages = downloadsFiles.filter(f => {
+            const hasImageExt = imageExtensions.some(ext => f.toLowerCase().endsWith(ext));
+            return hasImageExt && !f.endsWith('.crdownload') && !f.endsWith('.tmp') && !f.endsWith('.partial');
+          });
+          
+          if (downloadedImages.length > 0) {
+            // Move file from Downloads to output directory
+            const downloadFile = downloadedImages[0];
+            const sourcePath = path.join(this.options.userDownloadsDir, downloadFile);
+            const destPath = path.join(this.options.outputDir, downloadFile);
+            
+            try {
+              fs.renameSync(sourcePath, destPath);
+              newFiles = [downloadFile];
+              console.log(`   📁 Found image in Downloads, moved to: ${downloadFile}`);
+            } catch (err) {
+              console.log(`   ⚠️  Could not move file from Downloads: ${err.message}`);
+            }
+          }
+        }
+
         if (newFiles.length > 0) {
           // Found new finished file(s)
-          console.log(`   ✅ Found ${newFiles.length} new file(s):`);
+          console.log(`   ✅ Found ${newFiles.length} new image file(s):`);
           newFiles.forEach(f => console.log(`      - ${f}`));
           
           downloadedFile = path.join(this.options.outputDir, newFiles[0]);
           const fileSize = fs.statSync(downloadedFile).size;
-          console.log(`   ✓ File downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
+          console.log(`   ✓ Image downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
           await this.page.waitForTimeout(500);
           break;
         }
         
-        // If no finished file yet, check for in-progress files
-        const inProgressFiles = currentFiles.filter(f => 
-          (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) &&
-          !initialFiles.includes(f.replace(/\.(crdownload|tmp|partial)$/, ''))
-        );
+        // If no finished file yet, check for in-progress files in output directory
+        let inProgressFiles = currentFiles.filter(f => {
+          // Check if it's a download-in-progress file
+          if (!(f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial'))) {
+            return false;
+          }
+          
+          // Check if base name (without download marker) is an image
+          const baseName = f.replace(/\.(crdownload|tmp|partial)$/, '');
+          const hasImageExt = imageExtensions.some(ext => baseName.toLowerCase().endsWith(ext));
+          if (!hasImageExt) {
+            return false;
+          }
+          
+          return !initialFiles.includes(baseName);
+        });
+        
+        // Also check Downloads folder for in-progress
+        if (inProgressFiles.length === 0 && fs.existsSync(this.options.userDownloadsDir)) {
+          const downloadsFiles = fs.readdirSync(this.options.userDownloadsDir);
+          const inProgressDownloads = downloadsFiles.filter(f => {
+            if (!(f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial'))) {
+              return false;
+            }
+            const baseName = f.replace(/\.(crdownload|tmp|partial)$/, '');
+            const hasImageExt = imageExtensions.some(ext => baseName.toLowerCase().endsWith(ext));
+            return hasImageExt;
+          });
+          
+          if (inProgressDownloads.length > 0) {
+            inProgressFiles = inProgressDownloads;
+          }
+        }
         
         if (inProgressFiles.length > 0) {
-          const inProgressFilePath = path.join(this.options.outputDir, inProgressFiles[0]);
+          // Determine file path - could be in either directory
+          let inProgressFilePath = path.join(this.options.outputDir, inProgressFiles[0]);
+          if (!fs.existsSync(inProgressFilePath)) {
+            inProgressFilePath = path.join(this.options.userDownloadsDir, inProgressFiles[0]);
+          }
+          
           const inProgressFileSize = fs.statSync(inProgressFilePath).size;
           
           // Found in-progress file(s), wait for completion
           if (!lastInProgressFile || lastInProgressFile !== inProgressFiles[0]) {
-            console.log(`   📥 In-progress file detected: ${inProgressFiles[0]}`);
+            console.log(`   📥 In-progress image detected: ${inProgressFiles[0]}`);
             console.log(`      Size: ${(inProgressFileSize / 1024 / 1024).toFixed(2)}MB`);
             lastInProgressFile = inProgressFiles[0];
             lastInProgressFileSize = inProgressFileSize;
