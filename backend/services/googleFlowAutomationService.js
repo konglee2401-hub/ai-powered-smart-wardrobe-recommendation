@@ -479,6 +479,11 @@ class GoogleFlowAutomationService {
   }
 
   async enterPrompt(prompt) {
+    // Validate input prompt
+    if (!prompt || typeof prompt !== 'string') {
+      throw new Error(`enterPrompt: Invalid prompt - expected string, got ${typeof prompt}`);
+    }
+    
     // STEP 0: Clean up prompt - remove newlines and extra whitespace
     const cleanPrompt = prompt
       .replace(/\n+/g, ' ')           // Replace newlines with space
@@ -487,9 +492,9 @@ class GoogleFlowAutomationService {
       .trim();                         // Trim leading/trailing whitespace
     
     console.log('✍️  ENTERING PROMPT\n');
-    console.log(`   Original length: ${prompt.length} chars`);
-    console.log(`   Cleaned length: ${cleanPrompt.length} chars`);
-    console.log(`   Prompt: "${cleanPrompt.substring(0, 80)}"\n`);
+    console.log(`   Original length: ${(prompt || '').length} chars`);
+    console.log(`   Cleaned length: ${(cleanPrompt || '').length} chars`);
+    console.log(`   Prompt: "${(cleanPrompt || '').substring(0, 80)}"\n`);
 
     try {
       // Find and focus the Slate editor textbox
@@ -2508,6 +2513,22 @@ class GoogleFlowAutomationService {
         console.log(`${'═'.repeat(80)}\n`);
 
         const prompt = prompts[i];
+        
+        // Validate prompt is a non-empty string
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+          console.error(`❌ PROMPT ${i + 1} INVALID: Expected non-empty string, got:`, {
+            type: typeof prompt,
+            value: prompt,
+            length: prompt?.length || 'undefined'
+          });
+          results.push({
+            success: false,
+            imageNumber: i + 1,
+            error: `Invalid prompt: expected non-empty string, got ${typeof prompt}`
+          });
+          throw new Error(`Invalid prompt at index ${i}: ${typeof prompt}`);
+        }
+        
         const isLastPrompt = (i === prompts.length - 1);
 
         try {

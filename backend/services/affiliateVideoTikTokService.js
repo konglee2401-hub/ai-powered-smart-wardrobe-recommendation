@@ -831,16 +831,28 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       
       console.log('🚀 Initializing image generation service...');
       
+      // Validate prompts before passing to generateMultiple
+      const wearingPrompt = wearingPromptData?.prompt || '';
+      const holdingPrompt = holdingPromptData?.prompt || '';
+      
+      if (!wearingPrompt || typeof wearingPrompt !== 'string' || wearingPrompt.trim().length === 0) {
+        throw new Error(`Invalid wearing prompt: ${typeof wearingPrompt}, length: ${wearingPrompt?.length || 0}`);
+      }
+      if (!holdingPrompt || typeof holdingPrompt !== 'string' || holdingPrompt.trim().length === 0) {
+        throw new Error(`Invalid holding prompt: ${typeof holdingPrompt}, length: ${holdingPrompt?.length || 0}`);
+      }
+      
+      console.log(`📝 Prompt validation passed`);
+      console.log(`   Wearing: ${wearingPrompt.substring(0, 80)}...`);
+      console.log(`   Holding: ${holdingPrompt.substring(0, 80)}...`);
+      
       // Generate both images in single browser session with component reuse
       let multiGenResult;
       try {
         multiGenResult = await imageGen.generateMultiple(
           characterFilePath,
           productFilePath,
-          [
-            wearingPromptData.prompt,    // Image 1: wearing product
-            holdingPromptData.prompt     // Image 2: holding product
-          ]
+          [wearingPrompt, holdingPrompt]
         );
       } catch (genMultiError) {
         console.error('❌ generateMultiple threw error:', genMultiError.message);

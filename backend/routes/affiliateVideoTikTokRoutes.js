@@ -414,6 +414,14 @@ router.post('/step-2-generate-images', async (req, res) => {
     // Generate both images using generateMultiple
     console.log(`🎨 Generating both images in parallel...`);
     
+    // Validate prompts before passing to generateMultiple
+    if (!wearingPrompt || typeof wearingPrompt !== 'string' || wearingPrompt.trim().length === 0) {
+      throw new Error(`Invalid wearing prompt: ${typeof wearingPrompt}`);
+    }
+    if (!holdingPrompt || typeof holdingPrompt !== 'string' || holdingPrompt.trim().length === 0) {
+      throw new Error(`Invalid holding prompt: ${typeof holdingPrompt}`);
+    }
+    
     let multiGenResult;
     try {
       multiGenResult = await imageGenService.generateMultiple(
