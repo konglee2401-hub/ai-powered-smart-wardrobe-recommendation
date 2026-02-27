@@ -1177,15 +1177,19 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`   ✅ All 3 images verified to exist\n`);
         
         // Upload wearing + product using uploadImages method
-        // This captures TOP 10 hrefs, monitors for new ones, and adds to command
-        await videoGen.uploadImages(
+        // This captures TOP 10 hrefs, monitors for new ones, and stores image URLs
+        const imageUrls = await videoGen.uploadImages(
           wearingImageResult.screenshotPath,  // Character/wearing image
           productFilePath,  // Product image
           [holdingImageResult.screenshotPath]  // Additional image (holding)
         );
-        console.log('✅ All images uploaded to command\n');
+        console.log('✅ All images uploaded and URLs captured\n');
+        console.log(`📎 IMAGE URL MAPPING:`);
+        console.log(`   wearing: ${imageUrls.wearing ? '✓' : '✗'}`);
+        console.log(`   product: ${imageUrls.product ? '✓' : '✗'}`);
+        console.log(`   holding: ${imageUrls.holding ? '✓' : '✗'}\n`);
 
-        // STEP 4.4: Generate videos for each segment
+        // STEP 4.4: Generate videos for each segment with proper image composition
         console.log(`${'═'.repeat(80)}`);
         console.log(`🎯 VIDEO GENERATION: ${videoSegments.length} segment(s)`);
         console.log(`${'═'.repeat(80)}\n`);
@@ -1193,13 +1197,23 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
           const segment = videoSegments[segIdx];
           const isFirstSegment = segIdx === 0;
+          const imageComposition = segment.imageComposition || ['wearing'];  // Default fallback
 
           console.log(`\n📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
           console.log(`   Duration: ${segment.duration}s`);
-          console.log(`   Image: ${segment.image}`);
+          console.log(`   Images: [${imageComposition.join(', ')}]`);
 
           try {
-            // Build segment-specific prompt
+            // STEP 4.4.1: Prepare images for this segment
+            console.log(`   📷 Preparing images: ${imageComposition.join(' + ')}`);
+            const imagesReady = await videoGen.prepareSegmentImages(imageComposition, imageUrls);
+            if (!imagesReady) {
+              console.warn(`   ⚠️  Could not prepare all images, continuing...`);
+            } else {
+              console.log(`   ✓ Images prepared`);
+            }
+
+            // STEP 4.4.2: Build segment-specific prompt
             const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
             let segmentPrompt;
             if (normalizedLanguage === 'vi') {
@@ -1236,35 +1250,22 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             console.log(`   Script length: ${segment.script.length} chars`);
             console.log(`   Prompt length: ${segmentPrompt.length} chars`);
 
-            // For segments after the first: use "Reuse command" flow
-            if (!isFirstSegment) {
-              console.log(`   → SEGMENT ${segIdx + 1}: Using REUSE flow`);
-              console.log(`   📌 Finding previous video to reuse command...`);
-              
-              // Find the last generated <a> tag and click "Sử dụng lại câu lệnh"
-              const reuseSuccess = await videoGen.reuseLastCommand();
-              if (!reuseSuccess) {
-                console.warn(`   ⚠️  Could not reuse command, continuing...`);
-              } else {
-                console.log(`   ✓ Reuse command activated`);
-              }
-            }
-
-            // Clear old prompt and enter new one
+            // STEP 4.4.3: Clear old prompt and enter new one (for segments 2+, prompt may need clearing)
             console.log(`   🧹 Clearing old prompt...`);
             await videoGen.clearPromptText();
             console.log(`   ✓ Prompt cleared`);
 
+            // STEP 4.4.4: Enter the new prompt
             console.log(`   ⌨️  Entering new prompt...`);
             await videoGen.enterPrompt(segmentPrompt);
             console.log(`   ✓ Prompt entered`);
 
-            // Press Enter - auto-triggers generation in video mode
+            // STEP 4.4.5: Generation auto-triggers in video mode when pressing Enter
             console.log(`   ⏳ Generation auto-triggered by Enter key`);
             await new Promise(resolve => setTimeout(resolve, 2000));  // Wait for generation to initialize
             console.log(`   ✓ Generation started`);
 
-            // Monitor generation until complete
+            // STEP 4.4.6: Monitor generation until complete
             const maxWaitTime = Math.max(180000, (segment.duration + 60) * 1000);
             console.log(`   ⏳ Monitoring generation (timeout: ${(maxWaitTime / 1000).toFixed(0)}s)...`);
             const renderComplete = await videoGen.monitorGeneration();
@@ -1275,7 +1276,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             }
             console.log(`   ✓ Generation completed`);
 
-            // Download video (try 1080p, fallback to 720p)
+            // STEP 4.4.7: Download video (try 1080p, fallback to 720p)
             console.log(`   📥 Downloading video...`);
             let videoPath = await videoGen.downloadVideo('1080p');
             
@@ -1768,25 +1769,25 @@ function generateStructuredVideoContent(analysis, config) {
         segment: 'intro',
         duration: segmentDurations.intro,
         script: `Introducing the amazing ${productName} that will transform your style! ${productColor} and absolutely stunning.`,
-        image: 'wearing'
+        imageComposition: ['wearing', 'product']  // Multi-image composition
       },
       {
         segment: 'wearing',
         duration: segmentDurations.wearing,
         script: `See how flawlessly it looks when worn – perfect fit, amazing style, incredibly comfortable. This ${productType} is a must-have!`,
-        image: 'wearing'
+        imageComposition: ['wearing']  // Single image
       },
       {
         segment: 'holding',
         duration: segmentDurations.holding,
         script: `Check out the exquisite details – the quality is insane! Made with premium ${productMaterial}, designed for durability and elegance.`,
-        image: 'holding'
+        imageComposition: ['holding', 'product']  // Multi-image composition
       },
       {
         segment: 'cta',
         duration: segmentDurations.cta,
         script: `Don't miss out! Get yours now and elevate your wardrobe instantly. Limited stock available. Link in bio for exclusive deals! #Must-have`,
-        image: 'product'
+        imageComposition: ['product']  // Single image
       }
     ],
     voiceoverScript: generateVoiceoverScript(productName, productColor, voicePace),
@@ -2003,19 +2004,37 @@ function parseDeepAnalysisResponse(rawText, analysis) {
 function parseVideoSegments(text) {
   const segments = [];
   
-  // Try to find segment markers like [INTRO], [WEARING], [HOLDING], [CTA]
-  const segmentPattern = /\[?(\w+)\]?\s*\((\d+)s?\)?\s*:?\s*([\s\S]*?)(?=\[?(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
+  // Try to find segment markers like [INTRO], [WEARING], [HOLDING], [CTA] with optional [IMAGES: ...]
+  // Pattern: [SEGMENT_NAME] (duration) [IMAGES: image1, image2] : script\n- Reason: reason text
+  const segmentPattern = /\[(\w+)\]\s*\((\d+)s?\)\s*(?:\[IMAGES?:\s*([^\]]+)\])?\s*:?\s*([\s\S]*?)(?=\[(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
   
   let match;
   while ((match = segmentPattern.exec(text)) !== null) {
-    const [, segmentName, duration, script] = match;
+    const [, segmentName, duration, imagesStr, script] = match;
+    
+    // Parse image composition from [IMAGES: wearing, product, ...]
+    let imageComposition = [];
+    if (imagesStr) {
+      imageComposition = imagesStr
+        .split(',')
+        .map(img => img.trim().toLowerCase())
+        .filter(img => ['wearing', 'holding', 'product'].includes(img));
+    }
+    
+    // Fallback to default if no images specified
+    if (imageComposition.length === 0) {
+      imageComposition = [getImageForSegment(segmentName)];
+    }
     
     if (script && script.trim().length > 0) {
+      // Extract just the script part (remove the "- Reason: ..." part if present)
+      const scriptOnly = script.split('\n').filter(line => !line.match(/^\s*-\s*Reason/))[0] || script;
+      
       segments.push({
         segment: segmentName.toLowerCase(),
         duration: parseInt(duration) || 5,
-        script: script.trim(),
-        image: getImageForSegment(segmentName)
+        script: scriptOnly.trim(),
+        imageComposition: imageComposition  // NEW: Store array of images
       });
     }
   }
@@ -2028,11 +2047,12 @@ function parseVideoSegments(text) {
       .slice(0, 4); // Maximum 4 segments
     
     lines.forEach((line, idx) => {
+      const segmentName = ['intro', 'wearing', 'holding', 'cta'][idx] || 'segment';
       segments.push({
-        segment: ['intro', 'wearing', 'holding', 'cta'][idx] || 'segment',
+        segment: segmentName,
         duration: 5,
         script: line.replace(/^[^:]+:\s*/, '').trim(),
-        image: ['wearing', 'wearing', 'holding', 'product'][idx] || 'wearing'
+        imageComposition: [getImageForSegment(segmentName)]  // NEW: Wrap in array
       });
     });
   }
@@ -2077,9 +2097,9 @@ PRODUCT INFORMATION:
 - Key Details: ${analysis.product?.key_details}
 
 IMAGES PROVIDED:
-1. Wearing Image: Character styled wearing the product
-2. Holding Image: Character holding/presenting the product
-3. Product Image: Original product reference
+1. "wearing" - Character styled wearing the product
+2. "holding" - Character holding/presenting the product
+3. "product" - Original product reference
 
 YOUR TASK:
 Generate content for a TikTok video (9:16 format, ${videoDuration} seconds).
@@ -2088,21 +2108,26 @@ IMPORTANT: Format your response with these EXACT section markers for parsing:
 
 🎬 VIDEO SEGMENTS:
 Create ${Math.ceil(videoDuration / 5)} short video segments. For EACH segment, use this format:
-[SEGMENT_NAME] (duration_in_seconds):
+[SEGMENT_NAME] (duration_in_seconds) [IMAGES: image1, image2, ...] :
 Your narration text here (3-7 seconds of script)
+- Reason: Why these images work for this segment
 
 Example:
-[INTRO] (3s):
-Check out this amazing new look!
+[INTRO] (3s) [IMAGES: wearing, product]:
+Check out this amazing new look! Perfect for any occasion.
+- Reason: Show product on body combined with standalone product shot
 
-[WEARING] (5s):
+[WEARING] (5s) [IMAGES: wearing]:
 See how perfectly it fits and looks.
+- Reason: Focus on fit and styling
 
-[HOLDING] (4s):
-The details are absolutely stunning.
+[HOLDING] (4s) [IMAGES: holding, product]:
+The details are absolutely stunning. Premium quality clear.
+- Reason: Close-up details of the product
 
-[CTA] (3s):
-Get yours now! Link in bio!
+[CTA] (3s) [IMAGES: product]:
+Get yours now! Link in bio! Limited stock!
+- Reason: Product-focused call-to-action
 
 🎙️ VOICEOVER:
 Write a cohesive ${voiceGender} narrator script:
@@ -2121,6 +2146,7 @@ REQUIREMENTS:
 - Focus on product benefits and style appeal
 - Optimize for affiliate conversion while maintaining authenticity
 - Each segment should flow naturally into the next
+- Image composition should vary: some segments 1 image, some 2 images, strategically selected
 `;
 }
 

@@ -171,6 +171,13 @@ class GoogleFlowAutomationService {
       throw new Error(`Product image not found: ${productImagePath}`);
     }
 
+    // Initialize imageUrls tracking object
+    const imageUrls = {
+      wearing: null,
+      holding: null,
+      product: null
+    };
+
     try {
       // STEP 0: Handle any terms modal
       console.log('⏳ Checking for terms modal...');
@@ -179,7 +186,7 @@ class GoogleFlowAutomationService {
 
       // STEP 1: Log the files we're about to upload
       console.log('📋 FILES TO UPLOAD:');
-      console.log(`   [1] Character: ${characterImagePath}`);
+      console.log(`   [1] Character/Wearing: ${characterImagePath}`);
       console.log(`   [2] Product: ${productImagePath}\n`);
 
       // NOTE: configureSettings() should be called BEFORE uploadImages() by the caller
@@ -202,8 +209,8 @@ class GoogleFlowAutomationService {
       
       // Arrays to store file paths and names for sequential processing
       const filesToProcess = [
-        { path: characterImagePath, label: 'CHARACTER', index: 0 },
-        { path: productImagePath, label: 'PRODUCT', index: 1 }
+        { path: characterImagePath, label: 'CHARACTER/WEARING', imageKey: 'wearing', index: 0 },
+        { path: productImagePath, label: 'PRODUCT', imageKey: 'product', index: 1 }
       ];
 
       // Get initial image count
@@ -217,7 +224,7 @@ class GoogleFlowAutomationService {
         const file = filesToProcess[fileIdx];
         
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📤 UPLOADING ${file.label} IMAGE (${fileIdx + 1}/2)`);
+        console.log(`📤 UPLOADING ${file.label} IMAGE (${fileIdx + 1}/${filesToProcess.length})`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
         // Step 1: Upload file
@@ -286,7 +293,11 @@ class GoogleFlowAutomationService {
           }, initialTopHrefs);
 
           if (result.found) {
-            console.log(`   ✅ NEW item detected with href: "${result.newHref.substring(0, 60)}..." New image confirmed.\\n`);\n            newItemHref = result.newHref;
+            console.log(`   ✅ NEW item detected with href: "${result.newHref.substring(0, 60)}..." New image confirmed.\n`);
+            newItemHref = result.newHref;
+            // 💫 STORE the href for this image type
+            imageUrls[file.imageKey] = newItemHref;
+            console.log(`   📎 Stored href for "${file.imageKey}": ${newItemHref.substring(0, 60)}...\n`);
             break;
           }
 
@@ -298,8 +309,8 @@ class GoogleFlowAutomationService {
         }
 
         if (newItemHref === null) {
-          console.log(`   ⚠️  No NEW item detected within timeout\\n`);
-          console.log(`   ℹ️  Continuing anyway...\\n`);
+          console.log(`   ⚠️  No NEW item detected within timeout\n`);
+          console.log(`   ℹ️  Continuing anyway...\n`);
         }
 
         // Step 5: Wait 2 seconds for virtuoso card to render
@@ -408,7 +419,7 @@ class GoogleFlowAutomationService {
           } catch (e) {
             console.log(`   ❌ Error: ${e.message}${rightClickAttempts < maxRightClickAttempts ? ', retrying...' : ', skipping'}\n`);
             
-            if (hoverAttempts < maxHoverAttempts) {
+            if (rightClickAttempts < maxRightClickAttempts) {
               await this.page.waitForTimeout(1000);
             }
           }
@@ -441,6 +452,15 @@ class GoogleFlowAutomationService {
       } else {
         console.log(`✅ Image count correct!\n`);
       }
+
+      // 💫 STORE imageUrls in instance for later use by segments
+      console.log(`\n📎 STORING IMAGE URL MAPPING FOR SEGMENTS:`);
+      console.log(`   wearing: ${imageUrls.wearing ? imageUrls.wearing.substring(0, 60) + '...' : '(not set)'}`);
+      console.log(`   product: ${imageUrls.product ? imageUrls.product.substring(0, 60) + '...' : '(not set)'}`);
+      console.log(`   holding: ${imageUrls.holding ? imageUrls.holding.substring(0, 60) + '...' : '(not set)'}\n`);
+      
+      this.imageUrls = imageUrls;
+      return imageUrls;
 
     } catch (error) {
       console.error(`\n❌ UPLOAD FAILED: ${error.message}`);
@@ -2421,6 +2441,167 @@ class GoogleFlowAutomationService {
 
     } catch (error) {
       console.error(`   ❌ Error in reuseLastCommand: ${error.message}`);
+      return false;
+    }
+  }
+
+  async prepareSegmentImages(imageComposition, imageUrls) {
+    /**
+     * Prepare images for a specific video segment by selecting them from previously uploaded images
+     * 
+     * Flow:
+     * 1. For each image in imageComposition array (e.g., ['wearing', 'product']):
+     *    - Find the corresponding href from imageUrls map
+     *    - Right-click on the image and select "Thêm vào câu lệnh"
+     * 2. Wait for all images to be added to command
+     * 3. Images are now ready for prompt generation
+     * 
+     * @param {Array<string>} imageComposition - Array of image names like ['wearing', 'product']
+     * @param {Object} imageUrls - Map of image names to hrefs: {wearing: 'href1', holding: 'href2', product: 'href3'}
+     * @returns {Promise<boolean>} - True if at least one image was added successfully
+     */
+    console.log(`\n📷 PREPARING SEGMENT IMAGES: [${imageComposition.join(', ')}]`);
+    
+    try {
+      let successCount = 0;
+      
+      for (const imageName of imageComposition) {
+        const href = imageUrls[imageName];
+        
+        if (!href) {
+          console.warn(`   ⚠️  No href found for image: ${imageName}`);
+          continue;
+        }
+        
+        console.log(`   📌 Adding image: ${imageName}`);
+        const addedSuccess = await this.addImageToCommand(href);
+        
+        if (addedSuccess) {
+          console.log(`   ✓ Image ${imageName} added to command`);
+          successCount++;
+        } else {
+          console.warn(`   ⚠️  Could not add image ${imageName}, skipping...`);
+        }
+        
+        // Small delay between adding images
+        await this.page.waitForTimeout(500);
+      }
+      
+      if (successCount === 0) {
+        console.warn(`   ⚠️  No images were added to command`);
+        return false;
+      }
+      
+      console.log(`   ✅ Added ${successCount}/${imageComposition.length} images to command\n`);
+      return true;
+      
+    } catch (error) {
+      console.error(`   ❌ Error preparing segment images: ${error.message}`);
+      return false;
+    }
+  }
+
+  async addImageToCommand(itemHref) {
+    /**
+     * Find an image by href and add it to the command via right-click menu
+     * 
+     * Used in both:
+     * - Multi-image upload flow (uploadImages)
+     * - Per-segment image selection (prepareSegmentImages)
+     * 
+     * @param {string} itemHref - The href attribute value to find
+     * @returns {Promise<boolean>} - True if image was added successfully
+     */
+    try {
+      // Find the item with this href
+      const linkData = await this.page.evaluate((targetHref) => {
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        
+        for (const link of links) {
+          const href = link.getAttribute('href');
+          if (href === targetHref) {
+            const rect = link.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
+        }
+        
+        return { found: false };
+      }, itemHref);
+
+      if (!linkData.found) {
+        console.log(`      ⚠️  Image not found by href`);
+        return false;
+      }
+
+      // Right-click on the image using mouse movement method
+      await this.page.mouse.move(linkData.x, linkData.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down({ button: 'right' });
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up({ button: 'right' });
+      
+      // Wait for context menu to appear
+      console.log(`      ⏳ Waiting for context menu...`);
+      await this.page.waitForTimeout(1500);
+
+      // Find and click "Thêm vào câu lệnh" button
+      const addedToCmdSuccess = await this.page.evaluate(() => {
+        const menuItems = document.querySelectorAll('[role="menuitem"]');
+        
+        for (const item of menuItems) {
+          const text = item.textContent.toLowerCase();
+          const hasCheckIcon = item.innerHTML.includes('check') || item.innerHTML.includes('checkmark');
+          
+          // Look for "thêm vào câu lệnh" text with check icon
+          if ((text.includes('thêm vào') || text.includes('add')) && hasCheckIcon) {
+            const rect = item.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
+        }
+        
+        // Fallback: just look for text match
+        for (const item of menuItems) {
+          const text = item.textContent.toLowerCase();
+          if (text.includes('thêm vào') || text.includes('add to')) {
+            const rect = item.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
+        }
+        
+        return { found: false };
+      });
+
+      if (!addedToCmdSuccess.found) {
+        console.log(`      ⚠️  "Thêm vào câu lệnh" option not found`);
+        return false;
+      }
+
+      // Click the "Thêm vào câu lệnh" button using mouse movement method
+      await this.page.mouse.move(addedToCmdSuccess.x, addedToCmdSuccess.y);
+      await this.page.waitForTimeout(150);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.up();
+
+      console.log(`      ✓ Added to command`);
+      await this.page.waitForTimeout(800);
+      
+      return true;
+
+    } catch (error) {
+      console.error(`      ❌ Error: ${error.message}`);
       return false;
     }
   }
