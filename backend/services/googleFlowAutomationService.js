@@ -109,7 +109,7 @@ class GoogleFlowAutomationService {
     console.log('⏳ Waiting for page elements to load...');
     let pageReady = false;
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 15;
 
     while (!pageReady && attempts < maxAttempts) {
       attempts++;
@@ -117,19 +117,34 @@ class GoogleFlowAutomationService {
         const buttons = document.querySelectorAll('button');
         const visibleButtons = Array.from(buttons).filter(btn => {
           const style = window.getComputedStyle(btn);
-          return style.display !== 'none' && style.visibility !== 'hidden';
+          return style.display !== 'none' && style.visibility !== 'hidden' && btn.offsetHeight > 0;
         });
         const hasFileInput = document.querySelector('input[type="file"]') !== null;
         const prompts = document.querySelectorAll('[contenteditable="true"]');
-        return { buttons: buttons.length, visible: visibleButtons.length, input: hasFileInput, prompts: prompts.length };
+        
+        // Check for essential elements
+        const hasMainContent = document.querySelector('[data-testid="virtuoso-item-list"]') !== null ||
+                              document.querySelector('.grid') !== null ||
+                              document.querySelector('[role="main"]') !== null;
+        
+        return { 
+          buttons: buttons.length, 
+          visible: visibleButtons.length, 
+          input: hasFileInput, 
+          prompts: prompts.length,
+          mainContent: hasMainContent
+        };
       });
 
-      pageReady = elements.buttons > 10 && elements.visible > 10 && elements.input && elements.prompts > 0;
+      // More flexible readiness check: Either satisfy original strict requirement OR new flexible requirement
+      const strictReady = elements.buttons > 10 && elements.visible > 10 && elements.input && elements.prompts > 0;
+      const flexibleReady = elements.visible > 5 && elements.mainContent;
+      pageReady = strictReady || flexibleReady;
 
       if (!pageReady) {
-        console.log(`   Attempt ${attempts}: buttons=${elements.buttons}, visible=${elements.visible}, input=${elements.input}, prompts=${elements.prompts}`);
-        console.log(`   ⏳ Not ready yet, waiting 1500ms...`);
-        await this.page.waitForTimeout(1500);
+        console.log(`   Attempt ${attempts}: buttons=${elements.buttons}, visible=${elements.visible}, input=${elements.input}, prompts=${elements.prompts}, content=${elements.mainContent}`);
+        console.log(`   ⏳ Not ready yet, waiting 1000ms...`);
+        await this.page.waitForTimeout(1000);
       }
     }
 
@@ -2052,7 +2067,9 @@ class GoogleFlowAutomationService {
       // Wait for file to appear in output directory
       let downloadedFile = null;
       let waitAttempts = 0;
-      const maxWaitAttempts = 120; // 120 * 500ms = 60 seconds (allow more time for file to finish writing)
+      // Increase timeout for 2K images (can be 100-200MB+ downloads that need processing)
+      // 300 * 500ms = 150 seconds (2.5 minutes for large file processing)
+      const maxWaitAttempts = 300;
       
       // Get initial files (all files, regardless of extension)
       const initialFiles = fs.readdirSync(this.options.outputDir);
@@ -2066,8 +2083,11 @@ class GoogleFlowAutomationService {
 
       // Track in-progress files separately
       let lastInProgressFile = null;
+      let lastInProgressFileSize = 0;
+      let lastInProgressFileTime = Date.now();
       let inProgressWaitAttempts = 0;
-      const maxInProgressWaitAttempts = 30; // Wait up to 15 seconds for in-progress file to complete
+      // Wait up to 150 seconds (300 attempts) for in-progress file to complete
+      const maxInProgressWaitAttempts = 300;
 
       while (waitAttempts < maxWaitAttempts) {
         waitAttempts++;
@@ -2091,7 +2111,8 @@ class GoogleFlowAutomationService {
           newFiles.forEach(f => console.log(`      - ${f}`));
           
           downloadedFile = path.join(this.options.outputDir, newFiles[0]);
-          console.log(`   ✓ File downloaded: ${path.basename(downloadedFile)}`);
+          const fileSize = fs.statSync(downloadedFile).size;
+          console.log(`   ✓ File downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
           await this.page.waitForTimeout(500);
           break;
         }
@@ -2103,25 +2124,40 @@ class GoogleFlowAutomationService {
         );
         
         if (inProgressFiles.length > 0) {
+          const inProgressFilePath = path.join(this.options.outputDir, inProgressFiles[0]);
+          const inProgressFileSize = fs.statSync(inProgressFilePath).size;
+          
           // Found in-progress file(s), wait for completion
           if (!lastInProgressFile || lastInProgressFile !== inProgressFiles[0]) {
             console.log(`   📥 In-progress file detected: ${inProgressFiles[0]}`);
+            console.log(`      Size: ${(inProgressFileSize / 1024 / 1024).toFixed(2)}MB`);
             lastInProgressFile = inProgressFiles[0];
+            lastInProgressFileSize = inProgressFileSize;
+            lastInProgressFileTime = Date.now();
             inProgressWaitAttempts = 0;
           }
           
           inProgressWaitAttempts++;
-          if (inProgressWaitAttempts >= maxInProgressWaitAttempts) {
-            console.log(`   ⚠️  In-progress file not completing: ${inProgressFiles[0]}`);
-            console.log('   🔄 Checking if it will complete anyway...');
-            // Wait a bit more in case it completes
+          
+          // Log progress every 20 attempts (10 seconds)
+          if (inProgressWaitAttempts % 20 === 0) {
+            const currentSize = fs.statSync(inProgressFilePath).size;
+            const sizeDiff = currentSize - lastInProgressFileSize;
+            const timeDiff = (Date.now() - lastInProgressFileTime) / 1000;
+            const speed = sizeDiff > 0 ? (sizeDiff / timeDiff / 1024 / 1024).toFixed(2) : '0.00';
+            console.log(`   📥 Download progress (${inProgressWaitAttempts}/${maxInProgressWaitAttempts}):`);
+            console.log(`      Size: ${(currentSize / 1024 / 1024).toFixed(2)}MB`);
+            console.log(`      Speed: ${speed}MB/s`);
+            lastInProgressFileSize = currentSize;
+            lastInProgressFileTime = Date.now();
           } else if (inProgressWaitAttempts % 5 === 0) {
-            console.log(`   ⏳ Waiting for in-progress file... (${inProgressWaitAttempts}/${maxInProgressWaitAttempts})`);
+            const currentSize = fs.statSync(inProgressFilePath).size;
+            console.log(`   ⏳ Download in progress... (${inProgressWaitAttempts}/${maxInProgressWaitAttempts}, ${(currentSize / 1024 / 1024).toFixed(2)}MB)`);
           }
         }
 
-        if (waitAttempts % 12 === 0) {
-          console.log(`   ⏳ Waiting for download... (${waitAttempts}/${maxWaitAttempts})`);
+        if (waitAttempts % 30 === 0) {
+          console.log(`   ⏳ Waiting for download... (${waitAttempts}/${maxWaitAttempts}, ${(waitAttempts * 0.5).toFixed(0)}s elapsed)`);
         }
 
         await this.page.waitForTimeout(500);
@@ -2129,11 +2165,20 @@ class GoogleFlowAutomationService {
 
       if (!downloadedFile) {
         console.warn('   ⚠️  Download timeout - file not found in output directory');
+        console.warn(`   ⏱️  Waited ${(maxWaitAttempts * 0.5).toFixed(0)}s (${(maxWaitAttempts * 500 / 1000).toFixed(1)} seconds)`);
         console.warn(`   📁 Current files in directory: ${fs.readdirSync(this.options.outputDir).length}`);
         const allFiles = fs.readdirSync(this.options.outputDir);
         if (allFiles.length > 0) {
           console.warn('   📂 All files:');
-          allFiles.forEach(f => console.warn(`      - ${f}`));
+          allFiles.forEach(f => {
+            const filePath = path.join(this.options.outputDir, f);
+            try {
+              const size = fs.statSync(filePath).size;
+              console.warn(`      - ${f} (${(size / 1024 / 1024).toFixed(2)}MB)`);
+            } catch (e) {
+              console.warn(`      - ${f} (size unavailable)`);
+            }
+          });
         }
         console.warn('');
         return null;
