@@ -802,8 +802,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     console.log(`\n✅ PROMPTS BUILT:`);
     try {
-      console.log(`  Change-clothes prompt: ${wearingPromptData?.prompt?.substring(0, 80) || 'N/A'}...`);
-      console.log(`  Holding-product prompt: ${holdingPromptData?.prompt?.substring(0, 80) || 'N/A'}...`);
+      console.log(`  Change-clothes prompt: ${wearingPromptData?.prompts?.prompt?.substring(0, 80) || 'N/A'}...`);
+      console.log(`  Holding-product prompt: ${holdingPromptData?.prompts?.prompt?.substring(0, 80) || 'N/A'}...`);
     } catch (logErr) {
       console.log(`  ⚠️ Could not display prompt preview:`, logErr.message);
       console.log(`  Wearing data type: ${typeof wearingPromptData}, keys: ${Object.keys(wearingPromptData || {}).join(', ')}`);
@@ -832,8 +832,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log('🚀 Initializing image generation service...');
       
       // Validate prompts before passing to generateMultiple
-      const wearingPrompt = wearingPromptData?.prompt || '';
-      const holdingPrompt = holdingPromptData?.prompt || '';
+      const wearingPrompt = wearingPromptData?.prompts?.prompt || '';
+      const holdingPrompt = holdingPromptData?.prompts?.prompt || '';
       
       if (!wearingPrompt || typeof wearingPrompt !== 'string' || wearingPrompt.trim().length === 0) {
         throw new Error(`Invalid wearing prompt: ${typeof wearingPrompt}, length: ${wearingPrompt?.length || 0}`);
