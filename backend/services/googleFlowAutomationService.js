@@ -2382,6 +2382,49 @@ class GoogleFlowAutomationService {
     }
   }
 
+  async reuseLastCommand() {
+    /**
+     * Find the last generated video and reuse its command
+     * Used for segments 2-4 in multi-segment video generation
+     * 
+     * Steps:
+     * 1. Find the most recently created <a> tag (last in list)
+     * 2. Extract its href
+     * 3. Call rightClickReuseCommand(href) to show reuse menu
+     */
+    try {
+      const lastHref = await this.page.evaluate(() => {
+        // Get all <a> tags in the items list
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        if (links.length === 0) {
+          console.log('[REUSE] No items found in list');
+          return null;
+        }
+
+        // Get the last one (most recent)
+        const lastLink = links[links.length - 1];
+        const href = lastLink.getAttribute('href');
+        const text = lastLink.textContent.substring(0, 50);
+        
+        console.log(`[REUSE] Found last item: ${text}... (href: ${href})`);
+        return href;
+      });
+
+      if (!lastHref) {
+        console.log('   ⚠️  Could not find last generated video');
+        return false;
+      }
+
+      // Now right-click on it and select reuse
+      console.log(`   🔄 Reusing command from last generated video...`);
+      return await this.rightClickReuseCommand(lastHref);
+
+    } catch (error) {
+      console.error(`   ❌ Error in reuseLastCommand: ${error.message}`);
+      return false;
+    }
+  }
+
   async rightClickReuseCommand(itemHref) {
     /**
      * Right-click on generated item and click "Sử dụng lại câu lệnh" (Reuse command)

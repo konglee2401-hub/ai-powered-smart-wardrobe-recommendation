@@ -1137,16 +1137,32 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`  Multiple segments: ${videoSegments.length}`);
 
       try {
-        // Initialize browser ONCE for all segments
+        // STEP 4.0: Initialize browser ONCE for all segments
         console.log('\n🚀 Initializing video generation browser (reusable session)...');
         await videoGen.init();
         console.log('✅ Browser initialized');
 
+        // STEP 4.1: Navigate to project
+        console.log('\n🔗 Navigating to Google Flow project...');
         await videoGen.navigateToProject();
         console.log('✅ Navigated to Google Flow project');
 
-        // 💫 UPLOAD ALL 3 IMAGES FOR VIDEO GENERATION
-        console.log('\n📸 STEP 4.1: Uploading 3 images for video generation:');
+        // STEP 4.2: Configure settings BEFORE uploading (CRITICAL)
+        console.log('\n⚙️  Configuring video settings...\n');
+        try {
+          const settingsOk = await videoGen.configureSettings();
+          if (settingsOk) {
+            console.log('✅ Video settings configured\n');
+          } else {
+            console.log('⚠️  Settings might be incomplete, continuing...\n');
+          }
+        } catch (settingsError) {
+          console.warn(`⚠️  Settings configuration error: ${settingsError.message}`);
+          console.warn('⚠️  Continuing with default settings...\n');
+        }
+
+        // STEP 4.3: Upload ALL 3 images for video generation
+        console.log('📸 STEP 4.3: Uploading 3 images for video generation:');
         console.log(`   ├─ Wearing image: ${wearingImageResult.screenshotPath}`);
         console.log(`   ├─ Holding image: ${holdingImageResult.screenshotPath}`);
         console.log(`   └─ Product image: ${productFilePath}`);
@@ -1160,263 +1176,133 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         }
         console.log(`   ✅ All 3 images verified to exist\n`);
         
-        // Upload wearing + product using uploadImages method (standard flow)
-        // This will handle the file inputs, elements, and UI interactions
+        // Upload wearing + product using uploadImages method
+        // This captures TOP 10 hrefs, monitors for new ones, and adds to command
         await videoGen.uploadImages(
           wearingImageResult.screenshotPath,  // Character/wearing image
           productFilePath,  // Product image
           [holdingImageResult.screenshotPath]  // Additional image (holding)
         );
-        console.log('✅ Images uploaded and ready for video generation\n');
+        console.log('✅ All images uploaded to command\n');
 
-        // 💫 CRITICAL: Configure video settings AFTER upload
-        console.log('⚙️  Configuring video settings...');
-        try {
-          const settingsOk = await videoGen.configureSettings();
-          if (settingsOk) {
-            console.log('✅ Video settings configured\n');
-          } else {
-            console.log('⚠️  Settings might be incomplete, continuing...\n');
-          }
-        } catch (settingsError) {
-          console.warn(`⚠️  Settings configuration error: ${settingsError.message}`);
-          console.warn('⚠️  Continuing with default settings...\n');
-        }
+        // STEP 4.4: Generate videos for each segment
+        console.log(`${'═'.repeat(80)}`);
+        console.log(`🎯 VIDEO GENERATION: ${videoSegments.length} segment(s)`);
+        console.log(`${'═'.repeat(80)}\n`);
 
-        // Switch to video tab ONCE
-        console.log('📹 Switching to video generation mode...');
-        await videoGen.switchToVideoTab();
-        console.log('✅ Video tab active');
+        for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
+          const segment = videoSegments[segIdx];
+          const isFirstSegment = segIdx === 0;
 
-        await videoGen.selectVideoFromComponents();
-        console.log('✅ Selected "Tạo video từ các thành phần" mode');
+          console.log(`\n📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
+          console.log(`   Duration: ${segment.duration}s`);
+          console.log(`   Image: ${segment.image}`);
 
-        // Verify video interface ONCE
-        await videoGen.verifyVideoInterface();
-        console.log('✅ Veo model verified');
-
-        // ========== GENERATE VIDEOS FOR EACH SEGMENT ==========
-        if (hasMultipleSegments) {
-          console.log(`\n${'═'.repeat(70)}`);
-          console.log(`🎯 MULTI-SEGMENT VIDEO GENERATION (${videoSegments.length} videos)`);
-          console.log(`${'═'.repeat(70)}`);
-          
-          // 🔴 CRITICAL: Verify image is still selected before generation
-          console.log(`\n✅ PRE-FLIGHT CHECKS:`);
-          const imageStillSelected = await videoGen.verifyImageSelected();
-          if (!imageStillSelected) {
-            console.warn(`⚠️  WARNING: Image selection lost! Attempting to reselect...`);
-            if (wearingImageResult?.screenshotPath) {
-              await videoGen.selectReferencePath(wearingImageResult.screenshotPath);
-              console.log(`   Reselection complete`);
+          try {
+            // Build segment-specific prompt
+            const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+            let segmentPrompt;
+            if (normalizedLanguage === 'vi') {
+              segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+                segment.segment,
+                productFocus,
+                { name: analysis.product?.garment_type, details: analysis.product?.key_details }
+              );
             } else {
-              console.warn(`   ⚠️  Cannot reselect: wearingImagePath not available`);
+              segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
+                videoDuration: segment.duration,
+                voiceGender,
+                voicePace,
+                productFocus
+              });
             }
-          } else {
-            console.log(`   ✅ Reference image still selected`);
-          }
 
-          for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
-            const segment = videoSegments[segIdx];
-            const isFirstSegment = segIdx === 0;
-
-            console.log(`\n📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
-            console.log(`   Duration: ${segment.duration}s`);
-            console.log(`   Image: ${segment.image}`);
-
-            try {
-              // Build prompt for this specific segment
-              // 💫 Use Vietnamese prompts if language='vi'
-              // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
-              const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
-              let segmentPrompt;
-              if (normalizedLanguage === 'vi') {
-                segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-                  segment.segment,
-                  productFocus,
-                  { name: analysis.product?.garment_type, details: analysis.product?.key_details }
-                );
-              } else {
-                segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
-                  videoDuration: segment.duration,
-                  voiceGender,
-                  voicePace,
-                  productFocus
-                });
-              }
-
-              // 🔴 CRITICAL: If prompt is empty, use fallback
-              if (!segmentPrompt || segmentPrompt.trim().length === 0) {
-                console.warn(`⚠️  Segment prompt is empty, using English fallback`);
-                segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
-                  videoDuration: segment.duration,
-                  voiceGender,
-                  voicePace,
-                  productFocus
-                });
-              }
-
-              console.log(`   Script length: ${segment.script.length} chars`);
-              console.log(`   Prompt length: ${segmentPrompt.length} chars`);
-
-              if (isFirstSegment) {
-                // FIRST segment: Normal flow (images already uploaded)
-                console.log(`   → FIRST SEGMENT: Using normal generation flow`);
-
-                // 🔴 CRITICAL: Validate prompt is not empty
-                if (!segmentPrompt || segmentPrompt.trim().length === 0) {
-                  throw new Error(`Segment prompt is empty for ${segment.segment}`);
-                }
-
-                await videoGen.enterPrompt(segmentPrompt);
-                console.log(`   ✓ Prompt entered`);
-
-                // 💫 FOR VIDEO MODE: Pressing Enter in enterPrompt() auto-triggers generation
-                // No need to wait for or click a Send button like in image mode
-                console.log(`   ⏳ Generation auto-triggered by Enter key in video mode`);
-                console.log(`   ⏳ Waiting 2s for generation to initialize...`);
-                await new Promise(resolve => setTimeout(resolve, 2000));  // Wait for generation to start
-                console.log(`   ✓ Generation submitted`);
-
-              } else {
-                // SUBSEQUENT segments: Reuse button flow (no re-upload)
-                console.log(`   → SEGMENT ${segIdx + 1}: Using REUSE optimization (no image re-upload)`);
-
-                const segmentVideo = await videoGen.generateSegmentVideo(segmentPrompt);
-                if (segmentVideo) {
-                  allGeneratedVideos.push({
-                    segment: segment.segment,
-                    path: segmentVideo,
-                    duration: segment.duration
-                  });
-                  console.log(`   ✅ Video generated: ${path.basename(segmentVideo)}`);
-                  continue; // Skip to next segment
-                } else {
-                  console.warn(`   ⚠️  Segment video generation failed`);
-                }
-              }
-
-              // Monitor generation for FIRST segment only (subsequent handled in generateSegmentVideo)
-              if (isFirstSegment) {
-                const maxWaitTime = Math.max(180000, (segment.duration + 60) * 1000);
-                console.log(`   ⏳ Monitoring generation (timeout: ${(maxWaitTime / 1000).toFixed(0)}s)...`);
-                const renderComplete = await videoGen.monitorGeneration();
-
-                if (!renderComplete) {
-                  console.warn(`   ⚠️  Generation timeout`);
-                  throw new Error(`Segment ${segment.segment} generation timeout`);
-                }
-                console.log(`   ✓ Generation completed`);
-
-                // Download video
-                console.log(`   📥 Downloading video...`);
-                const videoPath = await videoGen.downloadVideo();
-
-                if (videoPath) {
-                  allGeneratedVideos.push({
-                    segment: segment.segment,
-                    path: videoPath,
-                    duration: segment.duration,
-                    size: fs.statSync(videoPath).size
-                  });
-                  console.log(`   ✅ Video downloaded (${(allGeneratedVideos[0].size / 1024 / 1024).toFixed(2)}MB)`);
-                } else {
-                  console.warn(`   ⚠️  Video download returned no path`);
-                }
-              }
-
-            } catch (segmentError) {
-              console.error(`   ❌ Segment ${segIdx + 1} failed: ${segmentError.message}`);
-              if (isFirstSegment) {
-                throw segmentError; // Fail early if first segment fails
-              }
-              // Continue to next segment if not first
+            // Fallback if prompt is empty
+            if (!segmentPrompt || segmentPrompt.trim().length === 0) {
+              console.warn(`⚠️  Segment prompt is empty, using English fallback`);
+              segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
+                videoDuration: segment.duration,
+                voiceGender,
+                voicePace,
+                productFocus
+              });
             }
-          }
 
-        } else {
-          // SINGLE SEGMENT: Normal flow
-          console.log(`\n📹 Generating single video from integrated prompt...`);
+            // Validate prompt
+            if (!segmentPrompt || segmentPrompt.trim().length === 0) {
+              throw new Error(`Segment prompt is empty for ${segment.segment}`);
+            }
 
-          // 💫 Use Vietnamese prompts if language='vi'
-          // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
-          const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
-          let videoPrompt;
-          if (normalizedLanguage === 'vi') {
-            videoPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-              'Hook',
-              productFocus,
-              { name: analysis.product?.garment_type, details: analysis.product?.key_details }
-            );
-          } else {
-            videoPrompt = buildVideoPromptFromAnalysis(
-              deepAnalysis.data,
-              analysis,
-              { videoDuration, voiceGender, voicePace, productFocus }
-            );
-          }
+            console.log(`   Script length: ${segment.script.length} chars`);
+            console.log(`   Prompt length: ${segmentPrompt.length} chars`);
 
-          // 🔴 CRITICAL: If prompt is empty, use English fallback
-          if (!videoPrompt || videoPrompt.trim().length === 0) {
-            console.warn(`⚠️  Video prompt is empty, using English fallback`);
-            videoPrompt = buildVideoPromptFromAnalysis(
-              deepAnalysis.data,
-              analysis,
-              { videoDuration, voiceGender, voicePace, productFocus }
-            );
-          }
+            // For segments after the first: use "Reuse command" flow
+            if (!isFirstSegment) {
+              console.log(`   → SEGMENT ${segIdx + 1}: Using REUSE flow`);
+              console.log(`   📌 Finding previous video to reuse command...`);
+              
+              // Find the last generated <a> tag and click "Sử dụng lại câu lệnh"
+              const reuseSuccess = await videoGen.reuseLastCommand();
+              if (!reuseSuccess) {
+                console.warn(`   ⚠️  Could not reuse command, continuing...`);
+              } else {
+                console.log(`   ✓ Reuse command activated`);
+              }
+            }
 
-          console.log(`✅ Video prompt generated (${videoPrompt.length} chars)`);
+            // Clear old prompt and enter new one
+            console.log(`   🧹 Clearing old prompt...`);
+            await videoGen.clearPromptText();
+            console.log(`   ✓ Prompt cleared`);
 
-          // Enter prompt
-          console.log('\n📝 Entering video prompt...');
-          
-          // 🔴 CRITICAL: Validate prompt is not empty
-          if (!videoPrompt || videoPrompt.trim().length === 0) {
-            throw new Error('Video prompt is empty - cannot generate video');
-          }
-          
-          await videoGen.enterPrompt(videoPrompt);
-          console.log('✅ Prompt entered');
+            console.log(`   ⌨️  Entering new prompt...`);
+            await videoGen.enterPrompt(segmentPrompt);
+            console.log(`   ✓ Prompt entered`);
 
-          // Wait for send button to be enabled
-          console.log('\n⏳ Waiting for send button to enable...');
-          await videoGen.waitForSendButtonEnabled();
-          console.log('✅ Send button enabled');
+            // Press Enter - auto-triggers generation in video mode
+            console.log(`   ⏳ Generation auto-triggered by Enter key`);
+            await new Promise(resolve => setTimeout(resolve, 2000));  // Wait for generation to initialize
+            console.log(`   ✓ Generation started`);
 
-          // Check send button
-          console.log('\n✔️  Checking send button...');
-          await videoGen.checkSendButton();
-          console.log('✅ Send button verified');
+            // Monitor generation until complete
+            const maxWaitTime = Math.max(180000, (segment.duration + 60) * 1000);
+            console.log(`   ⏳ Monitoring generation (timeout: ${(maxWaitTime / 1000).toFixed(0)}s)...`);
+            const renderComplete = await videoGen.monitorGeneration();
 
-          // Submit video generation
-          console.log('\n⏳ Submitting video generation request...');
-          await videoGen.submit();
-          console.log('✅ Generation submitted');
+            if (!renderComplete) {
+              console.warn(`   ⚠️  Generation timeout`);
+              throw new Error(`Segment ${segment.segment} generation timeout`);
+            }
+            console.log(`   ✓ Generation completed`);
 
-          // Monitor generation
-          const maxWaitTime = Math.max(180000, (videoDuration + 60) * 1000);
-          console.log(`\n⏳ Monitoring generation (timeout: ${(maxWaitTime / 1000).toFixed(0)}s)...`);
-          const renderComplete = await videoGen.monitorGeneration();
+            // Download video (try 1080p, fallback to 720p)
+            console.log(`   📥 Downloading video...`);
+            let videoPath = await videoGen.downloadVideo('1080p');
+            
+            if (!videoPath) {
+              console.log(`   ⚠️  1080p download failed, trying 720p...`);
+              videoPath = await videoGen.downloadVideo('720p');
+            }
 
-          if (!renderComplete) {
-            throw new Error('Video generation timeout');
-          }
-          console.log('✅ Generation completed');
+            if (videoPath) {
+              const videoSize = fs.statSync(videoPath).size;
+              allGeneratedVideos.push({
+                segment: segment.segment,
+                path: videoPath,
+                duration: segment.duration,
+                size: videoSize
+              });
+              console.log(`   ✅ Video downloaded (${(videoSize / 1024 / 1024).toFixed(2)}MB)`);
+            } else {
+              console.warn(`   ⚠️  Video download returned no path`);
+            }
 
-          // Download video
-          console.log('\n📥 Downloading generated video...');
-          const videoPath = await videoGen.downloadVideo();
-
-          if (videoPath) {
-            const videoSize = fs.statSync(videoPath).size;
-            allGeneratedVideos.push({
-              segment: 'combined',
-              path: videoPath,
-              duration: videoDuration,
-              size: videoSize
-            });
-            console.log(`✅ Video downloaded (${(videoSize / 1024 / 1024).toFixed(2)}MB)`);
+          } catch (segmentError) {
+            console.error(`   ❌ Segment ${segIdx + 1} failed: ${segmentError.message}`);
+            if (isFirstSegment) {
+              throw segmentError; // Fail early if first segment fails
+            }
+            // Continue to next segment if not first
           }
         }
 
