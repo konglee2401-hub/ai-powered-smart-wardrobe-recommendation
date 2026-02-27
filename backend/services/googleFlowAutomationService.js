@@ -2515,14 +2515,8 @@ class GoogleFlowAutomationService {
         const isLastPrompt = (i === prompts.length - 1);
 
         try {
-          // STEP A: Enter prompt
-          console.log(`[STEP A] 📝 Entering prompt (\${prompt.length} chars)...`);
-          const normalizedPrompt = prompt.normalize('NFC');
-          await this.enterPrompt(normalizedPrompt);
-          console.log('[STEP A] ✓ Prompt entered\n');
-
-          // STEP B: Capture initial hrefs BEFORE clicking generate
-          console.log('[STEP B] 📎 Capturing initial hrefs...');
+          // STEP 0: Capture initial hrefs BEFORE entering prompt
+          console.log('[STEP 0] 📎 Capturing initial hrefs (BEFORE typing)...');
           const initialHrefs = await this.page.evaluate(() => {
             const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
             const hrefs = {};
@@ -2535,7 +2529,13 @@ class GoogleFlowAutomationService {
             }
             return hrefs;
           });
-          console.log(`[STEP B] ✓ Captured \${Object.keys(initialHrefs).length} initial hrefs`);
+          console.log(`[STEP 0] ✓ Captured \${Object.keys(initialHrefs).length} baseline hrefs (before any changes)\n`);
+
+          // STEP A: Enter prompt
+          console.log(`[STEP A] 📝 Entering prompt (\${prompt.length} chars)...`);
+          const normalizedPrompt = prompt.normalize('NFC');
+          await this.enterPrompt(normalizedPrompt);
+          console.log('[STEP A] ✓ Prompt entered\n');
 
           // STEP B: Click generate button
           console.log('[STEP B] 🚀 Clicking generate button...');
@@ -2543,17 +2543,19 @@ class GoogleFlowAutomationService {
 
           // STEP C: Wait for NEW generation to complete with href monitoring
           console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
-          console.log('[STEP C] 📊 Monitoring hrefs for NEW image...\n');
+          console.log('[STEP C] 📊 Monitoring hrefs for NEW image (checking ~every 100ms)...\n');
           
           const startTime = Date.now();
           const timeoutMs = this.options.timeouts.generation || 120000;
           let monitoringAttempt = 0;
+          let lastProgressLogTime = startTime;
           const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
 
           // Wait for NEW image link to appear (NEW href not in initial list)
           await this.page.waitForFunction(
             async () => {
               monitoringAttempt++;
+              const currentTime = Date.now();
               const result = await this.page.evaluate((oldHrefs) => {
                 const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
                 
@@ -2584,9 +2586,11 @@ class GoogleFlowAutomationService {
                 return true;
               }
               
-              // Log progress every 10 attempts
-              if (monitoringAttempt % 10 === 0) {
-                console.log(`   [GENERATION] Attempt \${monitoringAttempt}/\${maxMonitoringAttempts}`);
+              // Log progress every ~1 second (roughly every 10 checks at ~100ms polling)
+              if (currentTime - lastProgressLogTime >= 1000) {
+                const elapsedSecs = ((currentTime - startTime) / 1000).toFixed(1);
+                console.log(`   [GENERATION] ⏱️  \${elapsedSecs}s elapsed | Checks: \${monitoringAttempt} | Frequency: ~every 100ms`);
+                lastProgressLogTime = currentTime;
               }
               
               return false;
