@@ -30,6 +30,9 @@ router.get('/library', cloudGalleryController.getMediaLibrary);
 // Get media by type
 router.get('/type/:type', cloudGalleryController.getMediaByType);
 
+// 💫 NEW: Get media by asset category (character-image, product-image, etc.)
+router.get('/category/:category', cloudGalleryController.getMediaByCategory);
+
 // Upload media
 router.post('/upload', upload.single('file'), cloudGalleryController.uploadMedia);
 

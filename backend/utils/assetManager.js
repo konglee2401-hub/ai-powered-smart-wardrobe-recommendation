@@ -16,6 +16,21 @@
  *       googleDriveId: "file123",
  *       googleDrivePath: "Affiliate AI/Images/...",
  *       url: "https://drive.google.com/..."
+ *     },
+ *     // 💫 NEW: Cloud storage for hybrid sync
+ *     cloudStorage: {
+ *       location: "google-drive",
+ *       googleDriveId: "file123",
+ *       webViewLink: "https://drive.google.com/...",
+ *       thumbnailLink: "https://...",
+ *       status: "synced"
+ *     },
+ *     // 💫 NEW: Local storage for offline access
+ *     localStorage: {
+ *       location: "local",
+ *       path: "/path/to/file.jpg",
+ *       fileSize: 1024,
+ *       verified: true
  *     }
  *   });
  */
@@ -34,8 +49,10 @@ class AssetManager {
    * @param {string} assetData.assetCategory - Category like 'generated-image', 'product-image'
    * @param {string} assetData.userId - User ID
    * @param {string} [assetData.sessionId] - Session ID
-   * @param {Object} assetData.storage - Storage info
+   * @param {Object} assetData.storage - Storage info (LEGACY - for backward compatibility)
    * @param {string} assetData.storage.location - 'google-drive' or 'local'
+   * @param {Object} [assetData.cloudStorage] - Cloud storage info (NEW - for hybrid sync)
+   * @param {Object} [assetData.localStorage] - Local storage info (NEW - for offline access)
    * @param {Object} [assetData.metadata] - Metadata
    * @param {string[]} [assetData.tags] - Tags
    * @param {boolean} [options.autoReplace=true] - Auto-replace duplicate files
@@ -58,6 +75,8 @@ class AssetManager {
       userId = 'anonymous',
       sessionId,
       storage,
+      cloudStorage,  // 💫 NEW
+      localStorage,  // 💫 NEW
       metadata = {},
       tags = []
     } = assetData;
@@ -127,6 +146,9 @@ class AssetManager {
         existingAsset.mimeType = mimeType;
         existingAsset.fileSize = fileSize;
         existingAsset.storage = storage;
+        // 💫 NEW: Update hybrid storage fields
+        if (cloudStorage) existingAsset.cloudStorage = cloudStorage;
+        if (localStorage) existingAsset.localStorage = localStorage;
         existingAsset.metadata = { ...existingAsset.metadata, ...metadata };
         existingAsset.tags = [...new Set([...existingAsset.tags, ...tags])];
         existingAsset.updatedAt = new Date();
@@ -163,9 +185,14 @@ class AssetManager {
         userId,
         sessionId,
         storage,
+        // 💫 NEW: Include hybrid storage fields
+        cloudStorage: cloudStorage || undefined,
+        localStorage: localStorage || undefined,
         metadata,
         tags,
-        status: 'active'
+        status: 'active',
+        // 💫 NEW: Set sync status based on cloudStorage
+        syncStatus: cloudStorage?.status === 'synced' ? 'synced' : 'pending'
       });
 
       await newAsset.save();

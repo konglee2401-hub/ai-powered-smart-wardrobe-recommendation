@@ -66,7 +66,30 @@ export function GalleryDialog({
     try {
       const response = await axios.get(`${API_BASE}/cloud-gallery/library`);
       if (response.data.success) {
-        setMediaLibrary(response.data.data);
+        const library = response.data.data;
+        
+        // 💫 NEW: Load character and product images from Asset database
+        try {
+          const characterRes = await axios.get(`${API_BASE}/cloud-gallery/category/character-image`);
+          if (characterRes.data.success) {
+            library.characterImages = characterRes.data.data || [];
+          }
+        } catch (error) {
+          console.warn('Could not load character images:', error.message);
+          library.characterImages = [];
+        }
+        
+        try {
+          const productRes = await axios.get(`${API_BASE}/cloud-gallery/category/product-image`);
+          if (productRes.data.success) {
+            library.productImages = productRes.data.data || [];
+          }
+        } catch (error) {
+          console.warn('Could not load product images:', error.message);
+          library.productImages = [];
+        }
+        
+        setMediaLibrary(library);
       }
     } catch (error) {
       console.error('Error loading media library:', error);
@@ -401,6 +424,36 @@ export function GalleryDialog({
                 <MediaSection
                   title="Templates"
                   items={filterMedia(mediaLibrary.templates)}
+                  viewMode={viewMode}
+                  isSelected={isMediaSelected}
+                  onSelect={handleMediaSelect}
+                  allowedTypes={allowedTypes}
+                  onToggleFavorite={toggleFavorite}
+                  isFavorite={isFavorite}
+                />
+              )}
+
+              {/* 💫 NEW: Uploaded Models (Character Images) Section */}
+              {(selectedType === 'all' || selectedType === 'image') && 
+               filterMedia(mediaLibrary.characterImages)?.length > 0 && (
+                <MediaSection
+                  title="📸 Uploaded Models"
+                  items={filterMedia(mediaLibrary.characterImages)}
+                  viewMode={viewMode}
+                  isSelected={isMediaSelected}
+                  onSelect={handleMediaSelect}
+                  allowedTypes={allowedTypes}
+                  onToggleFavorite={toggleFavorite}
+                  isFavorite={isFavorite}
+                />
+              )}
+
+              {/* 💫 NEW: Uploaded Products Section */}
+              {(selectedType === 'all' || selectedType === 'image') && 
+               filterMedia(mediaLibrary.productImages)?.length > 0 && (
+                <MediaSection
+                  title="🛍️ Uploaded Products"
+                  items={filterMedia(mediaLibrary.productImages)}
                   viewMode={viewMode}
                   isSelected={isMediaSelected}
                   onSelect={handleMediaSelect}
