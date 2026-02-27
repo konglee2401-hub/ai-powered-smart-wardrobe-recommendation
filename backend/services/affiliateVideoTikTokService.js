@@ -1058,8 +1058,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     const deepAnalysis = await performDeepChatGPTAnalysis(
       analysis,
       {
-        wearingImage: wearingImageResult.url,
-        holdingImage: holdingImageResult.url,
+        wearingImage: wearingImageResult.screenshotPath,  // 🔴 FIX: use screenshotPath not .url
+        holdingImage: holdingImageResult.screenshotPath,  // 🔴 FIX: use screenshotPath not .url
         productImage: productFilePath
       },
       {
@@ -1145,15 +1145,32 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         await videoGen.navigateToProject();
         console.log('✅ Navigated to Google Flow project');
 
-        // Upload wearing image reference ONCE for all segments
-        if (fs.existsSync(wearingImageResult.screenshotPath)) {
-          console.log('\n📸 Uploading image reference (will be reused for all segments)...');
-          await videoGen.uploadImage(wearingImageResult.screenshotPath);
-          console.log('✅ Reference image uploaded');
+        // 💫 UPLOAD ALL 3 IMAGES FOR VIDEO GENERATION
+        console.log('\n📸 STEP 4.1: Uploading 3 images for video generation:');
+        console.log(`   ├─ Wearing image: ${wearingImageResult.screenshotPath}`);
+        console.log(`   ├─ Holding image: ${holdingImageResult.screenshotPath}`);
+        console.log(`   └─ Product image: ${productFilePath}`);
+        
+        // Verify all images exist
+        const videoImages = [wearingImageResult.screenshotPath, holdingImageResult.screenshotPath, productFilePath];
+        for (let imgPath of videoImages) {
+          if (!imgPath || !fs.existsSync(imgPath)) {
+            throw new Error(`Image not found for video generation: ${imgPath}`);
+          }
         }
+        console.log(`   ✅ All 3 images verified to exist\n`);
+        
+        // Upload wearing + product using uploadImages method (standard flow)
+        // This will handle the file inputs, elements, and UI interactions
+        await videoGen.uploadImages(
+          wearingImageResult.screenshotPath,  // Character/wearing image
+          productFilePath,  // Product image
+          [holdingImageResult.screenshotPath]  // Additional image (holding)
+        );
+        console.log('✅ Images uploaded and ready for video generation\n');
 
         // Switch to video tab ONCE
-        console.log('\n📹 Switching to video generation mode...');
+        console.log('📹 Switching to video generation mode...');
         await videoGen.switchToVideoTab();
         console.log('✅ Video tab active');
 
@@ -1713,61 +1730,48 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
     let deepAnalysisPrompt;
     if (normalizedLanguage === 'vi') {
-      console.log(`\n📝 Using VIETNAMESE deep analysis prompt`);
       deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
         productFocus,
         { videoDuration, voiceGender, voicePace }
       );
     } else {
-      console.log(`\n📝 Using ENGLISH deep analysis prompt`);
       deepAnalysisPrompt = buildDeepAnalysisPrompt(
         analysis,
         {
-          wearing: typeof wearingImage === 'string' ? wearingImage : wearingImage.url,
-          holding: typeof holdingImage === 'string' ? holdingImage : holdingImage.url,
+          wearing: typeof wearingImage === 'string' ? wearingImage : wearingImage.screenshotPath,
+          holding: typeof holdingImage === 'string' ? holdingImage : holdingImage.screenshotPath,
           product: productImage
         },
         { videoDuration, voiceGender, voicePace, productFocus }
       );
     }
 
-    // 💫 NEW: Log the prompt being sent to ChatGPT
-    console.log(`\n📤 CHATGPT PROMPT BEING SENT:`);
-    console.log(`${'─'.repeat(80)}`);
-    console.log(deepAnalysisPrompt);
-    console.log(`${'─'.repeat(80)}\n`);
-
-    // 🔴 CRITICAL: Initialize BEFORE content that might error
+    // 🔴 CRITICAL: Initialize BEFORE attempting image analysis
     console.log(`   🚀 Initializing ChatGPT Browser Automation...`);
     chatGPTService = new ChatGPTService({ headless: true });
     await chatGPTService.initialize();
     
-    // Analyze all 3 images for video script generation
-    console.log(`   📸 Analyzing images for video segment scripts...`);
+    // 💫 NEW: Log the 3 images being uploaded to ChatGPT
+    console.log(`\n📸 STEP 3: Uploading 3 images for ChatGPT analysis:`);
+    console.log(`   ├─ Wearing image: ${wearingImage}`);
+    console.log(`   ├─ Holding image: ${holdingImage}`);
+    console.log(`   └─ Product image: ${productImage}`);
     
-    // Get file paths for images
-    let wearingPath = wearingImage;
-    let holdingPath = holdingImage;
-    let productPath = productImage;
-
-    // Convert URLs to local paths if needed
-    if (typeof wearingImage === 'string' && wearingImage.startsWith('http')) {
-      wearingPath = wearingImage;
+    // Verify all 3 images exist
+    const imageFiles = [wearingImage, holdingImage, productImage];
+    const missingImages = imageFiles.filter(img => !img || (typeof img === 'string' && !fs.existsSync(img)));
+    if (missingImages.length > 0) {
+      throw new Error(`Missing images for ChatGPT analysis: ${missingImages.length} image(s) not found or undefined`);
     }
-    if (typeof holdingImage === 'string' && holdingImage.startsWith('http')) {
-      holdingPath = holdingImage;
-    }
-    if (typeof productImage === 'string' && productImage.startsWith('http')) {
-      productPath = productImage;
-    }
+    console.log(`   ✅ All 3 images verified to exist`);
 
     // Call ChatGPT for video script generation
     const rawChatGPTResponse = await chatGPTService.analyzeMultipleImages(
-      [wearingPath, holdingPath, productPath],
+      [wearingImage, holdingImage, productImage],
       deepAnalysisPrompt
     );
 
-    // 💫 NEW: Log the raw response received from ChatGPT
+    // 💫 NEW: Log the raw response received from ChatGPT (not the long prompt)
     console.log(`\n📥 CHATGPT RAW RESPONSE RECEIVED:`);
     console.log(`${'─'.repeat(80)}`);
     console.log(rawChatGPTResponse);
