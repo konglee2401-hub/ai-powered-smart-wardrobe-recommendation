@@ -14,6 +14,7 @@ import affiliateVideoTikTokService from '../services/affiliateVideoTikTokService
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import TTSService from '../services/ttsService.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
+import { buildDetailedPrompt } from '../services/smartPromptBuilder.js';
 import aiController from '../controllers/aiController.js';
 import upload from '../middleware/upload.js';
 import fs from 'fs';
@@ -367,11 +368,41 @@ router.post('/step-2-generate-images', async (req, res) => {
       headless: true
     });
 
-    console.log('📝 Building prompts from analysis...');
+    console.log('📝 Building prompts from analysis with buildDetailedPrompt...');
     
-    // Build prompts from analysis
-    const wearingPrompt = affiliateVideoTikTokService.buildWearingPrompt(analysis);
-    const holdingPrompt = affiliateVideoTikTokService.buildHoldingPrompt(analysis);
+    // Build prompts using buildDetailedPrompt for proper Vietnamese support
+    // (same method used in executeAffiliateVideoTikTokFlow)
+    
+    // Prepare base options for prompt building
+    const baseOptions = {
+      language: 'vi',  // Generate Vietnamese prompts
+      style: 'professional',
+      detailLevel: 'detailed'
+    };
+    
+    // Determine product focus from analysis
+    const productFocus = analysis.product?.focus || 'full-outfit';
+    
+    // Generate both prompts in parallel
+    console.log('  📝 Building WEARING prompt (character wearing product)...');
+    const wearingPromptData = await buildDetailedPrompt(
+      analysis,
+      baseOptions,
+      'change-clothes',
+      productFocus,
+      'vi'  // Vietnamese
+    );
+    const wearingPrompt = wearingPromptData.prompts.prompt;
+    
+    console.log('  📝 Building HOLDING prompt (character holding product)...');
+    const holdingPromptData = await buildDetailedPrompt(
+      analysis,
+      baseOptions,
+      'character-holding-product',
+      productFocus,
+      'vi'  // Vietnamese
+    );
+    const holdingPrompt = holdingPromptData.prompts.prompt;
 
     console.log(`📝 Prompts built from analysis`);
     console.log(`  Wearing: ${wearingPrompt.substring(0, 100)}...`);
