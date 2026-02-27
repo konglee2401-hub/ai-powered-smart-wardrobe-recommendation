@@ -12,9 +12,12 @@ import express from 'express';
 import SessionLogService from '../services/sessionLogService.js';
 import affiliateVideoTikTokService from '../services/affiliateVideoTikTokService.js';
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
+import GoogleDriveOAuthService from '../services/googleDriveOAuth.js';
+import MultiVideoGenerationService from '../services/multiVideoGenerationService.js';
 import TTSService from '../services/ttsService.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
 import { buildDetailedPrompt } from '../services/smartPromptBuilder.js';
+import VietnamesePromptBuilder from '../services/vietnamesePromptBuilder.js';
 import aiController from '../controllers/aiController.js';
 import upload from '../middleware/upload.js';
 import fs from 'fs';
@@ -435,14 +438,71 @@ router.post('/step-2-generate-images', async (req, res) => {
 
     console.log(`✅ Holding image generated: ${holdingResult.imageUrl}`);
 
+    // ========== UPLOAD TO GOOGLE DRIVE ==========
+    console.log(`\n📤 Uploading generated images to Google Drive...`);
+    let wearingImageDriveUrl = null;
+    let holdingImageDriveUrl = null;
+
+    try {
+      const driveService = new GoogleDriveOAuthService();
+      
+      const wearingFilePath = wearingResult.screenshotPath || wearingResult.imageUrl;
+      const holdingFilePath = holdingResult.screenshotPath || holdingResult.imageUrl;
+
+      // Upload wearing image
+      console.log(`  📤 Uploading wearing image...`);
+      const wearingUploadResult = await driveService.uploadFile(
+        wearingFilePath,
+        `wearing-${flowId}-${Date.now()}.jpg`,
+        {
+          description: `Affiliate TikTok - Character Wearing Product [${flowId}]`,
+          properties: {
+            flowId: flowId,
+            type: 'wearing'
+          }
+        }
+      );
+      wearingImageDriveUrl = wearingUploadResult.webViewLink;
+      console.log(`  ✅ Wearing image uploaded: ${wearingImageDriveUrl}`);
+
+      // Upload holding image
+      console.log(`  📤 Uploading holding image...`);
+      const holdingUploadResult = await driveService.uploadFile(
+        holdingFilePath,
+        `holding-${flowId}-${Date.now()}.jpg`,
+        {
+          description: `Affiliate TikTok - Character Holding Product [${flowId}]`,
+          properties: {
+            flowId: flowId,
+            type: 'holding'
+          }
+        }
+      );
+      holdingImageDriveUrl = holdingUploadResult.webViewLink;
+      console.log(`  ✅ Holding image uploaded: ${holdingImageDriveUrl}`);
+
+      await logger.info(`Images uploaded to Google Drive`, 'step-2-drive-upload', {
+        wearing_url: wearingImageDriveUrl,
+        holding_url: holdingImageDriveUrl
+      });
+    } catch (driveError) {
+      console.warn(`⚠️  Google Drive upload failed: ${driveError.message}`);
+      console.warn('   Continuing without Google Drive upload...');
+      await logger.warn(`Google Drive upload skipped: ${driveError.message}`, 'step-2-drive-upload');
+      // Continue without Drive upload - not critical
+    }
+
     const step2Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // Update flow state
+    // Update flow state - INCLUDE productImagePath for Step 3/4
     flowStates.set(flowId, {
       ...flowState,
       step2: {
         wearingImagePath: wearingResult.screenshotPath || wearingResult.imageUrl,
         holdingImagePath: holdingResult.screenshotPath || holdingResult.imageUrl,
+        wearingImageDriveUrl: wearingImageDriveUrl,
+        holdingImageDriveUrl: holdingImageDriveUrl,
+        productImagePath: productImagePath,  // Keep for Step 3/4
         duration: parseFloat(step2Duration)
       }
     });
@@ -451,6 +511,8 @@ router.post('/step-2-generate-images', async (req, res) => {
     await logger.info(`Step 2 image generation complete`, 'step-2-complete', {
       wearing: wearingResult.screenshotPath || wearingResult.imageUrl,
       holding: holdingResult.screenshotPath || holdingResult.imageUrl,
+      wearing_drive_url: wearingImageDriveUrl,
+      holding_drive_url: holdingImageDriveUrl,
       duration: parseFloat(step2Duration)
     });
 
@@ -462,6 +524,8 @@ router.post('/step-2-generate-images', async (req, res) => {
       step: 2,
       wearingImage: wearingResult.screenshotPath || wearingResult.imageUrl,
       holdingImage: holdingResult.screenshotPath || holdingResult.imageUrl,
+      wearingImageDriveUrl: wearingImageDriveUrl,
+      holdingImageDriveUrl: holdingImageDriveUrl,
       step_duration: parseFloat(step2Duration)
     });
 
@@ -518,27 +582,46 @@ router.post('/step-3-deep-analysis', async (req, res) => {
     }
 
     const { analysis } = flowState.step1;
-    const { wearingImagePath, holdingImagePath } = flowState.step2;
-    const { videoDuration = 20, productFocus = 'full-outfit' } = req.body;
+    const { wearingImagePath, holdingImagePath, productImagePath } = flowState.step2;
+    const { videoDuration = 20, productFocus = 'full-outfit', language = 'vi' } = req.body;
 
     console.log(`📸 Using images from Step 2:`);
     console.log(`   Wearing: ${wearingImagePath}`);
     console.log(`   Holding: ${holdingImagePath}`);
+    console.log(`   Product: ${productImagePath}`);
 
-    // 💡 REUSE: Call deep analysis logic
-    const deepAnalysisPrompt = affiliateVideoTikTokService.buildDeepAnalysisPrompt(
-      analysis,
-      productFocus
-    );
+    if (!productImagePath) {
+      throw new Error('Product image path is missing from Step 2. Please complete Step 2 again.');
+    }
 
-    console.log(`🤖 Analyzing for video script generation...`);
+    // 💡 REUSE: Build deep analysis prompt with language support
+    console.log(`\n📝 Building deep analysis prompt (language: ${language})...`);
+    let deepAnalysisPrompt;
     
-    // Use ChatGPT Service for deep analysis
+    const normalizedLanguage = (language || 'vi').split('-')[0].split('_')[0].toLowerCase();
+    
+    if (normalizedLanguage === 'vi') {
+      console.log(`   Using Vietnamese prompt builder...`);
+      deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
+        productFocus,
+        { videoDuration, voiceGender: 'female', voicePace: 'fast' }
+      );
+    } else {
+      console.log(`   Using English prompt builder...`);
+      deepAnalysisPrompt = affiliateVideoTikTokService.buildDeepAnalysisPrompt(
+        analysis,
+        productFocus
+      );
+    }
+
+    console.log(`🤖 Analyzing 3 images for video script generation...`);
+    
+    // Use ChatGPT Service for deep analysis with ALL 3 images
     const chatGPTService = new ChatGPTService({ debug: false });
     await chatGPTService.initialize();
     
     const deepAnalysisResult = await chatGPTService.analyzeMultipleImages(
-      [wearingImagePath, holdingImagePath],
+      [wearingImagePath, holdingImagePath, productImagePath],
       deepAnalysisPrompt
     );
     
@@ -570,13 +653,17 @@ router.post('/step-3-deep-analysis', async (req, res) => {
 
     const step3Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // Update flow state
+    // Update flow state - INCLUDE images for Step 4
     flowStates.set(flowId, {
       ...flowState,
       step3: {
         videoScripts,
         metadata,
         hashtags,
+        wearingImagePath,      // For Step 4
+        holdingImagePath,      // For Step 4
+        productImagePath,      // For Step 4
+        language: normalizedLanguage,  // Log which language was used
         duration: parseFloat(step3Duration)
       }
     });
@@ -585,6 +672,7 @@ router.post('/step-3-deep-analysis', async (req, res) => {
     await logger.info(`Step 3 deep analysis complete`, 'step-3-complete', {
       scripts_count: videoScripts.length,
       hashtags_count: hashtags.length,
+      language: normalizedLanguage,
       duration: parseFloat(step3Duration)
     });
 
@@ -648,11 +736,26 @@ router.post('/step-4-generate-video', async (req, res) => {
       throw new Error('Previous steps not found. Please run Steps 1-3 first.');
     }
 
-    const { wearingImagePath, holdingImagePath } = flowState.step2;
-    const { videoScripts } = flowState.step3;
+    const { wearingImagePath, holdingImagePath, productImagePath } = flowState.step3;
+    const { videoScripts, language } = flowState.step3;
     const { videoDuration = 20, aspectRatio = '9:16' } = req.body;
 
-    console.log(`🎬 Generating video with ${videoScripts.length} segments`);
+    console.log(`📸 Using images from Step 3:`);
+    console.log(`   Wearing: ${wearingImagePath}`);
+    console.log(`   Holding: ${holdingImagePath}`);
+    console.log(`   Product: ${productImagePath}`);
+    console.log(`   Scripts count: ${videoScripts.length}`);
+    console.log(`   Language: ${language}`);
+
+    if (!wearingImagePath || !holdingImagePath || !productImagePath) {
+      throw new Error('Required image paths missing from Step 3. Images: wearing=' + !!wearingImagePath + ', holding=' + !!holdingImagePath + ', product=' + !!productImagePath);
+    }
+
+    if (!videoScripts || videoScripts.length === 0) {
+      throw new Error('No video scripts available from Step 3');
+    }
+
+    console.log(`🎬 Generating video with ${videoScripts.length} segments...`);
 
     // 💡 REUSE: Use MultiVideoGenerationService
     const videoGenService = new MultiVideoGenerationService();
@@ -665,10 +768,12 @@ router.post('/step-4-generate-video', async (req, res) => {
       analysis: {
         scripts: videoScripts,
         characterImage: wearingImagePath,
-        productImage: holdingImagePath
+        holdingImage: holdingImagePath,
+        productImage: productImagePath
       },
       quality: 'high',
-      aspectRatio
+      aspectRatio,
+      language: language || 'vi'
     });
 
     if (!videoGenResult?.success || !videoGenResult?.videos?.[0]) {
@@ -752,8 +857,8 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
       throw new Error('Step 3 analysis not found. Please run Steps 1-3 first.');
     }
 
-    const { videoScripts, metadata } = flowState.step3;
-    const { voiceGender = 'female', voicePace = 'fast', language = 'vi' } = req.body;
+    const { videoScripts, metadata, language: step3Language } = flowState.step3;
+    const { voiceGender = 'female', voicePace = 'fast', language = step3Language || 'vi' } = req.body;
 
     if (!videoScripts || videoScripts.length === 0) {
       throw new Error('No video scripts available for voiceover generation');
@@ -764,7 +869,11 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
       .map(script => typeof script === 'object' ? script.text || script.script : script)
       .join(' ');
 
-    console.log(`🎤 Generating voiceover (${voiceGender}, ${voicePace})`);
+    console.log(`🎤 Generating voiceover`);
+    console.log(`   Gender: ${voiceGender}`);
+    console.log(`   Pace: ${voicePace}`);
+    console.log(`   Language: ${language}`);
+    console.log(`   Text length: ${voiceoverText.length} chars (${voiceoverText.split(' ').length} words)`);
     console.log(`   Text: ${voiceoverText.substring(0, 100)}...`);
 
     // 💡 REUSE: Use TTSService
@@ -797,7 +906,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
 
     const step5Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // Update flow state
+    // Update flow state - Include language and text for logging
     flowStates.set(flowId, {
       ...flowState,
       step5: {
@@ -805,15 +914,22 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
         audioBuffer: audioBuffer.toString('base64'),
         voiceGender,
         voicePace,
+        language,
+        textLength: voiceoverText.length,
+        wordCount: voiceoverText.split(' ').length,
         duration: parseFloat(step5Duration)
       }
     });
 
-    // Log
+    // Log comprehensive info
     await logger.info(`Step 5 voiceover generation complete`, 'step-5-complete', {
       audio_path: audioPath,
+      audio_size: fs.statSync(audioPath).size,
       voice_gender: voiceGender,
       voice_pace: voicePace,
+      language: language,
+      text_length: voiceoverText.length,
+      word_count: voiceoverText.split(' ').length,
       duration: parseFloat(step5Duration)
     });
 
@@ -873,13 +989,18 @@ router.post('/step-6-finalize', async (req, res) => {
       throw new Error('Flow state not found');
     }
 
-    const { step2, step3, step4, step5 } = flowState;
+    const { step1, step2, step3, step4, step5 } = flowState;
 
     if (!step4?.videoPath) {
       throw new Error('Video not found. Please complete Steps 1-4 first.');
     }
 
-    console.log(`📦 Combining video with voiceover...`);
+    console.log(`📦 Preparing final package...`);
+    console.log(`   Video: ${step4.videoPath}`);
+    console.log(`   Audio: ${step5?.audioPath || 'not available'}`);
+    console.log(`   Wearing image: ${step2.wearingImagePath}`);
+    console.log(`   Holding image: ${step2.holdingImagePath}`);
+    console.log(`   Product image: ${step2.productImagePath}`);
 
     // 💡 TODO: Combine video + audio using FFmpeg
     // For now, just prepare the package
@@ -887,58 +1008,132 @@ router.post('/step-6-finalize', async (req, res) => {
 
     if (step5?.audioPath && fs.existsSync(step5.audioPath)) {
       console.log(`🎵 Audio available: ${step5.audioPath}`);
+      console.log(`   Size: ${fs.statSync(step5.audioPath).size} bytes`);
       // TODO: Merge video + audio
       // finalizedVideoPath = await combineVideoAndAudio(step4.videoPath, step5.audioPath);
     }
 
-    // Prepare final package
+    // Prepare final package with ALL necessary info
     const finalPackage = {
+      type: 'affiliate-video-tiktok',
+      flowId: flowId,
+      timestamp: new Date().toISOString(),
       video: {
         path: finalizedVideoPath,
-        metadata: step4.videoMetadata
-      },
-      images: {
-        wearing: step2.wearingImagePath,
-        holding: step2.holdingImagePath
+        metadata: step4.videoMetadata,
+        duration: step4.duration
       },
       audio: {
-        path: step5?.audioPath,
+        path: step5?.audioPath || null,
         voiceGender: step5?.voiceGender,
-        voicePace: step5?.voicePace
+        voicePace: step5?.voicePace,
+        language: step5?.language || step3.language,
+        duration: step5?.duration || null
       },
-      metadata: {
-        hashtags: step3.hashtags,
-        ...step3.metadata
+      images: {
+        character: {
+          path: step1?.characterImagePath,
+          original: true
+        },
+        product: {
+          path: step2.productImagePath,
+          original: true
+        },
+        wearing: {
+          path: step2.wearingImagePath,
+          generated: true,
+          driveUrl: step2.wearingImageDriveUrl,
+          method: 'google-flow'
+        },
+        holding: {
+          path: step2.holdingImagePath,
+          generated: true,
+          driveUrl: step2.holdingImageDriveUrl,
+          method: 'google-flow'
+        }
+      },
+      analysis: {
+        character: step1?.analysis?.character,
+        product: step1?.analysis?.product,
+        videoScripts: step3.videoScripts,
+        metadata: step3.metadata,
+        hashtags: step3.hashtags
       }
     };
 
-    console.log(`✅ Package prepared`);
+    console.log(`📦 Final package prepared successfully`);
 
     const step6Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // Update flow state
+    // Calculate total duration
+    const totalDuration = Object.keys(flowState)
+      .filter(key => key.startsWith('step'))
+      .reduce((sum, key) => sum + (flowState[key].duration || 0), 0);
+
+    // Update flow state with comprehensive final info
     flowStates.set(flowId, {
       ...flowState,
       step6: {
         finalPackage,
         duration: parseFloat(step6Duration)
       },
-      status: 'completed'
+      status: 'completed',
+      totalDuration: totalDuration
     });
 
-    // Log
+    // Log comprehensive final summary
     await logger.info(`Step 6 finalization complete`, 'step-6-complete', {
-      final_package: finalPackage,
+      final_package_type: finalPackage.type,
+      final_package_contents: {
+        video: finalPackage.video.path,
+        audio: finalPackage.audio.path,
+        images_count: Object.keys(finalPackage.images).length,
+        hashtags_count: finalPackage.analysis.hashtags.length
+      },
       duration: parseFloat(step6Duration)
     });
 
-    console.log(`✅ STEP 6 COMPLETE in ${step6Duration}s`);
-    console.log(`✅ ENTIRE FLOW COMPLETED!`);
+    // Log overall flow completion
+    await logger.info(`ENTIRE FLOW COMPLETED`, 'flow-complete', {
+      flowId: flowId,
+      status: 'completed',
+      total_duration: totalDuration,
+      step1_duration: flowState.step1?.duration,
+      step2_duration: flowState.step2?.duration,
+      step3_duration: flowState.step3?.duration,
+      step4_duration: flowState.step4?.duration,
+      step5_duration: flowState.step5?.duration,
+      step6_duration: parseFloat(step6Duration),
+      deliverables: {
+        video: finalPackage.video.path,
+        audio: finalPackage.audio.path,
+        wear_image: finalPackage.images.wearing.path,
+        holding_image: finalPackage.images.holding.path,
+        product_image: finalPackage.images.product.path
+      }
+    });
 
-    // Calculate total duration
-    const totalDuration = Object.keys(flowState)
-      .filter(key => key.startsWith('step'))
-      .reduce((sum, key) => sum + (flowState[key].duration || 0), 0);
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`✅ STEP 6 COMPLETE in ${step6Duration}s`);
+    console.log(`✅ ENTIRE FLOW COMPLETED SUCCESSFULLY!`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`📊 FINAL SUMMARY:`);
+    console.log(`   Flow ID: ${flowId}`);
+    console.log(`   Total Duration: ${totalDuration.toFixed(1)}s`);
+    console.log(`   Step 1 (Analysis): ${flowState.step1?.duration.toFixed(1)}s`);
+    console.log(`   Step 2 (Image Gen): ${flowState.step2?.duration.toFixed(1)}s`);
+    console.log(`   Step 3 (Deep Analysis): ${flowState.step3?.duration.toFixed(1)}s`);
+    console.log(`   Step 4 (Video Gen): ${flowState.step4?.duration.toFixed(1)}s`);
+    console.log(`   Step 5 (Voiceover): ${flowState.step5?.duration.toFixed(1)}s`);
+    console.log(`   Step 6 (Finalize): ${step6Duration}s`);
+    console.log(`\n📦 OUTPUT ARTIFACTS:`);
+    console.log(`   Video: ${finalPackage.video.path}`);
+    console.log(`   Audio: ${finalPackage.audio.path}`);
+    console.log(`   Wearing Image: ${finalPackage.images.wearing.path}`);
+    console.log(`   Holding Image: ${finalPackage.images.holding.path}`);
+    console.log(`   Product Image: ${finalPackage.images.product.path}`);
+    console.log(`   Hashtags: ${finalPackage.analysis.hashtags.length}`);
+    console.log(`${'='.repeat(80)}\n`);
 
     res.json({
       success: true,
