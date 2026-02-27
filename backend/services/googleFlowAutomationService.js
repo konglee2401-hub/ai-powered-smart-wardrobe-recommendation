@@ -161,6 +161,57 @@ class GoogleFlowAutomationService {
     console.log(`   ✅ Page ready (attempt ${attempts})\n`);
   }
 
+  async getHrefsFromVirtuosoList() {
+    /**
+     * Helper: Get ALL hrefs from virtuoso-item-list
+     * Used to capture state before/after operations to find what changed
+     * 
+     * @returns {Array<string>} - Array of all href values in order
+     */
+    return await this.page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+      return links.map(link => link.getAttribute('href'));
+    });
+  }
+
+  async findNewHref(previousHrefs) {
+    /**
+     * Helper: Find hrefs that exist now but not in previousHrefs
+     * Returns the first NEW href (usually the most recent upload)
+     * 
+     * @param {Array<string>} previousHrefs - Previous state
+     * @returns {string|null} - First new href, or null if none found
+     */
+    const currentHrefs = await this.getHrefsFromVirtuosoList();
+    const previousSet = new Set(previousHrefs);
+    
+    for (const href of currentHrefs) {
+      if (!previousSet.has(href)) {
+        return href;
+      }
+    }
+    
+    return null;
+  }
+
+  async findHrefByPosition(position) {
+    /**
+     * Helper: Get href at a specific position (0 = first/latest)
+     * Useful for finding last generated item
+     * 
+     * @param {number} position - 0 for first (latest), -1 for last, etc.
+     * @returns {string|null}
+     */
+    const hrefs = await this.getHrefsFromVirtuosoList();
+    if (position === 0 || position === -Math.abs(hrefs.length)) {
+      return hrefs[0]; // First = latest
+    }
+    if (position === -1 || position === hrefs.length - 1) {
+      return hrefs[hrefs.length - 1]; // Last
+    }
+    return hrefs[position] || null;
+  }
+
   async uploadImages(characterImagePath, productImagePath, existingImages = []) {
     console.log('\n🖼️  UPLOADING IMAGES\n');
 
@@ -248,26 +299,12 @@ class GoogleFlowAutomationService {
           }
         }
 
-        // Step 3: Get initial hrefs from TOP 10 items ONLY to track which one is new
-        console.log(`   📎 Capturing initial hrefs from TOP 10 items...`);
-        const initialTopHrefs = await this.page.evaluate(() => {
-          const items = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]')).slice(0, 10);
-          const topHrefs = {};
-          
-          for (const item of items) {
-            const index = item.getAttribute('data-index');
-            const link = item.querySelector('a[href]');
-            if (link) {
-              topHrefs[index] = link.getAttribute('href');
-            }
-          }
-          
-          return topHrefs;
-        });
+        // Step 3: Get initial hrefs from ALL items to track which ones are new
+        console.log(`   📎 Capturing ALL initial hrefs...`);
+        const initialAllHrefs = await this.getHrefsFromVirtuosoList();
+        console.log(`   ✓ Captured ${initialAllHrefs.length} hrefs\n`);
 
-        console.log(`   ✓ Captured initial hrefs from ${Object.keys(initialTopHrefs).length} TOP items\n`);
-
-        // Step 4: Monitor for NEW href (not in the original TOP 10) to confirm upload complete
+        // Step 4: Monitor for NEW href (not in the original set) to confirm upload complete
         console.log(`   ⏳ Monitoring for NEW href (confirming new image uploaded)...`);
         let newItemHref = null;
         let hrefCheckAttempts = 0;
@@ -276,25 +313,10 @@ class GoogleFlowAutomationService {
         while (newItemHref === null && hrefCheckAttempts < maxHrefCheckAttempts) {
           hrefCheckAttempts++;
 
-          const result = await this.page.evaluate((oldTopHrefs) => {
-            // Check all items
-            const items = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
-            const oldHrefSet = new Set(Object.values(oldTopHrefs));
-            
-            // Find the first <a> tag with href that is NOT in the old TOP 10
-            for (const link of items) {
-              const href = link.getAttribute('href');
-              if (!oldHrefSet.has(href)) {
-                return { found: true, newHref: href };
-              }
-            }
-            
-            return { found: false };
-          }, initialTopHrefs);
+          newItemHref = await this.findNewHref(initialAllHrefs);
 
-          if (result.found) {
-            console.log(`   ✅ NEW item detected with href: "${result.newHref.substring(0, 60)}..." New image confirmed.\n`);
-            newItemHref = result.newHref;
+          if (newItemHref) {
+            console.log(`   ✅ NEW item detected with href: "${newItemHref.substring(0, 60)}..." New image confirmed.\n`);
             // 💫 STORE the href for this image type
             imageUrls[file.imageKey] = newItemHref;
             console.log(`   📎 Stored href for "${file.imageKey}": ${newItemHref.substring(0, 60)}...\n`);
@@ -838,11 +860,12 @@ class GoogleFlowAutomationService {
     
     try {
       // Find the latest generated video item
+      // Capture ALL hrefs and get the FIRST one (most recent = first in list)
       const latestHref = await this.page.evaluate(() => {
-        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        const items = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
         if (items.length > 0) {
-          // Last item is usually the newest generated one
-          return items[items.length - 1].getAttribute('href');
+          // First item is the newest generated one (Google Flow shows newest first)
+          return items[0].getAttribute('href');
         }
         return null;
       });
@@ -2035,28 +2058,42 @@ class GoogleFlowAutomationService {
 
     try {
       // Find the item with this href and right-click it
+      // Capture ALL links to ensure robust matching
       const linkData = await this.page.evaluate((targetHref) => {
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
         
-        for (const link of links) {
+        // Find exact match
+        for (const link of allLinks) {
           const href = link.getAttribute('href');
           if (href === targetHref) {
             const rect = link.getBoundingClientRect();
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
+              y: Math.round(rect.top + rect.height / 2),
+              linkCount: allLinks.length
             };
           }
         }
         
-        return { found: false };
+        // Not found - return all hrefs for debugging
+        const allHrefs = allLinks.map(l => l.getAttribute('href'));
+        return { found: false, linkCount: allLinks.length, allHrefs };
       }, newHref);
 
       if (!linkData.found) {
-        console.warn('   ⚠️  Item with href not found for download\n');
+        console.warn(`   ⚠️  Item not found for download: ${newHref.substring(0, 60)}...`);
+        if (linkData && linkData.allHrefs && linkData.allHrefs.length > 0) {
+          console.warn(`   📎 Available hrefs (${linkData.allHrefs.length}):`);
+          for (let i = 0; i < Math.min(5, linkData.allHrefs.length); i++) {
+            console.warn(`      [${i}] ${linkData.allHrefs[i].substring(0, 50)}...`);
+          }
+        }
+        console.warn('');
         return null;
       }
+
+      console.log(`   ✓ Found ${mediaType} (${linkData.linkCount} total items)`);
 
       console.log(`   🖱️  Right-clicking on ${mediaType}...`);
       // Use mouse movement method for right-click (Method 2)
@@ -2404,36 +2441,26 @@ class GoogleFlowAutomationService {
 
   async reuseLastCommand() {
     /**
-     * Find the last generated video and reuse its command
+     * Find the last generated item and reuse its command
      * Used for segments 2-4 in multi-segment video generation
      * 
      * Steps:
-     * 1. Find the most recently created <a> tag (last in list)
-     * 2. Extract its href
+     * 1. Capture ALL hrefs from virtuoso list
+     * 2. Take the FIRST one (most recently added/first in list)
      * 3. Call rightClickReuseCommand(href) to show reuse menu
      */
     try {
-      const lastHref = await this.page.evaluate(() => {
-        // Get all <a> tags in the items list
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-        if (links.length === 0) {
-          console.log('[REUSE] No items found in list');
-          return null;
-        }
-
-        // Get the last one (most recent)
-        const lastLink = links[links.length - 1];
-        const href = lastLink.getAttribute('href');
-        const text = lastLink.textContent.substring(0, 50);
-        
-        console.log(`[REUSE] Found last item: ${text}... (href: ${href})`);
-        return href;
-      });
-
-      if (!lastHref) {
-        console.log('   ⚠️  Could not find last generated video');
+      // Capture all hrefs and get the first (most recent)
+      const allHrefs = await this.getHrefsFromVirtuosoList();
+      
+      if (allHrefs.length === 0) {
+        console.log('   ⚠️  No items found in list');
         return false;
       }
+
+      const lastHref = allHrefs[0]; // First = most recent
+      console.log(`   🔄 Found most recent item (${allHrefs.length} total items)`);
+      console.log(`   📎 Href: ${lastHref.substring(0, 60)}...`);
 
       // Now right-click on it and select reuse
       console.log(`   🔄 Reusing command from last generated video...`);
@@ -2515,27 +2542,40 @@ class GoogleFlowAutomationService {
     try {
       // Find the item with this href
       const linkData = await this.page.evaluate((targetHref) => {
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        // Capture all links to find exact match
+        const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
         
-        for (const link of links) {
+        // Find exact match
+        for (const link of allLinks) {
           const href = link.getAttribute('href');
           if (href === targetHref) {
             const rect = link.getBoundingClientRect();
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
+              y: Math.round(rect.top + rect.height / 2),
+              linkCount: allLinks.length
             };
           }
         }
         
-        return { found: false };
+        // Not found - return all hrefs for debugging
+        const allHrefs = allLinks.map(l => l.getAttribute('href'));
+        return { found: false, linkCount: allLinks.length, allHrefs };
       }, itemHref);
 
       if (!linkData.found) {
-        console.log(`      ⚠️  Image not found by href`);
+        console.log(`      ⚠️  Image not found by href: ${itemHref.substring(0, 60)}...`);
+        if (linkData && linkData.allHrefs && linkData.allHrefs.length > 0) {
+          console.log(`      📎 Available hrefs (${linkData.allHrefs.length}):`);
+          for (let i = 0; i < Math.min(5, linkData.allHrefs.length); i++) {
+            console.log(`         [${i}] ${linkData.allHrefs[i].substring(0, 50)}...`);
+          }
+        }
         return false;
       }
+
+      console.log(`      ✓ Found image (${linkData.linkCount} total items)`);
 
       // Right-click on the image using mouse movement method
       await this.page.mouse.move(linkData.x, linkData.y);
@@ -2619,29 +2659,41 @@ class GoogleFlowAutomationService {
     console.log('\n🔄 RIGHT-CLICK REUSE COMMAND');
 
     try {
-      // Find the item with this href
+      // Find the item with this href - capture ALL links for robust matching
       const linkData = await this.page.evaluate((targetHref) => {
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
         
-        for (const link of links) {
+        // Find exact match
+        for (const link of allLinks) {
           const href = link.getAttribute('href');
           if (href === targetHref) {
             const rect = link.getBoundingClientRect();
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
+              y: Math.round(rect.top + rect.height / 2),
+              linkCount: allLinks.length
             };
           }
         }
-        
-        return { found: false };
+
+        // Not found - return all hrefs for debugging
+        const allHrefs = allLinks.map(l => l.getAttribute('href'));
+        return { found: false, linkCount: allLinks.length, allHrefs };
       }, itemHref);
 
       if (!linkData.found) {
-        console.log('   ⚠️  Item not found for reuse command');
+        console.log(`   ⚠️  Item not found for reuse: ${itemHref.substring(0, 60)}...`);
+        if (linkData && linkData.allHrefs && linkData.allHrefs.length > 0) {
+          console.log(`   📎 Available hrefs (${linkData.allHrefs.length}):`);
+          for (let i = 0; i < Math.min(5, linkData.allHrefs.length); i++) {
+            console.log(`      [${i}] ${linkData.allHrefs[i].substring(0, 50)}...`);
+          }
+        }
         return false;
       }
+
+      console.log(`   ✓ Found item (${linkData.linkCount} total items)`);
 
       console.log('   🖱️  Right-clicking on item using mouse movement method...');
       // Use mouse movement method for right-click (same as Method 2 for reliability)
