@@ -59,7 +59,9 @@
     "seed:providers": "node scripts/seedImageProviders.js",
     "test:keys": "node scripts/testApiKeys.js",
     "seed:image-providers": "node seedImageProviders.js",
-    "seed:templates": "node scripts/seedCorePromptTemplates.js"
+    "seed:templates": "node scripts/seedCorePromptTemplates.js",
+    "seed:scene-lock-defaults": "node scripts/seed/07-seed-scene-lock-defaults.js",
+    "scene-lock:workflow": "node scripts/scene-lock/run-scene-lock-workflow.js --scene studio --count 2"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",

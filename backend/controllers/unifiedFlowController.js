@@ -150,7 +150,7 @@ export async function buildPromptEndpoint(req, res) {
     // Use provided options or AI recommendations - Include ALL selected options, not just hardcoded fields
     const finalOptions = {
       // Environment & Photography
-      scene: selectedOptions.scene || analysis?.recommendations?.scene?.choice || 'studio',
+      scene: selectedOptions.scene || 'linhphap-tryon-room',
       lighting: selectedOptions.lighting || analysis?.recommendations?.lighting?.choice || 'soft-diffused',
       mood: selectedOptions.mood || analysis?.recommendations?.mood?.choice || 'elegant',
       style: selectedOptions.style || analysis?.recommendations?.style?.choice || 'fashion-editorial',
