@@ -21,6 +21,99 @@ import 'dotenv/config';
 
 const OPTIONS_DATA = {
   scene: [
+    // ============================================================
+    // LINH PHÁP CORE SCENES (PRIORITY)
+    // ============================================================
+
+    {
+      value: 'linhphap-tryon-room',
+      label: 'Try-On Room (Linh Pháp)',
+      description: 'Realistic home try-on room for women fashion, lived-in and natural',
+      keywords: [
+        'try-on room',
+        'home fitting',
+        'women fashion',
+        'lived-in',
+        'natural light',
+        'bedroom try on'
+      ],
+      technicalDetails: {
+        environment: 'real apartment try-on room',
+        lighting: 'soft daylight from window',
+        camera: 'eye-level, medium-wide, 35mm look',
+        elements: 'mirror, chair, bed, clothes, accessories',
+        usage: 'fashion overlay, lifestyle, AI model'
+      },
+      previewImage: '/images/options/scene-linhphap-tryon.jpg',
+      sortOrder: 1
+    },
+
+    {
+      value: 'linhphap-boutique',
+      label: 'Small Boutique (Linh Pháp)',
+      description: 'Authentic small women fashion boutique with diverse products',
+      keywords: [
+        'boutique',
+        'small shop',
+        'women fashion store',
+        'real retail',
+        'local business'
+      ],
+      technicalDetails: {
+        environment: 'small local fashion boutique',
+        lighting: 'mixed daylight and warm ambient',
+        camera: 'eye-level, static, medium-wide',
+        elements: 'clothing racks, shoes, bags, cosmetics',
+        usage: 'selling visuals, product showcase'
+      },
+      previewImage: '/images/options/scene-linhphap-boutique.jpg',
+      sortOrder: 2
+    },
+
+    {
+      value: 'linhphap-bedroom-lifestyle',
+      label: 'Bedroom Lifestyle (Linh Pháp)',
+      description: 'Realistic feminine bedroom for lifestyle fashion content',
+      keywords: [
+        'bedroom',
+        'lifestyle',
+        'women fashion',
+        'home wear',
+        'daily life'
+      ],
+      technicalDetails: {
+        environment: 'real lived-in bedroom',
+        lighting: 'natural window light',
+        camera: 'eye-level, medium shot',
+        elements: 'bed, clothes, shoes, bags, vanity',
+        usage: 'lifestyle fashion, home wear, sexy wear'
+      },
+      previewImage: '/images/options/scene-linhphap-bedroom.jpg',
+      sortOrder: 3
+    },
+
+    {
+      value: 'linhphap-workroom-livestream',
+      label: 'Workroom & Livestream (Linh Pháp)',
+      description: 'Home workroom with livestream setup and Linh Pháp LED sign',
+      keywords: [
+        'livestream',
+        'workroom',
+        'fashion seller',
+        'home business',
+        'behind the scenes'
+      ],
+      technicalDetails: {
+        environment: 'home workroom used for selling',
+        lighting: 'daylight + soft indoor + LED sign',
+        camera: 'eye-level, realistic scale',
+        elements: 'tripod, ring light, mic, desk, clothes',
+        branding: 'LED sign reading Linh Pháp',
+        usage: 'livestream background, selling video'
+      },
+      previewImage: '/images/options/scene-linhphap-workroom.jpg',
+      sortOrder: 4
+    },
     {
       value: 'studio',
       label: 'Professional Studio',
@@ -781,25 +874,25 @@ const isMainModule = import.meta.url === `file://${process.argv[1].replace(/\\/g
 if (isMainModule) {
   // Connect to MongoDB (you'll need to configure your connection)
   const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smartwardrobe';
-  
+
   try {
     await mongoose.connect(mongoUri);
     console.log('📊 Connected to MongoDB');
 
     const args = process.argv.slice(2);
-    
+
     if (args.includes('--clear')) {
       await clearOptions();
     }
-    
+
     if (args.includes('--seed')) {
       await seedOptions();
     }
-    
+
     if (args.includes('--validate')) {
       await validateOptions();
     }
-    
+
     if (args.length === 0) {
       // Default: seed and validate
       await seedOptions();

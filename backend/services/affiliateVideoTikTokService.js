@@ -1271,13 +1271,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
                 await videoGen.enterPrompt(segmentPrompt);
                 console.log(`   ✓ Prompt entered`);
 
-                await videoGen.waitForSendButtonEnabled();
-                console.log(`   ✓ Send button enabled`);
-
-                await videoGen.checkSendButton();
-                console.log(`   ✓ Send button verified`);
-
-                await videoGen.submit();
+                // 💫 FOR VIDEO MODE: Pressing Enter in enterPrompt() auto-triggers generation
+                // No need to wait for or click a Send button like in image mode
+                console.log(`   ⏳ Generation auto-triggered by Enter key in video mode`);
+                console.log(`   ⏳ Waiting 2s for generation to initialize...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));  // Wait for generation to start
                 console.log(`   ✓ Generation submitted`);
 
               } else {

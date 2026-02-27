@@ -778,35 +778,62 @@ class GoogleFlowAutomationService {
     
     const startTime = Date.now();
     const timeoutMs = timeoutSeconds * 1000;
+    let generationDetected = false;
+    let lastStatus = '';
+    let statusCheckCount = 0;
 
     try {
       // Wait for generation to complete
-      let lastStatus = '';
-      
       while (Date.now() - startTime < timeoutMs) {
+        statusCheckCount++;
+        
         const status = await this.page.evaluate(() => {
-          const progressEl = document.querySelector('[aria-label*="progress"], [data-testid*="progress"]');
+          // For video mode: look for progress indicators or loading state
+          const progressEl = document.querySelector('[aria-label*="progress"], [data-testid*="progress"], [aria-label*="Processing"]');
           if (progressEl) return 'generating';
           
+          // Look for any loading/spinner elements
+          const spinner = document.querySelector('[role="status"], .loading, [aria-busy="true"]');
+          if (spinner && spinner.textContent.toLowerCase().includes('generat')) return 'generating';
+          
+          // Check if there's a new video item being created (by monitoring virtuoso items count)
+          const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+          const itemCount = items.length;
+          if (itemCount > 5) return 'generating';  // More items than initial 5 means something is happening
+          
+          // Look for download button (generation ready)
           const readyEl = document.querySelector('button[aria-label*="Download"]');
           if (readyEl) return 'ready';
           
           return 'unknown';
         });
 
+        // Log status changes
         if (status !== lastStatus) {
           console.log(`   Status: ${status}`);
           lastStatus = status;
+          if (status === 'generating') {
+            generationDetected = true;
+            console.log(`   🎬 Generation detected!`);
+          }
         }
 
         if (status === 'ready') {
           console.log('✅ Generation completed');
           return true;
         }
+        
+        // If we've been waiting too long without detecting generation, log details
+        if (statusCheckCount % 10 === 0 && !generationDetected) {
+          console.log(`   ⏳ Still waiting for generation to start... (${Math.round((Date.now() - startTime) / 1000)}s elapsed)`);
+        }
 
         await this.page.waitForTimeout(2000);
       }
 
+      if (!generationDetected) {
+        console.warn('⚠️  Generation never started - might be stuck or already completed');
+      }
       console.warn('⚠️  Generation timeout');
       return false;
     } catch (error) {
