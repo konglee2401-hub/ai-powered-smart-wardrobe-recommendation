@@ -98,7 +98,8 @@ async function testAllInteractive() {
       
       // Open dropdown if closed
       const isOpen = await service.page.evaluate(() => {
-        const btn = document.querySelector('button[aria-haspopup="menu"][id^="radix-"]');
+        const settingsMenu = document.querySelector('[data-radix-menu-content]');
+        const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
         return btn?.getAttribute('aria-expanded') === 'true';
       });
 
@@ -226,8 +227,9 @@ async function testModelDropdown(service) {
     try {
       // Find model dropdown button by aria-haspopup inside settings
       const btnInfo = await service.page.evaluate(() => {
-        // Find button with aria-haspopup="menu" (the model dropdown)
-        const btn = document.querySelector('button[aria-haspopup="menu"][id^="radix-"]');
+        // Query from settings menu container, not entire page
+        const settingsMenu = document.querySelector('[data-radix-menu-content]');
+        const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
         
         if (!btn) return { found: false };
         
@@ -251,7 +253,8 @@ async function testModelDropdown(service) {
 
       if (method === 'click') {
         await service.page.evaluate(() => {
-          const btn = document.querySelector('button[aria-haspopup="menu"][id^="radix-"]');
+          const settingsMenu = document.querySelector('[data-radix-menu-content]');
+          const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
           btn?.click();
         });
       } 
@@ -264,7 +267,8 @@ async function testModelDropdown(service) {
       } 
       else if (method === 'mouseDownUp') {
         await service.page.evaluate(() => {
-          const btn = document.querySelector('button[aria-haspopup="menu"][id^="radix-"]');
+          const settingsMenu = document.querySelector('[data-radix-menu-content]');
+          const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
           if (btn) {
             const downEvent = new MouseEvent('mousedown', { bubbles: true });
             const upEvent = new MouseEvent('mouseup', { bubbles: true });
