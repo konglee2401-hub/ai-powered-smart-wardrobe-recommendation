@@ -880,13 +880,7 @@ class GoogleFlowAutomationService {
           for (const btn of buttons) {
             const text = btn.textContent || '';
             if (text.includes('Banana') || text.includes(model)) {
-              // Dispatch pointerdown event for Radix UI
-              const event = new PointerEvent('pointerdown', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-              });
-              btn.dispatchEvent(event);
+              btn.click();
               return true;
             }
           }
@@ -979,25 +973,13 @@ class GoogleFlowAutomationService {
 
       console.log(`[SETTINGS] Step 2: Found button at (${btnInfo.x}, ${btnInfo.y})...`);
       
-      // Dispatch pointerdown event (Radix UI uses this)
-      console.log('[SETTINGS] Step 3: Dispatching pointerdown event...');
-      await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('button[aria-haspopup="menu"]');
-        
-        // Find the main settings button
-        for (const btn of buttons) {
-          const box = btn.getBoundingClientRect();
-          if (box.width >= 30 && box.height >= 30 && box.top >= 30) {
-            const event = new PointerEvent('pointerdown', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            btn.dispatchEvent(event);
-            break;
-          }
-        }
-      });
+      // Use realistic mouse movements (Radix UI compatible)
+      console.log('[SETTINGS] Step 3: Moving mouse and clicking...');
+      await this.page.mouse.move(btnInfo.x, btnInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
 
       // Wait for menu to appear
       console.log('[SETTINGS] Step 4: Waiting for menu...');
@@ -1264,25 +1246,16 @@ class GoogleFlowAutomationService {
       console.log(`     Current state: aria-selected=${buttonInfo.ariaSelected}`);
       console.log(`     Position: (${buttonInfo.x}, ${buttonInfo.y})`);
 
-      // Dispatch pointerdown event (Radix UI uses this instead of click)
-      console.log(`   🖱️  Dispatching pointerdown event...\n`);
-      await this.page.evaluate((targetLabel) => {
-        const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
-        for (const btn of buttons) {
-          if (btn.textContent.trim() === targetLabel || btn.textContent.trim().includes(targetLabel)) {
-            const event = new PointerEvent('pointerdown', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            btn.dispatchEvent(event);
-            break;
-          }
-        }
-      }, label);
+      // Use realistic mouse movement to click (Radix UI compatible)
+      console.log(`   🖱️  Clicking with mouse movement...\n`);
+      await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
 
       // Wait for state update
-      await this.page.waitForTimeout(500);
+      await this.page.waitForTimeout(300);
 
       // Verify new state
       const newState = await this.page.evaluate((targetLabel) => {
@@ -1352,22 +1325,16 @@ class GoogleFlowAutomationService {
       console.log(`     Current state: aria-selected=${buttonInfo.ariaSelected}`);
       console.log(`     Position: (${buttonInfo.x}, ${buttonInfo.y})`);
 
-      // Dispatch pointerdown event (Radix UI uses this instead of click)
-      console.log(`   🖱️  Dispatching pointerdown event...\n`);
-      await this.page.evaluate((sel) => {
-        const btn = document.querySelector(sel);
-        if (btn) {
-          const event = new PointerEvent('pointerdown', {
-            bubbles: true,
-            cancelable: true,
-            view: window
-          });
-          btn.dispatchEvent(event);
-        }
-      }, selector);
+      // Use realistic mouse movement to click
+      console.log(`   🖱️  Clicking with mouse movement...`);
+      await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
 
       // Wait for state update
-      await this.page.waitForTimeout(500);
+      await this.page.waitForTimeout(300);
 
       // Verify new state
       const newState = await this.page.evaluate((sel) => {
@@ -1446,25 +1413,15 @@ class GoogleFlowAutomationService {
       console.log(`   Has arrow_forward: ${generateBtnInfo.hasArrow}`);
       console.log(`   Position: (${generateBtnInfo.x}, ${generateBtnInfo.y})\n`);
 
-      // Dispatch pointerdown event (Radix UI requirement)
-      console.log('   🖱️  Dispatching pointerdown event...');
-      await this.page.evaluate(() => {
-        const container = document.querySelector('.aQhhA');
-        if (container) {
-          const buttons = container.querySelectorAll('button');
-          if (buttons.length >= 2) {
-            const submitBtn = buttons[1];
-            const event = new PointerEvent('pointerdown', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            submitBtn.dispatchEvent(event);
-          }
-        }
-      });
+      // Use realistic mouse movement to click
+      console.log('   🖱️  Clicking with mouse movement...');
+      await this.page.mouse.move(generateBtnInfo.x, generateBtnInfo.y);
+      await this.page.waitForTimeout(150);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.up();
 
-      console.log('   ✓ Submit button pointerdown event dispatched\n');
+      console.log('   ✓ Submit button clicked\n');
       await this.page.waitForTimeout(1000);
 
     } catch (error) {

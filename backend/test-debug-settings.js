@@ -1,18 +1,18 @@
 /**
- * Test script to interactively test settings buttons
+ * Test script to interactively test all button clicks with multiple methods
  * Usage: npm run test-debug-settings (from backend folder with internet)
  * 
- * This script:
- * 1. Initializes GoogleFlowAutomationService with visual browser
- * 2. Navigates to Google Flow page
- * 3. Clicks settings button to open menu
- * 4. Interactively clicks each tab to test if they work
+ * Tests:
+ * 1. Settings tabs with 3 methods: click(), mouse movement, mouse down/up
+ * 2. Model dropdown button
+ * 3. Model menu items selection
+ * 4. Submit button (without prompt to trigger error toast)
  */
 
 import GoogleFlowAutomationService from './services/googleFlowAutomationService.js';
 
-async function testSettingsInteractive() {
-  console.log('🚀 Starting Interactive Settings Buttons Test\n');
+async function testAllInteractive() {
+  console.log('🚀 Starting Comprehensive Button Test\n');
 
   const service = new GoogleFlowAutomationService({
     headless: false,  // Show browser visually
@@ -41,9 +41,7 @@ async function testSettingsInteractive() {
       });
       console.log('✓ Page loaded\n');
     } catch (e) {
-      // If page load fails (no internet), just continue - we may still be able to test
-      console.log('⚠️  Page load warning (may be offline): ' + e.message);
-      console.log('   Waiting 5 seconds anyway...\n');
+      console.log('⚠️  Page load warning (may be offline)');
       await service.page.waitForTimeout(5000);
     }
 
@@ -53,62 +51,120 @@ async function testSettingsInteractive() {
     console.log('✓ Page ready\n');
 
     // Step 4: Click settings button
-    console.log('📍 Step 4: Clicking settings button to open menu...');
-    const settingsOpened = await service.clickSettingsButton();
-    if (settingsOpened) {
-      console.log('✓ Settings menu opened\n');
-    } else {
-      console.log('⚠️  Settings button click may have failed\n');
+    console.log('📍 Step 4: Opening settings menu...');
+    await service.clickSettingsButton();
+    await service.page.waitForTimeout(1000);
+    console.log('✓ Settings menu opened\n');
+
+    // Step 5: Test IMAGE tab with 3 methods
+    console.log('📍 Step 5: Testing IMAGE tab with 3 methods\n');
+    
+    await testButtonClick(service, {
+      selector: 'button[id*="IMAGE"][role="tab"]',
+      name: 'IMAGE tab',
+      methods: ['click', 'mouse', 'mouseDownUp']
+    });
+
+    // Step 6: Test VIDEO tab with 3 methods
+    console.log('📍 Step 6: Testing VIDEO tab with 3 methods\n');
+    
+    await testButtonClick(service, {
+      selector: 'button[id*="VIDEO"][role="tab"]',
+      name: 'VIDEO tab',
+      methods: ['click', 'mouse', 'mouseDownUp']
+    });
+
+    // Step 7: Test model dropdown button
+    console.log('📍 Step 7: Testing MODEL DROPDOWN button\n');
+    
+    await testButtonClick(service, {
+      selector: 'button[id^="radix-"][aria-haspopup="menu"]',
+      name: 'Model dropdown (radix-:rhd:)',
+      methods: ['click', 'mouse', 'mouseDownUp']
+    });
+
+    await service.page.waitForTimeout(1500);
+
+    // Step 8: Test model menu items
+    console.log('📍 Step 8: Testing MODEL MENU ITEMS\n');
+    
+    const models = ['Nano Banana Pro', 'Nano Banana 2', 'Imagen 4'];
+    for (const model of models) {
+      console.log(`\n   Testing model: "${model}"`);
+      console.log('   ═'.repeat(40));
+      
+      // First, open the dropdown
+      const isOpen = await service.page.evaluate(() => {
+        const dropdown = document.querySelector('button[id^="radix-"][aria-haspopup="menu"]');
+        return dropdown?.getAttribute('aria-expanded') === 'true';
+      });
+
+      if (!isOpen) {
+        console.log('   Opening dropdown first...');
+        await testButtonClick(service, {
+          selector: 'button[id^="radix-"][aria-haspopup="menu"]',
+          name: 'Reopen dropdown',
+          methods: ['mouse']
+        });
+        await service.page.waitForTimeout(800);
+      }
+
+      // Find and test model menu item
+      const found = await service.page.evaluate((modelName) => {
+        const menuItems = document.querySelectorAll('[role="menuitem"] button');
+        for (const item of menuItems) {
+          if (item.textContent.includes(modelName)) {
+            return {
+              found: true,
+              text: item.textContent.trim(),
+              selector: item.className
+            };
+          }
+        }
+        return { found: false };
+      }, model);
+
+      if (found.found) {
+        console.log(`   ✓ Found menu item: "${found.text}"`);
+        
+        // Test clicking model menu item with 3 methods
+        await testModelMenuItem(service, model);
+      } else {
+        console.log(`   ❌ Menu item not found`);
+      }
+      
+      await service.page.waitForTimeout(800);
     }
 
-    await service.page.waitForTimeout(1000);
+    // Step 9: Test submit button
+    console.log('\n\n📍 Step 9: Testing SUBMIT BUTTON\n');
+    console.log('   (No prompt entered - should show "Prompt must be provided" error)\n');
+    
+    await testButtonClick(service, {
+      selector: '.aQhhA button:nth-of-type(2)',
+      name: 'Submit button (2nd in .aQhhA)',
+      methods: ['click', 'mouse', 'mouseDownUp']
+    });
 
-    // Step 5: Test clicking each tab
-    console.log('📍 Step 5: Testing tab clicks\n');
+    console.log('\n   ⏳ Waiting 2 seconds to see error toast...\n');
+    await service.page.waitForTimeout(2000);
 
-    const testsToRun = [
-      { selector: 'button[id*="IMAGE"][role="tab"]', name: 'IMAGE tab', delay: 1000 },
-      { selector: 'button[id*="VIDEO"][role="tab"]', name: 'VIDEO tab', delay: 1000 },
-      { selector: 'button[id*="PORTRAIT"][role="tab"]', name: 'PORTRAIT (Dọc) tab', delay: 1000 },
-      { selector: 'button[id*="LANDSCAPE"][role="tab"]', name: 'LANDSCAPE (Ngang) tab', delay: 1000 },
-      { text: 'x1', name: 'x1 count button', delay: 800 },
-      { text: 'x2', name: 'x2 count button', delay: 800 },
-      { text: 'x3', name: 'x3 count button', delay: 800 },
-      { text: 'x4', name: 'x4 count button', delay: 800 }
-    ];
+    // Check if error toast appeared
+    const hasErrorToast = await service.page.evaluate(() => {
+      const toast = document.querySelector('[data-sonner-toast]');
+      return !!toast;
+    });
 
-    for (let i = 0; i < testsToRun.length; i++) {
-      const test = testsToRun[i];
-      console.log(`\n   [${i + 1}/${testsToRun.length}] Testing: ${test.name}`);
-      console.log('   ═'.repeat(40));
-
-      try {
-        if (test.selector) {
-          // Test using selectRadixTab (by selector)
-          console.log(`   Selector: ${test.selector}`);
-          const result = await service.selectRadixTab(test.selector, test.name);
-          console.log(`   Result: ${result ? '✓ SUCCESS' : '❌ FAILED'}`);
-        } else if (test.text) {
-          // Test using selectTab (by text)
-          console.log(`   Text: "${test.text}"`);
-          const result = await service.selectTab(test.text);
-          console.log(`   Result: ${result ? '✓ SUCCESS' : '❌ FAILED'}`);
-        }
-
-        // Wait so you can see changes on screen
-        console.log(`   ⏳ Waiting ${test.delay}ms before next test...\n`);
-        await service.page.waitForTimeout(test.delay);
-
-      } catch (error) {
-        console.log(`   ❌ Error: ${error.message}\n`);
-      }
+    if (hasErrorToast) {
+      console.log('   ✅ ERROR TOAST APPEARED - Submit button worked!\n');
+    } else {
+      console.log('   ⚠️  No error toast visible\n');
     }
 
     console.log('\n' + '═'.repeat(60));
     console.log('✅ All tests completed!');
     console.log('═'.repeat(60));
-    console.log('\nBrowser will stay open for 10 more seconds then close...');
-    console.log('Watch the settings menu for any issues.\n');
+    console.log('\nBrowser will stay open for 10 more seconds...\n');
 
     await service.page.waitForTimeout(10000);
 
@@ -123,5 +179,156 @@ async function testSettingsInteractive() {
   }
 }
 
-testSettingsInteractive();
+/**
+ * Test a button with 3 different click methods
+ */
+async function testButtonClick(service, options) {
+  const { selector, name, methods = ['click', 'mouse', 'mouseDownUp'] } = options;
+
+  for (const method of methods) {
+    console.log(`\n   Method: ${method.toUpperCase()}`);
+    console.log('   Selector: ' + selector);
+
+    try {
+      // Verify selector exists
+      const exists = await service.page.$(selector);
+      if (!exists) {
+        console.log('   ❌ SELECTOR NOT FOUND');
+        continue;
+      }
+      console.log('   ✓ Selector found');
+
+      // Get button info
+      const btnInfo = await service.page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        if (!btn) return null;
+        const rect = btn.getBoundingClientRect();
+        return {
+          text: btn.textContent.trim().substring(0, 40),
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          visible: rect.width > 0 && rect.height > 0
+        };
+      }, selector);
+
+      if (!btnInfo) {
+        console.log('   ❌ Could not get button info');
+        continue;
+      }
+
+      console.log(`   Button: "${btnInfo.text}"`);
+      console.log(`   Position: (${btnInfo.x}, ${btnInfo.y})`);
+      console.log(`   Visible: ${btnInfo.visible}`);
+
+      // Try the click method
+      if (method === 'click') {
+        console.log('   Executing: btn.click()');
+        await service.page.evaluate((sel) => {
+          document.querySelector(sel)?.click();
+        }, selector);
+      } 
+      else if (method === 'mouse') {
+        console.log('   Executing: mouse.move() + mouse.down() + mouse.up()');
+        await service.page.mouse.move(btnInfo.x, btnInfo.y);
+        await service.page.waitForTimeout(100);
+        await service.page.mouse.down();
+        await service.page.waitForTimeout(50);
+        await service.page.mouse.up();
+      } 
+      else if (method === 'mouseDownUp') {
+        console.log('   Executing: dispatchEvent(mousedown) + dispatchEvent(mouseup)');
+        await service.page.evaluate((sel) => {
+          const btn = document.querySelector(sel);
+          if (btn) {
+            const downEvent = new MouseEvent('mousedown', { bubbles: true });
+            const upEvent = new MouseEvent('mouseup', { bubbles: true });
+            btn.dispatchEvent(downEvent);
+            btn.dispatchEvent(upEvent);
+          }
+        }, selector);
+      }
+
+      console.log('   ✓ Click executed');
+      await service.page.waitForTimeout(300);
+
+    } catch (error) {
+      console.log(`   ❌ Error: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Test clicking a model menu item
+ */
+async function testModelMenuItem(service, modelName) {
+  console.log(`\n   Testing menu item click: "${modelName}"`);
+  
+  const methods = ['click', 'mouse', 'mouseDownUp'];
+  
+  for (const method of methods) {
+    try {
+      const btnInfo = await service.page.evaluate((name) => {
+        const menuItems = document.querySelectorAll('[role="menuitem"] button');
+        for (const item of menuItems) {
+          if (item.textContent.includes(name)) {
+            const rect = item.getBoundingClientRect();
+            return {
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              found: true
+            };
+          }
+        }
+        return { found: false };
+      }, modelName);
+
+      if (!btnInfo.found) {
+        console.log(`     ❌ ${method.toUpperCase()}: Menu item not found`);
+        continue;
+      }
+
+      if (method === 'click') {
+        await service.page.evaluate((name) => {
+          const menuItems = document.querySelectorAll('[role="menuitem"] button');
+          for (const item of menuItems) {
+            if (item.textContent.includes(name)) {
+              item.click();
+              break;
+            }
+          }
+        }, modelName);
+      } 
+      else if (method === 'mouse') {
+        await service.page.mouse.move(btnInfo.x, btnInfo.y);
+        await service.page.waitForTimeout(100);
+        await service.page.mouse.down();
+        await service.page.waitForTimeout(50);
+        await service.page.mouse.up();
+      } 
+      else if (method === 'mouseDownUp') {
+        await service.page.evaluate((name) => {
+          const menuItems = document.querySelectorAll('[role="menuitem"] button');
+          for (const item of menuItems) {
+            if (item.textContent.includes(name)) {
+              const downEvent = new MouseEvent('mousedown', { bubbles: true });
+              const upEvent = new MouseEvent('mouseup', { bubbles: true });
+              item.dispatchEvent(downEvent);
+              item.dispatchEvent(upEvent);
+              break;
+            }
+          }
+        }, modelName);
+      }
+
+      console.log(`     ✓ ${method.toUpperCase()}: Executed`);
+      await service.page.waitForTimeout(300);
+
+    } catch (error) {
+      console.log(`     ❌ ${method.toUpperCase()}: ${error.message}`);
+    }
+  }
+}
+
+testAllInteractive();
+
 
