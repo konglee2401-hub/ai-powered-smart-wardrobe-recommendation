@@ -1169,6 +1169,20 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         );
         console.log('✅ Images uploaded and ready for video generation\n');
 
+        // 💫 CRITICAL: Configure video settings AFTER upload
+        console.log('⚙️  Configuring video settings...');
+        try {
+          const settingsOk = await videoGen.configureSettings();
+          if (settingsOk) {
+            console.log('✅ Video settings configured\n');
+          } else {
+            console.log('⚠️  Settings might be incomplete, continuing...\n');
+          }
+        } catch (settingsError) {
+          console.warn(`⚠️  Settings configuration error: ${settingsError.message}`);
+          console.warn('⚠️  Continuing with default settings...\n');
+        }
+
         // Switch to video tab ONCE
         console.log('📹 Switching to video generation mode...');
         await videoGen.switchToVideoTab();

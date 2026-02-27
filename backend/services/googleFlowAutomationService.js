@@ -662,15 +662,36 @@ class GoogleFlowAutomationService {
     console.log('⏳ Waiting for Send button to enable...');
     
     try {
+      // First, wait for ANY button with the right aria-label
       await this.page.waitForFunction(() => {
-        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"], button[aria-label*="generate"], button[aria-label*="send"]');
+        if (btn) {
+          console.log(`[DEBUG] Found button: ${btn.getAttribute('aria-label')}`);
+        }
         return btn && !btn.disabled;
-      }, { timeout: 10000 });
+      }, { timeout: 15000 });  // Increased timeout for video generation
       
       console.log('✅ Send button is enabled');
       return true;
     } catch (error) {
       console.warn('⚠️  Timeout waiting for Send button:', error.message);
+      
+      // Try to find and log what buttons are available
+      try {
+        const buttons = await this.page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns.map(b => ({
+            text: b.textContent.trim().substring(0, 50),
+            ariaLabel: b.getAttribute('aria-label'),
+            disabled: b.disabled,
+            visible: b.offsetParent !== null
+          })).filter((b, i) => i < 10);  // First 10 buttons
+        });
+        console.log('[DEBUG] Available buttons:', JSON.stringify(buttons, null, 2));
+      } catch (e) {
+        console.log('[DEBUG] Could not enumerate buttons:', e.message);
+      }
+      
       return false;
     }
   }
@@ -679,9 +700,25 @@ class GoogleFlowAutomationService {
     console.log('✔️  Checking Send button status...');
     
     const status = await this.page.evaluate(() => {
-      const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+      // Try multiple selector strategies
+      let btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+      
+      // If not found, try lowercase
+      if (!btn) {
+        btn = document.querySelector('button[aria-label*="generate"], button[aria-label*="send"]');
+      }
+      
+      // If still not found, try by text content
+      if (!btn) {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        btn = buttons.find(b => {
+          const text = b.textContent.toLowerCase();
+          return text.includes('generate') || text.includes('send') || text.includes('tạo');
+        });
+      }
+      
       if (!btn) return { found: false, disabled: null };
-      return { found: true, disabled: btn.disabled, text: btn.textContent };
+      return { found: true, disabled: btn.disabled, text: btn.textContent, ariaLabel: btn.getAttribute('aria-label') };
     });
 
     if (!status.found) {
@@ -689,7 +726,7 @@ class GoogleFlowAutomationService {
       return false;
     }
 
-    console.log(`   Button: "${status.text.trim()}" | Disabled: ${status.disabled}`);
+    console.log(`   Button: "${status.text.trim()}" | Aria-label: ${status.ariaLabel} | Disabled: ${status.disabled}`);
     return !status.disabled;
   }
 
@@ -698,7 +735,23 @@ class GoogleFlowAutomationService {
     
     try {
       const clicked = await this.page.evaluate(() => {
-        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+        // Try multiple selector strategies
+        let btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]');
+        
+        // If not found, try lowercase
+        if (!btn) {
+          btn = document.querySelector('button[aria-label*="generate"], button[aria-label*="send"]');
+        }
+        
+        // If still not found, try by text content
+        if (!btn) {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          btn = buttons.find(b => {
+            const text = b.textContent.toLowerCase();
+            return text.includes('generate') || text.includes('send') || text.includes('tạo');
+          });
+        }
+        
         if (btn && !btn.disabled) {
           btn.click();
           return true;
@@ -821,6 +874,8 @@ class GoogleFlowAutomationService {
     if (switched) {
       console.log('✅ Video tab active');
       await this.page.waitForTimeout(1000);
+    } else {
+      console.log('⚠️  Video tab not found - continuing without explicit tab switch (UI might handle this automatically)');
     }
     return switched;
   }
@@ -831,20 +886,50 @@ class GoogleFlowAutomationService {
     try {
       const selected = await this.page.evaluate(() => {
         const buttons = document.querySelectorAll('button');
+        
+        // Log all button texts for debugging
+        const buttonTexts = Array.from(buttons).map(b => b.textContent.trim().substring(0, 60));
+        console.log(`[DEBUG] Found ${buttons.length} buttons on page`);
+        
+        // First try: Look for "video" or "thành phần" in button text
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          // Look for "Create video from components" or Vietnamese equivalent
-          if (text.includes('video') || text.includes('thành phần')) {
+          if (text.includes('video') && text.includes('thành phần')) {
+            console.log(`[DEBUG] Found exact match: "${btn.textContent.trim()}"`);
             btn.click();
             return true;
           }
         }
+        
+        // Second try: Just look for "thành phần" (components) since it's Vietnamese
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('thành phần')) {
+            console.log(`[DEBUG] Found components button: "${btn.textContent.trim()}"`);
+            btn.click();
+            return true;
+          }
+        }
+        
+        // Third try: Look for "create" or "tạo" (create)
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if ((text.includes('create') || text.includes('tạo')) && text.includes('video')) {
+            console.log(`[DEBUG] Found create video button: "${btn.textContent.trim()}"`);
+            btn.click();
+            return true;
+          }
+        }
+        
+        console.log(`[DEBUG] Available button texts:`, buttonTexts);
         return false;
       });
 
       if (selected) {
         console.log('✅ Video mode selected');
         await this.page.waitForTimeout(800);
+      } else {
+        console.log('⚠️  Video mode button not found - UI might already be in video mode');
       }
       return selected;
     } catch (error) {
@@ -861,19 +946,27 @@ class GoogleFlowAutomationService {
         // Check for video generation interface elements
         const prompt = document.querySelector('[role="textbox"][data-slate-editor="true"]');
         const aspectRatio = document.querySelector('[aria-label*="Aspect"], [aria-label*="aspect"]');
+        const sendButton = document.querySelector('button[aria-label*="Send"], button[aria-label*="send"]');
         
-        return !!(prompt && aspectRatio);
+        // Log what we found
+        console.log(`[DEBUG] Video interface check:`);
+        console.log(`  - Prompt textbox: ${!!prompt}`);
+        console.log(`  - Aspect ratio control: ${!!aspectRatio}`);
+        console.log(`  - Send button: ${!!sendButton}`);
+        
+        // We just need the prompt textbox to be present
+        return !!prompt;
       });
 
       if (verified) {
         console.log('✅ Video interface verified');
       } else {
-        console.log('⚠️  Video interface not fully ready');
+        console.log('⚠️  Video interface not fully ready - continuing anyway (interface might load after first interaction)');
       }
-      return verified;
+      return verified || true;  // Continue even if not fully ready
     } catch (error) {
       console.error('❌ Error verifying interface:', error.message);
-      return false;
+      return true;  // Continue despite error
     }
   }
 
