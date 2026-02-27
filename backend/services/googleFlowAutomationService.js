@@ -826,10 +826,197 @@ class GoogleFlowAutomationService {
     return true;
   }
 
+  /**
+   * Click dropdown button using mouse movement method (Method 2)
+   * Reliable for Radix UI components
+   */
+  async clickDropdownButton(selector, displayName = 'Dropdown') {
+    console.log(`   > Clicking ${displayName} dropdown...`);
+    
+    try {
+      const btnInfo = await this.page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        
+        if (!btn) {
+          return { found: false, error: `Button not found with selector: ${sel}` };
+        }
+        
+        const rect = btn.getBoundingClientRect();
+        
+        // Check if visible
+        if (rect.width === 0 || rect.height === 0) {
+          return { found: false, error: 'Button found but not visible' };
+        }
+        
+        return {
+          found: true,
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          text: btn.textContent.trim().substring(0, 50)
+        };
+      }, selector);
+
+      if (!btnInfo.found) {
+        console.warn(`   ⚠️  ${btnInfo.error}`);
+        return false;
+      }
+
+      console.log(`   ✓ Found: "${btnInfo.text}"`);
+      console.log(`   🖱️  Clicking with mouse movement...`);
+      
+      // Use mouse movement method (Method 2 - proven reliable)
+      await this.page.mouse.move(btnInfo.x, btnInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
+      
+      await this.page.waitForTimeout(500);
+      return true;
+
+    } catch (error) {
+      console.warn(`   ❌ Error clicking dropdown: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Click menu item using mouse movement method (Method 2)
+   * Used to select from dropdown menus
+   */
+  async clickMenuItemByText(itemText, menuSelector = '[role="menu"]') {
+    console.log(`   > Selecting menu item: "${itemText}"...`);
+    
+    try {
+      const menuInfo = await this.page.evaluate((text, selector) => {
+        const menus = document.querySelectorAll(selector);
+        
+        for (const menu of menus) {
+          const buttons = menu.querySelectorAll('button');
+          for (const btn of buttons) {
+            if (btn.textContent.includes(text)) {
+              const rect = btn.getBoundingClientRect();
+              
+              // Check if visible
+              if (rect.width === 0 || rect.height === 0) {
+                continue;
+              }
+              
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                fullText: btn.textContent.trim()
+              };
+            }
+          }
+        }
+        
+        return { found: false };
+      }, itemText, menuSelector);
+
+      if (!menuInfo.found) {
+        console.warn(`   ⚠️  Menu item not found: "${itemText}"`);
+        return false;
+      }
+
+      console.log(`   ✓ Found: "${menuInfo.fullText}"`);
+      console.log(`   🖱️  Clicking with mouse movement...`);
+      
+      // Use mouse movement method (Method 2)
+      await this.page.mouse.move(menuInfo.x, menuInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
+      
+      await this.page.waitForTimeout(500);
+      return true;
+
+    } catch (error) {
+      console.warn(`   ❌ Error clicking menu item: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Select VIDEO reference type (Ingredients or Frames)
+   * For VIDEO tab only
+   */
+  async selectVideoReferenceType(referenceType = 'ingredients') {
+    const type = (referenceType || 'ingredients').toLowerCase();
+    const displayName = type === 'frames' ? 'Frames' : 'Ingredients';
+    
+    console.log(`   > Selecting VIDEO reference type: ${displayName}...`);
+    
+    // Try to find and click the reference type tab
+    try {
+      // First, check if we can find tabs with Ingredients/Frames
+      const found = await this.page.evaluate((targetType) => {
+        const buttons = document.querySelectorAll('button[role="tab"]');
+        
+        for (const btn of buttons) {
+          const text = btn.textContent.trim().toLowerCase();
+          if (text.includes(targetType)) {
+            const rect = btn.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                text: btn.textContent.trim()
+              };
+            }
+          }
+        }
+        return { found: false };
+      }, type);
+
+      if (found.found) {
+        console.log(`   ✓ Found: "${found.text}"`);
+        console.log(`   🖱️  Clicking with mouse movement...`);
+        
+        // Click using mouse method
+        await this.page.mouse.move(found.x, found.y);
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(50);
+        await this.page.mouse.up();
+        
+        await this.page.waitForTimeout(300);
+        return true;
+      } else {
+        console.log(`   ℹ️  Reference type selector not found (may use defaults), continuing...`);
+        return true;
+      }
+
+    } catch (error) {
+      console.warn(`   ⚠️  Error selecting reference type: ${error.message}`);
+      return true; // Don't fail - may be optional
+    }
+  }
+
   async configureSettings() {
     console.log('⚙️  CONFIGURING SETTINGS\n');
 
     try {
+      // Set default values if not provided
+      if (!this.options.imageCount && this.type === 'image') {
+        this.options.imageCount = 1;
+      }
+      if (!this.options.videoCount && this.type === 'video') {
+        this.options.videoCount = 1;
+      }
+      if (!this.options.aspectRatio) {
+        this.options.aspectRatio = '9:16';
+      }
+      if (!this.options.model) {
+        this.options.model = this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast';
+      }
+      if (!this.options.videoReferenceType) {
+        this.options.videoReferenceType = 'ingredients'; // Default for VIDEO
+      }
+
       // STEP 0: Click settings button to open menu
       console.log('   🔧 STEP 0: Opening settings menu...');
       const settingsOpened = await this.clickSettingsButton();
@@ -837,10 +1024,6 @@ class GoogleFlowAutomationService {
         console.warn('   ⚠️  Settings button may have failed, continuing...');
       }
       await this.page.waitForTimeout(500);
-
-      // DEBUG: Inspect all buttons in settings menu
-      console.log('\n   🔍 DEBUG: Inspecting settings menu buttons...');
-      await this.debugSettingsButtons();
 
       // STEP 1: Select Image/Video Tab
       console.log('   📋 STEP 1: Select Image/Video Tab');
@@ -867,34 +1050,41 @@ class GoogleFlowAutomationService {
       await this.selectTab(`x${count}`);
       await this.page.waitForTimeout(500);
 
-      // STEP 4: Select Model
-      if (this.type === 'image') {
-        console.log('\n   🤖 STEP 4: Select Model');
-        const targetModel = this.options.model || 'Nano Banana Pro';
-        console.log(`   > Selecting ${targetModel}...`);
-        
-        const modelSelected = await this.page.evaluate((model) => {
-          // The model button has multiple descendant elements, search for text content
-          const buttons = document.querySelectorAll('button[aria-haspopup="menu"], button[aria-expanded]');
-          
-          for (const btn of buttons) {
-            const text = btn.textContent || '';
-            if (text.includes('Banana') || text.includes(model)) {
-              btn.click();
-              return true;
-            }
-          }
-          return false;
-        }, targetModel);
-        
-        if (!modelSelected) {
-          console.log(`   ℹ️  Model selection not performed (may already be set), continuing...`);
-        } else {
-          console.log(`   ✓ ${targetModel} selected`);
-          await this.page.waitForTimeout(500);
-        }
+      // STEP 4: Select VIDEO Reference Type (if VIDEO tab)
+      if (this.type === 'video') {
+        console.log('\n   📽️  STEP 4: Select VIDEO Reference Type');
+        await this.selectVideoReferenceType(this.options.videoReferenceType);
+        await this.page.waitForTimeout(500);
       }
 
+      // STEP 5: Select Model (for both IMAGE and VIDEO)
+      console.log(`\n   🤖 STEP ${this.type === 'image' ? 4 : 5}: Select Model`);
+      const targetModel = this.options.model;
+      console.log(`   > Selecting: "${targetModel}"`);
+      
+      // Find model dropdown button from settings menu
+      const dropdownClicked = await this.clickDropdownButton(
+        'button[id^="radix-"][aria-haspopup="menu"]',
+        'Model dropdown'
+      );
+      
+      if (dropdownClicked) {
+        // Wait for dropdown to open
+        await this.page.waitForTimeout(800);
+        
+        // Click the model menu item
+        const itemClicked = await this.clickMenuItemByText(targetModel, '[role="menu"]');
+        
+        if (itemClicked) {
+          console.log(`   ✓ ${targetModel} selected`);
+        } else {
+          console.log(`   ⚠️  Could not select model ${targetModel}, may already be set`);
+        }
+      } else {
+        console.log(`   ⚠️  Could not open model dropdown, may already be configured`);
+      }
+
+      await this.page.waitForTimeout(500);
       console.log('\n   ✅ Settings configuration complete\n');
       return true;
 
