@@ -2218,21 +2218,18 @@ class GoogleFlowAutomationService {
         const isLastPrompt = (i === prompts.length - 1);
 
         try {
-          // STEP 0: Capture initial hrefs BEFORE entering prompt
-          console.log('[STEP 0] 📎 Capturing initial hrefs (BEFORE typing)...');
+          // STEP 0: Capture initial hrefs BEFORE entering prompt (TOP 10 only)
+          console.log('[STEP 0] 📎 Capturing initial hrefs (TOP 10) (BEFORE typing)...');
           const initialHrefs = await this.page.evaluate(() => {
-            const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
-            const hrefs = {};
-            for (const item of items) {
-              const index = item.getAttribute('data-index');
-              const link = item.querySelector('a[href]');
-              if (link) {
-                hrefs[index] = link.getAttribute('href');
-              }
+            const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+            const hrefs = [];
+            // Get first 10 links only (newly generated/uploaded always pushed to top)
+            for (let i = 0; i < Math.min(10, links.length); i++) {
+              hrefs.push(links[i].getAttribute('href'));
             }
             return hrefs;
           });
-          console.log(`[STEP 0] ✓ Captured ${Object.keys(initialHrefs).length} baseline hrefs (before any changes)\n`);
+          console.log(`[STEP 0] ✓ Captured TOP 10 baseline hrefs (before any changes)\n`);
 
           // STEP A: Enter prompt
           console.log(`[STEP A] 📝 Entering prompt (${prompt.length} chars)...`);
@@ -2259,31 +2256,22 @@ class GoogleFlowAutomationService {
             monitoringAttempt++;
 
             const result = await this.page.evaluate((oldHrefs) => {
-              const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+              const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
               
-              for (const item of items) {
-                const index = item.getAttribute('data-index');
-                const link = item.querySelector('a[href]');
+              // Check TOP 10 links only (new items always pushed to top)
+              for (let i = 0; i < Math.min(10, links.length); i++) {
+                const currentHref = links[i].getAttribute('href');
                 
-                if (!link) continue;
-                
-                const currentHref = link.getAttribute('href');
-                const oldHref = oldHrefs[index];
-                
-                // If href changed OR is new item (not in oldHrefs)
-                if (!oldHref || oldHref !== currentHref) {
-                  // Check if this href is NEW (not in any old values)
-                  const isNewHref = !Object.values(oldHrefs).includes(currentHref);
-                  if (isNewHref) {
-                    return { found: true, newHref: currentHref, newIndex: index };
-                  }
+                // If this href is NOT in old list, it's a NEW one
+                if (!oldHrefs.includes(currentHref)) {
+                  return { found: true, newHref: currentHref, position: i };
                 }
               }
               return { found: false };
             }, initialHrefs);
             
             if (result.found) {
-              console.log(`   ✅ NEW item detected at data-index="${result.newIndex}"! New image confirmed.\n`);
+              console.log(`   ✅ NEW item detected at position #${result.position}! New image confirmed.\n`);
               lastGeneratedHref = result.newHref;
               generationDetected = true;
               break;
