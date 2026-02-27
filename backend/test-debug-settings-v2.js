@@ -81,20 +81,61 @@ async function testAllInteractive() {
       await service.page.waitForTimeout(400);
     }
 
-    // Step 6: Test MODEL dropdown button
-    console.log('\n\n📍 Step 6: Testing MODEL dropdown button\n');
+    // 5d: Switch to VIDEO tab and test all VIDEO options
+    console.log('\n\n5d. Testing VIDEO tab and its options:');
+    console.log('───'.repeat(20));
+    
+    // Switch to VIDEO tab
+    await testTabInSettings(service, 'Video', 'VIDEO tab', ['click', 'mouse']);
+    await service.page.waitForTimeout(600);
+
+    // Video has different sub-tabs: VIDEO_REFERENCES (Ingredients) and VIDEO_FRAMES (Frames)
+    console.log('\n   5d-1. Testing VIDEO sub-tabs (Ingredients/Frames):');
+    await testTabInSettings(service, 'Ingredients', 'VIDEO_REFERENCES (Ingredients)', ['mouse']);
+    await service.page.waitForTimeout(400);
+    await testTabInSettings(service, 'Frames', 'VIDEO_FRAMES (Frames)', ['mouse']);
+    await service.page.waitForTimeout(400);
+
+    // Back to Ingredients for aspect ratio and count testing
+    await testTabInSettings(service, 'Ingredients', 'Back to Ingredients', ['mouse']);
+    await service.page.waitForTimeout(400);
+
+    // Video aspect ratio: LANDSCAPE/PORTRAIT
+    console.log('\n   5d-2. Testing VIDEO aspect ratio (LANDSCAPE/PORTRAIT):');
+    await testTabInSettings(service, 'Ngang', 'LANDSCAPE (Ngang)', ['mouse']);
+    await service.page.waitForTimeout(400);
+    await testTabInSettings(service, 'Dọc', 'PORTRAIT (Dọc)', ['mouse']);
+    await service.page.waitForTimeout(400);
+
+    // Video count tabs (x1, x2, x3, x4)
+    console.log('\n   5d-3. Testing VIDEO count tabs (x1/x2/x3/x4):');
+    for (const count of ['x1', 'x2', 'x3', 'x4']) {
+      await testTabInSettings(service, count, `${count} count`, ['click', 'mouse']);
+      await service.page.waitForTimeout(400);
+    }
+
+    console.log('\n✓ VIDEO tab options tested\n');
+
+    // Step 6: Test IMAGE model dropdown and items
+    console.log('📍 Step 6: Testing IMAGE model selection\n');
     console.log('═'.repeat(60));
     
+    // Switch back to IMAGE tab for IMAGE models
+    console.log('\n   6a. Switching to IMAGE tab for model testing:');
+    await testTabInSettings(service, 'Image', 'IMAGE tab', ['mouse']);
+    await service.page.waitForTimeout(600);
+
+    // Test IMAGE model dropdown button
+    console.log('\n   6b. Testing IMAGE model dropdown button:\n');
     await testModelDropdown(service);
     await service.page.waitForTimeout(800);
 
-    // Step 7: Test model menu items (Nano Banana Pro, Nano Banana 2, Imagen 4)
-    console.log('\n\n📍 Step 7: Testing MODEL menu items\n');
-    console.log('═'.repeat(60));
+    // Test IMAGE model menu items (Nano Banana models)
+    console.log('\n   6c. Testing IMAGE model items\n');
     
-    const models = ['Nano Banana Pro', 'Nano Banana 2', 'Imagen 4'];
-    for (const model of models) {
-      console.log(`\nTesting model: "${model}"`);
+    const imageModels = ['Nano Banana Pro', 'Nano Banana 2', 'Imagen 4'];
+    for (const model of imageModels) {
+      console.log(`      Testing model: "${model}"`);
       
       // Open dropdown if closed
       const isOpen = await service.page.evaluate(() => {
@@ -104,7 +145,46 @@ async function testAllInteractive() {
       });
 
       if (!isOpen) {
-        console.log('   Reopening model dropdown...');
+        console.log('         Reopening model dropdown...');
+        await testModelDropdown(service);
+        await service.page.waitForTimeout(800);
+      }
+
+      // Test clicking model item
+      await testModelMenuItem(service, model);
+      await service.page.waitForTimeout(600);
+    }
+
+    // Step 7: Test VIDEO model dropdown and items
+    console.log('\n\n📍 Step 7: Testing VIDEO model selection\n');
+    console.log('═'.repeat(60));
+    
+    // Switch to VIDEO tab for VIDEO models
+    console.log('\n   7a. Switching to VIDEO tab for model testing:');
+    await testTabInSettings(service, 'Video', 'VIDEO tab', ['mouse']);
+    await service.page.waitForTimeout(600);
+
+    // Test VIDEO model dropdown button
+    console.log('\n   7b. Testing VIDEO model dropdown button:\n');
+    await testModelDropdown(service);
+    await service.page.waitForTimeout(800);
+
+    // Test VIDEO model menu items (Veo models)
+    console.log('\n   7c. Testing VIDEO model items\n');
+    
+    const videoModels = ['Veo 3.1 - Fast', 'Veo 3.1 - Quality', 'Veo 2 - Fast', 'Veo 2 - Quality'];
+    for (const model of videoModels) {
+      console.log(`      Testing model: "${model}"`);
+      
+      // Open dropdown if closed
+      const isOpen = await service.page.evaluate(() => {
+        const settingsMenu = document.querySelector('[data-radix-menu-content]');
+        const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
+        return btn?.getAttribute('aria-expanded') === 'true';
+      });
+
+      if (!isOpen) {
+        console.log('         Reopening model dropdown...');
         await testModelDropdown(service);
         await service.page.waitForTimeout(800);
       }
