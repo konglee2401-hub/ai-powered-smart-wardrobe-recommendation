@@ -838,6 +838,10 @@ class GoogleFlowAutomationService {
       }
       await this.page.waitForTimeout(500);
 
+      // DEBUG: Inspect all buttons in settings menu
+      console.log('\n   🔍 DEBUG: Inspecting settings menu buttons...');
+      await this.debugSettingsButtons();
+
       // STEP 1: Select Image/Video Tab
       console.log('   📋 STEP 1: Select Image/Video Tab');
       if (this.type === 'image') {

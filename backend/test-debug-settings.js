@@ -1,9 +1,9 @@
 /**
  * Test script to debug settings buttons
- * Usage: npm run test-debug-settings
+ * Usage: npm run test-debug-settings (from backend or root)
  */
 
-import GoogleFlowAutomationService from './backend/services/googleFlowAutomationService.js';
+import GoogleFlowAutomationService from './services/googleFlowAutomationService.js';
 
 async function testDebugSettings() {
   console.log('🚀 Starting Settings Buttons Debug Test\n');
@@ -15,7 +15,7 @@ async function testDebugSettings() {
 
   try {
     // Initialize
-    await service.initialize();
+    await service.init();
     console.log('✓ Browser initialized\n');
 
     // Navigate to Google Flow
