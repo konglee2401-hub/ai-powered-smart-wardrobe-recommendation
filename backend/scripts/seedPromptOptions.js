@@ -135,6 +135,8 @@ const promptOptions = [
       equipment: 'professional photography setup'
     },
     promptSuggestion: 'Photography studio with white seamless backdrop, professional lighting setup, pristine clean floor, perfect for fashion photography displays',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, selfie, portrait, camera POV, cluttered background, cgi, artificial render, low detail',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, selfie, chân dung, góc POV, nền lộn xộn, CGI, render giả, ít chi tiết',
     isActive: true,
     sortOrder: 1
   },
@@ -152,6 +154,8 @@ const promptOptions = [
       atmosphere: 'relaxed summer vibes'
     },
     promptSuggestion: 'Golden hour beach setting with ocean waves in background, sandy beach, warm sunlight creating golden tones, relaxed vacation aesthetic',
+    sceneNegativePrompt: 'people, human, crowd, model, mannequin, face, body, hands, reflection of people, storm weather, dark moody sky, cgi water, artificial beach set, low detail',
+    sceneNegativePromptVi: 'người, đám đông, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, thời tiết bão, trời tối, nước biển CGI, bối cảnh biển giả, ít chi tiết',
     isActive: true,
     sortOrder: 2
   },
@@ -169,6 +173,8 @@ const promptOptions = [
       atmosphere: 'contemporary urban'
     },
     promptSuggestion: 'Urban street setting with modern city architecture, brick walls or glass buildings, street-level perspective, contemporary metropolitan vibe',
+    sceneNegativePrompt: 'people, human, crowd, traffic jam, mannequin, face, body, hands, reflection of people, dystopian cyberpunk, overexposed neon, cgi buildings, low detail',
+    sceneNegativePromptVi: 'người, đám đông, kẹt xe, mannequin, mặt, cơ thể, tay, phản chiếu người, cyberpunk quá đà, neon cháy sáng, tòa nhà CGI, ít chi tiết',
     isActive: true,
     sortOrder: 3
   },
@@ -186,6 +192,8 @@ const promptOptions = [
       atmosphere: 'earthy and organic'
     },
     promptSuggestion: 'Natural outdoor environment with lush green trees, plants, garden setting, organic natural lighting, earthy peaceful atmosphere',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, artificial plastic plants, fantasy forest, heavy fog, cgi render, low detail',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, cây nhựa giả, rừng fantasy, sương mù dày, render CGI, ít chi tiết',
     isActive: true,
     sortOrder: 4
   },
@@ -201,6 +209,8 @@ const promptOptions = [
       atmosphere: 'corporate professional'
     },
     promptSuggestion: 'Modern office environment with sleek furniture, minimalist desk setup, professional ambiance, corporate professional aesthetic, business-ready setting',
+    sceneNegativePrompt: 'people, human, office workers, model, mannequin, face, body, hands, reflection of people, messy paperwork chaos, dark office noir, cgi render, low detail',
+    sceneNegativePromptVi: 'người, nhân viên văn phòng, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, giấy tờ bừa bộn, văn phòng tối noir, render CGI, ít chi tiết',
     isActive: true,
     sortOrder: 5
   },
