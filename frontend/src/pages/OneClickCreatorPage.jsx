@@ -18,6 +18,7 @@ import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService
 import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
+import ScenePickerModal from '../components/ScenePickerModal';
 import { 
   calculateVideoCount, 
   VIDEO_PROVIDER_LIMITS, 
@@ -155,7 +156,7 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
     };
 
     const selectedOptions = {
-      scene: recommendedOptions.scene || 'studio',
+      scene: recommendedOptions.sceneLockedPrompt || recommendedOptions.scene || 'linhphap-tryon-room',
       lighting: recommendedOptions.lighting || 'soft-diffused',
       mood: recommendedOptions.mood || 'confident',
       style: recommendedOptions.style || 'minimalist',
@@ -195,7 +196,7 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
     // Build field values from recommendations
     const fieldValues = {
       productFocus: productFocus || 'full outfit',
-      scene: recommendedOptions.scene || 'studio',
+      scene: recommendedOptions.sceneLockedPrompt || recommendedOptions.scene || 'linhphap-tryon-room',
       lighting: recommendedOptions.lighting || 'soft-diffused',
       mood: recommendedOptions.mood || 'confident',
       style: recommendedOptions.style || 'minimalist',
@@ -213,7 +214,7 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
     console.warn('Template-based generation failed, using fallback:', templateError);
     // Fallback to hardcoded prompt
     const imagePrompt = `Professional fashion photo. Character wearing ${productFocus || 'full outfit'}. ` +
-      `Scene: ${recommendedOptions.scene}. Lighting: ${recommendedOptions.lighting}. ` +
+      `Scene: ${recommendedOptions.sceneLockedPrompt || recommendedOptions.scene}. Lighting: ${recommendedOptions.lighting}. ` +
       `Mood: ${recommendedOptions.mood}. Style: ${recommendedOptions.style}. ` +
       `Colors: ${recommendedOptions.colorPalette}. Camera: ${recommendedOptions.cameraAngle}. ` +
       `Use case: ${useCase}. High quality, detailed, professional.`;
@@ -237,7 +238,7 @@ async function generateVideoPromptFromTemplate(useCase, productFocus, recommende
           product: { type: productFocus, category: 'clothing' } 
         },
         selectedOptions: { 
-          scene: 'fashion shoot',
+          scene: recommendedOptions.sceneLockedPrompt || recommendedOptions.scene || 'linhphap-tryon-room',
           lighting: 'professional',
           mood: recommendedOptions.mood || 'confident',
           style: recommendedOptions.style || 'minimalist',
@@ -308,7 +309,6 @@ const getWorkflowStepsRaw = (useCase) => {
   }
   return WORKFLOW_STEPS;
 };
-
 
 
 // Session component
@@ -602,6 +602,33 @@ export default function OneClickCreatorPage() {
   // Workflow state
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessions, setSessions] = useState([]);
+  const [sceneOptions, setSceneOptions] = useState([]);
+  const [selectedScene, setSelectedScene] = useState('');
+  const [selectedScenePrompt, setSelectedScenePrompt] = useState('');
+  const [showScenePicker, setShowScenePicker] = useState(false);
+
+
+
+  useEffect(() => {
+    const loadSceneOptions = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const data = await response.json();
+        if (data?.success) {
+          const scenes = data.data || [];
+          setSceneOptions(scenes);
+          if (scenes.length > 0) {
+            const fallback = scenes[0];
+            setSelectedScene(prev => prev || fallback.value);
+            setSelectedScenePrompt(prev => prev || fallback.sceneLockedPrompt || fallback.sceneLockedPromptVi || fallback.promptSuggestion || '');
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load scene options:', error.message);
+      }
+    };
+    loadSceneOptions();
+  }, []);
 
   // 💫 NEW: Auto-set aspect ratio based on use case
   useEffect(() => {
@@ -1008,6 +1035,11 @@ export default function OneClickCreatorPage() {
             }
           }
           recommendedOptions = { ...categoryDefaults };
+          recommendedOptions.scene = selectedScene || categoryDefaults.scene || 'linhphap-tryon-room';
+          const pickedScene = sceneOptions.find(s => s.value === recommendedOptions.scene);
+          recommendedOptions.sceneLockedPrompt = (i18n.language || 'en').startsWith('vi')
+            ? (pickedScene?.sceneLockedPromptVi || pickedScene?.sceneLockedPrompt || pickedScene?.promptSuggestionVi || pickedScene?.promptSuggestion || '')
+            : (pickedScene?.sceneLockedPrompt || pickedScene?.sceneLockedPromptVi || pickedScene?.promptSuggestion || pickedScene?.promptSuggestionVi || '');
           console.log(`✅ Set defaults from ${Object.keys(categoryDefaults).length} categories`);
           addLog(sessionId, `✓ Prepared ${Object.keys(categoryDefaults).length} filtered categories`);
           
@@ -1558,6 +1590,27 @@ export default function OneClickCreatorPage() {
                 <Upload className="w-4 h-4" />
                 {t('oneClickCreator.uploadImagesStep')}
               </h3>
+
+              <div className="mb-4 p-3 rounded-lg border border-purple-700/60 bg-purple-950/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase text-purple-300">Scene Locked</p>
+                    <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowScenePicker(true)}
+                    className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 text-white"
+                  >
+                    Pick Scene
+                  </button>
+                </div>
+                <details className="mt-2">
+                  <summary className="text-xs text-purple-200 cursor-pointer">Locked prompt</summary>
+                  <p className="text-xs text-gray-200 mt-1">{selectedScenePrompt || 'No locked prompt'}</p>
+                </details>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 {/* Character Image */}
                 <div className="space-y-2">
@@ -1788,6 +1841,22 @@ export default function OneClickCreatorPage() {
         }}
         assetType="image"
         title={galleryPickerFor === 'character' ? t('oneClickCreator.selectCharacterImage') : t('oneClickCreator.selectProductImage')}
+      />
+
+
+      <ScenePickerModal
+        isOpen={showScenePicker}
+        onClose={() => setShowScenePicker(false)}
+        scenes={sceneOptions}
+        selectedScene={selectedScene}
+        language={i18n.language || 'en'}
+        onSelect={(value, scene) => {
+          setSelectedScene(value);
+          const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
+          setSelectedScenePrompt(isVi
+            ? (scene?.sceneLockedPromptVi || scene?.sceneLockedPrompt || scene?.promptSuggestionVi || scene?.promptSuggestion || '')
+            : (scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || scene?.promptSuggestionVi || ''));
+        }}
       />
 
       {/* Session Log Modal */}

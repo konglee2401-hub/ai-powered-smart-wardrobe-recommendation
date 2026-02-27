@@ -37,6 +37,7 @@ import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
 import ImagePromptWithTemplates from '../components/ImagePromptWithTemplates';
 import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
+import ScenePickerModal from '../components/ScenePickerModal';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
 // Steps - Style and Prompt merged into single step
@@ -216,6 +217,9 @@ export default function ImageGenerationPage() {
 
   // Options from API
   const [promptOptions, setPromptOptions] = useState(null);
+  const [sceneOptions, setSceneOptions] = useState([]);
+  const [showScenePicker, setShowScenePicker] = useState(false);
+  const [showSceneLockedPrompt, setShowSceneLockedPrompt] = useState(false);
 
   // Generation options
   const [imageCount, setImageCount] = useState(DESIRED_OUTPUT_COUNT);
@@ -278,6 +282,15 @@ export default function ImageGenerationPage() {
       try {
         const options = await aiOptionsAPI.getAllOptions();
         setPromptOptions(options);
+
+        const sceneResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const sceneData = await sceneResponse.json();
+        if (sceneData?.success) {
+          setSceneOptions(sceneData.data || []);
+          if (!selectedOptions.scene && sceneData.data?.length > 0) {
+            setSelectedOptions(prev => ({ ...prev, scene: sceneData.data[0].value }));
+          }
+        }
       } catch (error) {
         console.warn('Could not load options:', error);
       }
@@ -600,7 +613,6 @@ export default function ImageGenerationPage() {
       console.log('📥 Recommendations from analysis:', rec);
       const newOpts = { ...selectedOptions };
       // Extract .choice value from nested {choice, reason, alternatives} structure
-      if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
       if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
       if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
       if (rec.style?.choice) newOpts.style = rec.style.choice;
@@ -631,6 +643,7 @@ export default function ImageGenerationPage() {
       
       // Apply each decision
       Object.entries(decisions).forEach(([category, decision]) => {
+        if (category === 'scene') return;
         if (decision.finalValue && decision.finalValue !== 'Not set') {
           newOpts[category] = decision.finalValue;
           console.log(`   ✓ ${category}: ${decision.finalValue}`);
@@ -642,8 +655,7 @@ export default function ImageGenerationPage() {
         console.log('⚠️ No valid options applied, using defaults from analysis...');
         if (analysis?.recommendations) {
           const rec = analysis.recommendations;
-          if (rec.scene?.choice) newOpts.scene = rec.scene.choice;
-          if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
+              if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
           if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
           if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
           if (rec.hairstyle?.choice) newOpts.hairstyle = rec.hairstyle.choice;
@@ -656,7 +668,7 @@ export default function ImageGenerationPage() {
       }
       
       // Final fallback: ensure at least some defaults are set for critical options
-      if (!newOpts.scene) newOpts.scene = 'studio';
+      if (!newOpts.scene) newOpts.scene = selectedOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room';
       if (!newOpts.lighting) newOpts.lighting = 'soft';
       if (!newOpts.mood) newOpts.mood = 'elegant';
       
@@ -665,7 +677,7 @@ export default function ImageGenerationPage() {
       
       // Save new options where user checked "Save as":
       const toSave = Object.entries(decisions)
-        .filter(([_, d]) => d.saveAsOption && d.finalValue && d.finalValue !== 'Not set')
+        .filter(([cat, d]) => cat !== 'scene' && d.saveAsOption && d.finalValue && d.finalValue !== 'Not set')
         .map(([cat, d]) => ({ category: cat, value: d.finalValue }));
       
       if (toSave.length > 0) {
@@ -709,7 +721,7 @@ export default function ImageGenerationPage() {
         
         // Apply each recommendation
         let appliedCount = 0;
-        for (const key of ['scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup']) {
+        for (const key of ['lighting', 'mood', 'cameraAngle', 'hairstyle', 'makeup']) {
           if (rec[key]?.choice) {
             newOpts[key] = rec[key].choice;
             appliedCount++;
@@ -740,7 +752,7 @@ export default function ImageGenerationPage() {
   const getDefaultOptionsByFocus = () => {
     const defaults = {
       // Common for all focuses
-      scene: 'studio',
+      scene: selectedOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room',
       lighting: 'soft-diffused',
       mood: 'confident',
       style: 'fashion-editorial',
@@ -1395,9 +1407,31 @@ export default function ImageGenerationPage() {
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
                   <Wand2 className="w-3 h-3" /> Style Options
                 </h3>
+                <div className="border border-purple-700 rounded-lg p-3 bg-purple-950/20 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div>
+                      <p className="text-xs uppercase text-purple-300 font-semibold">Scene Locked</p>
+                      <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedOptions.scene)?.label || selectedOptions.scene || 'Not selected'}</p>
+                    </div>
+                    <button onClick={() => setShowScenePicker(true)} className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500">Pick Scene</button>
+                  </div>
+                  <button onClick={() => setShowSceneLockedPrompt(v => !v)} className="text-xs text-purple-200 underline">{showSceneLockedPrompt ? 'Hide locked prompt' : 'Show locked prompt'}</button>
+                  {showSceneLockedPrompt && (
+                    <p className="text-xs text-gray-200 mt-2 whitespace-pre-wrap">
+                      {(() => {
+                        const currentScene = sceneOptions.find(s => s.value === selectedOptions.scene);
+                        const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
+                        return isVi
+                          ? (currentScene?.sceneLockedPromptVi || currentScene?.sceneLockedPrompt || currentScene?.promptSuggestionVi || currentScene?.promptSuggestion || 'No locked prompt')
+                          : (currentScene?.sceneLockedPrompt || currentScene?.sceneLockedPromptVi || currentScene?.promptSuggestion || currentScene?.promptSuggestionVi || 'No locked prompt');
+                      })()}
+                    </p>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   {Object.entries(STYLE_CATEGORIES)
-                    .filter(([key]) => getVisibleCategories().includes(key))
+                    .filter(([key]) => key !== 'scene' && getVisibleCategories().includes(key))
                     .map(([key, category]) => (
                     <div key={key} className="border border-gray-700 rounded-lg overflow-hidden">
                       <button
@@ -2214,6 +2248,16 @@ export default function ImageGenerationPage() {
         onSelect={handleGallerySelect}
         assetType="image"
         title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
+      />
+
+
+      <ScenePickerModal
+        isOpen={showScenePicker}
+        onClose={() => setShowScenePicker(false)}
+        scenes={sceneOptions}
+        selectedScene={selectedOptions.scene}
+        language={i18n.language || 'en'}
+        onSelect={(value) => setSelectedOptions(prev => ({ ...prev, scene: value }))}
       />
 
       {/* Session Log Modal */}
