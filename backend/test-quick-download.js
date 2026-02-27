@@ -38,10 +38,16 @@ async function testQuickDownload() {
     await service.waitForPageReady();
     console.log('✅ Page ready\n');
 
+    // Wait additional time for content to render
+    console.log('⏳ Waiting for content to load...');
+    await service.page.waitForTimeout(2000);
+    console.log('✅ Content loaded\n');
+
     // Get first href
     console.log('🔍 Getting first image href...');
     const firstHref = await service.page.evaluate(() => {
       const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+      console.log(`[DEBUG] Found ${links.length} images in virtuoso list`);
       if (links.length === 0) return null;
       return links[0].getAttribute('href');
     });

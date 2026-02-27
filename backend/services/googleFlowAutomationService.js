@@ -55,20 +55,34 @@ class GoogleFlowAutomationService {
     const headlessMode = this.options.headless === true ? 'new' : this.options.headless;
     this.browser = await puppeteer.launch({
       headless: headlessMode,
-      args: ['--no-sandbox', '--disable-dev-shm-usage']
+      args: [
+        '--no-sandbox', 
+        '--disable-dev-shm-usage'
+      ]
     });
 
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 720 });
 
-    const client = await this.page.target().createCDPSession();
-    await client.send('Page.setDownloadBehavior', {
-      behavior: 'allow',
-      downloadPath: outputDirAbsolute
-    });
-
-    // Update options to use absolute path
+    // Store absolute path for later use
     this.options.outputDir = outputDirAbsolute;
+
+    // Set up CDP download listener
+    const client = await this.page.target().createCDPSession();
+    
+    // Normalize path for CDP command
+    const normalizedPath = outputDirAbsolute.replace(/\\/g, '/');
+    
+    try {
+      console.log(`   📥 Configuring downloads to: ${normalizedPath}`);
+      await client.send('Page.setDownloadBehavior', {
+        behavior: 'allow',
+        downloadPath: normalizedPath
+      });
+      console.log('   ✅ Download path set');
+    } catch (err) {
+      console.warn(`   ⚠️  Download path config failed: ${err.message} (using default)`);
+    }
 
     await this.loadSession();
     console.log('✅ Initialized\n');
@@ -2012,6 +2026,7 @@ class GoogleFlowAutomationService {
           return { found: false };
         }, quality);
 
+        // Click quality option
         if (qualityInfo.found) {
           selectedQuality = quality;
           console.log(`   🖱️  Clicking ${quality}...`);
@@ -2020,6 +2035,9 @@ class GoogleFlowAutomationService {
           await this.page.mouse.down();
           await this.page.waitForTimeout(100);
           await this.page.mouse.up();
+          
+          // Wait extra time for download to initiate
+          await this.page.waitForTimeout(2000);
           break;
         }
       }
