@@ -2467,9 +2467,9 @@ class GoogleFlowAutomationService {
      * - If IS last: Right-click -> Download
      */
     
-    console.log(`\n\${'═'.repeat(80)}`);
-    console.log(`📊 MULTI-IMAGE GENERATION: \${prompts.length} images`);
-    console.log(`\${'═'.repeat(80)}\n`);
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`📊 MULTI-IMAGE GENERATION: ${prompts.length} images`);
+    console.log(`${'═'.repeat(80)}\n`);
 
     const results = [];
     let lastGeneratedHref = null;
@@ -2507,9 +2507,9 @@ class GoogleFlowAutomationService {
 
       // STEP 3: GENERATE EACH PROMPT WITH DIFFERENT FLOW FOR LAST VS NON-LAST
       for (let i = 0; i < prompts.length; i++) {
-        console.log(`\n\${'═'.repeat(80)}`);
-        console.log(`🎨 PROMPT \${i + 1}/\${prompts.length}: Processing`);
-        console.log(`\${'═'.repeat(80)}\n`);
+        console.log(`\n${'═'.repeat(80)}`);
+        console.log(`🎨 PROMPT ${i + 1}/${prompts.length}: Processing`);
+        console.log(`${'═'.repeat(80)}\n`);
 
         const prompt = prompts[i];
         const isLastPrompt = (i === prompts.length - 1);
@@ -2529,10 +2529,10 @@ class GoogleFlowAutomationService {
             }
             return hrefs;
           });
-          console.log(`[STEP 0] ✓ Captured \${Object.keys(initialHrefs).length} baseline hrefs (before any changes)\n`);
+          console.log(`[STEP 0] ✓ Captured ${Object.keys(initialHrefs).length} baseline hrefs (before any changes)\n`);
 
           // STEP A: Enter prompt
-          console.log(`[STEP A] 📝 Entering prompt (\${prompt.length} chars)...`);
+          console.log(`[STEP A] 📝 Entering prompt (${prompt.length} chars)...`);
           const normalizedPrompt = prompt.normalize('NFC');
           await this.enterPrompt(normalizedPrompt);
           console.log('[STEP A] ✓ Prompt entered\n');
@@ -2581,7 +2581,7 @@ class GoogleFlowAutomationService {
               }, initialHrefs);
               
               if (result.found) {
-                console.log(`   [GENERATION] ✅ NEW item detected at data-index="\${result.newIndex}"! New image confirmed.\n`);
+                console.log(`   [GENERATION] ✅ NEW item detected at data-index="${result.newIndex}"! New image confirmed.\n`);
                 lastGeneratedHref = result.newHref;
                 return true;
               }
@@ -2589,7 +2589,7 @@ class GoogleFlowAutomationService {
               // Log progress every ~1 second (roughly every 10 checks at ~100ms polling)
               if (currentTime - lastProgressLogTime >= 1000) {
                 const elapsedSecs = ((currentTime - startTime) / 1000).toFixed(1);
-                console.log(`   [GENERATION] ⏱️  \${elapsedSecs}s elapsed | Checks: \${monitoringAttempt} | Frequency: ~every 100ms`);
+                console.log(`   [GENERATION] ⏱️  ${elapsedSecs}s elapsed | Checks: ${monitoringAttempt} | Frequency: ~every 100ms`);
                 lastProgressLogTime = currentTime;
               }
               
@@ -2599,8 +2599,8 @@ class GoogleFlowAutomationService {
           );
 
           const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
-          console.log(`[STEP C] ✅ NEW generation detected in \${elapsedSecs}s`);
-          console.log(`[STEP C] ✓ Generated href: \${lastGeneratedHref?.substring(0, 60)}...\n`);
+          console.log(`[STEP C] ✅ NEW generation detected in ${elapsedSecs}s`);
+          console.log(`[STEP C] ✓ Generated href: ${lastGeneratedHref?.substring(0, 60)}...\n`);
 
           // STEP D: Download the generated image/video
           console.log('[STEP D] ⬇️  Downloading generated ' + (this.type === 'image' ? 'image' : 'video') + '...');
@@ -2611,7 +2611,7 @@ class GoogleFlowAutomationService {
             throw new Error('Failed to download generated ' + (this.type === 'image' ? 'image' : 'video'));
           }
           
-          console.log(`[STEP D] ✅ Download complete: \${path.basename(downloadedFile)}\n`);
+          console.log(`[STEP D] ✅ Download complete: ${path.basename(downloadedFile)}\n`);
 
           // STEP E: If NOT last, reuse command. If last, skip reuse
           if (!isLastPrompt) {
@@ -2643,7 +2643,7 @@ class GoogleFlowAutomationService {
           });
 
         } catch (generationError) {
-          console.error(`\n❌ PROMPT \${i + 1} FAILED: \${generationError.message}\n`);
+          console.error(`\n❌ PROMPT ${i + 1} FAILED: ${generationError.message}\n`);
           results.push({
             success: false,
             imageNumber: i + 1,
@@ -2654,17 +2654,17 @@ class GoogleFlowAutomationService {
       }
 
       // STEP F: Create assets and log results
-      console.log(`\n\${'═'.repeat(70)}`);
+      console.log(`\n${'═'.repeat(70)}`);
       console.log(`📁 STEP F: Creating assets and logging results`);
-      console.log(`\${'═'.repeat(70)}\n`);
+      console.log(`${'═'.repeat(70)}\n`);
 
       const downloadedFiles = results
         .filter(r => r.success && r.downloadedFile)
         .map(r => r.downloadedFile);
 
-      console.log(`   📊 Downloaded files: \${downloadedFiles.length}`);
+      console.log(`   📊 Downloaded files: ${downloadedFiles.length}`);
       downloadedFiles.forEach((file, idx) => {
-        console.log(`     [\${idx + 1}] \${path.basename(file)}`);
+        console.log(`     [${idx + 1}] ${path.basename(file)}`);
       });
       console.log('');
 
@@ -2686,19 +2686,19 @@ class GoogleFlowAutomationService {
       console.log('');
 
       // Save session log to file
-      const logFilePath = path.join(this.options.outputDir, `session-\${Date.now()}.json`);
+      const logFilePath = path.join(this.options.outputDir, `session-${Date.now()}.json`);
       fs.writeFileSync(logFilePath, JSON.stringify(sessionLog, null, 2));
-      console.log(`   ✅ Session log saved: \${path.basename(logFilePath)}\n`);
+      console.log(`   ✅ Session log saved: ${path.basename(logFilePath)}\n`);
 
       // Close browser when done
       await this.close();
 
       // Return overall results with downloadedFiles list
       const successCount = results.filter(r => r.success).length;
-      console.log(`\n\${'═'.repeat(70)}`);
-      console.log(`✅ COMPLETE: \${successCount}/\${results.length} successful`);
-      console.log(`📁 Output directory: \${this.options.outputDir}`);
-      console.log(`\${'═'.repeat(70)}\n`);
+      console.log(`\n${'═'.repeat(70)}`);
+      console.log(`✅ COMPLETE: ${successCount}/${results.length} successful`);
+      console.log(`📁 Output directory: ${this.options.outputDir}`);
+      console.log(`${'═'.repeat(70)}\n`);
 
       return {
         success: successCount === results.length,
@@ -2710,7 +2710,7 @@ class GoogleFlowAutomationService {
       };
 
     } catch (error) {
-      console.error(`❌ Multi-generation failed: \${error.message}`);
+      console.error(`❌ Multi-generation failed: ${error.message}`);
       if (this.browser) {
         await this.close();
       }
