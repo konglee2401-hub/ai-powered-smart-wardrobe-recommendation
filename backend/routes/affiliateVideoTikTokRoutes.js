@@ -413,14 +413,33 @@ router.post('/step-2-generate-images', async (req, res) => {
 
     // Generate both images using generateMultiple
     console.log(`🎨 Generating both images in parallel...`);
-    const multiGenResult = await imageGenService.generateMultiple(
-      characterImagePath,
-      productImagePath,
-      [wearingPrompt, holdingPrompt]
-    );
+    
+    let multiGenResult;
+    try {
+      multiGenResult = await imageGenService.generateMultiple(
+        characterImagePath,
+        productImagePath,
+        [wearingPrompt, holdingPrompt]
+      );
+    } catch (genMultiError) {
+      console.error('❌ generateMultiple threw error:', genMultiError.message);
+      multiGenResult = {
+        success: false,
+        error: genMultiError.message,
+        results: []
+      };
+    }
 
-    if (!multiGenResult?.success || !multiGenResult?.results || multiGenResult.results.length < 2) {
-      throw new Error(`Image generation failed: ${multiGenResult?.error || 'No results'}`);
+    console.log(`📊 Multi-generation result:`, {
+      success: multiGenResult?.success,
+      resultsType: typeof multiGenResult?.results,
+      resultsLength: multiGenResult?.results?.length,
+      error: multiGenResult?.error
+    });
+
+    if (!multiGenResult || typeof multiGenResult !== 'object' || !Array.isArray(multiGenResult?.results) || (multiGenResult?.results?.length || 0) < 2) {
+      const errorMsg = multiGenResult?.error || 'Image generation failed - no results produced';
+      throw new Error(errorMsg);
     }
 
     const wearingResult = multiGenResult.results[0];

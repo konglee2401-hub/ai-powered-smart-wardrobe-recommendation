@@ -832,17 +832,40 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log('🚀 Initializing image generation service...');
       
       // Generate both images in single browser session with component reuse
-      const multiGenResult = await imageGen.generateMultiple(
-        characterFilePath,
-        productFilePath,
-        [
-          wearingPromptData.prompt,    // Image 1: wearing product
-          holdingPromptData.prompt     // Image 2: holding product
-        ]
-      );
+      let multiGenResult;
+      try {
+        multiGenResult = await imageGen.generateMultiple(
+          characterFilePath,
+          productFilePath,
+          [
+            wearingPromptData.prompt,    // Image 1: wearing product
+            holdingPromptData.prompt     // Image 2: holding product
+          ]
+        );
+      } catch (genMultiError) {
+        console.error('❌ generateMultiple threw error:', genMultiError.message);
+        multiGenResult = {
+          success: false,
+          error: genMultiError.message,
+          results: []
+        };
+      }
 
-      if (!multiGenResult.success || !multiGenResult.results || multiGenResult.results.length < 2) {
-        throw new Error('Multi-generation failed or did not produce enough results');
+      console.log(`📊 Multi-generation result:`, {
+        success: multiGenResult?.success,
+        resultsType: typeof multiGenResult?.results,
+        resultsLength: multiGenResult?.results?.length,
+        error: multiGenResult?.error
+      });
+
+      if (!multiGenResult || typeof multiGenResult !== 'object') {
+        throw new Error('generateMultiple returned invalid result');
+      }
+
+      if (!multiGenResult.success || !Array.isArray(multiGenResult.results) || multiGenResult.results.length < 2) {
+        const errorMsg = multiGenResult.error || 'Multi-generation failed or did not produce enough results';
+        console.error(`❌ Generation failed:`, errorMsg);
+        throw new Error(errorMsg);
       }
 
       // Extract results
