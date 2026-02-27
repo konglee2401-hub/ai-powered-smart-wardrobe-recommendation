@@ -1066,7 +1066,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         videoDuration,
         voiceGender,
         voicePace,
-        productFocus
+        productFocus,
+        language  // 💫 Add language to config
       }
     );
 
@@ -1213,12 +1214,28 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
                 });
               }
 
+              // 🔴 CRITICAL: If prompt is empty, use fallback
+              if (!segmentPrompt || segmentPrompt.trim().length === 0) {
+                console.warn(`⚠️  Segment prompt is empty, using English fallback`);
+                segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
+                  videoDuration: segment.duration,
+                  voiceGender,
+                  voicePace,
+                  productFocus
+                });
+              }
+
               console.log(`   Script length: ${segment.script.length} chars`);
               console.log(`   Prompt length: ${segmentPrompt.length} chars`);
 
               if (isFirstSegment) {
                 // FIRST segment: Normal flow (images already uploaded)
                 console.log(`   → FIRST SEGMENT: Using normal generation flow`);
+
+                // 🔴 CRITICAL: Validate prompt is not empty
+                if (!segmentPrompt || segmentPrompt.trim().length === 0) {
+                  throw new Error(`Segment prompt is empty for ${segment.segment}`);
+                }
 
                 await videoGen.enterPrompt(segmentPrompt);
                 console.log(`   ✓ Prompt entered`);
@@ -1310,10 +1327,26 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             );
           }
 
+          // 🔴 CRITICAL: If prompt is empty, use English fallback
+          if (!videoPrompt || videoPrompt.trim().length === 0) {
+            console.warn(`⚠️  Video prompt is empty, using English fallback`);
+            videoPrompt = buildVideoPromptFromAnalysis(
+              deepAnalysis.data,
+              analysis,
+              { videoDuration, voiceGender, voicePace, productFocus }
+            );
+          }
+
           console.log(`✅ Video prompt generated (${videoPrompt.length} chars)`);
 
           // Enter prompt
           console.log('\n📝 Entering video prompt...');
+          
+          // 🔴 CRITICAL: Validate prompt is not empty
+          if (!videoPrompt || videoPrompt.trim().length === 0) {
+            throw new Error('Video prompt is empty - cannot generate video');
+          }
+          
           await videoGen.enterPrompt(videoPrompt);
           console.log('✅ Prompt entered');
 
@@ -1667,7 +1700,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
   
   try {
     const { wearingImage, holdingImage, productImage } = images;
-    const { videoDuration, voiceGender, voicePace, productFocus } = config;
+    const { videoDuration, voiceGender, voicePace, productFocus, language = 'en' } = config;
 
     console.log('\n🧠 STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
     console.log(`   Images: wearing, holding, product`);
