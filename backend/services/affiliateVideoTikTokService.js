@@ -891,32 +891,34 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         throw new Error(`Holding image generation failed: ${holdingResult.error}`);
       }
 
-      // Map to expected format
+      // Map to expected format (use actual fields from generateMultiple)
       wearingImageResult = {
-        imageUrl: wearingResult.imageUrl,
-        screenshotPath: wearingResult.screenshotPath,
-        downloadedAt: wearingResult.downloadedAt
+        imageUrl: wearingResult.downloadedFile || wearingResult.href,  // Local file path or Google Flow URL
+        screenshotPath: wearingResult.downloadedFile,  // Downloaded file path
+        downloadedAt: new Date().toISOString(),
+        href: wearingResult.href  // Google Flow URL for reference
       };
       
       holdingImageResult = {
-        imageUrl: holdingResult.imageUrl,
-        screenshotPath: holdingResult.screenshotPath,
-        downloadedAt: holdingResult.downloadedAt
+        imageUrl: holdingResult.downloadedFile || holdingResult.href,
+        screenshotPath: holdingResult.downloadedFile,
+        downloadedAt: new Date().toISOString(),
+        href: holdingResult.href  // Google Flow URL for reference
       };
 
-      console.log(`✅ Wearing image generated: ${wearingResult?.imageUrl?.substring(0, 80) || 'N/A'}...`);
-      console.log(`✅ Holding image generated: ${holdingResult?.imageUrl?.substring(0, 80) || 'N/A'}...`);
+      console.log(`✅ Wearing image generated: ${wearingResult?.downloadedFile?.substring(0, 80) || wearingResult?.href || 'N/A'}...`);
+      console.log(`✅ Holding image generated: ${holdingResult?.downloadedFile?.substring(0, 80) || holdingResult?.href || 'N/A'}...`);
         
     } catch (imageGenError) {
       console.error('❌ Image generation failed:', imageGenError.message);
       throw new Error(`Image generation failed: ${imageGenError.message}`);
     }
 
-    if (!wearingImageResult || !wearingImageResult.imageUrl) {
-      throw new Error('Wearing image generation failed - no output URL');
+    if (!wearingImageResult || (!wearingImageResult.imageUrl && !wearingImageResult.href)) {
+      throw new Error(`Wearing image generation failed - no output (screenshotPath: ${wearingImageResult?.screenshotPath || 'none'})`);
     }
-    if (!holdingImageResult || !holdingImageResult.imageUrl) {
-      throw new Error('Holding image generation failed - no output URL');
+    if (!holdingImageResult || (!holdingImageResult.imageUrl && !holdingImageResult.href)) {
+      throw new Error(`Holding image generation failed - no output (screenshotPath: ${holdingImageResult?.screenshotPath || 'none'})`);
     }
 
     const step2Duration = ((Date.now() - step2Start) / 1000).toFixed(2);

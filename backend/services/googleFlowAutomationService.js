@@ -2610,10 +2610,27 @@ class GoogleFlowAutomationService {
           // STEP D: Download the generated image/video
           console.log('[STEP D] ⬇️  Downloading generated ' + (this.type === 'image' ? 'image' : 'video') + '...');
           
-          const downloadedFile = await this.downloadItemViaContextMenu(lastGeneratedHref);
+          let downloadedFile = await this.downloadItemViaContextMenu(lastGeneratedHref);
           
           if (!downloadedFile) {
             throw new Error('Failed to download generated ' + (this.type === 'image' ? 'image' : 'video'));
+          }
+          
+          // RENAME downloaded file to include image number to prevent collisions
+          // when multiple images are downloaded in same session
+          const fileExt = path.extname(downloadedFile);
+          const fileName = path.basename(downloadedFile, fileExt);
+          const imageNum = String(i + 1).padStart(2, '0');  // 01, 02, etc.
+          const renamedFileName = `${fileName}-img${imageNum}${fileExt}`;
+          const renamedFilePath = path.join(path.dirname(downloadedFile), renamedFileName);
+          
+          try {
+            fs.renameSync(downloadedFile, renamedFilePath);
+            downloadedFile = renamedFilePath;
+            console.log(`[STEP D] 📂 Renamed to: ${renamedFileName}`);
+          } catch (renameErr) {
+            console.log(`[STEP D] ⚠️  Could not rename file: ${renameErr.message}`);
+            // Continue with original name
           }
           
           console.log(`[STEP D] ✅ Download complete: ${path.basename(downloadedFile)}\n`);
