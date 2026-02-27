@@ -1397,40 +1397,43 @@ class GoogleFlowAutomationService {
     console.log('🎬 CLICKING GENERATE BUTTON\n');
 
     try {
-      // Find generate button near prompt area (not top bar)
-      // Look in area around y > 200 to avoid top navigation
+      // Find the submit button using the unique class "aQhhA"
+      // It contains 2 buttons, the 2nd one is the submit button with arrow_forward icon
+      
+      console.log('   🔍 Finding submit button via .aQhhA class...');
+      
       const generateBtnInfo = await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        let targetBtn = null;
+        // Find the container with unique class
+        const container = document.querySelector('.aQhhA');
         
-        // First priority: Find button with arrow_forward icon in lower area
-        for (const btn of buttons) {
-          const rect = btn.getBoundingClientRect();
-          const text = btn.textContent.toLowerCase();
-          
-          // Filter by position: must be in lower area (y > 200)
-          if (rect.top < 200) continue;
-          
-          // Check for arrow_forward icon or tạo text
-          const hasArrow = btn.innerHTML.includes('arrow_forward');
-          const hasCreateText = text.includes('tạo') || text.includes('create');
-          
-          if (hasArrow || hasCreateText) {
-            targetBtn = btn;
-            break;
-          }
+        if (!container) {
+          return { found: false, error: 'Container .aQhhA not found' };
         }
-
-        if (!targetBtn) {
-          return { found: false, error: 'No generate button found in lower area' };
+        
+        // Get all buttons in this container
+        const buttons = container.querySelectorAll('button');
+        
+        if (buttons.length < 2) {
+          return { found: false, error: `Expected 2+ buttons, found ${buttons.length}` };
         }
-
-        const rect = targetBtn.getBoundingClientRect();
+        
+        // Get the 2nd button (index 1) - this is the submit button
+        const submitBtn = buttons[1];
+        const rect = submitBtn.getBoundingClientRect();
+        
+        // Check if visible
+        if (rect.width === 0 || rect.height === 0) {
+          return { found: false, error: 'Submit button not visible' };
+        }
+        
         return {
           found: true,
-          x: Math.floor(rect.left + rect.width / 2),
-          y: Math.floor(rect.top + rect.height / 2),
-          text: targetBtn.textContent.trim().substring(0, 50)
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          w: Math.round(rect.width),
+          h: Math.round(rect.height),
+          text: submitBtn.textContent.trim().substring(0, 50),
+          hasArrow: submitBtn.innerHTML.includes('arrow_forward')
         };
       });
 
@@ -1438,44 +1441,30 @@ class GoogleFlowAutomationService {
         throw new Error(generateBtnInfo.error);
       }
 
-      console.log(`   Found button: "${generateBtnInfo.text}"\n`);
+      console.log(`   ✓ Found submit button (2nd in .aQhhA)\n`);
+      console.log(`   Text: "${generateBtnInfo.text}"`);
+      console.log(`   Has arrow_forward: ${generateBtnInfo.hasArrow}`);
       console.log(`   Position: (${generateBtnInfo.x}, ${generateBtnInfo.y})\n`);
 
-      // Dispatch pointerdown event (Radix UI uses this for button clicks)
+      // Dispatch pointerdown event (Radix UI requirement)
       console.log('   🖱️  Dispatching pointerdown event...');
       await this.page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        
-        // Find the generate button again
-        for (const btn of buttons) {
-          const rect = btn.getBoundingClientRect();
-          const text = btn.textContent.toLowerCase();
-          
-          if (rect.top < 200) continue;
-          const hasArrow = btn.innerHTML.includes('arrow_forward');
-          const hasCreateText = text.includes('tạo') || text.includes('create');
-          
-          if (hasArrow || hasCreateText) {
-            // Dispatch pointer events
-            const pointerDownEvent = new PointerEvent('pointerdown', {
+        const container = document.querySelector('.aQhhA');
+        if (container) {
+          const buttons = container.querySelectorAll('button');
+          if (buttons.length >= 2) {
+            const submitBtn = buttons[1];
+            const event = new PointerEvent('pointerdown', {
               bubbles: true,
               cancelable: true,
               view: window
             });
-            const pointerUpEvent = new PointerEvent('pointerup', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            
-            btn.dispatchEvent(pointerDownEvent);
-            btn.dispatchEvent(pointerUpEvent);
-            break;
+            submitBtn.dispatchEvent(event);
           }
         }
       });
 
-      console.log('   ✓ Generate button pointerdown/pointerup events dispatched\n');
+      console.log('   ✓ Submit button pointerdown event dispatched\n');
       await this.page.waitForTimeout(1000);
 
     } catch (error) {
