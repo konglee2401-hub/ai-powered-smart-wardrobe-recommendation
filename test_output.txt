@@ -1,0 +1,102 @@
+[0m
+============================================================[0m
+[1mBROWSER AUTOMATION - QUICK DEBUG TEST[0m
+[0m============================================================[0m
+[36m
+🎬 Testing: COMPLETE FLOW (Model → Qty → Prompt → Submit)
+[0m
+[1mOpening Google Gemini...[0m
+🚀 Initializing Image Generation Service...
+
+[0m
+Usage:[0m
+[0m  node backend/test-quick-debug.js [test] [param][0m
+[0m
+Tests:[0m
+[0m  model              - Test model selection[0m
+[0m  qty [x1|x2|x3|x4] - Test quantity selection (default: x1)[0m
+[0m  prompt             - Test prompt input & submit[0m
+[0m  complete (default) - Test everything together
+[0m
+✅ Session cookies loaded
+✅ Initialized
+
+🌐 Navigating to Google Flow...
+
+   Target URL: https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0
+
+⏳ Waiting for page elements to load...
+   ✅ Page ready (attempt 1)
+
+   ⏳ Checking for intro modal...
+   ℹ️  No intro modal found
+✅ Google Flow loaded and logged in
+
+[0m
+📍 OPENING SETTINGS MENU[0m
+[0m──────────────────────────────────────────────────[0m
+[SETTINGS] Step 1: Finding button with aria-haspopup="menu"...
+[SETTINGS] Step 2: Moving mouse to (816, 662)...
+[SETTINGS] Step 3: Mouse down...
+[SETTINGS] Step 4: Mouse up...
+[SETTINGS] Step 5: Waiting for menu...
+[SETTINGS] ✅ Settings menu opened successfully
+[SETTINGS] Menu items: 0
+[0m  ✅ Settings opened[0m
+[36m  📸 Screenshot saved: debug-settings-screenshot.png[0m
+[0m
+📍 STEP 1: Selecting Model (Nano Banana Pro)[0m
+[0m──────────────────────────────────────────────────[0m
+   [MODEL] Looking for model selector button...
+   [MODEL] ✅ Found: "🍌 Nano Banana 2crop_16_9x2"
+   [MODEL] Clicking at (816, 662)...
+   [MODEL] ⚠️  Could not find "Nano Banana Pro" or Pro variant in dropdown
+[0m  ⚠️  Model may not be available[0m
+[0m
+📍 STEP 2: Selecting Quantity (x2)[0m
+[0m──────────────────────────────────────────────────[0m
+   [TAB] Looking for tab: "x2"
+   [TAB] ⚠️  "x2" not found
+[0m  ⚠️  Quantity option not visible[0m
+[0m
+📍 STEP 3: Typing Prompt[0m
+[0m──────────────────────────────────────────────────[0m
+✍️  ENTERING PROMPT
+
+   Original length: 98 chars
+   Normalized length: 98 chars
+   Prompt: "Professional fashion photography: woman in elegant summer dress, studio lighting..."
+
+   🔍 Finding prompt textbox...
+   ✓ Found prompt textbox
+
+   🖱️  Focusing textbox...
+   ⌨️  Typing 1 chunks (200 chars each, 1ms/char - FAST)...
+
+
+   ✓ Typed all 1 chunks (98 total chars)
+   ⏳ Waiting for framework to process...
+   📤 Dispatching blur/input/change events...
+   ✓ Events dispatched
+
+   ✓ Prompt entered successfully
+
+[0m  ✅ Prompt typed[0m
+[0m
+📍 STEP 4: Clicking Submit Button[0m
+[0m──────────────────────────────────────────────────[0m
+🎬 CLICKING GENERATE BUTTON
+
+   Found button: "arrow_forwardTạo" (Has arrow: true)
+
+   Position: (915, 662)
+
+   ✓ Generate button clicked
+
+[0m  ✅ Submit button clicked[0m
+[0m
+==================================================[0m
+[33m⏳ WAITING 120 SECONDS FOR VISUAL VERIFICATION[0m
+[0m==================================================[0m
+[33mWatch the browser to see if generation started
+[0m

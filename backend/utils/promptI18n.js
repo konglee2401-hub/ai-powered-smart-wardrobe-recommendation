@@ -128,7 +128,8 @@ export const PROMPT_TRANSLATIONS_VI = {
  * @returns {string} Translated label
  */
 export function getTranslatedOptionLabel(category, value, language = 'en') {
-  if (language === 'vi' && PROMPT_TRANSLATIONS_VI[category]?.[value]) {
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  if (normalizedLanguage === 'vi' && PROMPT_TRANSLATIONS_VI[category]?.[value]) {
     return PROMPT_TRANSLATIONS_VI[category][value];
   }
   // Fallback to English or first-letter uppercase
@@ -142,7 +143,8 @@ export function getTranslatedOptionLabel(category, value, language = 'en') {
  * @returns {Object} All options in specified language
  */
 export function getCategoryTranslations(category, language = 'en') {
-  if (language === 'vi' && PROMPT_TRANSLATIONS_VI[category]) {
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  if (normalizedLanguage === 'vi' && PROMPT_TRANSLATIONS_VI[category]) {
     return PROMPT_TRANSLATIONS_VI[category];
   }
   return {};
@@ -155,7 +157,8 @@ export function getCategoryTranslations(category, language = 'en') {
  * @returns {Object} Translated options
  */
 export function translateSelectedOptions(selectedOptions, language = 'en') {
-  if (language === 'en') return selectedOptions;
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  if (normalizedLanguage === 'en') return selectedOptions;
 
   const translated = {};
   for (const [category, value] of Object.entries(selectedOptions)) {

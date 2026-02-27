@@ -1221,10 +1221,11 @@ const getPromptOptionsTranslated = async (req, res) => {
     }
 
     // Format response based on language
+    const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
     const formatted = options.map(opt => ({
       value: opt.value,
-      label: language === 'vi' && opt.labelVi ? opt.labelVi : opt.label,
-      description: language === 'vi' && opt.descriptionVi ? opt.descriptionVi : opt.description,
+      label: normalizedLanguage === 'vi' && opt.labelVi ? opt.labelVi : opt.label,
+      description: normalizedLanguage === 'vi' && opt.descriptionVi ? opt.descriptionVi : opt.description,
       category: opt.category
     }));
 

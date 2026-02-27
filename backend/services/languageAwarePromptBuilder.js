@@ -82,13 +82,16 @@ export async function buildLanguageAwarePrompt(
     negative: detailedPrompt.negativePrompt || ''
   };
 
+  // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  
   // If English requested, return as-is
-  if (language === 'en') {
+  if (normalizedLanguage === 'en') {
     return englishPrompt;
   }
 
   // If Vietnamese requested, translate
-  if (language === 'vi') {
+  if (normalizedLanguage === 'vi') {
     return translatePromptToVietnamese(englishPrompt, selectedOptions, analysis);
   }
 

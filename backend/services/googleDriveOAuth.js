@@ -504,6 +504,15 @@ class GoogleDriveOAuthService {
 
       console.log(`✅ Uploaded: ${fileName} (${response.data.id})`);
 
+      // 🔴 CRITICAL FIX: Share file publicly so proxy can download it without auth
+      try {
+        await this.shareFilePublicly(response.data.id);
+        console.log(`🔗 File shared publicly`);
+      } catch (shareError) {
+        console.warn(`⚠️  Warning: Could not share file publicly: ${shareError.message}`);
+        console.warn(`   File proxy may not work without public sharing`);
+      }
+
       return {
         id: response.data.id,
         name: response.data.name,
@@ -539,7 +548,35 @@ class GoogleDriveOAuthService {
   }
 
   /**
-   * 💫 Upload Character Image
+   * � CRITICAL: Share file publicly for public proxy download
+   * Without this, files uploaded to Drive can't be accessed via public export URL
+   */
+  async shareFilePublicly(fileId) {
+    try {
+      if (!this.drive) {
+        throw new Error('Google Drive not initialized');
+      }
+
+      // Create public permission (anyone with link can view)
+      const permission = await this.drive.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+      });
+
+      console.log(`   ✅ File ${fileId} is now publicly accessible`);
+      return permission.data;
+    } catch (error) {
+      // 🔴 CRITICAL: This error should bubble up so caller knows sharing failed
+      console.error(`   ❌ Failed to share file publicly: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * �💫 Upload Character Image
    * Auto-saves to: Images/Uploaded/App/Character
    */
   async uploadCharacterImage(buffer, fileName, options = {}) {

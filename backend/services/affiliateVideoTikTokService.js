@@ -147,9 +147,11 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     try {
       // Use ChatGPT Browser Automation (not OpenAI API, not Gemini)
       // 💫 Get appropriate prompt based on language
+      // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+      const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
       let analysisPrompt;
       
-      if (language === 'vi') {
+      if (normalizedLanguage === 'vi') {
         console.log(`\n📝 Using VIETNAMESE analysis prompt`);
         analysisPrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
       } else {
@@ -542,7 +544,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             
             // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
             if (charUploadResult?.webViewLink) {
-              characterDriveUrl = charUploadResult.webViewLink;
+              characterDriveUrl = charUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
               console.log(`  ✅ Character image uploaded to Drive`);
               console.log(`     File ID: ${charUploadResult.id}`);
               console.log(`     Drive Link: ${charUploadResult.webViewLink}`);
@@ -588,7 +590,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             
             // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
             if (prodUploadResult?.webViewLink) {
-              productDriveUrl = prodUploadResult.webViewLink;
+              productDriveUrl = prodUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
               console.log(`  ✅ Product image uploaded to Drive`);
               console.log(`     File ID: ${prodUploadResult.id}`);
               console.log(`     Drive Link: ${prodUploadResult.webViewLink}`);
@@ -773,7 +775,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       analysis,
       baseOptions,
       'change-clothes',
-      productFocus
+      productFocus,
+      'en'  // Force English for consistency
     ).then(promptData => ({
       useCase: 'change-clothes',
       prompts: promptData
@@ -784,7 +787,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       analysis,
       baseOptions,
       'character-holding-product',
-      productFocus
+      productFocus,
+      'en'  // Force English for consistency
     ).then(promptData => ({
       useCase: 'character-holding-product',
       prompts: promptData
@@ -814,8 +818,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       // ✅ OPTIMIZED: Use GoogleFlowAutomationService for efficient component reuse
       const imageGen = new GoogleFlowAutomationService({
         type: 'image',
-        projectId: 'c9d5fea9-63e5-4d21-ac72-6830091fdbc0',  // Required: navigate to project page
-        imageCount: 2,  // TikTok flow generates 2 images (wearing + holding)
+        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
+        imageCount: 1,  // TikTok affiliate: Generate 1 image per prompt (x1) - We generate 2 different prompts
         headless: false
       });
       
@@ -1072,6 +1076,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       // ========== INITIALIZE SINGLE BROWSER SESSION ==========
       const videoGen = new GoogleFlowAutomationService({
         type: 'video',
+        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
         headless: false,
         outputDir: tempDir,
         timeouts: {
@@ -1143,8 +1148,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             try {
               // Build prompt for this specific segment
               // 💫 Use Vietnamese prompts if language='vi'
+              // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+              const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
               let segmentPrompt;
-              if (language === 'vi') {
+              if (normalizedLanguage === 'vi') {
                 segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
                   segment.segment,
                   productFocus,
@@ -1239,8 +1246,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           console.log(`\n📹 Generating single video from integrated prompt...`);
 
           // 💫 Use Vietnamese prompts if language='vi'
+          // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+          const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
           let videoPrompt;
-          if (language === 'vi') {
+          if (normalizedLanguage === 'vi') {
             videoPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
               'Hook',
               productFocus,
@@ -1612,8 +1621,10 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
 
     // Build detailed prompt for ChatGPT video analysis
     // 💫 Use Vietnamese prompts if language='vi'
+    // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+    const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
     let deepAnalysisPrompt;
-    if (language === 'vi') {
+    if (normalizedLanguage === 'vi') {
       console.log(`\n📝 Using VIETNAMESE deep analysis prompt`);
       deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
         productFocus,

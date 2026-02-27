@@ -276,7 +276,9 @@ router.post('/generate-prompts-chatgpt', protect, async (req, res) => {
     console.log(`📝 Language: ${language}`);  // 💫 Log language
 
     // 💫 NEW: Support Vietnamese language for video prompts
-    if (language === 'vi') {
+    // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+    const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+    if (normalizedLanguage === 'vi') {
       try {
         const VietnamesePromptBuilder = require('../services/vietnamesePromptBuilder.js');
         console.log(`\n🇻🇳 Using Vietnamese prompts for video generation...`);
@@ -615,7 +617,9 @@ router.post(
       console.log(`📝 Language: ${language}`);  // 💫 Log language
 
       // 💫 NEW: Support Vietnamese language for scenario prompts
-      if (language === 'vi') {
+      // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+      const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+      if (normalizedLanguage === 'vi') {
         try {
           const VietnamesePromptBuilder = require('../services/vietnamesePromptBuilder.js');
           console.log(`\n🇻🇳 Using Vietnamese prompts for scenario-based video generation...`);

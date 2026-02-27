@@ -114,11 +114,14 @@ export const PROMPT_TRANSLATIONS_VI = {
  * @returns {string} Translated label or original value if not found
  */
 export function getTranslatedOptionLabel(category, value, language = 'en') {
-  if (language === 'en') {
+  // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  
+  if (normalizedLanguage === 'en') {
     return value;
   }
   
-  if (language === 'vi' && PROMPT_TRANSLATIONS_VI[category]) {
+  if (normalizedLanguage === 'vi' && PROMPT_TRANSLATIONS_VI[category]) {
     return PROMPT_TRANSLATIONS_VI[category][value] || value;
   }
   

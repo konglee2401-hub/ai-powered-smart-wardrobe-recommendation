@@ -93,7 +93,10 @@ function getFallbackTechnicalDetails(category, optionValue) {
  */
 export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en') {
   // 💫 NEW: Support Vietnamese language for image generation
-  if (language === 'vi') {
+  // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  
+  if (normalizedLanguage === 'vi') {
     try {
       console.log(`\n🇻🇳 Using Vietnamese prompts for image generation...`);
       const VietnamesePromptBuilder = require('./vietnamesePromptBuilder.js');
