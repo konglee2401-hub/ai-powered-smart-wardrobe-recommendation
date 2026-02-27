@@ -31,6 +31,86 @@ class ChatGPTService extends BrowserService {
     console.log('✅ ChatGPT initialized successfully');
   }
 
+
+  /**
+   * Generate text-only response from ChatGPT browser (no image upload)
+   * Returns raw assistant text for downstream JSON extraction.
+   */
+  async generateText(prompt) {
+    console.log('\n🧠 ChatGPT BROWSER TEXT GENERATION');
+    console.log('='.repeat(80));
+
+    try {
+      await this.closeLoginModal();
+
+      const inputSelectors = [
+        'textarea[placeholder*="Message"]',
+        'textarea',
+        '[contenteditable="true"]',
+        '#prompt-textarea'
+      ];
+
+      let selector = null;
+      for (const s of inputSelectors) {
+        const el = await this.page.$(s);
+        if (el) {
+          selector = s;
+          break;
+        }
+      }
+
+      if (!selector) {
+        throw new Error('Could not find ChatGPT input box');
+      }
+
+      await this.page.focus(selector);
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('KeyA');
+      await this.page.keyboard.up('Control');
+      await this.page.keyboard.press('Backspace');
+      await this.page.keyboard.type(prompt, { delay: 5 });
+      await this.page.keyboard.press('Enter');
+
+      // Wait until assistant response is present and stable
+      await this.page.waitForTimeout(9000);
+
+      const response = await this.page.evaluate(() => {
+        const candidates = [
+          '[data-message-author-role="assistant"]',
+          'article',
+          '.markdown'
+        ];
+
+        for (const selector of candidates) {
+          const nodes = document.querySelectorAll(selector);
+          if (nodes.length > 0) {
+            const last = nodes[nodes.length - 1];
+            if (last?.innerText?.trim()) return last.innerText.trim();
+          }
+        }
+
+        const markdownBlocks = document.querySelectorAll('.markdown, pre, code');
+        if (markdownBlocks.length > 0) {
+          const last = markdownBlocks[markdownBlocks.length - 1];
+          if (last?.innerText?.trim()) return last.innerText.trim();
+        }
+
+        return '';
+      });
+
+      if (!response) {
+        throw new Error('Could not extract text response from ChatGPT');
+      }
+
+      console.log(`✅ ChatGPT response length: ${response.length}`);
+      return response;
+    } catch (error) {
+      console.error('❌ ChatGPT text generation failed:', error.message);
+      await this.saveErrorDebugInfo('chatgpt-text');
+      throw error;
+    }
+  }
+
   /**
    * Close login modal if it appears
    */
