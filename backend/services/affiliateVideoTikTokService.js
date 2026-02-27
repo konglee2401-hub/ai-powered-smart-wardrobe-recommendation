@@ -863,8 +863,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         downloadedAt: holdingResult.downloadedAt
       };
 
-      console.log(`✅ Wearing image generated: ${wearingResult.imageUrl.substring(0, 80)}...`);
-      console.log(`✅ Holding image generated: ${holdingResult.imageUrl.substring(0, 80)}...`);
+      console.log(`✅ Wearing image generated: ${wearingResult?.imageUrl?.substring(0, 80) || wearingResult?.imageUrl || 'N/A'}...`);
+      console.log(`✅ Holding image generated: ${holdingResult?.imageUrl?.substring(0, 80) || holdingResult?.imageUrl || 'N/A'}...`);
         
     } catch (imageGenError) {
       console.error('❌ Image generation failed:', imageGenError.message);

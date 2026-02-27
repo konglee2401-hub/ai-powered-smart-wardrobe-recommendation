@@ -408,8 +408,8 @@ router.post('/step-2-generate-images', async (req, res) => {
     const holdingPrompt = holdingPromptData.prompt;
 
     console.log(`📝 Prompts built from analysis`);
-    console.log(`  Wearing: ${wearingPrompt.substring(0, 100)}...`);
-    console.log(`  Holding: ${holdingPrompt.substring(0, 100)}...`);
+    console.log(`  Wearing: ${wearingPrompt?.substring(0, 100) || 'N/A'}...`);
+    console.log(`  Holding: ${holdingPrompt?.substring(0, 100) || 'N/A'}...`);
 
     // Generate both images using generateMultiple
     console.log(`🎨 Generating both images in parallel...`);
