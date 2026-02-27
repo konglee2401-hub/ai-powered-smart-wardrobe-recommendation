@@ -1955,14 +1955,21 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
       
-      // Wait 2s for context menu to fully render
+      // Wait for context menu to fully render (increased to 3s to be sure)
       console.log('   ⏳ Waiting for context menu to appear...');
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(3000);
 
       // Find and click download option from context menu
       // Looking for: <div role="menuitem" with icon "download" and text "Tải xuống"
       const downloadInfo = await this.page.evaluate(() => {
         const menuItems = document.querySelectorAll('[role="menuitem"]');
+        
+        // Debug: log what menu items exist
+        const debugItems = [];
+        for (const item of menuItems) {
+          const text = item.textContent.substring(0, 50);
+          debugItems.push(text);
+        }
         
         for (const item of menuItems) {
           const text = item.textContent.toLowerCase();
@@ -1979,11 +1986,17 @@ class GoogleFlowAutomationService {
           }
         }
         
-        return { found: false };
+        return { found: false, availableItems: debugItems };
       });
 
       if (!downloadInfo.found) {
-        console.warn('   ⚠️  Download option not found in context menu\n');
+        console.warn('   ⚠️  Download option not found in context menu');
+        if (downloadInfo.availableItems && downloadInfo.availableItems.length > 0) {
+          console.warn(`   📋 Available menu items: ${downloadInfo.availableItems.join(', ')}`);
+        } else {
+          console.warn('   📋 No menu items found at all (context menu may not have appeared)');
+        }
+        console.warn('   💡 Tip: Image may need more time to load. Try increasing wait time.\n');
         return null;
       }
 
@@ -2606,6 +2619,12 @@ class GoogleFlowAutomationService {
           const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
           console.log(`[STEP C] ✅ NEW generation detected in ${elapsedSecs}s`);
           console.log(`[STEP C] ✓ Generated href: ${lastGeneratedHref?.substring(0, 60)}...\n`);
+
+          // Wait for image to fully load in the UI (thumbnail, preview, context menu ready)
+          // This ensures the download option is available in the context menu
+          console.log('[STEP C.5] ⏳ Waiting for image UI to fully render (3 seconds)...');
+          await this.page.waitForTimeout(3000);
+          console.log('[STEP C.5] ✅ Image ready for download\n');
 
           // STEP D: Download the generated image/video
           console.log('[STEP D] ⬇️  Downloading generated ' + (this.type === 'image' ? 'image' : 'video') + '...');
