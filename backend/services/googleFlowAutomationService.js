@@ -1157,12 +1157,41 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(100);
       await this.page.mouse.up();
 
-      console.log('   ✓ Generate button clicked\n');
+      console.log('   ✓ Generate button clicked (via button click)\n');
       await this.page.waitForTimeout(1000);
 
     } catch (error) {
-      console.error(`   ❌ Error: ${error.message}`);
-      throw error;
+      console.error(`   ⚠️  Button click failed: ${error.message}`);
+      console.log('   📝 Falling back to Enter key submission...\n');
+      
+      // Fallback: Focus textbox and press Enter to submit
+      try {
+        const textboxExists = await this.page.$('[role="textbox"][data-slate-editor="true"]');
+        if (!textboxExists) {
+          throw new Error('Prompt textbox not found for Enter fallback');
+        }
+
+        // Focus the textbox
+        console.log('   🖱️  Focusing prompt textbox...');
+        await this.page.evaluate(() => {
+          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+          if (textbox) {
+            textbox.focus();
+          }
+        });
+        await this.page.waitForTimeout(200);
+
+        // Press Enter to submit
+        console.log('   ⌨️  Pressing Enter key to submit...');
+        await this.page.keyboard.press('Enter');
+
+        console.log('   ✓ Generate button clicked (via Enter key in textbox)\n');
+        await this.page.waitForTimeout(1000);
+
+      } catch (fallbackError) {
+        console.error(`   ❌ Both button click and Enter fallback failed: ${fallbackError.message}`);
+        throw fallbackError;
+      }
     }
   }
 
