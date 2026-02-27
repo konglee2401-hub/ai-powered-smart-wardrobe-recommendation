@@ -2148,9 +2148,11 @@ class GoogleFlowAutomationService {
   async downloadItemViaContextMenu(newHref) {
     /**
      * Download generated item by right-clicking and selecting download option
-     * Item: Image or Video based on type
+     * Returns the downloaded file path, or null if download failed
+     * Waits for file to appear in output directory
      */
     const mediaType = this.type === 'image' ? 'image' : 'video';
+    const mediaExt = this.type === 'image' ? '.jpg' : '.mp4';
     
     console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
 
@@ -2176,7 +2178,7 @@ class GoogleFlowAutomationService {
 
       if (!linkData.found) {
         console.warn('   ⚠️  Item with href not found for download\n');
-        return false;
+        return null;
       }
 
       console.log(`   🖱️  Right-clicking on ${mediaType}...`);
@@ -2210,7 +2212,7 @@ class GoogleFlowAutomationService {
 
       if (!downloadInfo.found) {
         console.warn('   ⚠️  Download option not found in context menu\n');
-        return false;
+        return null;
       }
 
       // Click download button using mouse movement method
@@ -2221,14 +2223,52 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(50);
       await this.page.mouse.up();
 
-      console.log('   ✓ Download started\n');
-      await this.page.waitForTimeout(2000);
+      console.log('   ✓ Download started, waiting for file...');
       
-      return true;
+      // Wait for file to appear in output directory
+      let downloadedFile = null;
+      let waitAttempts = 0;
+      const maxWaitAttempts = 60; // 60 * 500ms = 30 seconds
+      
+      const initialFiles = fs.readdirSync(this.options.outputDir).filter(f => 
+        f.endsWith(mediaExt) || f.endsWith('.tmp')
+      );
+
+      while (waitAttempts < maxWaitAttempts) {
+        waitAttempts++;
+        
+        // Check for new files
+        const currentFiles = fs.readdirSync(this.options.outputDir);
+        const newFiles = currentFiles.filter(f => 
+          !initialFiles.includes(f) && (f.endsWith(mediaExt) || f.endsWith('.tmp'))
+        );
+
+        if (newFiles.length > 0) {
+          // Found new file(s)
+          downloadedFile = path.join(this.options.outputDir, newFiles[0]);
+          console.log(`   ✓ File downloaded: ${path.basename(downloadedFile)}`);
+          await this.page.waitForTimeout(500);
+          break;
+        }
+
+        if (waitAttempts % 10 === 0) {
+          console.log(`   ⏳ Waiting for download... (${waitAttempts}/${maxWaitAttempts})`);
+        }
+
+        await this.page.waitForTimeout(500);
+      }
+
+      if (!downloadedFile) {
+        console.warn('   ⚠️  Download timeout - file not found in output directory\n');
+        return null;
+      }
+
+      console.log(`   ✅ Download confirmed\n`);
+      return downloadedFile;
 
     } catch (error) {
       console.error(`   ❌ Error downloading: ${error.message}\n`);
-      return false;
+      return null;
     }
   }
 
@@ -2537,10 +2577,21 @@ class GoogleFlowAutomationService {
           console.log(`[STEP C] ✅ NEW generation detected in \${elapsedSecs}s`);
           console.log(`[STEP C] ✓ Generated href: \${lastGeneratedHref?.substring(0, 60)}...\n`);
 
-          // STEP D or E: Different logic for last vs non-last prompt
+          // STEP D: Download the generated image/video
+          console.log('[STEP D] ⬇️  Downloading generated ' + (this.type === 'image' ? 'image' : 'video') + '...');
+          
+          const downloadedFile = await this.downloadItemViaContextMenu(lastGeneratedHref);
+          
+          if (!downloadedFile) {
+            throw new Error('Failed to download generated ' + (this.type === 'image' ? 'image' : 'video'));
+          }
+          
+          console.log(`[STEP D] ✅ Download complete: \${path.basename(downloadedFile)}\n`);
+
+          // STEP E: If NOT last, reuse command. If last, skip reuse
           if (!isLastPrompt) {
-            // NOT LAST PROMPT: Use reuse command
-            console.log('[STEP D] 🔄 NOT LAST PROMPT - Reusing for next...');
+            // NOT LAST PROMPT: Reuse command for next prompt
+            console.log('[STEP E] 🔄 NOT LAST PROMPT - Reusing for next...');
             
             const reuseSuccess = await this.rightClickReuseCommand(lastGeneratedHref);
             if (!reuseSuccess) {
@@ -2549,34 +2600,22 @@ class GoogleFlowAutomationService {
 
             const clearSuccess = await this.clearPromptText();
             if (!clearSuccess) {
-              console.log('[STEP D] ⚠️  Clear may have issues, but continuing...');
+              console.log('[STEP E] ⚠️  Clear may have issues, but continuing...');
             }
 
-            console.log('[STEP D] ✅ Ready for next prompt\n');
-            
-            results.push({
-              success: true,
-              imageNumber: i + 1,
-              href: lastGeneratedHref,
-              action: 'reused_for_next'
-            });
-
+            console.log('[STEP E] ✅ Ready for next prompt\n');
           } else {
-            // IS LAST PROMPT: Download  
-            console.log('[STEP E] ⬇️  IS LAST PROMPT - Downloading final image...');
-            
-            const downloadSuccess = await this.downloadItemViaContextMenu(lastGeneratedHref);
-            
-            console.log('[STEP E] ✅ Final image downloaded\n');
-
-            results.push({
-              success: true,
-              imageNumber: i + 1,
-              href: lastGeneratedHref,
-              action: 'downloaded',
-              downloadSuccess: downloadSuccess
-            });
+            // IS LAST PROMPT: No reuse needed
+            console.log('[STEP E] 🎯 LAST PROMPT - Generation and download complete\n');
           }
+          
+          results.push({
+            success: true,
+            imageNumber: i + 1,
+            href: lastGeneratedHref,
+            downloadedFile: downloadedFile,
+            action: isLastPrompt ? 'downloaded' : 'downloaded_and_reused'
+          });
 
         } catch (generationError) {
           console.error(`\n❌ PROMPT \${i + 1} FAILED: \${generationError.message}\n`);
@@ -2589,20 +2628,60 @@ class GoogleFlowAutomationService {
         }
       }
 
+      // STEP F: Create assets and log results
+      console.log(`\n\${'═'.repeat(70)}`);
+      console.log(`📁 STEP F: Creating assets and logging results`);
+      console.log(`\${'═'.repeat(70)}\n`);
+
+      const downloadedFiles = results
+        .filter(r => r.success && r.downloadedFile)
+        .map(r => r.downloadedFile);
+
+      console.log(`   📊 Downloaded files: \${downloadedFiles.length}`);
+      downloadedFiles.forEach((file, idx) => {
+        console.log(`     [\${idx + 1}] \${path.basename(file)}`);
+      });
+      console.log('');
+
+      // Log session results
+      const sessionLog = {
+        timestamp: new Date().toISOString(),
+        type: this.type,
+        count: downloadedFiles.length,
+        files: downloadedFiles.map(f => ({
+          path: f,
+          name: path.basename(f),
+          size: fs.statSync(f).size
+        })),
+        results: results
+      };
+
+      console.log('   📋 Session log:');
+      console.log(JSON.stringify(sessionLog, null, 2));
+      console.log('');
+
+      // Save session log to file
+      const logFilePath = path.join(this.options.outputDir, `session-\${Date.now()}.json`);
+      fs.writeFileSync(logFilePath, JSON.stringify(sessionLog, null, 2));
+      console.log(`   ✅ Session log saved: \${path.basename(logFilePath)}\n`);
+
       // Close browser when done
       await this.close();
 
-      // Return overall results
+      // Return overall results with downloadedFiles list
       const successCount = results.filter(r => r.success).length;
       console.log(`\n\${'═'.repeat(70)}`);
-      console.log(`📊 COMPLETE: \${successCount}/\${results.length} successful`);
+      console.log(`✅ COMPLETE: \${successCount}/\${results.length} successful`);
+      console.log(`📁 Output directory: \${this.options.outputDir}`);
       console.log(`\${'═'.repeat(70)}\n`);
 
       return {
         success: successCount === results.length,
         results: results,
         totalGenerated: successCount,
-        totalRequested: results.length
+        totalRequested: results.length,
+        downloadedFiles: downloadedFiles,
+        sessionLog: logFilePath
       };
 
     } catch (error) {
