@@ -4,7 +4,7 @@
  * Quick Test: Download first image from Google Flow project
  */
 
-import GoogleFlowAutomationService from './backend/services/googleFlowAutomationService.js';
+import GoogleFlowAutomationService from './services/googleFlowAutomationService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

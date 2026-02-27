@@ -2028,21 +2028,28 @@ class GoogleFlowAutomationService {
       let waitAttempts = 0;
       const maxWaitAttempts = 60; // 60 * 500ms = 30 seconds
       
-      const initialFiles = fs.readdirSync(this.options.outputDir).filter(f => 
-        f.endsWith(mediaExt) || f.endsWith('.tmp')
-      );
+      // Get initial files (all files, regardless of extension)
+      const initialFiles = fs.readdirSync(this.options.outputDir);
+      console.log(`   📁 Initial files in directory: ${initialFiles.length}`);
+      if (initialFiles.length <= 10) {
+        initialFiles.forEach(f => console.log(`      - ${f}`));
+      }
+
+      // Check immediately (download might be very fast)
+      await this.page.waitForTimeout(500);
 
       while (waitAttempts < maxWaitAttempts) {
         waitAttempts++;
         
-        // Check for new files
+        // Check for new files (all files, not just specific extensions)
         const currentFiles = fs.readdirSync(this.options.outputDir);
-        const newFiles = currentFiles.filter(f => 
-          !initialFiles.includes(f) && (f.endsWith(mediaExt) || f.endsWith('.tmp'))
-        );
+        const newFiles = currentFiles.filter(f => !initialFiles.includes(f));
 
         if (newFiles.length > 0) {
           // Found new file(s)
+          console.log(`   ✅ Found ${newFiles.length} new file(s):`);
+          newFiles.forEach(f => console.log(`      - ${f}`));
+          
           downloadedFile = path.join(this.options.outputDir, newFiles[0]);
           console.log(`   ✓ File downloaded: ${path.basename(downloadedFile)}`);
           await this.page.waitForTimeout(500);
@@ -2057,7 +2064,14 @@ class GoogleFlowAutomationService {
       }
 
       if (!downloadedFile) {
-        console.warn('   ⚠️  Download timeout - file not found in output directory\n');
+        console.warn('   ⚠️  Download timeout - file not found in output directory');
+        console.warn(`   📁 Current files in directory: ${fs.readdirSync(this.options.outputDir).length}`);
+        const allFiles = fs.readdirSync(this.options.outputDir);
+        if (allFiles.length > 0) {
+          console.warn('   📂 All files:');
+          allFiles.forEach(f => console.warn(`      - ${f}`));
+        }
+        console.warn('');
         return null;
       }
 
