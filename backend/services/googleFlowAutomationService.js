@@ -2052,7 +2052,7 @@ class GoogleFlowAutomationService {
       // Wait for file to appear in output directory
       let downloadedFile = null;
       let waitAttempts = 0;
-      const maxWaitAttempts = 60; // 60 * 500ms = 30 seconds
+      const maxWaitAttempts = 120; // 120 * 500ms = 60 seconds (allow more time for file to finish writing)
       
       // Get initial files (all files, regardless of extension)
       const initialFiles = fs.readdirSync(this.options.outputDir);
@@ -2064,11 +2064,18 @@ class GoogleFlowAutomationService {
       // Check immediately (download might be very fast)
       await this.page.waitForTimeout(500);
 
+      // Track in-progress files separately
+      let lastInProgressFile = null;
+      let inProgressWaitAttempts = 0;
+      const maxInProgressWaitAttempts = 30; // Wait up to 15 seconds for in-progress file to complete
+
       while (waitAttempts < maxWaitAttempts) {
         waitAttempts++;
         
-        // Check for new finished files (excluding .crdownload, .tmp)
+        // Check for new finished files AND in-progress files
         const currentFiles = fs.readdirSync(this.options.outputDir);
+        
+        // First, check for finished files (new files without download markers)
         const newFiles = currentFiles.filter(f => {
           // Exclude download-in-progress files
           if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
@@ -2079,7 +2086,7 @@ class GoogleFlowAutomationService {
         });
 
         if (newFiles.length > 0) {
-          // Found new file(s)
+          // Found new finished file(s)
           console.log(`   ✅ Found ${newFiles.length} new file(s):`);
           newFiles.forEach(f => console.log(`      - ${f}`));
           
@@ -2088,8 +2095,32 @@ class GoogleFlowAutomationService {
           await this.page.waitForTimeout(500);
           break;
         }
+        
+        // If no finished file yet, check for in-progress files
+        const inProgressFiles = currentFiles.filter(f => 
+          (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) &&
+          !initialFiles.includes(f.replace(/\.(crdownload|tmp|partial)$/, ''))
+        );
+        
+        if (inProgressFiles.length > 0) {
+          // Found in-progress file(s), wait for completion
+          if (!lastInProgressFile || lastInProgressFile !== inProgressFiles[0]) {
+            console.log(`   📥 In-progress file detected: ${inProgressFiles[0]}`);
+            lastInProgressFile = inProgressFiles[0];
+            inProgressWaitAttempts = 0;
+          }
+          
+          inProgressWaitAttempts++;
+          if (inProgressWaitAttempts >= maxInProgressWaitAttempts) {
+            console.log(`   ⚠️  In-progress file not completing: ${inProgressFiles[0]}`);
+            console.log('   🔄 Checking if it will complete anyway...');
+            // Wait a bit more in case it completes
+          } else if (inProgressWaitAttempts % 5 === 0) {
+            console.log(`   ⏳ Waiting for in-progress file... (${inProgressWaitAttempts}/${maxInProgressWaitAttempts})`);
+          }
+        }
 
-        if (waitAttempts % 10 === 0) {
+        if (waitAttempts % 12 === 0) {
           console.log(`   ⏳ Waiting for download... (${waitAttempts}/${maxWaitAttempts})`);
         }
 
@@ -2241,48 +2272,58 @@ class GoogleFlowAutomationService {
 
   async clearPromptText() {
     /**
-     * Clear all text from the prompt input field
+     * Clear all text from the prompt input field (Slate editor)
      * Used after right-clicking "Sử dụng lại câu lệnh" to clear previous prompt
+     * 
+     * Note: execCommand doesn't work well with Slate, so we use keyboard shortcuts
      */
     console.log('   🧹 Clearing prompt text...');
 
     try {
-      const cleared = await this.page.evaluate(() => {
+      // Focus the textbox first
+      await this.page.focus('[role="textbox"][data-slate-editor="true"]');
+      await this.page.waitForTimeout(200);
+      
+      // Select all text using Ctrl+A (keyboard shortcut - more reliable than execCommand)
+      await this.page.keyboard.press('Control+A');
+      await this.page.waitForTimeout(100);
+      
+      // Delete selected text
+      await this.page.keyboard.press('Delete');
+      await this.page.waitForTimeout(300);
+      
+      // Verify text is cleared
+      const remaining = await this.page.evaluate(() => {
         const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+        if (!textbox) return -1;
         
-        if (!textbox) {
-          console.log('[CLEAR] Textbox not found');
-          return false;
-        }
-
-        // Focus the textbox
-        textbox.focus();
-        
-        // Select all text (Ctrl+A)
-        document.execCommand('selectAll', false, null);
-        
-        // Delete selected text
-        document.execCommand('delete', false, null);
-        
-        const remaining = textbox.textContent || textbox.innerText || '';
-        console.log(`[CLEAR] Remaining text length: ${remaining.length}`);
-        
-        return remaining.trim().length === 0;
+        const text = textbox.textContent || textbox.innerText || '';
+        return text.trim().length;
       });
 
-      if (cleared) {
-        console.log('   ✓ Prompt text cleared');
-        await this.page.waitForTimeout(500);
+      if (remaining === 0) {
+        console.log('   ✓ Prompt text cleared completely');
+        return true;
+      } else if (remaining === -1) {
+        console.log('   ⚠️  Textbox not found, but continuing...');
         return true;
       } else {
-        console.log('   ⚠️  Some text may remain, but continuing...');
-        // Continue anyway
+        console.log(`   ⚠️  ${remaining} chars may remain, attempting again...`);
+        
+        // Try again with more aggressive clearing
+        await this.page.keyboard.press('Control+A');
+        await this.page.waitForTimeout(100);
+        await this.page.keyboard.press('Backspace');
+        await this.page.waitForTimeout(200);
+        
+        console.log('   ✓ Prompt cleared (second attempt)');
         return true;
       }
 
     } catch (error) {
       console.error(`   ❌ Error clearing: ${error.message}`);
-      return false;
+      console.log('   ⚠️  Continuing anyway...');
+      return true;  // Continue anyway, might still work
     }
   }
 
