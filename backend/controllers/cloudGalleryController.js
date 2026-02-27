@@ -1,12 +1,15 @@
 /**
  * Cloud Gallery Controller
  * Handles gallery endpoints for Google Drive integration
+ * Supports both Drive folder queries and Asset database category queries
  */
 
 import fs from 'fs';
 import CloudMediaManager from '../services/cloudMediaManager.js';
+import CloudMediaManagerEnhanced from '../services/cloudMediaManagerEnhanced.js';
 
 const mediaManager = new CloudMediaManager();
+const enhancedMediaManager = new CloudMediaManagerEnhanced();
 
 const cloudGalleryController = {};
 
@@ -54,6 +57,38 @@ cloudGalleryController.getMediaByType = async (req, res) => {
       type,
       count: media.length,
       data: media,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * 💫 NEW: Get media by asset category from MongoDB Asset database
+ * Supports: character-image, product-image, generated-image, etc.
+ */
+cloudGalleryController.getMediaByCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Asset category is required (e.g., character-image, product-image)',
+      });
+    }
+
+    const media = await enhancedMediaManager.getMediaByCategory(category);
+
+    res.json({
+      success: true,
+      category,
+      count: media.length,
+      data: media,
+      source: 'asset-database'
     });
   } catch (error) {
     res.status(500).json({

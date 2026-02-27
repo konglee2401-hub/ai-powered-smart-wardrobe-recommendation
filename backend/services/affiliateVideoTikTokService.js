@@ -627,21 +627,36 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`\n📝 Creating Asset for character image...`);
         
         const characterAssetResult = await AssetManager.saveAsset({
-          filename: `Character-${flowId}.jpg`,  // 🔴 FIX: Use filename not filePath
+          filename: `Character-${flowId}.jpg`,
           assetType: 'image',
           assetCategory: 'character-image',
           mimeType: 'image/jpeg',
-          fileSize: fs.statSync(characterFilePath).size,  // 🔴 FIX: Get file size
-          userId: 'system',  // 🔴 FIX: Required by AssetManager
+          fileSize: fs.statSync(characterFilePath).size,
+          userId: 'system',
           sessionId: flowId,
-          // 🔴 FIX: Add required storage object
+          // 🔴 FIX: Add BOTH storage objects
           storage: {
-            location: 'local',
+            location: characterDriveUrl ? 'google-drive' : 'local',
             filePath: characterFilePath,
             ...(characterDriveUrl && {
-              location: 'google-drive',
               googleDriveId: characterDriveUrl
             })
+          },
+          // 💫 NEW: Populate cloudStorage for gallery/sync
+          cloudStorage: characterDriveUrl ? {
+            location: 'google-drive',
+            googleDriveId: characterDriveUrl,
+            webViewLink: null,  // Will be fetched later if needed
+            thumbnailLink: null,
+            status: 'synced',  // Already uploaded
+            syncedAt: new Date()
+          } : undefined,
+          // 💫 NEW: Populate localStorage for offline access
+          localStorage: {
+            location: 'local',
+            path: characterFilePath,
+            fileSize: fs.statSync(characterFilePath).size,
+            verified: fs.existsSync(characterFilePath)
           },
           metadata: {
             source: 'user-uploaded',
@@ -650,8 +665,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           }
         });
 
-        if (characterAssetResult?.assetId) {
-          console.log(`  ✅ Character Asset created: ${characterAssetResult.assetId}`);
+        if (characterAssetResult?.asset?.assetId) {
+          console.log(`  ✅ Character Asset created: ${characterAssetResult.asset.assetId}`);
         } else {
           console.warn(`  ⚠️ Character Asset creation returned: ${JSON.stringify(characterAssetResult)}`);
         }
@@ -666,21 +681,36 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`\n📝 Creating Asset for product image...`);
         
         const productAssetResult = await AssetManager.saveAsset({
-          filename: `Product-${flowId}.jpg`,  // 🔴 FIX: Use filename not filePath
+          filename: `Product-${flowId}.jpg`,
           assetType: 'image',
           assetCategory: 'product-image',
           mimeType: 'image/jpeg',
-          fileSize: fs.statSync(productFilePath).size,  // 🔴 FIX: Get file size
-          userId: 'system',  // 🔴 FIX: Required by AssetManager
+          fileSize: fs.statSync(productFilePath).size,
+          userId: 'system',
           sessionId: flowId,
-          // 🔴 FIX: Add required storage object
+          // 🔴 FIX: Add BOTH storage objects
           storage: {
-            location: 'local',
+            location: productDriveUrl ? 'google-drive' : 'local',
             filePath: productFilePath,
             ...(productDriveUrl && {
-              location: 'google-drive',
               googleDriveId: productDriveUrl
             })
+          },
+          // 💫 NEW: Populate cloudStorage for gallery/sync
+          cloudStorage: productDriveUrl ? {
+            location: 'google-drive',
+            googleDriveId: productDriveUrl,
+            webViewLink: null,  // Will be fetched later if needed
+            thumbnailLink: null,
+            status: 'synced',  // Already uploaded
+            syncedAt: new Date()
+          } : undefined,
+          // 💫 NEW: Populate localStorage for offline access
+          localStorage: {
+            location: 'local',
+            path: productFilePath,
+            fileSize: fs.statSync(productFilePath).size,
+            verified: fs.existsSync(productFilePath)
           },
           metadata: {
             source: 'user-uploaded',
@@ -689,8 +719,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           }
         });
 
-        if (productAssetResult?.assetId) {
-          console.log(`  ✅ Product Asset created: ${productAssetResult.assetId}`);
+        if (productAssetResult?.asset?.assetId) {
+          console.log(`  ✅ Product Asset created: ${productAssetResult.asset.assetId}`);
         } else {
           console.warn(`  ⚠️ Product Asset creation returned: ${JSON.stringify(productAssetResult)}`);
         }
