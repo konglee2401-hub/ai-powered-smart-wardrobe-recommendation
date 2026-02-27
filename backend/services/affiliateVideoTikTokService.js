@@ -1174,8 +1174,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           const imageStillSelected = await videoGen.verifyImageSelected();
           if (!imageStillSelected) {
             console.warn(`⚠️  WARNING: Image selection lost! Attempting to reselect...`);
-            await videoGen.selectReferencePath(referenceImagePath);
-            console.log(`   Reselection complete`);
+            if (wearingImageResult?.screenshotPath) {
+              await videoGen.selectReferencePath(wearingImageResult.screenshotPath);
+              console.log(`   Reselection complete`);
+            } else {
+              console.warn(`   ⚠️  Cannot reselect: wearingImagePath not available`);
+            }
           } else {
             console.log(`   ✅ Reference image still selected`);
           }
@@ -1599,10 +1603,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       };
 
       // Mark session as completed and store final artifacts
+      const generatedImagePaths = [];
+      if (wearingImageResult?.screenshotPath) {
+        generatedImagePaths.push(wearingImageResult.screenshotPath);
+      }
+      if (holdingImageResult?.screenshotPath) {
+        generatedImagePaths.push(holdingImageResult.screenshotPath);
+      }
+
       await logger.storeArtifacts({
         characterImagePath: characterFilePath,
         productImagePath: productFilePath,
-        generatedImagePaths: images,
+        generatedImagePaths: generatedImagePaths,
         videoSegmentPaths: savedAssets.videos
       });
       await logger.markCompleted();
