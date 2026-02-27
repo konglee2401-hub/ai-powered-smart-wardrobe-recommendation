@@ -62,22 +62,22 @@ async function testAllInteractive() {
     
     // 5a: IMAGE/VIDEO tabs
     console.log('\n5a. Testing IMAGE/VIDEO tabs:');
-    await testTabInSettings(service, 'IMAGE', 'IMAGE tab', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'IMAGE', 'IMAGE tab', ['click']);
     await service.page.waitForTimeout(400);
-    await testTabInSettings(service, 'VIDEO', 'VIDEO tab', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'VIDEO', 'VIDEO tab', ['click']);
     await service.page.waitForTimeout(400);
 
     // 5b: LANDSCAPE/PORTRAIT tabs
     console.log('\n5b. Testing LANDSCAPE/PORTRAIT tabs:');
-    await testTabInSettings(service, 'Ngang', 'LANDSCAPE (Ngang)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Ngang', 'LANDSCAPE (Ngang)', ['click']);
     await service.page.waitForTimeout(400);
-    await testTabInSettings(service, 'Dọc', 'PORTRAIT (Dọc)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Dọc', 'PORTRAIT (Dọc)', ['click']);
     await service.page.waitForTimeout(400);
 
     // 5c: Count tabs (x1, x2, x3, x4)
     console.log('\n5c. Testing COUNT tabs (x1/x2/x3/x4):');
     for (const count of ['x1', 'x2', 'x3', 'x4']) {
-      await testTabInSettings(service, count, `${count} count`, ['click', 'mouse', 'mouseDownUp']);
+      await testTabInSettings(service, count, `${count} count`, ['click']);
       await service.page.waitForTimeout(400);
     }
 
@@ -86,31 +86,31 @@ async function testAllInteractive() {
     console.log('───'.repeat(20));
     
     // Switch to VIDEO tab
-    await testTabInSettings(service, 'Video', 'VIDEO tab', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Video', 'VIDEO tab', ['click']);
     await service.page.waitForTimeout(600);
 
     // Video has different sub-tabs: VIDEO_REFERENCES (Ingredients) and VIDEO_FRAMES (Frames)
     console.log('\n   5d-1. Testing VIDEO sub-tabs (Ingredients/Frames):');
-    await testTabInSettings(service, 'Ingredients', 'VIDEO_REFERENCES (Ingredients)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Ingredients', 'VIDEO_REFERENCES (Ingredients)', ['click']);
     await service.page.waitForTimeout(400);
-    await testTabInSettings(service, 'Frames', 'VIDEO_FRAMES (Frames)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Frames', 'VIDEO_FRAMES (Frames)', ['click']);
     await service.page.waitForTimeout(400);
 
     // Back to Ingredients for aspect ratio and count testing
-    await testTabInSettings(service, 'Ingredients', 'Back to Ingredients', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Ingredients', 'Back to Ingredients', ['click']);
     await service.page.waitForTimeout(400);
 
     // Video aspect ratio: LANDSCAPE/PORTRAIT
     console.log('\n   5d-2. Testing VIDEO aspect ratio (LANDSCAPE/PORTRAIT):');
-    await testTabInSettings(service, 'Ngang', 'LANDSCAPE (Ngang)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Ngang', 'LANDSCAPE (Ngang)', ['click']);
     await service.page.waitForTimeout(400);
-    await testTabInSettings(service, 'Dọc', 'PORTRAIT (Dọc)', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Dọc', 'PORTRAIT (Dọc)', ['click']);
     await service.page.waitForTimeout(400);
 
     // Video count tabs (x1, x2, x3, x4)
     console.log('\n   5d-3. Testing VIDEO count tabs (x1/x2/x3/x4):');
     for (const count of ['x1', 'x2', 'x3', 'x4']) {
-      await testTabInSettings(service, count, `${count} count`, ['click', 'mouse', 'mouseDownUp']);
+      await testTabInSettings(service, count, `${count} count`, ['click']);
       await service.page.waitForTimeout(400);
     }
 
@@ -122,7 +122,7 @@ async function testAllInteractive() {
     
     // Switch back to IMAGE tab for IMAGE models
     console.log('\n   6a. Switching to IMAGE tab for model testing:');
-    await testTabInSettings(service, 'Image', 'IMAGE tab', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Image', 'IMAGE tab', ['click']);
     await service.page.waitForTimeout(600);
 
     // Test IMAGE model dropdown button
@@ -161,7 +161,7 @@ async function testAllInteractive() {
     
     // Switch to VIDEO tab for VIDEO models
     console.log('\n   7a. Switching to VIDEO tab for model testing:');
-    await testTabInSettings(service, 'Video', 'VIDEO tab', ['click', 'mouse', 'mouseDownUp']);
+    await testTabInSettings(service, 'Video', 'VIDEO tab', ['click']);
     await service.page.waitForTimeout(600);
 
     // Test VIDEO model dropdown button
@@ -236,7 +236,7 @@ async function testAllInteractive() {
 /**
  * Test a tab button inside settings menu
  */
-async function testTabInSettings(service, searchText, displayName, methods = ['click', 'mouse', 'mouseDownUp']) {
+async function testTabInSettings(service, searchText, displayName, methods = ['click']) {
   console.log(`\n   Testing: "${displayName}" (search: "${searchText}")`);
   
   for (const method of methods) {
@@ -278,27 +278,27 @@ async function testTabInSettings(service, searchText, displayName, methods = ['c
           }
         }, searchText);
       } 
-      else if (method === 'mouse') {
-        await service.page.mouse.move(btnInfo.x, btnInfo.y);
-        await service.page.waitForTimeout(100);
-        await service.page.mouse.down();
-        await service.page.waitForTimeout(50);
-        await service.page.mouse.up();
-      }
-      else if (method === 'mouseDownUp') {
-        await service.page.evaluate((text) => {
-          const tabs = document.querySelectorAll('button[role="tab"]');
-          for (const tab of tabs) {
-            if (tab.textContent.includes(text)) {
-              const downEvent = new MouseEvent('mousedown', { bubbles: true });
-              const upEvent = new MouseEvent('mouseup', { bubbles: true });
-              tab.dispatchEvent(downEvent);
-              tab.dispatchEvent(upEvent);
-              return;
-            }
-          }
-        }, searchText);
-      }
+      // else if (method === 'mouse') {
+      //   await service.page.mouse.move(btnInfo.x, btnInfo.y);
+      //   await service.page.waitForTimeout(100);
+      //   await service.page.mouse.down();
+      //   await service.page.waitForTimeout(50);
+      //   await service.page.mouse.up();
+      // }
+      // else if (method === 'mouseDownUp') {
+      //   await service.page.evaluate((text) => {
+      //     const tabs = document.querySelectorAll('button[role="tab"]');
+      //     for (const tab of tabs) {
+      //       if (tab.textContent.includes(text)) {
+      //         const downEvent = new MouseEvent('mousedown', { bubbles: true });
+      //         const upEvent = new MouseEvent('mouseup', { bubbles: true });
+      //         tab.dispatchEvent(downEvent);
+      //         tab.dispatchEvent(upEvent);
+      //         return;
+      //       }
+      //     }
+      //   }, searchText);
+      // }
 
       console.log(`            ✓ Executed`);
       await service.page.waitForTimeout(200);
@@ -315,7 +315,7 @@ async function testTabInSettings(service, searchText, displayName, methods = ['c
 async function testModelDropdown(service) {
   console.log('\n   Testing: Model dropdown button\n');
   
-  const methods = ['click', 'mouse', 'mouseDownUp'];
+  const methods = ['click'];
   
   for (const method of methods) {
     try {
@@ -352,25 +352,25 @@ async function testModelDropdown(service) {
           btn?.click();
         });
       } 
-      else if (method === 'mouse') {
-        await service.page.mouse.move(btnInfo.x, btnInfo.y);
-        await service.page.waitForTimeout(100);
-        await service.page.mouse.down();
-        await service.page.waitForTimeout(50);
-        await service.page.mouse.up();
-      } 
-      else if (method === 'mouseDownUp') {
-        await service.page.evaluate(() => {
-          const settingsMenu = document.querySelector('[data-radix-menu-content]');
-          const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
-          if (btn) {
-            const downEvent = new MouseEvent('mousedown', { bubbles: true });
-            const upEvent = new MouseEvent('mouseup', { bubbles: true });
-            btn.dispatchEvent(downEvent);
-            btn.dispatchEvent(upEvent);
-          }
-        });
-      }
+      // else if (method === 'mouse') {
+      //   await service.page.mouse.move(btnInfo.x, btnInfo.y);
+      //   await service.page.waitForTimeout(100);
+      //   await service.page.mouse.down();
+      //   await service.page.waitForTimeout(50);
+      //   await service.page.mouse.up();
+      // } 
+      // else if (method === 'mouseDownUp') {
+      //   await service.page.evaluate(() => {
+      //     const settingsMenu = document.querySelector('[data-radix-menu-content]');
+      //     const btn = settingsMenu?.querySelector('button[aria-haspopup="menu"]');
+      //     if (btn) {
+      //       const downEvent = new MouseEvent('mousedown', { bubbles: true });
+      //       const upEvent = new MouseEvent('mouseup', { bubbles: true });
+      //       btn.dispatchEvent(downEvent);
+      //       btn.dispatchEvent(upEvent);
+      //     }
+      //   });
+      // }
 
       console.log(`            ✓ Executed`);
       await service.page.waitForTimeout(300);
@@ -387,7 +387,7 @@ async function testModelDropdown(service) {
 async function testModelMenuItem(service, modelName) {
   console.log(`   Testing click: "${modelName}"`);
   
-  const methods = ['click', 'mouse', 'mouseDownUp'];
+  const methods = ['click'];
   
   for (const method of methods) {
     try {
@@ -433,30 +433,30 @@ async function testModelMenuItem(service, modelName) {
           }
         }, modelName);
       } 
-      else if (method === 'mouse') {
-        await service.page.mouse.move(btnInfo.x, btnInfo.y);
-        await service.page.waitForTimeout(100);
-        await service.page.mouse.down();
-        await service.page.waitForTimeout(50);
-        await service.page.mouse.up();
-      } 
-      else if (method === 'mouseDownUp') {
-        await service.page.evaluate((name) => {
-          const menus = document.querySelectorAll('[role="menu"]');
-          for (const menu of menus) {
-            const buttons = menu.querySelectorAll('button');
-            for (const btn of buttons) {
-              if (btn.textContent.includes(name)) {
-                const downEvent = new MouseEvent('mousedown', { bubbles: true });
-                const upEvent = new MouseEvent('mouseup', { bubbles: true });
-                btn.dispatchEvent(downEvent);
-                btn.dispatchEvent(upEvent);
-                return;
-              }
-            }
-          }
-        }, modelName);
-      }
+      // else if (method === 'mouse') {
+      //   await service.page.mouse.move(btnInfo.x, btnInfo.y);
+      //   await service.page.waitForTimeout(100);
+      //   await service.page.mouse.down();
+      //   await service.page.waitForTimeout(50);
+      //   await service.page.mouse.up();
+      // } 
+      // else if (method === 'mouseDownUp') {
+      //   await service.page.evaluate((name) => {
+      //     const menus = document.querySelectorAll('[role="menu"]');
+      //     for (const menu of menus) {
+      //       const buttons = menu.querySelectorAll('button');
+      //       for (const btn of buttons) {
+      //         if (btn.textContent.includes(name)) {
+      //           const downEvent = new MouseEvent('mousedown', { bubbles: true });
+      //           const upEvent = new MouseEvent('mouseup', { bubbles: true });
+      //           btn.dispatchEvent(downEvent);
+      //           btn.dispatchEvent(upEvent);
+      //           return;
+      //         }
+      //       }
+      //     }
+      //   }, modelName);
+      // }
 
       console.log(`            ✓ ${method.toUpperCase()}`);
       await service.page.waitForTimeout(300);
@@ -473,7 +473,7 @@ async function testModelMenuItem(service, modelName) {
 async function testSubmitButton(service) {
   console.log('\n   Testing: Submit button\n');
   
-  const methods = ['click', 'mouse', 'mouseDownUp'];
+  const methods = ['click'];
   
   for (const method of methods) {
     try {
@@ -503,24 +503,24 @@ async function testSubmitButton(service) {
           document.querySelector('.aQhhA button:nth-of-type(2)')?.click();
         });
       } 
-      else if (method === 'mouse') {
-        await service.page.mouse.move(btnInfo.x, btnInfo.y);
-        await service.page.waitForTimeout(100);
-        await service.page.mouse.down();
-        await service.page.waitForTimeout(50);
-        await service.page.mouse.up();
-      } 
-      else if (method === 'mouseDownUp') {
-        await service.page.evaluate(() => {
-          const btn = document.querySelector('.aQhhA button:nth-of-type(2)');
-          if (btn) {
-            const downEvent = new MouseEvent('mousedown', { bubbles: true });
-            const upEvent = new MouseEvent('mouseup', { bubbles: true });
-            btn.dispatchEvent(downEvent);
-            btn.dispatchEvent(upEvent);
-          }
-        });
-      }
+      // else if (method === 'mouse') {
+      //   await service.page.mouse.move(btnInfo.x, btnInfo.y);
+      //   await service.page.waitForTimeout(100);
+      //   await service.page.mouse.down();
+      //   await service.page.waitForTimeout(50);
+      //   await service.page.mouse.up();
+      // } 
+      // else if (method === 'mouseDownUp') {
+      //   await service.page.evaluate(() => {
+      //     const btn = document.querySelector('.aQhhA button:nth-of-type(2)');
+      //     if (btn) {
+      //       const downEvent = new MouseEvent('mousedown', { bubbles: true });
+      //       const upEvent = new MouseEvent('mouseup', { bubbles: true });
+      //       btn.dispatchEvent(downEvent);
+      //       btn.dispatchEvent(upEvent);
+      //     }
+      //   });
+      // }
 
       console.log(`            ✓ Executed`);
       await service.page.waitForTimeout(300);
