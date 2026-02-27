@@ -1862,11 +1862,13 @@ class GoogleFlowAutomationService {
   async downloadItemViaContextMenu(newHref) {
     /**
      * Download generated item by right-clicking and selecting download option
+     * Handles the submenu (1K for image, 1080p for video)
      * Returns the downloaded file path, or null if download failed
      * Waits for file to appear in output directory
      */
     const mediaType = this.type === 'image' ? 'image' : 'video';
     const mediaExt = this.type === 'image' ? '.jpg' : '.mp4';
+    const downloadOption = this.type === 'image' ? '1K' : '1080p';
     
     console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
 
@@ -1902,17 +1904,23 @@ class GoogleFlowAutomationService {
       await this.page.mouse.down({ button: 'right' });
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
-      await this.page.waitForTimeout(800);
+      
+      // Wait 2s for context menu to fully render
+      console.log('   ⏳ Waiting for context menu to appear...');
+      await this.page.waitForTimeout(2000);
 
       // Find and click download option from context menu
+      // Looking for: <div role="menuitem" with icon "download" and text "Tải xuống"
       const downloadInfo = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('button[role="menuitem"]');
+        const menuItems = document.querySelectorAll('[role="menuitem"]');
         
-        for (const btn of buttons) {
-          const text = btn.textContent.toLowerCase();
+        for (const item of menuItems) {
+          const text = item.textContent.toLowerCase();
+          const hasDownloadIcon = item.innerHTML.includes('download');
+          
           // Look for download / tải xuống button
-          if (text.includes('tải') || text.includes('download')) {
-            const rect = btn.getBoundingClientRect();
+          if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
+            const rect = item.getBoundingClientRect();
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
@@ -1929,13 +1937,89 @@ class GoogleFlowAutomationService {
         return null;
       }
 
-      // Click download button using mouse movement method
-      console.log('   🖱️  Clicking download option...');
+      // Click download button using mouse movement method (Method 2)
+      console.log('   🖱️  Clicking "Tải xuống" option...');
       await this.page.mouse.move(downloadInfo.x, downloadInfo.y);
-      await this.page.waitForTimeout(100);
+      await this.page.waitForTimeout(150);
       await this.page.mouse.down();
-      await this.page.waitForTimeout(50);
+      await this.page.waitForTimeout(100);
       await this.page.mouse.up();
+
+      // Wait for submenu to appear
+      console.log(`   ⏳ Waiting for submenu (${downloadOption})...`);
+      await this.page.waitForTimeout(1500);
+
+      // Click the specific download quality option (1K for image, 1080p for video)
+      const qualityInfo = await this.page.evaluate((targetQuality) => {
+        const buttons = document.querySelectorAll('[role="menuitem"]');
+        
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          
+          // Look for the right quality option
+          if (targetQuality === '1K' && text.includes('1k')) {
+            const rect = btn.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          } else if (targetQuality === '1080p' && text.includes('1080')) {
+            const rect = btn.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
+        }
+        
+        return { found: false };
+      }, downloadOption);
+
+      if (!qualityInfo.found) {
+        console.warn(`   ⚠️  ${downloadOption} option not found in submenu\n`);
+        console.log('   ℹ️  Trying first available option...');
+        
+        // Fallback: just click first submenu button
+        const firstOption = await this.page.evaluate(() => {
+          const menus = document.querySelectorAll('[role="menu"]');
+          if (menus.length < 2) return { found: false };
+          
+          const submenu = menus[menus.length - 1];
+          const buttons = submenu.querySelectorAll('[role="menuitem"]');
+          
+          if (buttons.length === 0) return { found: false };
+          
+          const rect = buttons[0].getBoundingClientRect();
+          return {
+            found: true,
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2)
+          };
+        });
+
+        if (!firstOption.found) {
+          console.warn('   ⚠️  No submenu options available\n');
+          return null;
+        }
+
+        // Click first option with Method 2
+        console.log('   🖱️  Clicking first available option...');
+        await this.page.mouse.move(firstOption.x, firstOption.y);
+        await this.page.waitForTimeout(150);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.up();
+      } else {
+        // Click the quality option with Method 2
+        console.log(`   🖱️  Clicking ${downloadOption}...`);
+        await this.page.mouse.move(qualityInfo.x, qualityInfo.y);
+        await this.page.waitForTimeout(150);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.up();
+      }
 
       console.log('   ✓ Download started, waiting for file...');
       
@@ -2037,21 +2121,23 @@ class GoogleFlowAutomationService {
       await this.page.mouse.down({ button: 'right' });
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
-      await this.page.waitForTimeout(800);
+      
+      // Wait 2s for context menu to fully render
+      console.log('   ⏳ Waiting for context menu to appear...');
+      await this.page.waitForTimeout(2000);
 
       // Find and click "Sử dụng lại câu lệnh" button with mouse movement method
       const reuseClicked = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('button[role="menuitem"]');
+        const menuItems = document.querySelectorAll('[role="menuitem"]');
         
-        for (const btn of buttons) {
-          const text = btn.textContent.toLowerCase();
-          const hasUndoIcon = btn.querySelector('i[class*="google-symbols"]') && 
-                             btn.querySelector('i').textContent.includes('undo');
+        for (const item of menuItems) {
+          const text = item.textContent.toLowerCase();
+          const hasUndoIcon = item.innerHTML.includes('undo');
           
           // Look for "sử dụng lại" text and undo icon
           if ((text.includes('sử dụng lại') || text.includes('reuse')) && hasUndoIcon) {
-            const rect = btn.getBoundingClientRect();
-            console.log(`[REUSE] Found button: "${btn.textContent.trim()}"`);
+            const rect = item.getBoundingClientRect();
+            console.log(`[REUSE] Found button: "${item.textContent.trim()}"`);
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
@@ -2061,11 +2147,11 @@ class GoogleFlowAutomationService {
         }
         
         // Fallback: just look for text match
-        for (const btn of buttons) {
-          const text = btn.textContent.toLowerCase();
+        for (const item of menuItems) {
+          const text = item.textContent.toLowerCase();
           if (text.includes('sử dụng lại') || text.includes('reuse') || text.includes('dùng lại')) {
-            const rect = btn.getBoundingClientRect();
-            console.log(`[REUSE] Found button (text only): "${btn.textContent.trim()}"`);
+            const rect = item.getBoundingClientRect();
+            console.log(`[REUSE] Found button (text only): "${item.textContent.trim()}"`);
             return {
               found: true,
               x: Math.round(rect.left + rect.width / 2),
@@ -2074,9 +2160,9 @@ class GoogleFlowAutomationService {
           }
         }
         
-        console.log('[REUSE] Available menuitem buttons:');
-        buttons.forEach(btn => {
-          console.log(`  - "${btn.textContent.trim()}"`);
+        console.log('[REUSE] Available menuitem options:');
+        menuItems.forEach(item => {
+          console.log(`  - "${item.textContent.trim()}"`);
         });
         
         return { found: false };
@@ -2090,9 +2176,9 @@ class GoogleFlowAutomationService {
       // Click the reuse button using mouse movement method (Method 2) for reliability
       console.log('   🖱️  Clicking "Sử dụng lại câu lệnh" with mouse movement...');
       await this.page.mouse.move(reuseClicked.x, reuseClicked.y);
-      await this.page.waitForTimeout(100);
+      await this.page.waitForTimeout(150);
       await this.page.mouse.down();
-      await this.page.waitForTimeout(50);
+      await this.page.waitForTimeout(100);
       await this.page.mouse.up();
 
       console.log('   ✓ Reuse command clicked, waiting for prompt reload...');
