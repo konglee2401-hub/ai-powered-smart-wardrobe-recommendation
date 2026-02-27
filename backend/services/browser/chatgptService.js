@@ -63,13 +63,65 @@ class ChatGPTService extends BrowserService {
         throw new Error('Could not find ChatGPT input box');
       }
 
-      await this.page.focus(selector);
-      await this.page.keyboard.down('Control');
-      await this.page.keyboard.press('KeyA');
-      await this.page.keyboard.up('Control');
-      await this.page.keyboard.press('Backspace');
-      await this.page.keyboard.type(prompt, { delay: 5 });
-      await this.page.keyboard.press('Enter');
+      // IMPORTANT: Insert full prompt in one shot (paste-style), avoid typing.
+      // Typing multi-line prompts can emit Enter key events and submit prematurely.
+      const inserted = await this.page.evaluate((sel, fullPrompt) => {
+        const elem = document.querySelector(sel);
+        if (!elem) return false;
+
+        if (elem.tagName === 'TEXTAREA' || elem.tagName === 'INPUT') {
+          elem.focus();
+          elem.value = fullPrompt;
+          elem.dispatchEvent(new Event('input', { bubbles: true }));
+          elem.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+
+        // contenteditable fallback
+        if (elem.getAttribute('contenteditable') === 'true') {
+          elem.focus();
+          elem.textContent = fullPrompt;
+          elem.dispatchEvent(new InputEvent('input', { bubbles: true, data: fullPrompt, inputType: 'insertText' }));
+          elem.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+
+        return false;
+      }, selector, prompt);
+
+      if (!inserted) {
+        throw new Error('Failed to insert full prompt into ChatGPT input');
+      }
+
+      await this.page.waitForTimeout(300);
+
+      // Submit explicitly via send button first (preferred), Enter as fallback.
+      const submittedByButton = await this.page.evaluate(() => {
+        const candidates = [
+          'button[data-testid="send-button"]',
+          'button[aria-label*="Send"]',
+          'button[aria-label*="send"]',
+          'button[title*="Send"]',
+          'button:has(svg)'
+        ];
+
+        for (const selector of candidates) {
+          const buttons = document.querySelectorAll(selector);
+          for (const btn of buttons) {
+            const disabled = btn.disabled || btn.getAttribute('aria-disabled') === 'true';
+            if (!disabled && btn.offsetParent !== null) {
+              btn.click();
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (!submittedByButton) {
+        await this.page.focus(selector);
+        await this.page.keyboard.press('Enter');
+      }
 
       // Wait until assistant response is present and stable
       await this.page.waitForTimeout(9000);
