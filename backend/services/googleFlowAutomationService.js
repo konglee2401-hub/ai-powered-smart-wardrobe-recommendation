@@ -2543,60 +2543,60 @@ class GoogleFlowAutomationService {
 
           // STEP C: Wait for NEW generation to complete with href monitoring
           console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
-          console.log('[STEP C] 📊 Monitoring hrefs for NEW image (checking ~every 100ms)...\n');
+          console.log('[STEP C] 📊 Monitoring hrefs for NEW image (checking ~every 1 second)...\n');
           
           const startTime = Date.now();
           const timeoutMs = this.options.timeouts.generation || 120000;
+          let generationDetected = false;
           let monitoringAttempt = 0;
-          let lastProgressLogTime = startTime;
           const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
 
-          // Wait for NEW image link to appear (NEW href not in initial list)
-          await this.page.waitForFunction(
-            async () => {
-              monitoringAttempt++;
-              const currentTime = Date.now();
-              const result = await this.page.evaluate((oldHrefs) => {
-                const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+          // Monitor for NEW image (similar to uploadImages approach)
+          while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
+            monitoringAttempt++;
+
+            const result = await this.page.evaluate((oldHrefs) => {
+              const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+              
+              for (const item of items) {
+                const index = item.getAttribute('data-index');
+                const link = item.querySelector('a[href]');
                 
-                for (const item of items) {
-                  const index = item.getAttribute('data-index');
-                  const link = item.querySelector('a[href]');
-                  
-                  if (!link) continue;
-                  
-                  const currentHref = link.getAttribute('href');
-                  const oldHref = oldHrefs[index];
-                  
-                  // If href changed OR is new item (not in oldHrefs)
-                  if (!oldHref || oldHref !== currentHref) {
-                    // Check if this href is NEW (not in any old values)
-                    const isNewHref = !Object.values(oldHrefs).includes(currentHref);
-                    if (isNewHref) {
-                      return { found: true, newHref: currentHref, newIndex: index };
-                    }
+                if (!link) continue;
+                
+                const currentHref = link.getAttribute('href');
+                const oldHref = oldHrefs[index];
+                
+                // If href changed OR is new item (not in oldHrefs)
+                if (!oldHref || oldHref !== currentHref) {
+                  // Check if this href is NEW (not in any old values)
+                  const isNewHref = !Object.values(oldHrefs).includes(currentHref);
+                  if (isNewHref) {
+                    return { found: true, newHref: currentHref, newIndex: index };
                   }
                 }
-                return { found: false };
-              }, initialHrefs);
-              
-              if (result.found) {
-                console.log(`   [GENERATION] ✅ NEW item detected at data-index="${result.newIndex}"! New image confirmed.\n`);
-                lastGeneratedHref = result.newHref;
-                return true;
               }
-              
-              // Log progress every ~1 second (roughly every 10 checks at ~100ms polling)
-              if (currentTime - lastProgressLogTime >= 1000) {
-                const elapsedSecs = ((currentTime - startTime) / 1000).toFixed(1);
-                console.log(`   [GENERATION] ⏱️  ${elapsedSecs}s elapsed | Checks: ${monitoringAttempt} | Frequency: ~every 100ms`);
-                lastProgressLogTime = currentTime;
-              }
-              
-              return false;
-            },
-            { timeout: timeoutMs }
-          );
+              return { found: false };
+            }, initialHrefs);
+            
+            if (result.found) {
+              console.log(`   ✅ NEW item detected at data-index="${result.newIndex}"! New image confirmed.\n`);
+              lastGeneratedHref = result.newHref;
+              generationDetected = true;
+              break;
+            }
+
+            // Log progress every 10 attempts
+            if (monitoringAttempt % 10 === 0 && monitoringAttempt > 0) {
+              console.log(`   [GENERATION] Attempt ${monitoringAttempt}/${maxMonitoringAttempts} (elapsed: ${(monitoringAttempt).toFixed(0)}s)`);
+            }
+
+            await this.page.waitForTimeout(1000);
+          }
+
+          if (!generationDetected) {
+            throw new Error(`Generation timeout: No NEW href detected after ${monitoringAttempt}s`);
+          }
 
           const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
           console.log(`[STEP C] ✅ NEW generation detected in ${elapsedSecs}s`);
