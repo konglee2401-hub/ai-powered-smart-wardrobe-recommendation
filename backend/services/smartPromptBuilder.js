@@ -10,6 +10,7 @@
  */
 
 import PromptOption from '../models/PromptOption.js';
+import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
 
 // ============================================================
 // LOAD OPTION DETAILS: TECHNICAL DETAILS & PROMPT SUGGESTIONS
@@ -99,7 +100,6 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   if (normalizedLanguage === 'vi') {
     try {
       console.log(`\n🇻🇳 Using Vietnamese prompts for image generation...`);
-      const VietnamesePromptBuilder = require('./vietnamesePromptBuilder.js');
       
       // Build Vietnamese prompt based on use case
       let vietnamesePrompt = '';
