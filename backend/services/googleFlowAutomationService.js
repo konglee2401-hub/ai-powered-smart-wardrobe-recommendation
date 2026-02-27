@@ -481,18 +481,67 @@ class GoogleFlowAutomationService {
         }
       });
       await this.page.waitForTimeout(300);
-      // Attempt typing with verification and a single retry if the editor content
-      // does not match the expected prompt (handles flaky slate input in the UI)
+
+      // Attempt typing with optimized strategy: type start, paste middle, type end
       let attempts = 0;
       let success = false;
-      const maxAttempts = 2; // 1 initial try + 1 retry
+      const maxAttempts = 2;
 
       while (attempts < maxAttempts && !success) {
         attempts++;
-        console.log(`   ⌨️  Typing prompt via keyboard (attempt ${attempts}/${maxAttempts})...`);
-        // Type slowly to trigger framework handlers - using cleaned prompt
-        await this.page.keyboard.type(cleanPrompt, { delay: 15 });
-        console.log(`   ✓ Typed attempt ${attempts}: ${prompt.length} chars`);
+        console.log(`   ⌨️  Entering prompt (attempt ${attempts}/${maxAttempts})...`);
+        
+        // Split prompt into sections for optimized entry
+        const PREFIX_LEN = 20;
+        const SUFFIX_LEN = 20;
+        
+        const prefix = cleanPrompt.substring(0, PREFIX_LEN);
+        const suffix = cleanPrompt.substring(Math.max(PREFIX_LEN, cleanPrompt.length - SUFFIX_LEN));
+        const middle = cleanPrompt.substring(PREFIX_LEN, cleanPrompt.length - SUFFIX_LEN);
+        
+        console.log(`   📝 Splitting: [${PREFIX_LEN}] + [${middle.length}] + [${SUFFIX_LEN}]`);
+        
+        // SECTION 1: Type first 20 chars (slow, careful)
+        if (prefix.length > 0) {
+          console.log(`   ⌨️  [1/3] Typing first ${prefix.length} chars...`);
+          await this.page.keyboard.type(prefix, { delay: 3 });
+          await this.page.waitForTimeout(100);
+        }
+        
+        // SECTION 2: Paste middle section (fast via clipboard)
+        if (middle.length > 0) {
+          console.log(`   📋 [2/3] Pasting middle ${middle.length} chars...`);
+          
+          // Use clipboard to paste efficiently
+          await this.page.evaluate(() => {
+            const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+            if (textbox) {
+              // Get current caret position and insert text
+              const event = new ClipboardEvent('paste', {
+                clipboardData: new DataTransfer(),
+                bubbles: true
+              });
+              Object.defineProperty(event, 'clipboardData', {
+                value: {
+                  getData: () => ''
+                }
+              });
+            }
+          });
+          
+          // Simpler approach: type middle section quickly without delay
+          await this.page.keyboard.type(middle, { delay: 0 });
+          await this.page.waitForTimeout(50);
+        }
+        
+        // SECTION 3: Type last 20 chars (slow, careful)
+        if (suffix.length > 0) {
+          console.log(`   ⌨️  [3/3] Typing last ${suffix.length} chars...`);
+          await this.page.keyboard.type(suffix, { delay: 3 });
+          await this.page.waitForTimeout(100);
+        }
+        
+        console.log(`   ✓ Entry complete: ${cleanPrompt.length} chars`);
 
         // Allow framework to process input
         console.log('   ⏳ Waiting for framework to process input...');
@@ -545,7 +594,7 @@ class GoogleFlowAutomationService {
 
         // Retry: clear the editor and try once more
         if (attempts < maxAttempts) {
-          console.log('   🔁 Retrying: clearing editor and retyping...');
+          console.log('   🔁 Retrying: clearing editor and re-entering...');
           // Focus and select-all then delete to clear Slate editor
           await this.page.focus('[role="textbox"][data-slate-editor="true"]');
           await this.page.keyboard.down('Control');
