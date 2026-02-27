@@ -743,7 +743,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // Build options for both use cases
     // Priority: UI options > Analysis recommendations > Defaults
     const baseOptions = {
-      scene: options.scene || analysis?.recommendations?.scene?.choice || 'studio',
+      scene: options.scene || 'linhphap-tryon-room',
       lighting: options.lighting || analysis?.recommendations?.lighting?.choice || 'soft-diffused',
       mood: options.mood || analysis?.recommendations?.mood?.choice || 'confident',
       style: options.style || 'minimalist',
@@ -2378,7 +2378,7 @@ Return as JSON with clear sections.
     if (product.primary_color) prompt += ` in ${product.primary_color}`;
     if (product.fabric_type) prompt += ` made of ${product.fabric_type}`;
     
-    prompt += `. Setting: ${recommendations.scene || 'studio'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
+    prompt += `. Scene locked background: ${recommendations.sceneLockedPrompt || recommendations.scene || 'linhphap-tryon-room'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
     
     return prompt;
   },
@@ -2402,7 +2402,7 @@ Return as JSON with clear sections.
     
     if (product.primary_color) prompt += ` in ${product.primary_color}`;
     
-    prompt += `. Close-up focus on the product to show details and quality. Setting: ${recommendations.scene || 'studio'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
+    prompt += `. Close-up focus on the product to show details and quality. Scene locked background: ${recommendations.sceneLockedPrompt || recommendations.scene || 'linhphap-tryon-room'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
     
     return prompt;
   },

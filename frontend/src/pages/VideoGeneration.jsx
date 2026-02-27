@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Upload, Film, Sparkles, Clock, CheckCircle, XCircle, Play, Download } from 'lucide-react';
 import Navbar from '../components/ui/Navbar';
+import ScenePickerModal from '../components/ScenePickerModal';
 
 export default function VideoGeneration() {
   const [characterImage, setCharacterImage] = useState(null);
@@ -10,6 +11,10 @@ export default function VideoGeneration() {
   const [referencePreview, setReferencePreview] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState('runway');
+  const [sceneOptions, setSceneOptions] = useState([]);
+  const [selectedScene, setSelectedScene] = useState('');
+  const [selectedScenePrompt, setSelectedScenePrompt] = useState('');
+  const [showScenePicker, setShowScenePicker] = useState(false);
   
   const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState(0);
@@ -33,6 +38,28 @@ export default function VideoGeneration() {
     }
   };
 
+
+  React.useEffect(() => {
+    const loadScenes = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const data = await response.json();
+        if (data?.success) {
+          const scenes = data.data || [];
+          setSceneOptions(scenes);
+          if (scenes.length > 0) {
+            const first = scenes[0];
+            setSelectedScene(first.value);
+            setSelectedScenePrompt(first.sceneLockedPrompt || first.sceneLockedPromptVi || first.promptSuggestion || '');
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load scenes:', error.message);
+      }
+    };
+    loadScenes();
+  }, []);
+
   const handleGenerate = async () => {
     if (!characterImage || !prompt) {
       alert('Please provide character image and prompt');
@@ -42,7 +69,8 @@ export default function VideoGeneration() {
     const formData = new FormData();
     formData.append('character_image', characterImage);
     if (referenceMedia) formData.append('reference_media', referenceMedia);
-    formData.append('prompt', prompt);
+    const finalPrompt = selectedScenePrompt ? `${prompt}. Scene locked background: ${selectedScenePrompt}` : prompt;
+    formData.append('prompt', finalPrompt);
     formData.append('model', model);
 
     setStatus('uploading');
@@ -184,6 +212,21 @@ export default function VideoGeneration() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Scene Locked Picker */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <label className="block mb-3 font-semibold text-lg">Scene Locked</label>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-sm font-medium">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
+                </div>
+                <button onClick={() => setShowScenePicker(true)} className="px-3 py-1 rounded bg-purple-600 text-white text-sm">Pick Scene</button>
+              </div>
+              <details>
+                <summary className="text-sm text-purple-700 cursor-pointer">Locked prompt</summary>
+                <p className="text-xs text-gray-600 mt-1">{selectedScenePrompt || 'No locked prompt'}</p>
+              </details>
             </div>
 
             {/* Prompt Input */}
@@ -458,6 +501,16 @@ export default function VideoGeneration() {
           </div>
         </div>
       </div>
+      <ScenePickerModal
+        isOpen={showScenePicker}
+        onClose={() => setShowScenePicker(false)}
+        scenes={sceneOptions}
+        selectedScene={selectedScene}
+        onSelect={(value, scene) => {
+          setSelectedScene(value);
+          setSelectedScenePrompt(scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || '');
+        }}
+      />
     </div>
   );
 }
@@ -487,6 +540,16 @@ function PipelineStage({ name, description, completed, active }) {
         </p>
         <p className="text-xs text-gray-600">{description}</p>
       </div>
+      <ScenePickerModal
+        isOpen={showScenePicker}
+        onClose={() => setShowScenePicker(false)}
+        scenes={sceneOptions}
+        selectedScene={selectedScene}
+        onSelect={(value, scene) => {
+          setSelectedScene(value);
+          setSelectedScenePrompt(scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || '');
+        }}
+      />
     </div>
   );
 }

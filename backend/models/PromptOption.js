@@ -95,6 +95,56 @@ const promptOptionSchema = new mongoose.Schema({
     default: null
   },
 
+  // Vietnamese translation for prompt suggestion (optional)
+  promptSuggestionVi: {
+    type: String,
+    default: null
+  },
+
+  // NEW: Canonical scene lock prompt used to keep background stable across generations
+  // Priority in builders: sceneLockedPrompt > promptSuggestion > option value
+  sceneLockedPrompt: {
+    type: String,
+    default: null
+  },
+
+  // Vietnamese scene lock prompt (for multilingual frontend)
+  sceneLockedPromptVi: {
+    type: String,
+    default: null
+  },
+
+  // Optional negative prompts specific to locked scene
+  sceneNegativePrompt: {
+    type: String,
+    default: null
+  },
+  sceneNegativePromptVi: {
+    type: String,
+    default: null
+  },
+
+  // NEW: Enable/disable using scene lock for this option
+  useSceneLock: {
+    type: Boolean,
+    default: true
+  },
+
+  // NEW: Default locked image selected for this scene
+  sceneLockedImageUrl: {
+    type: String,
+    default: null
+  },
+
+  // NEW: Generated candidate images for review/pick workflow
+  sceneLockSamples: [{
+    url: { type: String, default: '' },
+    prompt: { type: String, default: '' },
+    provider: { type: String, default: 'google-flow' },
+    createdAt: { type: Date, default: Date.now },
+    isDefault: { type: Boolean, default: false }
+  }],
+
   // NEW: Preview image for UI
   previewImage: {
     type: String,

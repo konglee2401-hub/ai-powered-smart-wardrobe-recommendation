@@ -52,6 +52,65 @@ async function loadPromptSuggestion(optionValue, category) {
   return optionValue;
 }
 
+
+/**
+ * Build a locked scene directive to keep scene consistency across generations
+ * Priority: sceneLockedPrompt > promptSuggestion > option value
+ */
+async function buildLockedSceneDirective(sceneValue, selectedOptions = {}, language = 'en') {
+  if (!sceneValue) return '';
+
+  // Manual override from UI/request takes highest priority
+  const overridePrompt = selectedOptions?.sceneOverridePrompt || selectedOptions?.sceneLockOverridePrompt;
+  if (overridePrompt && typeof overridePrompt === 'string' && overridePrompt.trim()) {
+    return `Scene Locked Prompt (OVERRIDE): ${overridePrompt.trim()}`;
+  }
+
+  let option = null;
+  try {
+    option = await PromptOption.findOne({ value: sceneValue, category: 'scene' });
+  } catch (error) {
+    console.warn(`Could not load scene option for scene lock ${sceneValue}:`, error.message);
+  }
+
+  const disableSceneLock = selectedOptions?.disableSceneLock === true || option?.useSceneLock === false;
+  if (disableSceneLock) {
+    const fallbackSuggestion = option?.promptSuggestion?.trim() || sceneValue;
+    return fallbackSuggestion;
+  }
+
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  const canonical = normalizedLanguage === 'vi'
+    ? (option?.sceneLockedPromptVi?.trim() || option?.sceneLockedPrompt?.trim())
+    : (option?.sceneLockedPrompt?.trim() || option?.sceneLockedPromptVi?.trim());
+
+  if (canonical) {
+    return `Scene Locked Prompt: ${canonical}`;
+  }
+
+  const baseSuggestion = normalizedLanguage === 'vi'
+    ? (option?.promptSuggestionVi?.trim() || option?.promptSuggestion?.trim() || sceneValue)
+    : (option?.promptSuggestion?.trim() || option?.promptSuggestionVi?.trim() || sceneValue);
+  const technicalDetails = option?.technicalDetails || getFallbackTechnicalDetails('scene', sceneValue);
+
+  const detailParts = Object.entries(technicalDetails || {})
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ');
+
+  const consistencyRules = [
+    'Keep backdrop structure and geometry unchanged in every generation',
+    'Keep floor material and color relationship with backdrop consistent',
+    'Keep prop layout and spacing consistent; do not introduce new dominant objects',
+    'Keep camera-to-subject distance and horizon perspective stable'
+  ].join('; ');
+
+  if (detailParts) {
+    return `Scene Locked Prompt: ${baseSuggestion}. Fixed technical details: ${detailParts}. Consistency rules: ${consistencyRules}.`;
+  }
+
+  return `Scene Locked Prompt: ${baseSuggestion}. Consistency rules: ${consistencyRules}.`;
+}
+
 function getFallbackTechnicalDetails(category, optionValue) {
   const fallbacks = {
     scene: {
@@ -141,34 +200,34 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   // Route to appropriate prompt builder based on use case
   switch (useCase) {
     case 'change-clothes':
-      promptStr = await buildChangeClothesPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildChangeClothesPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'character-holding-product':
-      promptStr = await buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'ecommerce-product':
-      promptStr = await buildEcommerceProductPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildEcommerceProductPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'social-media':
-      promptStr = await buildSocialMediaPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildSocialMediaPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'fashion-editorial':
-      promptStr = await buildFashionEditorialPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildFashionEditorialPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'lifestyle-scene':
-      promptStr = buildLifestyleScenePrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildLifestyleScenePrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'before-after':
-      promptStr = buildBeforeAfterPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildBeforeAfterPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'styling':
-      promptStr = buildStylingPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildStylingPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'complete-look':
-      promptStr = buildCompleteLookPrompt(analysis, selectedOptions, productFocus);
+      promptStr = await buildCompleteLookPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     default:
-      promptStr = buildDefaultPrompt(analysis, selectedOptions);
+      promptStr = await buildDefaultPrompt(analysis, selectedOptions, normalizedLanguage);
   }
 
   const negativePrompt = buildNegativePrompt(analysis?.product, selectedOptions);
@@ -183,7 +242,7 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
  * CHANGE CLOTHES: Keep character's face and body, ONLY change the clothing
  * Most important: Emphasize keeping face, body, pose identical
  */
-async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus) {
+async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -349,17 +408,10 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus)
   parts.push(`8. Keep body proportions visible in shoulders/waist/hips\n`);
 
   // 8. ENVIRONMENT & LIGHTING (WITH TECHNICAL DETAILS AND PROMPT SUGGESTIONS)
-  parts.push(`\n=== ENVIRONMENT ===`);
+  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
   if (selectedOptions.scene) {
-    const sceneSuggestion = await loadPromptSuggestion(selectedOptions.scene, 'scene');
-    parts.push(`Setting: ${sceneSuggestion}`);
-    // Add technical details for specific scenes
-    const sceneDetails = getFallbackTechnicalDetails('scene', selectedOptions.scene);
-    if (sceneDetails && Object.keys(sceneDetails).length > 0) {
-      for (const [key, value] of Object.entries(sceneDetails)) {
-        parts.push(`  ${key}: ${value}`);
-      }
-    }
+    const lockedSceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
+    parts.push(`Setting: ${lockedSceneDirective}`);
   }
   
   if (selectedOptions.lighting) {
@@ -468,7 +520,7 @@ function getSceneTechnicalDetails(scene) {
  * - Social media content (trending product showcase)
  * - Unboxing-style content
  */
-async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus) {
+async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -645,11 +697,10 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   // ==========================================
   // ENVIRONMENT & SETTING
   // ==========================================
-  parts.push(`\n=== ENVIRONMENT & SETTING ===`);
+  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
   if (selectedOptions.scene) {
-    parts.push(`Location: ${selectedOptions.scene}`);
-    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
-    if (sceneDetails) parts.push(sceneDetails);
+    const lockedSceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
+    parts.push(`Location: ${lockedSceneDirective}`);
   } else {
     parts.push(`Location: Clean, uncluttered background - focus on character`);
   }
@@ -699,7 +750,7 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
 // �🛍️ ECOMMERCE: Professional product photography for online stores
 // ============================================================
 
-function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus) {
+async function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const product = analysis.product || {};
 
@@ -734,7 +785,7 @@ function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus) {
     parts.push('Why: Ecommerce standard, allows easy background removal');
     parts.push('Lighting: Even, no shadows on background');
   } else {
-    parts.push(`Background: ${selectedOptions.scene}`);
+    parts.push(`Background: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   }
   parts.push('Context: Minimal - Focus on product\n');
 
@@ -793,7 +844,7 @@ function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus) {
 // 📱 SOCIAL MEDIA: Engaging, trendy content for Instagram/TikTok
 // ============================================================
 
-function buildSocialMediaPrompt(analysis, selectedOptions, productFocus) {
+async function buildSocialMediaPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -831,10 +882,10 @@ function buildSocialMediaPrompt(analysis, selectedOptions, productFocus) {
   parts.push('Hair: On-trend, moving naturally (suggests motion)\n');
 
   // 3. ENVIRONMENT (INSTAGRAM-WORTHY)
-  parts.push('=== ENVIRONMENT ===');
+  parts.push('=== SCENE LOCKED BACKGROUND ===');
   parts.push('Setting: Instagram-aesthetic location');
   if (selectedOptions.scene) {
-    parts.push(`Location: ${selectedOptions.scene}`);
+    parts.push(`Location: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   } else {
     parts.push('Location: Urban, modern, aesthetic background');
   }
@@ -895,7 +946,7 @@ function buildSocialMediaPrompt(analysis, selectedOptions, productFocus) {
 // 👗 FASHION EDITORIAL: Magazine-style, artistic fashion content
 // ============================================================
 
-function buildFashionEditorialPrompt(analysis, selectedOptions, productFocus) {
+async function buildFashionEditorialPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -950,10 +1001,10 @@ function buildFashionEditorialPrompt(analysis, selectedOptions, productFocus) {
   parts.push('- Show garment artfully (from interesting angle)\n');
 
   // 3. ENVIRONMENT (EDITORIAL SETTING)
-  parts.push('=== ENVIRONMENT & SETTING ===');
+  parts.push('=== SCENE LOCKED BACKGROUND ===');
   parts.push('Setting: High-fashion editorial location');
   if (selectedOptions.scene) {
-    parts.push(`Location: ${selectedOptions.scene}`);
+    parts.push(`Location: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   } else {
     parts.push('Location: Luxury, artistic, or minimalist editorial background');
   }
@@ -1013,7 +1064,7 @@ function buildFashionEditorialPrompt(analysis, selectedOptions, productFocus) {
 // 🌿 LIFESTYLE: Real-world context, day-in-life styling
 // ============================================================
 
-function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus) {
+async function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -1057,10 +1108,10 @@ function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus) {
   parts.push('- Fits naturally into the scene\n');
 
   // 3. ENVIRONMENT (LIFESTYLE SETTING)
-  parts.push('=== ENVIRONMENT & LOCATION ===');
+  parts.push('=== SCENE LOCKED BACKGROUND ===');
   parts.push('Setting: Real-world lifestyle context');
   if (selectedOptions.scene) {
-    parts.push(`Location: ${selectedOptions.scene}`);
+    parts.push(`Location: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   } else {
     parts.push('Location: Cafe, street, home, workplace, park, etc.');
   }
@@ -1126,7 +1177,7 @@ function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus) {
 // ⬅️➡️ BEFORE-AFTER: Transformation showcase (split concept)
 // ============================================================
 
-function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus) {
+async function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -1227,7 +1278,7 @@ function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus) {
 /**
  * STYLING: Change styling elements (hair, makeup, accessories) with the outfit
  */
-function buildStylingPrompt(analysis, selectedOptions, productFocus) {
+async function buildStylingPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -1295,11 +1346,9 @@ function buildStylingPrompt(analysis, selectedOptions, productFocus) {
   }
 
   // 3. ENVIRONMENT
-  parts.push(`\n=== ENVIRONMENT ===`);
+  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
   if (selectedOptions.scene) {
-    parts.push(`Scene: ${selectedOptions.scene}`);
-    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
-    if (sceneDetails) parts.push(sceneDetails);
+    parts.push(`Scene: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
@@ -1318,7 +1367,7 @@ function buildStylingPrompt(analysis, selectedOptions, productFocus) {
 /**
  * COMPLETE LOOK: Show the character in full styling with complete outfit context
  */
-function buildCompleteLookPrompt(analysis, selectedOptions, productFocus) {
+async function buildCompleteLookPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -1396,11 +1445,9 @@ function buildCompleteLookPrompt(analysis, selectedOptions, productFocus) {
   parts.push(`Full body, standing, confident pose`);
 
   // ENVIRONMENT
-  parts.push(`\n=== SETTING ===`);
+  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
   if (selectedOptions.scene) {
-    parts.push(`Location: ${selectedOptions.scene}`);
-    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
-    if (sceneDetails) parts.push(sceneDetails);
+    parts.push(`Location: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Atmosphere: ${selectedOptions.mood}`);
@@ -1420,7 +1467,7 @@ function buildCompleteLookPrompt(analysis, selectedOptions, productFocus) {
 /**
  * DEFAULT: General structured prompt when use case not specified
  */
-function buildDefaultPrompt(analysis, selectedOptions) {
+async function buildDefaultPrompt(analysis, selectedOptions, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
@@ -1484,11 +1531,9 @@ function buildDefaultPrompt(analysis, selectedOptions) {
   }
 
   // Environment/Technical (ENHANCED)
-  parts.push(`\n=== ENVIRONMENT ===`);
+  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
   if (selectedOptions.scene) {
-    parts.push(`Scene: ${selectedOptions.scene}`);
-    const sceneDetails = getSceneTechnicalDetails(selectedOptions.scene);
-    if (sceneDetails) parts.push(sceneDetails);
+    parts.push(`Scene: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}`);
   }
   if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}`);
   if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);

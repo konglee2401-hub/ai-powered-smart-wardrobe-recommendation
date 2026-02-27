@@ -115,6 +115,73 @@ const OPTIONS_DATA = {
       sortOrder: 4
     },
     {
+      value: 'linhphap-tryon-room',
+      label: 'Try-On Room (Linh Pháp)',
+      description: 'Realistic home try-on room for women fashion, lived-in and natural',
+      keywords: ['try-on room', 'home fitting', 'women fashion', 'lived-in', 'natural light', 'bedroom try on'],
+      technicalDetails: {
+        environment: 'real apartment try-on room',
+        lighting: 'soft daylight from window',
+        elements: 'mirror, chair, bed, clothes, accessories',
+        usage: 'fashion overlay, lifestyle, AI model'
+      },
+      promptSuggestion: 'A realistic home try-on room for women fashion, slightly messy lived-in environment, natural window daylight, mirror/chair/bed and mixed fashion items for authentic styling context.',
+      promptSuggestionVi: 'Phòng thử đồ tại nhà chân thực cho thời trang nữ, hơi bừa bộn tự nhiên, ánh sáng cửa sổ mềm, có gương/ghế/giường và nhiều món đồ thời trang đa dạng.',
+      sceneLockedPrompt: 'A realistic home try-on room for women\'s fashion, neutral walls and natural materials, wooden floor with visible texture, light curtains softly diffusing daylight, a full-length mirror leaning against the wall, a chair and bed with various fashion items casually placed, women\'s clothing including tops, dresses, matching sets, loungewear, sleepwear, and sexy outfits, different fabrics such as cotton, silk, lace, satin, a mix of colors, patterns, and tones, not uniform, women\'s accessories visible around the room, handbags, shoes, sandals, heels placed naturally on the floor, a small shelf with makeup items, cosmetics, and beauty products, a few hats and fashion accessories casually arranged, natural folds, real fabric texture, soft daylight with realistic shadows, slightly messy lived-in feeling, a small fabric tag reading "Linh Pháp" attached to a clothing hanger, empty scene, no people, no human, no mannequin, no reflection of people, background only, realistic apartment environment, ultra realistic high detail photography',
+      previewImage: '/images/options/scene-linhphap-tryon.jpg',
+      sortOrder: 1
+    },
+    {
+      value: 'linhphap-boutique',
+      label: 'Small Boutique (Linh Pháp)',
+      description: 'Authentic small women fashion boutique with diverse products',
+      keywords: ['boutique', 'small shop', 'women fashion store', 'real retail', 'local business'],
+      technicalDetails: {
+        environment: 'small local fashion boutique',
+        lighting: 'mixed daylight and warm ambient',
+        elements: 'clothing racks, shoes, bags, cosmetics',
+        usage: 'selling visuals, product showcase'
+      },
+      promptSuggestion: 'Authentic small women fashion boutique interior with mixed daylight and warm ambient light, diverse fashion racks and accessories, natural local retail atmosphere.',
+      sceneLockedPrompt: 'A small local women\'s fashion boutique interior, neutral base colors with warm wooden elements, clothing racks filled with women\'s fashion items, a wide variety of apparel including tops, dresses, matching sets, loungewear, sexy outfits, diverse colors, patterns, and fabrics, shoes, sandals, heels displayed near the racks, handbags hanging or placed on shelves, hats and fashion accessories integrated naturally, a small display table with makeup and beauty products, natural arrangement, not perfectly styled, no single dominant color palette, warm ambient lighting mixed with daylight, authentic small business atmosphere, a subtle handwritten sign reading "Linh Pháp" placed on a shelf, empty store, no people, no mannequin, background only, realistic retail environment, ultra realistic',
+      previewImage: '/images/options/scene-linhphap-boutique.jpg',
+      sortOrder: 2
+    },
+    {
+      value: 'linhphap-bedroom-lifestyle',
+      label: 'Bedroom Lifestyle (Linh Pháp)',
+      description: 'Realistic feminine bedroom for lifestyle fashion content',
+      keywords: ['bedroom', 'lifestyle', 'women fashion', 'home wear', 'daily life'],
+      technicalDetails: {
+        environment: 'real lived-in bedroom',
+        lighting: 'natural window light',
+        elements: 'bed, clothes, shoes, bags, vanity',
+        usage: 'lifestyle fashion, home wear, sexy wear'
+      },
+      promptSuggestion: 'Feminine lived-in bedroom with natural daylight, mixed women fashion items and accessories, authentic everyday lifestyle mood for homewear content.',
+      sceneLockedPrompt: 'A realistic feminine bedroom lifestyle background, neutral wall tones and wooden furniture, bed, chair, and small table with women\'s fashion items, a mix of tops, dresses, sets, sleepwear, and sexy outfits, clothes casually placed with natural folds, variety of colors and textures, handbags resting on a chair, shoes and sandals placed near the bed, hats and accessories casually arranged, a vanity or small table with makeup and cosmetics, soft daylight coming through a window, realistic shadows and depth, lived-in everyday atmosphere, a small fabric tag reading "Linh Pháp" placed on folded clothing, empty scene, no people, background only, realistic home environment, ultra realistic photography',
+      previewImage: '/images/options/scene-linhphap-bedroom.jpg',
+      sortOrder: 3
+    },
+    {
+      value: 'linhphap-workroom-livestream',
+      label: 'Workroom & Livestream (Linh Pháp)',
+      description: 'Home workroom with livestream setup and Linh Pháp LED sign',
+      keywords: ['livestream', 'workroom', 'fashion seller', 'home business', 'behind the scenes'],
+      technicalDetails: {
+        environment: 'home workroom used for selling',
+        lighting: 'daylight + soft indoor + LED sign',
+        elements: 'tripod, ring light, mic, desk, clothes',
+        branding: 'LED sign reading Linh Pháp',
+        usage: 'livestream background, selling video'
+      },
+      promptSuggestion: 'Realistic home workroom for women fashion seller with livestream tools, mixed lighting and visible Linh Pháp LED sign, slightly messy but organized.',
+      sceneLockedPrompt: 'A realistic home workroom of a female fashion shop owner, used for daily work and livestream selling, natural materials, wooden desk and shelves, a clothing rack filled with women\'s fashion items, including tops, dresses, matching sets, loungewear, and sexy outfits, diverse colors, patterns, and fabric types, no uniform color palette, shoes, handbags, and fashion accessories placed naturally around the room, cosmetics and beauty products on a side table, livestream tools integrated naturally into the space, a smartphone mounted on a tripod positioned for livestream, a ring light visible near the desk, a small desk microphone or clip-on mic, charging cables, power strips, and adapters slightly visible, a laptop or tablet open on the desk, a soft LED neon sign on the wall reading "Linh Pháp", warm white or soft pink LED glow not overpowering, open boxes with fashion items and packaging materials nearby, fabric samples, tags, ribbons, notebooks scattered naturally, natural daylight mixed with soft indoor lighting and LED glow, realistic shadows and depth, slightly messy but organized workspace, empty room, no people, no human, background only, authentic lived-in working and livestream selling environment, ultra realistic high detail photography',
+      previewImage: '/images/options/scene-linhphap-workroom.jpg',
+      sortOrder: 4
+    },
+
+    {
       value: 'studio',
       label: 'Professional Studio',
       description: 'Clean studio with seamless backdrop',
