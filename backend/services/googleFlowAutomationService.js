@@ -1889,8 +1889,9 @@ class GoogleFlowAutomationService {
     } else if (this.type === 'image') {
       qualityOptions = ['1k', '1K'];
     } else {
-      // Video
-      qualityOptions = ['1080p', '1080P'];
+      // Video: Try 1080P first, fallback to 720p
+      qualityOptions = ['1080p', '1080P', '720p', '720P'];
+      console.log(`   ℹ️  Video (trying 1080P first, fallback to 720p)`);
     }
     
     console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
