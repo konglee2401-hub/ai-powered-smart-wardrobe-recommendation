@@ -182,17 +182,10 @@ class GoogleFlowAutomationService {
       console.log(`   [1] Character: ${characterImagePath}`);
       console.log(`   [2] Product: ${productImagePath}\n`);
 
-      // STEP 2: Configure settings BEFORE uploading (CRITICAL)
-      console.log('🔧 Configuring settings BEFORE upload...');
-      try {
-        await this.configureSettings();
-        console.log('✅ Settings configured\n');
-      } catch (settingsError) {
-        console.log(`⚠️  Settings config failed: ${settingsError.message}`);
-        console.log('⚠️  Continuing anyway...\n');
-      }
+      // NOTE: configureSettings() should be called BEFORE uploadImages() by the caller
+      // uploadImages() focuses only on the upload process
 
-      // STEP 3: Find and log file input
+      // STEP 2: Find and log file input
       console.log('🔍 Finding file input on page...');
       const fileInputFound = await this.page.evaluate(() => {
         const inputs = document.querySelectorAll('input[type="file"]');
@@ -248,67 +241,52 @@ class GoogleFlowAutomationService {
           }
         }
 
-        // Step 3: Get initial hrefs from ALL items to track which one is new
-        console.log(`   📎 Capturing initial hrefs from all virtuoso items...`);
-        const initialAllHrefs = await this.page.evaluate(() => {
-          const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
-          const allHrefs = {};
+        // Step 3: Get initial hrefs from TOP 10 items ONLY to track which one is new
+        console.log(`   📎 Capturing initial hrefs from TOP 10 items...`);
+        const initialTopHrefs = await this.page.evaluate(() => {
+          const items = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]')).slice(0, 10);
+          const topHrefs = {};
           
           for (const item of items) {
             const index = item.getAttribute('data-index');
-            const links = item.querySelectorAll('a[href]');
-            const hrefs = [];
-            for (let i = 0; i < Math.min(1, links.length); i++) {
-              hrefs.push(links[i].getAttribute('href'));
-            }
-            if (hrefs.length > 0) {
-              allHrefs[index] = hrefs[0]; // Store first href for each item
+            const link = item.querySelector('a[href]');
+            if (link) {
+              topHrefs[index] = link.getAttribute('href');
             }
           }
           
-          return allHrefs;
+          return topHrefs;
         });
 
-        console.log(`   ✓ Captured initial hrefs from ${Object.keys(initialAllHrefs).length} items\n`);
+        console.log(`   ✓ Captured initial hrefs from ${Object.keys(initialTopHrefs).length} TOP items\n`);
 
-        // Step 4: Monitor for href changes to confirm upload complete
+        // Step 4: Monitor for NEW href (not in the original TOP 10) to confirm upload complete
         console.log(`   ⏳ Monitoring for NEW href (confirming new image uploaded)...`);
-        let newItemIndex = null;
+        let newItemHref = null;
         let hrefCheckAttempts = 0;
         const maxHrefCheckAttempts = 20; // 20 seconds
 
-        while (newItemIndex === null && hrefCheckAttempts < maxHrefCheckAttempts) {
+        while (newItemHref === null && hrefCheckAttempts < maxHrefCheckAttempts) {
           hrefCheckAttempts++;
 
-          const result = await this.page.evaluate((oldAllHrefs) => {
-            const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
+          const result = await this.page.evaluate((oldTopHrefs) => {
+            // Check all items
+            const items = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+            const oldHrefSet = new Set(Object.values(oldTopHrefs));
             
-            // Find item with NEW href (not in oldAllHrefs)
-            for (const item of items) {
-              const index = item.getAttribute('data-index');
-              const links = item.querySelectorAll('a[href]');
-              
-              if (links.length === 0) continue;
-              
-              const currentHref = links[0].getAttribute('href');
-              const oldHref = oldAllHrefs[index];
-              
-              // If this item's href is NOT in oldAllHrefs, it's a NEW item
-              if (!oldHref || oldHref !== currentHref) {
-                // Double-check: this href is not in the old values anywhere
-                const isNewHref = !Object.values(oldAllHrefs).includes(currentHref);
-                if (isNewHref) {
-                  return { found: true, newIndex: index, newHref: currentHref };
-                }
+            // Find the first <a> tag with href that is NOT in the old TOP 10
+            for (const link of items) {
+              const href = link.getAttribute('href');
+              if (!oldHrefSet.has(href)) {
+                return { found: true, newHref: href };
               }
             }
             
             return { found: false };
-          }, initialAllHrefs);
+          }, initialTopHrefs);
 
           if (result.found) {
-            console.log(`   ✅ NEW item detected at data-index="${result.newIndex}"! New image confirmed.\n`);
-            newItemIndex = result.newIndex;
+            console.log(`   ✅ NEW item detected with href: "${result.newHref.substring(0, 60)}..." New image confirmed.\\n`);\n            newItemHref = result.newHref;
             break;
           }
 
@@ -319,10 +297,9 @@ class GoogleFlowAutomationService {
           await this.page.waitForTimeout(1000);
         }
 
-        if (newItemIndex === null) {
-          console.log(`   ⚠️  No NEW item detected within timeout\n`);
-          console.log(`   ℹ️  Continuing anyway...\n`);
-          newItemIndex = file.index; // Fallback to original index
+        if (newItemHref === null) {
+          console.log(`   ⚠️  No NEW item detected within timeout\\n`);
+          console.log(`   ℹ️  Continuing anyway...\\n`);
         }
 
         // Step 5: Wait 2 seconds for virtuoso card to render
@@ -346,28 +323,22 @@ class GoogleFlowAutomationService {
           try {
             // Find the NEW <a> tag by its href
             console.log(`   🔍 Finding NEW <a> tag with href...`);
-            const linkData = await this.page.evaluate((oldAllHrefs) => {
-              // Find all <a> tags in virtuoso items
-              const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+            const linkData = await this.page.evaluate((targetHref) => {
+              // Find the <a> tag with the specific href
+              const link = document.querySelector(`a[href="${targetHref}"]`);
               
-              for (const link of links) {
-                const href = link.getAttribute('href');
-                // Check if this href is NEW (not in old list)
-                const isNew = !Object.values(oldAllHrefs).includes(href);
-                
-                if (isNew) {
-                  const rect = link.getBoundingClientRect();
-                  return {
-                    found: true,
-                    href: href,
-                    x: Math.round(rect.left + rect.width / 2),
-                    y: Math.round(rect.top + rect.height / 2)
-                  };
-                }
+              if (!link) {
+                return { found: false };
               }
-              
-              return { found: false };
-            }, initialAllHrefs);
+                  
+              const rect = link.getBoundingClientRect();
+              return {
+                found: true,
+                href: targetHref,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }, newItemHref);
 
             if (!linkData.found) {
               console.log(`   ⚠️  NEW <a> tag not found${rightClickAttempts < maxRightClickAttempts ? ', retrying...' : ', skipping'}\n`);
