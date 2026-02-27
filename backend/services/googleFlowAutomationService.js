@@ -358,9 +358,11 @@ class GoogleFlowAutomationService {
             await this.page.mouse.move(linkData.x, linkData.y);
             await this.page.waitForTimeout(300);
 
-            // Right-click on the link
+            // Right-click on the link using mouse movement method (Method 2)
             console.log(`   🖱️  Right-clicking on image...`);
-            await this.page.mouse.click(linkData.x, linkData.y, { button: 'right' });
+            await this.page.mouse.down({ button: 'right' });
+            await this.page.waitForTimeout(50);
+            await this.page.mouse.up({ button: 'right' });
             await this.page.waitForTimeout(800);
 
             // Find and click "Thêm vào câu lệnh" button in context menu
@@ -891,23 +893,96 @@ class GoogleFlowAutomationService {
       const menuInfo = await this.page.evaluate((text, selector) => {
         const menus = document.querySelectorAll(selector);
         
+        // First, log all available menu items for debugging
+        const allItems = [];
         for (const menu of menus) {
           const buttons = menu.querySelectorAll('button');
           for (const btn of buttons) {
-            if (btn.textContent.includes(text)) {
-              const rect = btn.getBoundingClientRect();
-              
-              // Check if visible
-              if (rect.width === 0 || rect.height === 0) {
-                continue;
-              }
-              
+            const btnText = btn.textContent.trim();
+            const rect = btn.getBoundingClientRect();
+            const visible = rect.width > 0 && rect.height > 0;
+            if (visible) {
+              allItems.push(btnText);
+            }
+          }
+        }
+        
+        console.log(`[MENU] Available items: ${allItems.length} found`);
+        allItems.forEach((item, idx) => {
+          console.log(`  [${idx}] "${item}"`);
+        });
+        
+        // Try to find exact match first
+        for (const menu of menus) {
+          const buttons = menu.querySelectorAll('button');
+          for (const btn of buttons) {
+            const btnText = btn.textContent.trim();
+            const rect = btn.getBoundingClientRect();
+            
+            // Check if visible
+            if (rect.width === 0 || rect.height === 0) {
+              continue;
+            }
+            
+            // EXACT MATCH FIRST: Full text equals search text
+            if (btnText === text) {
+              console.log(`[MATCH] EXACT: "${btnText}"`);
               return {
                 found: true,
                 x: Math.round(rect.left + rect.width / 2),
                 y: Math.round(rect.top + rect.height / 2),
-                fullText: btn.textContent.trim()
+                fullText: btnText,
+                matchType: 'exact'
               };
+            }
+          }
+        }
+        
+        // Try substring match - but be careful to match the beginning or a key part
+        // For model selection: "Nano Banana Pro" should match "🍌 Nano Banana Pro" but NOT "🍌 Nano Banana 2"
+        for (const menu of menus) {
+          const buttons = menu.querySelectorAll('button');
+          for (const btn of buttons) {
+            const btnText = btn.textContent.trim();
+            const rect = btn.getBoundingClientRect();
+            
+            // Check if visible
+            if (rect.width === 0 || rect.height === 0) {
+              continue;
+            }
+            
+            // CONTAINS MATCH: Handle model names carefully
+            // For "Nano Banana Pro" search, match "Nano Banana Pro" but not "Nano Banana 2"
+            // Check if the button text contains the search text as a word boundary
+            if (btnText.includes(text)) {
+              // Additional check: for model names, ensure we're matching the right one
+              // "Nano Banana Pro" should NOT match "Nano Banana 2"
+              // Check if any part of the search text is actually different (like "Pro" vs "2")
+              const searchWords = text.split(' ');
+              const btnWords = btnText.split(' ');
+              let allWordsMatch = true;
+              
+              for (const word of searchWords) {
+                // Check if this word appears in the button text
+                const wordFound = btnWords.some(btnWord => 
+                  btnWord.includes(word) || word.includes(btnWord)
+                );
+                if (!wordFound && word.length > 2) { // Ignore very short words
+                  allWordsMatch = false;
+                  break;
+                }
+              }
+              
+              if (allWordsMatch) {
+                console.log(`[MATCH] CONTAINS: "${btnText}"`);
+                return {
+                  found: true,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2),
+                  fullText: btnText,
+                  matchType: 'contains'
+                };
+              }
             }
           }
         }
@@ -917,10 +992,11 @@ class GoogleFlowAutomationService {
 
       if (!menuInfo.found) {
         console.warn(`   ⚠️  Menu item not found: "${itemText}"`);
+        console.log(`   📋 Available menu items should be shown above`);
         return false;
       }
 
-      console.log(`   ✓ Found: "${menuInfo.fullText}"`);
+      console.log(`   ✓ Found: "${menuInfo.fullText}" (${menuInfo.matchType} match)`);
       console.log(`   🖱️  Clicking with mouse movement...`);
       
       // Use mouse movement method (Method 2)
@@ -1060,7 +1136,9 @@ class GoogleFlowAutomationService {
       // STEP 5: Select Model (for both IMAGE and VIDEO)
       console.log(`\n   🤖 STEP ${this.type === 'image' ? 4 : 5}: Select Model`);
       const targetModel = this.options.model;
-      console.log(`   > Selecting: "${targetModel}"`);
+      console.log(`   > Target model: "${targetModel}"`);
+      console.log(`   > Type: ${this.type}`);
+      console.log(`   > Default would be: ${this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast'}`);
       
       // Find model dropdown button from settings menu
       const dropdownClicked = await this.clickDropdownButton(
@@ -2053,29 +2131,46 @@ class GoogleFlowAutomationService {
       }
 
       console.log(`   🖱️  Right-clicking on ${mediaType}...`);
-      await this.page.mouse.click(linkData.x, linkData.y, { button: 'right' });
+      // Use mouse movement method for right-click (Method 2)
+      await this.page.mouse.move(linkData.x, linkData.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down({ button: 'right' });
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up({ button: 'right' });
       await this.page.waitForTimeout(800);
 
       // Find and click download option from context menu
-      const downloadClicked = await this.page.evaluate(() => {
+      const downloadInfo = await this.page.evaluate(() => {
         const buttons = document.querySelectorAll('button[role="menuitem"]');
         
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
           // Look for download / tải xuống button
           if (text.includes('tải') || text.includes('download')) {
-            btn.click();
-            return true;
+            const rect = btn.getBoundingClientRect();
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
           }
         }
         
-        return false;
+        return { found: false };
       });
 
-      if (!downloadClicked) {
+      if (!downloadInfo.found) {
         console.warn('   ⚠️  Download option not found in context menu\n');
         return false;
       }
+
+      // Click download button using mouse movement method
+      console.log('   🖱️  Clicking download option...');
+      await this.page.mouse.move(downloadInfo.x, downloadInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
 
       console.log('   ✓ Download started\n');
       await this.page.waitForTimeout(2000);
@@ -2131,12 +2226,17 @@ class GoogleFlowAutomationService {
         return false;
       }
 
-      console.log('   🖱️  Right-clicking on item...');
-      await this.page.mouse.click(linkData.x, linkData.y, { button: 'right' });
+      console.log('   🖱️  Right-clicking on item using mouse movement method...');
+      // Use mouse movement method for right-click (same as Method 2 for reliability)
+      await this.page.mouse.move(linkData.x, linkData.y);
+      await this.page.waitForTimeout(100);
+      // Perform right-click
+      await this.page.mouse.down({ button: 'right' });
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up({ button: 'right' });
       await this.page.waitForTimeout(800);
 
-      // Find and click "Sử dụng lại câu lệnh" button
-      // Query: Find button with role="menuitem" that contains the undo icon and text
+      // Find and click "Sử dụng lại câu lệnh" button with mouse movement method
       const reuseClicked = await this.page.evaluate(() => {
         const buttons = document.querySelectorAll('button[role="menuitem"]');
         
@@ -2147,9 +2247,13 @@ class GoogleFlowAutomationService {
           
           // Look for "sử dụng lại" text and undo icon
           if ((text.includes('sử dụng lại') || text.includes('reuse')) && hasUndoIcon) {
+            const rect = btn.getBoundingClientRect();
             console.log(`[REUSE] Found button: "${btn.textContent.trim()}"`);
-            btn.click();
-            return true;
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
           }
         }
         
@@ -2157,9 +2261,13 @@ class GoogleFlowAutomationService {
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
           if (text.includes('sử dụng lại') || text.includes('reuse') || text.includes('dùng lại')) {
+            const rect = btn.getBoundingClientRect();
             console.log(`[REUSE] Found button (text only): "${btn.textContent.trim()}"`);
-            btn.click();
-            return true;
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
           }
         }
         
@@ -2168,13 +2276,21 @@ class GoogleFlowAutomationService {
           console.log(`  - "${btn.textContent.trim()}"`);
         });
         
-        return false;
+        return { found: false };
       });
 
-      if (!reuseClicked) {
+      if (!reuseClicked.found) {
         console.log('   ⚠️  "Sử dụng lại câu lệnh" option not found');
         return false;
       }
+
+      // Click the reuse button using mouse movement method (Method 2) for reliability
+      console.log('   🖱️  Clicking "Sử dụng lại câu lệnh" with mouse movement...');
+      await this.page.mouse.move(reuseClicked.x, reuseClicked.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
 
       console.log('   ✓ Reuse command clicked, waiting for prompt reload...');
       await this.page.waitForTimeout(1500);
