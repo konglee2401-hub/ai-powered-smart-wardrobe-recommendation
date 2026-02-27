@@ -395,7 +395,7 @@ router.post('/step-2-generate-images', async (req, res) => {
       productFocus,
       'vi'  // Vietnamese
     );
-    const wearingPrompt = wearingPromptData.prompts.prompt;
+    const wearingPrompt = wearingPromptData.prompt;
     
     console.log('  📝 Building HOLDING prompt (character holding product)...');
     const holdingPromptData = await buildDetailedPrompt(
@@ -405,7 +405,7 @@ router.post('/step-2-generate-images', async (req, res) => {
       productFocus,
       'vi'  // Vietnamese
     );
-    const holdingPrompt = holdingPromptData.prompts.prompt;
+    const holdingPrompt = holdingPromptData.prompt;
 
     console.log(`📝 Prompts built from analysis`);
     console.log(`  Wearing: ${wearingPrompt.substring(0, 100)}...`);

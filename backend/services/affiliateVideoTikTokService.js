@@ -801,8 +801,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     ]);
 
     console.log(`\n✅ PROMPTS BUILT:`);
-    console.log(`  Change-clothes prompt: ${wearingPromptData.prompts.prompt.substring(0, 80)}...`);
-    console.log(`  Holding-product prompt: ${holdingPromptData.prompts.prompt.substring(0, 80)}...`);
+    console.log(`  Change-clothes prompt: ${wearingPromptData.prompt.substring(0, 80)}...`);
+    console.log(`  Holding-product prompt: ${holdingPromptData.prompt.substring(0, 80)}...`);
 
     // ============================================================
     // STEP 2: GENERATE BOTH IMAGES (Optimized - Single Browser)
@@ -830,8 +830,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         characterFilePath,
         productFilePath,
         [
-          wearingPromptData.prompts.prompt,    // Image 1: wearing product
-          holdingPromptData.prompts.prompt     // Image 2: holding product
+          wearingPromptData.prompt,    // Image 1: wearing product
+          holdingPromptData.prompt     // Image 2: holding product
         ]
       );
 
