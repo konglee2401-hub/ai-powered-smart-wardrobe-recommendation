@@ -43,9 +43,14 @@ class GoogleFlowAutomationService {
     const typeLabel = this.type === 'image' ? 'Image' : 'Video';
     console.log(`🚀 Initializing ${typeLabel} Generation Service...\n`);
 
-    if (!fs.existsSync(this.options.outputDir)) {
-      fs.mkdirSync(this.options.outputDir, { recursive: true });
+    // Ensure outputDir is an absolute path for browser downloads
+    const outputDirAbsolute = path.resolve(this.options.outputDir);
+    
+    if (!fs.existsSync(outputDirAbsolute)) {
+      fs.mkdirSync(outputDirAbsolute, { recursive: true });
     }
+
+    console.log(`   📁 Output directory: ${outputDirAbsolute}\n`);
 
     const headlessMode = this.options.headless === true ? 'new' : this.options.headless;
     this.browser = await puppeteer.launch({
@@ -59,8 +64,11 @@ class GoogleFlowAutomationService {
     const client = await this.page.target().createCDPSession();
     await client.send('Page.setDownloadBehavior', {
       behavior: 'allow',
-      downloadPath: this.options.outputDir
+      downloadPath: outputDirAbsolute
     });
+
+    // Update options to use absolute path
+    this.options.outputDir = outputDirAbsolute;
 
     await this.loadSession();
     console.log('✅ Initialized\n');
@@ -2041,9 +2049,16 @@ class GoogleFlowAutomationService {
       while (waitAttempts < maxWaitAttempts) {
         waitAttempts++;
         
-        // Check for new files (all files, not just specific extensions)
+        // Check for new finished files (excluding .crdownload, .tmp)
         const currentFiles = fs.readdirSync(this.options.outputDir);
-        const newFiles = currentFiles.filter(f => !initialFiles.includes(f));
+        const newFiles = currentFiles.filter(f => {
+          // Exclude download-in-progress files
+          if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
+            return false;
+          }
+          // Only include files that are new
+          return !initialFiles.includes(f);
+        });
 
         if (newFiles.length > 0) {
           // Found new file(s)

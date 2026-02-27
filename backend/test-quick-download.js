@@ -19,7 +19,7 @@ async function testQuickDownload() {
     type: 'image',
     projectId: 'c9d5fea9-63e5-4d21-ac72-6830091fdbc0',
     headless: false,
-    outputDir: path.join(__dirname, './backend/temp/download-test')
+    outputDir: path.join(__dirname, './temp/download-test')
   });
 
   try {
