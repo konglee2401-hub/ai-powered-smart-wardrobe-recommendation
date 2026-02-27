@@ -845,83 +845,27 @@ class GoogleFlowAutomationService {
       // STEP 1: Select Image/Video Tab
       console.log('   📋 STEP 1: Select Image/Video Tab');
       if (this.type === 'image') {
-        console.log('   > Selecting IMAGE tab...');
-        const imageTabClicked = await this.page.evaluate(() => {
-          const btn = document.querySelector('button[id*="IMAGE"][role="tab"]');
-          if (btn) {
-            btn.click();
-            return true;
-          }
-          return false;
-        });
-        if (!imageTabClicked) {
-          console.warn('   ⚠️  IMAGE tab click may have failed, continuing...');
-        } else {
-          console.log('   ✓ IMAGE tab selected');
-        }
+        const selector = 'button[id*="IMAGE"][role="tab"]';
+        await this.selectRadixTab(selector, 'IMAGE tab');
       } else {
-        console.log('   > Selecting VIDEO tab...');
-        const videoTabClicked = await this.page.evaluate(() => {
-          const btn = document.querySelector('button[id*="VIDEO"][role="tab"]');
-          if (btn) {
-            btn.click();
-            return true;
-          }
-          return false;
-        });
-        if (!videoTabClicked) {
-          console.warn('   ⚠️  VIDEO tab click may have failed, continuing...');
-        } else {
-          console.log('   ✓ VIDEO tab selected');
-        }
+        const selector = 'button[id*="VIDEO"][role="tab"]';
+        await this.selectRadixTab(selector, 'VIDEO tab');
       }
-      await this.page.waitForTimeout(800);
+      await this.page.waitForTimeout(500);
 
       // STEP 2: Select Aspect Ratio (Portrait 9:16 for TikTok)
       console.log('\n   📐 STEP 2: Select Aspect Ratio');
       const isVertical = this.options.aspectRatio.includes('9:16');
       const targetRatio = isVertical ? 'PORTRAIT' : 'LANDSCAPE';
-      console.log(`   > Selecting ${targetRatio} (${this.options.aspectRatio})...`);
-      
-      const aspectRatioSelected = await this.page.evaluate((target) => {
-        const btn = document.querySelector(`button[id*="${target}"][role="tab"]`);
-        if (btn) {
-          btn.click();
-          return true;
-        }
-        return false;
-      }, targetRatio);
-      
-      if (!aspectRatioSelected) {
-        console.warn(`   ⚠️  ${targetRatio} selection may have failed, continuing...`);
-      } else {
-        console.log(`   ✓ ${targetRatio} selected`);
-      }
-      await this.page.waitForTimeout(800);
+      const ratioSelector = `button[id*="${targetRatio}"][role="tab"]`;
+      await this.selectRadixTab(ratioSelector, `${targetRatio} (${this.options.aspectRatio})`);
+      await this.page.waitForTimeout(500);
 
       // STEP 3: Select Image/Video Count
       console.log('\n   🔢 STEP 3: Select Count');
       const count = this.type === 'image' ? this.options.imageCount : this.options.videoCount;
-      console.log(`   > Selecting x${count}...`);
-      
-      const countSelected = await this.page.evaluate((targetCount) => {
-        // Look for button with text like "x1", "x2", "x3", "x4"
-        const buttons = document.querySelectorAll('button[role="tab"]');
-        for (const btn of buttons) {
-          if (btn.textContent.trim() === `x${targetCount}`) {
-            btn.click();
-            return true;
-          }
-        }
-        return false;
-      }, count);
-      
-      if (!countSelected) {
-        console.warn(`   ⚠️  x${count} selection may have failed, continuing...`);
-      } else {
-        console.log(`   ✓ x${count} selected`);
-      }
-      await this.page.waitForTimeout(800);
+      await this.selectTab(`x${count}`);
+      await this.page.waitForTimeout(500);
 
       // STEP 4: Select Model
       if (this.type === 'image') {
@@ -1260,18 +1204,163 @@ class GoogleFlowAutomationService {
   }
 
   async selectTab(label) {
-    const selected = await this.page.evaluate((targetLabel) => {
-      const buttons = document.querySelectorAll('button[role="tab"]');
-      for (const btn of buttons) {
-        if (btn.textContent.includes(targetLabel)) {
-          btn.click();
-          return true;
+    console.log(`   > Selecting "${label}" tab...`);
+    
+    try {
+      // Find button by text and get its position
+      const buttonInfo = await this.page.evaluate((targetLabel) => {
+        const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
+        
+        for (const btn of buttons) {
+          const text = btn.textContent.trim(); // Trim whitespace
+          
+          console.log(`[SELECT_TAB] Checking button: "${text}"`);
+          
+          // Match by text
+          if (text === targetLabel || text.includes(targetLabel.trim())) {
+            const rect = btn.getBoundingClientRect();
+            
+            // Check if visible
+            if (rect.width === 0 || rect.height === 0) {
+              console.log(`[SELECT_TAB] Button found but not visible`);
+              return { found: false, error: 'Button not visible' };
+            }
+            
+            return {
+              found: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              ariaSelected: btn.getAttribute('aria-selected'),
+              dataState: btn.getAttribute('data-state'),
+              text: text
+            };
+          }
         }
-      }
-      return false;
-    }, label);
+        
+        return { found: false, error: `No tab found with label "${targetLabel}"` };
+      }, label);
 
-    return selected;
+      if (!buttonInfo.found) {
+        console.warn(`   ⚠️  ${buttonInfo.error}`);
+        return false;
+      }
+
+      console.log(`   ✓ Found tab: "${buttonInfo.text}"`);
+      console.log(`     Current state: aria-selected=${buttonInfo.ariaSelected}`);
+      console.log(`     Position: (${buttonInfo.x}, ${buttonInfo.y})`);
+
+      // Use realistic mouse movement to click (Radix UI requirement)
+      console.log(`   🖱️  Clicking with mouse movement...`);
+      await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
+
+      // Wait for state update
+      await this.page.waitForTimeout(300);
+
+      // Verify new state
+      const newState = await this.page.evaluate((targetLabel) => {
+        const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
+        for (const btn of buttons) {
+          if (btn.textContent.trim() === targetLabel || btn.textContent.trim().includes(targetLabel)) {
+            return {
+              ariaSelected: btn.getAttribute('aria-selected'),
+              dataState: btn.getAttribute('data-state')
+            };
+          }
+        }
+        return null;
+      }, label);
+
+      if (newState) {
+        console.log(`   ✓ After click: aria-selected=${newState.ariaSelected}`);
+      }
+
+      return true;
+
+    } catch (error) {
+      console.warn(`   ❌ Error selecting tab: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Universal Radix tab selector using mouse movement (works for all tab types)
+   * More reliable than direct .click() for Radix UI components
+   */
+  async selectRadixTab(selector, displayName) {
+    console.log(`   > Selecting ${displayName}...`);
+    
+    try {
+      // Find button by selector
+      const buttonInfo = await this.page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        
+        if (!btn) {
+          return { found: false, error: `Button not found with selector: ${sel}` };
+        }
+        
+        const rect = btn.getBoundingClientRect();
+        
+        // Check if visible
+        if (rect.width === 0 || rect.height === 0) {
+          return { found: false, error: 'Button found but not visible' };
+        }
+        
+        return {
+          found: true,
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          text: btn.textContent.trim().substring(0, 50),
+          ariaSelected: btn.getAttribute('aria-selected'),
+          dataState: btn.getAttribute('data-state')
+        };
+      }, selector);
+
+      if (!buttonInfo.found) {
+        console.warn(`   ⚠️  ${buttonInfo.error}`);
+        return false;
+      }
+
+      console.log(`   ✓ Found button: "${buttonInfo.text}"`);
+      console.log(`     Current state: aria-selected=${buttonInfo.ariaSelected}`);
+      console.log(`     Position: (${buttonInfo.x}, ${buttonInfo.y})`);
+
+      // Use realistic mouse movement to click
+      console.log(`   🖱️  Clicking with mouse movement...`);
+      await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(50);
+      await this.page.mouse.up();
+
+      // Wait for state update
+      await this.page.waitForTimeout(300);
+
+      // Verify new state
+      const newState = await this.page.evaluate((sel) => {
+        const btn = document.querySelector(sel);
+        if (btn) {
+          return {
+            ariaSelected: btn.getAttribute('aria-selected'),
+            dataState: btn.getAttribute('data-state')
+          };
+        }
+        return null;
+      }, selector);
+
+      if (newState) {
+        console.log(`   ✓ After click: aria-selected=${newState.ariaSelected}\n`);
+      }
+
+      return true;
+
+    } catch (error) {
+      console.warn(`   ❌ Error selecting tab: ${error.message}\n`);
+      return false;
+    }
   }
 
   async clickCreate() {
