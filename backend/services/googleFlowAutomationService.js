@@ -879,16 +879,25 @@ class GoogleFlowAutomationService {
 
   /**
    * Click dropdown button using mouse movement method (Method 2)
-   * Reliable for Radix UI components
+   * IMPORTANT: Must query from settings container [data-radix-menu-content]
    */
   async clickDropdownButton(selector, displayName = 'Dropdown') {
     console.log(`   > Clicking ${displayName} dropdown...`);
     
     try {
       const btnInfo = await this.page.evaluate((sel) => {
-        const btn = document.querySelector(sel);
+        // CRITICAL: Query from settings menu container, NOT from entire page
+        const settingsContainer = document.querySelector('[data-radix-menu-content]');
+        if (!settingsContainer) {
+          console.log('[DROPDOWN] Settings container [data-radix-menu-content] not found');
+          return { found: false, error: 'Settings container not found' };
+        }
+        
+        console.log('[DROPDOWN] Found settings container, searching for button...');
+        const btn = settingsContainer.querySelector(sel);
         
         if (!btn) {
+          console.log(`[DROPDOWN] Button not found in settings container`);
           return { found: false, error: `Button not found with selector: ${sel}` };
         }
         
@@ -896,9 +905,11 @@ class GoogleFlowAutomationService {
         
         // Check if visible
         if (rect.width === 0 || rect.height === 0) {
+          console.log('[DROPDOWN] Button found but not visible');
           return { found: false, error: 'Button found but not visible' };
         }
         
+        console.log(`[DROPDOWN] Found visible button: "${btn.textContent.trim().substring(0, 30)}"`);
         return {
           found: true,
           x: Math.round(rect.left + rect.width / 2),
@@ -2532,14 +2543,17 @@ class GoogleFlowAutomationService {
 
           // STEP C: Wait for NEW generation to complete with href monitoring
           console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
-          console.log('[STEP C] 📊 Monitoring hrefs for NEW image...');
+          console.log('[STEP C] 📊 Monitoring hrefs for NEW image...\n');
           
           const startTime = Date.now();
           const timeoutMs = this.options.timeouts.generation || 120000;
+          let monitoringAttempt = 0;
+          const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
 
           // Wait for NEW image link to appear (NEW href not in initial list)
           await this.page.waitForFunction(
             async () => {
+              monitoringAttempt++;
               const result = await this.page.evaluate((oldHrefs) => {
                 const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]');
                 
@@ -2557,7 +2571,7 @@ class GoogleFlowAutomationService {
                     // Check if this href is NEW (not in any old values)
                     const isNewHref = !Object.values(oldHrefs).includes(currentHref);
                     if (isNewHref) {
-                      return { found: true, newHref: currentHref };
+                      return { found: true, newHref: currentHref, newIndex: index };
                     }
                   }
                 }
@@ -2565,9 +2579,16 @@ class GoogleFlowAutomationService {
               }, initialHrefs);
               
               if (result.found) {
+                console.log(`   [GENERATION] ✅ NEW item detected at data-index="\${result.newIndex}"! New image confirmed.\n`);
                 lastGeneratedHref = result.newHref;
                 return true;
               }
+              
+              // Log progress every 10 attempts
+              if (monitoringAttempt % 10 === 0) {
+                console.log(`   [GENERATION] Attempt \${monitoringAttempt}/\${maxMonitoringAttempts}`);
+              }
+              
               return false;
             },
             { timeout: timeoutMs }
