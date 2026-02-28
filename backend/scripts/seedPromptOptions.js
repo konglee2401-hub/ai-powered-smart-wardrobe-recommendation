@@ -22,6 +22,107 @@ const promptOptions = [
   // Scene options
   {
     category: 'scene',
+    label: 'Try-On Room (Linh Pháp)',
+    labelVi: 'Phòng Thử Đồ (Linh Pháp)',
+    value: 'linhphap-tryon-room',
+    description: 'Realistic home try-on room for women fashion, lived-in and natural',
+    descriptionVi: 'Phòng thử đồ tại nhà chân thực cho thời trang nữ, tự nhiên, có dấu hiệu sử dụng',
+    keywords: ['try-on room', 'home fitting', 'women fashion', 'lived-in', 'natural light', 'bedroom try on'],
+    technicalDetails: {
+      environment: 'real apartment try-on room',
+      lighting: 'soft daylight from window',
+      elements: 'mirror, chair, bed, clothes, accessories',
+      usage: 'fashion overlay, lifestyle, AI model'
+    },
+    promptSuggestion: 'A realistic home try-on room for women fashion, slightly messy lived-in environment, natural window daylight, mirror/chair/bed and mixed fashion items for authentic styling context.',
+    promptSuggestionVi: 'Phòng thử đồ tại nhà chân thực cho thời trang nữ, hơi bừa bộn tự nhiên, ánh sáng cửa sổ mềm, có gương/ghế/giường và nhiều món đồ thời trang đa dạng.',
+    sceneLockedPrompt: 'A realistic home try-on room for women\'s fashion, neutral walls and natural materials, wooden floor with visible texture, light curtains softly diffusing daylight, a full-length mirror leaning against the wall, a chair and bed with various fashion items casually placed, women\'s clothing including tops, dresses, matching sets, loungewear, sleepwear, and sexy outfits, different fabrics such as cotton, silk, lace, satin, a mix of colors, patterns, and tones, not uniform, women\'s accessories visible around the room, handbags, shoes, sandals, heels placed naturally on the floor, a small shelf with makeup items, cosmetics, and beauty products, a few hats and fashion accessories casually arranged, natural folds, real fabric texture, soft daylight with realistic shadows, slightly messy lived-in feeling, a small fabric tag reading "Linh Pháp" attached to a clothing hanger, empty scene, no people, no human, no mannequin, no reflection of people, background only, realistic apartment environment, ultra realistic high detail photography',
+    sceneLockedPromptVi: 'Phòng thay đồ tại nhà chân thực cho thời trang nữ, tường trung tính và chất liệu tự nhiên, sàn gỗ có vân rõ, rèm sáng khuếch tán ánh sáng ban ngày, gương đứng tựa tường, ghế và giường có nhiều món đồ thời trang đặt tự nhiên, gồm áo, váy, set bộ, đồ mặc nhà, đồ ngủ và đồ sexy, đa dạng chất liệu cotton/silk/lace/satin, màu sắc và họa tiết phong phú không đồng nhất, phụ kiện nữ xuất hiện quanh phòng, túi xách/giày/sandal/giày cao gót đặt tự nhiên trên sàn, kệ nhỏ có đồ makeup và mỹ phẩm, mũ và phụ kiện sắp xếp ngẫu nhiên, nếp vải tự nhiên và texture thật, ánh sáng ban ngày mềm với bóng đổ thực tế, cảm giác có người ở, hơi bừa nhưng hợp lý, có tag vải chữ "Linh Pháp" trên móc treo, cảnh trống không người, không mannequin, không phản chiếu người, chỉ background, môi trường căn hộ chân thực, ảnh siêu thực chi tiết cao',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, menswear, masculine style, single color palette, pastel only, monochrome, perfect studio setup, luxury showroom, cgi, unreal, artificial, camera POV, selfie, portrait',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, đồ nam, phong cách nam tính, bảng màu đơn sắc, chỉ pastel, setup studio hoàn hảo, showroom xa xỉ, CGI, giả, góc nhìn POV, selfie, chân dung',
+    previewImage: '/images/options/scene-linhphap-tryon.jpg',
+    isActive: true,
+    useSceneLock: true,
+    sortOrder: 1
+  },
+  {
+    category: 'scene',
+    label: 'Small Boutique (Linh Pháp)',
+    labelVi: 'Boutique Nhỏ (Linh Pháp)',
+    value: 'linhphap-boutique',
+    description: 'Authentic small women fashion boutique with diverse products',
+    descriptionVi: 'Boutique thời trang nữ quy mô nhỏ, chân thực, hàng hóa đa dạng',
+    keywords: ['boutique', 'small shop', 'women fashion store', 'real retail', 'local business'],
+    technicalDetails: {
+      environment: 'small local fashion boutique',
+      lighting: 'mixed daylight and warm ambient',
+      elements: 'clothing racks, shoes, bags, cosmetics',
+      usage: 'selling visuals, product showcase'
+    },
+    promptSuggestion: 'Authentic small women fashion boutique interior with mixed daylight and warm ambient light, diverse fashion racks and accessories, natural local retail atmosphere.',
+    promptSuggestionVi: 'Không gian boutique thời trang nữ nhỏ, ánh sáng pha giữa daylight và đèn ấm, rack đồ đa dạng cùng phụ kiện, không khí bán hàng địa phương chân thực.',
+    sceneLockedPrompt: 'A small local women\'s fashion boutique interior, neutral base colors with warm wooden elements, clothing racks filled with women\'s fashion items, a wide variety of apparel including tops, dresses, matching sets, loungewear, sexy outfits, diverse colors, patterns, and fabrics, shoes, sandals, heels displayed near the racks, handbags hanging or placed on shelves, hats and fashion accessories integrated naturally, a small display table with makeup and beauty products, natural arrangement, not perfectly styled, no single dominant color palette, warm ambient lighting mixed with daylight, authentic small business atmosphere, a subtle handwritten sign reading "Linh Pháp" placed on a shelf, empty store, no people, no mannequin, background only, realistic retail environment, ultra realistic',
+    sceneLockedPromptVi: 'Không gian boutique thời trang nữ địa phương quy mô nhỏ, tông nền trung tính với điểm nhấn gỗ ấm, rack quần áo đầy đủ sản phẩm nữ, đa dạng áo, váy, set bộ, đồ mặc nhà, đồ sexy, màu sắc/họa tiết/chất liệu phong phú, giày/sandal/giày cao gót trưng gần kệ, túi xách treo hoặc đặt trên shelf, mũ và phụ kiện sắp xếp tự nhiên, bàn trưng bày nhỏ có mỹ phẩm và đồ làm đẹp, bố cục tự nhiên không quá hoàn hảo, không có bảng màu đơn điệu, ánh sáng đèn ấm pha daylight, bầu không khí cửa hàng nhỏ chân thực, có bảng viết tay "Linh Pháp" đặt trên kệ, cửa hàng trống không người, không mannequin, chỉ background, môi trường bán lẻ chân thực, siêu thực',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, menswear, luxury fashion house, perfect showroom, single color theme, cgi, artificial lighting, camera POV, portrait',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, đồ nam, cửa hàng thời trang xa xỉ, showroom hoàn hảo, tông màu đơn điệu, CGI, ánh sáng giả, POV, chân dung',
+    previewImage: '/images/options/scene-linhphap-boutique.jpg',
+    isActive: true,
+    useSceneLock: true,
+    sortOrder: 2
+  },
+  {
+    category: 'scene',
+    label: 'Bedroom Lifestyle (Linh Pháp)',
+    labelVi: 'Phòng Ngủ Lifestyle (Linh Pháp)',
+    value: 'linhphap-bedroom-lifestyle',
+    description: 'Realistic feminine bedroom for lifestyle fashion content',
+    descriptionVi: 'Phòng ngủ nữ tính chân thực cho nội dung thời trang lifestyle',
+    keywords: ['bedroom', 'lifestyle', 'women fashion', 'home wear', 'daily life'],
+    technicalDetails: {
+      environment: 'real lived-in bedroom',
+      lighting: 'natural window light',
+      elements: 'bed, clothes, shoes, bags, vanity',
+      usage: 'lifestyle fashion, home wear, sexy wear'
+    },
+    promptSuggestion: 'Feminine lived-in bedroom with natural daylight, mixed women fashion items and accessories, authentic everyday lifestyle mood for homewear content.',
+    promptSuggestionVi: 'Phòng ngủ nữ tính có dấu hiệu sử dụng, ánh sáng tự nhiên từ cửa sổ, nhiều items thời trang và phụ kiện, phù hợp nội dung lifestyle tại nhà.',
+    sceneLockedPrompt: 'A realistic feminine bedroom lifestyle background, neutral wall tones and wooden furniture, bed, chair, and small table with women\'s fashion items, a mix of tops, dresses, sets, sleepwear, and sexy outfits, clothes casually placed with natural folds, variety of colors and textures, handbags resting on a chair, shoes and sandals placed near the bed, hats and accessories casually arranged, a vanity or small table with makeup and cosmetics, soft daylight coming through a window, realistic shadows and depth, lived-in everyday atmosphere, a small fabric tag reading "Linh Pháp" placed on folded clothing, empty scene, no people, background only, realistic home environment, ultra realistic photography',
+    sceneLockedPromptVi: 'Background phòng ngủ nữ tính chân thực cho lifestyle, tường trung tính và nội thất gỗ, giường/ghế/bàn nhỏ có các món thời trang nữ, gồm áo, váy, set bộ, đồ ngủ, đồ sexy, quần áo đặt tự nhiên với nếp gấp thật, đa dạng màu sắc và texture, túi xách đặt trên ghế, giày và sandal gần giường, mũ và phụ kiện sắp xếp ngẫu nhiên, bàn trang điểm nhỏ có mỹ phẩm, ánh sáng cửa sổ mềm, bóng đổ và chiều sâu thực tế, không khí đời thường có người ở, có tag vải chữ "Linh Pháp" trên đồ gấp, cảnh trống không người, chỉ background, môi trường nhà ở chân thực, ảnh siêu thực',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, hands, reflection of people, menswear, hotel room, luxury suite, single color palette, cgi, artificial, camera POV',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, tay, phản chiếu người, đồ nam, phòng khách sạn, luxury suite, bảng màu đơn điệu, CGI, giả, góc POV',
+    previewImage: '/images/options/scene-linhphap-bedroom.jpg',
+    isActive: true,
+    useSceneLock: true,
+    sortOrder: 3
+  },
+  {
+    category: 'scene',
+    label: 'Workroom & Livestream (Linh Pháp)',
+    labelVi: 'Phòng Làm Việc & Livestream (Linh Pháp)',
+    value: 'linhphap-workroom-livestream',
+    description: 'Home workroom with livestream setup and Linh Pháp LED sign',
+    descriptionVi: 'Phòng làm việc tại nhà có setup livestream và đèn LED Linh Pháp',
+    keywords: ['livestream', 'workroom', 'fashion seller', 'home business', 'behind the scenes'],
+    technicalDetails: {
+      environment: 'home workroom used for selling',
+      lighting: 'daylight + soft indoor + LED sign',
+      elements: 'tripod, ring light, mic, desk, clothes',
+      branding: 'LED sign reading Linh Pháp',
+      usage: 'livestream background, selling video'
+    },
+    promptSuggestion: 'Realistic home workroom for women fashion seller with livestream tools, mixed lighting and visible Linh Pháp LED sign, slightly messy but organized.',
+    promptSuggestionVi: 'Phòng làm việc tại nhà của chủ shop thời trang nữ, có thiết bị livestream, ánh sáng pha trộn và đèn LED Linh Pháp, hơi bừa nhưng có tổ chức.',
+    sceneLockedPrompt: 'A realistic home workroom of a female fashion shop owner, used for daily work and livestream selling, natural materials, wooden desk and shelves, a clothing rack filled with women\'s fashion items, including tops, dresses, matching sets, loungewear, and sexy outfits, diverse colors, patterns, and fabric types, no uniform color palette, shoes, handbags, and fashion accessories placed naturally around the room, cosmetics and beauty products on a side table, livestream tools integrated naturally into the space, a smartphone mounted on a tripod positioned for livestream, a ring light visible near the desk, a small desk microphone or clip-on mic, charging cables, power strips, and adapters slightly visible, a laptop or tablet open on the desk, a soft LED neon sign on the wall reading "Linh Pháp", warm white or soft pink LED glow not overpowering, open boxes with fashion items and packaging materials nearby, fabric samples, tags, ribbons, notebooks scattered naturally, natural daylight mixed with soft indoor lighting and LED glow, realistic shadows and depth, slightly messy but organized workspace, empty room, no people, no human, background only, authentic lived-in working and livestream selling environment, ultra realistic high detail photography',
+    sceneLockedPromptVi: 'Phòng làm việc tại nhà chân thực của nữ chủ shop thời trang, dùng cho công việc hàng ngày và livestream bán hàng, vật liệu tự nhiên, bàn và kệ gỗ, rack đồ chứa nhiều sản phẩm nữ gồm áo, váy, set bộ, đồ mặc nhà, đồ sexy, màu sắc/họa tiết/chất liệu đa dạng, không đồng nhất bảng màu, giày/túi/phụ kiện đặt tự nhiên quanh phòng, mỹ phẩm và đồ làm đẹp trên bàn phụ, thiết bị livestream tích hợp tự nhiên trong không gian, điện thoại gắn tripod để livestream, ring light gần bàn, micro bàn hoặc micro cài áo, dây sạc/ổ cắm/adapter hơi lộ, laptop hoặc tablet mở trên bàn, đèn LED chữ "Linh Pháp" trên tường, ánh LED trắng ấm hoặc hồng nhẹ không quá gắt, có thùng hàng mở và vật liệu đóng gói, mẫu vải/tag/ribbon/sổ ghi chú đặt tự nhiên, ánh sáng ban ngày pha đèn trong nhà và LED, bóng đổ có chiều sâu, không gian hơi bừa nhưng có tổ chức, phòng trống không người, chỉ background, môi trường làm việc và livestream chân thực, ảnh siêu thực chi tiết cao',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, menswear, masculine style, professional TV studio, perfect influencer room, luxury showroom, single color palette, pastel only, overly bright neon, cgi, unreal, artificial, camera POV, selfie, portrait',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, đồ nam, phong cách nam tính, studio TV chuyên nghiệp, phòng influencer quá hoàn hảo, showroom xa xỉ, bảng màu đơn điệu, chỉ pastel, đèn neon quá gắt, CGI, giả, POV, selfie, chân dung',
+    previewImage: '/images/options/scene-linhphap-workroom.jpg',
+    isActive: true,
+    useSceneLock: true,
+    sortOrder: 4
+  },
+  {
+    category: 'scene',
     label: 'Studio',
     labelVi: 'Phòng Studio',
     value: 'studio',
@@ -34,6 +135,8 @@ const promptOptions = [
       equipment: 'professional photography setup'
     },
     promptSuggestion: 'Photography studio with white seamless backdrop, professional lighting setup, pristine clean floor, perfect for fashion photography displays',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, selfie, portrait, camera POV, cluttered background, cgi, artificial render, low detail',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, selfie, chân dung, góc POV, nền lộn xộn, CGI, render giả, ít chi tiết',
     isActive: true,
     sortOrder: 1
   },
@@ -51,6 +154,8 @@ const promptOptions = [
       atmosphere: 'relaxed summer vibes'
     },
     promptSuggestion: 'Golden hour beach setting with ocean waves in background, sandy beach, warm sunlight creating golden tones, relaxed vacation aesthetic',
+    sceneNegativePrompt: 'people, human, crowd, model, mannequin, face, body, hands, reflection of people, storm weather, dark moody sky, cgi water, artificial beach set, low detail',
+    sceneNegativePromptVi: 'người, đám đông, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, thời tiết bão, trời tối, nước biển CGI, bối cảnh biển giả, ít chi tiết',
     isActive: true,
     sortOrder: 2
   },
@@ -68,6 +173,8 @@ const promptOptions = [
       atmosphere: 'contemporary urban'
     },
     promptSuggestion: 'Urban street setting with modern city architecture, brick walls or glass buildings, street-level perspective, contemporary metropolitan vibe',
+    sceneNegativePrompt: 'people, human, crowd, traffic jam, mannequin, face, body, hands, reflection of people, dystopian cyberpunk, overexposed neon, cgi buildings, low detail',
+    sceneNegativePromptVi: 'người, đám đông, kẹt xe, mannequin, mặt, cơ thể, tay, phản chiếu người, cyberpunk quá đà, neon cháy sáng, tòa nhà CGI, ít chi tiết',
     isActive: true,
     sortOrder: 3
   },
@@ -85,6 +192,8 @@ const promptOptions = [
       atmosphere: 'earthy and organic'
     },
     promptSuggestion: 'Natural outdoor environment with lush green trees, plants, garden setting, organic natural lighting, earthy peaceful atmosphere',
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body, hands, reflection of people, artificial plastic plants, fantasy forest, heavy fog, cgi render, low detail',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, cây nhựa giả, rừng fantasy, sương mù dày, render CGI, ít chi tiết',
     isActive: true,
     sortOrder: 4
   },
@@ -100,6 +209,8 @@ const promptOptions = [
       atmosphere: 'corporate professional'
     },
     promptSuggestion: 'Modern office environment with sleek furniture, minimalist desk setup, professional ambiance, corporate professional aesthetic, business-ready setting',
+    sceneNegativePrompt: 'people, human, office workers, model, mannequin, face, body, hands, reflection of people, messy paperwork chaos, dark office noir, cgi render, low detail',
+    sceneNegativePromptVi: 'người, nhân viên văn phòng, mẫu, mannequin, mặt, cơ thể, tay, phản chiếu người, giấy tờ bừa bộn, văn phòng tối noir, render CGI, ít chi tiết',
     isActive: true,
     sortOrder: 5
   },

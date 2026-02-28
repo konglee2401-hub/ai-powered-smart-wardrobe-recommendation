@@ -31,6 +31,138 @@ class ChatGPTService extends BrowserService {
     console.log('✅ ChatGPT initialized successfully');
   }
 
+
+  /**
+   * Generate text-only response from ChatGPT browser (no image upload)
+   * Returns raw assistant text for downstream JSON extraction.
+   */
+  async generateText(prompt) {
+    console.log('\n🧠 ChatGPT BROWSER TEXT GENERATION');
+    console.log('='.repeat(80));
+
+    try {
+      await this.closeLoginModal();
+
+      const inputSelectors = [
+        'textarea[placeholder*="Message"]',
+        'textarea',
+        '[contenteditable="true"]',
+        '#prompt-textarea'
+      ];
+
+      let selector = null;
+      for (const s of inputSelectors) {
+        const el = await this.page.$(s);
+        if (el) {
+          selector = s;
+          break;
+        }
+      }
+
+      if (!selector) {
+        throw new Error('Could not find ChatGPT input box');
+      }
+
+      // IMPORTANT: Insert full prompt in one shot (paste-style), avoid typing.
+      // Typing multi-line prompts can emit Enter key events and submit prematurely.
+      const inserted = await this.page.evaluate((sel, fullPrompt) => {
+        const elem = document.querySelector(sel);
+        if (!elem) return false;
+
+        if (elem.tagName === 'TEXTAREA' || elem.tagName === 'INPUT') {
+          elem.focus();
+          elem.value = fullPrompt;
+          elem.dispatchEvent(new Event('input', { bubbles: true }));
+          elem.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+
+        // contenteditable fallback
+        if (elem.getAttribute('contenteditable') === 'true') {
+          elem.focus();
+          elem.textContent = fullPrompt;
+          elem.dispatchEvent(new InputEvent('input', { bubbles: true, data: fullPrompt, inputType: 'insertText' }));
+          elem.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+
+        return false;
+      }, selector, prompt);
+
+      if (!inserted) {
+        throw new Error('Failed to insert full prompt into ChatGPT input');
+      }
+
+      await this.page.waitForTimeout(300);
+
+      // Submit explicitly via send button first (preferred), Enter as fallback.
+      const submittedByButton = await this.page.evaluate(() => {
+        const candidates = [
+          'button[data-testid="send-button"]',
+          'button[aria-label*="Send"]',
+          'button[aria-label*="send"]',
+          'button[title*="Send"]',
+          'button:has(svg)'
+        ];
+
+        for (const selector of candidates) {
+          const buttons = document.querySelectorAll(selector);
+          for (const btn of buttons) {
+            const disabled = btn.disabled || btn.getAttribute('aria-disabled') === 'true';
+            if (!disabled && btn.offsetParent !== null) {
+              btn.click();
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (!submittedByButton) {
+        await this.page.focus(selector);
+        await this.page.keyboard.press('Enter');
+      }
+
+      // Wait until assistant response is present and stable
+      await this.page.waitForTimeout(9000);
+
+      const response = await this.page.evaluate(() => {
+        const candidates = [
+          '[data-message-author-role="assistant"]',
+          'article',
+          '.markdown'
+        ];
+
+        for (const selector of candidates) {
+          const nodes = document.querySelectorAll(selector);
+          if (nodes.length > 0) {
+            const last = nodes[nodes.length - 1];
+            if (last?.innerText?.trim()) return last.innerText.trim();
+          }
+        }
+
+        const markdownBlocks = document.querySelectorAll('.markdown, pre, code');
+        if (markdownBlocks.length > 0) {
+          const last = markdownBlocks[markdownBlocks.length - 1];
+          if (last?.innerText?.trim()) return last.innerText.trim();
+        }
+
+        return '';
+      });
+
+      if (!response) {
+        throw new Error('Could not extract text response from ChatGPT');
+      }
+
+      console.log(`✅ ChatGPT response length: ${response.length}`);
+      return response;
+    } catch (error) {
+      console.error('❌ ChatGPT text generation failed:', error.message);
+      await this.saveErrorDebugInfo('chatgpt-text');
+      throw error;
+    }
+  }
+
   /**
    * Close login modal if it appears
    */
