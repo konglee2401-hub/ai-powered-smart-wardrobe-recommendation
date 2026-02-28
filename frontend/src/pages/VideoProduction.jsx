@@ -12,9 +12,24 @@ import { AccountCard } from '@/components/VideoProduction/AccountCard';
 import { VideoMashupCreator } from '@/components/VideoProduction/VideoMashupCreator';
 import { ProcessingMonitor } from '@/components/VideoProduction/ProcessingMonitor';
 import { QueueScannerPanel } from '@/components/VideoProduction/QueueScannerPanel';
-import { Video, Users, Library, Zap, Plus, Play, BarChart3, Zap as Zap2 } from 'lucide-react';
+import { Video, Users, Library, Zap, Plus, Play, BarChart3, Zap as Zap2, ShieldCheck } from 'lucide-react';
 import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
+
+const emptyAccountForm = {
+  platform: 'youtube',
+  displayName: '',
+  email: '',
+  accountHandle: '',
+  pageId: '',
+  channelId: '',
+  businessId: '',
+  apiKey: '',
+  accessToken: '',
+  refreshToken: '',
+  clientId: '',
+  clientSecret: ''
+};
 
 export function VideoProduction() {
   const { t } = useTranslation();
@@ -22,64 +37,150 @@ export function VideoProduction() {
     getAllAccounts,
     getAccountStats,
     addAccount,
+    verifyAccount,
+    verifyAllAccounts,
+    validateAccountConfig,
+    deleteAccount,
     accounts,
-    queue,
   } = useVideoProductionStore();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const [selectedMediaForVideo, setSelectedMediaForVideo] = useState(null);
-  const [formData, setFormData] = useState({
-    platform: 'tiktok',
-    username: '',
-    password: '',
-    displayName: '',
-    email: '',
-  });
+  const [testingConfig, setTestingConfig] = useState(false);
+  const [testingAllAccounts, setTestingAllAccounts] = useState(false);
+  const [formData, setFormData] = useState(emptyAccountForm);
 
   useEffect(() => {
     getAllAccounts();
     getAccountStats();
   }, [getAllAccounts, getAccountStats]);
 
+  const platformRequirements = {
+    youtube: {
+      title: 'YouTube Data API v3 / YouTube Upload',
+      doc: 'OAuth2 scopes: youtube.upload, youtube, youtubepartner-channel-audit',
+      idLabel: 'Channel ID',
+      idField: 'channelId'
+    },
+    facebook: {
+      title: 'Facebook Graph API / Pages API',
+      doc: 'Permissions: pages_manage_posts, pages_read_engagement, pages_show_list, publish_video',
+      idLabel: 'Page ID',
+      idField: 'pageId'
+    },
+    tiktok: {
+      title: 'TikTok Content Posting API / Marketing API',
+      doc: 'Scopes: video.upload, video.publish, user.info.basic; business app review required',
+      idLabel: 'Business / Advertiser ID',
+      idField: 'businessId'
+    }
+  };
+
+  const currentRequirements = platformRequirements[formData.platform];
+
+  const createPayload = () => {
+    const platformIdentity = {
+      youtube: formData.channelId,
+      facebook: formData.pageId,
+      tiktok: formData.businessId
+    };
+
+    return {
+      username: formData.accountHandle,
+      password: formData.accessToken,
+      email: formData.email,
+      displayName: formData.displayName,
+      metadata: {
+        accountHandle: formData.accountHandle,
+        pageId: formData.pageId,
+        channelId: formData.channelId,
+        businessId: formData.businessId,
+        apiKey: formData.apiKey,
+        accessToken: formData.accessToken,
+        refreshToken: formData.refreshToken,
+        clientId: formData.clientId,
+        clientSecret: formData.clientSecret,
+        postingReadiness: {
+          supportsVideoUpload: true,
+          supportsScheduledPosts: true,
+          supportsDraft: true,
+          supportsTitleDescription: true,
+          supportsHashtags: true,
+          platform: formData.platform,
+          configuredIdentity: platformIdentity[formData.platform]
+        }
+      }
+    };
+  };
+
   const handleAddAccount = async (e) => {
     e.preventDefault();
     try {
+      const payload = createPayload();
       await addAccount(
         formData.platform,
-        formData.username,
-        formData.password,
-        formData.displayName,
-        formData.email,
-        {}
+        payload.username,
+        payload.password,
+        payload.displayName,
+        payload.email,
+        payload.metadata
       );
-      toast.success('Account added successfully!');
-      setFormData({ platform: 'tiktok', username: '', password: '', displayName: '', email: '' });
+      toast.success('Account configuration saved successfully!');
+      setFormData(emptyAccountForm);
       setShowAddAccount(false);
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     }
   };
 
+  const handleTestAccountConfig = async () => {
+    setTestingConfig(true);
+    try {
+      const payload = createPayload();
+      const result = await validateAccountConfig(formData.platform, payload.metadata);
+      if (result.valid) {
+        toast.success(`Configuration is valid (${result.checkedWith || 'api-check'})`);
+      } else {
+        toast.error(`Missing: ${(result.missing || []).join(', ')}`);
+      }
+    } catch (error) {
+      toast.error(`Configuration test failed: ${error.message}`);
+    } finally {
+      setTestingConfig(false);
+    }
+  };
+
+  const handleTestAllAccounts = async () => {
+    if (!accounts.items.length) {
+      toast.error('No configured accounts to test.');
+      return;
+    }
+
+    setTestingAllAccounts(true);
+    try {
+      const result = await verifyAllAccounts();
+      const total = result.total ?? accounts.items.length;
+      const success = result.success ?? result.connected ?? 0;
+      const failed = result.failed ?? Math.max(total - success, 0);
+      toast.success(`Connection test done: ${success}/${total} connected${failed ? `, ${failed} failed` : ''}`);
+    } catch (error) {
+      toast.error(`Cannot test all accounts: ${error.message}`);
+    } finally {
+      setTestingAllAccounts(false);
+    }
+  };
+
   const handleGallerySelect = (items) => {
-    // If single item (not multiselect), items will be an object
     const item = Array.isArray(items) ? items[0] : items;
-    
+
     if (!item || !item.url || !item.name) {
       console.error('❌ Invalid gallery item selected:', item);
       toast.error('Error: Selected item is missing required data');
       return;
     }
-    
-    console.log(`🎬 Media selected for video production:`, { 
-      assetId: item.assetId, 
-      name: item.name, 
-      url: item.url,
-      type: item.type,
-      category: item.category
-    });
-    
+
     setSelectedMediaForVideo(item);
     toast.success(`Selected: ${item.name}`);
   };
@@ -96,13 +197,11 @@ export function VideoProduction() {
 
   return (
     <div className="w-full h-full bg-gray-900 text-white p-6 overflow-auto">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">{t('videoProduction.title')}</h1>
         <p className="text-gray-400">{t('videoProduction.subtitle')}</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-gray-700 pb-0 overflow-x-auto">
         {tabButtons.map((tab) => {
           const Icon = tab.icon;
@@ -123,7 +222,6 @@ export function VideoProduction() {
         })}
       </div>
 
-      {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <SystemStatus />
@@ -156,44 +254,52 @@ export function VideoProduction() {
         </div>
       )}
 
-      {/* Creator Tab */}
-      {activeTab === 'creator' && (
-        <VideoMashupCreator />
-      )}
+      {activeTab === 'creator' && <VideoMashupCreator />}
+      {activeTab === 'processing' && <ProcessingMonitor />}
+      {activeTab === 'scanner' && <QueueScannerPanel />}
 
-      {/* Processing Tab */}
-      {activeTab === 'processing' && (
-        <ProcessingMonitor />
-      )}
-
-      {/* Queue Scanner Tab */}
-      {activeTab === 'scanner' && (
-        <QueueScannerPanel />
-      )}
-
-      {/* Accounts Tab */}
       {activeTab === 'accounts' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+            <h3 className="font-semibold flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4 h-4 text-green-400" />
+              Platform readiness checklist
+            </h3>
+            <ul className="text-xs text-gray-300 space-y-1 list-disc ml-4">
+              <li>YouTube: prepare OAuth consent, refresh token flow, privacyStatus, categoryId, tags.</li>
+              <li>Facebook: use Page access token (not user token), support unpublished_content_type, scheduled_publish_time.</li>
+              <li>TikTok: ensure app review approved for content posting, include post_info visibility and duet/stitch options.</li>
+            </ul>
+          </div>
+
+          <div className="flex justify-between items-center gap-3 flex-wrap">
             <div>
               <h2 className="text-xl font-semibold">Connected Accounts</h2>
               <p className="text-gray-400 text-sm">
                 {accounts.stats?.total || 0} total accounts across {accounts.stats?.platforms?.length || 0} platforms
               </p>
             </div>
-            <button
-              onClick={() => setShowAddAccount(true)}
-              className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 transition"
-            >
-              <Plus className="w-4 h-4" />
-              Add Account
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleTestAllAccounts}
+                disabled={testingAllAccounts || accounts.loading}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 px-4 py-2 rounded-lg transition"
+              >
+                {testingAllAccounts ? 'Testing...' : 'Test All Connections'}
+              </button>
+              <button
+                onClick={() => setShowAddAccount(true)}
+                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add Account
+              </button>
+            </div>
           </div>
 
-          {/* Add Account Form */}
           {showAddAccount && (
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="font-semibold mb-4">Add New Account</h3>
+              <h3 className="font-semibold mb-4">Add Multi-Platform Account</h3>
               <form onSubmit={handleAddAccount} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-400 mb-2 block">Platform</label>
@@ -202,28 +308,28 @@ export function VideoProduction() {
                     onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
                   >
-                    <option value="tiktok">TikTok</option>
-                    <option value="instagram">Instagram</option>
                     <option value="youtube">YouTube</option>
                     <option value="facebook">Facebook</option>
+                    <option value="tiktok">TikTok</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-400 mb-2 block">Username</label>
+                  <label className="text-sm text-gray-400 mb-2 block">Display Name</label>
                   <input
                     type="text"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    value={formData.displayName}
+                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                    required
+                    placeholder="Main brand account"
                   />
                 </div>
+
                 <div>
-                  <label className="text-sm text-gray-400 mb-2 block">Password</label>
+                  <label className="text-sm text-gray-400 mb-2 block">Account Handle / Username</label>
                   <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    type="text"
+                    value={formData.accountHandle}
+                    onChange={(e) => setFormData({ ...formData, accountHandle: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
                     required
                   />
@@ -237,21 +343,87 @@ export function VideoProduction() {
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="text-sm text-gray-400 mb-2 block">Display Name</label>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">{currentRequirements.idLabel}</label>
                   <input
                     type="text"
-                    value={formData.displayName}
-                    onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                    value={formData[currentRequirements.idField]}
+                    onChange={(e) => setFormData({ ...formData, [currentRequirements.idField]: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">API Key</label>
+                  <input
+                    type="text"
+                    value={formData.apiKey}
+                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    required={formData.platform !== 'facebook'}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-gray-400 mb-2 block">Access Token</label>
+                  <input
+                    type="password"
+                    value={formData.accessToken}
+                    onChange={(e) => setFormData({ ...formData, accessToken: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Refresh Token</label>
+                  <input
+                    type="password"
+                    value={formData.refreshToken}
+                    onChange={(e) => setFormData({ ...formData, refreshToken: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
                   />
                 </div>
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Client ID</label>
+                  <input
+                    type="text"
+                    value={formData.clientId}
+                    onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-gray-400 mb-2 block">Client Secret</label>
+                  <input
+                    type="password"
+                    value={formData.clientSecret}
+                    onChange={(e) => setFormData({ ...formData, clientSecret: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2 bg-gray-900/50 border border-gray-700 rounded p-3 text-xs">
+                  <p className="text-purple-300 font-medium mb-1">{currentRequirements.title}</p>
+                  <p className="text-gray-300">{currentRequirements.doc}</p>
+                </div>
+
                 <div className="md:col-span-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestAccountConfig}
+                    disabled={testingConfig}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 px-4 py-2 rounded-lg transition"
+                  >
+                    {testingConfig ? 'Testing keys...' : 'Test Key + Token'}
+                  </button>
                   <button
                     type="submit"
                     className="flex-1 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition"
                   >
-                    Add Account
+                    Save Account
                   </button>
                   <button
                     type="button"
@@ -265,7 +437,6 @@ export function VideoProduction() {
             </div>
           )}
 
-          {/* Accounts Grid */}
           {accounts.loading ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
@@ -284,9 +455,9 @@ export function VideoProduction() {
                 <AccountCard
                   key={account.id}
                   account={account}
-                  onDelete={() => {}}
-                  onEdit={() => {}}
-                  onVerify={() => {}}
+                  onDelete={deleteAccount}
+                  onEdit={() => toast('Edit flow can be extended here')}
+                  onVerify={verifyAccount}
                   isLoading={accounts.loading}
                 />
               ))}
@@ -297,18 +468,14 @@ export function VideoProduction() {
             <div className="text-center py-12 bg-gray-800/30 border border-gray-700 rounded-lg">
               <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">No accounts connected yet</p>
-              <p className="text-sm text-gray-500 mt-1">Add your first account to get started</p>
+              <p className="text-sm text-gray-500 mt-1">Add your first YouTube, Facebook, or TikTok account to get started</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Queue Tab */}
-      {activeTab === 'queue' && (
-        <QueueStatus />
-      )}
+      {activeTab === 'queue' && <QueueStatus />}
 
-      {/* Media Tab */}
       {activeTab === 'media' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -329,8 +496,8 @@ export function VideoProduction() {
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
               <h3 className="font-semibold mb-3">Selected Media</h3>
               <div className="flex gap-4 items-start">
-                <img 
-                  src={selectedMediaForVideo.thumbnail} 
+                <img
+                  src={selectedMediaForVideo.thumbnail}
                   alt={selectedMediaForVideo.name}
                   className="w-24 h-24 object-cover rounded-lg"
                 />
@@ -366,7 +533,6 @@ export function VideoProduction() {
         </div>
       )}
 
-      {/* Gallery Picker Modal */}
       <GalleryPicker
         isOpen={showGalleryPicker}
         onClose={() => setShowGalleryPicker(false)}

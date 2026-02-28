@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Trash2, Edit2, CheckCircle, AlertCircle, RotateCw } from 'lucide-react';
+import { Trash2, Edit2, CheckCircle, AlertCircle, RotateCw, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function AccountCard({ account, onDelete, onEdit, onVerify, isLoading }) {
@@ -43,7 +43,6 @@ export function AccountCard({ account, onDelete, onEdit, onVerify, isLoading }) 
 
   return (
     <div className={`rounded-lg border p-4 transition ${getStatusColor()}`}>
-      {/* Header */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
           <h4 className="font-semibold capitalize">{account.platform}</h4>
@@ -63,27 +62,31 @@ export function AccountCard({ account, onDelete, onEdit, onVerify, isLoading }) 
         </div>
       </div>
 
-      {/* Details */}
       <div className="space-y-2 mb-4 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-400">Email</span>
-          <span className="font-mono text-xs">{account.email || 'N/A'}</span>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-400">Account</span>
+          <span className="font-mono text-xs truncate">{account.metadata?.accountHandle || account.username || 'N/A'}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-400">Upload Capacity</span>
-          <span>
-            {account.uploadCapacity?.used || 0} / {account.uploadCapacity?.total || '∞'} GB
-          </span>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-400">Page / Channel</span>
+          <span className="font-mono text-xs truncate">{account.metadata?.pageId || account.metadata?.channelId || account.metadata?.businessId || 'N/A'}</span>
         </div>
-        {account.metadata && account.metadata.lastLogin && (
-          <div className="flex justify-between">
-            <span className="text-gray-400">Last Login</span>
-            <span className="text-xs">{new Date(account.metadata.lastLogin).toLocaleDateString()}</span>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-400">API Key</span>
+          <span className="font-mono text-xs">{account.metadata?.apiKey ? 'Configured' : 'Missing'}</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-gray-400">Token</span>
+          <span className="font-mono text-xs">{account.metadata?.accessToken ? 'Configured' : 'Missing'}</span>
+        </div>
+        {account.metadata?.lastVerifiedAt && (
+          <div className="flex justify-between gap-2">
+            <span className="text-gray-400">Last Verified</span>
+            <span className="text-xs">{new Date(account.metadata.lastVerifiedAt).toLocaleString()}</span>
           </div>
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2">
         <button
           onClick={handleVerify}
@@ -93,12 +96,12 @@ export function AccountCard({ account, onDelete, onEdit, onVerify, isLoading }) 
           {verifying ? (
             <>
               <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Verifying...</span>
+              <span>Testing...</span>
             </>
           ) : (
             <>
               <RotateCw className="w-4 h-4" />
-              <span>Verify</span>
+              <span>Test Connection</span>
             </>
           )}
         </button>
@@ -122,7 +125,13 @@ export function AccountCard({ account, onDelete, onEdit, onVerify, isLoading }) 
         </button>
       </div>
 
-      {/* Error Display */}
+      {account.metadata?.lastVerificationResult && (
+        <div className="mt-3 pt-3 border-t border-gray-700/30 text-xs flex items-start gap-2 text-gray-300">
+          <LinkIcon className="w-3 h-3 mt-0.5 text-blue-400 shrink-0" />
+          <p className="line-clamp-2">{account.metadata.lastVerificationResult}</p>
+        </div>
+      )}
+
       {account.errors && account.errors.length > 0 && (
         <div className="mt-3 pt-3 border-t border-gray-700/30">
           <p className="text-xs text-red-400 mb-2">Recent Errors:</p>
