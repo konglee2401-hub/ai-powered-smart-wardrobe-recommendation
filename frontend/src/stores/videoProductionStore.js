@@ -48,7 +48,7 @@ const useVideoProductionStore = create((set, get) => ({
     set(state => ({ queue: { ...state.queue, loading: true } }));
     try {
       const result = await videoProductionApi.queue.getStats();
-      set(state => ({ queue: { ...state.queue, stats: result.stats, loading: false } }));
+      set(state => ({ queue: { ...state.queue, stats: result.stats, items: result.items || state.queue.items, loading: false } }));
       return result;
     } catch (error) {
       set(state => ({ queue: { ...state.queue, error: error.message, loading: false } }));
@@ -59,6 +59,15 @@ const useVideoProductionStore = create((set, get) => ({
   getNextPendingVideo: async (platform) => {
     try {
       return await videoProductionApi.queue.getNextPending(platform);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+
+  publishQueueItem: async (queueId, accountIds = [], uploadConfig = {}) => {
+    try {
+      return await videoProductionApi.queue.publish(queueId, accountIds, uploadConfig);
     } catch (error) {
       throw error;
     }
