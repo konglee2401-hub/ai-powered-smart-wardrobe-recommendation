@@ -69,7 +69,11 @@ class VideoProductionController {
    */
   static getQueueStats = asyncHandler((req, res) => {
     const result = VideoQueueService.getQueueStats();
-    res.json(result);
+    const itemsResult = VideoQueueService.getAllQueueItems(200);
+    res.json({
+      ...result,
+      items: itemsResult.items || []
+    });
   });
 
   /**
@@ -268,6 +272,90 @@ class VideoProductionController {
     }
 
     res.json(result);
+  });
+
+
+  static verifyAccount = asyncHandler(async (req, res) => {
+    const { accountId } = req.params;
+    const result = await MultiAccountService.verifyAccountConnection(accountId);
+    if (!result.success) return res.status(404).json(result);
+    res.json(result);
+  });
+
+  static verifyAllAccounts = asyncHandler(async (req, res) => {
+    const result = await MultiAccountService.verifyAllAccounts();
+    res.json(result);
+  });
+
+  static validateAccountConfig = asyncHandler((req, res) => {
+    const { platform, config = {} } = req.body;
+    if (!platform) return res.status(400).json({ error: 'platform is required' });
+    const result = MultiAccountService.validateAccountConfig(platform, config);
+    res.json(result);
+  });
+
+  static publishQueueItem = asyncHandler(async (req, res) => {
+    const { queueId } = req.params;
+    const { accountIds = [], uploadConfig = {} } = req.body;
+
+    const queueResult = VideoQueueService.getQueueItem(queueId);
+    if (!queueResult.success) return res.status(404).json(queueResult);
+
+    const queueItem = queueResult.queueItem;
+    const videoPath = queueItem.videoConfig?.outputPath || queueItem.videoConfig?.videoPath || queueItem.videoConfig?.filePath;
+
+    if (!videoPath) {
+      return res.status(400).json({ success: false, error: 'Missing output video path in queue item config' });
+    }
+
+    const resolvedIds = accountIds.length ? accountIds : (queueItem.accountIds || []);
+    if (!resolvedIds.length) {
+      return res.status(400).json({ success: false, error: 'At least one accountId is required for publishing' });
+    }
+
+    const results = [];
+    for (const accountId of resolvedIds) {
+      const account = MultiAccountService.getRawAccount(accountId);
+      if (!account) {
+        results.push({ accountId, success: false, error: 'Account not found' });
+        continue;
+      }
+
+      const upload = AutoUploadService.registerUpload({
+        queueId,
+        videoPath,
+        platform: account.platform,
+        accountId,
+        uploadConfig
+      });
+
+      if (!upload.success) {
+        results.push({ accountId, success: false, error: upload.error });
+        continue;
+      }
+
+      const executed = await AutoUploadService.executeUpload(upload.uploadId, account);
+      if (executed.success) {
+        MultiAccountService.recordPost(accountId);
+      } else {
+        MultiAccountService.recordError(accountId, executed.error);
+      }
+
+      results.push({ accountId, ...executed });
+    }
+
+    const successful = results.filter(r => r.success).length;
+    if (successful > 0) {
+      VideoQueueService.updateQueueStatus(queueId, 'uploaded');
+    }
+
+    res.json({
+      success: successful > 0,
+      queueId,
+      successful,
+      failed: results.length - successful,
+      results
+    });
   });
 
   // ============ MEDIA LIBRARY ENDPOINTS ============
@@ -510,11 +598,40 @@ class VideoProductionController {
       return res.status(400).json({ error: 'name, schedule, and jobType are required' });
     }
 
-    // Basic handler for job execution
-    const handler = async job => ({
-      success: true,
-      output: { message: 'Job executed' }
-    });
+    const handler = async job => {
+      if (job.jobType === 'publish') {
+        const ready = VideoQueueService.getNextReady(job.platform || 'all');
+        if (!ready.success) {
+          return { success: true, output: { message: 'No ready videos to publish' } };
+        }
+
+        const queueItem = ready.queueItem;
+        const accountIds = job.metadata?.accountIds || queueItem.accountIds || [];
+        if (!accountIds.length) {
+          return { success: false, error: 'No accountIds configured for publish schedule' };
+        }
+
+        const publishReq = {
+          params: { queueId: queueItem.queueId },
+          body: { accountIds, uploadConfig: job.metadata?.uploadConfig || {} }
+        };
+
+        const publishRes = { payload: null, statusCode: 200, status(code) { this.statusCode = code; return this; }, json(data) { this.payload = data; return this; } };
+        await VideoProductionController.publishQueueItem(publishReq, publishRes, () => {});
+
+        return { success: publishRes.payload?.success, output: publishRes.payload };
+      }
+
+      if (job.jobType === 'queue-scan') {
+        const result = await import('../services/queueScannerCronJob.js').then(m => m.default.scanAndProcess(job.metadata || {}));
+        return { success: result.success, output: result };
+      }
+
+      return {
+        success: true,
+        output: { message: 'Job executed' }
+      };
+    };
 
     const result = CronJobService.createJob({
       name,

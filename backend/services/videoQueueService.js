@@ -380,6 +380,16 @@ class VideoQueueService {
     }
   }
 
+
+  getAllQueueItems(limit = 100) {
+    const sorted = [...this.queue].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return {
+      success: true,
+      items: sorted.slice(0, limit),
+      count: this.queue.length
+    };
+  }
+
   /**
    * Get queue statistics
    */
