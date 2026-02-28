@@ -79,6 +79,141 @@ const useVideoProductionStore = create((set, get) => ({
     }
   },
 
+  verifyAccount: async (accountId) => {
+    try {
+      const result = await videoProductionApi.accounts.verify(accountId);
+      set(state => ({
+        accounts: {
+          ...state.accounts,
+          items: state.accounts.items.map(account =>
+            account.id === accountId
+              ? {
+                  ...account,
+                  status: result?.account?.status || result?.status || 'active',
+                  metadata: {
+                    ...(account.metadata || {}),
+                    ...(result?.account?.metadata || {}),
+                    lastVerifiedAt: result?.verifiedAt || new Date().toISOString(),
+                    lastVerificationResult: result?.result || result?.message || 'Connected'
+                  }
+                }
+              : account
+          )
+        }
+      }));
+      return result;
+    } catch (error) {
+      set(state => ({
+        accounts: {
+          ...state.accounts,
+          items: state.accounts.items.map(account =>
+            account.id === accountId
+              ? {
+                  ...account,
+                  status: 'inactive',
+                  metadata: {
+                    ...(account.metadata || {}),
+                    lastVerifiedAt: new Date().toISOString(),
+                    lastVerificationResult: error.message
+                  }
+                }
+              : account
+          ),
+          error: error.message
+        }
+      }));
+      throw error;
+    }
+  },
+
+  verifyAllAccounts: async () => {
+    set(state => ({ accounts: { ...state.accounts, loading: true } }));
+    try {
+      const result = await videoProductionApi.accounts.verifyAll();
+      const updates = result?.accounts || [];
+      set(state => ({
+        accounts: {
+          ...state.accounts,
+          loading: false,
+          items: state.accounts.items.map(account => {
+            const match = updates.find(update => update.id === account.id);
+            return match
+              ? {
+                  ...account,
+                  ...match,
+                  metadata: {
+                    ...(account.metadata || {}),
+                    ...(match.metadata || {}),
+                    lastVerifiedAt: result?.verifiedAt || new Date().toISOString()
+                  }
+                }
+              : account;
+          })
+        }
+      }));
+      return result;
+    } catch (error) {
+      // Fallback: verify one by one if bulk endpoint is not implemented
+      const currentAccounts = get().accounts.items;
+      let successCount = 0;
+      await Promise.allSettled(
+        currentAccounts.map(async (account) => {
+          try {
+            await get().verifyAccount(account.id);
+            successCount += 1;
+          } catch {
+            // Individual errors are already recorded in verifyAccount
+          }
+        })
+      );
+
+      set(state => ({ accounts: { ...state.accounts, loading: false } }));
+      return {
+        total: currentAccounts.length,
+        success: successCount,
+        failed: currentAccounts.length - successCount
+      };
+    }
+  },
+
+  validateAccountConfig: async (platform, config) => {
+    try {
+      return await videoProductionApi.accounts.validateConfig(platform, config);
+    } catch (error) {
+      // Local fallback validation for development environments
+      const missing = [];
+      if (!config.accountHandle) missing.push('Account handle');
+      if (!config.accessToken) missing.push('Access token');
+      if (!config.apiKey && platform !== 'facebook') missing.push('API key');
+      if (platform === 'facebook' && !config.pageId) missing.push('Page ID');
+      if (platform === 'youtube' && !config.channelId) missing.push('Channel ID');
+      if (platform === 'tiktok' && !config.businessId) missing.push('Business/Advertiser ID');
+
+      return {
+        valid: missing.length === 0,
+        checkedWith: 'local-fallback',
+        missing
+      };
+    }
+  },
+
+  deleteAccount: async (accountId) => {
+    set(state => ({ accounts: { ...state.accounts, loading: true } }));
+    try {
+      await videoProductionApi.accounts.delete(accountId);
+      set(state => ({
+        accounts: {
+          ...state.accounts,
+          loading: false,
+          items: state.accounts.items.filter(account => account.id !== accountId)
+        }
+      }));
+    } catch (error) {
+      set(state => ({ accounts: { ...state.accounts, loading: false, error: error.message } }));
+      throw error;
+    }
+  },
+
   getAllAccounts: async () => {
     set(state => ({ accounts: { ...state.accounts, loading: true } }));
     try {

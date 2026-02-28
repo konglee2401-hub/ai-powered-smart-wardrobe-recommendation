@@ -75,7 +75,16 @@ export const videoProductionApi = {
       api.post(`/accounts/${accountId}/deactivate`, { reason }),
     
     delete: (accountId) =>
-      api.delete(`/accounts/${accountId}`)
+      api.delete(`/accounts/${accountId}`),
+
+    verify: (accountId) =>
+      api.post(`/accounts/${accountId}/verify`),
+
+    verifyAll: () =>
+      api.post('/accounts/verify-all'),
+
+    validateConfig: (platform, config) =>
+      api.post('/accounts/validate-config', { platform, config })
   },
 
   // ============ MEDIA LIBRARY OPERATIONS ============
