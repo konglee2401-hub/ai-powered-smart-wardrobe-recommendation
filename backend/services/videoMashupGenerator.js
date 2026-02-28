@@ -36,7 +36,8 @@ class VideoMashupGenerator {
     const {
       duration = 30,
       quality = 'high',
-      aspectRatio = '9:16'
+      aspectRatio = '9:16',
+      audioSource = 'main' // main | sub | none
     } = options;
 
     try {
@@ -69,6 +70,12 @@ class VideoMashupGenerator {
       console.log(`Main scaled: ${mainW}x${mainH}`);
       console.log(`Sub scaled: ${subW}x${subH}`);
 
+      const audioMap = audioSource === 'none'
+        ? '-an'
+        : audioSource === 'sub'
+          ? '-map 1:a?'
+          : '-map 0:a?';
+
       // Build FFmpeg command for 2/3 + 1/3 layout
       const ffmpegCmd = `
 ffmpeg -i "${mainVideoPath}" \
@@ -78,10 +85,10 @@ ffmpeg -i "${mainVideoPath}" \
   [main][sub]hstack=inputs=2:gap=0[out]; \
   [out]scale=${targetWidth}:${targetHeight}[final]" \
   -map "[final]" \
-  -map 0:a \
+  ${audioMap} \
   -c:v libx264 -preset ${quality === 'high' ? 'medium' : 'fast'} \
   -crf ${quality === 'high' ? '18' : '23'} \
-  -c:a aac -b:a 128k \
+  ${audioSource === 'none' ? '' : '-c:a aac -b:a 128k'} \
   -t ${duration} \
   -y "${outputPath}"
       `.trim().replace(/\n\s+/g, ' ');
@@ -122,7 +129,8 @@ ffmpeg -i "${mainVideoPath}" \
             size: stats.size,
             duration,
             quality,
-            aspectRatio
+            aspectRatio,
+            audioSource
           },
           layout: {
             main: { width: mainW, height: mainH, position: 'left' },
