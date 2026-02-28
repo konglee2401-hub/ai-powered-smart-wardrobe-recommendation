@@ -41,7 +41,10 @@ export const videoProductionApi = {
     
     getLogs: (queueId) => api.get(`/queue/${queueId}/logs`),
     
-    clear: (status) => api.delete('/queue', { params: { statusFilter: status } })
+    clear: (status) => api.delete('/queue', { params: { statusFilter: status } }),
+
+    publish: (queueId, accountIds = [], uploadConfig = {}) =>
+      api.post(`/publish/queue/${queueId}`, { accountIds, uploadConfig })
   },
 
   // ============ ACCOUNT OPERATIONS ============

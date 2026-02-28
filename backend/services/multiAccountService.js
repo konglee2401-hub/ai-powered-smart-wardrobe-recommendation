@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import platformPublishingService from './platformPublishingService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mediaDir = path.join(__dirname, '../media');
@@ -230,6 +231,10 @@ class MultiAccountService {
         error: error.message
       };
     }
+  }
+
+  getRawAccount(accountId) {
+    return this.accounts.find(a => a.accountId === accountId) || null;
   }
 
   /**
@@ -722,6 +727,63 @@ class MultiAccountService {
         error: error.message
       };
     }
+  }
+
+  validateAccountConfig(platform, config = {}) {
+    const missing = [];
+    if (!config.accountHandle) missing.push('accountHandle');
+    if (!config.accessToken) missing.push('accessToken');
+    if (!config.apiKey && platform !== 'facebook') missing.push('apiKey');
+    if (platform === 'facebook' && !config.pageId) missing.push('pageId');
+    if (platform === 'youtube' && !config.channelId) missing.push('channelId');
+    if (platform === 'tiktok' && !config.businessId) missing.push('businessId');
+
+    return {
+      success: true,
+      valid: missing.length === 0,
+      checkedWith: 'service-validation',
+      missing
+    };
+  }
+
+  async verifyAccountConnection(accountId) {
+    const account = this.getRawAccount(accountId);
+    if (!account) {
+      return { success: false, error: `Account not found: ${accountId}` };
+    }
+
+    const result = await platformPublishingService.verifyAccountConnection(account);
+
+    account.verified = result.connected;
+    account.verifiedAt = result.connected ? new Date().toISOString() : account.verifiedAt;
+    account.lastError = result.connected ? null : result.reason;
+    account.lastErrorAt = result.connected ? null : new Date().toISOString();
+    this.saveAccounts();
+
+    return {
+      success: true,
+      accountId,
+      status: result.connected ? 'active' : 'inactive',
+      account: this.sanitizeAccount(account),
+      result: result.connected ? 'Connected' : result.reason,
+      verifiedAt: new Date().toISOString()
+    };
+  }
+
+  async verifyAllAccounts() {
+    const results = await Promise.all(
+      this.accounts.map(async account => this.verifyAccountConnection(account.accountId))
+    );
+
+    const success = results.filter(r => r.success && r.status === 'active').length;
+    return {
+      success: true,
+      total: results.length,
+      success,
+      failed: results.length - success,
+      accounts: results.filter(r => r.success).map(r => r.account),
+      verifiedAt: new Date().toISOString()
+    };
   }
 }
 
