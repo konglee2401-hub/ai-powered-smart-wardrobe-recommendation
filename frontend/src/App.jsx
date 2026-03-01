@@ -27,6 +27,12 @@ import VideoGenerationPage from './pages/VideoGenerationPage';
 import OneClickCreatorPage from './pages/OneClickCreatorPage';
 import VoiceOverPage from './pages/VoiceOverPage';
 
+import ShortsReelsDashboard from './pages/trend-automation/ShortsReelsDashboard';
+import ShortsReelsChannels from './pages/trend-automation/ShortsReelsChannels';
+import ShortsReelsVideos from './pages/trend-automation/ShortsReelsVideos';
+import ShortsReelsLogs from './pages/trend-automation/ShortsReelsLogs';
+import ShortsReelsSettings from './pages/trend-automation/ShortsReelsSettings';
+
 function App() {
   return (
     <Router>
@@ -201,6 +207,48 @@ function App() {
           </div>
         } />
         
+
+        <Route path="/shorts-reels/dashboard" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <ShortsReelsDashboard />
+            </div>
+          </div>
+        } />
+        <Route path="/shorts-reels/channels" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <ShortsReelsChannels />
+            </div>
+          </div>
+        } />
+        <Route path="/shorts-reels/videos" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <ShortsReelsVideos />
+            </div>
+          </div>
+        } />
+        <Route path="/shorts-reels/logs" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <ShortsReelsLogs />
+            </div>
+          </div>
+        } />
+        <Route path="/shorts-reels/settings" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <ShortsReelsSettings />
+            </div>
+          </div>
+        } />
+
         {/* Redirect old routes */}
         <Route path="/model-tester" element={<Navigate to="/tester" replace />} />
         <Route path="/model-stats" element={<Navigate to="/stats" replace />} />
