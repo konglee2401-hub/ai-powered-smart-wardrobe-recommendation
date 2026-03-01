@@ -60,6 +60,7 @@ export default function Navbar() {
     { path: '/tester', label: t('navbar.providerTester'), icon: Zap },
     { path: '/performance', label: t('navbar.performance'), icon: Gauge },
     { path: '/video-production', label: t('navbar.videoProduction'), icon: Film },
+    { path: '/shorts-reels/dashboard', label: 'Shorts/Reels', icon: TrendingUp },
   ];
 
   // Settings items
