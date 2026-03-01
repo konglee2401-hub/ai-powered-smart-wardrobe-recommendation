@@ -46,7 +46,6 @@ import ttsRoutes from './routes/ttsRoutes.js';
 import sessionLogRoutes from './routes/sessionLogRoutes.js';
 import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
 import trendAutomationRoutes from './routes/trendAutomationRoutes.js';
-import trendSchedulerService from './services/trendAutomation/schedulerService.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -229,7 +228,6 @@ try {
   // Continue anyway - will authenticate on first upload
 }
 
-await trendSchedulerService.start();
 
 server.listen(PORT, () => {
   console.log('\n' + '='.repeat(80));
