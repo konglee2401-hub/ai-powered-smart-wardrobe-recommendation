@@ -15,6 +15,10 @@ export default function Navbar() {
   const { t, i18n } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
+  const [activeDesktopMenu, setActiveDesktopMenu] = useState(null);
+
+  const handleDesktopMenuEnter = (menuKey) => setActiveDesktopMenu(menuKey);
+  const handleDesktopMenuLeave = () => setActiveDesktopMenu(null);
 
   const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
 
@@ -36,6 +40,7 @@ export default function Navbar() {
         { path: '/generate/one-click', label: t('navbar.oneClick'), icon: Sparkles },
       ]
     },
+    { path: '/video-production', label: t('navbar.videoProduction'), icon: Film, category: 'main' },
   ];
 
   // Media Management
@@ -59,7 +64,6 @@ export default function Navbar() {
     { path: '/video-script-generator', label: t('navbar.videoScriptGenerator'), icon: Film },
     { path: '/tester', label: t('navbar.providerTester'), icon: Zap },
     { path: '/performance', label: t('navbar.performance'), icon: Gauge },
-    { path: '/video-production', label: t('navbar.videoProduction'), icon: Film },
     { path: '/shorts-reels/dashboard', label: 'Shorts/Reels', icon: TrendingUp },
   ];
 
@@ -136,17 +140,22 @@ export default function Navbar() {
             {/* Primary Items - Generate */}
             {primaryNavItems.map((item) => 
               item.submenu ? (
-                <div key="generate" className="relative group">
-                  <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+                <div
+                  key="generate"
+                  className="relative pb-1"
+                  onMouseEnter={() => handleDesktopMenuEnter('generate')}
+                  onMouseLeave={handleDesktopMenuLeave}
+                >
+                  <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
                     <item.icon className="w-4 h-4" />
                     <span>{item.label}</span>
                     <ChevronDown className="w-4 h-4" />
                   </button>
-                  <div className="absolute left-0 mt-0 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                  <div className={`absolute left-0 top-full pt-1 w-40 transition-all z-50 ${activeDesktopMenu === 'generate' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
                     {item.submenu.map((sub) => (
                       <NavLink key={sub.path} item={sub} onClick={() => setMobileMenuOpen(false)} />
                     ))}
-                  </div>
+                  </div></div>
                 </div>
               ) : (
                 <NavLink key={item.path} item={item} />
@@ -154,59 +163,75 @@ export default function Navbar() {
             )}
 
             {/* Media Management Dropdown */}
-            <div className="relative group">
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+            <div
+              className="relative pb-1"
+              onMouseEnter={() => handleDesktopMenuEnter('media')}
+              onMouseLeave={handleDesktopMenuLeave}
+            >
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
                 <Image className="w-4 h-4" />
                 <span>{t('navbar.media')}</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'media' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
                 {mediaNavItems.map((item) => (
                   <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
                 ))}
-              </div>
+              </div></div>
             </div>
 
             {/* Dashboard & Analytics Dropdown */}
-            <div className="relative group">
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+            <div
+              className="relative pb-1"
+              onMouseEnter={() => handleDesktopMenuEnter('analytics')}
+              onMouseLeave={handleDesktopMenuLeave}
+            >
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
                 <LayoutDashboard className="w-4 h-4" />
                 <span>{t('navbar.analytics')}</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'analytics' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
                 {analyticsNavItems.map((item) => (
                   <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
                 ))}
-              </div>
+              </div></div>
             </div>
 
             {/* Advanced Tools Dropdown */}
-            <div className="relative group">
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+            <div
+              className="relative pb-1"
+              onMouseEnter={() => handleDesktopMenuEnter('tools')}
+              onMouseLeave={handleDesktopMenuLeave}
+            >
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
                 <Zap className="w-4 h-4" />
                 <span>{t('navbar.tools')}</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <div className="absolute left-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'tools' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
                 {advancedToolsNavItems.map((item) => (
                   <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
                 ))}
-              </div>
+              </div></div>
             </div>
 
             {/* Settings Dropdown */}
-            <div className="relative group">
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700 group-hover:bg-gray-700">
+            <div
+              className="relative pb-1"
+              onMouseEnter={() => handleDesktopMenuEnter('settings')}
+              onMouseLeave={handleDesktopMenuLeave}
+            >
+              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
                 <Settings className="w-4 h-4" />
                 <span>{t('navbar.settings')}</span>
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <div className="absolute right-0 mt-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className={`absolute right-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'settings' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
                 {settingsItems.map((item) => (
                   <NavLink key={item.path || item.href} item={item} onClick={() => setMobileMenuOpen(false)} />
                 ))}
-              </div>
+              </div></div>
             </div>
           </div>
 
