@@ -7,11 +7,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import googleDriveIntegration from './googleDriveIntegration.js';
+import GoogleDriveIntegration from './googleDriveIntegration.js';
 import videoMashupGenerator from './videoMashupGenerator.js';
 import VideoQueueService from './videoQueueService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const googleDriveIntegration = new GoogleDriveIntegration();
 
 class QueueScannerCronJob {
   constructor() {

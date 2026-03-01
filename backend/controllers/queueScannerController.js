@@ -4,7 +4,9 @@
  */
 
 import queueScannerCronJob from '../services/queueScannerCronJob.js';
-import googleDriveIntegration from '../services/googleDriveIntegration.js';
+import GoogleDriveIntegration from '../services/googleDriveIntegration.js';
+
+const googleDriveIntegration = new GoogleDriveIntegration();
 
 export class QueueScannerController {
   /**

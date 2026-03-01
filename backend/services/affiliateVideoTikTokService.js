@@ -12,7 +12,7 @@
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
 import { buildDetailedPrompt } from './smartPromptBuilder.js';
-import GoogleFlowAutomationService from './googleFlowAutomationService.js';
+import GrokServiceV2 from './browser/grokServiceV2.js';
 import ChatGPTService from './browser/chatgptService.js';
 import GoogleDriveOAuthService from './googleDriveOAuth.js';
 import PromptOption from '../models/PromptOption.js';
@@ -806,7 +806,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       baseOptions,
       'change-clothes',
       productFocus,
-      'en'  // Force English for consistency
+      language  // Use selected language (en or vi)
     ).then(promptData => ({
       useCase: 'change-clothes',
       prompts: promptData
@@ -818,7 +818,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       baseOptions,
       'character-holding-product',
       productFocus,
-      'en'  // Force English for consistency
+      language  // Use selected language (en or vi)
     ).then(promptData => ({
       useCase: 'character-holding-product',
       prompts: promptData
@@ -851,12 +851,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     let holdingImageResult = null;
     
     try {
-      // ✅ OPTIMIZED: Use GoogleFlowAutomationService for efficient component reuse
-      const imageGen = new GoogleFlowAutomationService({
-        type: 'image',
-        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
-        imageCount: 1,  // TikTok affiliate: Generate 1 image per prompt (x1) - We generate 2 different prompts
-        headless: false
+      // ✅ SWITCHED TO GROK: More reliable image generation than Google Flow
+      // Grok auto-redirects after 5-7s with Cloudflare bypass, no manual verification needed
+      const imageGen = new GrokServiceV2({
+        outputDir: outputDir,
+        headless: false,
+        debugMode: false  // ✅ PRODUCTION MODE
       });
       
       console.log('🚀 Initializing image generation service...');
@@ -1151,8 +1151,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       const videoGen = new GoogleFlowAutomationService({
         type: 'video',
         projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
+        videoCount: 2,  // 🔴 DEFAULT OUTPUT: Generate 2 videos per segment
         headless: false,
         outputDir: tempDir,
+        debugMode: false,  // ✅ PRODUCTION MODE - Full automation with delays
         timeouts: {
           pageLoad: 30000,
           generation: Math.max(180000, (videoDuration + 60) * 1000)
