@@ -3,6 +3,8 @@ uvicorn[standard]==0.30.6
 pymongo==4.9.1
 python-dotenv==1.0.1
 playwright==1.47.0
+nodriver==0.40
+# yt-dlp pinned for downloader
 yt-dlp==2025.2.19
 apscheduler==3.10.4
 pydantic==2.9.2
