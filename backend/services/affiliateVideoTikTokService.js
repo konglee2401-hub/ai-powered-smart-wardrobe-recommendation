@@ -847,6 +847,13 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log('\n🌐 STEP 2: Generate Both Images (Wearing + Holding)');
     console.log('─'.repeat(80));
 
+    // Create output directory for generated images
+    const outputDir = path.join(tempDir, 'generated-images');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+      console.log(`📁 Created output directory: ${outputDir}`);
+    }
+
     let wearingImageResult = null;
     let holdingImageResult = null;
     
@@ -902,6 +909,52 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
       if (!multiGenResult || typeof multiGenResult !== 'object') {
         throw new Error('generateMultiple returned invalid result');
+      }
+
+      console.log(`📊 Results breakdown:`, {
+        totalResults: multiGenResult?.results?.length || 0,
+        successful: multiGenResult?.results?.filter(r => r.success)?.length || 0,
+        failed: multiGenResult?.results?.filter(r => !r.success)?.length || 0
+      });
+
+      // Show which images failed for debugging
+      if (multiGenResult?.results) {
+        multiGenResult.results.forEach((result, idx) => {
+          if (!result.success) {
+            console.error(`   ❌ IMAGE ${idx + 1} (${result.type}): ${result.error}`);
+          }
+        });
+      }
+
+      // ✅ NEW: Retry logic for IMAGE 1 (wearing) if only IMAGE 2 (holding) succeeded
+      if (!multiGenResult.success && multiGenResult?.results?.length === 2) {
+        const wearingResult = multiGenResult.results[0];
+        const holdingResult = multiGenResult.results[1];
+        
+        // If IMAGE 1 failed but IMAGE 2 succeeded, retry IMAGE 1 once
+        if (!wearingResult.success && holdingResult.success) {
+          console.log('\n🔄 RETRY: IMAGE 1 (wearing) failed but IMAGE 2 succeeded');
+          console.log('📍 Attempting to regenerate IMAGE 1...\n');
+          
+          try {
+            const retryResult = await imageGen.generateImage(wearingPrompt, {
+              download: true,
+              outputPath: outputDir
+            });
+            
+            // Update the results with retry result
+            wearingResult.success = true;
+            wearingResult.downloadedFile = retryResult.path;
+            wearingResult.href = retryResult.url;
+            wearingResult.url = retryResult.url;
+            
+            console.log('✅ IMAGE 1 retry successful');
+            multiGenResult.success = true;
+          } catch (retryError) {
+            console.error(`❌ IMAGE 1 retry failed: ${retryError.message}`);
+            // Continue without retry - will fail below
+          }
+        }
       }
 
       if (!multiGenResult.success || !Array.isArray(multiGenResult.results) || multiGenResult.results.length < 2) {
@@ -1121,236 +1174,194 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
 
     // ============================================================
-    // STEP 4: VIDEO GENERATION (Using GoogleFlowAutomationService)
-    // 💫 OPTIMIZED: Single browser session for multiple segments (if needed)
+    // STEP 4: VIDEO GENERATION (Using GrokServiceV2 - Actual Video via /imagine)
+    // 🎬 Generate actual 10-second video with 720p resolution
+    // Dynamically select images based on deep analysis recommendations
     // ============================================================
 
     console.log('\n' + '─'.repeat(80));
-    console.log('🎬 STEP 4: Video Generation');
+    console.log('🎬 STEP 4: Video Generation (via Grok /imagine)');
     console.log('─'.repeat(80));
     await logger.startStage('video-generation');
     const step4Start = Date.now();
 
     let videoGenerationResult = null;
-    let allGeneratedVideos = [];
     
     try {
-      // Detect if we have multiple video segments
-      const videoSegments = deepAnalysis.data.videoScripts || [];
-      const hasMultipleSegments = videoSegments.length > 1;
-
-      console.log(`\n📊 VIDEO SEGMENTS DETECTED: ${videoSegments.length}`);
-      if (hasMultipleSegments) {
-        console.log(`   💡 OPTIMIZED MODE: Will generate ${videoSegments.length} videos in single browser session`);
-        console.log(`   Segments: ${videoSegments.map(s => s.segment).join(', ')}`);
+      // ========== EXTRACT IMAGE RECOMMENDATIONS FROM STEP 3 ==========
+      const imageRecommendations = extractImageRecommendations(deepAnalysis);
+      console.log(`\n📸 IMAGE SELECTION STRATEGY:`);
+      console.log(`  Wearing image: ${wearingImagePath}`);
+      console.log(`  Holding image: ${holdingImagePath}`);
+      console.log(`  Product image: ${productFilePath}`);
+      console.log(`  Deep analysis recommends:`);
+      if (imageRecommendations.preferHolding) {
+        console.log(`    → Use HOLDING image for main video (product showcase)`);
       } else {
-        console.log(`   📹 STANDARD MODE: Generating single video`);
+        console.log(`    → Use WEARING image for main video (styling/fitting)`);
+      }
+      if (imageRecommendations.includeProduct) {
+        console.log(`    → Include product image in context`);
       }
 
-      // ========== INITIALIZE SINGLE BROWSER SESSION ==========
-      const videoGen = new GoogleFlowAutomationService({
-        type: 'video',
-        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
-        videoCount: 2,  // 🔴 DEFAULT OUTPUT: Generate 2 videos per segment
-        headless: false,
+      // ========== INITIALIZE GROK BROWSER SESSION ==========
+      const videoGen = new GrokServiceV2({
         outputDir: tempDir,
-        debugMode: false,  // ✅ PRODUCTION MODE - Full automation with delays
-        timeouts: {
-          pageLoad: 30000,
-          generation: Math.max(180000, (videoDuration + 60) * 1000)
-        }
+        headless: false,
+        debugMode: false
       });
 
       console.log(`\n📝 VIDEO GENERATION PARAMETERS:`);
-      console.log(`  Reference image: wearing`);
-      console.log(`  Duration: ${videoDuration}s`);
-      console.log(`  Aspect ratio: 9:16 (TikTok)`);
-      console.log(`  Quality: high`);
-      console.log(`  Multiple segments: ${videoSegments.length}`);
+      console.log(`  Duration: 10s`);
+      console.log(`  Resolution: 720p`);
+      console.log(`  Format: TikTok-friendly (9:16 aspect ratio)`);
+      console.log(`  Using: GrokServiceV2 /imagine page for native video generation`);
 
       try {
-        // STEP 4.0: Initialize browser ONCE for all segments
-        console.log('\n🚀 Initializing video generation browser (reusable session)...');
-        await videoGen.init();
-        console.log('✅ Browser initialized');
+        // STEP 4.0: Initialize browser
+        console.log('\n🚀 Initializing Grok browser for video generation...');
+        await videoGen.initialize();
+        console.log('✅ Grok browser initialized');
 
-        // STEP 4.1: Navigate to project
-        console.log('\n🔗 Navigating to Google Flow project...');
-        await videoGen.navigateToProject();
-        console.log('✅ Navigated to Google Flow project');
-
-        // STEP 4.2: Configure settings BEFORE uploading (CRITICAL)
-        console.log('\n⚙️  Configuring video settings...\n');
-        try {
-          const settingsOk = await videoGen.configureSettings();
-          if (settingsOk) {
-            console.log('✅ Video settings configured\n');
-          } else {
-            console.log('⚠️  Settings might be incomplete, continuing...\n');
-          }
-        } catch (settingsError) {
-          console.warn(`⚠️  Settings configuration error: ${settingsError.message}`);
-          console.warn('⚠️  Continuing with default settings...\n');
+        // STEP 4.1: Select primary image for video (wearing or holding based on analysis)
+        const primaryImagePath = imageRecommendations.preferHolding && holdingImagePath ? holdingImagePath : wearingImagePath;
+        const secondaryImagePath = imageRecommendations.preferHolding ? wearingImagePath : holdingImagePath;
+        
+        console.log(`\n🖼️  IMAGE SELECTION FOR VIDEO:`);
+        console.log(`  Primary: ${path.basename(primaryImagePath)} (main character)`);
+        console.log(`  Secondary: ${path.basename(secondaryImagePath)} (reference/context)`);
+        if (productFilePath) {
+          console.log(`  Product: ${path.basename(productFilePath)} (optional context)`);
         }
 
-        // STEP 4.3: Upload ALL 3 images for video generation
-        console.log('📸 STEP 4.3: Uploading 3 images for video generation:');
-        console.log(`   ├─ Wearing image: ${wearingImageResult.screenshotPath}`);
-        console.log(`   ├─ Holding image: ${holdingImageResult.screenshotPath}`);
-        console.log(`   └─ Product image: ${productFilePath}`);
-        
-        // Verify all images exist
-        const videoImages = [wearingImageResult.screenshotPath, holdingImageResult.screenshotPath, productFilePath];
-        for (let imgPath of videoImages) {
-          if (!imgPath || !fs.existsSync(imgPath)) {
-            throw new Error(`Image not found for video generation: ${imgPath}`);
-          }
-        }
-        console.log(`   ✅ All 3 images verified to exist\n`);
-        
-        // Upload wearing + product using uploadImages method
-        // This captures TOP 10 hrefs, monitors for new ones, and stores image URLs
-        const imageUrls = await videoGen.uploadImages(
-          wearingImageResult.screenshotPath,  // Character/wearing image
-          productFilePath,  // Product image
-          [holdingImageResult.screenshotPath]  // Additional image (holding)
-        );
-        console.log('✅ All images uploaded and URLs captured\n');
-        console.log(`📎 IMAGE URL MAPPING:`);
-        console.log(`   wearing: ${imageUrls.wearing ? '✓' : '✗'}`);
-        console.log(`   product: ${imageUrls.product ? '✓' : '✗'}`);
-        console.log(`   holding: ${imageUrls.holding ? '✓' : '✗'}\n`);
-
-        // STEP 4.4: Generate videos for each segment with proper image composition
-        console.log(`${'═'.repeat(80)}`);
-        console.log(`🎯 VIDEO GENERATION: ${videoSegments.length} segment(s)`);
+        // STEP 4.2: Build comprehensive video prompt
+        console.log(`\n${'═'.repeat(80)}`);
+        console.log(`🎯 GENERATING TIKTOK VIDEO`);
         console.log(`${'═'.repeat(80)}\n`);
 
-        for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
-          const segment = videoSegments[segIdx];
-          const isFirstSegment = segIdx === 0;
-          const imageComposition = segment.imageComposition || ['wearing'];  // Default fallback
-
-          console.log(`\n📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
-          console.log(`   Duration: ${segment.duration}s`);
-          console.log(`   Images: [${imageComposition.join(', ')}]`);
-
-          try {
-            // STEP 4.4.1: Prepare images for this segment
-            console.log(`   📷 Preparing images: ${imageComposition.join(' + ')}`);
-            const imagesReady = await videoGen.prepareSegmentImages(imageComposition, imageUrls);
-            if (!imagesReady) {
-              console.warn(`   ⚠️  Could not prepare all images, continuing...`);
-            } else {
-              console.log(`   ✓ Images prepared`);
-            }
-
-            // STEP 4.4.2: Build segment-specific prompt
-            const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
-            let segmentPrompt;
-            if (normalizedLanguage === 'vi') {
-              segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-                segment.segment,
+        let videoPrompt;
+        const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+        
+        const videoScripts = deepAnalysis.data.videoScripts || [];
+        
+        // Build prompt based on which image is primary
+        if (imageRecommendations.preferHolding) {
+          // Use holding-focused prompt
+          if (normalizedLanguage === 'vi') {
+            videoPrompt = VietnamesePromptBuilder.buildHoldingProductPrompt({
+              garment_type: analysis.product?.garment_type || 'sản phẩm',
+              primary_color: analysis.product?.primary_color || 'màu chính',
+              fabric_type: analysis.product?.fabric_type || 'chất vải',
+              pattern: analysis.product?.pattern || 'màu trơn',
+              key_details: analysis.product?.key_details || 'chi tiết',
+              scene: 'phía sau trắng sạch',
+              lighting: 'ánh sáng chuyên nghiệp',
+              mood: 'chuyên nghiệp, tự tin',
+              style: 'hiện đại, chuyên nghiệp'
+            });
+          } else {
+            // Use English holding product prompt from smartPromptBuilder
+            const holdingPrompt = buildCharacterHoldingProductPrompt(
+              analysis,
+              {
+                outfitColor: analysis.product?.primary_color,
+                outfitStyle: 'casual-professional',
+                hairstyle: 'same',
+                makeup: 'natural',
+                scene: 'studio',
+                lighting: 'professional',
+                mood: 'confident',
+                cameraAngle: 'eye-level',
+                colorPalette: 'warm'
+              },
+              productFocus
+            );
+            videoPrompt = holdingPrompt;
+          }
+        } else {
+          // Use wearing-focused prompt (default)
+          if (normalizedLanguage === 'vi') {
+            const scriptContent = videoScripts.map(s => `${s.segment}: ${s.script}`).join(' ');
+            videoPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+              'complete-tiktok-video',
+              productFocus,
+              { 
+                name: analysis.product?.garment_type, 
+                details: analysis.product?.key_details,
+                scriptContent: scriptContent
+              }
+            );
+          } else {
+            const scriptContent = videoScripts.map(s => `${s.segment}: ${s.script}`).join(' ');
+            videoPrompt = buildComprehensiveVideoPrompt(
+              scriptContent,
+              analysis,
+              {
+                videoDuration: 10,
+                voiceGender,
+                voicePace,
                 productFocus,
-                { name: analysis.product?.garment_type, details: analysis.product?.key_details }
-              );
-            } else {
-              segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
-                videoDuration: segment.duration,
-                voiceGender,
-                voicePace,
-                productFocus
-              });
-            }
-
-            // Fallback if prompt is empty
-            if (!segmentPrompt || segmentPrompt.trim().length === 0) {
-              console.warn(`⚠️  Segment prompt is empty, using English fallback`);
-              segmentPrompt = buildSegmentVideoPrompt(segment, analysis, {
-                videoDuration: segment.duration,
-                voiceGender,
-                voicePace,
-                productFocus
-              });
-            }
-
-            // Validate prompt
-            if (!segmentPrompt || segmentPrompt.trim().length === 0) {
-              throw new Error(`Segment prompt is empty for ${segment.segment}`);
-            }
-
-            console.log(`   Script length: ${segment.script.length} chars`);
-            console.log(`   Prompt length: ${segmentPrompt.length} chars`);
-
-            // STEP 4.4.3: Clear old prompt and enter new one (for segments 2+, prompt may need clearing)
-            console.log(`   🧹 Clearing old prompt...`);
-            await videoGen.clearPromptText();
-            console.log(`   ✓ Prompt cleared`);
-
-            // STEP 4.4.4: Enter the new prompt
-            console.log(`   ⌨️  Entering new prompt...`);
-            await videoGen.enterPrompt(segmentPrompt);
-            console.log(`   ✓ Prompt entered`);
-
-            // STEP 4.4.5: Generation auto-triggers in video mode when pressing Enter
-            console.log(`   ⏳ Generation auto-triggered by Enter key`);
-            await new Promise(resolve => setTimeout(resolve, 2000));  // Wait for generation to initialize
-            console.log(`   ✓ Generation started`);
-
-            // STEP 4.4.6: Monitor generation until complete
-            const maxWaitTime = Math.max(180000, (segment.duration + 60) * 1000);
-            console.log(`   ⏳ Monitoring generation (timeout: ${(maxWaitTime / 1000).toFixed(0)}s)...`);
-            const renderComplete = await videoGen.monitorGeneration();
-
-            if (!renderComplete) {
-              console.warn(`   ⚠️  Generation timeout`);
-              throw new Error(`Segment ${segment.segment} generation timeout`);
-            }
-            console.log(`   ✓ Generation completed`);
-
-            // STEP 4.4.7: Download video (try 1080p, fallback to 720p)
-            console.log(`   📥 Downloading video...`);
-            let videoPath = await videoGen.downloadVideo('1080p');
-            
-            if (!videoPath) {
-              console.log(`   ⚠️  1080p download failed, trying 720p...`);
-              videoPath = await videoGen.downloadVideo('720p');
-            }
-
-            if (videoPath) {
-              const videoSize = fs.statSync(videoPath).size;
-              allGeneratedVideos.push({
-                segment: segment.segment,
-                path: videoPath,
-                duration: segment.duration,
-                size: videoSize
-              });
-              console.log(`   ✅ Video downloaded (${(videoSize / 1024 / 1024).toFixed(2)}MB)`);
-            } else {
-              console.warn(`   ⚠️  Video download returned no path`);
-            }
-
-          } catch (segmentError) {
-            console.error(`   ❌ Segment ${segIdx + 1} failed: ${segmentError.message}`);
-            if (isFirstSegment) {
-              throw segmentError; // Fail early if first segment fails
-            }
-            // Continue to next segment if not first
+                aspectRatio: '9:16',
+                platform: 'TikTok'
+              }
+            );
           }
         }
 
-        // Store result
-        videoGenerationResult = {
-          videos: allGeneratedVideos,
-          totalCount: allGeneratedVideos.length,
-          status: allGeneratedVideos.length > 0 ? 'success' : 'no-videos'
-        };
+        if (!videoPrompt || videoPrompt.trim().length === 0) {
+          throw new Error('Failed to generate video prompt');
+        }
+
+        console.log(`📝 Video prompt ready (${videoPrompt.length} characters)`);
+        console.log(`   First 150 chars: "${videoPrompt.substring(0, 150)}..."\n`);
+
+        // STEP 4.3: Generate video using /imagine page
+        console.log('📤 Starting video generation...\n');
+        
+        const videoResult = await videoGen.generateVideo(
+          videoPrompt,
+          primaryImagePath,
+          secondaryImagePath,
+          {
+            download: true,
+            outputPath: tempDir,
+            reloadAfter: false  // Don't reload after single video
+          }
+        );
+
+        if (videoResult?.path && fs.existsSync(videoResult.path)) {
+          const videoSize = fs.statSync(videoResult.path).size;
+          console.log(`\n✅ VIDEO GENERATION SUCCESSFUL`);
+          console.log(`   File: ${path.basename(videoResult.path)}`);
+          console.log(`   Size: ${(videoSize / 1024 / 1024).toFixed(2)} MB`);
+          console.log(`   Duration: 10 seconds`);
+          console.log(`   Resolution: 720p (9:16 TikTok format)`);
+          console.log(`   Primary image: ${imageRecommendations.preferHolding ? 'Character holding product' : 'Character wearing product'}`);
+
+          videoGenerationResult = {
+            success: true,
+            videos: [{
+              type: 'tiktok-video',
+              path: videoResult.path,
+              url: videoResult.url,
+              duration: 10,
+              resolution: '720p',
+              size: videoSize,
+              format: '9:16',
+              primaryImage: imageRecommendations.preferHolding ? 'holding' : 'wearing'
+            }],
+            totalCount: 1,
+            status: 'success',
+            downloadedPath: videoResult.path
+          };
+        } else {
+          throw new Error('Video generation returned no valid file path');
+        }
 
       } finally {
-        // Always close browser (single close for all segments)
         try {
           await videoGen.close();
-          console.log(`✅ Browser closed after all video generations`);
+          console.log(`\n✅ Grok browser closed`);
         } catch (closeError) {
           console.warn('⚠️  Warning closing browser:', closeError.message);
         }
@@ -1358,25 +1369,35 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     } catch (videoError) {
       console.error('❌ Video generation failed:', videoError.message);
-      console.warn('⚠️  Continuing with partial results...');
+      console.error(`   Stack: ${videoError.stack.split('\n').slice(0, 3).join('\n')}`);
+      
       videoGenerationResult = {
-        videos: allGeneratedVideos,
-        totalCount: allGeneratedVideos.length,
+        success: false,
+        videos: [],
+        totalCount: 0,
         error: videoError.message,
-        status: 'partial-failure'
+        status: 'failure'
       };
     }
 
     const step4Duration = ((Date.now() - step4Start) / 1000).toFixed(2);
-    await logger.endStage('video-generation', allGeneratedVideos.length > 0);
-    await logger.info(`Video generation completed`, 'video-generation-complete', {
-      generatedCount: allGeneratedVideos.length,
-      duration: step4Duration
-    });
-    await logger.storeArtifacts({
-      videos: allGeneratedVideos.map(v => ({ segment: v.segment, path: v.path, size: v.size }))
-    });
-    console.log(`\n✅ STEP 4 COMPLETE: Generated ${allGeneratedVideos.length} video(s) in ${step4Duration}s`);
+    await logger.endStage('video-generation', videoGenerationResult?.success);
+    
+    if (videoGenerationResult?.success) {
+      console.log(`\n✅ STEP 4 COMPLETE: Generated ${videoGenerationResult.totalCount} video(s) in ${step4Duration}s`);
+      await logger.info(`Video generation completed`, 'video-generation-complete', {
+        generatedCount: videoGenerationResult.totalCount,
+        duration: step4Duration,
+        resolution: '720p',
+        videoDuration: '10s'
+      });
+    } else {
+      console.error(`\n❌ STEP 4 FAILED: ${videoGenerationResult?.error || 'Unknown error'}`);
+      await logger.error(`Video generation failed`, 'video-generation-failed', {
+        error: videoGenerationResult?.error,
+        duration: step4Duration
+      });
+    }
 
     // ============================================================
     // STEP 5: 💫 AUTO-SAVE GENERATED ASSETS TO DATABASE
@@ -2305,6 +2326,54 @@ function buildVideoPromptFromAnalysis(deepAnalysis, characterAnalysis, config) {
   return prompt;
 }
 
+/**
+ * Build comprehensive prompt for Grok video generation (/imagine page)
+ * Optimized for actual video generation (not just frames)
+ */
+function buildComprehensiveVideoPrompt(scriptContent, characterAnalysis, config) {
+  const { 
+    videoDuration = 10, 
+    voiceGender = 'female', 
+    voicePace = 'moderate',
+    productFocus = 'full-outfit',
+    aspectRatio = '9:16',
+    platform = 'TikTok'
+  } = config;
+  
+  const product = characterAnalysis.product || {};
+  const productName = product.garment_type || product.name || 'fashion product';
+  const productColor = product.primary_color || product.color || 'fashionable';
+  const productMaterial = product.fabric_type || product.material || 'premium quality';
+  
+  // Build the prompt for natural video generation
+  let prompt = `Create a professional TikTok video (${aspectRatio} format, ${videoDuration} seconds):\n\n`;
+  
+  prompt += `📝 SCRIPT:\n`;
+  prompt += `${scriptContent}\n\n`;
+  
+  prompt += `🎬 VISUAL ELEMENTS:\n`;
+  prompt += `- Main subject: Model demonstrating a ${productColor} ${productName}\n`;
+  prompt += `- Material: ${productMaterial}\n`;
+  prompt += `- Focus: ${productFocus}\n`;
+  prompt += `- Pacing: Fast-paced, engaging cuts for ${platform}\n`;
+  prompt += `- Transitions: Smooth fades and quick cuts\n\n`;
+  
+  prompt += `🎙️ VOICEOVER:\n`;
+  prompt += `- Gender: ${voiceGender}\n`;
+  prompt += `- Pace: ${voicePace}\n`;
+  prompt += `- Tone: Energetic, persuasive, authentic\n\n`;
+  
+  prompt += `🎨 STYLE & MOOD:\n`;
+  prompt += `- Overall aesthetic: Modern, trendy, conversion-focused\n`;
+  prompt += `- Lighting: Bright, professional, flattering\n`;
+  prompt += `- Quality: 720p minimum resolution\n`;
+  prompt += `- Aspect ratio: ${aspectRatio} (vertical for ${platform})\n\n`;
+  
+  prompt += `⏱️ TIMING: ${videoDuration} seconds total video length\n`;
+  
+  return prompt;
+}
+
 export default {
   executeAffiliateVideoTikTokFlow,
   performDeepChatGPTAnalysis,
@@ -2414,69 +2483,144 @@ Return as JSON with clear sections.
     
     return prompt;
   },
-
-  /**
-   * Build holding prompt for Step 2
-   */
-  buildHoldingPrompt: (analysis) => {
-    if (!analysis) return "Generate a professional image of a model holding the product";
-    
-    const character = analysis.character || {};
-    const product = analysis.product || {};
-    const recommendations = analysis.recommendations || {};
-
-    let prompt = `Professional fashion image of a ${character.age_range || 'elegant'} person`;
-    
-    if (character.hair) prompt += `, with ${character.hair}`;
-    if (character.body_type) prompt += `, ${character.body_type} figure`;
-    
-    prompt += ` holding ${product.garment_type || 'beautiful product'}`;
-    
-    if (product.primary_color) prompt += ` in ${product.primary_color}`;
-    
-    prompt += `. Close-up focus on the product to show details and quality. Scene locked background: ${recommendations.sceneLockedPrompt || recommendations.scene || 'linhphap-tryon-room'}. Lighting: ${recommendations.lighting || 'professional'}. Mood: ${recommendations.mood || 'confident'}. High quality, professional photography.`;
-    
-    return prompt;
-  },
-
-  /**
-   * Build deep analysis prompt for Step 3
-   */
-  buildDeepAnalysisPrompt: (analysis, productFocus) => {
-    return `
-You are a TikTok content strategist and fashion expert. Based on the character and product analysis, create compelling TikTok content.
-
-ANALYSIS PROVIDED:
-${JSON.stringify(analysis, null, 2)}
-
-TASK:
-1. Generate 3-5 short video scripts (each 15-30 seconds for TikTok)
-2. Create engaging hashtags (10-15 relevant ones)
-3. Suggest video segments and flow
-4. Provide copy for each segment
-
-SCRIPT REQUIREMENTS:
-- Concise and engaging (TikTok style)
-- Focus on: ${productFocus || 'full outfit appeal'}
-- Include call-to-action
-- Make it shareable and relatable
-
-Return as JSON with:
-{
-  "videoScripts": [
-    { "segment": "intro", "text": "...", "duration": 5 },
-    { "segment": "wearing", "text": "...", "duration": 10 },
-    { "segment": "holding", "text": "...", "duration": 10 },
-    { "segment": "cta", "text": "...", "duration": 5 }
-  ],
-  "hashtags": ["#fashion", ...],
-  "metadata": {
-    "tone": "engaging, energetic",
-    "hook": "strong visual + trending audio",
-    "message": "main selling point"
-  }
-}
-    `;
-  }
 };
+
+/**
+ * Extract image recommendations from deep analysis
+ * Determines whether to use wearing or holding image as primary
+ * @param {Object} deepAnalysis - Result from STEP 3 ChatGPT analysis
+ * @returns {Object} { preferHolding, includeProduct }
+ */
+function extractImageRecommendations(deepAnalysis) {
+  const videoScripts = deepAnalysis?.data?.videoScripts || [];
+  
+  // Count script types to determine which image is more useful
+  let wearingCount = 0;
+  let holdingCount = 0;
+  let productShowcaseCount = 0;
+
+  for (const script of videoScripts) {
+    const segment = (script.segment || '').toLowerCase();
+    const scriptText = (script.script || '').toLowerCase();
+    
+    // Detect segment type from script name/content
+    if (segment.includes('wear') || segment.includes('wearing') || segment.includes('fit') || segment.includes('styling')) {
+      wearingCount++;
+    } else if (segment.includes('hold') || segment.includes('holding') || segment.includes('hand') || segment.includes('present')) {
+      holdingCount++;
+    }
+    
+    // Detect product showcase cues
+    if (scriptText.includes('product') || scriptText.includes('detail') || scriptText.includes('quality') || scriptText.includes('close')) {
+      productShowcaseCount++;
+    }
+  }
+
+  console.log(`\n🔍 IMAGE RECOMMENDATION ANALYSIS:`);
+  console.log(`   Wearing-focused segments: ${wearingCount}`);
+  console.log(`   Holding-focused segments: ${holdingCount}`);
+  console.log(`   Product showcase cues: ${productShowcaseCount}`);
+
+  // Decision logic
+  const preferHolding = holdingCount > wearingCount;
+  const includeProduct = productShowcaseCount > 0;
+
+  if (preferHolding) {
+    console.log(`   ✅ DECISION: Use HOLDING image (character prominently displaying product)`);
+  } else {
+    console.log(`   ✅ DECISION: Use WEARING image (character styling with product)`);
+  }
+
+  if (includeProduct) {
+    console.log(`   ✅ Context: Include product image for detail references`);
+  }
+
+  return {
+    preferHolding,
+    includeProduct,
+    wearingCount,
+    holdingCount,
+    productShowcaseCount
+  };
+}
+
+/**
+ * Build character holding product prompt (English version)
+ * Character prominently holds or presents product in hand
+ */
+function buildCharacterHoldingProductPrompt(analysis, selectedOptions = {}, productFocus = 'full-outfit') {
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+
+  let prompt = `[CHARACTER HOLDING PRODUCT COMPOSITION]\n`;
+  prompt += `Purpose: Character prominently holding or presenting product for affiliate/marketing content\n`;
+  prompt += `Focus: Character (60%) + Product in hand (40%)\n\n`;
+
+  prompt += `[IMAGE REFERENCE MAPPING]\n`;
+  prompt += `Character: Keep from reference image (face, body, pose)\n`;
+  prompt += `Product: Character holds/presents in hand or elevated position\n\n`;
+
+  // Character Section
+  prompt += `=== CHARACTER (PRIMARY SUBJECT - 60% of focus) ===\n`;
+  prompt += `The character is the MAIN SUBJECT - prominently featured\n\n`;
+
+  prompt += `Character Description:\n`;
+  if (character.age) prompt += `- Age: ${character.age}\n`;
+  if (character.gender) prompt += `- Gender: ${character.gender}\n`;
+  if (character.skinTone) prompt += `- Skin tone: ${character.skinTone}\n`;
+  if (character.hair?.color && character.hair?.style) {
+    prompt += `- Hair: ${character.hair.color} ${character.hair.style}\n`;
+  }
+  prompt += `- KEEP same face, body, appearance as reference\n\n`;
+
+  prompt += `POSE & POSITIONING:\n`;
+  prompt += `- Standing or seated, natural comfortable position\n`;
+  prompt += `- Hands/arms prominently HOLDING or PRESENTING the product\n`;
+  prompt += `- Product visible and well-placed in character's hands\n`;
+  prompt += `- Expression: Engaged, interested, confident\n`;
+  prompt += `- Looking at product OR making eye contact\n\n`;
+
+  // Product Section
+  prompt += `=== PRODUCT (SECONDARY FOCUS - IN HANDS) ===\n`;
+  prompt += `The product is PROMINENTLY VISIBLE, held by character\n\n`;
+
+  if (product.garment_type) {
+    prompt += `Garment: ${product.garment_type}\n`;
+  }
+  if (product.style_category) {
+    prompt += `Style: ${product.style_category}\n`;
+  }
+
+  prompt += `COLORS:\n`;
+  if (product.primary_color) prompt += `  Primary: ${product.primary_color}\n`;
+  if (product.secondary_color) prompt += `  Secondary: ${product.secondary_color}\n`;
+
+  prompt += `MATERIAL & TEXTURE:\n`;
+  if (product.fabric_type) {
+    prompt += `  Fabric: ${product.fabric_type}\n`;
+  }
+
+  prompt += `\nHOW PRODUCT IS PRESENTED:\n`;
+  prompt += `- Character HOLDS product clearly visible to camera\n`;
+  prompt += `- Hand position: Natural, comfortable holding\n`;
+  prompt += `- Product orientation: Clearly visible, not hidden\n`;
+  prompt += `- Display angle: Shows product details best\n`;
+  if (productFocus === 'full-outfit') {
+    prompt += `- Garment held up or draped, clearly visible\n`;
+  } else if (productFocus === 'accessory') {
+    prompt += `- Accessory prominently held or displayed near face/chest\n`;
+  }
+  prompt += `- Lighting: Well-lit, colors true-to-life\n\n`;
+
+  // Styling & Scene
+  prompt += `=== STYLING & SCENE ===\n`;
+  prompt += `- Background: Clean, uncluttered (does not compete with character)\n`;
+  prompt += `- Lighting: Soft, flattering, even lighting on character and product\n`;
+  prompt += `- Mood: Positive, engaging, professional presentation\n`;
+  prompt += `- Camera angle: Eye-level or slightly below for engagement\n`;
+  prompt += `- Frame: Character from waist up OR full-body showing hands clearly\n`;
+  prompt += `- Quality: Magazine-quality, retail-ready, 8K detail\n`;
+
+  return prompt;
+}
 
