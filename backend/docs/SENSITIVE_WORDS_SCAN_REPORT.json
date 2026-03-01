@@ -1,0 +1,184 @@
+{
+  "timestamp": "2026-02-27T16:04:01.500Z",
+  "totalscan": {
+    "fieldsScanned": 186,
+    "issuesFound": 6,
+    "riskSummary": {
+      "high": 6,
+      "medium": 6,
+      "low": 1
+    }
+  },
+  "findings": {
+    "sceneLockedPromptVi": [
+      {
+        "lineNum": 40,
+        "text": "Phòng thay đồ tại nhà chân thực cho thời trang nữ, tường trung tính và chất liệu...",
+        "findings": [
+          {
+            "word": "sexy",
+            "occurrences": 1,
+            "reason": "Suggestive/adult-oriented term",
+            "risk": "high",
+            "alternatives": [
+              "elegant",
+              "chic",
+              "stylish",
+              "alluring",
+              "flattering",
+              "fashion-forward"
+            ],
+            "originalMatches": [
+              "sexy"
+            ]
+          }
+        ]
+      },
+      {
+        "lineNum": 65,
+        "text": "Không gian boutique thời trang nữ địa phương quy mô nhỏ, tông nền trung tính với...",
+        "findings": [
+          {
+            "word": "sexy",
+            "occurrences": 1,
+            "reason": "Suggestive/adult-oriented term",
+            "risk": "high",
+            "alternatives": [
+              "elegant",
+              "chic",
+              "stylish",
+              "alluring",
+              "flattering",
+              "fashion-forward"
+            ],
+            "originalMatches": [
+              "sexy"
+            ]
+          }
+        ]
+      },
+      {
+        "lineNum": 90,
+        "text": "Background phòng ngủ nữ tính chân thực cho lifestyle, tường trung tính và nội th...",
+        "findings": [
+          {
+            "word": "sexy",
+            "occurrences": 1,
+            "reason": "Suggestive/adult-oriented term",
+            "risk": "high",
+            "alternatives": [
+              "elegant",
+              "chic",
+              "stylish",
+              "alluring",
+              "flattering",
+              "fashion-forward"
+            ],
+            "originalMatches": [
+              "sexy"
+            ]
+          }
+        ]
+      },
+      {
+        "lineNum": 116,
+        "text": "Phòng làm việc tại nhà chân thực của nữ chủ shop thời trang, dùng cho công việc ...",
+        "findings": [
+          {
+            "word": "sexy",
+            "occurrences": 1,
+            "reason": "Suggestive/adult-oriented term",
+            "risk": "high",
+            "alternatives": [
+              "elegant",
+              "chic",
+              "stylish",
+              "alluring",
+              "flattering",
+              "fashion-forward"
+            ],
+            "originalMatches": [
+              "sexy"
+            ]
+          }
+        ]
+      }
+    ],
+    "description": [
+      {
+        "lineNum": 330,
+        "text": "Romantic and dreamy intimate atmosphere",
+        "findings": [
+          {
+            "word": "intimate",
+            "occurrences": 1,
+            "reason": "Suggestive term for apparel",
+            "risk": "high",
+            "alternatives": [
+              "personal care",
+              "comfort wear",
+              "private wear"
+            ],
+            "originalMatches": [
+              "intimate"
+            ]
+          }
+        ]
+      }
+    ],
+    "promptSuggestion": [
+      {
+        "lineNum": 337,
+        "text": "Romantic and dreamy mood with soft ethereal expression, intimate posture, gentle...",
+        "findings": [
+          {
+            "word": "intimate",
+            "occurrences": 1,
+            "reason": "Suggestive term for apparel",
+            "risk": "high",
+            "alternatives": [
+              "personal care",
+              "comfort wear",
+              "private wear"
+            ],
+            "originalMatches": [
+              "intimate"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "replacementMap": {
+    "sexy outfits": "stylish outfits",
+    "sexy": "stylish",
+    "sleepwear": "nightwear",
+    "intimate": "personal wear",
+    "lingerie": "undergarments",
+    "sensual": "elegant",
+    "provocative": "bold",
+    "exposed": "visible",
+    "revealing": "contemporary-cut",
+    "hot": "trendy",
+    "erotic": "romantic",
+    "mature": "sophisticated"
+  },
+  "recommendations": {
+    "highRiskReplacements": {
+      "sexy": "elegant",
+      "intimate": "personal care",
+      "lingerie": "inner wear",
+      "provocative": "bold",
+      "revealing": "contemporary",
+      "erotic": "romantic"
+    },
+    "mediumRiskReplacements": {
+      "sleepwear": "nightwear",
+      "nude": "neutral-tone",
+      "sensual": "elegant",
+      "exposed": "open",
+      "hot": "trendy",
+      "mature": "sophisticated"
+    }
+  }
+}
