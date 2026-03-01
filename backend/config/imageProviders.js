@@ -834,6 +834,57 @@ export const IMAGE_PROVIDERS = [
   },
 
   // ============================================================================
+  // BFL PLAYGROUND - BROWSER AUTOMATION (PRIORITY 5)
+  // ============================================================================
+
+  {
+    name: 'BFL Playground FLUX.2 Klein',
+    id: 'bfl-playground-flux-2',
+    provider: 'bfl',
+    priority: 5,
+    pricing: null,
+    free: true, // Uses free credits from playground
+    requiresKey: false, // Uses browser session
+    requiresSession: true, // Needs manual login first
+    available: (() => {
+      // Check if session file exists
+      const sessionPath = path.join(process.cwd(), 'backend/sessions/bfl-session.json');
+      return fs.existsSync(sessionPath);
+    })(),
+    generate: async (prompt, options = {}) => {
+      // Dynamic import to avoid circular dependencies
+      const { default: BFLPlaygroundService } = await import('../services/browser/bflPlaygroundService.js');
+      
+      console.log(`   🎨 BFL Playground (browser automation)`);
+      
+      const service = new BFLPlaygroundService({
+        headless: options.headless !== false
+      });
+      
+      try {
+        const result = await service.generateImage(prompt, {
+          referenceImage: options.referenceImage,
+          outputPath: options.outputPath,
+          download: true,
+          maxWait: options.maxWait || 180000
+        });
+        
+        await service.close();
+        
+        return {
+          path: result.path,
+          url: result.url,
+          provider: 'bfl',
+          model: 'flux-2-klein'
+        };
+      } catch (error) {
+        await service.close();
+        throw error;
+      }
+    }
+  },
+
+  // ============================================================================
   // POLLINATIONS - FALLBACK (PRIORITY 99)
   // ============================================================================
 

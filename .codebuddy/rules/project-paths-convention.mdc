@@ -1,0 +1,70 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-03-01T16:25:19.205Z
+provider: 
+---
+
+# Project Paths Convention
+
+## ⚠️ CRITICAL: Correct Script Paths
+
+### Directory Structure
+```
+smart-wardrobe/
+├── backend/
+│   ├── scripts/          # Utility scripts
+│   ├── services/         # Business logic
+│   ├── config/           # Configuration
+│   └── sessions/         # Browser sessions
+├── frontend/
+└── docs/
+```
+
+### Running Scripts - ALWAYS use paths RELATIVE to workspace root
+
+When creating commands or scripts, assume the working directory is the **workspace root** (`smart-wardrobe/`).
+
+**Correct paths from root:**
+```bash
+# Backend scripts
+node backend/scripts/bfl-login.js
+node backend/scripts/bfl-test.js
+node backend/scripts/setup/01-check-drive-setup.js
+
+# Backend server
+node backend/server.js
+```
+
+**WRONG paths (common mistake):**
+```bash
+# ❌ WRONG - if user is in backend/, don't add "backend/" prefix
+node backend/scripts/bfl-login.js  # This would look for backend/backend/scripts/
+```
+
+### When User is Already in Subdirectory
+
+If the user is already in `backend/` directory (check their prompt shows `MINGW64 /c/Work/.../backend`), provide commands WITHOUT the `backend/` prefix:
+
+```bash
+# When in backend/ directory
+node scripts/bfl-login.js
+node scripts/bfl-test.js
+```
+
+### Creating New Scripts
+
+When creating new scripts:
+1. Place utility scripts in `backend/scripts/`
+2. Place browser services in `backend/services/browser/`
+3. Place sessions in `backend/sessions/`
+4. Use absolute paths in tool calls: `c:/Work/Affiliate-AI/smart-wardrobe/backend/...`
+
+### Quick Reference
+
+| If user is in... | Use path... |
+|-----------------|-------------|
+| `smart-wardrobe/` (root) | `backend/scripts/xxx.js` |
+| `smart-wardrobe/backend/` | `scripts/xxx.js` |
+| `smart-wardrobe/frontend/` | `../backend/scripts/xxx.js` |
