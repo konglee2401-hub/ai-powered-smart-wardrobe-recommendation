@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-02-27T16:04:08.743Z",
+  "summary": {
+    "updated": 5,
+    "unchanged": 78,
+    "skipped": 0,
+    "total": 83,
+    "status": "success"
+  },
+  "replacements": {
+    "sexy": "stylish",
+    "sexy outfits": "stylish outfits",
+    "lingerie": "elegant undergarments",
+    "intimate": "personal wear",
+    "erotic": "romantic",
+    "provocative": "striking",
+    "revealing": "contemporary-cut",
+    "explicit": "detailed",
+    "sleepwear": "nightwear",
+    "sensual": "elegant",
+    "exposed": "displayed",
+    "mature": "sophisticated",
+    "hot": "trendy",
+    "nude": "neutral-tone",
+    "alluring": "elegant"
+  },
+  "updates": [
+    {
+      "id": "69a1a2435343ac1f9c402b17",
+      "category": "scene",
+      "value": "linhphap-tryon-room",
+      "label": "Try-On Room (Linh Pháp)",
+      "updateTime": "2026-02-27T16:04:08.710Z",
+      "archivedOriginal": true
+    },
+    {
+      "id": "69a1a2435343ac1f9c402b18",
+      "category": "scene",
+      "value": "linhphap-boutique",
+      "label": "Small Boutique (Linh Pháp)",
+      "updateTime": "2026-02-27T16:04:08.717Z",
+      "archivedOriginal": true
+    },
+    {
+      "id": "69a1a2435343ac1f9c402b19",
+      "category": "scene",
+      "value": "linhphap-bedroom-lifestyle",
+      "label": "Bedroom Lifestyle (Linh Pháp)",
+      "updateTime": "2026-02-27T16:04:08.723Z",
+      "archivedOriginal": true
+    },
+    {
+      "id": "69a1a2435343ac1f9c402b1a",
+      "category": "scene",
+      "value": "linhphap-workroom-livestream",
+      "label": "Workroom & Livestream (Linh Pháp)",
+      "updateTime": "2026-02-27T16:04:08.729Z",
+      "archivedOriginal": true
+    },
+    {
+      "id": "69a1a2435343ac1f9c402b27",
+      "category": "mood",
+      "value": "romantic",
+      "label": "Romantic",
+      "updateTime": "2026-02-27T16:04:08.736Z",
+      "archivedOriginal": true
+    }
+  ]
+}

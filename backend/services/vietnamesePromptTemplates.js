@@ -342,6 +342,94 @@ TRỌNG TÂM: Chi tiết giày
 - Hiệu ứng: Nhẹ nhàng zoom out, fade hoặc cut để CTA
 - Nét mặt: Tươi cười, hài lòng, khuyến khích người xem tham gia`,
   },
+
+  // ============================================================
+  // IMAGE GENERATION: Wearing Product (Virtual Try-On)
+  // ============================================================
+  imageGeneration: {
+    wearingProduct: `[CẶP HÌNH ẢNH - IMAGE MAPPING]
+Hình ảnh 1 (upload đầu tiên) = NHÂN VẬT THAM CHIẾU - Người sẽ mặc trang phục
+Hình ảnh 2 (upload thứ hai) = SẢN PHẨM/BỘ TÀI LIỆU THAM CHIẾU - Trang phục cần áp dụng
+QUAN TRỌNG: KHÔNG ĐỂ NHẦM LẪN các hình. Giữ nguyên nhân vật, chỉ thay đổi quần áo.
+
+=== NHÂN VẬT PHẢI GIỮ NGUYÊN (TUYỆT ĐỐI CẦN THIẾT) ===
+
+GIỮ CHÍNH XÁC:
+- Khuôn mặt: GIỐNG HẾT nhân vật trong Hình 1 - không thay đổi khuôn, đường nét, hoặc biểu cảm
+- Cơ thể: GIỐNG HẾT thể hình, dáng người, và tỷ lệ cơ thể
+- Tư thế: GIỐNG HẾT vị trí cơ thể, tay, chân, và hướng đầu
+- Biểu cảm & Ánh nhìn: GIỮ NGUYÊN cảm xúc và hướng nhìn
+- Tóc: GIỮ NGUYÊN kiểu tóc, màu sắc, độ dài, và vị trí - KHÔNG thay đổi
+
+Danh sách cấm:
+X Không thay đổi hình dáng mặt
+X Không thay đổi màu mắt hay nhìn
+X Không thay đổi sắc tố da
+X Không thay đổi cơ thể hay tỷ lệ
+X Không thay đổi phong cách tóc
+X Không thay đổi vị trí tay hoặc chân
+
+=== THAY ĐỒ MỚI (TỪ HÌNH ẢNH 2) ===
+
+LOẠI TÀI LIỆU: {garment_type}
+
+MÀU SẮC & ĐẶC TRƯNG NHẬN DIỆN:
+Màu chính: {primary_color}
+{secondary_color_line}
+
+CHẤT LIỆU & CẢM GIÁC:
+Chất vải: {fabric_type}
+Cảm giác: {fabric_texture}
+
+KIỂU DỨA & CHI TIẾT:
+Kiểu dáng: {fit_type}
+{neckline_line}
+{sleeves_line}
+{key_details_line}
+
+CHIỀU DÀI & ĐỘ PHỦ:
+{length_coverage}
+
+=== KIỂU TÓC & TRANG ĐIỂM ===
+Kiểu tóc: GIỮ NGUYÊN kiểu tóc trong hình tham chiếu
+Trang điểm: GIỮ NGUYÊN tương tự hình tham chiếu - chuyên nghiệp, tự nhiên
+
+=== CÁC PHỤ CHỈ KỸ THUẬT ===
+
+1. ĐỌC garment từ Hình ảnh 2
+2. ĐẶT lên cơ thể nhân vật với rũi tự nhiên và nếp gấp
+3. TẠO LẬP giữa vai và cơ thể
+4. KHỚP hành vi vải với loại chất liệu
+5. ĐẶT toàn trên cơ thể từ Hình 1
+6. VỮA vị trí cổ, cổ tay, mắt cá chân thích hợp
+7. KHÔNG THAY cơ thể để vừa quần áo
+8. GIỮ tỷ lệ cơ thể trong vai/eo/hông
+
+=== CẤU TRÚC KHUNG & CHIẾU SÁNG ===
+
+{scene_directive}
+
+{lighting_info}
+
+Tâm trạng: {mood}
+
+=== CHẤT LƯỢNG & STYLE ===
+
+Phong cách: {style}
+Góc camera: {camera_angle}
+Bảng màu: {color_palette}
+Chất lượng: Ảnh chuyên nghiệp, 8K, nét canh tốt, siêu chi tiết, thực tế tự nhiên
+Chi tiết: Kết cấu vải thực tế, rũi tự nhiên, tỷ lệ giải phẫu chính xác
+
+=== DANH SÁCH KIỂM TRA THỰC HIỆN ===
+✓ Ảnh nhân vật từ Hình 1 với chi tiết nhân vật được bảo tồn
+✓ Mặc trang phục từ Hình 2 với màu và chất liệu đúng
+✓ Cùng khuôn mặt, cơ thể, tư thế, biểu cảm - KHÔNG THAY ĐỔI
+✓ ĐẶT garment thực tế với rũi tự nhiên
+✓ Chiếu sáng & sáng tác chuyên nghiệp
+✓ Không bị biến dạng giải phẫu hoặc tỷ lệ xấu
+`,
+  },
 };
 
 export default VIETNAM_PROMPTS;

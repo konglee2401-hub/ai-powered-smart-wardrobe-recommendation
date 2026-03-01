@@ -8,6 +8,8 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import ContentSafetyFilter from './contentSafetyFilter.js';
+import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
@@ -17,9 +19,18 @@ class GoogleFlowAutomationService {
     this.browser = null;
     this.page = null;
     this.type = options.type || 'image'; // 'image' or 'video'
+    this.contentSafetyFilter = new ContentSafetyFilter(); // Initialize content safety filter
+    this.grecaptchaClearingInterval = null; // Track auto-clearing interval
+    this.debugMode = options.debugMode === true; // Debug mode: only open, don't automate
+    
+    // Instance variables for tracking uploaded vs generated images
+    this.uploadedImageRefs = {}; // Store refs of uploaded images (href + img src + text)
+    this.lastPromptSubmitted = null; // Store original prompt for retry
+    this.imageUrls = {}; // Store generated image URLs for segment mapping
+    
     this.options = {
       headless: false,
-      sessionFilePath: path.join(__dirname, '../.sessions/google-flow-session.json'),
+      sessionFilePath: path.join(__dirname, '../.sessions/google-flow-session-complete.json'),
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
       projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
       aspectRatio: options.aspectRatio || '9:16',
@@ -28,7 +39,7 @@ class GoogleFlowAutomationService {
       model: options.model || (this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast'),
       outputDir: options.outputDir || path.join(__dirname, `../temp/${this.type}-generation-outputs`),
       timeouts: {
-        pageLoad: 30000,
+        pageLoad: 60000,
         tabSwitch: 1500,
         upload: 10000,
         prompt: 3000,
@@ -37,6 +48,10 @@ class GoogleFlowAutomationService {
       },
       ...options
     };
+
+    if (this.debugMode) {
+      console.log('🔧 DEBUG MODE ENABLED - Automation disabled, manual testing only\n');
+    }
   }
 
   async init() {
@@ -76,25 +91,145 @@ class GoogleFlowAutomationService {
     this.options.userDownloadsDir = userDownloadsDir;
     console.log(`   📥 Monitoring downloads in: ${userDownloadsDir}`);
 
+    // Load session and check token freshness
     await this.loadSession();
+    
     console.log('✅ Initialized\n');
+  }
+
+  async ensureFreshTokens() {
+    /**
+     * Note: Token freshness check deprecated.
+     * reCAPTCHA tokens are now generated fresh during each form submission,
+     * so we don't need to store or manage them in the session.
+     */
+    if (!this.sessionData) {
+      console.log('ℹ️  No session data for monitoring');
+      return;
+    }
+
+    try {
+      const sessionAge = Date.now() - new Date(this.sessionData.timestamp).getTime();
+      const ageSeconds = Math.round(sessionAge / 1000);
+
+      console.log(`📋 Session age: ${ageSeconds} seconds\n`);
+      console.log(`ℹ️  reCAPTCHA tokens will be generated fresh during submission\n`);
+    } catch (error) {
+      console.log(`⚠️  Session monitoring failed: ${error.message}\n`);
+    }
+  }
+
+  async refreshTokensAutomatically() {
+    /**
+     * DEPRECATED: reCAPTCHA tokens NOT captured/stored anymore.
+     * Tokens generated fresh during form submission only.
+     * NOT stored because: Invalid tokens cause API 400 errors.
+     */
+    try {
+      this.sessionData.timestamp = new Date().toISOString();
+      console.log('   ✅ Session timestamp updated\n');
+    } catch (error) {
+      console.log(`   ⚠️  Refresh failed: ${error.message}\n`);
+    }
   }
 
   async loadSession() {
     try {
       if (fs.existsSync(this.options.sessionFilePath)) {
         const sessionData = JSON.parse(fs.readFileSync(this.options.sessionFilePath, 'utf8'));
+        
+        // Load only cookies from the current domain to avoid third-party cookie issues
+        // Third-party cookies (SameSite=None from other domains) can cause interference
+        let loadedCount = 0;
         for (const cookie of (sessionData.cookies || [])) {
           try {
-            await this.page.setCookie(cookie);
+            // Only load cookies from labs.google domain or subdomains
+            // Skip cookies from other domains (google.com, etc) that would be third-party
+            if (cookie.domain && (cookie.domain === 'labs.google' || cookie.domain === '.labs.google')) {
+              await this.page.setCookie(cookie);
+              loadedCount++;
+            } else if (!cookie.domain) {
+              // No domain specified, safe to load
+              await this.page.setCookie(cookie);
+              loadedCount++;
+            } else {
+              console.log(`   ⏭️  Skipping third-party cookie: ${cookie.name} from ${cookie.domain}`);
+            }
           } catch (e) {
             // Ignore cookie errors
           }
         }
-        console.log('✅ Session cookies loaded');
+        console.log(`✅ Session cookies loaded (${loadedCount}/${(sessionData.cookies || []).length} cookies, filtered for same-domain only)`);
+        
+        // Store session data for later restoration
+        this.sessionData = sessionData;
+        
+        // Count resources loaded
+        const localStorageCount = Object.keys(sessionData.localStorage || {}).length;
+        console.log(`✅ Session data prepared (${localStorageCount} localStorage items)`);
+        console.log(`ℹ️  reCAPTCHA tokens will be generated fresh during form submission`);
       }
     } catch (e) {
-      console.log('⚠️  Could not load session');
+      console.log('⚠️  Could not load session:', e.message);
+      this.sessionData = null;
+    }
+  }
+
+  async restoreSessionBeforeNavigation() {
+    /**
+     * Restore localStorage items (but NOT reCAPTCHA tokens)
+     * 
+     * IMPORTANT: We do NOT restore _grecaptcha tokens because:
+     * 1. These tokens sync to google.com cookie domain
+     * 2. Google's own API rejects invalid/old tokens with 400 errors
+     * 3. Real Chrome doesn't have these tokens in cookies
+     * 4. Tokens are generated fresh during form submission
+     */
+    if (!this.sessionData) {
+      console.log('ℹ️  No session data available to restore');
+      return;
+    }
+
+    try {
+      console.log('🔐 Restoring session before navigation...');
+      
+      // Restore ONLY regular localStorage items (not reCAPTCHA tokens)
+      const storageItems = { ...this.sessionData.localStorage };
+
+      const result = await this.page.evaluate((storage) => {
+        try {
+          let itemsSet = 0;
+
+          // Restore localStorage items EXCEPT reCAPTCHA tokens
+          for (const [key, value] of Object.entries(storage || {})) {
+            if (value !== null && value !== undefined) {
+              try {
+                window.localStorage.setItem(key, value);
+                itemsSet++;
+              } catch (setError) {
+                // Skip items that can't be set (e.g., security restrictions)
+                console.warn(`Failed to set ${key}: ${setError.message}`);
+              }
+            }
+          }
+
+          return { itemsSet, success: true };
+        } catch (e) {
+          // If localStorage is not accessible at all
+          return { itemsSet: 0, success: false, error: e.message };
+        }
+      }, storageItems);
+
+      console.log(`   ✅ ${result.itemsSet} localStorage items restored (reCAPTCHA tokens excluded)`);
+      
+      if (!result.success && result.error) {
+        console.log(`   ⚠️  Note: localStorage access limited on this page (${result.error})`);
+      }
+
+      // Note: reCAPTCHA tokens are NOT restored - they're generated fresh during form submission
+      
+    } catch (e) {
+      console.log(`⚠️  Session restoration error: ${e.message}`);
     }
   }
 
@@ -106,8 +241,16 @@ class GoogleFlowAutomationService {
     console.log('🌐 Navigating to Google Flow...\n');
     console.log(`   Target URL: ${url}\n`);
 
+    console.log('🌐 Page navigation in progress...');
     await this.page.goto(url, { waitUntil: 'networkidle2', timeout: this.options.timeouts.pageLoad });
     await this.waitForPageReady();
+    
+    // ✅ RESTORE session tokens AFTER navigation when page is ready
+    await this.restoreSessionBeforeNavigation();
+    
+    // ✅ CHECK & REFRESH tokens NOW that we're on the project page with prompt box available
+    await this.ensureFreshTokens();
+    
     console.log('✅ Google Flow loaded and logged in\n');
   }
 
@@ -212,6 +355,63 @@ class GoogleFlowAutomationService {
     return hrefs[position] || null;
   }
 
+  async storeUploadedImage(imagePath) {
+    /**
+     * Store uploaded image from affiliate video step 1 to temp folder
+     * Returns path to stored image
+     * 
+     * @param {string} imagePath - Original image path
+     * @returns {Promise<string>} - Path to stored image in temp folder
+     */
+    try {
+      const uploadStorageDir = path.join(__dirname, '../temp/uploaded-images');
+      
+      // Create storage directory if it doesn't exist
+      if (!fs.existsSync(uploadStorageDir)) {
+        fs.mkdirSync(uploadStorageDir, { recursive: true });
+      }
+      
+      // Generate unique filename with timestamp
+      const timestamp = Date.now();
+      const originalName = path.basename(imagePath);
+      const storedImagePath = path.join(uploadStorageDir, `${timestamp}-${originalName}`);
+      
+      // Copy image to storage folder
+      fs.copyFileSync(imagePath, storedImagePath);
+      
+      console.log(`   📁 Image stored: ${storedImagePath}`);
+      
+      return storedImagePath;
+    } catch (error) {
+      console.error(`   ❌ Failed to store image: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async convertImageToPNG(imagePath) {
+    /**
+     * Convert any image format (JPEG, PNG, etc.) to PNG
+     * Returns PNG buffer that's compatible with clipboard.write()
+     * 
+     * @param {string} imagePath - Path to image file
+     * @returns {Buffer} - PNG image buffer
+     */
+    try {
+      console.log(`   🔄 Converting image to PNG...`);
+      
+      // Read the image and convert to PNG
+      const pngBuffer = await sharp(imagePath)
+        .png({ quality: 90 })
+        .toBuffer();
+      
+      console.log(`   ✅ Conversion successful (${(pngBuffer.length / 1024).toFixed(2)}KB PNG)`);
+      return pngBuffer;
+    } catch (error) {
+      console.error(`   ❌ Conversion failed: ${error.message}`);
+      throw error;
+    }
+  }
+
   async uploadImages(characterImagePath, productImagePath, existingImages = []) {
     console.log('\n🖼️  UPLOADING IMAGES\n');
 
@@ -243,20 +443,42 @@ class GoogleFlowAutomationService {
       // NOTE: configureSettings() should be called BEFORE uploadImages() by the caller
       // uploadImages() focuses only on the upload process
 
-      // STEP 2: Find and log file input
-      console.log('🔍 Finding file input on page...');
-      const fileInputFound = await this.page.evaluate(() => {
-        const inputs = document.querySelectorAll('input[type="file"]');
-        console.log(`[DEBUG] Found ${inputs.length} file inputs`);
-        return inputs.length > 0;
-      });
-
-      if (!fileInputFound) {
-        throw new Error('No file input found on page');
+      // STEP 2: Check for Slate editor container
+      console.log('🔍 Finding Slate editor container...');
+      const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+      const containerExists = await this.page.$(containerSelector);
+      
+      if (!containerExists) {
+        throw new Error('Slate editor container not found');
       }
-      console.log('✅ File input found\n');
+      console.log('✅ Slate editor container found\n');
 
-      const input = await this.page.$('input[type="file"]');
+      // STEP 2.5: Wait for page to be fully stable and focused
+      console.log('⏳ Waiting for page to be fully stable...');
+      await this.page.waitForTimeout(1000); // Let page DOM settle
+      
+      // Ensure main window/document is focused
+      console.log('📌 Ensuring document focus...');
+      await this.page.evaluate(() => {
+        window.focus();
+        document.body.focus();
+      });
+      await this.page.waitForTimeout(500);
+      
+      // Verify container is now focusable
+      console.log('🔍 Verifying container is focusable...');
+      const isFocusable = await this.page.evaluate((selector) => {
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetHeight > 0;
+      }, containerSelector);
+      
+      if (!isFocusable) {
+        console.warn('⚠️  Container may not be focusable, continuing anyway...');
+      } else {
+        console.log('✅ Container is focusable\n');
+      }
       
       // Arrays to store file paths and names for sequential processing
       const filesToProcess = [
@@ -269,7 +491,7 @@ class GoogleFlowAutomationService {
         return document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-index]').length;
       });
       console.log(`📊 Images before upload: ${beforeCount}\n`);
-
+      
       // PROCESS EACH IMAGE SEQUENTIALLY
       for (let fileIdx = 0; fileIdx < filesToProcess.length; fileIdx++) {
         const file = filesToProcess[fileIdx];
@@ -278,12 +500,168 @@ class GoogleFlowAutomationService {
         console.log(`📤 UPLOADING ${file.label} IMAGE (${fileIdx + 1}/${filesToProcess.length})`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
-        // Step 1: Upload file
-        console.log(`   📤 Attaching file: ${file.path}`);
-        await input.uploadFile(file.path);
-        console.log(`   ✓ File attached\n`);
+        // Step 1: Paste image via clipboard (primary) or drag-drop (fallback)
+        console.log(`   📤 Uploading image: ${file.path}`);
         
-        await this.page.waitForTimeout(1000);
+        // Store the uploaded image in temp folder first
+        let storedImagePath;
+        try {
+          storedImagePath = await this.storeUploadedImage(file.path);
+        } catch (storeError) {
+          console.error(`   ❌ Failed to store image: ${storeError.message}`);
+          console.error(`   Aborting upload for this file\n`);
+          continue; // Skip to next file
+        }
+        
+        // Convert image to PNG format (works better with clipboard API)
+        let pngBuffer;
+        try {
+          pngBuffer = await this.convertImageToPNG(storedImagePath);
+        } catch (convertError) {
+          console.error(`   ❌ Failed to convert image: ${convertError.message}`);
+          console.error(`   Aborting upload for this file\n`);
+          continue; // Skip to next file
+        }
+        
+        // Read original file for file input fallback
+        const originalBuffer = fs.readFileSync(file.path);
+        const base64Image = pngBuffer.toString('base64');
+        const mimeType = 'image/png'; // Always use PNG after conversion
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
+
+        console.log(`   📋 Original size: ${(originalBuffer.length / 1024).toFixed(2)}KB`);
+        console.log(`   📋 PNG size: ${(pngBuffer.length / 1024).toFixed(2)}KB`);
+
+        // APPROACH 1: Try clipboard.write() - should work with PNG
+        console.log(`   🔄 APPROACH 1: Trying clipboard.write() with PNG...`);
+        let uploadSuccess = false;
+        
+        // STEP 1: Focus container with robust retry logic
+        console.log(`   🔍 Focusing container with retry logic...`);
+        let focusAttempts = 0;
+        let focused = false;
+        
+        while (!focused && focusAttempts < 3) {
+          focusAttempts++;
+          
+          // Ensure window/document is focused first
+          await this.page.evaluate(() => {
+            window.focus();
+            document.body.focus();
+          });
+          await this.page.waitForTimeout(200);
+          
+          // Try to focus container
+          await this.page.evaluate((selector) => {
+            const element = document.querySelector(selector);
+            if (element) {
+              element.focus();
+              // Verify focus
+              const isFocused = document.activeElement === element;
+              return isFocused;
+            }
+            return false;
+          }, containerSelector);
+          
+          await this.page.waitForTimeout(300);
+          focused = true;
+          
+          if (focusAttempts > 1) {
+            console.log(`   ✓ Focus successful (attempt ${focusAttempts})`);
+          }
+        }
+        
+        // STEP 2: Copy to clipboard AFTER focus is confirmed
+        const clipboardSuccess = await this.page.evaluate(async (data, type) => {
+          try {
+            const activeElement = document.activeElement;
+            if (!activeElement) {
+              throw new Error('No active element found');
+            }
+            
+            const blob = await fetch(`data:${type};base64,${data}`).then(r => r.blob());
+            const clipboardItem = new ClipboardItem({ [type]: blob });
+            
+            await navigator.clipboard.write([clipboardItem]);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }, base64Image, mimeType);
+
+        if (clipboardSuccess) {
+          console.log(`   ✅ Clipboard approach successful`);
+          uploadSuccess = true;
+
+          // STEP 3: Paste with Ctrl+V
+          console.log(`   ⌨️  Pasting with Ctrl+V...`);
+          await this.page.waitForTimeout(200); // Extra wait before paste
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('v');
+          await this.page.keyboard.up('Control');
+          console.log(`   ✓ Ctrl+V executed\n`);
+          await this.page.waitForTimeout(3000); // Wait for upload to process
+        } else {
+          // Clipboard failed - skip drag-drop, go straight to file input
+          console.log(`   🔄 Clipboard failed, trying file input (native browser mechanism)...\n`);
+          try {
+            // Get initial count to verify upload
+            const beforeUploadCount = await this.page.evaluate(() => {
+              return document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length;
+            });
+            console.log(`   📊 Items in gallery before: ${beforeUploadCount}`);
+
+            const fileInput = await this.page.$('input[type="file"]');
+            if (!fileInput) {
+              console.log(`   ❌ File input element not found`);
+            } else {
+              console.log(`   📁 Uploading file via native browser file mechanism...`);
+              
+              // Random delay (100-300ms) to seem human-like
+              const delay = Math.floor(Math.random() * 200) + 100;
+              await this.page.waitForTimeout(delay);
+              
+              // Use uploadFile to set the file - this is native browser API, not bot detection
+              await fileInput.uploadFile(file.path);
+              console.log(`   ✓ File set to input element`);
+              
+              // Dispatch change event to trigger upload
+              console.log(`   ⌨️  Dispatching change event...`);
+              await this.page.evaluate(() => {
+                const fileInput = document.querySelector('input[type="file"]');
+                if (fileInput) {
+                  fileInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                  fileInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                }
+              });
+              
+              console.log(`   ⏳ Waiting for upload to process (3 seconds)...`);
+              await this.page.waitForTimeout(3000);
+              
+              // Verify upload by checking if gallery item count increased
+              const afterUploadCount = await this.page.evaluate(() => {
+                return document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length;
+              });
+              console.log(`   📊 Items in gallery after: ${afterUploadCount}`);
+              
+              if (afterUploadCount > beforeUploadCount) {
+                console.log(`   ✅ Upload verified! Gallery item count increased (${beforeUploadCount} → ${afterUploadCount})`);
+                uploadSuccess = true;
+              } else {
+                console.log(`   ⚠️  Gallery count did not increase - upload may have failed\n`);
+              }
+            }
+          } catch (fileInputErr) {
+            console.log(`   ⚠️  File input error: ${fileInputErr.message}\n`);
+          }
+        }
+
+        if (!uploadSuccess) {
+          console.warn(`   ⚠️  WARNING: Image upload status uncertain!`);
+          console.warn(`   Please verify in browser if image was uploaded successfully.\n`);
+        }
+
+        await this.page.waitForTimeout(2000);
 
         // Step 2: Check for ToS modal
         console.log(`   🔍 Checking for ToS modal (3 attempts)...`);
@@ -299,6 +677,11 @@ class GoogleFlowAutomationService {
           }
         }
 
+        // COMMENTED OUT: Step 3-6 (href detection and right-click add to prompt after clipboard paste)
+        // Images pasted via clipboard are already in the prompt as reference images
+        // No need to detect and right-click "Thêm vào câu lệnh" anymore
+        // This detection will still be used AFTER generation to detect generated images
+        /*
         // Step 3: Get initial hrefs from ALL items to track which ones are new
         console.log(`   📎 Capturing ALL initial hrefs...`);
         const initialAllHrefs = await this.getHrefsFromVirtuosoList();
@@ -320,6 +703,11 @@ class GoogleFlowAutomationService {
             // 💫 STORE the href for this image type
             imageUrls[file.imageKey] = newItemHref;
             console.log(`   📎 Stored href for "${file.imageKey}": ${newItemHref.substring(0, 60)}...\n`);
+            
+            // ⏳ Wait 3 seconds after image is detected before next step
+            console.log(`   ⏳ Waiting 3 seconds after upload confirmation...\n`);
+            await this.page.waitForTimeout(3000);
+            
             break;
           }
 
@@ -450,13 +838,10 @@ class GoogleFlowAutomationService {
         // Move mouse away
         await this.page.mouse.move(100, 100);
         await this.page.waitForTimeout(300);
+        */
 
-        // Reset input for next file (if there is one)
+        // No need to reset input since we're using clipboard paste
         if (fileIdx < filesToProcess.length - 1) {
-          await this.page.evaluate(() => {
-            const inp = document.querySelector('input[type="file"]');
-            inp.value = '';
-          });
           await this.page.waitForTimeout(500);
         }
       }
@@ -475,8 +860,59 @@ class GoogleFlowAutomationService {
         console.log(`✅ Image count correct!\n`);
       }
 
+      // 💫 CAPTURE UPLOADED IMAGE REFERENCES for later retry detection
+      console.log(`\n📎 CAPTURING UPLOADED IMAGE REFERENCES (for generate detection):`);
+      
+      const uploadedRefs = await this.page.evaluate(() => {
+        const refMap = {};
+        
+        // Get ALL items from virtuoso list
+        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        
+        // For each uploaded image, capture href + img src + text
+        // We'll store the LAST 2 items (most recent uploads)
+        const itemsArray = Array.from(items);
+        
+        if (itemsArray.length >= 2) {
+          // Get first 2 items (most recent since list is reversed)
+          for (let i = 0; i < 2 && i < itemsArray.length; i++) {
+            const linkEl = itemsArray[i];
+            const href = linkEl.getAttribute('href');
+            
+            // Find img inside the link
+            const imgEl = linkEl.querySelector('img');
+            const imgSrc = imgEl ? imgEl.getAttribute('src') : null;
+            
+            // Get text content (usually a description or title)
+            const textContent = linkEl.textContent.trim();
+            
+            // Map position to key (0 = wearing, 1 = product)
+            const key = i === 0 ? 'wearing' : 'product';
+            
+            refMap[key] = {
+              href,
+              imgSrc,
+              text: textContent.substring(0, 100)
+            };
+          }
+        }
+        
+        return refMap;
+      });
+      
+      this.uploadedImageRefs = uploadedRefs;
+      
+      console.log(`   📎 Uploaded image references captured:`);
+      for (const [key, ref] of Object.entries(this.uploadedImageRefs)) {
+        console.log(`   ✓ ${key}:`);
+        console.log(`     - href: ${ref.href ? ref.href.substring(0, 50) + '...' : '(none)'}`);
+        console.log(`     - imgSrc: ${ref.imgSrc ? ref.imgSrc.substring(0, 50) + '...' : '(none)'}`);
+        console.log(`     - text: "${ref.text}"`);
+      }
+      console.log('');
+
       // 💫 STORE imageUrls in instance for later use by segments
-      console.log(`\n📎 STORING IMAGE URL MAPPING FOR SEGMENTS:`);
+      console.log(`📎 STORING IMAGE URL MAPPING FOR SEGMENTS:`);
       console.log(`   wearing: ${imageUrls.wearing ? imageUrls.wearing.substring(0, 60) + '...' : '(not set)'}`);
       console.log(`   product: ${imageUrls.product ? imageUrls.product.substring(0, 60) + '...' : '(not set)'}`);
       console.log(`   holding: ${imageUrls.holding ? imageUrls.holding.substring(0, 60) + '...' : '(not set)'}\n`);
@@ -504,6 +940,36 @@ class GoogleFlowAutomationService {
       .replace(/\s+/g, ' ')           // Replace multiple spaces with single space
       .trim();                         // Trim leading/trailing whitespace
     
+    // STEP 0.5: Content Safety Check
+    const safety = this.contentSafetyFilter.validatePrompt(cleanPrompt);
+    if (safety.hasHighRisk) {
+      console.log('\n⚠️  CONTENT SAFETY WARNING\n');
+      console.log('[SAFETY] 🚨 HIGH RISK CONTENT DETECTED');
+      console.log(`[SAFETY] Risk Score: ${safety.riskScore}/100`);
+      console.log('[SAFETY] Issues found:');
+      safety.suggestions.forEach(s => {
+        console.log(`  • ${s.issue}`);
+        console.log(`    Suggested: "${s.suggested}"`);
+      });
+      
+      // Auto-correct high-risk content
+      console.log('\n[SAFETY] 🔧 Auto-correcting high-risk terms...');
+      const correctedPrompt = this.contentSafetyFilter.autoCorrect(cleanPrompt, 'high');
+      console.log(`[SAFETY] ✅ Corrected version applied\n`);
+      
+      return this.enterPrompt(correctedPrompt); // Recursively enter corrected prompt
+    } else if (safety.hasMediumRisk) {
+      console.log('\n⚠️  CONTENT SAFETY NOTICE\n');
+      console.log('[SAFETY] ⚡ Medium risk terms detected (review recommended):');
+      safety.suggestions.forEach(s => {
+        console.log(`  • ${s.issue}`);
+        console.log(`    Suggested: "${s.suggested}"`);
+      });
+      console.log('[SAFETY] Proceeding with original prompt\n');
+    } else {
+      console.log('[SAFETY] ✅ Prompt is content-safe\n');
+    }
+    
     console.log('✍️  ENTERING PROMPT\n');
     console.log(`   Original length: ${(prompt || '').length} chars`);
     console.log(`   Cleaned length: ${(cleanPrompt || '').length} chars`);
@@ -512,7 +978,7 @@ class GoogleFlowAutomationService {
     try {
       // Find and focus the Slate editor textbox
       console.log('   🔍 Finding prompt textbox...');
-      const promptDiv = await this.page.$('[role="textbox"][data-slate-editor="true"]');
+      const promptDiv = await this.page.$('.iTYalL[role="textbox"][data-slate-editor="true"]');
       
       if (!promptDiv) {
         throw new Error('Prompt textbox not found');
@@ -522,146 +988,138 @@ class GoogleFlowAutomationService {
       // Focus the textbox
       console.log('   🖱️  Focusing textbox...');
       await this.page.evaluate(() => {
-        const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (textbox) {
           textbox.focus();
         }
       });
       await this.page.waitForTimeout(300);
 
-      // Attempt typing with optimized strategy: type start, paste middle, type end
-      let attempts = 0;
-      let success = false;
-      const maxAttempts = 2;
-
-      while (attempts < maxAttempts && !success) {
-        attempts++;
-        console.log(`   ⌨️  Entering prompt (attempt ${attempts}/${maxAttempts})...`);
-        
-        // Split prompt into sections for optimized entry
-        const PREFIX_LEN = 20;
-        const SUFFIX_LEN = 20;
-        
-        const prefix = cleanPrompt.substring(0, PREFIX_LEN);
-        const suffix = cleanPrompt.substring(Math.max(PREFIX_LEN, cleanPrompt.length - SUFFIX_LEN));
-        const middle = cleanPrompt.substring(PREFIX_LEN, cleanPrompt.length - SUFFIX_LEN);
-        
-        console.log(`   📝 Splitting: [${PREFIX_LEN}] + [${middle.length}] + [${SUFFIX_LEN}]`);
-        
-        // SECTION 1: Type first 20 chars (slow, careful)
-        if (prefix.length > 0) {
-          console.log(`   ⌨️  [1/3] Typing first ${prefix.length} chars...`);
-          await this.page.keyboard.type(prefix, { delay: 3 });
-          await this.page.waitForTimeout(100);
-        }
-        
-        // SECTION 2: Paste middle section (fast via clipboard)
-        if (middle.length > 0) {
-          console.log(`   📋 [2/3] Pasting middle ${middle.length} chars...`);
-          
-          // Use clipboard to paste efficiently
-          await this.page.evaluate(() => {
-            const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
-            if (textbox) {
-              // Get current caret position and insert text
-              const event = new ClipboardEvent('paste', {
-                clipboardData: new DataTransfer(),
-                bubbles: true
-              });
-              Object.defineProperty(event, 'clipboardData', {
-                value: {
-                  getData: () => ''
-                }
-              });
-            }
-          });
-          
-          // Simpler approach: type middle section quickly without delay
-          await this.page.keyboard.type(middle, { delay: 0 });
-          await this.page.waitForTimeout(50);
-        }
-        
-        // SECTION 3: Type last 20 chars (slow, careful)
-        if (suffix.length > 0) {
-          console.log(`   ⌨️  [3/3] Typing last ${suffix.length} chars...`);
-          await this.page.keyboard.type(suffix, { delay: 3 });
-          await this.page.waitForTimeout(100);
-        }
-        
-        console.log(`   ✓ Entry complete: ${cleanPrompt.length} chars`);
-
-        // Allow framework to process input
-        console.log('   ⏳ Waiting for framework to process input...');
-        await this.page.waitForTimeout(2000);
-
-        // Dispatch events to finalize input
-        console.log('   📤 Dispatching blur/input/change events...');
+      // NEW METHOD: Use copy-paste instead of typing
+      console.log('   📋 Using copy-paste method...\n');
+      
+      try {
+        // Step 1: Focus textbox
+        console.log('   🖱️  [1] Focusing textbox...');
         await this.page.evaluate(() => {
-          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
           if (textbox) {
-            textbox.dispatchEvent(new Event('blur', { bubbles: true }));
-            textbox.dispatchEvent(new Event('input', { bubbles: true }));
-            textbox.dispatchEvent(new Event('change', { bubbles: true }));
+            textbox.focus();
           }
         });
-        console.log('   ✓ Events dispatched');
-
-        // Verify content in the editor matches expected prompt STRICTLY
-        const currentText = await this.page.evaluate(() => {
-          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
-          if (!textbox) return '';
-          // Slate often stores content in innerText/textContent
-          return (textbox.innerText || textbox.textContent || '').trim();
+        await this.page.waitForTimeout(200);
+        console.log('   ✓ Focused');
+        
+        // Step 2: Click left mouse button on textbox
+        console.log('   🖱️  [2] Clicking textbox...');
+        await this.page.evaluate(() => {
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          if (textbox) {
+            const rect = textbox.getBoundingClientRect();
+            const x = Math.round(rect.left + rect.width / 2);
+            const y = Math.round(rect.top + rect.height / 2);
+            // Dispatch click event
+            const event = new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            });
+            textbox.dispatchEvent(event);
+          }
         });
-
-        const expected = (cleanPrompt || '').trim();
-        const expectedLength = expected.length;
-        const currentLength = currentText.length;
+        await this.page.waitForTimeout(300);
+        console.log('   ✓ Clicked');
         
-        // 🔴 STRICT VERIFICATION: Allow max 1% difference (rounding errors)
-        const maxDifference = Math.max(1, Math.ceil(expectedLength * 0.01));
-        const lengthMatch = Math.abs(currentLength - expectedLength) <= maxDifference;
+        // Step 3: Copy prompt to clipboard
+        console.log('   📋 [3] Copying prompt to clipboard...');
+        await this.page.evaluate((promptText) => {
+          navigator.clipboard.writeText(promptText).catch(() => {});
+        }, cleanPrompt);
+        await this.page.waitForTimeout(200);
+        console.log('   ✓ Copied');
         
-        // Also check last 100 chars (or all if shorter) to ensure content integrity
-        const checkLength = Math.min(100, expectedLength);
-        const expectedTail = expected.slice(-checkLength);
-        const currentTail = currentText.slice(-checkLength);
-        const tailMatch = currentTail === expectedTail;
-
-        if (lengthMatch && tailMatch) {
-          console.log(`   ✅ Prompt verification PASSED (${currentLength}/${expectedLength} chars, tail matches)`);
-          success = true;
-          break;
+        // Step 4: Paste with Ctrl+V (using keyboard event sequence like image paste)
+        console.log('   📋 [4] Pasting with Ctrl+V...');
+        await this.page.waitForTimeout(200); // Extra wait before paste
+        await this.page.keyboard.down('Control');
+        await this.page.waitForTimeout(50);
+        await this.page.keyboard.press('v');
+        await this.page.waitForTimeout(50);
+        await this.page.keyboard.up('Control');
+        console.log('   ✓ Pasted');
+        
+        // 💫 Store prompt for retry use
+        this.lastPromptSubmitted = cleanPrompt;
+        console.log(`   💾 Stored prompt for retry (${cleanPrompt.length} chars)\n`);
+        
+        // Step 5: Wait 5 seconds for prompt to be processed
+        console.log('   ⏳ [5] Waiting 5 seconds for prompt to be processed...');
+        await this.page.waitForTimeout(5000);
+        console.log('   ✓ Processing complete');
+        
+        // Step 6: Wait 2 more seconds
+        console.log('   ⏳ [6] Waiting 2 more seconds before submitting...');
+        await this.page.waitForTimeout(2000);
+        console.log('   ✓ Ready');
+        
+        // Step 7: Click submit button (arrow_forward) using mouse
+        console.log('   🖱️  [7] Finding and clicking submit button...');
+        const submitClicked = await this.page.evaluate(() => {
+          // Find textbox first
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          if (!textbox) return { found: false };
+          
+          // Go up to find parent container with buttons
+          let container = textbox.parentElement;
+          for (let i = 0; i < 3; i++) {
+            if (container.parentElement) {
+              container = container.parentElement;
+            }
+          }
+          
+          // Find all buttons in this container
+          const buttons = container.querySelectorAll('button');
+          
+          // Look for button with arrow_forward icon
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i.google-symbols');
+            if (icon && icon.textContent.includes('arrow_forward')) {
+              if (!btn.disabled) {
+                const rect = btn.getBoundingClientRect();
+                return {
+                  found: true,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2)
+                };
+              }
+            }
+          }
+          
+          return { found: false };
+        });
+        
+        if (submitClicked.found) {
+          console.log('   ✓ Found submit button');
+          console.log(`   🖱️  Clicking with mouse at (${submitClicked.x}, ${submitClicked.y})...`);
+          
+          // Click using mouse movement method
+          await this.page.mouse.move(submitClicked.x, submitClicked.y);
+          await this.page.waitForTimeout(100);
+          await this.page.mouse.down();
+          await this.page.waitForTimeout(50);
+          await this.page.mouse.up();
+          
+          console.log('   ✓ Submitted\n');
+        } else {
+          console.warn('   ⚠️  Submit button not found, trying Enter as fallback...');
+          await this.page.keyboard.press('Enter');
+          console.log('   ⚠️  Submitted with Enter key (fallback)\n');
         }
-
-        console.log(`   ⚠️ Prompt verification FAILED`);
-        console.log(`      Expected: ${expectedLength} chars`);
-        console.log(`      Got: ${currentLength} chars`);
-        console.log(`      Length match: ${lengthMatch}, Tail match: ${tailMatch}`);
-
-        // Retry: clear the editor and try once more
-        if (attempts < maxAttempts) {
-          console.log('   🔁 Retrying: clearing editor and re-entering...');
-          // Focus and select-all then delete to clear Slate editor
-          await this.page.focus('[role="textbox"][data-slate-editor="true"]');
-          await this.page.keyboard.down('Control');
-          await this.page.keyboard.press('KeyA');
-          await this.page.keyboard.up('Control');
-          await this.page.keyboard.press('Backspace');
-          await this.page.waitForTimeout(400);
-        }
+        
+      } catch (pasteError) {
+        console.error(`   ❌ Error in copy-paste method: ${pasteError.message}`);
+        throw pasteError;
       }
-
-      if (!success) {
-        console.warn('   ❌ Prompt entry verification failed after retries');
-        throw new Error('Prompt not fully entered into editor');
-      }
-
-      // Press Enter to submit the prompt
-      console.log('   ⌨️  Pressing Enter to submit prompt...');
-      await this.page.keyboard.press('Enter');
-      console.log('   ✓ Prompt submitted with Enter key\n');
-      await this.page.waitForTimeout(500);
 
     } catch (error) {
       console.error(`   ❌ Error entering prompt: ${error.message}`);
@@ -743,9 +1201,149 @@ class GoogleFlowAutomationService {
     return !status.disabled;
   }
 
+  async clearGrecaptchaTokens() {
+    /**
+     * Clear reCAPTCHA tokens before submission
+     * In debug mode, this is disabled
+     */
+    if (this.debugMode) {
+      console.log('🔧 [DEBUG] Skipping token clearing\n');
+      return;
+    }
+
+    /**
+     * Uses Chrome DevTools Protocol to access cookies from ALL domains
+     * (including google.com which page.cookies() cannot access)
+     */
+    try {
+      console.log('🧹 Clearing cached reCAPTCHA tokens before submission...');
+      
+      // Clear from localStorage
+      const cleared = await this.page.evaluate(() => {
+        const keysToDelete = ['_grecaptcha', 'rc::a', 'rc::f'];
+        let deletedCount = 0;
+        
+        for (const key of keysToDelete) {
+          if (localStorage.getItem(key)) {
+            localStorage.removeItem(key);
+            deletedCount++;
+          }
+        }
+        
+        // Also clear any keys matching grecaptcha pattern (case-insensitive)
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.toLowerCase().includes('grecaptcha')) {
+            localStorage.removeItem(key);
+            deletedCount++;
+          }
+        }
+        
+        return deletedCount;
+      });
+      
+      if (cleared > 0) {
+        console.log(`   ✅ Cleared ${cleared} tokens from localStorage`);
+      }
+      
+      // Clear from cookies using Chrome DevTools Protocol (CDP)
+      // This allows access to cookies from ALL domains including google.com
+      try {
+        const cdpSession = await this.page.target().createCDPSession();
+        
+        // Get all cookies
+        const result = await cdpSession.send('Network.getAllCookies');
+        const allCookies = result.cookies || [];
+        let deletedCount = 0;
+        
+        for (const cookie of allCookies) {
+          const nameLower = cookie.name.toLowerCase();
+          
+          // Match grecaptcha-related cookies
+          if (nameLower === '_grecaptcha' || 
+              nameLower.startsWith('rc::') ||
+              nameLower.includes('captcha') ||
+              nameLower.includes('recaptcha')) {
+            
+            try {
+              // Delete via CDP (works for all domains including google.com)
+              await cdpSession.send('Network.deleteCookies', {
+                name: cookie.name,
+                domain: cookie.domain,
+                path: cookie.path
+              });
+              deletedCount++;
+              console.log(`   ✓ Deleted: ${cookie.name} from ${cookie.domain}`);
+            } catch (deleteError) {
+              // Ignore deletion errors
+            }
+          }
+        }
+        
+        await cdpSession.detach();
+        
+        if (deletedCount > 0) {
+          console.log(`   ✅ Cleared ${deletedCount} tokens from cookies (all domains)`);
+        }
+      } catch (cdpError) {
+        console.log(`   ⚠️  Cookie clearing via CDP failed: ${cdpError.message}`);
+        console.log('   💡 Attempting fallback with page.cookies()...');
+        
+        // Fallback: try with page.cookies() which only gets current domain
+        try {
+          const cookies = await this.page.cookies();
+          let fallbackCount = 0;
+          
+          for (const cookie of cookies) {
+            const nameLower = cookie.name.toLowerCase();
+            if (nameLower === '_grecaptcha' || nameLower.startsWith('rc::')) {
+              try {
+                await this.page.deleteCookie(cookie);
+                fallbackCount++;
+              } catch (e) {
+                // Ignore
+              }
+            }
+          }
+          
+          if (fallbackCount > 0) {
+            console.log(`   ✅ Fallback: Cleared ${fallbackCount} tokens from current domain`);
+          }
+        } catch (e) {
+          console.log(`   ⚠️  Fallback also failed: ${e.message}`);
+        }
+      }
+      
+      // Clear sessionStorage
+      try {
+        await this.page.evaluate(() => {
+          sessionStorage.clear();
+        });
+      } catch (e) {
+        // Ignore errors
+      }
+      
+      console.log('   💡 Fresh tokens will be generated during API submission\n');
+    } catch (error) {
+      console.warn(`   ⚠️  Error clearing tokens: ${error.message}`);
+    }
+  }
+
   async submit() {
+    if (this.debugMode) {
+      console.log('🔧 [DEBUG] Submit skipped (debug mode)\n');
+      return false;
+    }
+
+    // 🧹 Clear any cached reCAPTCHA tokens before submission
+    // ❌ COMMENTED OUT: Already called in enterPrompt() - avoid double submission
+    // await this.clearGrecaptchaTokens();
+    
     console.log('⏳ Submitting request...');
     
+    // ❌ COMMENTED OUT: Already submitted in enterPrompt() via mouse click
+    // Avoid double submission which causes duplicate requests
+    /*
     try {
       const clicked = await this.page.evaluate(() => {
         // Try multiple selector strategies
@@ -782,6 +1380,288 @@ class GoogleFlowAutomationService {
       }
     } catch (error) {
       console.error('❌ Error submitting:', error.message);
+      return false;
+    }
+    */
+    
+    // Return false since submit is handled in enterPrompt()
+    return false;
+  }
+
+  async findGeneratedImage() {
+    /**
+     * Find a newly generated image by comparing against uploaded image refs
+     * Generated images will have href + img src that DIFFER from uploaded refs
+     * 
+     * @returns {Object|null} - {href, imgSrc, text} if found, null otherwise
+     */
+    try {
+      const generated = await this.page.evaluate((uploadedRefs) => {
+        // Get ALL items from virtuoso list
+        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        const itemsArray = Array.from(items);
+        
+        // Check each item to see if it matches uploaded refs
+        for (let i = 0; i < itemsArray.length; i++) {
+          const linkEl = itemsArray[i];
+          const href = linkEl.getAttribute('href');
+          const imgEl = linkEl.querySelector('img');
+          const imgSrc = imgEl ? imgEl.getAttribute('src') : null;
+          const textContent = linkEl.textContent.trim();
+          
+          // Check if this matches any uploaded ref
+          let isUploaded = false;
+          for (const [key, ref] of Object.entries(uploadedRefs || {})) {
+            // Compare both href and imgSrc to be sure
+            if (ref.href === href && ref.imgSrc === imgSrc) {
+              isUploaded = true;
+              break;
+            }
+          }
+          
+          // If not found in uploaded refs, it's NEW (generated)
+          if (!isUploaded && href && imgSrc) {
+            return {
+              href,
+              imgSrc,
+              text: textContent.substring(0, 100),
+              position: i
+            };
+          }
+        }
+        
+        return null;
+      }, this.uploadedImageRefs);
+      
+      return generated;
+    } catch (error) {
+      console.error(`Error finding generated image: ${error.message}`);
+      return null;
+    }
+  }
+
+  async handleGenerationFailureRetry(prompt) {
+    /**
+     * Retry generation after failure
+     * Procedure:
+     * 1. Wait 5s for UI to stabilize
+     * 2. Find stored uploaded image refs (with retry)
+     * 3. Right-click on each, select "Thêm vào câu lệnh" (up to 5 attempts per image)
+     * 4. Focus textbox and paste original prompt again
+     * 
+     * NOTE: Gallery positions change when new items are appended!
+     * Must re-query DOM each attempt to get current coordinates
+     * 
+     * @param {string} prompt - Original prompt to reuse
+     */
+    console.log('\n🔄 HANDLING GENERATION FAILURE - RETRYING...\n');
+    
+    if (!prompt || !this.uploadedImageRefs) {
+      console.warn('⚠️  Missing prompt or uploadedImageRefs, cannot retry');
+      return false;
+    }
+    
+    try {
+      // Step 1: Wait 5 seconds
+      console.log('   ⏳ [1] Waiting 5 seconds for UI to stabilize...');
+      await this.page.waitForTimeout(5000);
+      console.log('   ✓ Stabilized\n');
+      
+      // Step 2: Find and add uploaded images again via right-click (with 5 retries)
+      const imageKeys = Object.keys(this.uploadedImageRefs);
+      const maxRetries = 5;
+      
+      for (let keyIdx = 0; keyIdx < imageKeys.length; keyIdx++) {
+        const key = imageKeys[keyIdx];
+        const ref = this.uploadedImageRefs[key];
+        
+        console.log(`   🖱️  [2.${keyIdx + 1}] Re-adding "${key}" image to prompt via right-click...`);
+        
+        let addSuccess = false;
+        let attemptCount = 0;
+        
+        // Retry loop for this specific image (up to 5 attempts)
+        while (!addSuccess && attemptCount < maxRetries) {
+          attemptCount++;
+          
+          if (attemptCount > 1) {
+            console.log(`   🔄 Re-adding attempt ${attemptCount}/${maxRetries}...`);
+          }
+          
+          try {
+            // ❗ CRITICAL: Query position FRESH each attempt (gallery positions change)
+            console.log(`   🔍 Querying current position of "${key}" image...`);
+            const linkData = await this.page.evaluate((targetHref) => {
+              const link = document.querySelector(`a[href="${targetHref}"]`);
+              if (!link) return { found: false };
+              
+              const rect = link.getBoundingClientRect();
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }, ref.href);
+            
+            if (!linkData.found) {
+              console.log(`   ⚠️  "${key}" image ref not found${attemptCount < maxRetries ? ', retrying...' : ', skipping'}`);
+              
+              if (attemptCount < maxRetries) {
+                await this.page.waitForTimeout(1000);
+                continue;
+              } else {
+                console.log(`   ❌ Failed after ${maxRetries} attempts\n`);
+                break;
+              }
+            }
+            
+            console.log(`   ✓ Found at position (${linkData.x}, ${linkData.y})`);
+            
+            // Right-click on the image
+            console.log(`   🖱️  Right-clicking on image...`);
+            await this.page.mouse.move(linkData.x, linkData.y);
+            await this.page.waitForTimeout(300);
+            await this.page.mouse.down({ button: 'right' });
+            await this.page.waitForTimeout(50);
+            await this.page.mouse.up({ button: 'right' });
+            await this.page.waitForTimeout(800);
+            
+            // Find and click "Thêm vào câu lệnh" button
+            const addBtn = await this.page.evaluate(() => {
+              const buttons = document.querySelectorAll('button[role="menuitem"]');
+              for (const btn of buttons) {
+                const text = btn.textContent.trim();
+                if (text.includes('Thêm vào')) {
+                  return {
+                    x: Math.floor(btn.getBoundingClientRect().left + btn.getBoundingClientRect().width / 2),
+                    y: Math.floor(btn.getBoundingClientRect().top + btn.getBoundingClientRect().height / 2)
+                  };
+                }
+              }
+              return null;
+            });
+            
+            if (!addBtn) {
+              console.log(`   ⚠️  "Thêm vào" button not found${attemptCount < maxRetries ? ', retrying...' : ', failing'}`);
+              
+              // Move mouse away
+              await this.page.mouse.move(100, 100);
+              await this.page.waitForTimeout(300);
+              
+              if (attemptCount < maxRetries) {
+                await this.page.waitForTimeout(1000);
+                continue;
+              } else {
+                break;
+              }
+            }
+            
+            // Click "Thêm vào" button
+            console.log(`   ✓ Clicking "Thêm vào câu lệnh"...`);
+            await this.page.mouse.move(addBtn.x, addBtn.y);
+            await this.page.waitForTimeout(200);
+            await this.page.mouse.down();
+            await this.page.waitForTimeout(100);
+            await this.page.mouse.up();
+            await this.page.waitForTimeout(1200);
+            
+            console.log(`   ✓ "${key}" image added successfully\n`);
+            addSuccess = true;
+            
+            // Move mouse away
+            await this.page.mouse.move(100, 100);
+            await this.page.waitForTimeout(300);
+            
+          } catch (e) {
+            console.log(`   ❌ Error on attempt ${attemptCount}/${maxRetries}: ${e.message}${attemptCount < maxRetries ? ', retrying...' : ', failing'}`);
+            
+            // Move mouse away
+            await this.page.mouse.move(100, 100);
+            await this.page.waitForTimeout(300);
+            
+            if (attemptCount < maxRetries) {
+              await this.page.waitForTimeout(1500);
+            }
+          }
+        }
+        
+        if (!addSuccess) {
+          console.warn(`   ⚠️  Could not add "${key}" image after ${maxRetries} attempts\n`);
+        }
+      }
+      
+      // Step 3: Re-paste original prompt
+      console.log(`   📋 [3] Re-entering original prompt...\n`);
+      
+      // Focus textbox
+      await this.page.evaluate(() => {
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        if (textbox) textbox.focus();
+      });
+      await this.page.waitForTimeout(300);
+      
+      // Copy prompt to clipboard (recreate to avoid state issues)
+      await this.page.evaluate((promptText) => {
+        navigator.clipboard.writeText(promptText).catch(() => {});
+      }, prompt);
+      await this.page.waitForTimeout(200);
+      
+      // Paste with Ctrl+V
+      await this.page.keyboard.down('Control');
+      await this.page.waitForTimeout(50);
+      await this.page.keyboard.press('v');
+      await this.page.waitForTimeout(50);
+      await this.page.keyboard.up('Control');
+      
+      console.log(`   ✓ Prompt re-pasted\n`);
+      console.log('   ⏳ [4] Waiting 5s for prompt to process...');
+      await this.page.waitForTimeout(5000);
+      console.log('   ✓ Ready\n');
+      
+      // Step 4: Click submit button again
+      console.log(`   🖱️  [5] Clicking submit button...`);
+      const submitClicked = await this.page.evaluate(() => {
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        if (!textbox) return { found: false };
+        
+        let container = textbox.parentElement;
+        for (let i = 0; i < 3; i++) {
+          if (container.parentElement) container = container.parentElement;
+        }
+        
+        const buttons = container.querySelectorAll('button');
+        for (const btn of buttons) {
+          const icon = btn.querySelector('i.google-symbols');
+          if (icon && icon.textContent.includes('arrow_forward')) {
+            if (!btn.disabled) {
+              const rect = btn.getBoundingClientRect();
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }
+          }
+        }
+        return { found: false };
+      });
+      
+      if (submitClicked.found) {
+        await this.page.mouse.move(submitClicked.x, submitClicked.y);
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(50);
+        await this.page.mouse.up();
+        console.log(`   ✓ Submitted\n`);
+        
+        return true;
+      } else {
+        console.warn('   ⚠️  Submit button not found');
+        return false;
+      }
+      
+    } catch (error) {
+      console.error(`\n❌ Retry failed: ${error.message}`);
       return false;
     }
   }
@@ -985,7 +1865,7 @@ class GoogleFlowAutomationService {
     try {
       const verified = await this.page.evaluate(() => {
         // Check for video generation interface elements
-        const prompt = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+        const prompt = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         const aspectRatio = document.querySelector('[aria-label*="Aspect"], [aria-label*="aspect"]');
         const sendButton = document.querySelector('button[aria-label*="Send"], button[aria-label*="send"]');
         
@@ -1167,7 +2047,7 @@ class GoogleFlowAutomationService {
         }
         
         // Try substring match - but be careful to match the beginning or a key part
-        // For model selection: "Nano Banana Pro" should match "🍌 Nano Banana Pro" but NOT "🍌 Nano Banana 2"
+        // For model selection: "Nano Banana Pro" should match "🍌 Nano Banana Pro" but NOT "🍌 Nano Banana Pro"
         for (const menu of menus) {
           const buttons = menu.querySelectorAll('button');
           for (const btn of buttons) {
@@ -1180,11 +2060,11 @@ class GoogleFlowAutomationService {
             }
             
             // CONTAINS MATCH: Handle model names carefully
-            // For "Nano Banana Pro" search, match "Nano Banana Pro" but not "Nano Banana 2"
+            // For "Nano Banana Pro" search, match "Nano Banana Pro" but not "Nano Banana Pro"
             // Check if the button text contains the search text as a word boundary
             if (btnText.includes(text)) {
               // Additional check: for model names, ensure we're matching the right one
-              // "Nano Banana Pro" should NOT match "Nano Banana 2"
+              // "Nano Banana Pro" should NOT match "Nano Banana Pro"
               // Check if any part of the search text is actually different (like "Pro" vs "2")
               const searchWords = text.split(' ');
               const btnWords = btnText.split(' ');
@@ -1315,7 +2195,7 @@ class GoogleFlowAutomationService {
         this.options.aspectRatio = '9:16';
       }
       if (!this.options.model) {
-        this.options.model = this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast';
+        this.options.model = this.type === 'image' ? 'Nano Banana 2' : 'Veo 3.1 - Fast';
       }
       if (!this.options.videoReferenceType) {
         this.options.videoReferenceType = 'ingredients'; // Default for VIDEO
@@ -1326,11 +2206,14 @@ class GoogleFlowAutomationService {
       const settingsOpened = await this.clickSettingsButton();
       if (!settingsOpened) {
         console.warn('   ⚠️  Settings button may have failed, continuing...');
+      } else {
+        console.log('   ✅ Settings menu opened');
       }
       await this.page.waitForTimeout(500);
 
       // STEP 1: Select Image/Video Tab
       console.log('   📋 STEP 1: Select Image/Video Tab');
+      console.log(`   > type: ${this.type}`);
       if (this.type === 'image') {
         const selector = 'button[id*="IMAGE"][role="tab"]';
         await this.selectRadixTab(selector, 'IMAGE tab');
@@ -1338,6 +2221,7 @@ class GoogleFlowAutomationService {
         const selector = 'button[id*="VIDEO"][role="tab"]';
         await this.selectRadixTab(selector, 'VIDEO tab');
       }
+      console.log(`   ✅ Tab selected`);
       await this.page.waitForTimeout(500);
 
       // STEP 2: Select Aspect Ratio (Portrait 9:16 for TikTok)
@@ -1351,7 +2235,14 @@ class GoogleFlowAutomationService {
       // STEP 3: Select Image/Video Count
       console.log('\n   🔢 STEP 3: Select Count');
       const count = this.type === 'image' ? this.options.imageCount : this.options.videoCount;
-      await this.selectTab(`x${count}`);
+      console.log(`   > Count: x${count}`);
+      console.log(`   > (this.options.imageCount = ${this.options.imageCount})`);
+      const countSelected = await this.selectTab(`x${count}`);
+      if (countSelected) {
+        console.log(`   ✅ Count x${count} selected`);
+      } else {
+        console.log(`   ⚠️  Count x${count} selection may have failed`);
+      }
       await this.page.waitForTimeout(500);
 
       // STEP 4: Select VIDEO Reference Type (if VIDEO tab)
@@ -1365,33 +2256,102 @@ class GoogleFlowAutomationService {
       console.log(`\n   🤖 STEP ${this.type === 'image' ? 4 : 5}: Select Model`);
       const targetModel = this.options.model;
       console.log(`   > Target model: "${targetModel}"`);
-      console.log(`   > Type: ${this.type}`);
-      console.log(`   > Default would be: ${this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast'}`);
       
-      // Find model dropdown button from settings menu
-      const dropdownClicked = await this.clickDropdownButton(
-        'button[id^="radix-"][aria-haspopup="menu"]',
-        'Model dropdown'
-      );
-      
-      if (dropdownClicked) {
-        // Wait for dropdown to open
-        await this.page.waitForTimeout(800);
+      try {
+        // Find and click the model dropdown button
+        // Button contains "Nano Banana" text OR banana emoji
+        console.log(`   > Searching for model dropdown button...`);
         
-        // Click the model menu item
-        const itemClicked = await this.clickMenuItemByText(targetModel, '[role="menu"]');
+        const modelDropdownClicked = await this.page.evaluate((target) => {
+          // Find button with Nano Banana text or banana emoji
+          const buttons = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'));
+          
+          for (const btn of buttons) {
+            const text = btn.textContent.trim();
+            // Check if it's the model dropdown (contains "Banana" or "Nano")
+            if (text.includes('Banana') || text.includes('Nano')) {
+              console.log(`[MODEL] Found model button: "${text.substring(0, 50)}"`);
+              
+              // Check if visible
+              const rect = btn.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                btn.click();
+                console.log(`[MODEL] ✓ Clicked model dropdown`);
+                return true;
+              }
+            }
+          }
+          
+          return false;
+        }, targetModel);
         
-        if (itemClicked) {
-          console.log(`   ✓ ${targetModel} selected`);
+        if (modelDropdownClicked) {
+          // Wait for dropdown menu to appear
+          console.log(`   ✓ Model dropdown opened, waiting for menu...`);
+          await this.page.waitForTimeout(800);
+          
+          // Now click the target model in the menu
+          const modelSelected = await this.page.evaluate((target) => {
+            // Find menu
+            const menu = document.querySelector('[role="menu"]');
+            if (!menu) {
+              console.log(`[MODEL-MENU] Menu not found`);
+              return false;
+            }
+            
+            // Find all menu items
+            const items = menu.querySelectorAll('button[role="menuitem"]');
+            console.log(`[MODEL-MENU] Found ${items.length} menu items`);
+            
+            // Look for target model
+            for (const item of items) {
+              const text = item.textContent.trim();
+              console.log(`[MODEL-MENU]  Item: "${text.substring(0, 50)}"`);
+              
+              if (text.includes(target)) {
+                console.log(`[MODEL-MENU] ✓ Matched: "${text}"`);
+                item.click();
+                return true;
+              }
+            }
+            
+            return false;
+          }, targetModel);
+          
+          if (modelSelected) {
+            console.log(`   ✓ ${targetModel} selected\n`);
+          } else {
+            console.log(`   ⚠️  Could not select ${targetModel} from menu\n`);
+          }
         } else {
-          console.log(`   ⚠️  Could not select model ${targetModel}, may already be set`);
+          console.log(`   ⚠️  Could not open model dropdown\n`);
         }
-      } else {
-        console.log(`   ⚠️  Could not open model dropdown, may already be configured`);
+      } catch (modelErr) {
+        console.warn(`   ⚠️  Error selecting model: ${modelErr.message}\n`);
       }
 
       await this.page.waitForTimeout(500);
-      console.log('\n   ✅ Settings configuration complete\n');
+
+      // STEP 6: Close settings menu by clicking settings button again
+      console.log('\n   🔧 STEP 6: Closing settings menu...');
+      try {
+        const settingsClosed = await this.clickSettingsButton();
+        if (settingsClosed) {
+          console.log('   ✓ Settings menu closed\n');
+        } else {
+          console.log('   ⚠️  Could not close settings menu, clicking elsewhere...\n');
+          // Fallback: click on main canvas area to close menu
+          await this.page.evaluate(() => {
+            const mainArea = document.querySelector('[role="main"]') || document.querySelector('.canvas') || document.body;
+            mainArea.click();
+          });
+          await this.page.waitForTimeout(500);
+        }
+      } catch (closeErr) {
+        console.log('   ⚠️  Error closing menu, continuing anyway...');
+      }
+
+      console.log('   ✅ Settings configuration complete\n');
       return true;
 
     } catch (error) {
@@ -1403,48 +2363,43 @@ class GoogleFlowAutomationService {
 
   async clickSettingsButton() {
     try {
-      console.log('[SETTINGS] Step 1: Finding button with aria-haspopup="menu"...');
+      console.log('[SETTINGS] Step 1: Finding settings button by content...');
       
-      // Find button by aria-haspopup AND position to ensure we get settings, not rename/delete
+      // Find settings button by looking for button containing "Nano Banana" or model name
+      // or by looking for button with aria-haspopup that contains aspect ratio + count
       const btnInfo = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('button[aria-haspopup="menu"]');
-        
-        if (buttons.length === 0) {
-          console.log('[SETTINGS] ❌ No buttons with aria-haspopup="menu" found');
-          return null;
-        }
-
-        // Look for settings button - should be one with "more_vert" or in top-right area
-        // Skip very small buttons or ones at extreme positions
+        // Method 1: Find button containing model name "Banana" (for image) or by aspect ratio marker
         let settingsBtn = null;
         
-        for (const btn of buttons) {
+        // Try finding by text content first (most reliable)
+        const allButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
+        
+        console.log(`[SETTINGS] Found ${allButtons.length} buttons with aria-haspopup="menu"`);
+        
+        for (const btn of allButtons) {
+          const text = btn.textContent.toLowerCase();
           const box = btn.getBoundingClientRect();
           
-          // Skip buttons that are too small or hidden
-          if (box.width < 30 || box.height < 30 || box.width > 200 || box.height > 200) {
-            console.log(`[SETTINGS] Skipping button: size ${box.width}x${box.height}`);
-            continue;
+          // Settings button should:
+          // 1. Contain "banana" (model name) OR
+          // 2. Contain crop ratio icon marker (crop_9_16, crop_16_9) AND count (x1, x2, x3, x4)
+          const isBananaModel = text.includes('banana');
+          const hasRatioMarker = text.includes('crop') || btn.innerHTML.includes('crop_');
+          const hasCount = /x[1-4]/.test(text);
+          
+          console.log(`[SETTINGS] Button: "${text.substring(0, 50)}" | banana:${isBananaModel} | ratio:${hasRatioMarker} | count:${hasCount}`);
+          
+          if ((isBananaModel || (hasRatioMarker && hasCount)) && 
+              box.width > 100 && box.height > 30 && 
+              box.top > 50) {  // Must be below top bar
+            settingsBtn = btn;
+            console.log(`[SETTINGS] ✓ Found settings button`);
+            break;
           }
-          
-          // Skip buttons at very top (title bar buttons like rename/delete)
-          if (box.top < 30) {
-            console.log(`[SETTINGS] Skipping top button at y=${Math.round(box.top)}`);
-            continue;
-          }
-          
-          // Use this button (should be main settings menu)
-          settingsBtn = btn;
-          
-          console.log('[SETTINGS] ✓ Found settings button at y=' + Math.round(box.top));
-          console.log('[SETTINGS]   Size: ' + box.width + 'x' + box.height);
-          console.log('[SETTINGS]   Text: ' + btn.textContent.substring(0, 50));
-          
-          break;
         }
-
+        
         if (!settingsBtn) {
-          console.log('[SETTINGS] ❌ No suitable settings button found');
+          console.log('[SETTINGS] ❌ Settings button not found by content');
           return null;
         }
 
@@ -1453,23 +2408,24 @@ class GoogleFlowAutomationService {
         return {
           x: Math.round(box.x + box.width / 2),
           y: Math.round(box.y + box.height / 2),
-          visible: box.width > 0 && box.height > 0
+          visible: box.width > 0 && box.height > 0,
+          text: settingsBtn.textContent.substring(0, 50)
         };
       });
 
       if (!btnInfo) {
-        console.log('[SETTINGS] ❌ Could not get button coordinates');
+        console.log('[SETTINGS] ❌ Could not identify settings button');
         return false;
       }
 
       if (!btnInfo.visible) {
-        console.log('[SETTINGS] ❌ Button not visible');
+        console.log('[SETTINGS] ❌ Settings button not visible');
         return false;
       }
 
-      console.log(`[SETTINGS] Step 2: Found button at (${btnInfo.x}, ${btnInfo.y})...`);
+      console.log(`[SETTINGS] Step 2: Found button "${btnInfo.text}" at (${btnInfo.x}, ${btnInfo.y})`);
       
-      // Use realistic mouse movements (Radix UI compatible)
+      // Click the button with realistic mouse movements
       console.log('[SETTINGS] Step 3: Moving mouse and clicking...');
       await this.page.mouse.move(btnInfo.x, btnInfo.y);
       await this.page.waitForTimeout(100);
@@ -1479,50 +2435,40 @@ class GoogleFlowAutomationService {
 
       // Wait for menu to appear
       console.log('[SETTINGS] Step 4: Waiting for menu...');
-      await this.page.waitForTimeout(800);
+      await this.page.waitForTimeout(1000);
 
-      // Verify menu opened
-      const menuState = await this.page.evaluate(() => {
+      // Verify menu opened by checking if aria-expanded="true"
+      const menuOpened = await this.page.evaluate(() => {
         const buttons = document.querySelectorAll('button[aria-haspopup="menu"]');
-        let settingsBtn = null;
         
         for (const btn of buttons) {
-          const box = btn.getBoundingClientRect();
-          if (box.width >= 30 && box.height >= 30 && box.top >= 30) {
-            settingsBtn = btn;
-            break;
+          const text = btn.textContent.toLowerCase();
+          const isBananaModel = text.includes('banana');
+          const hasRatioMarker = text.includes('crop') || btn.innerHTML.includes('crop_');
+          const hasCount = /x[1-4]/.test(text);
+          
+          if ((isBananaModel || (hasRatioMarker && hasCount))) {
+            const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+            const dataState = btn.getAttribute('data-state');
+            
+            console.log(`[SETTINGS] Menu state - aria-expanded: ${isExpanded}, data-state: ${dataState}`);
+            
+            return isExpanded || dataState === 'open';
           }
         }
-        
-        if (!settingsBtn) return { error: 'Button not found' };
-        
-        const ariaExpanded = settingsBtn.getAttribute('aria-expanded') === 'true';
-        const dataState = settingsBtn.getAttribute('data-state');
-        const menu = document.querySelector('[role="menu"]');
-        
-        console.log('[SETTINGS] aria-expanded:', ariaExpanded);
-        console.log('[SETTINGS] data-state:', dataState);
-        console.log('[SETTINGS] Menu found:', !!menu);
-        
-        return {
-          ariaExpanded,
-          dataState,
-          menuFound: !!menu,
-          menuItems: menu ? document.querySelectorAll('[role="menuitem"]').length : 0
-        };
+        return false;
       });
 
-      if (menuState.ariaExpanded && menuState.menuFound) {
+      if (menuOpened) {
         console.log('[SETTINGS] ✅ Settings menu opened successfully');
-        console.log(`[SETTINGS] Menu items: ${menuState.menuItems}`);
         return true;
       } else {
-        console.log('[SETTINGS] ⚠️  Menu status unclear - aria-expanded:', menuState.ariaExpanded);
-        return menuState.ariaExpanded; // Return true if aria-expanded is true
+        console.log('[SETTINGS] ⚠️  Menu may not have opened, continuing...');
+        return true;  // Continue anyway as menu may open with delay
       }
 
     } catch (error) {
-      console.log(`[SETTINGS] ❌ Error: ${error.message}`);
+      console.error('[SETTINGS] ❌ Error clicking settings button:', error.message);
       return false;
     }
   }
@@ -1700,6 +2646,22 @@ class GoogleFlowAutomationService {
     console.log(`   > Selecting "${label}" tab...`);
     
     try {
+      // First, log all available tab buttons for debugging
+      const availableTabs = await this.page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
+        return buttons.map(b => ({
+          text: b.textContent.trim().substring(0, 50),
+          ariaSelected: b.getAttribute('aria-selected')
+        }));
+      });
+      
+      if (availableTabs.length > 0) {
+        console.log(`   📊 Available tabs:`);
+        availableTabs.forEach((tab, idx) => {
+          console.log(`      [${idx}] "${tab.text}" (selected: ${tab.ariaSelected})`);
+        });
+      }
+      
       // Find button by text and get its position
       const buttonInfo = await this.page.evaluate((targetLabel) => {
         const buttons = Array.from(document.querySelectorAll('button[role="tab"]'));
@@ -1707,15 +2669,12 @@ class GoogleFlowAutomationService {
         for (const btn of buttons) {
           const text = btn.textContent.trim(); // Trim whitespace
           
-          console.log(`[SELECT_TAB] Checking button: "${text}"`);
-          
           // Match by text
           if (text === targetLabel || text.includes(targetLabel.trim())) {
             const rect = btn.getBoundingClientRect();
             
             // Check if visible
             if (rect.width === 0 || rect.height === 0) {
-              console.log(`[SELECT_TAB] Button found but not visible`);
               return { found: false, error: 'Button not visible' };
             }
             
@@ -1734,16 +2693,51 @@ class GoogleFlowAutomationService {
       }, label);
 
       if (!buttonInfo.found) {
-        console.warn(`   ⚠️  ${buttonInfo.error}`);
-        return false;
+        console.log(`   🔴 Not found: ${buttonInfo.error}`);
+        console.log(`   > Retrying with alternative search...`);
+        
+        // Alternative: search in all buttons
+        const altButtonInfo = await this.page.evaluate((targetLabel) => {
+          const allButtons = Array.from(document.querySelectorAll('button'));
+          
+          for (const btn of allButtons) {
+            const text = btn.textContent.trim();
+            if (text.includes(targetLabel)) {
+              const rect = btn.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                return {
+                  found: true,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2),
+                  text: text
+                };
+              }
+            }
+          }
+          return { found: false };
+        }, label);
+        
+        if (!altButtonInfo.found) {
+          console.warn(`   ⚠️  ${buttonInfo.error}`);
+          return false;
+        }
+        
+        console.log(`   ✓ Found via alternative search: "${altButtonInfo.text}"`);
+        await this.page.mouse.move(altButtonInfo.x, altButtonInfo.y);
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(50);
+        await this.page.mouse.up();
+        
+        return true;
       }
 
-      console.log(`   ✓ Found tab: "${buttonInfo.text}"`);
-      console.log(`     Current state: aria-selected=${buttonInfo.ariaSelected}`);
+      console.log(`   ✓ Found: "${buttonInfo.text}"`);
+      console.log(`     aria-selected=${buttonInfo.ariaSelected}`);
       console.log(`     Position: (${buttonInfo.x}, ${buttonInfo.y})`);
 
       // Use realistic mouse movement to click (Radix UI compatible)
-      console.log(`   🖱️  Clicking with mouse movement...\n`);
+      console.log(`   🖱️  Clicking...`);
       await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
       await this.page.waitForTimeout(100);
       await this.page.mouse.down();
@@ -1857,36 +2851,60 @@ class GoogleFlowAutomationService {
   }
 
   async clickCreate() {
+    if (this.debugMode) {
+      console.log('🔧 [DEBUG] Generate button click skipped (debug mode)\n');
+      return false;
+    }
+
+    // 🧹 Clear any cached reCAPTCHA tokens before clicking generate
+    // ❌ COMMENTED OUT: Already called in enterPrompt() - avoid duplicate token clearing
+    // await this.clearGrecaptchaTokens();
+    
     console.log('🎬 CLICKING GENERATE BUTTON\n');
 
     try {
-      // Find the submit button using the unique class "aQhhA"
-      // It contains 2 buttons, the 2nd one is the submit button with arrow_forward icon
-      
-      console.log('   🔍 Finding submit button via .aQhhA class...');
+      console.log('   🔍 Finding Generate button...');
       
       const generateBtnInfo = await this.page.evaluate(() => {
-        // Find the container with unique class
-        const container = document.querySelector('.aQhhA');
+        // Strategy 1: Find button with arrow_forward icon (main strategy)
+        const buttons = Array.from(document.querySelectorAll('button'));
+        let targetBtn = buttons.find(btn => 
+          btn.innerHTML.includes('arrow_forward') && 
+          !btn.textContent.includes('crop_16_9')
+        );
         
-        if (!container) {
-          return { found: false, error: 'Container .aQhhA not found' };
+        // Strategy 2: Look in the right sidebar container
+        if (!targetBtn) {
+          const container = document.querySelector('[class*="cYyugN"]');
+          if (container) {
+            const containerBtns = container.querySelectorAll('button');
+            targetBtn = containerBtns[containerBtns.length - 1];
+          }
         }
         
-        // Get all buttons in this container
-        const buttons = container.querySelectorAll('button');
-        
-        if (buttons.length < 2) {
-          return { found: false, error: `Expected 2+ buttons, found ${buttons.length}` };
+        // Strategy 3: Look via .aQhhA class (old method - fallback)
+        if (!targetBtn) {
+          const legacyContainer = document.querySelector('.aQhhA');
+          if (legacyContainer) {
+            const legacyBtns = legacyContainer.querySelectorAll('button');
+            if (legacyBtns.length >= 2) {
+              targetBtn = legacyBtns[1];
+            }
+          }
         }
         
-        // Get the 2nd button (index 1) - this is the submit button
-        const submitBtn = buttons[1];
-        const rect = submitBtn.getBoundingClientRect();
+        // Check if button found and visible
+        if (!targetBtn) {
+          return { found: false, error: 'Generate button not found in any strategy' };
+        }
         
-        // Check if visible
+        const rect = targetBtn.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
-          return { found: false, error: 'Submit button not visible' };
+          return { found: false, error: 'Generate button not visible' };
+        }
+        
+        if (targetBtn.disabled) {
+          return { found: false, error: 'Generate button is disabled' };
         }
         
         return {
@@ -1895,8 +2913,9 @@ class GoogleFlowAutomationService {
           y: Math.round(rect.top + rect.height / 2),
           w: Math.round(rect.width),
           h: Math.round(rect.height),
-          text: submitBtn.textContent.trim().substring(0, 50),
-          hasArrow: submitBtn.innerHTML.includes('arrow_forward')
+          text: targetBtn.textContent.trim().substring(0, 50),
+          hasArrow: targetBtn.innerHTML.includes('arrow_forward'),
+          disabled: targetBtn.disabled
         };
       });
 
@@ -1904,7 +2923,7 @@ class GoogleFlowAutomationService {
         throw new Error(generateBtnInfo.error);
       }
 
-      console.log(`   ✓ Found submit button (2nd in .aQhhA)\n`);
+      console.log(`   ✓ Found Generate button\n`);
       console.log(`   Text: "${generateBtnInfo.text}"`);
       console.log(`   Has arrow_forward: ${generateBtnInfo.hasArrow}`);
       console.log(`   Position: (${generateBtnInfo.x}, ${generateBtnInfo.y})\n`);
@@ -1917,7 +2936,7 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(100);
       await this.page.mouse.up();
 
-      console.log('   ✓ Submit button clicked\n');
+      console.log('   ✓ Generate button clicked\n');
       await this.page.waitForTimeout(1000);
 
     } catch (error) {
@@ -1926,7 +2945,7 @@ class GoogleFlowAutomationService {
       
       // Fallback: Focus textbox and press Enter to submit
       try {
-        const textboxExists = await this.page.$('[role="textbox"][data-slate-editor="true"]');
+        const textboxExists = await this.page.$('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (!textboxExists) {
           throw new Error('Prompt textbox not found for Enter fallback');
         }
@@ -1934,7 +2953,7 @@ class GoogleFlowAutomationService {
         // Focus the textbox
         console.log('   🖱️  Focusing prompt textbox...');
         await this.page.evaluate(() => {
-          const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
           if (textbox) {
             textbox.focus();
           }
@@ -2023,6 +3042,169 @@ class GoogleFlowAutomationService {
   }
 
   /**
+   * Detect and handle failed items in generation list (lightweight version for monitoring)
+   * Called frequently during generation monitoring to catch and retry failures immediately
+   * Handles ONE failed item per call - for continuous monitoring integration
+   */
+  async checkAndRetryFailedItemOnce() {
+    try {
+      const failureInfo = await this.page.evaluate(() => {
+        // Find all items in the virtuoso list
+        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+        
+        // Check ALL items for failures (scan entire list)
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          
+          // Look for warning icon (indicates failure) - check multiple selector patterns
+          const warningIcon = item.querySelector('i.google-symbols');
+          const hasWarningText = item.querySelector('[class*="dEfdsQ"], [class*="error"], [role="alert"]');
+          
+          // Check if it's a failed/error state
+          const isFailed = (warningIcon && warningIcon.textContent.trim() === 'warning') || 
+                          (hasWarningText && hasWarningText.textContent.toLowerCase().includes('không thành công'));
+          
+          if (isFailed) {
+            // Find the error message text
+            const errorMsg = item.querySelector('[class*="dEfdsQ"]'); 
+            
+            // Find retry button (refresh icon button) - try multiple selectors
+            const retryBtn = Array.from(item.querySelectorAll('button')).find(btn => {
+              const icon = btn.querySelector('i.google-symbols');
+              const btnText = btn.textContent.toLowerCase();
+              return (icon && (icon.textContent.trim() === 'refresh' || icon.textContent.trim() === 'restart_alt')) ||
+                     (btnText.includes('thử') || btnText.includes('retry'));
+            });
+
+            if (retryBtn) {
+              const rect = retryBtn.getBoundingClientRect();
+              return {
+                found: true,
+                position: i,
+                message: errorMsg ? errorMsg.textContent.trim() : 'Unknown error',
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }
+          }
+        }
+        
+        return { found: false };
+      });
+
+      if (!failureInfo.found) {
+        return false; // No failures detected
+      }
+
+      // Found a failure - click retry
+      console.log(`[FAILURES] ❌ Failed item at position #${failureInfo.position}: "${failureInfo.message}"`);
+      console.log(`[FAILURES]    🔄 Retrying in 5 seconds...`);
+      
+      // Wait 5 seconds before retrying
+      await this.page.waitForTimeout(5000);
+      
+      // Click retry button
+      await this.page.mouse.move(failureInfo.x, failureInfo.y);
+      await this.page.waitForTimeout(150);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.up();
+      
+      // Wait for retry to start
+      await this.page.waitForTimeout(1000);
+      console.log(`[FAILURES]    ✓ Retry triggered`);
+      return true; // Failure was retried
+      
+    } catch (error) {
+      // Log errors but don't break monitoring
+      console.log(`[FAILURES] ⚠️  Error during retry check: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Detect and handle failed items in generation list (legacy full version)
+   * Google Flow sometimes shows "Không thành công" error with retry button
+   * This method detects failed items and clicks retry, max 5 times per item
+   */
+  async detectAndHandleFailures(maxAttempts = 5) {
+    console.log('[FAILURES] 🔍 Checking for failed items...');
+    
+    let retryCount = 0;
+    let isCleared = false;
+
+    while (retryCount < maxAttempts && !isCleared) {
+      await this.page.waitForTimeout(500); // Stabilization wait
+      
+      const failureInfo = await this.page.evaluate(() => {
+        // Find all items in the virtuoso list
+        const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+        
+        // Check TOP 5 items for failures (new items at top)
+        for (let i = 0; i < Math.min(5, items.length); i++) {
+          const item = items[i];
+          
+          // Look for warning icon (indicates failure)
+          const warningIcon = item.querySelector('i.google-symbols:not([style*="display"])');
+          const warningText = item.querySelector('div');
+          
+          if (warningIcon && warningIcon.textContent.trim() === 'warning') {
+            // Find the error message text
+            const errorMsg = item.querySelector('[class*="dEfdsQ"]'); // "Không thành công" text
+            
+            // Find retry button (refresh icon button)
+            const retryBtn = Array.from(item.querySelectorAll('button')).find(btn => {
+              const icon = btn.querySelector('i.google-symbols');
+              return icon && (icon.textContent.includes('refresh') || icon.textContent.includes('Thử lại'));
+            });
+
+            if (retryBtn) {
+              const rect = retryBtn.getBoundingClientRect();
+              return {
+                found: true,
+                position: i,
+                message: errorMsg ? errorMsg.textContent.trim() : 'Unknown error',
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2)
+              };
+            }
+          }
+        }
+        
+        return { found: false };
+      });
+
+      if (!failureInfo.found) {
+        console.log('[FAILURES] ✅ No failed items detected');
+        isCleared = true;
+        break;
+      }
+
+      retryCount++;
+      console.log(`[FAILURES] ❌ Failed item detected at position #${failureInfo.position}`);
+      console.log(`[FAILURES]    Error: "${failureInfo.message}"`);
+      console.log(`[FAILURES]    Retry attempt ${retryCount}/${maxAttempts}...`);
+      
+      // Click retry button
+      await this.page.mouse.move(failureInfo.x, failureInfo.y);
+      await this.page.waitForTimeout(150);
+      await this.page.mouse.down();
+      await this.page.waitForTimeout(100);
+      await this.page.mouse.up();
+      
+      // Wait for retry to process (enhanced wait time)
+      console.log(`[FAILURES]    ⏳ Waiting for retry to process...`);
+      await this.page.waitForTimeout(3000);
+    }
+
+    if (retryCount >= maxAttempts && !isCleared) {
+      throw new Error(`[FAILURES] ❌ Item failed after ${maxAttempts} retry attempts. Generation aborted.`);
+    }
+
+    console.log('[FAILURES] ✓ All items checked - no failures\n');
+  }
+
+  /**
    * Click product configuration button (🍌 Nano Banana Pro)
    */
 
@@ -2044,7 +3226,11 @@ class GoogleFlowAutomationService {
     let qualityOptions = [];
     if (this.type === 'image' && this.options.model === 'Nano Banana Pro') {
       // Nano Banana Pro supports 2K for images
-      qualityOptions = ['2k', '2K', '1k', '1K'];  // Try 2K first, fallback to 1K
+      qualityOptions = [
+        '2k', 
+        '2K', 
+        '1k', 
+        '1K'];  // Try 2K first, fallback to 1K
       console.log(`   ℹ️  Model: ${this.options.model} (trying 2K first)`);
     } else if (this.type === 'image') {
       qualityOptions = ['1k', '1K'];
@@ -2103,58 +3289,100 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
       
-      // Wait for context menu to fully render (increased to 3s to be sure)
+      // Wait for context menu to fully render and page to stabilize
       console.log('   ⏳ Waiting for context menu to appear...');
-      await this.page.waitForTimeout(3000);
+      
+      // Wait extra to ensure page is stable before evaluate
+      // Sometimes page navigation happens after right-click
+      try {
+        await Promise.race([
+          this.page.waitForTimeout(3000),
+          this.page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {})
+        ]);
+      } catch (e) {
+        // Navigation timeout is OK, page might not navigate
+        await this.page.waitForTimeout(1000);
+      }
 
       // Find and click download option from context menu
       // Looking for: <div role="menuitem" with icon "download" and text "Tải xuống"
-      const downloadInfo = await this.page.evaluate(() => {
-        const menuItems = document.querySelectorAll('[role="menuitem"]');
-        
-        // Debug: log what menu items exist
-        const debugItems = [];
-        for (const item of menuItems) {
-          const text = item.textContent.substring(0, 50);
-          debugItems.push(text);
-        }
-        
-        for (const item of menuItems) {
-          const text = item.textContent.toLowerCase();
-          const hasDownloadIcon = item.innerHTML.includes('download');
-          
-          // Look for download / tải xuống button
-          if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
-            const rect = item.getBoundingClientRect();
-            return {
-              found: true,
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
-            };
+      let downloadInfo = null;
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (retries < maxRetries && !downloadInfo?.found) {
+        try {
+          downloadInfo = await this.page.evaluate(() => {
+            const menuItems = document.querySelectorAll('[role="menuitem"]');
+            
+            // Debug: log what menu items exist
+            const debugItems = [];
+            for (const item of menuItems) {
+              const text = item.textContent.substring(0, 50);
+              debugItems.push(text);
+            }
+            
+            for (const item of menuItems) {
+              const text = item.textContent.toLowerCase();
+              const hasDownloadIcon = item.innerHTML.includes('download');
+              
+              // Look for download / tải xuống button
+              if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
+                const rect = item.getBoundingClientRect();
+                return {
+                  found: true,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2)
+                };
+              }
+            }
+            
+            return { found: false, availableItems: debugItems };
+          });
+          break; // Success, exit retry loop
+        } catch (error) {
+          retries++;
+          if (error.message.includes('main frame') || error.message.includes('Execution context was destroyed')) {
+            console.log(`   ⏱️  Page unstable (${retries}/${maxRetries}), retrying...`);
+            await this.page.waitForTimeout(1000);
+          } else {
+            throw error;
           }
         }
-        
-        return { found: false, availableItems: debugItems };
-      });
+      }
 
-      if (!downloadInfo.found) {
-        console.warn('   ⚠️  Download option not found in context menu');
-        if (downloadInfo.availableItems && downloadInfo.availableItems.length > 0) {
-          console.warn(`   📋 Available menu items: ${downloadInfo.availableItems.join(', ')}`);
-        } else {
-          console.warn('   📋 No menu items found at all (context menu may not have appeared)');
-        }
+      if (!downloadInfo) {
+        console.warn('   ⚠️  Download option not found in context menu (after retries)');
         console.warn('   💡 Tip: Image may need more time to load. Try increasing wait time.\n');
         return null;
       }
 
-      // Click download button using mouse movement method (Method 2)
+      // Click download button using JavaScript (more reliable)
       console.log('   🖱️  Clicking "Tải xuống" option...');
-      await this.page.mouse.move(downloadInfo.x, downloadInfo.y);
-      await this.page.waitForTimeout(150);
-      await this.page.mouse.down();
-      await this.page.waitForTimeout(100);
-      await this.page.mouse.up();
+      const downloadClicked = await this.page.evaluate(() => {
+        const items = document.querySelectorAll('[role="menuitem"]');
+        for (const item of items) {
+          const text = item.textContent.toLowerCase();
+          const hasDownloadIcon = item.innerHTML.includes('download');
+          
+          if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
+            item.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!downloadClicked) {
+        console.warn('   ⚠️  Failed to click download via JavaScript, trying with mouse...');
+        await this.page.mouse.move(downloadInfo.x, downloadInfo.y);
+        await this.page.waitForTimeout(150);
+        await this.page.mouse.down();
+        await this.page.waitForTimeout(100);
+        await this.page.mouse.up();
+      } else {
+        console.log('   ✅ Download button clicked successfully via JavaScript');
+      }
 
       // Wait for submenu to appear
       console.log('   ⏳ Waiting for submenu...');
@@ -2163,39 +3391,119 @@ class GoogleFlowAutomationService {
       // Try to find and click the best quality option
       let selectedQuality = null;
       for (const quality of qualityOptions) {
-        const qualityInfo = await this.page.evaluate((targetQuality) => {
-          const buttons = document.querySelectorAll('[role="menuitem"]');
-          
-          for (const btn of buttons) {
-            const text = btn.textContent.toLowerCase();
-            
-            // Look for the right quality option (case-insensitive)
-            if (text.includes(targetQuality.toLowerCase())) {
-              const rect = btn.getBoundingClientRect();
-              return {
-                found: true,
-                quality: targetQuality,
-                x: Math.round(rect.left + rect.width / 2),
-                y: Math.round(rect.top + rect.height / 2)
-              };
+        let qualityInfo = null;
+        let retries = 0;
+        const maxRetries = 3;
+        
+        while (retries < maxRetries && !qualityInfo?.found) {
+          try {
+            qualityInfo = await this.page.evaluate((targetQuality) => {
+              const buttons = document.querySelectorAll('[role="menuitem"]');
+              
+              for (const btn of buttons) {
+                const text = btn.textContent.toLowerCase();
+                
+                // Look for the right quality option (case-insensitive)
+                if (text.includes(targetQuality.toLowerCase())) {
+                  const rect = btn.getBoundingClientRect();
+                  return {
+                    found: true,
+                    quality: targetQuality,
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2)
+                  };
+                }
+              }
+              
+              return { found: false };
+            }, quality);
+            break; // Success
+          } catch (error) {
+            retries++;
+            if (error.message.includes('main frame') || error.message.includes('Execution context was destroyed')) {
+              console.log(`   ⏱️  Page unstable trying ${quality} (${retries}/${maxRetries}), retrying...`);
+              await this.page.waitForTimeout(500);
+            } else {
+              throw error;
             }
           }
-          
-          return { found: false };
-        }, quality);
+        }
 
         // Click quality option
         if (qualityInfo.found) {
           selectedQuality = quality;
           console.log(`   🖱️  Clicking ${quality}...`);
-          await this.page.mouse.move(qualityInfo.x, qualityInfo.y);
-          await this.page.waitForTimeout(150);
-          await this.page.mouse.down();
-          await this.page.waitForTimeout(100);
-          await this.page.mouse.up();
+          
+          // Click directly via JavaScript (more reliable than mouse events)
+          const clickSuccess = await this.page.evaluate((targetQuality) => {
+            const buttons = document.querySelectorAll('[role="menuitem"]');
+            for (const btn of buttons) {
+              if (btn.textContent.toLowerCase().includes(targetQuality.toLowerCase())) {
+                btn.click();
+                return true;
+              }
+            }
+            return false;
+          }, quality);
+
+          if (!clickSuccess) {
+            console.warn(`   ⚠️  Failed to click ${quality} via JavaScript, trying with mouse...`);
+            await this.page.mouse.move(qualityInfo.x, qualityInfo.y);
+            await this.page.waitForTimeout(150);
+            await this.page.mouse.down();
+            await this.page.waitForTimeout(100);
+            await this.page.mouse.up();
+          } else {
+            console.log(`   ✅ ${quality} clicked successfully via JavaScript`);
+          }
           
           // Wait extra time for download to initiate
           await this.page.waitForTimeout(2000);
+          
+          // 💫 NEW: Detect and close error popups (e.g., "Không tăng độ phân giải được!")
+          const errorDetected = await this.page.evaluate(() => {
+            // Look for error toast/popup elements
+            const errorPatterns = [
+              '[data-sonner-toast]',  // Sonner toast container
+              '[role="alert"]',  // ARIA alert
+              '.error',
+              '[class*="error"]',
+              '[class*="toast"]'
+            ];
+
+            for (const selector of errorPatterns) {
+              const elements = document.querySelectorAll(selector);
+              for (const el of elements) {
+                const text = el.textContent.toLowerCase();
+                // Check for upscaling error messages (Vietnamese: "Không tăng độ phân giải được!")
+                if (text.includes('phân giải') || text.includes('upscal') || text.includes('không thể') || text.includes('error')) {
+                  // Try to find and click close button
+                  const closeBtn = el.querySelector('button');
+                  if (closeBtn) {
+                    closeBtn.click();
+                    return { found: true, message: text.substring(0, 100) };
+                  }
+                  // If no button, try to remove the element
+                  el.remove();
+                  return { found: true, message: text.substring(0, 100) };
+                }
+              }
+            }
+            return { found: false };
+          });
+
+          if (errorDetected.found) {
+            console.warn(`   ⚠️  Error popup detected and closed: "${errorDetected.message}"`);
+            console.log(`   💡 This likely means ${quality} upscaling failed. Trying next quality option...`);
+            
+            // Close any open menus
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(300);
+            
+            // Continue to next quality option instead of giving up
+            continue;
+          }
+          
           break;
         }
       }
@@ -2784,43 +4092,50 @@ class GoogleFlowAutomationService {
     console.log('   🧹 Clearing prompt text...');
 
     try {
-      // Focus the textbox first
-      await this.page.focus('[role="textbox"][data-slate-editor="true"]');
-      await this.page.waitForTimeout(200);
-      
-      // Select all text using Ctrl+A (keyboard shortcut - more reliable than execCommand)
-      await this.page.keyboard.press('Control+A');
-      await this.page.waitForTimeout(100);
-      
-      // Delete selected text
-      await this.page.keyboard.press('Delete');
-      await this.page.waitForTimeout(300);
-      
-      // Verify text is cleared
-      const remaining = await this.page.evaluate(() => {
-        const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
-        if (!textbox) return -1;
+      // Clear prompt using JavaScript (more reliable than keyboard shortcuts)
+      const cleared = await this.page.evaluate(() => {
+        const slateEditor = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        if (!slateEditor) {
+          return false;
+        }
+
+        // Method 1: Clear Slate editor content
+        // Slate stores content in contentEditable div, clear both textContent and internal state
+        slateEditor.textContent = '';
+        slateEditor.innerHTML = '';
         
-        const text = textbox.textContent || textbox.innerText || '';
-        return text.trim().length;
+        // Method 2: Trigger input events to notify React/framework of change
+        const inputEvent = new Event('input', { bubbles: true });
+        const changeEvent = new Event('change', { bubbles: true });
+        slateEditor.dispatchEvent(inputEvent);
+        slateEditor.dispatchEvent(changeEvent);
+        
+        // Verify clearing
+        const remaining = slateEditor.textContent.trim().length;
+        console.log(`   [JS] Cleared - remaining: ${remaining} chars`);
+        return remaining === 0;
       });
 
-      if (remaining === 0) {
+      if (cleared) {
         console.log('   ✓ Prompt text cleared completely');
         return true;
-      } else if (remaining === -1) {
-        console.log('   ⚠️  Textbox not found, but continuing...');
-        return true;
       } else {
-        console.log(`   ⚠️  ${remaining} chars may remain, attempting again...`);
-        
-        // Try again with more aggressive clearing
-        await this.page.keyboard.press('Control+A');
-        await this.page.waitForTimeout(100);
-        await this.page.keyboard.press('Backspace');
+        // Fallback: Try keyboard approach
+        console.log('   ⚠️  JavaScript clear had issues, trying keyboard approach...');
+        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
         await this.page.waitForTimeout(200);
         
-        console.log('   ✓ Prompt cleared (second attempt)');
+        // Use ctrl+a (lowercase) instead of Control+A
+        await this.page.keyboard.type('');  // Clear any pending keys
+        await this.page.keyboard.down('Control');
+        await this.page.keyboard.press('a');
+        await this.page.keyboard.up('Control');
+        await this.page.waitForTimeout(100);
+        
+        await this.page.keyboard.press('Delete');
+        await this.page.waitForTimeout(300);
+        
+        console.log('   ✓ Prompt cleared via keyboard fallback');
         return true;
       }
 
@@ -2837,6 +4152,25 @@ class GoogleFlowAutomationService {
    * For single item generation, just use prompts array with 1 element
    */
   async generateMultiple(characterImagePath, productImagePath, prompts) {
+    if (this.debugMode) {
+      console.log('\n🔧 [DEBUG] generateMultiple() is disabled (debug mode)');
+      console.log('   - init() allowed');
+      console.log('   - navigateToFlow() allowed');
+      console.log('   - All other steps skipped\n');
+      
+      await this.init();
+      await this.navigateToFlow();
+      
+      console.log('\n✅ Browser open at Google Flow project');
+      console.log('   (Manual testing enabled)\n');
+      
+      return {
+        success: true,
+        debugMode: true,
+        message: 'Debug mode: only opened project'
+      };
+    }
+
     /**
      * GENERATE MULTIPLE IMAGES - CORRECT FLOW FOR TIKTOK AFFILIATE
      * 
@@ -2864,27 +4198,39 @@ class GoogleFlowAutomationService {
       // Navigate to Google Flow project
       console.log('[NAV] 🔗 Navigating to Google Flow...');
       await this.navigateToFlow();
-      console.log('[NAV] ✅ Navigated to project\n');
+      console.log('[NAV] ✅ Navigated to project');
+      console.log('[DELAY] ⏳ Waiting 2 seconds...');
+      await this.page.waitForTimeout(2000);
+      console.log('[DELAY] ✅ Ready\n');
 
       // Wait for page to be fully ready
       console.log('[PAGE] ⏳ Waiting for page to load...');
       await this.waitForPageReady();
-      console.log('[PAGE] ✅ Page ready\n');
+      console.log('[PAGE] ✅ Page ready');
+      console.log('[DELAY] ⏳ Waiting 5 seconds (special delay after page load)...');
+      await this.page.waitForTimeout(5000);
+      console.log('[DELAY] ✅ Ready\n');
 
       // STEP 1: Configure settings ONCE AT START
       console.log('[CONFIG] ⚙️  Configuring settings (ONE TIME)...');
       const settingsOk = await this.configureSettings();
       if (!settingsOk) {
-        console.log('[CONFIG] ⚠️  Settings might be incomplete, continuing...\n');
+        console.log('[CONFIG] ⚠️  Settings might be incomplete, continuing...');
       } else {
-        console.log('[CONFIG] ✅ Settings configured\n');
+        console.log('[CONFIG] ✅ Settings configured');
       }
+      console.log('[DELAY] ⏳ Waiting 2 seconds...');
+      await this.page.waitForTimeout(2000);
+      console.log('[DELAY] ✅ Ready\n');
 
       // STEP 2: Upload images ONCE AT START  
       console.log('[UPLOAD] 📤 Uploading reference images (ONE TIME)...');
       const existingImages = [];
       await this.uploadImages(characterImagePath, productImagePath, existingImages);
-      console.log('[UPLOAD] ✅ Images uploaded\n');
+      console.log('[UPLOAD] ✅ Images uploaded');
+      console.log('[DELAY] ⏳ Waiting 2 seconds...');
+      await this.page.waitForTimeout(2000);
+      console.log('[DELAY] ✅ Ready\n');
 
       // STEP 3: GENERATE EACH PROMPT WITH DIFFERENT FLOW FOR LAST VS NON-LAST
       for (let i = 0; i < prompts.length; i++) {
@@ -2912,18 +4258,20 @@ class GoogleFlowAutomationService {
         const isLastPrompt = (i === prompts.length - 1);
 
         try {
-          // STEP 0: Capture initial hrefs BEFORE entering prompt (TOP 10 only)
-          console.log('[STEP 0] 📎 Capturing initial hrefs (TOP 10) (BEFORE typing)...');
-          const initialHrefs = await this.page.evaluate(() => {
-            const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-            const hrefs = [];
-            // Get first 10 links only (newly generated/uploaded always pushed to top)
-            for (let i = 0; i < Math.min(10, links.length); i++) {
-              hrefs.push(links[i].getAttribute('href'));
-            }
-            return hrefs;
-          });
-          console.log(`[STEP 0] ✓ Captured TOP 10 baseline hrefs (before any changes)\n`);
+          // STEP 0: For non-first iterations, ensure prompt field is completely clear
+          if (i > 0) {
+            console.log('[PRE-CLEAR] 🧹 Clearing prompt field before next iteration...');
+            await this.clearPromptText();
+            console.log('[PRE-CLEAR] ✓ Prompt field cleared');
+            console.log('[DELAY] ⏳ Waiting 1 second...');
+            await this.page.waitForTimeout(1000);
+            console.log('[DELAY] ✅ Ready\n');
+          }
+
+          // STEP 0: Capture ALL initial hrefs BEFORE entering prompt
+          console.log('[STEP 0] 📎 Capturing ALL initial hrefs (BEFORE typing)...');
+          const initialHrefs = await this.getHrefsFromVirtuosoList();
+          console.log(`[STEP 0] ✓ Captured ${initialHrefs.length} baseline hrefs (before any changes)\n`);
 
           // STEP A: Enter prompt
           console.log(`[STEP A] 📝 Entering prompt (${prompt.length} chars)...`);
@@ -2932,8 +4280,12 @@ class GoogleFlowAutomationService {
           console.log('[STEP A] ✓ Prompt entered\n');
 
           // STEP B: Click generate button
-          console.log('[STEP B] 🚀 Clicking generate button...');
-          await this.clickCreate();
+          // ❌ COMMENTED OUT: enterPrompt() already clicks the submit button - no need for separate clickCreate()
+          // await this.clickCreate();
+          console.log('[STEP B] ✅ Generate button already clicked in enterPrompt()');
+          console.log('[DELAY] ⏳ Waiting 2 seconds...');
+          await this.page.waitForTimeout(2000);
+          console.log('[DELAY] ✅ Ready');
 
           // STEP C: Wait for NEW generation to complete with href monitoring
           console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
@@ -2943,25 +4295,85 @@ class GoogleFlowAutomationService {
           const timeoutMs = this.options.timeouts.generation || 120000;
           let generationDetected = false;
           let monitoringAttempt = 0;
+          let failureRetryCount = 0; // Track retries for this prompt to prevent infinite loops
           const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
+          const maxFailureRetries = 5; // Max retries per prompt
+          let shouldTryFullRetry = false; // Flag to trigger full image re-add retry
 
           // Monitor for NEW image (similar to uploadImages approach)
           while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
             monitoringAttempt++;
 
+            // ❌ DETECT AND HANDLE FAILED ITEMS - call handleGenerationFailureRetry() directly
+            // (Don't use click retry button - re-add images via right-click instead)
+            const failureDetected = await this.page.evaluate(() => {
+              // Find all items in the virtuoso list
+              const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+              
+              // Check for failed items (warning icon + "Không thành công" text)
+              for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                
+                // Look for warning icon (indicates failure)
+                const warningIcon = item.querySelector('i.google-symbols');
+                const isFailed = (warningIcon && warningIcon.textContent.trim() === 'warning');
+                
+                if (isFailed) {
+                  const errorMsg = item.querySelector('[class*="dEfdsQ"]');
+                  return {
+                    found: true,
+                    position: i,
+                    message: errorMsg ? errorMsg.textContent.trim() : 'Unknown error'
+                  };
+                }
+              }
+              return { found: false };
+            });
+            
+            if (failureDetected.found) {
+              // 🔄 DETECTED FAILED ITEM - call handleGenerationFailureRetry() immediately
+              console.log(`[FAILURES] ❌ Failed item detected at position #${failureDetected.position}: "${failureDetected.message}"`);
+              console.log(`[FAILURES]    🔄 Calling full image re-add retry handler...\n`);
+              
+              failureRetryCount++;
+              
+              // Call retry handler to re-add images and repaste prompt
+              const retrySuccess = await this.handleGenerationFailureRetry(this.lastPromptSubmitted);
+              
+              if (retrySuccess) {
+                console.log(`[FAILURES]    ✓ Full retry submitted (attempt ${failureRetryCount}/${maxFailureRetries})`);
+                console.log(`[FAILURES]    📊 Resuming generation monitoring...\n`);
+                
+                // Wait for new generation to stabilize before continuing
+                await this.page.waitForTimeout(3000);
+                
+                // If we've exhausted retries, break and fail
+                if (failureRetryCount >= maxFailureRetries) {
+                  console.log(`\n❌ Failed items exhausted retries (${maxFailureRetries}) - generation failed\n`);
+                  shouldTryFullRetry = false;
+                  break;
+                }
+              } else {
+                console.log(`[FAILURES]    ❌ Retry handler failed\n`);
+                shouldTryFullRetry = false;
+                break;
+              }
+            }
+
             const result = await this.page.evaluate((oldHrefs) => {
               const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+              const currentHrefs = Array.from(links).map(link => link.getAttribute('href'));
               
-              // Check TOP 10 links only (new items always pushed to top)
-              for (let i = 0; i < Math.min(10, links.length); i++) {
-                const currentHref = links[i].getAttribute('href');
+              // Check ALL hrefs for new ones
+              for (let i = 0; i < currentHrefs.length; i++) {
+                const currentHref = currentHrefs[i];
                 
                 // If this href is NOT in old list, it's a NEW one
                 if (!oldHrefs.includes(currentHref)) {
                   return { found: true, newHref: currentHref, position: i };
                 }
               }
-              return { found: false };
+              return { found: false, totalHrefs: currentHrefs.length };
             }, initialHrefs);
             
             if (result.found) {
@@ -2976,11 +4388,48 @@ class GoogleFlowAutomationService {
               console.log(`   [GENERATION] Attempt ${monitoringAttempt}/${maxMonitoringAttempts} (elapsed: ${(monitoringAttempt).toFixed(0)}s)`);
             }
 
+            // Check for failures every 5 seconds during monitoring
+            if (monitoringAttempt % 5 === 0) {
+              console.log(`   [MONITORING] Checking for failed items (every 5s)...`);
+            }
+            
             await this.page.waitForTimeout(1000);
           }
 
           if (!generationDetected) {
-            throw new Error(`Generation timeout: No NEW href detected after ${monitoringAttempt}s`);
+            // If timeout/no generation detected
+            if (this.lastPromptSubmitted) {
+              console.log(`\n⏳ Generation timeout - attempting full image re-add retry...\n`);
+              
+              // Call retry handler to re-add images and repaste prompt
+              const retrySuccess = await this.handleGenerationFailureRetry(this.lastPromptSubmitted);
+              
+              if (retrySuccess) {
+                console.log(`\n🔄 Full retry submitted - resuming generation monitoring...\n`);
+                
+                // Reset monitoring counters for new attempt
+                generationDetected = false;
+                monitoringAttempt = 0;
+                failureRetryCount = 0;
+                shouldTryFullRetry = false;
+                
+                // Reset initial hrefs for new generation
+                initialHrefs = await this.page.evaluate(() => {
+                  const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+                  return links.map(link => link.getAttribute('href'));
+                });
+                
+                // Continue the generation monitoring loop instead of breaking
+                continue;
+              }
+            }
+            
+            // If retry failed or no prompt stored, throw error
+            if (shouldTryFullRetry) {
+              throw new Error('Generation monitoring timed out and retry handler failed');
+            }
+            
+            throw new Error('No new image generated within timeout period');
           }
 
           const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -3030,11 +4479,19 @@ class GoogleFlowAutomationService {
             if (!reuseSuccess) {
               throw new Error('Failed to reuse command');
             }
+            console.log('[STEP E] ✅ Reuse command executed');
+            console.log('[DELAY] ⏳ Waiting 2 seconds...');
+            await this.page.waitForTimeout(2000);
+            console.log('[DELAY] ✅ Ready');
 
             const clearSuccess = await this.clearPromptText();
             if (!clearSuccess) {
               console.log('[STEP E] ⚠️  Clear may have issues, but continuing...');
             }
+            console.log('[STEP E] ✅ Prompt cleared');
+            console.log('[DELAY] ⏳ Waiting 2 seconds...');
+            await this.page.waitForTimeout(2000);
+            console.log('[DELAY] ✅ Ready\n');
 
             console.log('[STEP E] ✅ Ready for next prompt\n');
           } else {
@@ -3052,6 +4509,24 @@ class GoogleFlowAutomationService {
 
         } catch (generationError) {
           console.error(`\n❌ PROMPT ${i + 1} FAILED: ${generationError.message}\n`);
+          
+          // If first attempt (i === 0) fails, pause for 180s to allow inspection
+          if (i === 0) {
+            console.warn('\n⚠️  ⏱️  FIRST ATTEMPT FAILED - PAUSING FOR 180 SECONDS FOR INSPECTION\n');
+            console.warn('📋 You have 3 minutes to inspect the browser and debug the issue\n');
+            console.warn('Current error:', generationError.message);
+            console.warn('Page URL:', await this.page.url());
+            
+            // Wait 180 seconds (3 minutes)
+            for (let second = 0; second < 180; second++) {
+              if (second % 30 === 0) {
+                console.log(`   ⏳ Inspection time: ${180 - second}s remaining...`);
+              }
+              await this.page.waitForTimeout(1000);
+            }
+            console.warn('\n⏱️  180 SECONDS INSPECTION TIME ENDED - Resuming process\n');
+          }
+          
           results.push({
             success: false,
             imageNumber: i + 1,
@@ -3098,6 +4573,10 @@ class GoogleFlowAutomationService {
       fs.writeFileSync(logFilePath, JSON.stringify(sessionLog, null, 2));
       console.log(`   ✅ Session log saved: ${path.basename(logFilePath)}\n`);
 
+      // Wait 5 seconds before closing
+      console.log(`\n⏳ Waiting 5 seconds before closing browser...`);
+      await this.page.waitForTimeout(5000);
+      
       // Close browser when done
       await this.close();
 

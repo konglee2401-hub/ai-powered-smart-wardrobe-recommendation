@@ -44,110 +44,79 @@ export function buildVirtualTryOnPrompt(characterAnalysis, productAnalysis, sele
   // ==========================================
   // PART 2: CHARACTER PRESERVATION (STRICT)
   // ==========================================
-  prompt += `=== CHARACTER MUST STAY UNCHANGED (CRITICAL) ===\n`;
+  prompt += `=== CHARACTER MUST STAY UNCHANGED ===\n`;
   
-  // Face & Head
-  prompt += `📍 FACE & HEAD:\n`;
-  if (character.age) prompt += `- Age: ${character.age} years old (KEEP EXACT)\n`;
+  // Consolidated character details (removed excessive "KEEP", "IDENTICAL", "PRESERVE" repetitions)
+  prompt += `Face & Head:\n`;
+  if (character.age) prompt += `- Age: ${character.age}\n`;
   if (character.gender) prompt += `- Gender: ${character.gender}\n`;
-  if (character.facialFeatures) prompt += `- Facial Features: ${character.facialFeatures} (IDENTICAL)\n`;
-  if (character.eyes) prompt += `- Eyes: ${character.eyes} (KEEP EXACT APPEARANCE)\n`;
-  if (character.skinTone) prompt += `- Skin: ${character.skinTone} (DO NOT CHANGE)\n`;
+  if (character.facialFeatures) prompt += `- Features: ${character.facialFeatures}\n`;
+  if (character.eyes) prompt += `- Eyes: ${character.eyes}\n`;
+  if (character.skinTone) prompt += `- Skin: ${character.skinTone}\n`;
   
-  // Hair
+  // Hair - consolidated
   if (character.hair) {
-    prompt += `📍 HAIR:\n`;
-    if (character.hair.length) prompt += `- Length: ${character.hair.length}\n`;
-    if (character.hair.style) prompt += `- Style: ${character.hair.style}\n`;
-    if (character.hair.color) prompt += `- Color: ${character.hair.color}\n`;
-    prompt += `- Position: EXACTLY as in reference (MUST PRESERVE)\n`;
+    prompt += `Hair: ${character.hair.color || ''} ${character.hair.style || ''} ${character.hair.length || ''} - same as reference\n`;
   } else {
-    prompt += `- Hair: Keep EXACTLY as shown in reference image\n`;
+    prompt += `Hair: Same as reference image\n`;
   }
   
-  // Body & Pose
-  prompt += `📍 BODY & POSE:\n`;
-  if (character.bodyType) prompt += `- Body Type: ${character.bodyType} (KEEP EXACT)\n`;
-  prompt += `- Posture: IDENTICAL to reference image\n`;
-  prompt += `- Arm Position: PRESERVE arm placement and position exactly\n`;
-  prompt += `- Head Angle: Keep head tilt and angle SAME as reference\n`;
-  prompt += `- Hand Position: SAME as shown in reference\n`;
-  
-  // Expression
-  prompt += `📍 FACIAL EXPRESSION:\n`;
-  prompt += `- Expression: SAME as reference (same smile, eyes, mouth)\n`;
-  prompt += `- Gaze Direction: Keep looking direction EXACTLY same\n\n`;
+  // Body & Pose - consolidated
+  prompt += `Body & Pose: Same body type, posture, arm position, head angle, hand position\n`;
+  prompt += `Expression: Same facial expression and gaze direction\n`;
+  prompt += `Do NOT change: face, body type, pose, expression, or hairstyle\n\n`;
 
   // ==========================================
-  // PART 3: PRODUCT/CLOTHING CHANGE SECTION (DETAILED)
+  // PART 3: PRODUCT/CLOTHING CHANGE SECTION (CONSOLIDATED)
   // ==========================================
   prompt += `=== CHANGE CLOTHING TO ===\n`;
   prompt += `Replace current clothing with the outfit from IMAGE 2.\n\n`;
 
-  // Garment Type & Category
-  prompt += `📦 GARMENT SPECIFICATION:\n`;
-  
+  // Consolidated garment specifications (removed scattered sections)
   if (product.garment_type || product.type) {
     const garmentType = product.garment_type || product.type;
-    prompt += `- Type: ${garmentType}\n`;
-    prompt += `- Apply this ${garmentType.toLowerCase()} on the character from IMAGE 1\n`;
+    prompt += `Garment: ${garmentType}`;
+    if (product.style_category) prompt += ` (${product.style_category})`;
+    prompt += `\n`;
   }
 
-  if (product.style_category) {
-    prompt += `- Style Category: ${product.style_category}\n`;
+  // Consolidated colors (was in separate COLOR section)
+  if (product.primary_color) {
+    const colorLine = product.secondary_color 
+      ? `${product.primary_color} with ${product.secondary_color}` 
+      : product.primary_color;
+    prompt += `Color: ${colorLine}\n`;
   }
 
-  // Color Specification (CRITICAL for distinguishing garment)
-  prompt += `🎨 COLOR & FINISH:\n`;
-  if (product.primary_color) prompt += `- Primary Color: ${product.primary_color}\n`;
-  if (product.secondary_color && product.secondary_color !== '') {
-    prompt += `- Secondary Color: ${product.secondary_color}\n`;
-  }
-
-  if (product.pattern) {
-    prompt += `- Pattern: ${product.pattern}\n`;
-  } else {
-    prompt += `- Pattern: solid color\n`;
-  }
-
-  // Material & Texture
-  prompt += `🧵 MATERIAL & TEXTURE:\n`;
+  // Consolidated material & texture (was separate section)
   if (product.fabric_type || product.material) {
     const material = product.fabric_type || product.material;
-    prompt += `- Fabric: ${material}\n`;
-    prompt += `- Appearance: Realistic ${material.toLowerCase()} texture\n`;
-  } else {
-    prompt += `- Fabric: High-quality material (infer from reference)\n`;
+    prompt += `Material: ${material} with realistic texture\n`;
   }
 
-  // Fit & Silhouette
-  prompt += `👕 FIT & SILHOUETTE:\n`;
-  if (product.fit_type || product.fit) {
-    prompt += `- Fit: ${product.fit_type || product.fit}\n`;
+  // Consolidated design details - no duplicate suffixes
+  const designDetails = [];
+  if (product.neckline) designDetails.push(product.neckline);
+  if (product.sleeves) designDetails.push(product.sleeves);
+  if (product.fit_type || product.fit) designDetails.push(product.fit_type || product.fit);
+  if (product.pattern && product.pattern !== 'solid' && product.pattern !== 'Solid color') {
+    designDetails.push(product.pattern);
   }
-  if (product.silhouette) {
-    prompt += `- Silhouette: ${product.silhouette}\n`;
+  
+  if (designDetails.length > 0) {
+    prompt += `Details: ${designDetails.join(', ')}\n`;
   }
-
-  // Design Details
-  prompt += `🎭 DESIGN DETAILS:\n`;
-  if (product.neckline) prompt += `- Neckline: ${product.neckline}\n`;
-  if (product.sleeves) prompt += `- Sleeves: ${product.sleeves}\n`;
+  
+  // Special Features - separate line
   if (product.key_details) {
-    prompt += `- Special Details: ${product.key_details}\n`;
-  } else {
-    prompt += `- Special Details: As shown in product reference\n`;
+    prompt += `Special Features: ${product.key_details}\n`;
   }
-
-  // Length & Coverage
-  prompt += `📏 LENGTH & COVERAGE:\n`;
-  if (product.length) {
-    prompt += `- Length: ${product.length}\n`;
-  }
-  if (product.coverage) {
-    prompt += `- Coverage: ${product.coverage}\n`;
-  } else {
-    prompt += `- Coverage: As shown in product image\n`;
+  
+  // Length & Coverage - separate line without duplicate suffixes
+  if (product.length || product.coverage) {
+    const lengthInfo = product.length || '';
+    const coverageInfo = product.coverage || '';
+    prompt += `Fit & Coverage: ${[lengthInfo, coverageInfo].filter(Boolean).join(', ')}\n`;
   }
 
   prompt += `\n`;
@@ -212,14 +181,14 @@ export function buildVirtualTryOnPrompt(characterAnalysis, productAnalysis, sele
   }
 
   // ==========================================
-  // PART 6: ENVIRONMENT & PHOTOGRAPHY  
+  // PART 6: ENVIRONMENT & PHOTOGRAPHY (CONSOLIDATED)
   // ==========================================
-  prompt += `=== ENVIRONMENT ===\n`;
+  prompt += `=== ENVIRONMENT & PHOTOGRAPHY ===\n`;
+  
   if (selectedOptions.scene) {
-    prompt += `Setting: ${selectedOptions.scene}\n`;
-    if (selectedOptions.scene === 'studio') {
-      prompt += `- White seamless background\n`;
-    }
+    prompt += `Setting: ${selectedOptions.scene}`;
+    if (selectedOptions.scene === 'studio') prompt += ` (white seamless background)`;
+    prompt += `\n`;
   }
   
   if (selectedOptions.lighting) {
@@ -229,44 +198,27 @@ export function buildVirtualTryOnPrompt(characterAnalysis, productAnalysis, sele
   }
   
   if (selectedOptions.mood) {
-    prompt += `Mood/Vibe: ${selectedOptions.mood}\n`;
+    prompt += `Mood: ${selectedOptions.mood}\n`;
   } else {
-    prompt += `Mood/Vibe: Professional, elegant\n`;
+    prompt += `Mood: Professional, elegant\n`;
   }
-
-  prompt += `\n`;
-
-  // ==========================================
-  // PART 7: PHOTOGRAPHY & TECHNICAL SPECS
-  // ==========================================
-  prompt += `=== PHOTOGRAPHY & QUALITY ===\n`;
   
+  // Style and camera angle
   if (selectedOptions.style) {
     prompt += `Style: ${selectedOptions.style}\n`;
-  } else {
-    prompt += `Style: Fashion photography\n`;
   }
   
   if (selectedOptions.cameraAngle) {
     prompt += `Camera angle: ${selectedOptions.cameraAngle}\n`;
-  } else {
-    prompt += `Camera angle: Three-quarter or full body\n`;
   }
   
   if (selectedOptions.colorPalette) {
     prompt += `Color palette: ${selectedOptions.colorPalette}\n`;
-  } else {
-    prompt += `Color palette: Neutral, complementary to garment\n`;
   }
-
-  // Quality specifications
-  prompt += `\nQuality Specifications:\n`;
-  prompt += `- Resolution: 8K, ultra high quality\n`;
-  prompt += `- Focus: Sharp focus on entire outfit and person\n`;
-  prompt += `- Detail: Ultra-detailed fabric texture and draping\n`;
-  prompt += `- Lighting: Professional, flattering, consistent\n`;
-  prompt += `- Realism: Photorealistic, natural appearance\n`;
-  prompt += `- Proportions: Anatomically correct, realistic proportions\n`;
+  
+  // Simplified quality statement (removed excessive technical terms)
+  prompt += `Quality: Professional 8K photography, sharp focus, ultra-detailed, photorealistic\n`;
+  prompt += `Anatomy: Anatomically correct, realistic proportions\n`;
 
   return prompt;
 }
