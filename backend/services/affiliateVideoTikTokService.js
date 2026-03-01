@@ -857,6 +857,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     let wearingImageResult = null;
     let holdingImageResult = null;
     
+    // 🔴 CRITICAL: STEP 2 MUST COMPLETE FULLY BEFORE PROCEEDING
     try {
       // ✅ SWITCHED TO GROK: More reliable image generation than Google Flow
       // Grok auto-redirects after 5-7s with Cloudflare bypass, no manual verification needed
@@ -883,16 +884,24 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`   Wearing: ${wearingPrompt.substring(0, 80)}...`);
       console.log(`   Holding: ${holdingPrompt.substring(0, 80)}...`);
       
+      console.log(`\n🔄 Generating BOTH images (wearing + holding) from character & product...`);
+      console.log(`   Character input: ${path.basename(characterFilePath)}`);
+      console.log(`   Product input: ${path.basename(productFilePath)}`);
+      console.log(`   Output directory: ${outputDir}`);
+      
       // Generate both images in single browser session with component reuse
       let multiGenResult;
       try {
+        console.log(`\n⏳ Calling generateMultiple (this may take 30-60 seconds)...`);
         multiGenResult = await imageGen.generateMultiple(
           characterFilePath,
           productFilePath,
           [wearingPrompt, holdingPrompt]
         );
+        console.log(`✅ generateMultiple completed (returned result object)`);
       } catch (genMultiError) {
         console.error('❌ generateMultiple threw error:', genMultiError.message);
+        console.error('Stack:', genMultiError.stack);
         multiGenResult = {
           success: false,
           error: genMultiError.message,
@@ -900,7 +909,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         };
       }
 
-      console.log(`📊 Multi-generation result:`, {
+      console.log(`\n📊 Multi-generation result summary:`, {
         success: multiGenResult?.success,
         resultsType: typeof multiGenResult?.results,
         resultsLength: multiGenResult?.results?.length,
@@ -908,7 +917,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       });
 
       if (!multiGenResult || typeof multiGenResult !== 'object') {
-        throw new Error('generateMultiple returned invalid result');
+        throw new Error('generateMultiple returned invalid result (not an object)');
+      }
+
+      if (!Array.isArray(multiGenResult.results)) {
+        throw new Error(`generateMultiple results is not an array: ${typeof multiGenResult.results}`);
       }
 
       console.log(`📊 Results breakdown:`, {
@@ -917,91 +930,103 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         failed: multiGenResult?.results?.filter(r => !r.success)?.length || 0
       });
 
-      // Show which images failed for debugging
-      if (multiGenResult?.results) {
+      // Show detailed output for each image
+      if (multiGenResult?.results?.length > 0) {
         multiGenResult.results.forEach((result, idx) => {
-          if (!result.success) {
-            console.error(`   ❌ IMAGE ${idx + 1} (${result.type}): ${result.error}`);
+          console.log(`\n   IMAGE ${idx + 1} (${result.type || 'unknown'}):`);
+          console.log(`     Success: ${result.success}`);
+          if (result.success) {
+            console.log(`     Download: ${result.downloadedFile ? '✅ Local file' : '❌ No local file'}`);
+            console.log(`     Path: ${result.downloadedFile || 'N/A'}`);
+            console.log(`     URL: ${result.href || 'N/A'}`);
+            if (result.downloadedFile && fs.existsSync(result.downloadedFile)) {
+              const fileSize = fs.statSync(result.downloadedFile).size;
+              console.log(`     File size: ${(fileSize / 1024).toFixed(2)} KB`);
+            } else if (result.downloadedFile) {
+              console.log(`     ⚠️ FILE NOT FOUND: ${result.downloadedFile}`);
+            }
+          } else {
+            console.log(`     Error: ${result.error}`);
           }
         });
       }
 
-      // ✅ NEW: Retry logic for IMAGE 1 (wearing) if only IMAGE 2 (holding) succeeded
-      if (!multiGenResult.success && multiGenResult?.results?.length === 2) {
-        const wearingResult = multiGenResult.results[0];
-        const holdingResult = multiGenResult.results[1];
-        
-        // If IMAGE 1 failed but IMAGE 2 succeeded, retry IMAGE 1 once
-        if (!wearingResult.success && holdingResult.success) {
-          console.log('\n🔄 RETRY: IMAGE 1 (wearing) failed but IMAGE 2 succeeded');
-          console.log('📍 Attempting to regenerate IMAGE 1...\n');
-          
-          try {
-            const retryResult = await imageGen.generateImage(wearingPrompt, {
-              download: true,
-              outputPath: outputDir
-            });
-            
-            // Update the results with retry result
-            wearingResult.success = true;
-            wearingResult.downloadedFile = retryResult.path;
-            wearingResult.href = retryResult.url;
-            wearingResult.url = retryResult.url;
-            
-            console.log('✅ IMAGE 1 retry successful');
-            multiGenResult.success = true;
-          } catch (retryError) {
-            console.error(`❌ IMAGE 1 retry failed: ${retryError.message}`);
-            // Continue without retry - will fail below
-          }
-        }
+      // ✅ STRICT VALIDATION: Both images MUST succeed
+      if (multiGenResult.results.length < 2) {
+        throw new Error(`Only ${multiGenResult.results.length} images returned, need 2 (wearing + holding)`);
       }
 
-      if (!multiGenResult.success || !Array.isArray(multiGenResult.results) || multiGenResult.results.length < 2) {
-        const errorMsg = multiGenResult.error || 'Multi-generation failed or did not produce enough results';
-        console.error(`❌ Generation failed:`, errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      // Extract results
       const wearingResult = multiGenResult.results[0];
       const holdingResult = multiGenResult.results[1];
 
+      // Strict check: both MUST have downloadedFile
       if (!wearingResult.success) {
-        throw new Error(`Wearing image generation failed: ${wearingResult.error}`);
+        throw new Error(`IMAGE 1 (WEARING) FAILED: ${wearingResult.error}`);
       }
-      if (!holdingResult.success) {
-        throw new Error(`Holding image generation failed: ${holdingResult.error}`);
+      if (!wearingResult.downloadedFile) {
+        throw new Error(`IMAGE 1 (WEARING) has no downloadedFile - may not have completed. Got: ${JSON.stringify(wearingResult)}`);
+      }
+      if (!fs.existsSync(wearingResult.downloadedFile)) {
+        throw new Error(`IMAGE 1 file does not exist: ${wearingResult.downloadedFile}`);
       }
 
-      // Map to expected format (use actual fields from generateMultiple)
+      if (!holdingResult.success) {
+        throw new Error(`IMAGE 2 (HOLDING) FAILED: ${holdingResult.error}`);
+      }
+      if (!holdingResult.downloadedFile) {
+        throw new Error(`IMAGE 2 (HOLDING) has no downloadedFile - may not have completed. Got: ${JSON.stringify(holdingResult)}`);
+      }
+      if (!fs.existsSync(holdingResult.downloadedFile)) {
+        throw new Error(`IMAGE 2 file does not exist: ${holdingResult.downloadedFile}`);
+      }
+
+      // ✅ Both images validated and exist - NOW map to expected format
       wearingImageResult = {
-        imageUrl: wearingResult.downloadedFile || wearingResult.href,  // Local file path or Google Flow URL
-        screenshotPath: wearingResult.downloadedFile,  // Downloaded file path
+        imageUrl: wearingResult.downloadedFile,  // ✅ Use actual file path
+        screenshotPath: wearingResult.downloadedFile,
         downloadedAt: new Date().toISOString(),
-        href: wearingResult.href  // Google Flow URL for reference
+        href: wearingResult.href,
+        type: 'wearing'
       };
       
       holdingImageResult = {
-        imageUrl: holdingResult.downloadedFile || holdingResult.href,
+        imageUrl: holdingResult.downloadedFile,  // ✅ Use actual file path
         screenshotPath: holdingResult.downloadedFile,
         downloadedAt: new Date().toISOString(),
-        href: holdingResult.href  // Google Flow URL for reference
+        href: holdingResult.href,
+        type: 'holding'
       };
 
-      console.log(`✅ Wearing image generated: ${wearingResult?.downloadedFile?.substring(0, 80) || wearingResult?.href || 'N/A'}...`);
-      console.log(`✅ Holding image generated: ${holdingResult?.downloadedFile?.substring(0, 80) || holdingResult?.href || 'N/A'}...`);
+      console.log(`\n✅ BOTH IMAGES VALIDATED:`);
+      console.log(`   IMAGE 1 (WEARING): ${wearingResult.downloadedFile}`);
+      console.log(`     - File exists: YES`);
+      console.log(`     - Size: ${(fs.statSync(wearingResult.downloadedFile).size / 1024).toFixed(2)} KB`);
+      console.log(`   IMAGE 2 (HOLDING): ${holdingResult.downloadedFile}`);
+      console.log(`     - File exists: YES`);
+      console.log(`     - Size: ${(fs.statSync(holdingResult.downloadedFile).size / 1024).toFixed(2)} KB`);
         
     } catch (imageGenError) {
-      console.error('❌ Image generation failed:', imageGenError.message);
-      throw new Error(`Image generation failed: ${imageGenError.message}`);
+      console.error('\n' + '═'.repeat(80));
+      console.error('🔴 STEP 2 FAILED - IMAGE GENERATION DID NOT COMPLETE');
+      console.error('═'.repeat(80));
+      console.error('Error:', imageGenError.message);
+      console.error('Stack:', imageGenError.stack);
+      console.error('═'.repeat(80));
+      throw new Error(`STEP 2 FAILURE - Image generation incomplete: ${imageGenError.message}`);
     }
 
-    if (!wearingImageResult || (!wearingImageResult.imageUrl && !wearingImageResult.href)) {
-      throw new Error(`Wearing image generation failed - no output (screenshotPath: ${wearingImageResult?.screenshotPath || 'none'})`);
+    // 🔴 FINAL VALIDATION before proceeding to STEP 3
+    if (!wearingImageResult || !wearingImageResult.screenshotPath) {
+      throw new Error(`VALIDATION FAILED: Wearing image missing (result: ${JSON.stringify(wearingImageResult)})`);
     }
-    if (!holdingImageResult || (!holdingImageResult.imageUrl && !holdingImageResult.href)) {
-      throw new Error(`Holding image generation failed - no output (screenshotPath: ${holdingImageResult?.screenshotPath || 'none'})`);
+    if (!holdingImageResult || !holdingImageResult.screenshotPath) {
+      throw new Error(`VALIDATION FAILED: Holding image missing (result: ${JSON.stringify(holdingImageResult)})`);
+    }
+    if (!fs.existsSync(wearingImageResult.screenshotPath)) {
+      throw new Error(`VALIDATION FAILED: Wearing image file not found: ${wearingImageResult.screenshotPath}`);
+    }
+    if (!fs.existsSync(holdingImageResult.screenshotPath)) {
+      throw new Error(`VALIDATION FAILED: Holding image file not found: ${holdingImageResult.screenshotPath}`);
     }
 
     const step2Duration = ((Date.now() - step2Start) / 1000).toFixed(2);
@@ -1019,9 +1044,13 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       }
     });
 
-    console.log(`\n✅ STEP 2 COMPLETE: Both images generated in ${step2Duration}s`);
-    console.log(`  ├─ Change-clothes (wearing): ${wearingImageResult.screenshotPath}`);
-    console.log(`  └─ Holding-product: ${holdingImageResult.screenshotPath}`);
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`✅ STEP 2 COMPLETE: BOTH IMAGES SUCCESSFULLY GENERATED`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`Duration: ${step2Duration}s`);
+    console.log(`Image 1 (WEARING): ${wearingImageResult.screenshotPath}`);
+    console.log(`Image 2 (HOLDING): ${holdingImageResult.screenshotPath}`);
+    console.log(`${'═'.repeat(80)}\n`);
 
     // 💫 SAVE STEP 2 IMAGES TO PREVIEW STORE (for frontend polling)
     updateFlowPreview(flowId, {
@@ -1042,11 +1071,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log('📤 STEP 2.5: Upload Generated Images to Google Drive (Parallel)');
     console.log('─'.repeat(80));
 
-    // Google Flow downloads images directly, so use the paths from the results
-    let wearingImagePath = wearingImageResult?.screenshotPath;  // ✅ Fixed: use screenshotPath not path
-    let holdingImagePath = holdingImageResult?.screenshotPath;  // ✅ Fixed: use screenshotPath not path
+    // Use paths from STEP 2 results (verified to exist)
+    let wearingImagePath = wearingImageResult.screenshotPath;  // ✅ From STEP 2
+    let holdingImagePath = holdingImageResult.screenshotPath;  // ✅ From STEP 2
 
-    console.log(`📁 Image paths from Google Flow:`);
+    console.log(`📁 Image paths from STEP 2 (verified to exist):`);
     console.log(`   Wearing: ${wearingImagePath}`);
     console.log(`   Holding: ${holdingImagePath}`);
     console.log(`\n⚡ Uploading both images in parallel...`);
@@ -1118,32 +1147,77 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.warn(`   Proceeding to Step 3 anyway...`);
     }
 
-    // 🔴 BARRIER: Explicit checkpoint to ensure STEP 2.5 is complete
-    console.log(`\n🔄 [BARRIER CHECKPOINT] Step 2 pipeline complete`);
-    console.log(`   ✅ Step 2: Image generation - DONE`);
-    console.log(`   ✅ Step 2.5: Image uploads - DONE`);
-    console.log(`   🔄 Proceeding to Step 3...\n`);
+    // 🔴 BARRIER: Explicit checkpoint to ensure STEP 2 pipeline is complete
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`🔄 [BARRIER CHECKPOINT] STEP 2 PIPELINE COMPLETE`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`✅ Step 2: Image generation - DONE`);
+    console.log(`   Wearing image: ${wearingImagePath}`);
+    console.log(`   Holding image: ${holdingImagePath}`);
+    console.log(`✅ Step 2.5: Image uploads - DONE`);
+    console.log(`\n📋 VERIFIED DATA FOR STEP 3:`);
+    console.log(`   wearingImagePath: ${fs.existsSync(wearingImagePath) ? '✅ EXISTS' : '❌ MISSING'}`);
+    console.log(`   holdingImagePath: ${fs.existsSync(holdingImagePath) ? '✅ EXISTS' : '❌ MISSING'}`);
+    console.log(`   productFilePath: ${fs.existsSync(productFilePath) ? '✅ EXISTS' : '❌ MISSING'}`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`🔄 NOW PROCEEDING TO STEP 3...\n`);
+    
+    // 🔴 ASSERT: If File doesn't exist, FAIL immediately
+    if (!fs.existsSync(wearingImagePath)) {
+      throw new Error(`BARRIER FAILED: Wearing image missing before STEP 3: ${wearingImagePath}`);
+    }
+    if (!fs.existsSync(holdingImagePath)) {
+      throw new Error(`BARRIER FAILED: Holding image missing before STEP 3: ${holdingImagePath}`);
+    }
 
     // ============================================================
     // STEP 3: DEEP CHATGPT ANALYSIS
     // ============================================================
 
     console.log('\n' + '─'.repeat(80));
-    console.log('🤖 STEP 3: Deep ChatGPT Analysis');
+    console.log('🤖 STEP 3: Deep ChatGPT Analysis (Using Generated Images)');
     console.log('─'.repeat(80));
     const step3Start = Date.now();
 
-    console.log(`📝 ANALYSIS INPUTS:`);
+    console.log(`\n📸 IMAGES BEING SENT TO CHATGPT:`);
+    console.log(`\n   1️⃣ WEARING IMAGE (Character wearing product):`);
+    console.log(`      Path: ${wearingImagePath}`);
+    console.log(`      Exists: ${fs.existsSync(wearingImagePath) ? '✅ YES' : '❌ NO'}`);
+    if (fs.existsSync(wearingImagePath)) {
+      const wearingSize = fs.statSync(wearingImagePath).size;
+      console.log(`      Size: ${(wearingSize / 1024).toFixed(2)} KB`);
+    }
+    
+    console.log(`\n   2️⃣ HOLDING IMAGE (Character holding product):`);
+    console.log(`      Path: ${holdingImagePath}`);
+    console.log(`      Exists: ${fs.existsSync(holdingImagePath) ? '✅ YES' : '❌ NO'}`);
+    if (fs.existsSync(holdingImagePath)) {
+      const holdingSize = fs.statSync(holdingImagePath).size;
+      console.log(`      Size: ${(holdingSize / 1024).toFixed(2)} KB`);
+    }
+    
+    console.log(`\n   3️⃣ PRODUCT IMAGE (Original product input):`);
+    console.log(`      Path: ${productFilePath}`);
+    console.log(`      Exists: ${fs.existsSync(productFilePath) ? '✅ YES' : '❌ NO'}`);
+    if (fs.existsSync(productFilePath)) {
+      const productSize = fs.statSync(productFilePath).size;
+      console.log(`      Size: ${(productSize / 1024).toFixed(2)} KB`);
+    }
+
+    console.log(`\n📝 ANALYSIS REQUEST PARAMS:`);
     console.log(`  Duration: ${videoDuration}s`);
     console.log(`  Voice: ${voiceGender} (${voicePace} pace)`);
     console.log(`  Focus: ${productFocus}`);
+    console.log(`  Language: ${language || 'en'}`);
+
+    console.log(`\n⏳ Sending to ChatGPT for analysis...`);
 
     const deepAnalysis = await performDeepChatGPTAnalysis(
       analysis,
       {
-        wearingImage: wearingImageResult.screenshotPath,  // 🔴 FIX: use screenshotPath not .url
-        holdingImage: holdingImageResult.screenshotPath,  // 🔴 FIX: use screenshotPath not .url
-        productImage: productFilePath
+        wearingImage: wearingImagePath,  // ✅ From STEP 2: wearing image
+        holdingImage: holdingImagePath,  // ✅ From STEP 2: holding image
+        productImage: productFilePath    // ✅ Original product input
       },
       {
         videoDuration,
@@ -1167,12 +1241,15 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       hashtags: deepAnalysis.data.hashtags || [],
       duration: step3Duration
     });
-    console.log(`\n✅ Deep analysis complete in ${step3Duration}s`);
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`✅ STEP 3 COMPLETE: ChatGPT Analysis Done`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`Duration: ${step3Duration}s`);
     console.log(`📊 ANALYSIS OUTPUT:`);
     console.log(`  Video scripts: ${deepAnalysis.data.videoScripts?.length || 0} segments`);
     console.log(`  Voiceover script: ${deepAnalysis.data.voiceoverScript?.split('\n').length || 0} lines / ${deepAnalysis.data.voiceoverScript?.length || 0} chars`);
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
-
+    console.log(`${'═'.repeat(80)}\n`);
     // ============================================================
     // STEP 4: VIDEO GENERATION (Using GrokServiceV2 - Actual Video via /imagine)
     // 🎬 Generate actual 10-second video with 720p resolution
