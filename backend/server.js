@@ -45,6 +45,8 @@ import assetRoutes from './routes/assetRoutes.js';
 import ttsRoutes from './routes/ttsRoutes.js';
 import sessionLogRoutes from './routes/sessionLogRoutes.js';
 import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
+import trendAutomationRoutes from './routes/trendAutomationRoutes.js';
+import trendSchedulerService from './services/trendAutomation/schedulerService.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seedProviders.js';
 
@@ -157,6 +159,7 @@ app.use('/api/video', videoScriptGenerationRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/debug-sessions', sessionLogRoutes);
 app.use('/api/ai/affiliate-video-tiktok', affiliateVideoTikTokRoutes);
+app.use('/api/shorts-reels', trendAutomationRoutes);
 
 app.use(errorHandler);
 
@@ -225,6 +228,8 @@ try {
   console.warn('⚠️ Google Drive authentication skipped:', error.message);
   // Continue anyway - will authenticate on first upload
 }
+
+await trendSchedulerService.start();
 
 server.listen(PORT, () => {
   console.log('\n' + '='.repeat(80));
