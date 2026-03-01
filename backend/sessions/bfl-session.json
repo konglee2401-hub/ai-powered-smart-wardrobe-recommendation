@@ -1,0 +1,112 @@
+{
+  "timestamp": 1772400328778,
+  "maxAge": 604800000,
+  "url": "https://playground.bfl.ai/lab/flux-2-klein",
+  "title": "FLUX Playground - Black Forest Labs",
+  "cookies": [
+    {
+      "name": "user-authorization",
+      "value": "%7B%22id%22%3A%222bf0ffb1-df48-4be1-8f72-bb0d9d68441d%22%2C%22email%22%3A%22leecris241%40gmail.com%22%2C%22authorization%22%3A%7B%22organization%22%3A%7B%226b7238e9-3150-413e-bff1-83f264d15213%22%3A%7B%22role%22%3A%22administrator%22%7D%7D%2C%22project%22%3A%7B%7D%2C%22attributes%22%3A%5B%5D%7D%7D",
+      "domain": ".bfl.ai",
+      "path": "/",
+      "expires": 1773005119.495677,
+      "size": 316,
+      "httpOnly": false,
+      "secure": true,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "Refresh",
+      "value": "twffbxmzh7wl",
+      "domain": ".bfl.ai",
+      "path": "/",
+      "expires": 1773005116.864935,
+      "size": 19,
+      "httpOnly": true,
+      "secure": true,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "cookieyes-consent",
+      "value": "consentid:S3p1T1dueHF5Tjc2N0lOTXE4ME1oNGFiVkRGTnNlTFg,consent:yes,action:no,necessary:yes,analytics:yes",
+      "domain": ".bfl.ai",
+      "path": "/",
+      "expires": 1803936288,
+      "size": 120,
+      "httpOnly": false,
+      "secure": true,
+      "session": false,
+      "sameSite": "Strict",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "Bearer",
+      "value": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjYwMTNmNWMwLWNlY2YtNDRjYy1iODg2LTZkMDRjM2FlZjgyYiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3VoamlkeWNvdG9iamdnd3lqZHd3LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyYmYwZmZiMS1kZjQ4LTRiZTEtOGY3Mi1iYjBkOWQ2ODQ0MWQiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzcyNDAwNjE2LCJpYXQiOjE3NzI0MDAzMTYsImVtYWlsIjoibGVlY3JpczI0MUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJhdXRob3JpemF0aW9uIjp7ImF0dHJpYnV0ZXMiOltdLCJvcmdhbml6YXRpb24iOnsiNmI3MjM4ZTktMzE1MC00MTNlLWJmZjEtODNmMjY0ZDE1MjEzIjp7InJvbGUiOiJhZG1pbmlzdHJhdG9yIn19LCJwcm9qZWN0Ijp7fX0sInByb3ZpZGVyIjoiZ29vZ2xlIiwicHJvdmlkZXJzIjpbImdvb2dsZSJdfSwidXNlcl9tZXRhZGF0YSI6eyJhdmF0YXJfdXJsIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jS0tCRDJ1Q3J6UVU4XzVLWTdoVVlxellHLXBkQnJBbUpfT1psR0Q2QXZEbHJSeDk3d0Q9czk2LWMiLCJlbWFpbCI6ImxlZWNyaXMyNDFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkNyaXMgTGVlIiwiaXNfYWN0aXZlIjp0cnVlLCJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJuYW1lIjoiQ3JpcyBMZWUiLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLS0JEMnVDcnpRVThfNUtZN2hVWXF6WUctcGRCckFtSl9PWmxHRDZBdkRsclJ4OTd3RD1zOTYtYyIsInByb3ZpZGVyX2lkIjoiMTEyODkwNDg2OTkxNjYyOTA1MjY0Iiwic3ViIjoiMTEyODkwNDg2OTkxNjYyOTA1MjY0In0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoib2F1dGgiLCJ0aW1lc3RhbXAiOjE3NzI0MDAzMTV9XSwic2Vzc2lvbl9pZCI6ImVjNTM0Mzk5LThmOTMtNDI2Yy05YjQ2LTJmZTkwYmIyNWJmMyIsImlzX2Fub255bW91cyI6ZmFsc2V9.nAJAQmMJQlwL3aNc1rS-SHsy1broAnJkhTxFAYvQnBW0oUK_C2nRHWmmKm29-clDLlHyzWl7gY6BGH21o-1IVg",
+      "domain": ".bfl.ai",
+      "path": "/",
+      "expires": 1772403916.864459,
+      "size": 1562,
+      "httpOnly": true,
+      "secure": true,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "x-playground-project",
+      "value": "%7B%22orgId%22%3A%226b7238e9-3150-413e-bff1-83f264d15213%22%2C%22projectId%22%3A%22a5921c35-0e74-420c-a26e-34eaa84fcbb3%22%2C%22projectName%22%3A%22Default%22%7D",
+      "domain": "playground.bfl.ai",
+      "path": "/",
+      "expires": 1803936319.232059,
+      "size": 181,
+      "httpOnly": false,
+      "secure": false,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "ph_phc_S5D9NAXVC6BGl2PWlhihIW6IcKFYloe6zvUZW9SU1Bu_posthog",
+      "value": "%7B%22%24device_id%22%3A%22019cab4a-1f2c-7d24-9594-78d0a8fe63d0%22%2C%22distinct_id%22%3A%22019cab4a-1f2c-7d24-9594-78d0a8fe63d0%22%2C%22%24sesid%22%3A%5B1772400323428%2C%22019cab4a-1fad-7610-8763-4e9044bd3035%22%2C1772400287624%5D%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22https%3A%2F%2Fplayground.bfl.ai%2F%22%2C%22u%22%3A%22https%3A%2F%2Fflux-2-klein-demo.bfl.ai%2F%22%7D%7D",
+      "domain": ".bfl.ai",
+      "path": "/",
+      "expires": 1803936323,
+      "size": 442,
+      "httpOnly": false,
+      "secure": true,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    }
+  ],
+  "localStorage": {
+    "ph_phc_S5D9NAXVC6BGl2PWlhihIW6IcKFYloe6zvUZW9SU1Bu_posthog": "{\"$user_state\":\"identified\",\"$sesid\":[1772400318292,\"019cab4a-2199-78ed-adbc-bd09e2b4d873\",1772400288149],\"distinct_id\":\"2bf0ffb1-df48-4be1-8f72-bb0d9d68441d\",\"$device_id\":\"019cab4a-1da4-73c9-a0db-a69e86646be2\",\"$last_posthog_reset\":\"2026-03-01T21:24:47.836Z\",\"$client_session_props\":{\"sessionId\":\"019cab4a-2199-78ed-adbc-bd09e2b4d873\",\"props\":{\"r\":\"$direct\",\"u\":\"https://playground.bfl.ai/lab/flux-2-klein\"}},\"$session_recording_enabled_server_side\":true,\"$console_log_recording_enabled_server_side\":true,\"$session_recording_network_payload_capture\":{\"capturePerformance\":{\"network_timing\":true,\"web_vitals\":false,\"web_vitals_allowed_metrics\":null},\"recordBody\":true,\"recordHeaders\":true},\"$session_recording_masking\":{\"maskAllInputs\":true},\"$session_recording_canvas_recording\":{},\"$replay_sample_rate\":null,\"$replay_minimum_duration\":30000,\"$replay_script_config\":{\"script\":\"posthog-recorder\"},\"$capture_rate_limit\":{\"tokens\":99,\"last\":1772400318292},\"$initial_person_info\":{\"r\":\"$direct\",\"u\":\"https://playground.bfl.ai/lab/flux-2-klein\"},\"$session_recording_url_trigger_activated_session\":\"019cab4a-2199-78ed-adbc-bd09e2b4d873\",\"$epp\":true,\"$user_id\":\"2bf0ffb1-df48-4be1-8f72-bb0d9d68441d\",\"$stored_person_properties\":{\"email\":\"leecris241@gmail.com\",\"isInternal\":false}}",
+    "__ph_opt_in_out_phc_S5D9NAXVC6BGl2PWlhihIW6IcKFYloe6zvUZW9SU1Bu": "1",
+    "bfl-playground-changelog": "{\"state\":{\"lastSeenEntryDate\":\"January 15, 2026\",\"hasInitialized\":true,\"hasHydrated\":true,\"dismissedPopoverDates\":[]},\"version\":2}"
+  },
+  "sessionStorage": {
+    "ph_phc_S5D9NAXVC6BGl2PWlhihIW6IcKFYloe6zvUZW9SU1Bu_posthog": "{\"$referrer\":\"$direct\",\"$referring_domain\":\"$direct\",\"$sdk_debug_replay_event_trigger_status\":\"trigger_disabled\",\"$sdk_debug_replay_url_trigger_status\":\"trigger_activated\",\"$sdk_debug_replay_linked_flag_trigger_status\":\"trigger_disabled\",\"$session_recording_start_reason\":\"session_id_changed\"}",
+    "ph_phc_S5D9NAXVC6BGl2PWlhihIW6IcKFYloe6zvUZW9SU1Bu_window_id": "\"019cab4a-2199-78ed-adbc-bd0a3dbc7167\""
+  },
+  "metadata": {
+    "provider": "bfl",
+    "savedAt": "2026-03-01T21:25:28.778Z",
+    "profile": "Profile 1"
+  }
+}
