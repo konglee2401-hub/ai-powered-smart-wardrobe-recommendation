@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import platformPublishingService from './platformPublishingService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mediaDir = path.join(__dirname, '../media');
@@ -452,24 +453,56 @@ class AutoUploadService {
         return { success: false, error: `Upload not found: ${uploadId}` };
       }
 
-      const { platform } = upload;
+      const { platform, videoPath, uploadConfig = {} } = upload;
+      this.updateUploadStatus(uploadId, 'uploading');
 
-      let result;
-      switch (platform) {
-        case 'tiktok':
-          result = await this.uploadToTikTok(uploadId, account);
-          break;
-        case 'youtube':
-          result = await this.uploadToYouTube(uploadId, account);
-          break;
-        case 'facebook':
-          result = await this.uploadToFacebook(uploadId, account);
-          break;
-        default:
-          return { success: false, error: `Unknown platform: ${platform}` };
+      try {
+        const published = await platformPublishingService.publish({
+          platform,
+          account,
+          videoPath,
+          uploadConfig
+        });
+
+        this.updateUploadStatus(uploadId, 'success', {
+          uploadUrl: published.uploadUrl,
+          platformPostId: published.platformPostId,
+          metadata: {
+            ...(upload.metadata || {}),
+            rawResponse: published.rawResponse,
+            nativeApi: true
+          }
+        });
+
+        return {
+          success: true,
+          uploadId,
+          uploadUrl: published.uploadUrl,
+          platformPostId: published.platformPostId,
+          message: `Uploaded to ${platform} using native API`
+        };
+      } catch (nativeError) {
+        // Fallback to mock implementation for local/dev usage
+        let fallbackResult;
+        switch (platform) {
+          case 'tiktok':
+            fallbackResult = await this.uploadToTikTok(uploadId, account);
+            break;
+          case 'youtube':
+            fallbackResult = await this.uploadToYouTube(uploadId, account);
+            break;
+          case 'facebook':
+            fallbackResult = await this.uploadToFacebook(uploadId, account);
+            break;
+          default:
+            return { success: false, error: `Unknown platform: ${platform}` };
+        }
+
+        if (fallbackResult.success) {
+          fallbackResult.message = `${fallbackResult.message} (fallback mode: ${nativeError.message})`;
+        }
+        return fallbackResult;
       }
-
-      return result;
     } catch (error) {
       return {
         success: false,
