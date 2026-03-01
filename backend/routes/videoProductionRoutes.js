@@ -39,6 +39,10 @@ router.patch('/accounts/:accountId', VideoProductionController.updateAccount);
 router.post('/accounts/:accountId/deactivate', VideoProductionController.deactivateAccount);
 router.delete('/accounts/:accountId', VideoProductionController.deleteAccount);
 
+router.post('/accounts/:accountId/verify', VideoProductionController.verifyAccount);
+router.post('/accounts/verify-all', VideoProductionController.verifyAllAccounts);
+router.post('/accounts/validate-config', VideoProductionController.validateAccountConfig);
+
 // ============ MEDIA LIBRARY ROUTES ============
 
 /**
@@ -66,6 +70,8 @@ router.get('/uploads/queue/:queueId', VideoProductionController.getUploadsForQue
 router.get('/uploads/account/:accountId', VideoProductionController.getUploadsForAccount);
 router.get('/uploads/:uploadId', VideoProductionController.getUploadStatus);
 router.post('/uploads/retry-failed', VideoProductionController.retryFailedUploads);
+
+router.post('/publish/queue/:queueId', VideoProductionController.publishQueueItem);
 
 // ============ CRON JOB ROUTES ============
 

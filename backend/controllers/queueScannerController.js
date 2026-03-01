@@ -15,7 +15,8 @@ export class QueueScannerController {
    */
   static async triggerScan(req, res) {
     try {
-      const result = await queueScannerCronJob.scanAndProcess();
+      const { autoPublish = false, accountIds = [], platform = "youtube" } = req.body || {};
+      const result = await queueScannerCronJob.scanAndProcess({ autoPublish, accountIds, platform });
       res.json(result);
     } catch (error) {
       res.status(500).json({
@@ -59,12 +60,13 @@ export class QueueScannerController {
    */
   static async initialize(req, res) {
     try {
-      const { intervalMinutes = 60 } = req.body;
-      queueScannerCronJob.initializeSchedule(intervalMinutes);
+      const { intervalMinutes = 60, autoPublish = false, accountIds = [], platform = "youtube" } = req.body;
+      const scheduleConfig = queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform });
       
       res.json({
         success: true,
-        message: `Queue Scanner initialized with ${intervalMinutes} minute interval`
+        message: `Queue Scanner initialized with ${intervalMinutes} minute interval`,
+        schedule: scheduleConfig
       });
     } catch (error) {
       res.status(500).json({

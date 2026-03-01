@@ -20,6 +20,8 @@ class QueueScannerCronJob {
     this.processedDir = path.join(__dirname, '../media/processed-queue');
     this.mediaDir = path.join(__dirname, '../media');
     this.isRunning = false;
+    this.scheduleIntervalRef = null;
+    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [] };
     this.ensureDirectories();
   }
 
@@ -35,7 +37,7 @@ class QueueScannerCronJob {
    * Scan queue folder and process videos
    * This should be called by CronJob scheduler
    */
-  async scanAndProcess() {
+  async scanAndProcess(options = {}) {
     if (this.isRunning) {
       console.log('⏳ Scanner already running, skipping...');
       return;
@@ -104,18 +106,26 @@ class QueueScannerCronJob {
 
           // 4. Update queue item status
           // Create queue record
-          const queueConfig = {
-            layout: '2-3-1-3',
-            duration: 30,
-            platform: 'youtube',
-            mainVideoPath: queueVideo.path,
-            subVideoPath: subVideo.path,
-            mashupId,
-            metadata
-          };
-
-          const queueResult = VideoQueueService.addToQueue(queueConfig);
-          console.log(`✓ Queue item created: ${queueResult.queueItem.queueId}`);
+          const queueResult = VideoQueueService.addToQueue({
+            videoConfig: {
+              layout: '2-3-1-3',
+              duration: 30,
+              platform: 'youtube',
+              mainVideoPath: queueVideo.path,
+              subVideoPath: subVideo.path,
+              mashupId,
+              outputPath: moveResult.filePath,
+              metadata
+            },
+            platform: options.platform || 'youtube',
+            contentType: 'mashup',
+            priority: 'high',
+            accountIds: options.accountIds || []
+          });
+          if (queueResult.success) {
+            VideoQueueService.updateQueueStatus(queueResult.queueId, 'ready');
+          }
+          console.log(`✓ Queue item created: ${queueResult.queueId}`);
 
           // 5. Mark queue video as processed
           const processedPath = path.join(this.processedDir, queueVideo.name);
@@ -163,14 +173,27 @@ class QueueScannerCronJob {
   /**
    * Initialize CronJob - runs at specified interval
    */
-  initializeSchedule(intervalMinutes = 60) {
+  initializeSchedule(intervalMinutes = 60, options = {}) {
+    if (this.scheduleIntervalRef) {
+      clearInterval(this.scheduleIntervalRef);
+      this.scheduleIntervalRef = null;
+    }
+
+    this.scheduleConfig = {
+      intervalMinutes,
+      autoPublish: !!options.autoPublish,
+      accountIds: options.accountIds || [],
+      platform: options.platform || 'youtube'
+    };
+
     console.log(`⏰ Initializing Queue Scanner CronJob (every ${intervalMinutes} minutes)`);
-    
-    setInterval(async () => {
-      await this.scanAndProcess();
+
+    this.scheduleIntervalRef = setInterval(async () => {
+      await this.scanAndProcess(this.scheduleConfig);
     }, intervalMinutes * 60 * 1000);
 
     console.log('✓ Queue Scanner CronJob initialized');
+    return this.scheduleConfig;
   }
 
   /**
@@ -181,7 +204,8 @@ class QueueScannerCronJob {
       isRunning: this.isRunning,
       queueDir: this.queueDir,
       processedDir: this.processedDir,
-      queueCount: googleDriveIntegration.listQueueVideos().length
+      queueCount: googleDriveIntegration.listQueueVideos().length,
+      scheduleConfig: this.scheduleConfig
     };
   }
 }
