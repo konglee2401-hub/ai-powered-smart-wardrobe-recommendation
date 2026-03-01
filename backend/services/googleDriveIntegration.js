@@ -217,4 +217,4 @@ class GoogleDriveIntegration {
   }
 }
 
-export default new GoogleDriveIntegration();
+export default GoogleDriveIntegration;

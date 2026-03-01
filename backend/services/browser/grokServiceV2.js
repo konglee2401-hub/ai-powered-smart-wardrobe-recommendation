@@ -64,9 +64,10 @@ class GrokServiceV2 extends BrowserService {
     }
     
     // STEP 1: Navigate to grok.com FIRST (without cookies)
-    console.log('📍 Step 1: Navigate to grok.com');
+    // NOTE: Grok auto-redirects after 5-7s, no need for long timeout
+    console.log('📍 Step 1: Navigate to grok.com (waiting for auto-redirect ~7s)');
     try {
-      await this.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await this.goto('https://grok.com', { waitUntil: 'domcontentloaded', timeout: 8000 });
       console.log('✅ Page loaded');
     } catch (e) {
       console.log(`⚠️  Navigation timeout: ${e.message}`);
@@ -144,9 +145,10 @@ class GrokServiceV2 extends BrowserService {
     await this.page.waitForTimeout(3000);
     
     // STEP 5: RELOAD PAGE - CRITICAL! This makes cookies active
+    // NOTE: Grok auto-redirects after 5-7s, 8s timeout is sufficient
     console.log('🔄 Step 4: Reloading page to activate cf_clearance cookie');
     try {
-      await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 8000 });
       console.log('✅ Page reloaded successfully');
     } catch (e) {
       console.log(`⚠️  Reload timeout: ${e.message}`);
@@ -190,7 +192,7 @@ class GrokServiceV2 extends BrowserService {
         if (cloudflareCheckCount < maxCloudflareAttempts) {
           console.log(`🔄 Reloading page to bypass Cloudflare...`);
           try {
-            await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+            await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 8000 });
             console.log('✅ Page reloaded');
           } catch (e) {
             console.log(`⚠️  Reload error: ${e.message}`);
@@ -817,6 +819,194 @@ class GrokServiceV2 extends BrowserService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Generate multiple images sequentially (compatible with affiliateVideoTikTokService)
+   * Note: Grok doesn't use character/product files - generates from prompts only
+   * 
+   * @param {string} characterImagePath - Ignored (Grok generates from prompts)
+   * @param {string} productImagePath - Ignored (Grok generates from prompts)
+   * @param {string[]} prompts - Array of prompts to generate images for
+   * @param {Object} options - Options including outputDir, download, etc.
+   * @returns {Promise<Object>} Results compatible with GoogleFlowAutomationService format
+   */
+  async generateMultiple(characterImagePath, productImagePath, prompts, options = {}) {
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`📊 AFFILIATE VIDEO IMAGE GENERATION (TikTok): 2 images (via Grok)`);
+    console.log(`${'═'.repeat(80)}\n`);
+    console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
+    console.log(`📦 Product image: ${path.basename(productImagePath)}\n`);
+
+    const results = [];
+    const downloadedFiles = [];
+    // Use instance outputDir from constructor options, fallback to default
+    const outputDir = this.options?.outputDir || options.outputDir || path.join(process.cwd(), 'backend', 'generated-images');
+
+    // Ensure output directory exists
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    try {
+      // Initialize if not already done
+      if (!this.page || this.page.isClosed()) {
+        console.log('[INIT] 🚀 Initializing Grok browser...');
+        await this.initialize();
+        console.log('[INIT] ✅ Grok initialized\n');
+      }
+
+      // Generate 2 specific prompts for affiliate video:
+      // Prompt 1: Character WEARING the product
+      // Prompt 2: Character HOLDING the product
+      
+      const generationPrompts = [
+        {
+          type: 'wearing',
+          prompt: this._createWearingPrompt(prompts[0] || '', productImagePath),
+          description: 'Character wearing the product'
+        },
+        {
+          type: 'holding',
+          prompt: this._createHoldingPrompt(prompts[1] || '', productImagePath),
+          description: 'Character holding the product'
+        }
+      ];
+
+      console.log(`📋 Two generation prompts prepared:\n`);
+      for (let i = 0; i < generationPrompts.length; i++) {
+        console.log(`   [${i + 1}] ${generationPrompts[i].type.toUpperCase()}: ${generationPrompts[i].description}`);
+        console.log(`${'─'.repeat(80)}`);
+        console.log(`   📝 FULL PROMPT:\n`);
+        console.log(generationPrompts[i].prompt);
+        console.log(`${'─'.repeat(80)}\n`);
+      }
+
+      // Generate each image sequentially
+      for (let i = 0; i < generationPrompts.length; i++) {
+        const { type, prompt, description } = generationPrompts[i];
+        const imageNumber = i + 1;
+
+        console.log(`\n${'═'.repeat(80)}`);
+        console.log(`🎨 IMAGE ${imageNumber}/2: ${description.toUpperCase()}`);
+        console.log(`${'═'.repeat(80)}\n`);
+
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+          console.error(`❌ IMAGE ${imageNumber} PROMPT INVALID`);
+          results.push({
+            success: false,
+            imageNumber,
+            type,
+            error: `Invalid prompt generated`
+          });
+          continue;
+        }
+
+        try {
+          console.log(`[STEP A] 📝 Generating ${type.toUpperCase()} image (${prompt.length} chars)...`);
+          console.log(`${'─'.repeat(80)}`);
+          console.log(`📋 PROMPT FOR ${type.toUpperCase()}:\n`);
+          console.log(prompt);
+          console.log(`${'─'.repeat(80)}\n`);
+          const generatedResult = await this.generateImage(prompt, {
+            download: true,
+            outputPath: outputDir
+          });
+
+          // Map to Google Flow format for compatibility
+          const result = {
+            success: true,
+            imageNumber,
+            type,
+            href: generatedResult.url,
+            downloadedFile: generatedResult.path,
+            url: generatedResult.url
+          };
+
+          results.push(result);
+          if (generatedResult.path) {
+            downloadedFiles.push(generatedResult.path);
+          }
+
+          console.log(`[STEP B] ✅ Image ${imageNumber} (${type}) generated successfully`);
+          console.log(`   📍 URL: ${generatedResult.url}`);
+          if (generatedResult.path) {
+            console.log(`   💾 Path: ${generatedResult.path}`);
+          }
+
+          // Small delay between images to avoid rate limiting
+          if (i < generationPrompts.length - 1) {
+            console.log(`[DELAY] ⏳ Waiting 3 seconds before next image...`);
+            await this.page.waitForTimeout(3000);
+            console.log(`[DELAY] ✅ Ready\n`);
+          }
+
+        } catch (promptError) {
+          console.error(`❌ IMAGE ${imageNumber} (${type}) FAILED: ${promptError.message}`);
+          results.push({
+            success: false,
+            imageNumber,
+            type,
+            error: promptError.message
+          });
+        }
+      }
+
+      // Prepare final results
+      const successCount = results.filter(r => r.success).length;
+
+      console.log(`\n${'═'.repeat(70)}`);
+      console.log(`✅ GENERATION COMPLETE: ${successCount}/2 successful`);
+      console.log(`📁 Output directory: ${outputDir}`);
+      console.log(`${'═'.repeat(70)}\n`);
+
+      return {
+        success: successCount === 2,
+        results: results,
+        totalGenerated: successCount,
+        totalRequested: 2,
+        downloadedFiles: downloadedFiles
+      };
+
+    } catch (error) {
+      console.error(`❌ Multi-generation failed: ${error.message}`);
+
+      return {
+        success: false,
+        error: error.message,
+        results: results,
+        totalGenerated: results.filter(r => r.success).length,
+        totalRequested: 2
+      };
+    }
+  }
+
+  /**
+   * Create prompt for character WEARING the product
+   * @private
+   */
+  _createWearingPrompt(basePrompt, productImagePath) {
+    const productName = path.basename(productImagePath, path.extname(productImagePath));
+    
+    if (basePrompt && basePrompt.trim()) {
+      return `${basePrompt}. Make sure the character is clearly wearing or displaying the ${productName}.`;
+    }
+    
+    return `Generate a professional product photo showing a model wearing the ${productName}. The model should look natural and confident, with good lighting and clear visibility of the product.`;
+  }
+
+  /**
+   * Create prompt for character HOLDING the product
+   * @private
+   */
+  _createHoldingPrompt(basePrompt, productImagePath) {
+    const productName = path.basename(productImagePath, path.extname(productImagePath));
+    
+    if (basePrompt && basePrompt.trim()) {
+      return `${basePrompt}. Make sure the character is clearly holding the ${productName} in a natural and appealing way.`;
+    }
+    
+    return `Generate a professional product photo showing a model holding the ${productName}. The model should look natural and confident, with good lighting and clear visibility of the product in their hands.`;
   }
 
   /**
@@ -1647,11 +1837,33 @@ class GrokServiceV2 extends BrowserService {
   }
 
   async _downloadImage(url, outputPath, maxRetries = 3) {
-    const filename = outputPath || path.join(
-      process.cwd(), 
-      'temp', 
-      `grok-generated-${Date.now()}.png`
-    );
+    // Handle outputPath: can be directory or file path
+    let filename;
+    if (!outputPath) {
+      filename = path.join(
+        process.cwd(), 
+        'backend',
+        'generated-images',
+        `grok-generated-${Date.now()}.png`
+      );
+    } else {
+      // Check if outputPath is a directory or file path
+      try {
+        if (fs.existsSync(outputPath) && fs.statSync(outputPath).isDirectory()) {
+          // It's a directory, create file inside it
+          filename = path.join(outputPath, `grok-generated-${Date.now()}.png`);
+        } else if (!fs.existsSync(outputPath) && !path.extname(outputPath)) {
+          // Path doesn't exist and has no extension - treat as directory
+          filename = path.join(outputPath, `grok-generated-${Date.now()}.png`);
+        } else {
+          // It's a file path
+          filename = outputPath;
+        }
+      } catch (e) {
+        // If there's an error checking, treat as file path
+        filename = outputPath;
+      }
+    }
     
     // Ensure directory exists
     const dir = path.dirname(filename);
