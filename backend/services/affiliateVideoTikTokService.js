@@ -53,7 +53,8 @@ function getImageGenerationService(provider, options = {}) {
       return new GoogleFlowAutomationService({
         type: 'image',
         aspectRatio: '9:16',
-        imageCount: 2,
+        imageCount: 1,
+        model: 'Nano Banana Pro',
         headless,
         ...options
       });
