@@ -291,6 +291,12 @@ function SceneDetailEditor({ scene, onRefresh }) {
   };
 
   const samples = scene.sceneLockSamples || [];
+  const sampleGroups = samples.reduce((acc, sample) => {
+    const ratio = sample.aspectRatio || sample.ratio || '16:9';
+    if (!acc[ratio]) acc[ratio] = [];
+    acc[ratio].push(sample);
+    return acc;
+  }, {});
   const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
 
   return (
