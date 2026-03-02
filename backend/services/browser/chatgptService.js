@@ -202,9 +202,9 @@ class ChatGPTService extends BrowserService {
         console.log(`[STEP 3] ✅ Clicked submit button: ${submittedByButton.selector}`);
       }
 
-      // Wait until assistant response is present and stable
-      console.log('[STEP 4] ⏳ Waiting 9 seconds for response...');
-      await this.page.waitForTimeout(9000);
+      // Wait until assistant response is present and stable (increased from 9s to 20s)
+      console.log('[STEP 4] ⏳ Waiting 20 seconds for response...');
+      await this.page.waitForTimeout(20000);
 
       console.log('[STEP 5] 🔍 Extracting response text...');
       const debugInfo = await this.page.evaluate(() => {
@@ -250,17 +250,26 @@ class ChatGPTService extends BrowserService {
           }
         }
 
+        // Get sample of body text for debugging
+        const bodyText = document.body.innerText || '';
+        const bodyPreview = bodyText.substring(0, 150);
+        
         return {
           found: false,
           foundElements: foundElements,
-          bodyLength: document.body.innerText.length,
-          hasAssistantElements: !!document.querySelector('[data-message-author-role="assistant"]')
+          bodyLength: bodyText.length,
+          bodyPreview: bodyPreview,
+          hasAssistantElements: !!document.querySelector('[data-message-author-role="assistant"]'),
+          allText: document.querySelectorAll('*:not(script):not(style)').length
         };
       });
 
       if (!debugInfo.found) {
         console.log('[STEP 5] ❌ Response not found. Debug info:');
         console.log(JSON.stringify(debugInfo, null, 2));
+        if (debugInfo.bodyPreview) {
+          console.log(`   📝 Body preview: ${debugInfo.bodyPreview}`);
+        }
         // Save page HTML for manual inspection
         const html = await this.page.content();
         const fs = (await import('fs')).default;
