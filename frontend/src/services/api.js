@@ -686,6 +686,41 @@ export const browserAutomationAPI = {
 };
 
 // ============================================
+// AFFILIATE VIDEO TIKTOK APIs
+// ============================================
+
+export const affiliateVideoTiktokAPI = {
+  /**
+   * Step 1: Analyze images for affiliate TikTok workflow
+   * @param {File} characterImage - Character image file
+   * @param {File} productImage - Product image file
+   * @param {string} flowId - Optional flow ID
+   */
+  step1Analyze: async (characterImage, productImage, flowId = null) => {
+    const formData = new FormData();
+    formData.append('characterImage', characterImage);
+    formData.append('productImage', productImage);
+    if (flowId) {
+      formData.append('flowId', flowId);
+    }
+
+    return api.postFormData('/ai/affiliate-video-tiktok/step-1-analyze', formData);
+  },
+
+  /**
+   * Step 2: Generate wearing/holding images using Step 1 result
+   * @param {string} flowId - Flow ID from Step 1
+   * @param {Object} options - Generation options
+   */
+  step2GenerateImages: async (flowId, options = {}) => {
+    return api.post('/ai/affiliate-video-tiktok/step-2-generate-images', {
+      flowId,
+      ...options,
+    });
+  },
+};
+
+// ============================================
 // PROVIDER APIs (Provider Manager)
 // ============================================
 

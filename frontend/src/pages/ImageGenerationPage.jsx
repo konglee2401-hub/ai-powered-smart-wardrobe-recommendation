@@ -13,7 +13,7 @@ import {
   Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap, Database
 } from 'lucide-react';
 
-import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
+import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI, affiliateVideoTiktokAPI } from '../services/api';
 
 // Import Google Drive API
 import driveAPI from '../services/driveAPI';
@@ -55,6 +55,7 @@ const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per request
 const USE_CASES = [
   { value: 'change-clothes', label: 'changeClothes', description: 'Mặc sản phẩm lên người mẫu' },
   { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nhân vật cầm sản phẩm trên tay' },
+  { value: 'affiliate-video-tiktok', label: 'affiliateVideoTikTok', description: 'Video affiliate TikTok 9:16 (luồng Step 1 + Step 2)' },
   { value: 'ecommerce-product', label: 'ecommerce', description: 'Ảnh sản phẩm thương mại' },
   { value: 'social-media', label: 'socialMedia', description: 'Bài đăng mạng xã hội' },
   { value: 'fashion-editorial', label: 'editorial', description: 'Bài báo thời trang chuyên nghiệp' },
@@ -115,6 +116,11 @@ const getUploadInstructions = (useCase) => {
       character: 'Person to feature prominently (influencer/affiliate)',
       product: 'Product to hold or present in hands',
       hint: 'Character holds product; character is 60% focus, product is 40% focus'
+    },
+    'affiliate-video-tiktok': {
+      character: 'KOL/creator rõ mặt và toàn thân hoặc nửa thân',
+      product: 'Sản phẩm dùng để quay affiliate TikTok',
+      hint: 'Use case này chạy luồng Affiliate TikTok Step 1 (analyze) + Step 2 (generate wearing/holding)'
     },
     'ecommerce-product': {
       character: 'Optional: person for scale/styling reference',
@@ -443,19 +449,65 @@ export default function ImageGenerationPage() {
       const charBase64 = await fileToBase64(characterImage.file);
       const prodBase64 = await fileToBase64(productImage.file);
 
-      const analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
-        charBase64,
-        prodBase64,
-        { 
-          provider: browserProvider, 
-          scene: selectedOptions.scene || 'studio', 
-          lighting: selectedOptions.lighting || 'soft-diffused',
-          mood: selectedOptions.mood || 'confident',
-          style: selectedOptions.style || 'minimalist',
-          colorPalette: selectedOptions.colorPalette || 'neutral',
-          cameraAngle: selectedOptions.cameraAngle || 'eye-level'
+      let analysisResponse;
+
+      if (useCase === 'affiliate-video-tiktok') {
+        const flowId = `affiliate-${Date.now()}`;
+        console.log('🎬 Using affiliate TikTok service flow (Step 1 + Step 2):', flowId);
+
+        const step1Response = await affiliateVideoTiktokAPI.step1Analyze(
+          characterImage.file,
+          productImage.file,
+          flowId
+        );
+
+        if (!step1Response?.success || !step1Response?.analysis) {
+          throw new Error(step1Response?.error || 'Affiliate TikTok Step 1 failed');
         }
-      );
+
+        const step2Response = await affiliateVideoTiktokAPI.step2GenerateImages(flowId, {
+          aspectRatio,
+        });
+
+        if (step2Response?.success) {
+          const step2Images = [step2Response.wearingImage, step2Response.holdingImage]
+            .filter(Boolean)
+            .map((url, index) => ({
+              url,
+              filename: index === 0 ? 'affiliate-wearing.jpg' : 'affiliate-holding.jpg',
+            }));
+
+          if (step2Images.length > 0) {
+            setGeneratedImages(step2Images);
+            console.log('✅ Affiliate TikTok Step 2 images ready:', step2Images);
+          }
+        }
+
+        // Normalize affiliate response to existing parser shape
+        analysisResponse = {
+          success: true,
+          data: {
+            analysis: typeof step1Response.analysis === 'string'
+              ? step1Response.analysis
+              : JSON.stringify(step1Response.analysis),
+            recommendations: step1Response.analysis,
+          },
+        };
+      } else {
+        analysisResponse = await browserAutomationAPI.analyzeBrowserOnly(
+          charBase64,
+          prodBase64,
+          { 
+            provider: browserProvider, 
+            scene: selectedOptions.scene || 'studio', 
+            lighting: selectedOptions.lighting || 'soft-diffused',
+            mood: selectedOptions.mood || 'confident',
+            style: selectedOptions.style || 'minimalist',
+            colorPalette: selectedOptions.colorPalette || 'neutral',
+            cameraAngle: selectedOptions.cameraAngle || 'eye-level'
+          }
+        );
+      }
 
       const endTime = Date.now();
       const duration = Math.round((endTime - startTime) / 1000);
