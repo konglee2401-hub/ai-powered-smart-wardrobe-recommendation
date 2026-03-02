@@ -136,10 +136,20 @@ const promptOptionSchema = new mongoose.Schema({
     default: null
   },
 
+  // NEW: Aspect-specific locked images for scene references
+  sceneLockedImageUrls: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {
+      '16:9': null,
+      '9:16': null
+    }
+  },
+
   // NEW: Generated candidate images for review/pick workflow
   sceneLockSamples: [{
     url: { type: String, default: '' },
     prompt: { type: String, default: '' },
+    aspectRatio: { type: String, default: '1:1' },
     provider: { type: String, default: 'google-flow' },
     createdAt: { type: Date, default: Date.now },
     isDefault: { type: Boolean, default: false }
