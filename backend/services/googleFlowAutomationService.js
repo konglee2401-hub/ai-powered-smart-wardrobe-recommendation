@@ -1701,30 +1701,42 @@ class GoogleFlowAutomationService {
         // First try: Look for "video" or "thành phần" in button text
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          if (text.includes('video') && text.includes('thành phần')) {
+          if (text.includes('video') && text.includes('thành phần') && !btn.disabled) {
             console.log(`[DEBUG] Found exact match: "${btn.textContent.trim()}"`);
-            btn.click();
-            return true;
+            try {
+              btn.click();
+              return true;
+            } catch (e) {
+              console.error(`[DEBUG] Failed to click exact match: ${e.message}`);
+            }
           }
         }
         
         // Second try: Just look for "thành phần" (components) since it's Vietnamese
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          if (text.includes('thành phần')) {
+          if (text.includes('thành phần') && !btn.disabled) {
             console.log(`[DEBUG] Found components button: "${btn.textContent.trim()}"`);
-            btn.click();
-            return true;
+            try {
+              btn.click();
+              return true;
+            } catch (e) {
+              console.error(`[DEBUG] Failed to click components: ${e.message}`);
+            }
           }
         }
         
         // Third try: Look for "create" or "tạo" (create)
         for (const btn of buttons) {
           const text = btn.textContent.toLowerCase();
-          if ((text.includes('create') || text.includes('tạo')) && text.includes('video')) {
+          if ((text.includes('create') || text.includes('tạo')) && text.includes('video') && !btn.disabled) {
             console.log(`[DEBUG] Found create video button: "${btn.textContent.trim()}"`);
-            btn.click();
-            return true;
+            try {
+              btn.click();
+              return true;
+            } catch (e) {
+              console.error(`[DEBUG] Failed to click create video: ${e.message}`);
+            }
           }
         }
         
@@ -2280,8 +2292,14 @@ class GoogleFlowAutomationService {
 
               if (text === normalizedTarget) {
                 console.log(`[MODEL-MENU] ✓ Exact matched: "${rawText}"`);
-                btn.click();
-                return { selected: true, selectedModel: text, usedFallbackFirst: false };
+                try {
+                  if (btn && !btn.disabled) {
+                    btn.click();
+                    return { selected: true, selectedModel: text, usedFallbackFirst: false };
+                  }
+                } catch (e) {
+                  console.error(`[MODEL-MENU] Failed to click matched item: ${e.message}`);
+                }
               }
             }
 
@@ -2292,35 +2310,50 @@ class GoogleFlowAutomationService {
                 const escapedId = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(menu.id) : menu.id.replace(/:/g, '\\:');
                 const dynamicSelector = `#${escapedId} > div:nth-child(1) > div > button`;
                 directFirstButton = document.querySelector(dynamicSelector);
-                if (directFirstButton) {
+                if (directFirstButton && !directFirstButton.disabled) {
                   const directText = normalize(directFirstButton.textContent || '');
                   console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by dynamic selector (${dynamicSelector}): "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
-                  directFirstButton.click();
-                  return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                  try {
+                    directFirstButton.click();
+                    return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                  } catch (e) {
+                    console.error(`[MODEL-MENU] Failed to click dynamic selector: ${e.message}`);
+                  }
                 }
               }
 
               // Legacy fallback selector kept for compatibility with earlier captured id
               const legacySelector = '#radix-\\:roc\\: > div:nth-child(1) > div > button';
               directFirstButton = document.querySelector(legacySelector);
-              if (directFirstButton) {
+              if (directFirstButton && !directFirstButton.disabled) {
                 const directText = normalize(directFirstButton.textContent || '');
                 console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by legacy selector: "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
-                directFirstButton.click();
-                return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                try {
+                  directFirstButton.click();
+                  return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                } catch (e) {
+                  console.error(`[MODEL-MENU] Failed to click legacy selector: ${e.message}`);
+                }
               }
 
               if (items.length > 0) {
                 const firstItem = items[0];
                 const firstText = normalize(firstItem.textContent || '');
                 console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click first item: "${firstItem.textContent?.trim() || ''}" -> "${firstText}"`);
-                const firstBtn = firstItem.querySelector('button');
-                if (firstBtn) {
-                  firstBtn.click();
-                } else {
-                  firstItem.click();
+                try {
+                  const firstBtn = firstItem.querySelector('button');
+                  if (firstBtn && !firstBtn.disabled) {
+                    firstBtn.click();
+                  } else if (firstItem && !firstItem.disabled) {
+                    firstItem.click();
+                  } else {
+                    return { selected: false, selectedModel: null, usedFallbackFirst: false };
+                  }
+                  return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                } catch (e) {
+                  console.error(`[MODEL-MENU] Failed to click first item: ${e.message}`);
+                  return { selected: false, selectedModel: null, usedFallbackFirst: false };
                 }
-                return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
               }
             }
 
@@ -3389,8 +3422,12 @@ class GoogleFlowAutomationService {
           const hasDownloadIcon = item.innerHTML.includes('download');
           
           if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
-            item.click();
-            return true;
+            try {
+              item.click();
+              return true;
+            } catch (e) {
+              console.error(`Failed to click download: ${e.message}`);
+            }
           }
         }
         return false;
@@ -3478,8 +3515,12 @@ class GoogleFlowAutomationService {
             const buttons = document.querySelectorAll('[role="menuitem"]');
             for (const btn of buttons) {
               if (btn.textContent.toLowerCase().includes(targetQuality.toLowerCase())) {
-                btn.click();
-                return true;
+                try {
+                  btn.click();
+                  return true;
+                } catch (e) {
+                  console.error(`Failed to click ${targetQuality}: ${e.message}`);
+                }
               }
             }
             return false;
@@ -3519,12 +3560,20 @@ class GoogleFlowAutomationService {
                   // Try to find and click close button
                   const closeBtn = el.querySelector('button');
                   if (closeBtn) {
-                    closeBtn.click();
-                    return { found: true, message: text.substring(0, 100) };
+                    try {
+                      closeBtn.click();
+                      return { found: true, message: text.substring(0, 100) };
+                    } catch (e) {
+                      console.error(`Failed to click close button: ${e.message}`);
+                    }
                   }
                   // If no button, try to remove the element
-                  el.remove();
-                  return { found: true, message: text.substring(0, 100) };
+                  try {
+                    el.remove();
+                    return { found: true, message: text.substring(0, 100) };
+                  } catch (e) {
+                    console.error(`Failed to remove error element: ${e.message}`);
+                  }
                 }
               }
             }
@@ -4352,8 +4401,12 @@ class GoogleFlowAutomationService {
           for (const btn of buttons) {
             const icon = btn.querySelector('i.google-symbols');
             if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
-              btn.click();
-              return { found: true, clicked: true };
+              try {
+                btn.click();
+                return { found: true, clicked: true };
+              } catch (e) {
+                console.error(`Failed to click arrow forward: ${e.message}`);
+              }
             }
           }
           return { found: buttons.length > 0, clicked: false };
