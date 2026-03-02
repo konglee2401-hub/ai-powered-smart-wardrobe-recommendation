@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import trendAutomationApi from '../../services/trendAutomationApi';
+import TrendAutomationLayout from '../../components/TrendAutomationLayout';
 
 export default function ShortsReelsVideos() {
   const [status, setStatus] = useState('');
@@ -12,32 +13,44 @@ export default function ShortsReelsVideos() {
   useEffect(() => { load(); }, [status]);
 
   return (
-    <div className="p-6 text-gray-100 space-y-4">
-      <h1 className="text-2xl font-bold">Videos</h1>
-      <select value={status} onChange={(e) => setStatus(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-3 py-2">
+    <TrendAutomationLayout
+      title="Scanned & Downloaded Videos"
+      subtitle="Danh sách video đã scan, trạng thái download, thumbnail và tiêu đề để dễ theo dõi."
+    >
+      <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-fit bg-gray-900 border border-gray-700 rounded px-3 py-2">
         <option value="">All status</option>
         <option value="pending">Pending</option>
         <option value="downloading">Downloading</option>
         <option value="done">Done</option>
         <option value="failed">Failed</option>
       </select>
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 overflow-auto">
+
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 overflow-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left border-b border-gray-700"><th>Title</th><th>Platform</th><th>Views</th><th>Status</th><th>Path</th><th></th></tr></thead>
+          <thead><tr className="text-left border-b border-gray-700"><th>Video</th><th>Platform</th><th>Topic</th><th>Views</th><th>Status</th><th>Path</th><th></th></tr></thead>
           <tbody>
             {data.items.map((v) => (
-              <tr key={v._id} className="border-b border-gray-800">
-                <td className="py-2"><a href={v.url} target="_blank" rel="noreferrer" className="text-blue-400">{v.title || v.videoId}</a></td>
+              <tr key={v._id} className="border-b border-gray-800 align-top">
+                <td className="py-2 min-w-[320px]">
+                  <div className="flex gap-3">
+                    <img src={v.thumbnail || 'https://placehold.co/120x68/111827/9ca3af?text=No+Thumb'} alt={v.title || v.videoId} className="w-[120px] h-[68px] object-cover rounded border border-gray-700" />
+                    <div>
+                      <a href={v.url} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{v.title || v.videoId}</a>
+                      <p className="text-xs text-gray-400 mt-1">ID: {v.videoId}</p>
+                    </div>
+                  </div>
+                </td>
                 <td>{v.platform}</td>
+                <td>{v.topic || '-'}</td>
                 <td>{v.views?.toLocaleString?.() || v.views}</td>
                 <td>{v.downloadStatus}</td>
-                <td>{v.localPath || '-'}</td>
+                <td className="text-xs break-all">{v.localPath || '-'}</td>
                 <td><button className="px-2 py-1 bg-purple-600 rounded" onClick={async () => { await trendAutomationApi.redownloadVideo(v._id); load(); }}>Re-download</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </TrendAutomationLayout>
   );
 }
