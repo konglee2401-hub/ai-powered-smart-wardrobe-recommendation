@@ -244,6 +244,33 @@ export async function deletePromptTemplate(id) {
   return deleteTemplate(id);
 }
 
+
+/**
+ * Scan hardcoded prompts from codebase (preview)
+ */
+export async function scanHardcodedPrompts() {
+  try {
+    const response = await api.get(`${BASE_URL}/hardcoded/scan`);
+    return response.data;
+  } catch (error) {
+    console.error('Error scanning hardcoded prompts:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sync hardcoded prompts to DB
+ */
+export async function syncHardcodedPrompts() {
+  try {
+    const response = await api.post(`${BASE_URL}/hardcoded/sync`);
+    return response.data;
+  } catch (error) {
+    console.error('Error syncing hardcoded prompts:', error);
+    throw error;
+  }
+}
+
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
@@ -376,6 +403,9 @@ export default {
   // Delete
   deleteTemplate,
   deletePromptTemplate,
+  // Hardcoded scan
+  scanHardcodedPrompts,
+  syncHardcodedPrompts,
   // Helpers
   getTemplateCategories,
   searchPromptTemplates,

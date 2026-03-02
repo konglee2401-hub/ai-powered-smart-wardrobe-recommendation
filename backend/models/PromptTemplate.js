@@ -31,6 +31,27 @@ const promptTemplateSchema = new mongoose.Schema(
       default: ''
     },
 
+    purpose: {
+      type: String,
+      trim: true,
+      maxlength: 300,
+      default: ''
+    },
+
+    sourceType: {
+      type: String,
+      enum: ['manual', 'hardcoded-scan'],
+      default: 'manual',
+      index: true
+    },
+
+    sourceKey: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true
+    },
+
     // Category & Type
     useCase: {
       type: String,
