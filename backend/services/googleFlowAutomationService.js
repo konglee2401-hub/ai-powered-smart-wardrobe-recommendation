@@ -4938,8 +4938,172 @@ class GoogleFlowAutomationService {
               }
             }
 
+            // Strategy 4: Test prompt - verify server is working with minimal input
             if (!finalSuccess) {
-              throw new Error('Generation failed after all recovery strategies (Retry x3, Reuse x2, Re-add refs fallback)');
+              console.log('[STEP F][TestPrompt] Testing server with short prompt...');
+              
+              // Get textbox and clear it
+              await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+              await this.page.waitForTimeout(300);
+              await this.page.keyboard.down('Control');
+              await this.page.keyboard.press('a');
+              await this.page.keyboard.up('Control');
+              await this.page.waitForTimeout(200);
+              await this.page.keyboard.press('Backspace');
+              await this.page.waitForTimeout(300);
+              
+              // Type short test prompt
+              const testPrompt = 'Test generation';
+              await this.page.evaluate((text) => {
+                navigator.clipboard.writeText(text).catch(() => {});
+              }, testPrompt);
+              await this.page.waitForTimeout(200);
+              
+              await this.page.keyboard.down('Control');
+              await this.page.keyboard.press('v');
+              await this.page.keyboard.up('Control');
+              await this.page.waitForTimeout(800);
+              
+              console.log('[STEP F][TestPrompt] 🧪 Submitting test prompt...');
+              await this.page.waitForTimeout(2000);
+              const testSubmitted = await clickSubmitButton();
+              
+              if (testSubmitted) {
+                console.log('[STEP F][TestPrompt] ⏳ Waiting for test response (not monitoring for new generation)...');
+                await this.page.waitForTimeout(15000);  // Just wait, don't monitor for generation detection
+                
+                const latestErrorAfterTest = await detectLatestErrorTile();
+                const testPassed = !latestErrorAfterTest.found;
+                
+                if (testPassed) {
+                  console.log('[STEP F][TestPrompt] ✅ Test prompt succeeded! Server is working.');
+                  
+                  // Now retry the original prompt using "Sử dụng lại câu lệnh" 2 times
+                  console.log('[STEP F][TestPrompt→Reuse] Retrying original prompt after test success...');
+                  for (let retryAfterTest = 1; retryAfterTest <= 2 && !finalSuccess; retryAfterTest++) {
+                    const errorTile = await detectLatestErrorTile();
+                    if (!errorTile.found) {
+                      finalSuccess = true;
+                      break;
+                    }
+
+                    await this.page.mouse.move(errorTile.tileCenter.x, errorTile.tileCenter.y);
+                    await this.page.waitForTimeout(500);
+
+                    const hoverTile = await detectLatestErrorTile();
+                    if (!hoverTile.found || !hoverTile.reuseButton) {
+                      console.log(`[STEP F][TestPrompt→Reuse] Attempt ${retryAfterTest}/2: reuse button not visible`);
+                      await this.page.waitForTimeout(1200);
+                      continue;
+                    }
+
+                    console.log(`[STEP F][TestPrompt→Reuse] Attempt ${retryAfterTest}/2: retrying original prompt`);
+                    await this.page.mouse.move(hoverTile.reuseButton.x, hoverTile.reuseButton.y);
+                    await this.page.waitForTimeout(120);
+                    await this.page.mouse.down();
+                    await this.page.waitForTimeout(80);
+                    await this.page.mouse.up();
+
+                    await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                    await this.page.waitForTimeout(300);
+                    await this.page.keyboard.down('Control');
+                    await this.page.keyboard.press('a');
+                    await this.page.keyboard.up('Control');
+                    await this.page.waitForTimeout(200);
+                    await this.page.keyboard.press('Backspace');
+                    await this.page.waitForTimeout(300);
+                    
+                    // Paste original prompt again
+                    await this.page.keyboard.down('Control');
+                    await this.page.keyboard.press('v');
+                    await this.page.keyboard.up('Control');
+                    await this.page.waitForTimeout(1000);
+                    
+                    console.log('[STEP F][TestPrompt→Reuse] ⏳ Waiting 3s for editor stabilization...');
+                    await this.page.waitForTimeout(3000);
+
+                    const resubmitted = await clickSubmitButton();
+                    if (!resubmitted) {
+                      console.log('[STEP F][TestPrompt→Reuse] ⚠️  Submit failed');
+                      continue;
+                    }
+
+                    await this.page.waitForTimeout(8000);
+                    const clearedAfterTest = await waitForErrorTileCleared(targetTileId, 10000);
+                    if (clearedAfterTest) {
+                      finalSuccess = true;
+                      console.log('[STEP F][TestPrompt→Reuse] ✅ Original prompt succeeded after test');
+                    }
+                  }
+                } else {
+                  console.log('[STEP F][TestPrompt] ❌ Test prompt also failed - proceeding to page reload strategy');
+                }
+              }
+            }
+
+            // Strategy 5: Page reload and retry entire flow (only once to avoid infinite loops)
+            if (!finalSuccess && i === 0) {  // Only attempt reload on first prompt
+              console.log('[STEP F][PageReload] ⏳ Reloading page to reset all state...');
+              await this.page.reload({ waitUntil: 'networkidle2' });
+              await this.page.waitForTimeout(3000);
+              
+              console.log('[STEP F][PageReload] 🔄 Reloading: Re-uploading images and retrying entire flow...');
+              
+              // Re-upload images
+              const reuploadResult = await this.uploadImages(characterImagePath, productImagePath, []);
+              if (!reuploadResult.success || !reuploadResult.imageUrls) {
+                console.log('[STEP F][PageReload] ⚠️  Failed to re-upload images after reload');
+                throw new Error('Page reload recovery: Failed to re-upload images');
+              }
+              
+              // Retry the entire flow one more time with the reloaded page
+              console.log('[STEP F][PageReload] ↩️  Retrying prompt submission after page reload (final attempt)...');
+              const reloadRetryResult = await this.page.evaluate(() => {
+                const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                return { found: !!textbox };
+              });
+              
+              if (reloadRetryResult.found) {
+                // Clear and enter prompt again
+                await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                await this.page.waitForTimeout(300);
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('a');
+                await this.page.keyboard.up('Control');
+                await this.page.waitForTimeout(200);
+                await this.page.keyboard.press('Backspace');
+                await this.page.waitForTimeout(300);
+                
+                // Paste original prompt
+                await this.page.evaluate((text) => {
+                  navigator.clipboard.writeText(text).catch(() => {});
+                }, normalizedPrompt);
+                await this.page.waitForTimeout(200);
+                
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('v');
+                await this.page.keyboard.up('Control');
+                await this.page.waitForTimeout(1000);
+                
+                console.log('[STEP F][PageReload] ⏳ Waiting 3s before final submit...');
+                await this.page.waitForTimeout(3000);
+                
+                const finalReloadSubmit = await clickSubmitButton();
+                if (finalReloadSubmit) {
+                  console.log('[STEP F][PageReload] ⏳ Monitoring for generation after reload...');
+                  await this.page.waitForTimeout(8000);
+                  const finalError = await detectLatestErrorTile();
+                  finalSuccess = !finalError.found;
+                  
+                  if (finalSuccess) {
+                    console.log('[STEP F][PageReload] ✅ Page reload strategy succeeded');
+                  }
+                }
+              }
+            }
+
+            if (!finalSuccess) {
+              throw new Error('Generation failed after all recovery strategies (Retry x3, Reuse x2, Re-add refs, Test prompt, Page reload)');
             }
 
             console.log('[STEP F] ✅ Successfully recovered from error');
