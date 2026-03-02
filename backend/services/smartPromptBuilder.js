@@ -118,8 +118,22 @@ async function getSceneReferenceInfo(sceneValue, selectedOptions = {}, language 
     promptDirective = fallback;
   }
 
-  // Get scene reference image URL if available
-  const imageUrl = option?.sceneLockedImageUrl || option?.previewImage || null;
+  const selectedAspectRatio = typeof selectedOptions?.aspectRatio === 'string'
+    ? selectedOptions.aspectRatio.trim()
+    : '';
+  const sceneLockedImageUrls = option?.sceneLockedImageUrls && typeof option.sceneLockedImageUrls === 'object'
+    ? option.sceneLockedImageUrls
+    : {};
+
+  // Get scene reference image URL with aspect priority (16:9 / 9:16)
+  const imageUrl = (
+    (selectedAspectRatio && sceneLockedImageUrls[selectedAspectRatio])
+    || option?.sceneLockedImageUrl
+    || sceneLockedImageUrls['9:16']
+    || sceneLockedImageUrls['16:9']
+    || option?.previewImage
+    || null
+  );
   
   return {
     prompt: promptDirective,

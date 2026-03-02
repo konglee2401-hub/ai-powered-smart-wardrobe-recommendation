@@ -8,6 +8,65 @@ import {
 
 const router = express.Router();
 
+
+const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
+
+
+const MAX_SCENE_LOCKED_HISTORY = 10;
+
+function normalizeSceneLockedImageHistory(input = null) {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => ({
+      url: typeof item?.url === 'string' ? item.url.trim() : '',
+      aspectRatio: SCENE_LOCK_ASPECTS.includes(item?.aspectRatio) ? item.aspectRatio : '9:16',
+      createdAt: item?.createdAt ? new Date(item.createdAt) : new Date()
+    }))
+    .filter((item) => !!item.url)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, MAX_SCENE_LOCKED_HISTORY);
+}
+
+function upsertSceneLockedImageHistory(history = [], imageUrl, aspectRatio) {
+  const normalized = normalizeSceneLockedImageHistory(history).filter((item) => item.url !== imageUrl);
+  return normalizeSceneLockedImageHistory([
+    {
+      url: imageUrl,
+      aspectRatio: SCENE_LOCK_ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16',
+      createdAt: new Date()
+    },
+    ...normalized
+  ]);
+}
+
+function normalizeSceneLockedImageUrls(input = null) {
+  const normalized = {
+    '16:9': null,
+    '9:16': null
+  };
+
+  if (input && typeof input === 'object') {
+    SCENE_LOCK_ASPECTS.forEach((aspect) => {
+      const value = input[aspect];
+      normalized[aspect] = typeof value === 'string' ? (value.trim() || null) : null;
+    });
+  }
+
+  return normalized;
+}
+
+function getSceneLockedImageUrlByAspect(scene = {}, aspectRatio = null) {
+  const normalized = normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls);
+  const aspect = typeof aspectRatio === 'string' ? aspectRatio.trim() : '';
+
+  if (SCENE_LOCK_ASPECTS.includes(aspect) && normalized[aspect]) {
+    return normalized[aspect];
+  }
+
+  return scene.sceneLockedImageUrl || normalized['9:16'] || normalized['16:9'] || null;
+}
+
 // ==================== SCENE LOCK MANAGER ====================
 
 router.get('/scenes/lock-manager', async (req, res) => {
@@ -16,10 +75,16 @@ router.get('/scenes/lock-manager', async (req, res) => {
       .sort({ sortOrder: 1, usageCount: -1, label: 1 })
       .lean();
 
+    const normalizedScenes = scenes.map((scene) => ({
+      ...scene,
+      sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+      sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
+    }));
+
     res.json({
       success: true,
-      data: scenes,
-      total: scenes.length
+      data: normalizedScenes,
+      total: normalizedScenes.length
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -113,16 +178,33 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
           ? `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`
           : item.url,
         prompt: finalPrompt,
+        aspectRatio,
         provider: 'google-flow',
         createdAt: new Date(),
         isDefault: false
       };
     });
 
-    scene.sceneLockSamples = samples;
+    const existingSamples = (scene.sceneLockSamples || []).map((sample) => (
+      typeof sample.toObject === 'function' ? sample.toObject() : sample
+    ));
+
+    const preservedSamples = existingSamples.filter((sample) => (sample.aspectRatio || '1:1') !== aspectRatio);
+    scene.sceneLockSamples = [...preservedSamples, ...samples];
+
+    // IMPORTANT: generating previews must NOT override current locked images.
     await scene.save();
 
-    res.json({ success: true, data: { value, samples } });
+    res.json({
+      success: true,
+      data: {
+        value,
+        aspectRatio,
+        samples,
+        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -131,22 +213,111 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
 router.post('/scenes/:value/select-lock-image', async (req, res) => {
   try {
     const { value } = req.params;
-    const { imageUrl } = req.body;
+    const { imageUrl, aspectRatio } = req.body;
 
     const scene = await PromptOption.findOne({ category: 'scene', value });
     if (!scene) {
       return res.status(404).json({ success: false, message: 'Scene option not found' });
     }
 
-    scene.sceneLockSamples = (scene.sceneLockSamples || []).map((sample) => ({
-      ...(typeof sample.toObject === 'function' ? sample.toObject() : sample),
-      isDefault: sample.url === imageUrl
-    }));
-    scene.sceneLockedImageUrl = imageUrl;
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({ success: false, message: 'imageUrl is required' });
+    }
+
+    const targetAspect = typeof aspectRatio === 'string' && SCENE_LOCK_ASPECTS.includes(aspectRatio)
+      ? aspectRatio
+      : '9:16';
+
+    scene.sceneLockSamples = (scene.sceneLockSamples || []).map((sample) => {
+      const sampleObj = typeof sample.toObject === 'function' ? sample.toObject() : sample;
+      const sameAspect = (sampleObj.aspectRatio || '1:1') === targetAspect;
+
+      return {
+        ...sampleObj,
+        isDefault: sameAspect && sampleObj.url === imageUrl
+      };
+    });
+
+    const aspectLockedImages = normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls);
+    aspectLockedImages[targetAspect] = imageUrl;
+    scene.sceneLockedImageUrls = aspectLockedImages;
+    if (targetAspect === '9:16') {
+      scene.sceneLockedImageUrl = imageUrl;
+    }
+
+    scene.sceneLockedImageHistory = upsertSceneLockedImageHistory(
+      scene.sceneLockedImageHistory,
+      imageUrl,
+      targetAspect
+    );
+
     scene.useSceneLock = true;
     await scene.save();
 
-    res.json({ success: true, data: { value, sceneLockedImageUrl: imageUrl } });
+    res.json({
+      success: true,
+      data: {
+        value,
+        sceneLockedImageUrl: scene.sceneLockedImageUrl || null,
+        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
+router.delete('/scenes/:value/locked-images', async (req, res) => {
+  try {
+    const { value } = req.params;
+    const { imageUrl } = req.body || {};
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({ success: false, message: 'imageUrl is required' });
+    }
+
+    const scene = await PromptOption.findOne({ category: 'scene', value });
+    if (!scene) {
+      return res.status(404).json({ success: false, message: 'Scene option not found' });
+    }
+
+    const history = normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory);
+    scene.sceneLockedImageHistory = history.filter((item) => item.url !== imageUrl);
+
+    const imageUrls = normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls);
+    SCENE_LOCK_ASPECTS.forEach((aspect) => {
+      if (imageUrls[aspect] === imageUrl) {
+        imageUrls[aspect] = null;
+      }
+    });
+
+    scene.sceneLockedImageUrls = imageUrls;
+    if (scene.sceneLockedImageUrl === imageUrl) {
+      scene.sceneLockedImageUrl = imageUrls['9:16'] || imageUrls['16:9'] || null;
+    }
+
+    scene.sceneLockSamples = (scene.sceneLockSamples || []).map((sample) => {
+      const sampleObj = typeof sample.toObject === 'function' ? sample.toObject() : sample;
+      if (sampleObj.url !== imageUrl) return sampleObj;
+      return {
+        ...sampleObj,
+        isDefault: false
+      };
+    });
+
+    await scene.save();
+
+    res.json({
+      success: true,
+      data: {
+        value,
+        sceneLockedImageUrl: scene.sceneLockedImageUrl || null,
+        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -161,6 +332,7 @@ router.patch('/:category/:value/prompt-assets', async (req, res) => {
       promptSuggestion,
       sceneLockedPrompt,
       sceneLockedImageUrl,
+      sceneLockedImageUrls,
       sceneLockedPromptVi,
       promptSuggestionVi,
       sceneNegativePrompt,
@@ -181,6 +353,19 @@ router.patch('/:category/:value/prompt-assets', async (req, res) => {
     if (typeof promptSuggestion === 'string') option.promptSuggestion = promptSuggestion.trim() || null;
     if (typeof sceneLockedPrompt === 'string') option.sceneLockedPrompt = sceneLockedPrompt.trim() || null;
     if (typeof sceneLockedImageUrl === 'string') option.sceneLockedImageUrl = sceneLockedImageUrl.trim() || null;
+    if (sceneLockedImageUrls && typeof sceneLockedImageUrls === 'object') {
+      const currentImageUrls = normalizeSceneLockedImageUrls(option.sceneLockedImageUrls);
+      const nextImageUrls = { ...currentImageUrls };
+
+      SCENE_LOCK_ASPECTS.forEach((aspect) => {
+        const incoming = sceneLockedImageUrls[aspect];
+        if (typeof incoming === 'string') {
+          nextImageUrls[aspect] = incoming.trim() || null;
+        }
+      });
+
+      option.sceneLockedImageUrls = nextImageUrls;
+    }
     if (typeof sceneLockedPromptVi === 'string') option.sceneLockedPromptVi = sceneLockedPromptVi.trim() || null;
     if (typeof promptSuggestionVi === 'string') option.promptSuggestionVi = promptSuggestionVi.trim() || null;
     if (typeof sceneNegativePrompt === 'string') option.sceneNegativePrompt = sceneNegativePrompt.trim() || null;
@@ -231,8 +416,10 @@ router.get('/', async (req, res) => {
       sceneLockedPromptVi: option.sceneLockedPromptVi || null,
       sceneNegativePrompt: option.sceneNegativePrompt || null,
       sceneNegativePromptVi: option.sceneNegativePromptVi || null,
-      sceneLockedImageUrl: option.sceneLockedImageUrl || null,
+      sceneLockedImageUrl: getSceneLockedImageUrlByAspect(option),
+      sceneLockedImageUrls: normalizeSceneLockedImageUrls(option.sceneLockedImageUrls),
       sceneLockSamples: option.sceneLockSamples || [],
+      sceneLockedImageHistory: normalizeSceneLockedImageHistory(option.sceneLockedImageHistory),
       useSceneLock: typeof option.useSceneLock === 'boolean' ? option.useSceneLock : true,
       isAiGenerated: option.isAiGenerated || false,
       usageCount: option.usageCount || 0
@@ -277,7 +464,9 @@ router.get('/:category', async (req, res) => {
           sceneLockedPromptVi: opt.sceneLockedPromptVi || null,
           sceneNegativePrompt: opt.sceneNegativePrompt || null,
           sceneNegativePromptVi: opt.sceneNegativePromptVi || null,
-          sceneLockedImageUrl: opt.sceneLockedImageUrl || null,
+          sceneLockedImageUrl: getSceneLockedImageUrlByAspect(opt),
+          sceneLockedImageUrls: normalizeSceneLockedImageUrls(opt.sceneLockedImageUrls),
+          sceneLockedImageHistory: normalizeSceneLockedImageHistory(opt.sceneLockedImageHistory),
           useSceneLock: typeof opt.useSceneLock === 'boolean' ? opt.useSceneLock : true,
           isAiGenerated: opt.isAiGenerated,
           usageCount: opt.usageCount
