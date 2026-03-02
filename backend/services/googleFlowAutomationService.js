@@ -976,150 +976,36 @@ class GoogleFlowAutomationService {
     console.log(`   Prompt: "${(cleanPrompt || '').substring(0, 80)}"\n`);
 
     try {
-      // Find and focus the Slate editor textbox
-      console.log('   🔍 Finding prompt textbox...');
-      const promptDiv = await this.page.$('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      // Normalize prompt for Unicode
+      const normalizedPrompt = cleanPrompt.normalize('NFC');
       
-      if (!promptDiv) {
-        throw new Error('Prompt textbox not found');
-      }
-      console.log('   ✓ Found prompt textbox\n');
-
-      // Focus the textbox
-      console.log('   🖱️  Focusing textbox...');
-      await this.page.evaluate(() => {
-        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        if (textbox) {
-          textbox.focus();
-        }
-      });
-      await this.page.waitForTimeout(300);
-
-      // NEW METHOD: Use copy-paste instead of typing
-      console.log('   📋 Using copy-paste method...\n');
+      // STEP 1: Copy prompt to clipboard
+      console.log('   📋 [1] Copying prompt to clipboard...');
+      await this.page.evaluate((text) => {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }, normalizedPrompt);
+      await this.page.waitForTimeout(200);
+      console.log('   ✓ Copied');
       
-      try {
-        // Step 1: Focus textbox
-        console.log('   🖱️  [1] Focusing textbox...');
-        await this.page.evaluate(() => {
-          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-          if (textbox) {
-            textbox.focus();
-          }
-        });
-        await this.page.waitForTimeout(200);
-        console.log('   ✓ Focused');
-        
-        // Step 2: Click left mouse button on textbox
-        console.log('   🖱️  [2] Clicking textbox...');
-        await this.page.evaluate(() => {
-          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-          if (textbox) {
-            const rect = textbox.getBoundingClientRect();
-            const x = Math.round(rect.left + rect.width / 2);
-            const y = Math.round(rect.top + rect.height / 2);
-            // Dispatch click event
-            const event = new MouseEvent('click', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            textbox.dispatchEvent(event);
-          }
-        });
-        await this.page.waitForTimeout(300);
-        console.log('   ✓ Clicked');
-        
-        // Step 3: Copy prompt to clipboard
-        console.log('   📋 [3] Copying prompt to clipboard...');
-        await this.page.evaluate((promptText) => {
-          navigator.clipboard.writeText(promptText).catch(() => {});
-        }, cleanPrompt);
-        await this.page.waitForTimeout(200);
-        console.log('   ✓ Copied');
-        
-        // Step 4: Paste with Ctrl+V (using keyboard event sequence like image paste)
-        console.log('   📋 [4] Pasting with Ctrl+V...');
-        await this.page.waitForTimeout(200); // Extra wait before paste
-        await this.page.keyboard.down('Control');
-        await this.page.waitForTimeout(50);
-        await this.page.keyboard.press('v');
-        await this.page.waitForTimeout(50);
-        await this.page.keyboard.up('Control');
-        console.log('   ✓ Pasted');
-        
-        // 💫 Store prompt for retry use
-        this.lastPromptSubmitted = cleanPrompt;
-        console.log(`   💾 Stored prompt for retry (${cleanPrompt.length} chars)\n`);
-        
-        // Step 5: Wait 5 seconds for prompt to be processed
-        console.log('   ⏳ [5] Waiting 5 seconds for prompt to be processed...');
-        await this.page.waitForTimeout(5000);
-        console.log('   ✓ Processing complete');
-        
-        // Step 6: Wait 2 more seconds
-        console.log('   ⏳ [6] Waiting 2 more seconds before submitting...');
-        await this.page.waitForTimeout(2000);
-        console.log('   ✓ Ready');
-        
-        // Step 7: Click submit button (arrow_forward) using mouse
-        console.log('   🖱️  [7] Finding and clicking submit button...');
-        const submitClicked = await this.page.evaluate(() => {
-          // Find textbox first
-          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-          if (!textbox) return { found: false };
-          
-          // Go up to find parent container with buttons
-          let container = textbox.parentElement;
-          for (let i = 0; i < 3; i++) {
-            if (container.parentElement) {
-              container = container.parentElement;
-            }
-          }
-          
-          // Find all buttons in this container
-          const buttons = container.querySelectorAll('button');
-          
-          // Look for button with arrow_forward icon
-          for (const btn of buttons) {
-            const icon = btn.querySelector('i.google-symbols');
-            if (icon && icon.textContent.includes('arrow_forward')) {
-              if (!btn.disabled) {
-                const rect = btn.getBoundingClientRect();
-                return {
-                  found: true,
-                  x: Math.round(rect.left + rect.width / 2),
-                  y: Math.round(rect.top + rect.height / 2)
-                };
-              }
-            }
-          }
-          
-          return { found: false };
-        });
-        
-        if (submitClicked.found) {
-          console.log('   ✓ Found submit button');
-          console.log(`   🖱️  Clicking with mouse at (${submitClicked.x}, ${submitClicked.y})...`);
-          
-          // Click using mouse movement method
-          await this.page.mouse.move(submitClicked.x, submitClicked.y);
-          await this.page.waitForTimeout(100);
-          await this.page.mouse.down();
-          await this.page.waitForTimeout(50);
-          await this.page.mouse.up();
-          
-          console.log('   ✓ Submitted\n');
-        } else {
-          console.warn('   ⚠️  Submit button not found, trying Enter as fallback...');
-          await this.page.keyboard.press('Enter');
-          console.log('   ⚠️  Submitted with Enter key (fallback)\n');
-        }
-        
-      } catch (pasteError) {
-        console.error(`   ❌ Error in copy-paste method: ${pasteError.message}`);
-        throw pasteError;
-      }
+      // STEP 2: Focus textbox using page.focus() (same as generateMultiple)
+      console.log('   🖱️  [2] Focusing textbox...');
+      await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      await this.page.waitForTimeout(100);
+      console.log('   ✓ Focused');
+      
+      // STEP 3: Paste with Ctrl+V
+      console.log('   📋 [3] Pasting with Ctrl+V...');
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('v');
+      await this.page.keyboard.up('Control');
+      await this.page.waitForTimeout(1000);
+      console.log('   ✓ Pasted');
+      
+      // STEP 4: Store prompt for retry use
+      this.lastPromptSubmitted = cleanPrompt;
+      console.log(`   💾 Stored prompt for retry (${cleanPrompt.length} chars)\n`);
+      
+      console.log('✅ Prompt entered successfully (NOT submitted yet - caller must submit)\n');
 
     } catch (error) {
       console.error(`   ❌ Error entering prompt: ${error.message}`);
@@ -1991,9 +1877,9 @@ class GoogleFlowAutomationService {
   }
 
   /**
-   * Click menu item using mouse movement method (Method 2)
-   * Used to select from dropdown menus
-   */
+  * Click menu item using mouse movement method (Method 2)
+  * Used to select from dropdown menus
+  */
   async clickMenuItemByText(itemText, menuSelector = '[role="menu"]') {
     console.log(`   > Selecting menu item: "${itemText}"...`);
     
@@ -2004,7 +1890,8 @@ class GoogleFlowAutomationService {
         // First, log all available menu items for debugging
         const allItems = [];
         for (const menu of menus) {
-          const buttons = menu.querySelectorAll('button');
+          // Handle both button items and div[role="menuitem"] items
+          const buttons = menu.querySelectorAll('button, div[role="menuitem"]');
           for (const btn of buttons) {
             const btnText = btn.textContent.trim();
             const rect = btn.getBoundingClientRect();
@@ -2022,7 +1909,7 @@ class GoogleFlowAutomationService {
         
         // Try to find exact match first
         for (const menu of menus) {
-          const buttons = menu.querySelectorAll('button');
+          const buttons = menu.querySelectorAll('button, div[role="menuitem"]');
           for (const btn of buttons) {
             const btnText = btn.textContent.trim();
             const rect = btn.getBoundingClientRect();
@@ -2049,7 +1936,7 @@ class GoogleFlowAutomationService {
         // Try substring match - but be careful to match the beginning or a key part
         // For model selection: "Nano Banana Pro" should match "🍌 Nano Banana Pro" but NOT "🍌 Nano Banana Pro"
         for (const menu of menus) {
-          const buttons = menu.querySelectorAll('button');
+          const buttons = menu.querySelectorAll('button, div[role="menuitem"]');
           for (const btn of buttons) {
             const btnText = btn.textContent.trim();
             const rect = btn.getBoundingClientRect();
@@ -2259,24 +2146,48 @@ class GoogleFlowAutomationService {
       
       try {
         // Find and click the model dropdown button
-        // Button contains "Nano Banana" text OR banana emoji
+        // Button contains arrow_drop_down icon and model name
         console.log(`   > Searching for model dropdown button...`);
         
         const modelDropdownClicked = await this.page.evaluate((target) => {
-          // Find button with Nano Banana text or banana emoji
+          // Find button with arrow_drop_down icon (model dropdown indicator)
           const buttons = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'));
           
           for (const btn of buttons) {
-            const text = btn.textContent.trim();
-            // Check if it's the model dropdown (contains "Banana" or "Nano")
-            if (text.includes('Banana') || text.includes('Nano')) {
-              console.log(`[MODEL] Found model button: "${text.substring(0, 50)}"`);
+            // Check if it has arrow_drop_down icon (model dropdown indicator)
+            const icon = btn.querySelector('i.google-symbols');
+            if (icon && icon.textContent.includes('arrow_drop_down')) {
+              // Check if it contains model name or is positioned correctly
+              const text = btn.textContent.trim();
+              const hasModelName = text.includes('Banana') || text.includes('Nano') || text.includes('Imagen') || text.includes('Veo');
               
-              // Check if visible
+              // 💫 FIX: Also check by positioning - settings button is usually bottom-right area
               const rect = btn.getBoundingClientRect();
-              if (rect.width > 0 && rect.height > 0) {
+              const hasProperSize = rect.width > 50 && rect.height > 20;
+              const hasProperPosition = rect.top > 600 && rect.left > 700;  // Bottom-right area
+              
+              if ((hasModelName || hasProperPosition) && hasProperSize) {
+                console.log(`[MODEL] Found model button: "${text.substring(0, 50)}" at (${Math.round(rect.left)}, ${Math.round(rect.top)})`);
+                
+                if (rect.width > 0 && rect.height > 0) {
+                  btn.click();
+                  console.log(`[MODEL] ✓ Clicked model dropdown`);
+                  return true;
+                }
+              }
+            }
+          }
+          
+          // 💫 FALLBACK: Search by position and icon only if name matching fails
+          console.log(`[MODEL] Name matching failed, trying position + icon fallback...`);
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i.google-symbols');
+            if (icon && icon.textContent.includes('arrow_drop_down')) {
+              const rect = btn.getBoundingClientRect();
+              // Bottom-right button with proper size
+              if (rect.top > 600 && rect.left > 600 && rect.width > 40 && rect.height > 20) {
+                console.log(`[MODEL] Found by position fallback`);
                 btn.click();
-                console.log(`[MODEL] ✓ Clicked model dropdown`);
                 return true;
               }
             }
@@ -2291,26 +2202,58 @@ class GoogleFlowAutomationService {
           await this.page.waitForTimeout(800);
           
           // Now click the target model in the menu
+          // IMPORTANT: Radix UI menus are rendered in a PORTAL at document.body level
+          // They are NOT children of the trigger button, so we must search from document root
           const modelSelected = await this.page.evaluate((target) => {
-            // Find menu
-            const menu = document.querySelector('[role="menu"]');
+            // Method 1: Find by role="menu" anywhere in document (portal)
+            let menu = document.querySelector('[role="menu"]');
+            
+            // Method 2: Find by Radix-specific attribute
             if (!menu) {
-              console.log(`[MODEL-MENU] Menu not found`);
+              menu = document.querySelector('[data-radix-menu-content]');
+            }
+            
+            // Method 3: Find by common portal container classes
+            if (!menu) {
+              // Radix portals are often in a div at body level
+              const portals = document.querySelectorAll('body > div > [role="menu"], body > [role="menu"]');
+              if (portals.length > 0) {
+                menu = portals[0];
+              }
+            }
+            
+            if (!menu) {
+              console.log(`[MODEL-MENU] Menu not found in DOM or portal`);
+              // Debug: Log what we can find
+              const allMenus = document.querySelectorAll('[role="menu"]');
+              const allRadix = document.querySelectorAll('[data-radix-menu-content]');
+              console.log(`[MODEL-MENU] Debug: Found ${allMenus.length} [role="menu"], ${allRadix.length} [data-radix-menu-content]`);
               return false;
             }
             
-            // Find all menu items
-            const items = menu.querySelectorAll('button[role="menuitem"]');
+            console.log(`[MODEL-MENU] Found menu element`);
+            
+            // Find all menu items - could be div[role="menuitem"] or button[role="menuitem"]
+            const items = menu.querySelectorAll('[role="menuitem"]');
             console.log(`[MODEL-MENU] Found ${items.length} menu items`);
             
-            // Look for target model
+            // Look for target model in each menu item
             for (const item of items) {
-              const text = item.textContent.trim();
-              console.log(`[MODEL-MENU]  Item: "${text.substring(0, 50)}"`);
+              // Model name is in span inside the menuitem
+              const nameSpan = item.querySelector('span');
+              const text = nameSpan ? nameSpan.textContent.trim() : item.textContent.trim();
+              console.log(`[MODEL-MENU]  Item: "${text}"`);
               
-              if (text.includes(target)) {
+              // Match by model name (partial match)
+              if (text.includes(target) || target.includes(text)) {
                 console.log(`[MODEL-MENU] ✓ Matched: "${text}"`);
-                item.click();
+                // Click the button inside the menuitem
+                const btn = item.querySelector('button');
+                if (btn) {
+                  btn.click();
+                } else {
+                  item.click();
+                }
                 return true;
               }
             }
@@ -4098,7 +4041,7 @@ class GoogleFlowAutomationService {
    *    - Clear prompt text (Ctrl+A+Backspace)
    * 3. Close browser
    */
-  async generateMultiple(characterImagePath, productImagePath, prompts) {
+  async generateMultiple(characterImagePath, productImagePath, prompts, options = {}) {
     if (this.debugMode) {
       console.log('\n🔧 [DEBUG] generateMultiple() is disabled (debug mode)');
       console.log('   - init() allowed');
@@ -4121,6 +4064,17 @@ class GoogleFlowAutomationService {
     console.log(`\n${'═'.repeat(80)}`);
     console.log(`📊 MULTI-IMAGE GENERATION: ${prompts.length} images`);
     console.log(`${'═'.repeat(80)}\n`);
+    console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
+    console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    // 💫 NEW: Handle optional scene reference image
+    if (options.sceneImagePath) {
+      console.log(`🎬 Scene image: ${path.basename(options.sceneImagePath)} (reference)`);
+    }
+    // 💫 NEW: Log scene locked prompt if available
+    if (options.sceneLockedPrompt) {
+      console.log(`📝 Scene locked prompt: "${options.sceneLockedPrompt.substring(0, 60)}..." (from scene: ${options.sceneName})`);
+    }
+    console.log();
 
     const results = [];
     let uploadedImageHrefs = [];
@@ -4209,7 +4163,34 @@ class GoogleFlowAutomationService {
       await this.page.keyboard.up('Control');
       await this.page.waitForTimeout(1500);
       
-      console.log('[UPLOAD] ✓ Images pasted to textbox');
+      // 💫 NEW: Upload optional scene reference image
+      if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
+        console.log('[UPLOAD] 📤 Uploading scene reference image...');
+        try {
+          const sceneImgData = fs.readFileSync(options.sceneImagePath);
+          const sceneBlob = Buffer.from(sceneImgData).toString('base64');
+          await this.page.evaluate((base64Str) => {
+            fetch(`data:image/png;base64,${base64Str}`)
+              .then(res => res.blob())
+              .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+              .catch(e => console.error('Failed to copy scene:', e));
+          }, sceneBlob);
+          await this.page.waitForTimeout(500);
+          
+          // Paste scene image
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('v');
+          await this.page.keyboard.up('Control');
+          await this.page.waitForTimeout(1500);
+          
+          console.log('[UPLOAD] ✓ Scene reference image pasted');
+        } catch (sceneError) {
+          console.warn(`[UPLOAD] ⚠️  Scene reference image upload failed (optional): ${sceneError.message}`);
+          // Don't throw - scene image is optional
+        }
+      }
+      
+      console.log('[UPLOAD] ✓ All images pasted to textbox');
       console.log('[DELAY] ⏳ Waiting 2 seconds...');
       await this.page.waitForTimeout(2000);
       console.log('[DELAY] ✅ Ready\n');
@@ -4454,23 +4435,82 @@ class GoogleFlowAutomationService {
           while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
             monitoringAttempt++;
 
-            // Get current hrefs
+            // 💫 FIX: Get ALL items (not just those with href) to catch error items
             const currentData = await this.page.evaluate(() => {
+              const allItems = [];
+              
+              // 1. First get items WITH href links
               const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-              return Array.from(links).map(link => {
+              for (const link of links) {
                 const parent = link.closest('[data-tile-id]');
-                const hasError = parent?.querySelector('i.google-symbols')?.textContent.includes('warning');
-                return {
+                const hasWarningIcon = parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
+                const parentText = parent?.textContent.toLowerCase() || '';
+                const hasErrorText = parentText.includes('không thành công') || parentText.includes('failed') || 
+                                    parentText.includes('error') || parentText.includes('lỗi');
+                const hasRetryButton = !!parent?.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
+                const styles = parent ? window.getComputedStyle(parent) : null;
+                const hasErrorStyling = styles?.opacity === '0.5' || parent?.classList?.contains('error');
+                const hasError = hasWarningIcon || hasRetryButton || hasErrorText || hasErrorStyling;
+                
+                allItems.push({
                   href: link.getAttribute('href'),
-                  hasError: hasError || false,
-                  isNew: false
-                };
-              });
+                  hasError: hasError,
+                  isNew: false,
+                  hasLink: true,
+                  tileId: parent?.getAttribute('data-tile-id'),
+                  indicators: {
+                    warningIcon: hasWarningIcon,
+                    errorText: hasErrorText,
+                    retryButton: hasRetryButton,
+                    errorStyling: hasErrorStyling
+                  }
+                });
+              }
+              
+              // 2️⃣ CRITICAL: Also check for ERROR ITEMS that DON'T have href (failed generations)
+              const errorItems = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+              for (const tile of errorItems) {
+                // Skip if already in allItems
+                const tileId = tile.getAttribute('data-tile-id');
+                if (allItems.some(item => item.tileId === tileId)) continue;
+                
+                // Check if this tile has error markers
+                const hasWarningIcon = !!tile.querySelector('i.google-symbols')?.textContent?.includes('warning');
+                const tileText = tile.textContent.toLowerCase() || '';
+                const hasErrorText = tileText.includes('không thành công') || tileText.includes('failed') || 
+                                    tileText.includes('error') || tileText.includes('lỗi');
+                const hasRetryButton = !!tile.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
+                
+                // If it looks like an error item, add it
+                if (hasWarningIcon || hasErrorText || hasRetryButton) {
+                  allItems.push({
+                    href: null,  // No href for error items
+                    hasError: true,  // Definitely an error
+                    isNew: true,  // Error item is considered "new" generation
+                    hasLink: false,
+                    tileId: tileId,
+                    indicators: {
+                      warningIcon: hasWarningIcon,
+                      errorText: hasErrorText,
+                      retryButton: hasRetryButton,
+                      errorStyling: true
+                    }
+                  });
+                }
+              }
+              
+              return allItems;
             });
 
-            // Find new hrefs
+            // Find new items (either new href OR new error item)
             for (const current of currentData) {
-              if (!promptSubmitHrefs.includes(current.href)) {
+              // Item is new if:
+              // 1. It has href and that href is not in promptSubmitHrefs, OR
+              // 2. It's an error item (hasError=true and no href)
+              const isNewHref = current.href && !promptSubmitHrefs.includes(current.href);
+              const isNewError = !current.href && current.hasError;  // Error item with no link = NEW error
+              
+              if (isNewHref || isNewError) {
                 current.isNew = true;
                 generatedHref = current;
                 generationDetected = true;
@@ -4480,7 +4520,19 @@ class GoogleFlowAutomationService {
 
             if (generationDetected) {
               console.log(`[STEP E] ✓ NEW generation detected`);
+              if (generatedHref.href) {
+                console.log(`[STEP E]   - Href: ${generatedHref.href.substring(0, 60)}...`);
+              } else {
+                console.log(`[STEP E]   - Type: ERROR ITEM (no href - fast detection!)`);
+              }
               console.log(`[STEP E]   - Has error: ${generatedHref.hasError}`);
+              if (generatedHref.hasError) {
+                console.log(`[STEP E]   - Error indicators:`);
+                console.log(`[STEP E]     • Warning icon: ${generatedHref.indicators.warningIcon}`);
+                console.log(`[STEP E]     • Error text: ${generatedHref.indicators.errorText}`);
+                console.log(`[STEP E]     • Retry button: ${generatedHref.indicators.retryButton}`);
+                console.log(`[STEP E]     • Error styling: ${generatedHref.indicators.errorStyling}`);
+              }
               break;
             }
 
@@ -4501,134 +4553,329 @@ class GoogleFlowAutomationService {
           let finalSuccess = !generatedHref.hasError;
 
           if (generatedHref.hasError) {
-            console.log('[STEP F] ❌ Generation failed - attempting retries via "reuse command"\n');
+            console.log('[STEP F] ❌ Generation failed - attempting retries with multiple strategies\n');
             
             while (retryCount < maxRetries && !finalSuccess) {
               retryCount++;
-              console.log(`[RETRY] Attempt ${retryCount}/${maxRetries}...`);
+              console.log(`${'─'.repeat(70)}`);
+              console.log(`[RETRY ${retryCount}/${maxRetries}] Starting retry attempt...\n`);
               
-              // Find the generated item position
-              const reuseResult = await this.page.evaluate((targetHref) => {
-                const link = document.querySelector(`a[href="${targetHref}"]`);
-                if (!link) return { found: false };
-                
-                const rect = link.getBoundingClientRect();
-                return {
-                  found: true,
-                  x: Math.round(rect.left + rect.width / 2),
-                  y: Math.round(rect.top + rect.height / 2)
-                };
-              }, generatedHref.href);
-
-              if (!reuseResult.found) {
-                console.log('[RETRY] ⚠️  Generated item not found in DOM\n');
-                continue;
-              }
-
-              // Right-click on the generated image
-              console.log('[RETRY] 🖱️  Right-clicking on generated image...');
-              await this.page.mouse.move(reuseResult.x, reuseResult.y);
-              await this.page.waitForTimeout(300);
-              await this.page.mouse.down({ button: 'right' });
-              await this.page.waitForTimeout(50);
-              await this.page.mouse.up({ button: 'right' });
-              await this.page.waitForTimeout(800);
-
-              // Click "Sử dụng lại câu lệnh"
-              const reuseMenuResult = await this.page.evaluate(() => {
-                const buttons = document.querySelectorAll('button[role="menuitem"]');
-                for (const btn of buttons) {
-                  if (btn.textContent.includes('Sử dụng lại')) {
-                    const rect = btn.getBoundingClientRect();
-                    return {
-                      found: true,
-                      x: Math.round(rect.left + rect.width / 2),
-                      y: Math.round(rect.top + rect.height / 2)
-                    };
+              let retryStrategyUsed = null;
+              
+              // 💫 FIX: For error items without href, find the error tile and click retry button first
+              if (!generatedHref.href && generatedHref.tileId) {
+                console.log('[RETRY] 🎯 Targeting ERROR ITEM (no href) - looking for retry button...');
+                try {
+                  const retryResult = await this.page.evaluate((targetTileId) => {
+                    const tile = document.querySelector(`[data-tile-id="${targetTileId}"]`);
+                    if (!tile) return { found: false };
+                    
+                    // Find refresh button (Thử lại)
+                    const buttons = tile.querySelectorAll('button');
+                    for (const btn of buttons) {
+                      const icon = btn.querySelector('i.google-symbols');
+                      const text = btn.textContent.toLowerCase();
+                      const ariaLabel = btn.getAttribute('aria-label') || '';
+                      
+                      // Look for refresh icon (Thử lại) or undo (Sử dụng lại)
+                      if (icon && (icon.textContent.includes('refresh') || icon.textContent.includes('undo'))) {
+                        const rect = btn.getBoundingClientRect();
+                        return {
+                          found: true,
+                          type: icon.textContent.includes('refresh') ? 'refresh' : 'undo',
+                          x: Math.round(rect.left + rect.width / 2),
+                          y: Math.round(rect.top + rect.height / 2)
+                        };
+                      }
+                    }
+                    return { found: false };
+                  }, generatedHref.tileId);
+                  
+                  if (retryResult.found) {
+                    console.log(`[RETRY]   ✓ Found ${retryResult.type} button on error tile`);
+                    console.log(`[RETRY]   🖱️  Clicking...`);
+                    await this.page.mouse.move(retryResult.x, retryResult.y);
+                    await this.page.waitForTimeout(200);
+                    await this.page.mouse.down();
+                    await this.page.waitForTimeout(100);
+                    await this.page.mouse.up();
+                    await this.page.waitForTimeout(1500);
+                    
+                    retryStrategyUsed = 'error-tile-' + retryResult.type;
+                    console.log('[RETRY]   ✓ Strategy executed');
+                  } else {
+                    console.log('[RETRY]   ⚠️  Retry button not found on error tile');
                   }
+                } catch (strategyErr) {
+                  console.log(`[RETRY]   ⚠️  Error accessing error tile: ${strategyErr.message}`);
                 }
-                return { found: false };
-              });
+              }
+              
+              // STRATEGY 1: Try "Sử dụng lại câu lệnh" (Reuse Command) via right-click menu
+              console.log('[RETRY] Strategy 1️⃣  - "Sử dụng lại câu lệnh" (right-click menu)...');
+              try {
+                const reuseResult = await this.page.evaluate((targetHref) => {
+                  const link = document.querySelector(`a[href="${targetHref}"]`);
+                  if (!link) return { found: false };
+                  
+                  const rect = link.getBoundingClientRect();
+                  return {
+                    found: true,
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2)
+                  };
+                }, generatedHref.href);
 
-              if (!reuseMenuResult.found) {
-                console.log('[RETRY] ⚠️  "Sử dụng lại câu lệnh" button not found\n');
+                if (reuseResult.found) {
+                  // Right-click on the generated image
+                  console.log('[RETRY]   📍 Found item, right-clicking...');
+                  await this.page.mouse.move(reuseResult.x, reuseResult.y);
+                  await this.page.waitForTimeout(300);
+                  await this.page.mouse.down({ button: 'right' });
+                  await this.page.waitForTimeout(50);
+                  await this.page.mouse.up({ button: 'right' });
+                  await this.page.waitForTimeout(1000);
+
+                  // Look for "Sử dụng lại câu lệnh" button
+                  const reuseMenuResult = await this.page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button[role="menuitem"]');
+                    for (const btn of buttons) {
+                      if (btn.textContent.includes('Sử dụng lại')) {
+                        const rect = btn.getBoundingClientRect();
+                        return {
+                          found: true,
+                          x: Math.round(rect.left + rect.width / 2),
+                          y: Math.round(rect.top + rect.height / 2),
+                          text: btn.textContent
+                        };
+                      }
+                    }
+                    return { found: false };
+                  });
+
+                  if (reuseMenuResult.found) {
+                    console.log(`[RETRY]   ✓ Found menu button: "${reuseMenuResult.text}"`);
+                    console.log('[RETRY]   🖱️  Clicking button...');
+                    await this.page.mouse.move(reuseMenuResult.x, reuseMenuResult.y);
+                    await this.page.waitForTimeout(200);
+                    await this.page.mouse.down();
+                    await this.page.waitForTimeout(100);
+                    await this.page.mouse.up();
+                    await this.page.waitForTimeout(1500);
+
+                    // Submit
+                    console.log('[RETRY]   🚀 Submitting with reused prompt...');
+                    const submitSuccess = await this.page.evaluate(() => {
+                      const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                      if (!textbox) return false;
+                      
+                      let container = textbox;
+                      for (let j = 0; j < 5; j++) {
+                        container = container?.parentElement;
+                      }
+                      
+                      const buttons = container?.querySelectorAll('button');
+                      for (const btn of buttons || []) {
+                        const icon = btn.querySelector('i.google-symbols');
+                        if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+                          btn.click();
+                          return true;
+                        }
+                      }
+                      return false;
+                    });
+
+                    if (submitSuccess) {
+                      retryStrategyUsed = 'reuse-command';
+                      console.log('[RETRY]   ✓ Strategy 1 executed');
+                    } else {
+                      console.log('[RETRY]   ⚠️  Submit failed, trying other strategies...');
+                    }
+                  } else {
+                    console.log('[RETRY]   ⚠️  "Sử dụng lại" button not found in menu');
+                  }
+                } else {
+                  console.log('[RETRY]   ⚠️  Item not found in DOM');
+                }
+
+                // Close any open menu
                 await this.page.mouse.move(100, 100);
                 await this.page.waitForTimeout(300);
-                continue;
+              } catch (strategyErr) {
+                console.log(`[RETRY]   ⚠️  Strategy 1 error: ${strategyErr.message}`);
               }
 
-              // Click the reuse button
-              console.log('[RETRY] 🖱️  Clicking "Sử dụng lại câu lệnh"...');
-              await this.page.mouse.move(reuseMenuResult.x, reuseMenuResult.y);
-              await this.page.waitForTimeout(200);
-              await this.page.mouse.down();
-              await this.page.waitForTimeout(100);
-              await this.page.mouse.up();
-              await this.page.waitForTimeout(1200);
+              // STRATEGY 2: Look for visible "Thử lại" or "Retry" button on the error
+              if (!retryStrategyUsed) {
+                console.log('[RETRY] Strategy 2️⃣  - "Thử lại" button on error...');
+                try {
+                  const retryBtnResult = await this.page.evaluate((targetHref) => {
+                    const link = document.querySelector(`a[href="${targetHref}"]`);
+                    if (!link) return { found: false };
+                    
+                    const parent = link.closest('[data-tile-id]');
+                    if (!parent) return { found: false };
+                    
+                    // Look for buttons with "Thử lại", "Retry", or retry icon
+                    const buttons = parent.querySelectorAll('button');
+                    for (const btn of buttons) {
+                      const text = btn.textContent.toLowerCase();
+                      const ariaLabel = btn.getAttribute('aria-label') || '';
+                      if (text.includes('thử lại') || text.includes('retry') || ariaLabel.includes('retry')) {
+                        const rect = btn.getBoundingClientRect();
+                        return {
+                          found: true,
+                          x: Math.round(rect.left + rect.width / 2),
+                          y: Math.round(rect.top + rect.height / 2),
+                          text: btn.textContent
+                        };
+                      }
+                    }
+                    return { found: false };
+                  }, generatedHref.href);
 
-              // Submit
-              console.log('[RETRY] 🖱️  Clicking submit...');
-              const submitBtn = await this.page.evaluate(() => {
-                const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-                if (!textbox) return { found: false };
-                
-                let container = textbox;
-                for (let i = 0; i < 5; i++) {
-                  container = container.parentElement;
-                }
-                
-                const buttons = container.querySelectorAll('button');
-                for (const btn of buttons) {
-                  const icon = btn.querySelector('i.google-symbols');
-                  if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
-                    const rect = btn.getBoundingClientRect();
-                    return {
-                      found: true,
-                      x: Math.round(rect.left + rect.width / 2),
-                      y: Math.round(rect.top + rect.height / 2)
-                    };
+                  if (retryBtnResult.found) {
+                    console.log(`[RETRY]   ✓ Found button: "${retryBtnResult.text}"`);
+                    console.log('[RETRY]   🖱️  Clicking Retry button...');
+                    await this.page.mouse.move(retryBtnResult.x, retryBtnResult.y);
+                    await this.page.waitForTimeout(200);
+                    await this.page.mouse.down();
+                    await this.page.waitForTimeout(100);
+                    await this.page.mouse.up();
+                    await this.page.waitForTimeout(1500);
+                    
+                    retryStrategyUsed = 'retry-button';
+                    console.log('[RETRY]   ✓ Strategy 2 executed');
+                  } else {
+                    console.log('[RETRY]   ⚠️  No Retry button found');
                   }
+                } catch (strategyErr) {
+                  console.log(`[RETRY]   ⚠️  Strategy 2 error: ${strategyErr.message}`);
                 }
-                return { found: false };
-              });
-
-              if (submitBtn.found) {
-                await this.page.mouse.move(submitBtn.x, submitBtn.y);
-                await this.page.waitForTimeout(100);
-                await this.page.mouse.down();
-                await this.page.waitForTimeout(50);
-                await this.page.mouse.up();
               }
 
-              console.log('[RETRY] Wait 2 seconds for resubmission...');
-              await this.page.waitForTimeout(2000);
+              // STRATEGY 3: Manual retry - Clear textbox and re-enter prompt
+              if (!retryStrategyUsed) {
+                console.log('[RETRY] Strategy 3️⃣  - Manual re-enter prompt...');
+                try {
+                  console.log('[RETRY]   📍 Clearing textbox...');
+                  await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                  await this.page.waitForTimeout(200);
+                  
+                  // Select all
+                  await this.page.keyboard.down('Control');
+                  await this.page.keyboard.press('a');
+                  await this.page.keyboard.up('Control');
+                  await this.page.waitForTimeout(100);
+                  
+                  // Delete
+                  await this.page.keyboard.press('Backspace');
+                  await this.page.waitForTimeout(500);
+
+                  console.log('[RETRY]   📝 Re-entering prompt...');
+                  // Re-paste the same prompt
+                  await this.page.evaluate((text) => {
+                    navigator.clipboard.writeText(text).catch(() => {});
+                  }, normalizedPrompt);
+                  await this.page.waitForTimeout(200);
+                  
+                  await this.page.keyboard.down('Control');
+                  await this.page.keyboard.press('v');
+                  await this.page.keyboard.up('Control');
+                  await this.page.waitForTimeout(1000);
+
+                  console.log('[RETRY]   🚀 Resubmitting...');
+                  const submitSuccess = await this.page.evaluate(() => {
+                    const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                    if (!textbox) return false;
+                    
+                    let container = textbox;
+                    for (let j = 0; j < 5; j++) {
+                      container = container?.parentElement;
+                    }
+                    
+                    const buttons = container?.querySelectorAll('button');
+                    for (const btn of buttons || []) {
+                      const icon = btn.querySelector('i.google-symbols');
+                      if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+                        btn.click();
+                        return true;
+                      }
+                    }
+                    return false;
+                  });
+
+                  if (submitSuccess) {
+                    retryStrategyUsed = 'manual-reenter';
+                    console.log('[RETRY]   ✓ Strategy 3 executed');
+                  } else {
+                    console.log('[RETRY]   ⚠️  Submit failed');
+                  }
+                } catch (strategyErr) {
+                  console.log(`[RETRY]   ⚠️  Strategy 3 error: ${strategyErr.message}`);
+                }
+              }
+
+              if (!retryStrategyUsed) {
+                console.log('[RETRY] ⚠️  All strategies failed for this attempt');
+              } else {
+                console.log(`[RETRY] 🔄 Used: ${retryStrategyUsed}`);
+              }
+
+              // Wait for generation response
+              console.log('[RETRY] ⏳ Waiting for response (10s)...');
+              await this.page.waitForTimeout(10000);
 
               // Check if error is gone
+              console.log('[RETRY] 🔍 Checking if error resolved...');
               const stillError = await this.page.evaluate((targetHref) => {
                 const link = document.querySelector(`a[href="${targetHref}"]`);
-                if (!link) return false;
+                if (!link) return null;
                 
                 const parent = link.closest('[data-tile-id]');
-                return parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
+                if (!parent) return null;
+                
+                // Use same multi-method detection as STEP E
+                const hasWarningIcon = parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
+                const parentText = parent?.textContent.toLowerCase() || '';
+                const hasErrorText = parentText.includes('không thành công') || 
+                                    parentText.includes('failed') || 
+                                    parentText.includes('error') ||
+                                    parentText.includes('lỗi');
+                const hasRetryButton = !!parent?.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
+                const styles = parent ? window.getComputedStyle(parent) : null;
+                const hasErrorStyling = styles?.opacity === '0.5' || parent?.classList?.contains('error');
+                
+                return hasWarningIcon || hasErrorText || hasRetryButton || hasErrorStyling;
               }, generatedHref.href);
 
-              finalSuccess = !stillError;
-              
-              if (finalSuccess) {
-                console.log('[RETRY] ✅ Error resolved!\n');
+              if (stillError === null) {
+                console.log('[RETRY] ⚠️  Item disappeared from DOM, assuming success');
+                finalSuccess = true;
+              } else if (stillError) {
+                console.log(`[RETRY] ❌ Still has error - will retry`);
+                if (retryCount < maxRetries) {
+                  console.log(`[RETRY] ⏳ Waiting 3s before next attempt...\n`);
+                  await this.page.waitForTimeout(3000);
+                }
               } else {
-                console.log(`[RETRY] ❌ Still failed, retrying... (${retryCount}/${maxRetries})\n`);
+                console.log('[RETRY] ✅ Error resolved!');
+                finalSuccess = true;
               }
             }
 
             if (!finalSuccess) {
-              console.log('[STEP F] ❌ Max retries exhausted, moving to next prompt\n');
+              console.log('\n[STEP F] ❌ Max retries (5) exhausted after trying all strategies');
+              console.log('[STEP F] ℹ️  Strategies attempted: reuse-command, retry-button, manual-reenter');
+              console.log('[STEP F] Moving to next prompt...\n');
               results.push({
                 success: false,
                 imageNumber: i + 1,
-                error: 'Generation failed after 5 retries'
+                error: 'Generation failed after 5 retry attempts with all strategies'
               });
               continue;
+            } else {
+              console.log('\n[STEP F] ✅ Successfully recovered from error!\n');
             }
           }
 

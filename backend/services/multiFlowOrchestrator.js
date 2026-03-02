@@ -1,7 +1,7 @@
 import GrokServiceV2 from './browser/grokServiceV2.js';
 import ZAIChatService from './browser/zaiChatService.js';
 import ZAIImageService from './browser/zaiImageService.js';
-import GoogleFlowService from './browser/googleFlowService.js';
+import GoogleFlowAutomationService from './googleFlowAutomationService.js';
 import { uploadToImageHost } from './imageUploadService.js';
 import path from 'path';
 import fs from 'fs';
@@ -20,6 +20,8 @@ class MultiFlowOrchestrator {
 
   /**
    * Available flow combinations
+   * Note: 'google-flow' flows are not supported in this orchestrator.
+   * Use GoogleFlowAutomationService directly for image upload + prompt generation.
    */
   static FLOW_TYPES = {
     'grok-grok': {
@@ -36,20 +38,6 @@ class MultiFlowOrchestrator {
       imageGenService: 'zai-image',
       requiresLogin: true
     },
-    'grok-flow': {
-      name: 'Grok → Google Flow',
-      description: 'Analyze with Grok, generate with Google Flow',
-      analysisService: 'grok',
-      imageGenService: 'google-flow',
-      requiresLogin: true // Google Flow requires login
-    },
-    'zai-flow': {
-      name: 'Z.AI Chat → Google Flow',
-      description: 'Analyze with Z.AI Chat, generate with Google Flow',
-      analysisService: 'zai-chat',
-      imageGenService: 'google-flow',
-      requiresLogin: true
-    },
     'zai-grok': {
       name: 'Z.AI Chat → Grok',
       description: 'Analyze with Z.AI Chat, generate with Grok',
@@ -57,6 +45,7 @@ class MultiFlowOrchestrator {
       imageGenService: 'grok',
       requiresLogin: true // Z.AI requires login
     }
+    // Note: 'grok-flow' and 'zai-flow' removed - use affiliateVideoTikTokService for Google Flow
   };
 
   /**
@@ -317,6 +306,8 @@ class MultiFlowOrchestrator {
 
   /**
    * Run image generation with specified service
+   * Note: 'google-flow' is not supported here - use GoogleFlowAutomationService directly
+   * for flows that require image upload + prompt generation
    */
   async _runImageGeneration(serviceName, analysis, options, index) {
     let service;
@@ -329,8 +320,7 @@ class MultiFlowOrchestrator {
         service = new ZAIImageService({ headless: true });
         break;
       case 'google-flow':
-        service = new GoogleFlowService({ headless: false }); // Requires visible browser for login
-        break;
+        throw new Error(`'google-flow' requires GoogleFlowAutomationService with image upload. Use affiliateVideoTikTokService instead.`);
       default:
         throw new Error(`Unknown image generation service: ${serviceName}`);
     }

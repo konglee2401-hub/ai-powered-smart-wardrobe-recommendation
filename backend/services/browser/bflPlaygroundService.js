@@ -1545,7 +1545,16 @@ class BFLPlaygroundService extends BrowserService {
     console.log(`📊 AFFILIATE VIDEO IMAGE GENERATION (TikTok): ${prompts.length} images (via BFL)`);
     console.log(`${'═'.repeat(80)}\n`);
     console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
-    console.log(`📦 Product image: ${path.basename(productImagePath)}\n`);
+    console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    // 💫 NEW: Handle optional scene reference image
+    if (options.sceneImagePath) {
+      console.log(`🎬 Scene image: ${path.basename(options.sceneImagePath)} (reference)`);
+    }
+    // 💫 NEW: Log scene locked prompt if available
+    if (options.sceneLockedPrompt) {
+      console.log(`📝 Scene locked prompt: "${options.sceneLockedPrompt.substring(0, 60)}..." (from scene: ${options.sceneName})`);
+    }
+    console.log();
 
     const results = [];
     const downloadedFiles = [];
@@ -1632,11 +1641,12 @@ class BFLPlaygroundService extends BrowserService {
           
           if (i === 0) {
             // ========== FIRST IMAGE: Upload both images ==========
-            console.log(`\n[UPLOAD] 📤 Uploading BOTH images as reference...`);
+            // 💫 NEW: Also upload optional scene image if provided
+            console.log(`\n[UPLOAD] 📤 Uploading images as reference...`);
             
             // Upload character image
             if (fs.existsSync(characterImagePath)) {
-              console.log(`   [1/2] Uploading character image...`);
+              console.log(`   [1/3] Uploading character image...`);
               await this.uploadImage(characterImagePath);
               console.log(`   ✅ Character image uploaded`);
             } else {
@@ -1647,19 +1657,33 @@ class BFLPlaygroundService extends BrowserService {
             
             // Upload product image  
             if (fs.existsSync(productImagePath)) {
-              console.log(`   [2/2] Uploading product image...`);
+              console.log(`   [2/3] Uploading product image...`);
               await this.uploadImage(productImagePath);
               console.log(`   ✅ Product image uploaded`);
             } else {
               console.warn(`   ⚠️ Product image not found: ${productImagePath}`);
             }
-
-            // Verify 2 preview images uploaded
-            console.log(`\n[VERIFY] 🔍 Verifying 2 preview images uploaded...`);
-            const hasTwoImages = await this.verifyPreviewImages(2, 15000);
             
-            if (!hasTwoImages) {
-              console.warn(`   ⚠️ Less than 2 preview images detected, but continuing...`);
+            // 💫 NEW: Upload optional scene reference image
+            if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
+              await this.page.waitForTimeout(500);
+              console.log(`   [3/3] Uploading scene reference image...`);
+              try {
+                await this.uploadImage(options.sceneImagePath);
+                console.log(`   ✅ Scene image uploaded`);
+              } catch (sceneError) {
+                console.warn(`   ⚠️ Scene image upload failed (non-blocking): ${sceneError.message}`);
+              }
+            }
+
+            // Verify preview images uploaded
+            // 💫 NEW: Expect 3 images if scene provided, otherwise 2
+            const expectedImageCount = (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) ? 3 : 2;
+            console.log(`\n[VERIFY] 🔍 Verifying ${expectedImageCount} preview images uploaded...`);
+            const hasImages = await this.verifyPreviewImages(expectedImageCount, 15000);
+            
+            if (!hasImages) {
+              console.warn(`   ⚠️ Less than ${expectedImageCount} preview images detected, but continuing...`);
             }
             
           } else {

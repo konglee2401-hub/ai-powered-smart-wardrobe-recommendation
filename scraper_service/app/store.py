@@ -8,6 +8,15 @@ def oid(v):
     return ObjectId(v) if isinstance(v, str) else v
 
 
+# Default playboard configs matching the backend
+DEFAULT_PLAYBOARD_CONFIGS = [
+    {"dimension": "most-viewed", "category": "All", "country": "Worldwide", "period": "weekly", "isActive": True, "priority": 10},
+    {"dimension": "most-viewed", "category": "Howto & Style", "country": "Viet Nam", "period": "weekly", "isActive": True, "priority": 8},
+    {"dimension": "most-viewed", "category": "Comedy", "country": "Viet Nam", "period": "weekly", "isActive": True, "priority": 7},
+    {"dimension": "most-viewed", "category": "Entertainment", "country": "Worldwide", "period": "weekly", "isActive": True, "priority": 6},
+]
+
+
 def get_or_create_settings():
     defaults = {
         'key': 'default',
@@ -22,6 +31,7 @@ def get_or_create_settings():
         'proxyList': [],
         'telegramBotToken': '',
         'isEnabled': True,
+        'playboardConfigs': DEFAULT_PLAYBOARD_CONFIGS,
     }
     doc = settings.find_one_and_update(
         {'key': 'default'},
@@ -43,22 +53,33 @@ def update_settings(payload):
 
 
 def upsert_channel(platform, channel_id, name, topic):
+    # First upsert without topics field
+    update_doc = {
+        '$set': {
+            'platform': platform,
+            'channelId': channel_id,
+            'name': name,
+            'isActive': True,
+            'updatedAt': now_utc(),
+        },
+        '$setOnInsert': {'createdAt': now_utc(), 'priority': 5, 'totalVideos': 0, 'topics': []},
+    }
+    
     doc = channels.find_one_and_update(
         {'platform': platform, 'channelId': channel_id},
-        {
-            '$set': {
-                'platform': platform,
-                'channelId': channel_id,
-                'name': name,
-                'isActive': True,
-                'updatedAt': now_utc(),
-            },
-            '$setOnInsert': {'createdAt': now_utc(), 'priority': 5, 'totalVideos': 0, 'topic': []},
-            '$addToSet': {'topic': topic},
-        },
+        update_doc,
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
+    
+    # Separately add topic if provided (avoids MongoDB operator conflict)
+    if topic:
+        doc = channels.find_one_and_update(
+            {'_id': doc['_id']},
+            {'$addToSet': {'topics': topic}},
+            return_document=ReturnDocument.AFTER,
+        )
+    
     return normalize(doc)
 
 
@@ -70,7 +91,7 @@ def upsert_video(payload):
                 'title': payload.get('title', ''),
                 'views': payload.get('views', 0),
                 'url': payload.get('url', ''),
-                'topic': payload.get('topic'),
+                'topics': payload.get('topic'),
                 'thumbnail': payload.get('thumbnail', ''),
                 'channel': oid(payload['channelId']),
                 'updatedAt': now_utc(),

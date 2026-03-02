@@ -16,7 +16,7 @@ def ensure_indexes():
 
     videos.create_index([('platform', ASCENDING), ('videoId', ASCENDING)], unique=True)
     videos.create_index([('downloadStatus', ASCENDING), ('discoveredAt', DESCENDING)])
-    videos.create_index([('topic', ASCENDING), ('downloadStatus', ASCENDING)])
+    videos.create_index([('topics', ASCENDING), ('downloadStatus', ASCENDING)])
 
     logs.create_index([('jobType', ASCENDING), ('ranAt', DESCENDING)])
     settings.create_index([('key', ASCENDING)], unique=True)

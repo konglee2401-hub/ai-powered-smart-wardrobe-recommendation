@@ -2311,7 +2311,14 @@ export default function ImageGenerationPage() {
         scenes={sceneOptions}
         selectedScene={selectedOptions.scene}
         language={i18n.language || 'en'}
-        onSelect={(value) => setSelectedOptions(prev => ({ ...prev, scene: value }))}
+        onSelect={(value, scene) => {
+          setSelectedOptions(prev => ({ ...prev, scene: value }));
+          // Store full scene object for accessing locked image and other properties
+          if (scene) {
+            // Scene data now available via selectedOptions.scene value lookup
+            console.log(`✅ Selected scene: ${scene.label} (${value})`);
+          }
+        }}
       />
 
       {/* Session Log Modal */}

@@ -1,7 +1,6 @@
 import GrokServiceV2 from '../services/browser/grokServiceV2.js';
 import ZAIChatService from '../services/browser/zaiChatService.js';
 import ZAIImageService from '../services/browser/zaiImageService.js';
-import GoogleFlowService from '../services/browser/googleFlowService.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import VideoGeneration from '../models/VideoGeneration.js';
@@ -1075,25 +1074,50 @@ export async function generateWithBrowser(req, res) {
       console.log(`${'='.repeat(80)}\n`);
 
       try {
-        // 💫 Ensure aspect ratio is correctly passed to Google Flow
+        // 💫 Use GoogleFlowAutomationService.generateMultiple() for image generation
         console.log(`   🎯 Passing aspect ratio to Google Flow: ${aspectRatio}`);
-        const genResult = await runImageGeneration({
-          personImagePath: charImagePath,
-          productImagePath: prodImagePath,
-          prompt: prompt,
-          negativePrompt: negativePrompt,  // 💫 Include negative prompt
-          imageCount: imageCount,
-          aspectRatio: aspectRatio,  // 💫 CRITICAL: Aspect ratio passed here
-          outputDir: path.join(tempDir, 'image-gen-results')
+        
+        const outputDir = path.join(tempDir, 'image-gen-results');
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+        
+        // Build prompts array for generateMultiple
+        const prompts = [];
+        for (let i = 0; i < imageCount; i++) {
+          prompts.push(negativePrompt 
+            ? `${prompt}\n\nNegative: ${negativePrompt}`
+            : prompt
+          );
+        }
+        
+        const flowService = new GoogleFlowAutomationService({
+          type: 'image',
+          aspectRatio,
+          imageCount: 1,
+          model: 'Nano Banana Pro',
+          headless: false,
+          outputDir
         });
+        
+        const generationResults = await flowService.generateMultiple(
+          charImagePath,
+          prodImagePath,
+          prompts
+        );
+        
+        // Extract downloaded files from results
+        const downloadedFiles = generationResults
+          .filter(r => r.success && r.downloadedFile)
+          .map(r => r.downloadedFile);
 
         // Cleanup temp files
         // 💫 IMPORTANT: CHANGED - Don't cleanup here! Files needed for video generation
         // cleanupTempFiles(tempFiles);  // ✅ REMOVED - cleanup moved to end of response
 
         // 💫 CHECK: Verify generation was successful
-        if (!genResult.success || !genResult.results?.files || genResult.results.files.length === 0) {
-          const errorMsg = genResult.error || 'Policy violation detected - images could not be generated after 3 attempts. Please change images and try again.';
+        if (downloadedFiles.length === 0) {
+          const errorMsg = 'Policy violation detected - images could not be generated after 3 attempts. Please change images and try again.';
           console.error(`❌ Generation failed with empty results:`, errorMsg);
           cleanupTempFiles(tempFiles);
           
@@ -1118,7 +1142,7 @@ export async function generateWithBrowser(req, res) {
         // Files are saved to temp/google-flow-downloads/, and serveGeneratedImage endpoint serves them
         global.generatedImagePaths = global.generatedImagePaths || {};
         
-        const generatedImages = (genResult.results?.files || []).map((filePath, idx) => {
+        const generatedImages = downloadedFiles.map((filePath, idx) => {
           const filename = path.basename(filePath);
           
           // 💫 FULL URL: Include backend domain so frontend (port 3000) can fetch from backend (5000)
@@ -1152,11 +1176,11 @@ export async function generateWithBrowser(req, res) {
 
         console.log(`📤 Response: ${generatedImages.length} images ready`);
         console.log(`   URLs: ${generatedImages.map(img => img.url).join(', ')}`);
-        console.log(`   File paths: ${(genResult.results?.files || []).join(', ')}`);
+        console.log(`   File paths: ${downloadedFiles.join(', ')}`);
         
         // 💫 IMPORTANT: Store file paths globally so video generation can access them
         // This is a temporary solution - video generation will read from these paths
-        global.lastGeneratedImagePaths = genResult.results?.files || [];
+        global.lastGeneratedImagePaths = downloadedFiles;
         global.lastInputImagePaths = {
           character: charImagePath,
           product: prodImagePath
@@ -1183,7 +1207,7 @@ export async function generateWithBrowser(req, res) {
             },
             // 💫 NEW: Also return file paths for backend-to-backend communication
             filePaths: {
-              generatedImages: genResult.results?.files || [],
+              generatedImages: downloadedFiles,
               characterImage: charImagePath,
               productImage: prodImagePath
             }
@@ -1322,11 +1346,6 @@ export async function generateWithBrowser(req, res) {
       case 'grok':
       case 'grok.com':
         browserService = new GrokServiceV2({ headless: false });
-        break;
-      case 'lab-flow':
-      case 'google-lab-flow':
-      case 'google-flow':
-        browserService = new GoogleFlowService({ headless: false });
         break;
       case 'zai':
       case 'image.z.ai':

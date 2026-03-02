@@ -954,7 +954,16 @@ class GrokServiceV2 extends BrowserService {
     console.log(`📊 AFFILIATE VIDEO IMAGE GENERATION (TikTok): 2 images (via Grok)`);
     console.log(`${'═'.repeat(80)}\n`);
     console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
-    console.log(`📦 Product image: ${path.basename(productImagePath)}\n`);
+    console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    // 💫 NEW: Handle optional scene reference image
+    if (options.sceneImagePath) {
+      console.log(`🎬 Scene image: ${path.basename(options.sceneImagePath)} (reference)`);
+    }
+    // 💫 NEW: Log scene locked prompt if available
+    if (options.sceneLockedPrompt) {
+      console.log(`📝 Scene locked prompt: "${options.sceneLockedPrompt.substring(0, 60)}..." (from scene: ${options.sceneName})`);
+    }
+    console.log();
 
     const results = [];
     const downloadedFiles = [];
@@ -1017,12 +1026,14 @@ class GrokServiceV2 extends BrowserService {
 
       // 🎯 PHASE 2: UPLOAD FILES BEFORE GENERATING IMAGES
       // This ensures both character and product images are available for context
+      // 💫 NEW: Also uploads optional scene reference image if available
       console.log(`\n${'═'.repeat(80)}`);
       console.log(`📤 PHASE 2: UPLOADING IMAGES FOR AFFILIATE GENERATION`);
       console.log(`${'═'.repeat(80)}\n`);
       
       try {
-        await this._uploadFiles(characterImagePath, productImagePath);
+        // 💫 NEW: Use _uploadFilesForVideo which supports optional scene image
+        await this._uploadFilesForVideo(characterImagePath, productImagePath, options.sceneImagePath);
       } catch (uploadError) {
         console.error(`⚠️  Image upload warning: ${uploadError.message}`);
         console.error(`   Continuing anyway - image generation may still work from prompts\n`);
@@ -1192,6 +1203,11 @@ class GrokServiceV2 extends BrowserService {
     console.log(`📝 Prompt: ${prompt.substring(0, 100)}...`);
     console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
     console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    
+    // 💫 NEW: Log scene reference image if present
+    if (options.sceneImagePath) {
+      console.log(`🎭 Scene ref image: ${path.basename(options.sceneImagePath)}`);
+    }
     console.log('');
 
     try {
@@ -1200,9 +1216,9 @@ class GrokServiceV2 extends BrowserService {
       await this._navigateToImagine();
       console.log('       ✅ At /imagine page\n');
 
-      // STEP 2: Upload both images
+      // STEP 2: Upload images (character, product, and optional scene)
       console.log('[2/5] 📤 Uploading images...');
-      await this._uploadFilesForVideo(characterImagePath, productImagePath);
+      await this._uploadFilesForVideo(characterImagePath, productImagePath, options.sceneImagePath);
       console.log('       ✅ Images uploaded\n');
 
       // STEP 3: Configure image settings (switch to Image tab)
@@ -1289,6 +1305,11 @@ class GrokServiceV2 extends BrowserService {
     console.log(`📝 Prompt: ${prompt.substring(0, 100)}...`);
     console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
     console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    
+    // 💫 NEW: Log scene reference image if present
+    if (options.sceneImagePath) {
+      console.log(`🎭 Scene ref image: ${path.basename(options.sceneImagePath)}`);
+    }
     console.log('');
 
     try {
@@ -1297,9 +1318,9 @@ class GrokServiceV2 extends BrowserService {
       await this._navigateToImagine();
       console.log('       ✅ At /imagine page\n');
 
-      // STEP 2: Upload both images
+      // STEP 2: Upload images (character, product, and optional scene)
       console.log('[2/6] 📤 Uploading images...');
-      await this._uploadFilesForVideo(characterImagePath, productImagePath);
+      await this._uploadFilesForVideo(characterImagePath, productImagePath, options.sceneImagePath);
       console.log('       ✅ Images uploaded\n');
 
       // STEP 3: Configure video settings
@@ -1405,7 +1426,7 @@ class GrokServiceV2 extends BrowserService {
    * Upload files for video generation
    * @private
    */
-  async _uploadFilesForVideo(characterImagePath, productImagePath) {
+  async _uploadFilesForVideo(characterImagePath, productImagePath, sceneImagePath = null) {
     // Find and use the file input in the form
     // Optimal selector: form > input (type=file)
     const fileInputSelector = 'form > input[type="file"]';
@@ -1444,6 +1465,27 @@ class GrokServiceV2 extends BrowserService {
       await this.page.waitForTimeout(1000);
     } catch (error) {
       console.warn(`   ⚠️  Product image upload: ${error.message}`);
+    }
+
+    // 💫 NEW: Upload scene reference image if available (optional)
+    if (sceneImagePath) {
+      console.log('   Uploading scene reference image...');
+      try {
+        const inputElement = await this.page.$(fileInputSelector);
+        if (!inputElement) {
+          const altInputElement = await this.page.$('input[type="file"]');
+          if (altInputElement) {
+            await this._uploadFileViaInput(altInputElement, sceneImagePath);
+          }
+        } else {
+          await this._uploadFileViaInput(inputElement, sceneImagePath);
+        }
+        await this.page.waitForTimeout(1000);
+        console.log('   ✅ Scene reference image uploaded');
+      } catch (error) {
+        console.warn(`   ⚠️  Scene reference image upload (optional): ${error.message}`);
+        // Don't throw - scene image is optional
+      }
     }
   }
 
