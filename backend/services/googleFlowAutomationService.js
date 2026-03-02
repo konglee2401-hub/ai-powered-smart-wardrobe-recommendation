@@ -3984,9 +3984,75 @@ class GoogleFlowAutomationService {
       console.log(`      ✓ Found image (${linkData.linkCount} total items)`);
       console.log(`      ⏳ Moving mouse to image and waiting 3s before right-click...`);
 
-      // Right-click on the image using mouse movement method
+      // Move mouse to image and wait for hover menu to appear
       await this.page.mouse.move(linkData.x, linkData.y);
-      await this.page.waitForTimeout(3000);  // Wait 3s for visual feedback before right-click
+      await this.page.waitForTimeout(500);  // Initial wait for hover detection
+      
+      // Verify hover menu with 3 buttons appears before right-clicking
+      console.log(`      🔍 Verifying hover menu appears with action buttons...`);
+      let hoverMenuFound = false;
+      for (let checkAttempt = 0; checkAttempt < 5; checkAttempt++) {
+        const hoverMenuData = await this.page.evaluate((targetHref) => {
+          // Find the link again
+          const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+          const targetLink = allLinks.find(link => link.getAttribute('href') === targetHref);
+          
+          if (!targetLink) return { found: false };
+          
+          // Get parent container
+          let parent = targetLink.parentElement;
+          if (!parent) return { found: false };
+          
+          // Look for sibling div that contains the action buttons
+          // The structure should be: <a>image</a> next to <div>buttons</div> in same container
+          const sibling = targetLink.nextElementSibling || parent.nextElementSibling;
+          
+          if (sibling && sibling.tagName === 'DIV') {
+            // Check if this div contains buttons (Yêu thích, Sử dụng lại câu lệnh, etc.)
+            const buttons = sibling.querySelectorAll('button');
+            if (buttons.length >= 2) {
+              console.log(`[HoverMenu] Found menu div with ${buttons.length} buttons`);
+              return { found: true, buttonCount: buttons.length };
+            }
+          }
+          
+          // Alternative: look for any visible menu div near the link
+          const parentContainer = targetLink.closest('[data-tile-id], li, div[class*="item"]');
+          if (parentContainer) {
+            const allDivsInParent = parentContainer.querySelectorAll('div');
+            for (const div of allDivsInParent) {
+              const buttons = div.querySelectorAll('button');
+              const isVisible = div.offsetParent !== null;
+              
+              if (buttons.length >= 2 && isVisible && !div.contains(targetLink)) {
+                console.log(`[HoverMenu] Found menu in parent with ${buttons.length} buttons`);
+                return { found: true, buttonCount: buttons.length };
+              }
+            }
+          }
+          
+          return { found: false };
+        }, itemHref);
+        
+        if (hoverMenuData.found) {
+          hoverMenuFound = true;
+          console.log(`      ✅ Hover menu detected (${hoverMenuData.buttonCount} buttons visible)`);
+          break;
+        }
+        
+        if (checkAttempt < 4) {
+          console.log(`      ⏳ Waiting for hover menu... (attempt ${checkAttempt + 1}/5)`);
+          await this.page.waitForTimeout(600);
+        }
+      }
+      
+      if (!hoverMenuFound) {
+        console.log(`      ⚠️  Hover menu did not appear - attempting right-click anyway`);
+      } else {
+        console.log(`      ✅ Hover menu confirmed visible, proceeding with right-click`);
+      }
+      
+      await this.page.waitForTimeout(500);  // Final wait before right-click
       await this.page.mouse.down({ button: 'right' });
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
@@ -4943,29 +5009,41 @@ class GoogleFlowAutomationService {
               console.log('[STEP F][TestPrompt] Testing server with short prompt...');
               
               // Get textbox and clear it
+              console.log('[STEP F][TestPrompt] 🔍 Focusing textbox with enhanced focus logic...');
               await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+              await this.page.waitForTimeout(500);  // Longer wait for focus to stick
+              
+              // Click textbox to ensure focus is active
+              await this.page.click('.iTYalL[role="textbox"][data-slate-editor="true"]');
               await this.page.waitForTimeout(300);
+              
+              console.log('[STEP F][TestPrompt] ⏳ Clearing textbox with Ctrl+A + Backspace...');
               await this.page.keyboard.down('Control');
               await this.page.keyboard.press('a');
               await this.page.keyboard.up('Control');
               await this.page.waitForTimeout(200);
               await this.page.keyboard.press('Backspace');
-              await this.page.waitForTimeout(300);
+              await this.page.waitForTimeout(500);  // Longer wait after clearing
               
               // Type short test prompt
               const testPrompt = 'Test generation';
+              console.log('[STEP F][TestPrompt] 📝 Copying test prompt to clipboard...');
               await this.page.evaluate((text) => {
                 navigator.clipboard.writeText(text).catch(() => {});
               }, testPrompt);
-              await this.page.waitForTimeout(200);
+              await this.page.waitForTimeout(300);
               
+              console.log('[STEP F][TestPrompt] ⏳ Pasting test prompt with Ctrl+V...');
               await this.page.keyboard.down('Control');
               await this.page.keyboard.press('v');
               await this.page.keyboard.up('Control');
-              await this.page.waitForTimeout(800);
+              await this.page.waitForTimeout(1000);  // Wait for paste to complete
+              
+              console.log('[STEP F][TestPrompt] ⏳ Waiting 2s for editor to stabilize...');
+              await this.page.waitForTimeout(2000);  // Let editor process the pasted text
               
               console.log('[STEP F][TestPrompt] 🧪 Submitting test prompt...');
-              await this.page.waitForTimeout(2000);
+              await this.page.waitForTimeout(1000);
               const testSubmitted = await clickSubmitButton();
               
               if (testSubmitted) {
@@ -5046,14 +5124,27 @@ class GoogleFlowAutomationService {
               console.log('[STEP F][PageReload] ⏳ Reloading page to reset all state...');
               await this.page.reload({ waitUntil: 'networkidle2' });
               await this.page.waitForTimeout(3000);
+              console.log('[STEP F][PageReload] ✅ Page reloaded successfully');
               
-              console.log('[STEP F][PageReload] 🔄 Reloading: Re-uploading images and retrying entire flow...');
+              console.log('[STEP F][PageReload] 🔄 Re-uploading images after reload...');
               
-              // Re-upload images
+              // Re-upload images with empty existingImages to reset monitoring
               const reuploadResult = await this.uploadImages(characterImagePath, productImagePath, []);
-              if (!reuploadResult.success || !reuploadResult.imageUrls) {
+              console.log('[STEP F][PageReload] 📊 Upload result:', {
+                success: reuploadResult?.success,
+                imageUrls: !!reuploadResult?.imageUrls,
+                imageCount: reuploadResult?.imageUrls ? Object.keys(reuploadResult.imageUrls).length : 0
+              });
+              
+              if (!reuploadResult?.success || !reuploadResult?.imageUrls) {
                 console.log('[STEP F][PageReload] ⚠️  Failed to re-upload images after reload');
+                console.log('[STEP F][PageReload] Result:', reuploadResult);
                 throw new Error('Page reload recovery: Failed to re-upload images');
+              }
+              
+              // Update uploaded refs from new upload
+              if (this.uploadedImageRefs?.wearing?.href && this.uploadedImageRefs?.product?.href) {
+                console.log('[STEP F][PageReload] ✅ Updated image refs after reload');
               }
               
               // Retry the entire flow one more time with the reloaded page
@@ -5064,28 +5155,33 @@ class GoogleFlowAutomationService {
               });
               
               if (reloadRetryResult.found) {
-                // Clear and enter prompt again
+                // Clear and enter prompt again with proper focus
+                console.log('[STEP F][PageReload] 🔍 Focusing textbox with enhanced focus logic...');
                 await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-                await this.page.waitForTimeout(300);
+                await this.page.click('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                await this.page.waitForTimeout(500);
+                
+                console.log('[STEP F][PageReload] ⏳ Clearing textbox...');
                 await this.page.keyboard.down('Control');
                 await this.page.keyboard.press('a');
                 await this.page.keyboard.up('Control');
                 await this.page.waitForTimeout(200);
                 await this.page.keyboard.press('Backspace');
-                await this.page.waitForTimeout(300);
+                await this.page.waitForTimeout(500);
                 
                 // Paste original prompt
+                console.log('[STEP F][PageReload] 📝 Pasting original prompt...');
                 await this.page.evaluate((text) => {
                   navigator.clipboard.writeText(text).catch(() => {});
                 }, normalizedPrompt);
-                await this.page.waitForTimeout(200);
+                await this.page.waitForTimeout(300);
                 
                 await this.page.keyboard.down('Control');
                 await this.page.keyboard.press('v');
                 await this.page.keyboard.up('Control');
                 await this.page.waitForTimeout(1000);
                 
-                console.log('[STEP F][PageReload] ⏳ Waiting 3s before final submit...');
+                console.log('[STEP F][PageReload] ⏳ Waiting 3s for Slate editor to stabilize...');
                 await this.page.waitForTimeout(3000);
                 
                 const finalReloadSubmit = await clickSubmitButton();
@@ -5097,8 +5193,14 @@ class GoogleFlowAutomationService {
                   
                   if (finalSuccess) {
                     console.log('[STEP F][PageReload] ✅ Page reload strategy succeeded');
+                  } else {
+                    console.log('[STEP F][PageReload] ⚠️  Generation still failed after reload');
                   }
+                } else {
+                  console.log('[STEP F][PageReload] ⚠️  Submit button click failed after reload');
                 }
+              } else {
+                console.log('[STEP F][PageReload] ⚠️  Textbox not found after reload');
               }
             }
 
