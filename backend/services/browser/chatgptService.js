@@ -35,13 +35,19 @@ class ChatGPTService extends BrowserService {
   /**
    * Generate text-only response from ChatGPT browser (no image upload)
    * Returns raw assistant text for downstream JSON extraction.
+   * 
+   * Note: Anonymous ChatGPT doesn't need login modal detection
    */
   async generateText(prompt) {
     console.log('\n🧠 ChatGPT BROWSER TEXT GENERATION');
     console.log('='.repeat(80));
 
     try {
-      await this.closeLoginModal();
+      // Skip login modal check for anonymous mode - it causes text extraction to fail
+      // if closeLoginModal() is called, the page structure changes and text cannot be extracted
+      // Just wait for page to stabilize and look for input box
+      console.log('⏳ Waiting for ChatGPT interface to stabilize...');
+      await this.page.waitForTimeout(2000);
 
       const inputSelectors = [
         'textarea[placeholder*="Message"]',

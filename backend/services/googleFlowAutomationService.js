@@ -4082,90 +4082,6 @@ class GoogleFlowAutomationService {
     }
   }
 
-  async clearPromptText() {
-    /**
-     * Clear all content from the prompt input field (Slate editor)
-     * INCLUDES: text + attached images
-     * Used after right-clicking "Sử dụng lại câu lệnh" to clear previous prompt and images
-     * 
-     * ⚠️ CRITICAL ISSUE FIXED:
-     * - When reuse command is clicked, previous command is reloaded WITH attached images
-     * - clearPromptText() must remove BOTH text AND images
-     * - Previously only cleared text, leaving images attached
-     * - This caused duplicate generation with unwanted images
-     */
-    console.log('   🧹 Clearing prompt text AND images...');
-
-    try {
-      // Clear ALL content using JavaScript (text + images)
-      const cleared = await this.page.evaluate(() => {
-        const slateEditor = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        if (!slateEditor) {
-          return false;
-        }
-
-        // Step 1: Remove all embedded images
-        const images = slateEditor.querySelectorAll('img');
-        console.log(`   [JS] Found ${images.length} embedded images`);
-        
-        // Remove each image
-        images.forEach(img => {
-          const parent = img.parentElement;
-          if (parent) {
-            parent.remove();
-          } else {
-            img.remove();
-          }
-        });
-
-        // Step 2: Clear all text content
-        // Slate stores content in contentEditable div
-        slateEditor.textContent = '';
-        slateEditor.innerHTML = '';
-        
-        // Step 3: Trigger change events to notify React/Slate of changes
-        const inputEvent = new Event('input', { bubbles: true });
-        const changeEvent = new Event('change', { bubbles: true });
-        slateEditor.dispatchEvent(inputEvent);
-        slateEditor.dispatchEvent(changeEvent);
-        
-        // Step 4: Verify clearing - check both text and remaining content
-        const remainingText = slateEditor.textContent.trim().length;
-        const remainingImages = slateEditor.querySelectorAll('img').length;
-        console.log(`   [JS] Cleared - remaining: text=${remainingText} chars, images=${remainingImages}`);
-        
-        return remainingText === 0 && remainingImages === 0;
-      });
-
-      if (cleared) {
-        console.log('   ✓ Prompt text AND images cleared completely');
-        return true;
-      } else {
-        // Fallback: Try keyboard approach
-        console.log('   ⚠️  JavaScript clear had issues, trying keyboard approach...');
-        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        await this.page.waitForTimeout(200);
-        
-        // Select all and delete
-        await this.page.keyboard.type('');  // Clear any pending keys
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('a');
-        await this.page.keyboard.up('Control');
-        await this.page.waitForTimeout(100);
-        
-        await this.page.keyboard.press('Delete');
-        await this.page.waitForTimeout(300);
-        
-        console.log('   ✓ Prompt cleared via keyboard fallback');
-        return true;
-      }
-
-    } catch (error) {
-      console.error(`   ❌ Error clearing: ${error.message}`);
-      console.log('   ⚠️  Continuing anyway...');
-      return true;  // Continue anyway, might still work
-    }
-  }
 
   /**
    * Generate multiple images/videos sequentially with different prompts
@@ -4410,6 +4326,75 @@ class GoogleFlowAutomationService {
           await this.page.waitForTimeout(1000);
           
           console.log('[STEP C] ✓ Prompt entered\n');
+
+          // STEP C+: Validate prompt and images before submitting
+          console.log('[VALIDATE] 🔍 Validating prompt and images before submit...');
+          const validationResult = await this.page.evaluate(() => {
+            const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+            if (!textbox) return { promptText: '', imageCount: 0, valid: false };
+            
+            // Get prompt text
+            const promptText = textbox.innerText || textbox.textContent || '';
+            
+            // Go up 2 parents to find image preview container
+            const previewContainer = textbox.parentElement?.parentElement;
+            if (!previewContainer) return { promptText: promptText.substring(0, 100), imageCount: 0, valid: false };
+            
+            // Find first div child - should contain image previews
+            const firstDivChild = previewContainer.children[0];
+            if (!firstDivChild) return { promptText: promptText.substring(0, 100), imageCount: 0, valid: false };
+            
+            // Count image preview buttons (data-card-open="false" indicates preview card)
+            const imagePreviews = firstDivChild.querySelectorAll('button[data-card-open="false"]');
+            const imageCount = imagePreviews.length;
+            
+            // Valid if: has prompt text AND has 2 images
+            const valid = promptText.trim().length > 0 && imageCount === 2;
+            
+            return {
+              promptText: promptText.substring(0, 100),
+              imageCount: imageCount,
+              valid: valid,
+              promptLength: promptText.length
+            };
+          });
+          
+          console.log(`[VALIDATE] Prompt text length: ${validationResult.promptLength} chars`);
+          console.log(`[VALIDATE] Image previews found: ${validationResult.imageCount}/2`);
+          
+          if (!validationResult.valid) {
+            if (validationResult.imageCount !== 2) {
+              console.log(`[VALIDATE] ⚠️  Expected 2 images, found ${validationResult.imageCount}`);
+            }
+            if (validationResult.promptLength === 0) {
+              console.log('[VALIDATE] ⚠️  Prompt text is empty');
+            }
+            console.log('[VALIDATE] ⏳ Waiting 2 seconds for images to load...');
+            await this.page.waitForTimeout(2000);
+            
+            // Retry validation
+            const validationRetry = await this.page.evaluate(() => {
+              const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+              if (!textbox) return { valid: false };
+              const previewContainer = textbox.parentElement?.parentElement;
+              if (!previewContainer) return { valid: false };
+              const firstDivChild = previewContainer.children[0];
+              if (!firstDivChild) return { valid: false };
+              const imagePreviews = firstDivChild.querySelectorAll('button[data-card-open="false"]');
+              return { valid: true, imageCount: imagePreviews.length };
+            });
+            
+            if (!validationRetry.valid) {
+              throw new Error('Could not validate prompt and images - UI structure not found');
+            }
+            
+            console.log(`[VALIDATE] Retry: ${validationRetry.imageCount}/2 images`);
+            if (validationRetry.imageCount !== 2) {
+              throw new Error(`Validation failed: Expected 2 images, found ${validationRetry.imageCount}`);
+            }
+          }
+          
+          console.log('[VALIDATE] ✅ Prompt and images validated\n');
 
           // STEP D: Capture hrefs again and submit
           console.log('[STEP D] 📸 Capturing hrefs AFTER prompt entry...');
