@@ -166,10 +166,11 @@ class DeepSessionCapture {
       }
 
       console.log('   5️⃣  Clearing test text...');
-      await this.page.evaluate(() => {
-        const textbox = document.querySelector('[role="textbox"][data-slate-editor="true"]');
-        if (textbox) textbox.textContent = '';
-      });
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('a');
+      await this.page.keyboard.up('Control');
+      await this.page.waitForTimeout(100);
+      await this.page.keyboard.press('Backspace');
       console.log('      ✓ Cleared\n');
 
     } catch (error) {
