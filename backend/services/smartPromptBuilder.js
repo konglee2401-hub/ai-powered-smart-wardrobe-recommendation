@@ -12,6 +12,26 @@
 import PromptOption from '../models/PromptOption.js';
 import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
 
+/**
+ * Helper: Compact prompt by removing unnecessary whitespace
+ * - Removes empty lines
+ * - Replaces multiple newlines with single space
+ * - Replaces multiple spaces with single space
+ * - Trims leading/trailing whitespace
+ */
+function compactPrompt(parts) {
+  if (!Array.isArray(parts)) return parts;
+  
+  // Filter out empty strings and join with single space
+  const compacted = parts
+    .filter(part => part && part.trim().length > 0)  // Remove empty parts
+    .join(' ')                                          // Join with single space
+    .replace(/\s+/g, ' ')                              // Replace multiple spaces with single
+    .trim();                                           // Trim
+  
+  return compacted;
+}
+
 // ============================================================
 // LOAD OPTION DETAILS: TECHNICAL DETAILS & PROMPT SUGGESTIONS
 // ============================================================
@@ -159,34 +179,45 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   if (normalizedLanguage === 'vi') {
     try {
       console.log(`\n🇻🇳 Using Vietnamese prompts for image generation...`);
+      console.log(`   Use case: ${useCase}`);
       
       // Build Vietnamese prompt based on use case
       let vietnamesePrompt = '';
-      if (useCase === 'change-clothes' || useCase === 'character-holding-product') {
-        // Use Vietnamese image generation prompt (for wearing product/virtual try-on)
-        // Extract relevant garment data from analysis parameter
-        const product = analysis?.product || {};
-        const garmentData = {
-          garment_type: product.garment_type || product.type || 'trang phuc',
-          primary_color: product.primary_color || product.color || 'mau chinh',
-          secondary_color_line: product.secondary_color ? `với ${product.secondary_color}` : '',
-          fabric_type: product.fabric_type || product.material || 'chat vai',
-          fabric_texture: 'cam giac vai',
-          fit_type: product.fit_type || product.fit || 'kieu dang',
-          neckline_line: product.neckline ? `Cổ: ${product.neckline}` : '',
-          sleeves_line: product.sleeves ? `Tay: ${product.sleeves}` : '',
-          key_details_line: product.key_details ? `Chi tiết: ${product.key_details}` : '',
-          length_coverage: product.length ? product.length : 'chieu dai',
-          scene_directive: selectedOptions.scene || 'canh nhat tren nha',
-          lighting_info: selectedOptions.lighting || 'sang tu nhien',
-          mood: selectedOptions.mood || 'tinh cam',
-          style: selectedOptions.style || 'phong cach',
-          camera_angle: selectedOptions.cameraAngle || 'goc nhin',
-          color_palette: selectedOptions.colorPalette || 'bang mau'
-        };
-        
+      
+      // Extract relevant garment data from analysis parameter
+      const product = analysis?.product || {};
+      const garmentData = {
+        garment_type: product.garment_type || product.type || 'trang phuc',
+        primary_color: product.primary_color || product.color || 'mau chinh',
+        secondary_color: product.secondary_color ? `với ${product.secondary_color}` : '',
+        secondary_color: product.secondary_color || '',
+        fabric_type: product.fabric_type || product.material || 'chat vai',
+        fabric_texture: 'cam giac vai',
+        fit_type: product.fit_type || product.fit || 'kieu dang',
+        pattern: product.pattern || 'mau tron',
+        neckline_line: product.neckline ? `Cổ: ${product.neckline}` : '',
+        sleeves_line: product.sleeves ? `Tay: ${product.sleeves}` : '',
+        key_details: product.key_details || 'chi tiet noi bat',
+        key_details_line: product.key_details ? `Chi tiết: ${product.key_details}` : '',
+        length_coverage: product.length ? product.length : 'chieu dai',
+        scene: selectedOptions.scene || 'nen trang',
+        scene_directive: selectedOptions.scene || 'canh nhat tren nha',
+        lighting: selectedOptions.lighting || 'sang tu nhien',
+        lighting_info: selectedOptions.lighting || 'sang tu nhien',
+        mood: selectedOptions.mood || 'chuyen nghiep',
+        style: selectedOptions.style || 'hien dai',
+        camera_angle: selectedOptions.cameraAngle || 'tam ngang',
+        color_palette: selectedOptions.colorPalette || 'am ap'
+      };
+      
+      if (useCase === 'change-clothes') {
+        // Use Vietnamese image generation prompt for wearing product (virtual try-on)
         vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData);
-        console.log(`✅ Using Vietnamese image generation (wearing product) prompt`);
+        console.log(`✅ Using Vietnamese WEARING product prompt`);
+      } else if (useCase === 'character-holding-product') {
+        // Use Vietnamese image generation prompt for holding product
+        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData);
+        console.log(`✅ Using Vietnamese HOLDING product prompt`);
       } else {
         // Fallback to character analysis for other use cases
         vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
@@ -262,7 +293,7 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
 /**
  * CHANGE CLOTHES: Keep character's face and body, ONLY change the clothing
  * Most important: Emphasize keeping face, body, pose identical
- * REFACTORED: Removed duplicates, consolidated sections to ~200 lines (from 270+)
+ * OPTIMIZED: Uses new bilingual template format - English for model, Vietnamese for debug
  */
 async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
@@ -270,18 +301,38 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   const product = analysis.product || {};
 
   // ==========================================
-  // IMAGE REFERENCE LABELING (CRITICAL)
+  // IMAGE MAPPING
   // ==========================================
-  parts.push('[IMAGE REFERENCE MAPPING]');
-  parts.push('Image 1 (First Upload) = CHARACTER REFERENCE - Person to be dressed');
-  parts.push('Image 2 (Second Upload) = PRODUCT/OUTFIT REFERENCE - Clothing to apply');
-  parts.push('CRITICAL: Do NOT swap these images. Keep character unchanged, change clothing only.\n');
+  parts.push('[IMAGE MAPPING]');
+  parts.push('Image 1 (first uploaded): CHARACTER REFERENCE — the person to use.');
+  parts.push('Image 2 (second uploaded): GARMENT REFERENCE — the garment to use.');
+  parts.push('IMPORTANT: Do not confuse the images. Always keep the character from Image 1.\n');
 
-  // SECTION 1: CHARACTER - Keep EXACTLY as shown in Image 1
-  parts.push('=== KEEP CHARACTER UNCHANGED ===');
-  
-  // Consolidate character details (removed redundant "SAME" repetitions)
-  if (character.age) parts.push(`Age: ${character.age} years old`);
+  // ==========================================
+  // IDENTITY LOCK — ABSOLUTE
+  // ==========================================
+  parts.push('[IDENTITY LOCK — ABSOLUTE]');
+  parts.push('Use the EXACT SAME character from Image 1.');
+  parts.push('Preserve without any change:');
+  parts.push('- Face (identical facial structure, features, expression)');
+  parts.push('- Body (identical shape, proportions, anatomy)');
+  parts.push('- Pose (identical position of head, arms, and legs)');
+  parts.push('- Gaze and emotion');
+  parts.push('- Hair (style, color, length, placement)');
+  parts.push('Strict identity lock. Zero tolerance for any variation.\n');
+
+  // ==========================================
+  // MODE SWITCH — WEARING
+  // ==========================================
+  parts.push('[MODE SWITCH — wearing]');
+  parts.push('The character is WEARING the garment from Image 2.');
+  parts.push('The garment is naturally fitted on the body.');
+  parts.push('If Image 2 contains a model, IGNORE the model completely and extract ONLY the garment.\n');
+
+  // ==========================================
+  // CHARACTER DETAILS (for reference)
+  // ==========================================
+  if (character.age) parts.push(`Character age: ${character.age} years old`);
   if (character.gender) parts.push(`Gender: ${character.gender}`);
   if (character.skinTone) parts.push(`Skin tone: ${character.skinTone}`);
   
@@ -293,159 +344,108 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   if (character.facialFeatures) {
     parts.push(`Facial features: ${character.facialFeatures}`);
   }
-  
-  // Consolidated preservation list (removed 7 duplicate "SAME" statements)
-  parts.push(`Face: IDENTICAL - same expression and gaze`);
   parts.push(`Body: IDENTICAL - same body type and proportions`);
   parts.push(`Pose: IDENTICAL - same position, orientation, and arm placement`);
   parts.push(`Head: IDENTICAL - same tilt and neck angle`);
   parts.push(`Do NOT change: face shape, eye color, nose, mouth, body structure\n`);
 
-  // SECTION 2: CHANGE CLOTHING - All product details in ONE consolidated section
-  parts.push(`=== CHANGE CLOTHING TO (FROM IMAGE 2) ===`);
+  // ==========================================
+  // GARMENT DETAILS
+  // ==========================================
+  parts.push('[GARMENT DETAILS]');
   
-  // Consolidated product details (removed scattered mentions)
-  if (product.garment_type || product.type) {
-    parts.push(`${product.garment_type || product.type}`);
-  }
-  if (product.style_category) parts.push(`Style: ${product.style_category}`);
+  const garmentType = product.garment_type || product.type || 'garment';
+  parts.push(`Garment type: ${garmentType}`);
   
-  // Colors - one clear statement (was mentioned 3+ times before)
-  if (product.primary_color) {
-    const colorLine = product.secondary_color 
-      ? `${product.primary_color} with ${product.secondary_color}` 
-      : product.primary_color;
-    parts.push(`Color: ${colorLine}`);
-  }
+  // Colors
+  const garmentColor = product.primary_color 
+    ? (product.secondary_color ? `${product.primary_color} with ${product.secondary_color}` : product.primary_color)
+    : 'fashionable';
+  parts.push(`Color(s): ${garmentColor}`);
   
-  // Material & texture - one clear statement (was duplicated)
-  if (product.fabric_type) {
-    parts.push(`Material: ${product.fabric_type} with realistic texture`);
-  } else if (product.material) {
-    parts.push(`Material: ${product.material}`);
-  }
+  // Material
+  const garmentMaterial = product.fabric_type || product.material || 'premium quality';
+  parts.push(`Material(s): ${garmentMaterial}`);
   
-  // Consolidated design details - no duplicate suffixes
+  // Fit and style
+  const garmentFitStyle = [product.fit_type || product.fit, product.style_category].filter(Boolean).join(', ') || 'stylish fit';
+  parts.push(`Fit and style: ${garmentFitStyle}`);
+  
+  // Length and coverage
+  const garmentLength = product.length || product.coverage || 'standard';
+  parts.push(`Length and coverage: ${garmentLength}`);
+  
+  // Additional details
   const designDetails = [];
   if (product.neckline) designDetails.push(product.neckline);
   if (product.sleeves) designDetails.push(product.sleeves);
-  if (product.fit_type || product.fit) designDetails.push(product.fit_type || product.fit);
   if (product.pattern && product.pattern !== 'Solid color' && product.pattern !== 'solid') {
     designDetails.push(product.pattern);
   }
-  
   if (designDetails.length > 0) {
-    parts.push(`Details: ${designDetails.join(', ')}`);
+    parts.push(`Design details: ${designDetails.join(', ')}`);
   }
   
-  // Special Features - separate line
   if (product.key_details) {
-    parts.push(`Special Features: ${product.key_details}`);
+    parts.push(`Special features: ${product.key_details}`);
   }
   
-  // Length & Coverage - separate line without duplicate suffixes
-  if (product.length || product.coverage) {
-    const lengthInfo = product.length || '';
-    const coverageInfo = product.coverage || '';
-    parts.push(`Fit & Coverage: ${[lengthInfo, coverageInfo].filter(Boolean).join(', ')}`);
-  }
-  parts.push('');
+  parts.push('\nMatch the garment EXACTLY in design, fabric, color, cut, and details.\n');
 
-  // SECTION 3: HAIR, MAKEUP & ACCESSORIES
-  parts.push(`=== STYLING & ACCESSORIES ===`);
-  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
-    const hairstyleSuggestion = await loadPromptSuggestion(selectedOptions.hairstyle, 'hairstyle');
-    parts.push(`Hairstyle: ${hairstyleSuggestion}`);
-  } else {
-    parts.push(`Hairstyle: Keep SAME as reference image`);
-  }
-  
-  if (selectedOptions.makeup) {
-    const makeupSuggestion = await loadPromptSuggestion(selectedOptions.makeup, 'makeup');
-    parts.push(`Makeup: ${makeupSuggestion}`);
-  } else if (character.makeup) {
-    parts.push(`Makeup: ${character.makeup}`);
-  } else {
-    parts.push(`Makeup: Professional, natural look`);
-  }
-  
-  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
-    const accessories = Array.isArray(selectedOptions.accessories) 
-      ? selectedOptions.accessories 
-      : selectedOptions.accessories.split(',');
-    parts.push(`Accessories: ${accessories.join(', ')}`);
-  }
-  
-  if (selectedOptions.shoes) {
-    const shoesSuggestion = await loadPromptSuggestion(selectedOptions.shoes, 'shoes');
-    parts.push(`Shoes: ${shoesSuggestion}`);
-  }
-  parts.push('');
+  // ==========================================
+  // FABRIC & FIT BEHAVIOR
+  // ==========================================
+  parts.push('[FABRIC & FIT BEHAVIOR]');
+  parts.push('Match fabric behavior to material type.');
+  parts.push('Create realistic folds, gravity, and tension.');
+  parts.push('Do NOT resize or alter the body to fit the garment.');
+  parts.push('Align neckline, armholes, waist, and ankles correctly.\n');
 
-  // SECTION 4: BOTTOM WEAR (if specified)
-  if (selectedOptions.bottom) {
-    parts.push(`=== BOTTOM WEAR ===`);
-    const bottomSuggestion = await loadPromptSuggestion(selectedOptions.bottom, 'bottoms');
-    parts.push(`${bottomSuggestion}\n`);
-  }
+  // ==========================================
+  // HAIR & MAKEUP
+  // ==========================================
+  parts.push('[HAIR & MAKEUP]');
+  parts.push('Keep the same hairstyle and makeup as Image 1.');
+  parts.push('Natural, professional, unchanged.\n');
 
-  // SECTION 5: GARMENT APPLICATION (Technical placement)
-  parts.push(`=== HOW TO APPLY THE GARMENT ===`);
-  parts.push(`1. Place garment from Image 2 on character properly`);
-  parts.push(`2. Ensure natural fabric draping and folds`);
-  parts.push(`3. Match fabric behavior to material type`);
-  parts.push(`4. Maintain proper fit on character's body`);
-  parts.push(`5. Do NOT distort body to fit garment`);
-  parts.push(`6. Keep body proportions visible in shoulders/waist/hips`);
-  parts.push(`7. Ensure proper gaps (neck, wrists, ankles)\n`);
-
-  // SECTION 6: ENVIRONMENT & LIGHTING (consolidated from 2 sections)
-  parts.push(`=== SCENE & LIGHTING ===`);
-  if (selectedOptions.scene) {
-    const lockedSceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
-    parts.push(`Setting: ${lockedSceneDirective}`);
-  }
-  
-  if (selectedOptions.lighting) {
-    const lightingSuggestion = await loadPromptSuggestion(selectedOptions.lighting, 'lighting');
-    parts.push(`Lighting: ${lightingSuggestion}`);
-  }
+  // ==========================================
+  // SCENE & QUALITY
+  // ==========================================
+  parts.push('[SCENE & QUALITY]');
+  parts.push('Lighting: studio, soft diffused.');
   
   if (selectedOptions.mood) {
     const moodSuggestion = await loadPromptSuggestion(selectedOptions.mood, 'mood');
     parts.push(`Mood: ${moodSuggestion}`);
+  } else {
+    parts.push('Mood: professional, confident');
   }
-  parts.push('');
-
-  // SECTION 7: PHOTOGRAPHY STYLE (simplified, removed technical jargon)
-  parts.push(`=== PHOTOGRAPHY STYLE ===`);
+  
   if (selectedOptions.style) {
     const styleSuggestion = await loadPromptSuggestion(selectedOptions.style, 'style');
     parts.push(`Style: ${styleSuggestion}`);
-  }
-  if (selectedOptions.cameraAngle) {
-    const angleSuggestion = await loadPromptSuggestion(selectedOptions.cameraAngle, 'cameraAngle');
-    parts.push(`Camera angle: ${angleSuggestion}`);
-  }
-  if (selectedOptions.colorPalette) {
-    const paletteSuggestion = await loadPromptSuggestion(selectedOptions.colorPalette, 'colorPalette');
-    parts.push(`Color palette: ${paletteSuggestion}`);
+  } else {
+    parts.push('Style: modern, professional');
   }
   
-  // Simplified quality statement (removed excessive technical terms)
-  parts.push(`Quality: Professional photography, sharp focus, ultra-detailed, photorealistic`);
-  parts.push(`Detail Level: Realistic fabric texture, proper draping, anatomically correct`);
-  parts.push('');
+  parts.push('Camera: eye-level.');
+  parts.push('Color palette: neutral.\n');
 
-  // SECTION 8: EXECUTION CHECKLIST (concise)
-  parts.push(`=== EXECUTION CHECKLIST ===`);
-  parts.push(`✓ Photo of person from Image 1 with character details preserved`);
-  parts.push(`✓ Wearing garment from Image 2 with correct colors and materials`);
-  parts.push(`✓ Same face, body, pose, expression - UNCHANGED`);
-  parts.push(`✓ Realistic fabric behavior and fit on body`);
-  parts.push(`✓ Professional photo quality and lighting`);
+  parts.push('High realism, professional fashion photography.');
+  parts.push('Sharp focus, natural skin texture.');
+  parts.push('Realistic fabric texture and accurate anatomy.\n');
 
-  return parts.join('\n');
+  // ==========================================
+  // HARD CONSTRAINTS
+  // ==========================================
+  parts.push('[HARD CONSTRAINTS]');
+  parts.push('Do not change the character.');
+  parts.push('Do not alter face, body, pose, gaze, or hair.');
+  parts.push('Do not swap identity or merge identities.');
+  parts.push('Do not merge garment with body.');
+  parts.push('No distorted anatomy, no extra fingers, no blur, no low quality.');
+
+  return compactPrompt(parts);
 }
 
 /**
@@ -493,249 +493,378 @@ function getSceneTechnicalDetails(scene) {
 
 /**
  * CHARACTER HOLDING PRODUCT: Character prominently holding or presenting the product
+ * OPTIMIZED: Uses new bilingual template format - English for model, Vietnamese for debug
  * 
  * Key Focus:
  * - Character is the PRIMARY SUBJECT (60%+ of image)
  * - Product is VISIBLE in hands/displayed (40% of focus)
  * - Natural pose of holding/presenting product
  * - Character's expression shows the product or engagement with it
- * 
- * Best For:
- * - Affiliate marketing (presenter + product)
- * - Fashion styling (model showing outfit piece)
- * - Product demonstration (how to use/wear)
- * - Social media content (trending product showcase)
- * - Unboxing-style content
  */
 async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
 
-  parts.push('[CHARACTER HOLDING PRODUCT COMPOSITION]');
-  parts.push('Purpose: Character prominently holding or presenting product for affiliate/marketing content');
-  parts.push('Focus: Character (60%) + Product in hand (40%)\n');
+  // ==========================================
+  // IMAGE MAPPING
+  // ==========================================
+  parts.push('[IMAGE MAPPING]');
+  parts.push('Image 1 (first uploaded): CHARACTER REFERENCE — the person to use.');
+  parts.push('Image 2 (second uploaded): GARMENT REFERENCE — the garment to use.');
+  parts.push('IMPORTANT: Do not confuse the images. Always keep the character from Image 1.\n');
 
   // ==========================================
-  // IMAGE REFERENCE SETUP
+  // IDENTITY LOCK — ABSOLUTE
   // ==========================================
-  parts.push('[IMAGE REFERENCE MAPPING]');
-  parts.push('Image 1 (First Upload) = CHARACTER REFERENCE - Person to feature');
-  parts.push('Image 2 (Second Upload) = PRODUCT REFERENCE - Item to hold/present');
-  parts.push('CRITICAL: Character holds/presents product from Image 2 in hand or elevated position.\n');
+  parts.push('[IDENTITY LOCK — ABSOLUTE]');
+  parts.push('Use the EXACT SAME character from Image 1.');
+  parts.push('Preserve without any change:');
+  parts.push('- Face (identical facial structure, features, expression)');
+  parts.push('- Body (identical shape, proportions, anatomy)');
+  parts.push('- Pose (identical position of head, arms, and legs)');
+  parts.push('- Gaze and emotion');
+  parts.push('- Hair (style, color, length, placement)');
+  parts.push('Strict identity lock. Zero tolerance for any variation.\n');
 
   // ==========================================
-  // CHARACTER SECTION (PRIMARY FOCUS)
+  // MODE SWITCH — HOLDING
   // ==========================================
-  parts.push('=== CHARACTER (PRIMARY SUBJECT - 60% of focus) ===');
-  parts.push('The character is the MAIN SUBJECT - prominently featured\n');
+  parts.push('[MODE SWITCH — holding]');
+  parts.push('The character is NOT wearing the garment.');
+  parts.push('The character is HOLDING the garment from Image 2 in her hands,');
+  parts.push('presenting it clearly to the camera like a product showcase.');
+  parts.push('If Image 2 contains a model, IGNORE the model completely and extract ONLY the garment.\n');
 
-  // Physical appearance - KEEP SAME
-  parts.push('Character Description (KEEP FROM IMAGE 1):');
-  if (character.age) parts.push(`- Age: ${character.age} years old`);
-  if (character.gender) parts.push(`- Gender: ${character.gender}`);
-  if (character.skinTone) parts.push(`- Skin tone: ${character.skinTone}`);
+  // ==========================================
+  // CHARACTER DETAILS (for reference)
+  // ==========================================
+  if (character.age) parts.push(`Character age: ${character.age} years old`);
+  if (character.gender) parts.push(`Gender: ${character.gender}`);
+  if (character.skinTone) parts.push(`Skin tone: ${character.skinTone}`);
   
   if (character.hair?.color && character.hair?.style) {
-    parts.push(`- Hair: ${character.hair.color} hair, ${character.hair.style} style`);
+    parts.push(`Hair: ${character.hair.color} hair, ${character.hair.style} style`);
   }
   
   if (character.facialFeatures) {
-    parts.push(`- Facial features: ${character.facialFeatures}`);
+    parts.push(`Facial features: ${character.facialFeatures}`);
   }
-  parts.push(`- SAME face, body, and overall appearance as Image 1\n`);
-
-  // Pose for holding product
-  parts.push('POSE & POSITIONING:');
-  parts.push('- Standing or seated, natural comfortable position');
-  parts.push(`- Hands/arms prominently HOLDING or PRESENTING the product`);
-  parts.push('- Product visible and well-placed in character\'s hands or near body');
-  parts.push('- Character looking at product OR toward camera with confident/engaging expression');
-  parts.push('- Posture: Open, approachable, product-focused pose');
-  parts.push('- Full body or close-up focusing on the hands holding product\n');
-
-  // Expression & Engagement
-  parts.push('EXPRESSION & ENGAGEMENT:');
-  parts.push('- Expression: Engaged, interested, possibly smiling or intrigued');
-  parts.push('- Focus: Looking at product or making eye contact while holding it');
-  parts.push('- Energy: Positive, confident, product-presentation energy');
-  parts.push('- NOT looking away from or ignoring the product\n');
-
-  // Outfit for character
-  parts.push('CHARACTER OUTFIT:');
-  if (selectedOptions.outfitColor) {
-    parts.push(`- Color: ${selectedOptions.outfitColor}`);
-  } else {
-    parts.push(`- Color: Neutral or complementary to product`);
-  }
-  if (selectedOptions.outfitStyle) {
-    parts.push(`- Style: ${selectedOptions.outfitStyle}`);
-  } else {
-    parts.push(`- Style: Casual, clean, professional casual`);
-  }
-  parts.push(`- Purpose: Does NOT compete with product - subtle background outfit\n`);
+  parts.push(`Body: IDENTICAL - same body type and proportions`);
+  parts.push(`Pose: Natural position to HOLD/PRESENT product in hands`);
+  parts.push(`Expression: Engaged, confident, product-presentation energy\n`);
 
   // ==========================================
-  // PRODUCT SECTION (SECONDARY FOCUS - IN HANDS)
+  // GARMENT DETAILS
   // ==========================================
-  parts.push('=== PRODUCT (SECONDARY FOCUS - IN HANDS) ===');
-  parts.push('The product is PROMINENTLY VISIBLE, held or presented by character\n');
-
-  // Product identification
-  if (product.garment_type) {
-    parts.push(`Garment: ${product.garment_type}`);
-  } else if (product.detailedDescription) {
-    parts.push(`Item: ${product.detailedDescription}`);
-  } else if (product.type) {
-    parts.push(`Type: ${product.type}`);
-  }
-
-  // Product styling details
-  if (product.style_category) parts.push(`Style: ${product.style_category}`);
-
+  parts.push('[GARMENT DETAILS]');
+  
+  const garmentType = product.garment_type || product.type || 'garment';
+  parts.push(`Garment type: ${garmentType}`);
+  
   // Colors
-  parts.push(`\n📍 COLORS (Clear identification):`);
-  if (product.primary_color) parts.push(`  Primary: ${product.primary_color}`);
-  if (product.secondary_color && product.secondary_color !== '') {
-    parts.push(`  Secondary: ${product.secondary_color}`);
-  }
-
+  const garmentColor = product.primary_color 
+    ? (product.secondary_color ? `${product.primary_color} with ${product.secondary_color}` : product.primary_color)
+    : 'fashionable';
+  parts.push(`Color(s): ${garmentColor}`);
+  
   // Material
-  parts.push(`\n🧵 MATERIAL & TEXTURE:`);
-  if (product.fabric_type) {
-    parts.push(`  Fabric: ${product.fabric_type}`);
-    parts.push(`  Appearance: Realistic ${product.fabric_type.toLowerCase()} texture`);
-  } else if (product.material) {
-    parts.push(`  Material: ${product.material}`);
+  const garmentMaterial = product.fabric_type || product.material || 'premium quality';
+  parts.push(`Material(s): ${garmentMaterial}`);
+  
+  // Fit and style
+  const garmentFitStyle = [product.fit_type || product.fit, product.style_category].filter(Boolean).join(', ') || 'stylish fit';
+  parts.push(`Fit and style: ${garmentFitStyle}`);
+  
+  // Length and coverage
+  const garmentLength = product.length || product.coverage || 'standard';
+  parts.push(`Length and coverage: ${garmentLength}`);
+  
+  // Additional details
+  const designDetails = [];
+  if (product.neckline) designDetails.push(product.neckline);
+  if (product.sleeves) designDetails.push(product.sleeves);
+  if (product.pattern && product.pattern !== 'Solid color' && product.pattern !== 'solid') {
+    designDetails.push(product.pattern);
   }
-
-  // Pattern
-  parts.push(`\n🎨 PATTERN & DESIGN:`);
-  if (product.pattern) {
-    parts.push(`  Pattern: ${product.pattern}`);
-  } else {
-    parts.push(`  Pattern: Solid color`);
+  if (designDetails.length > 0) {
+    parts.push(`Design details: ${designDetails.join(', ')}`);
   }
-
-  // Design details
+  
   if (product.key_details) {
-    parts.push(`  Key details: ${product.key_details}`);
+    parts.push(`Special features: ${product.key_details}`);
   }
-
-  // HOW PRODUCT IS HELD
-  parts.push(`\n👐 HOW PRODUCT IS PRESENTED:`);
-  parts.push(`- Character HOLDS product clearly visible to camera`);
-  parts.push(`- Hand position: Comfortable natural holding position`);
-  parts.push(`- Product orientation: Clearly visible, not hidden or folded`);
-  parts.push(`- Angle: Best angle to show product details`);
-  if (productFocus === 'full-outfit') {
-    parts.push(`- Display: Garment held up, draped on arms, or worn by character`);
-  } else if (productFocus === 'top') {
-    parts.push(`- Display: Top piece held or draped, clearly visible`);
-  } else if (productFocus === 'bottom') {
-    parts.push(`- Display: Bottom piece held up, folded visible in hands`);
-  } else if (productFocus === 'shoes') {
-    parts.push(`- Display: Shoes held in hands showing front/side view`);
-  } else if (productFocus === 'accessory') {
-    parts.push(`- Display: Accessory prominently held or displayed near face/chest`);
-  }
-  parts.push(`- Lighting on product: Well-lit, colors true-to-life\n`);
-
-  // ==========================================
-  // HANDS & PLACEMENT
-  // ==========================================
-  parts.push('=== HANDS & PRODUCT PLACEMENT ===');
-  parts.push('- Hands: Natural, well-shaped, clearly visible');
-  parts.push('- Hand position: Comfortable holding or presenting pose');
-  parts.push('- Fingers: Visible but not distracting, natural posture');
-  parts.push('- Product placement: Center-right or slightly off-center for visual balance');
-  parts.push('- Hand-product relationship: Product clearly held/presented by character\n');
-
-  // ==========================================
-  // STYLING & APPEARANCE
-  // ==========================================
-  parts.push('=== STYLING & APPEARANCE ===');
   
-  // Hairstyle
-  if (selectedOptions.hairstyle && selectedOptions.hairstyle !== 'same') {
-    const hairstyleSuggestion = await loadPromptSuggestion(selectedOptions.hairstyle, 'hairstyle');
-    parts.push(`Hairstyle: ${hairstyleSuggestion}`);
-  } else {
-    parts.push(`Hairstyle: Keep from Image 1 reference`);
-  }
-
-  // Makeup
-  if (selectedOptions.makeup) {
-    const makeupSuggestion = await loadPromptSuggestion(selectedOptions.makeup, 'makeup');
-    parts.push(`Makeup: ${makeupSuggestion}`);
-  } else {
-    parts.push(`Makeup: Natural, fresh, professional look - enhances but not overpowering`);
-  }
-
-  // Accessories
-  if (selectedOptions.accessories && selectedOptions.accessories.length > 0) {
-    parts.push(`\nAccessories: Minimal - does not compete with held product`);
-    const accessories = Array.isArray(selectedOptions.accessories)
-      ? selectedOptions.accessories
-      : selectedOptions.accessories.split(',');
-    parts.push(`- Featured: ${accessories.join(', ')}`);
-  }
+  parts.push('\nMatch the garment EXACTLY in design, fabric, color, cut, and details.\n');
 
   // ==========================================
-  // ENVIRONMENT & SETTING
+  // HOW PRODUCT IS PRESENTED
   // ==========================================
-  parts.push(`\n=== SCENE LOCKED BACKGROUND ===`);
-  if (selectedOptions.scene) {
-    const lockedSceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
-    parts.push(`Location: ${lockedSceneDirective}`);
-  } else {
-    parts.push(`Location: Clean, uncluttered background - focus on character`);
-  }
-  parts.push(`Background: Slightly soft-focused or neutral to emphasize character\n`);
+  parts.push('[PRODUCT PRESENTATION]');
+  parts.push('- Character HOLDS garment clearly visible to camera');
+  parts.push('- Hand position: Comfortable natural holding position');
+  parts.push('- Garment orientation: Clearly visible, not hidden or folded');
+  parts.push('- Angle: Best angle to show garment details');
+  parts.push('- Lighting on garment: Well-lit, colors true-to-life\n');
 
   // ==========================================
-  // PHOTOGRAPHY STYLE & TECHNICAL
+  // HAIR & MAKEUP
   // ==========================================
-  parts.push('=== LIGHTING & PHOTOGRAPHY ===');
-  if (selectedOptions.lighting) {
-    parts.push(`Lighting style: ${selectedOptions.lighting}`);
-  } else {
-    parts.push(`Lighting: Soft, flattering, even lighting on character and product`);
-  }
-  parts.push('- Key light: Slightly front/45° for flattering character lighting');
-  parts.push('- Product lighting: Well-lit showing colors and texture clearly');
-  parts.push('- No harsh shadows on character or product');
+  parts.push('[HAIR & MAKEUP]');
+  parts.push('Keep the same hairstyle and makeup as Image 1.');
+  parts.push('Natural, professional, unchanged.\n');
+
+  // ==========================================
+  // SCENE & QUALITY
+  // ==========================================
+  parts.push('[SCENE & QUALITY]');
+  parts.push('Lighting: studio, soft diffused.');
   
-  if (selectedOptions.mood) parts.push(`Mood: ${selectedOptions.mood}`);
-  else parts.push(`Mood: Positive, engaging, professional presentation`);
+  if (selectedOptions.mood) {
+    const moodSuggestion = await loadPromptSuggestion(selectedOptions.mood, 'mood');
+    parts.push(`Mood: ${moodSuggestion}`);
+  } else {
+    parts.push('Mood: professional, confident, engaging');
+  }
+  
+  if (selectedOptions.style) {
+    const styleSuggestion = await loadPromptSuggestion(selectedOptions.style, 'style');
+    parts.push(`Style: ${styleSuggestion}`);
+  } else {
+    parts.push('Style: modern, professional');
+  }
+  
+  parts.push('Camera: eye-level.');
+  parts.push('Color palette: neutral.\n');
 
-  parts.push(`\n=== COMPOSITION ===`);
-  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}`);
-  else parts.push(`Camera angle: Eye-level or slightly below eye-level for engagement`);
-
-  if (selectedOptions.colorPalette) parts.push(`Color harmony: ${selectedOptions.colorPalette}`);
-  else parts.push(`Color harmony: Warm, inviting, product colors pop`);
-
-  parts.push(`\nFrame: Character from waist/hips up OR full-body showing hands clearly`);
-  parts.push(`Focus: Sharp and detailed on face and hands`);
-  parts.push(`Depth: Slight background blur to emphasize character and product\n`);
+  parts.push('High realism, professional fashion photography.');
+  parts.push('Sharp focus, natural skin texture.');
+  parts.push('Realistic fabric texture and accurate anatomy.\n');
 
   // ==========================================
-  // FINAL TECHNICAL SPECS
+  // HARD CONSTRAINTS
   // ==========================================
-  parts.push('=== QUALITY & TECHNICAL SPECS ===');
-  parts.push('Resolution: 8K ultra high quality');
-  parts.push('Style: Professional marketing/affiliate photography');
-  parts.push('Finish: Magazine-quality, retail-ready');
-  parts.push('Details: Ultra-detailed, sharp focus, excellent clarity');
-  parts.push('Aesthetic: Clean, professional, product-focused marketing image');
+  parts.push('[HARD CONSTRAINTS]');
+  parts.push('Do not change the character.');
+  parts.push('Do not alter face, body, pose, gaze, or hair.');
+  parts.push('Do not swap identity or merge identities.');
+  parts.push('Do not merge garment with body.');
+  parts.push('No distorted anatomy, no extra fingers, no blur, no low quality.');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 // ============================================================
 // �🛍️ ECOMMERCE: Professional product photography for online stores
 // ============================================================
+
+
+
+// ============================================================
+// FLUX 2 KLEIN OPTIMIZED PROMPTS
+// Ultra-compact prompts (~550-650 chars) for Flux 2 Klein
+// Based on real-world testing: safe zone ~600-900 chars, optimal ~750 chars
+// ============================================================
+
+/**
+ * Vietnamese to English translation dictionary for fashion terms
+ * Used to ensure Flux prompts are always in English
+ */
+const VI_TO_EN_FASHION = {
+  // Garment types
+  'váy maxi hai dây': 'two-strap maxi dress',
+  'váy maxi': 'maxi dress',
+  'váy': 'dress',
+  'áo sơ mi': 'shirt',
+  'áo phông': 't-shirt',
+  'áo khoác': 'jacket',
+  'áo len': 'sweater',
+  'quần jean': 'jeans',
+  'quần': 'pants',
+  'chân váy': 'skirt',
+  'đầm': 'dress',
+  'áo': 'top',
+  
+  // Colors
+  'trắng kem': 'cream white',
+  'trắng': 'white',
+  'đen': 'black',
+  'đỏ': 'red',
+  'xanh dương': 'blue',
+  'xanh lá': 'green',
+  'vàng': 'yellow',
+  'hồng': 'pink',
+  'cam': 'orange',
+  'tím': 'purple',
+  'nâu': 'brown',
+  'xám': 'gray',
+  'be': 'beige',
+  'kem': 'cream',
+  
+  // Materials
+  'voan hoặc chiffon nhẹ, có lớp lót': 'light chiffon with lining',
+  'voan': 'voile',
+  'chiffon': 'chiffon',
+  'lụa': 'silk',
+  'cotton': 'cotton',
+  'len': 'wool',
+  'polyester': 'polyester',
+  'vải': 'fabric',
+  
+  // Fit types
+  'ôm nhẹ phần thân trên, xòe tự nhiên từ eo xuống': 'fitted bodice with natural flare from waist',
+  'ôm nhẹ': 'slightly fitted',
+  'ông rộng': 'loose fit',
+  'ông sát': 'tight fit',
+  'vừa vặn': 'regular fit',
+  'xòe': 'flared',
+  'ôm': 'fitted',
+  
+  // Length
+  'maxi dài qua mắt cá chân': 'ankle-length maxi',
+  'dài qua gối': 'knee-length',
+  'ngắn': 'short',
+  'dài': 'long',
+  'maxi': 'maxi length',
+  'midi': 'midi length',
+  'mini': 'mini length'
+};
+
+/**
+ * Translate Vietnamese fashion term to English
+ * Falls back to original text if no translation found
+ */
+function translateToEn(text, fallback = '') {
+  if (!text) return fallback;
+  
+  const lowerText = text.toLowerCase().trim();
+  
+  // Direct match
+  if (VI_TO_EN_FASHION[lowerText]) {
+    return VI_TO_EN_FASHION[lowerText];
+  }
+  
+  // Partial match (find longest matching key)
+  let bestMatch = '';
+  let bestKey = '';
+  for (const [vi, en] of Object.entries(VI_TO_EN_FASHION)) {
+    if (lowerText.includes(vi) && vi.length > bestKey.length) {
+      bestKey = vi;
+      bestMatch = en;
+    }
+  }
+  
+  if (bestMatch) {
+    // Replace the Vietnamese part with English
+    return lowerText.replace(bestKey, bestMatch).trim();
+  }
+  
+  // Return fallback if available, otherwise original
+  return fallback || text;
+}
+
+/**
+ * Extract and translate product info for Flux prompts
+ */
+function getEnglishProductInfo(product) {
+  return {
+    garmentType: translateToEn(product.garment_type || product.type, 'garment'),
+    garmentColor: translateToEn(product.primary_color, 'fashionable color'),
+    garmentMaterial: translateToEn(product.fabric_type || product.material, 'premium fabric'),
+    garmentFit: translateToEn(product.fit_type || product.fit, 'stylish fit'),
+    garmentLength: translateToEn(product.length || product.coverage, 'standard length')
+  };
+}
+
+/**
+ * FLUX WEARING PROMPT - Ultra-compact for Flux 2 Klein
+ * Character wears the garment from Image 2
+ * Target: ~550-650 characters
+ */
+function buildFluxWearingPrompt(analysis, selectedOptions = {}) {
+  const product = analysis?.product || {};
+  const { garmentType, garmentColor, garmentMaterial, garmentFit, garmentLength } = getEnglishProductInfo(product);
+  
+  const prompt = `Image 1: character reference. Image 2: garment reference.
+Always keep the character from Image 1. Only change clothing.
+
+Use the EXACT SAME character from Image 1.
+Same face, body, pose, gaze, expression, and hair.
+Strict identity lock.
+
+The character is WEARING the garment from Image 2.
+The garment fits naturally on the body.
+
+Ignore any model in Image 2. Use ONLY the garment.
+
+Garment: ${garmentType}, ${garmentColor}, ${garmentMaterial}, ${garmentFit}, ${garmentLength}.
+Match the garment exactly in design and details.
+
+Natural fabric drape, correct material behavior.
+Studio lighting, eye-level camera.
+High realism, sharp face, realistic fabric.`;
+
+  return prompt.trim();
+}
+
+/**
+ * FLUX HOLDING PROMPT - Ultra-compact for Flux 2 Klein
+ * Character holds/presents the garment from Image 2
+ * Target: ~550-650 characters
+ */
+function buildFluxHoldingPrompt(analysis, selectedOptions = {}) {
+  const product = analysis?.product || {};
+  const { garmentType, garmentColor, garmentMaterial, garmentFit, garmentLength } = getEnglishProductInfo(product);
+  
+  const prompt = `Image 1: character reference. Image 2: garment reference.
+Always keep the character from Image 1. Only change clothing.
+
+Use the EXACT SAME character from Image 1.
+Same face, body, pose, gaze, expression, and hair.
+Strict identity lock.
+
+The character is NOT wearing the garment.
+The character is HOLDING the garment in her hands, clearly presenting it.
+Wearing the garment is forbidden.
+
+Ignore any model in Image 2. Use ONLY the garment.
+
+Garment: ${garmentType}, ${garmentColor}, ${garmentMaterial}, ${garmentFit}, ${garmentLength}.
+Match the garment exactly in design and details.
+
+Natural fabric drape, correct material behavior.
+Studio lighting, eye-level camera.
+High realism, sharp face, realistic fabric.`;
+
+  return prompt.trim();
+}
+
+/**
+ * Build Flux-optimized prompt based on use case
+ * @param {string} useCase - 'change-clothes' (wearing) or 'character-holding-product' (holding)
+ * @param {object} analysis - Analysis data with product info
+ * @param {object} selectedOptions - Selected options
+ * @returns {object} - { prompt, negativePrompt, charCount }
+ */
+function buildFluxPrompt(useCase, analysis, selectedOptions = {}) {
+  let prompt;
+  
+  if (useCase === 'character-holding-product') {
+    prompt = buildFluxHoldingPrompt(analysis, selectedOptions);
+  } else {
+    // Default to wearing
+    prompt = buildFluxWearingPrompt(analysis, selectedOptions);
+  }
+  
+  // Negative prompt - also compact
+  const negativePrompt = 'blurry, distorted, deformed, extra fingers, missing fingers, bad anatomy, low quality, jpeg artifacts, watermark, text, logo';
+  
+  return {
+    prompt,
+    negativePrompt,
+    charCount: prompt.length
+  };
+}
 
 async function buildEcommerceProductPrompt(analysis, selectedOptions, productFocus, language = 'en') {
   const parts = [];
@@ -824,7 +953,7 @@ async function buildEcommerceProductPrompt(analysis, selectedOptions, productFoc
   parts.push('- Do NOT use artistic filters or effects');
   parts.push('- Do NOT hide any important product details');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 // ============================================================
@@ -926,7 +1055,7 @@ async function buildSocialMediaPrompt(analysis, selectedOptions, productFocus, l
   parts.push('- Vibrant but natural colors');
   parts.push('- Professional but approachable quality');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 // ============================================================
@@ -1044,7 +1173,7 @@ async function buildFashionEditorialPrompt(analysis, selectedOptions, productFoc
   
   parts.push('\nFinal Look: High-fashion, aspirational, magazine-ready');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 // ============================================================
@@ -1157,7 +1286,7 @@ async function buildLifestyleScenePrompt(analysis, selectedOptions, productFocus
   parts.push('- 4K-8K quality');
   parts.push('- Suitable for: Magazine spread, website, Instagram, blog');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 // ============================================================
@@ -1259,7 +1388,7 @@ async function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus, l
   parts.push('- 8K resolution, sharp, professional');
   parts.push('- Suitable for: Brand campaigns, lookbooks, social proof, styling posts');
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 /**
@@ -1348,7 +1477,7 @@ async function buildStylingPrompt(analysis, selectedOptions, productFocus, langu
   
   parts.push(`Professional photography, 8k, sharp focus, ultra-detailed`);
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 /**
@@ -1448,7 +1577,7 @@ async function buildCompleteLookPrompt(analysis, selectedOptions, productFocus, 
   
   parts.push(`Professional fashion photography, 8k, sharp focus, magazine-quality, ultra high resolution`);
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 /**
@@ -1530,7 +1659,7 @@ async function buildDefaultPrompt(analysis, selectedOptions, language = 'en') {
 
   parts.push(`Professional photography, 8k, sharp focus, ultra-detailed`);
 
-  return parts.join('\n');
+  return compactPrompt(parts);
 }
 
 /**
@@ -1655,3 +1784,6 @@ function buildNegativePrompt(product, selectedOptions) {
 // This file no longer needs to export individual builder functions.
 // The main 'buildDetailedPrompt' is the single entry point.
 // Removing the old, unnecessary export statements that were causing the crash.
+
+// Export Flux-optimized prompt builder for BFL provider
+export { buildFluxPrompt, buildFluxWearingPrompt, buildFluxHoldingPrompt };

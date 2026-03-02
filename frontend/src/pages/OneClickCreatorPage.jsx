@@ -49,6 +49,7 @@ const FOCUS_OPTIONS = [
 const IMAGE_PROVIDERS = [
   { id: 'grok', label: 'Grok', icon: '🤖' },
   { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
+  { id: 'bfl', label: 'BFL FLUX', icon: '🎨' },
 ];
 
 const VIDEO_PROVIDERS = [
@@ -582,7 +583,7 @@ export default function OneClickCreatorPage() {
   // Settings
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
-  const [imageProvider, setImageProvider] = useState('google-flow');
+  const [imageProvider, setImageProvider] = useState('bfl');
   const [videoProvider, setVideoProvider] = useState('google-flow');  // Aligned with image provider
   const [videoScenario, setVideoScenario] = useState('product-intro');  // Default scenario
   const [videoDuration, setVideoDuration] = useState(20);  // Default 20 seconds

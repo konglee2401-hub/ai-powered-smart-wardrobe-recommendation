@@ -1205,6 +1205,113 @@ export async function generateWithBrowser(req, res) {
     }
 
     // ====================================
+    // 🎨 NEW: BFL FLUX.2 Klein image generation
+    // ====================================
+    if (generationProvider === 'bfl') {
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`🎨 IMAGE GENERATION - BFL FLUX.2 KLEIN`);
+      console.log(`${'='.repeat(80)}\n`);
+
+      try {
+        // Dynamic import for BFL service
+        const { default: BFLPlaygroundService } = await import('../services/browser/bflPlaygroundService.js');
+        
+        const bflService = new BFLPlaygroundService({ 
+          headless: false,
+          timeout: 180000 
+        });
+
+        console.log(`   🚀 Initializing BFL Playground...`);
+        await bflService.initialize();
+
+        // Upload images if provided
+        if (charImagePath && fs.existsSync(charImagePath)) {
+          console.log(`   📤 Uploading character image: ${charImagePath}`);
+          await bflService.uploadImage(charImagePath);
+        }
+        
+        if (prodImagePath && fs.existsSync(prodImagePath)) {
+          console.log(`   📤 Uploading product image: ${prodImagePath}`);
+          await bflService.uploadImage(prodImagePath);
+        }
+
+        // Enter prompt
+        console.log(`   ⌨️  Entering prompt...`);
+        await bflService.enterPrompt(prompt);
+
+        // Generate image
+        console.log(`   🎨 Generating image...`);
+        const imageUrl = await bflService.generate(180000);
+
+        if (!imageUrl) {
+          throw new Error('No image generated');
+        }
+
+        // Download image
+        console.log(`   💾 Downloading image...`);
+        const downloadPath = await bflService.downloadImage(imageUrl, 
+          path.join(tempDir, 'image-gen-results', `bfl-generated-${Date.now()}.png`)
+        );
+
+        await bflService.close();
+
+        // Prepare response
+        const filename = path.basename(downloadPath);
+        const httpUrl = `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`;
+        
+        // Store in global for access
+        global.generatedImagePaths = global.generatedImagePaths || {};
+        global.generatedImagePaths[filename] = downloadPath;
+        setTimeout(() => delete global.generatedImagePaths[filename], 60 * 60 * 1000);
+
+        const generatedImages = [{
+          url: httpUrl,
+          filename: filename,
+          provider: 'bfl',
+          size: fs.statSync(downloadPath).size
+        }];
+
+        // Store for video generation
+        global.lastGeneratedImagePaths = [downloadPath];
+        global.lastInputImagePaths = {
+          character: charImagePath,
+          product: prodImagePath
+        };
+
+        console.log(`✅ BFL image generation complete: ${filename}`);
+
+        return res.json({
+          success: true,
+          data: {
+            generatedImages: generatedImages,
+            count: 1,
+            expectedCount: 1,
+            aspectRatio: aspectRatio,
+            providers: {
+              generation: 'bfl'
+            },
+            filePaths: {
+              generatedImages: [downloadPath],
+              characterImage: charImagePath,
+              productImage: prodImagePath
+            }
+          },
+          message: `Image generated successfully via BFL FLUX.2 Klein`
+        });
+
+      } catch (bflError) {
+        console.error(`❌ BFL Image Generation Error:`, bflError.message);
+        cleanupTempFiles(tempFiles);
+        
+        return res.status(500).json({
+          error: `BFL image generation failed: ${bflError.message}`,
+          success: false,
+          stage: 'image-generation'
+        });
+      }
+    }
+
+    // ====================================
     // STEP 1: Initialize browser service (for Grok provider)
     // ====================================
     console.log(`\n${'='.repeat(80)}`);
