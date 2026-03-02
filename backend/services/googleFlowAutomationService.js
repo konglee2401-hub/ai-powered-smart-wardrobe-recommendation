@@ -2217,7 +2217,7 @@ class GoogleFlowAutomationService {
           // Now click the target model in the menu
           // IMPORTANT: Radix UI menus are rendered in a PORTAL at document.body level
           // They are NOT children of the trigger button, so we must search from document root
-          const modelSelected = await this.page.evaluate((target, type) => {
+          const modelSelectionResult = await this.page.evaluate((target, type) => {
             const normalize = (text = '') => text
               .normalize('NFKC')
               .replace(/🍌/g, '')
@@ -2249,7 +2249,7 @@ class GoogleFlowAutomationService {
               const allMenus = document.querySelectorAll('[role="menu"]');
               const allRadix = document.querySelectorAll('[data-radix-menu-content]');
               console.log(`[MODEL-MENU] Debug: Found ${allMenus.length} [role="menu"], ${allRadix.length} [data-radix-menu-content]`);
-              return false;
+              return { selected: false, selectedModel: null, usedFallbackFirst: false };
             }
 
             const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
@@ -2273,16 +2273,34 @@ class GoogleFlowAutomationService {
                 } else {
                   item.click();
                 }
-                return true;
+                return { selected: true, selectedModel: text, usedFallbackFirst: false };
               }
             }
 
-            return false;
+            if (type === 'image' && items.length > 0) {
+              const firstItem = items[0];
+              const firstText = normalize(firstItem.textContent || '');
+              console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click first item: "${firstItem.textContent?.trim() || ''}" -> "${firstText}"`);
+              const firstBtn = firstItem.querySelector('button');
+              if (firstBtn) {
+                firstBtn.click();
+              } else {
+                firstItem.click();
+              }
+              return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+            }
+
+            return { selected: false, selectedModel: null, usedFallbackFirst: false };
           }, effectiveTargetModel, this.type);
           
-          if (modelSelected) {
-            this.options.model = effectiveTargetModel;
-            console.log(`   ✓ ${effectiveTargetModel} selected\n`);
+          if (modelSelectionResult?.selected) {
+            if (this.type === 'image' && modelSelectionResult.usedFallbackFirst) {
+              this.options.model = 'Nano Banana Pro';
+              console.log(`   ✓ Nano Banana Pro selected (fallback first item)\n`);
+            } else {
+              this.options.model = effectiveTargetModel;
+              console.log(`   ✓ ${effectiveTargetModel} selected\n`);
+            }
           } else {
             console.log(`   ⚠️  Could not select ${effectiveTargetModel} from menu\n`);
           }
