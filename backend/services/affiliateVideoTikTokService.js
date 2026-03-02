@@ -11,10 +11,98 @@
  */
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
-import { buildDetailedPrompt } from './smartPromptBuilder.js';
+import { buildDetailedPrompt, buildFluxPrompt } from './smartPromptBuilder.js';
 import GrokServiceV2 from './browser/grokServiceV2.js';
+import BFLPlaygroundService from './browser/bflPlaygroundService.js';
+import GoogleFlowAutomationService from './googleFlowAutomationService.js';
 import ChatGPTService from './browser/chatgptService.js';
 import GoogleDriveOAuthService from './googleDriveOAuth.js';
+
+// ============================================================
+// PROVIDER SELECTION HELPER
+// ============================================================
+
+/**
+ * Get browser service for image generation based on provider
+ * @param {string} provider - Provider ID: 'bfl', 'grok', 'google-flow'
+ * @param {object} options - Service options (outputDir, headless, debugMode)
+ * @returns {object} Browser service instance
+ */
+function getImageGenerationService(provider, options = {}) {
+  const { outputDir, headless = false, debugMode = false } = options;
+  
+  console.log(`🔌 Selecting image generation provider: ${provider}`);
+  
+  switch (provider) {
+    case 'bfl':
+    case 'bfl-playground':
+      return new BFLPlaygroundService({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'grok':
+    case 'grok.com':
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'google-flow':
+    case 'google':
+      return new GoogleFlowAutomationService({
+        type: 'image',
+        aspectRatio: '9:16',
+        imageCount: 2,
+        headless,
+        ...options
+      });
+    default:
+      console.warn(`⚠️ Unknown provider '${provider}', defaulting to Grok`);
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+  }
+}
+
+/**
+ * Get browser service for video generation based on provider
+ * @param {string} provider - Provider ID: 'grok', 'google-flow'
+ * @param {object} options - Service options (outputDir, headless, debugMode)
+ * @returns {object} Browser service instance
+ */
+function getVideoGenerationService(provider, options = {}) {
+  const { outputDir, headless = false, debugMode = false } = options;
+  
+  console.log(`🔌 Selecting video generation provider: ${provider}`);
+  
+  switch (provider) {
+    case 'grok':
+    case 'grok.com':
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'google-flow':
+    case 'google':
+      return new GoogleFlowAutomationService({
+        type: 'video',
+        aspectRatio: '9:16',
+        headless,
+        ...options
+      });
+    default:
+      console.warn(`⚠️ Unknown video provider '${provider}', defaulting to Grok`);
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+  }
+}
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
@@ -125,8 +213,18 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       voicePace = 'fast',
       productFocus = 'full-outfit',
       language = 'en',  // 💫 Support language selection: 'en' or 'vi'
+      imageProvider = 'bfl',  // 💫 Default to BFL Playground
+      videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {}
     } = req.body;
+
+    // Extract providers from options if not in body directly
+    const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
+    const finalVideoProvider = options.videoProvider || videoProvider || 'grok';
+    
+    console.log(`\n🔌 PROVIDER CONFIGURATION:`);
+    console.log(`  Image Provider: ${finalImageProvider}`);
+    console.log(`  Video Provider: ${finalVideoProvider}`);
 
     // ============================================================
     // STEP 1: CHATGPT BROWSER AUTOMATION ANALYSIS (Non-blocking)
@@ -146,16 +244,17 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
 
     try {
       // Use ChatGPT Browser Automation (not OpenAI API, not Gemini)
-      // 💫 Get appropriate prompt based on language
-      // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
-      const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+      // 🔴 CRITICAL: BFL provider ALWAYS uses English for analysis
+      // This ensures product info is in English for Flux prompts
+      const analysisLanguage = finalImageProvider === 'bfl' ? 'en' : language;
+      const normalizedLanguage = (analysisLanguage || 'en').split('-')[0].split('_')[0].toLowerCase();
       let analysisPrompt;
       
       if (normalizedLanguage === 'vi') {
         console.log(`\n📝 Using VIETNAMESE analysis prompt`);
         analysisPrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
       } else {
-        console.log(`\n📝 Using ENGLISH analysis prompt`);
+        console.log(`\n📝 Using ENGLISH analysis prompt${finalImageProvider === 'bfl' ? ' (forced for BFL/Flux)' : ''}`);
         analysisPrompt = `
 You are an expert fashion stylist and virtual try-on specialist. Analyze these two images extensively to provide detailed styling recommendations.
 
@@ -801,34 +900,61 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         }
       });
     }
-    const generateWearingPromise = buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'change-clothes',
-      productFocus,
-      language  // Use selected language (en or vi)
-    ).then(promptData => ({
-      useCase: 'change-clothes',
-      prompts: promptData
-    }));
+    // 🔴 CRITICAL: BFL provider uses FLUX-OPTIMIZED prompts (~550-650 chars)
+    // Flux 2 Klein safe zone: 600-900 chars, optimal ~750 chars
+    // Other providers use standard detailed prompts
+    const useFluxPrompts = finalImageProvider === 'bfl';
+    console.log(`  Prompt mode: ${useFluxPrompts ? 'FLUX-OPTIMIZED (~600 chars)' : 'STANDARD'}`);
+    
+    let wearingPromptData, holdingPromptData;
+    
+    if (useFluxPrompts) {
+      // Use ultra-compact Flux-optimized prompts for BFL
+      const wearingResult = buildFluxPrompt('change-clothes', analysis, baseOptions);
+      const holdingResult = buildFluxPrompt('character-holding-product', analysis, baseOptions);
+      
+      wearingPromptData = {
+        useCase: 'change-clothes',
+        prompts: { prompt: wearingResult.prompt, negativePrompt: wearingResult.negativePrompt }
+      };
+      holdingPromptData = {
+        useCase: 'character-holding-product',
+        prompts: { prompt: holdingResult.prompt, negativePrompt: holdingResult.negativePrompt }
+      };
+      
+      console.log(`  Wearing prompt: ${wearingResult.charCount} chars`);
+      console.log(`  Holding prompt: ${holdingResult.charCount} chars`);
+    } else {
+      // Use standard detailed prompts for other providers
+      const effectivePromptLanguage = language;
+      
+      const generateWearingPromise = buildDetailedPrompt(
+        analysis,
+        baseOptions,
+        'change-clothes',
+        productFocus,
+        effectivePromptLanguage
+      ).then(promptData => ({
+        useCase: 'change-clothes',
+        prompts: promptData
+      }));
 
-    // Promise 2: Generate character-holding-product image
-    const generateHoldingPromise = buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'character-holding-product',
-      productFocus,
-      language  // Use selected language (en or vi)
-    ).then(promptData => ({
-      useCase: 'character-holding-product',
-      prompts: promptData
-    }));
+      const generateHoldingPromise = buildDetailedPrompt(
+        analysis,
+        baseOptions,
+        'character-holding-product',
+        productFocus,
+        effectivePromptLanguage
+      ).then(promptData => ({
+        useCase: 'character-holding-product',
+        prompts: promptData
+      }));
 
-    // Wait for both prompts to be built
-    const [wearingPromptData, holdingPromptData] = await Promise.all([
-      generateWearingPromise,
-      generateHoldingPromise
-    ]);
+      [wearingPromptData, holdingPromptData] = await Promise.all([
+        generateWearingPromise,
+        generateHoldingPromise
+      ]);
+    }
 
     console.log(`\n✅ PROMPTS BUILT:`);
     try {
@@ -859,15 +985,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     
     // 🔴 CRITICAL: STEP 2 MUST COMPLETE FULLY BEFORE PROCEEDING
     try {
-      // ✅ SWITCHED TO GROK: More reliable image generation than Google Flow
-      // Grok auto-redirects after 5-7s with Cloudflare bypass, no manual verification needed
-      const imageGen = new GrokServiceV2({
+      // 💫 DYNAMIC PROVIDER: Use selected provider for image generation
+      const imageGen = getImageGenerationService(finalImageProvider, {
         outputDir: outputDir,
         headless: false,
         debugMode: false  // ✅ PRODUCTION MODE
       });
       
-      console.log('🚀 Initializing image generation service...');
+      console.log(`🚀 Initializing image generation service (${finalImageProvider})...`);
       
       // Validate prompts before passing to generateMultiple
       const wearingPrompt = wearingPromptData?.prompts?.prompt || '';
@@ -888,15 +1013,17 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`   Character input: ${path.basename(characterFilePath)}`);
       console.log(`   Product input: ${path.basename(productFilePath)}`);
       console.log(`   Output directory: ${outputDir}`);
+      console.log(`   Provider: ${finalImageProvider}`);
       
-      // Generate both images in single browser session with component reuse
+      // Generate both images using generateMultiple (all providers now support this interface)
       let multiGenResult;
       try {
-        console.log(`\n⏳ Calling generateMultiple (this may take 30-60 seconds)...`);
+        console.log(`\n⏳ Calling generateMultiple (this may take 60-180 seconds)...`);
         multiGenResult = await imageGen.generateMultiple(
           characterFilePath,
           productFilePath,
-          [wearingPrompt, holdingPrompt]
+          [wearingPrompt, holdingPrompt],
+          { outputDir }
         );
         console.log(`✅ generateMultiple completed (returned result object)`);
       } catch (genMultiError) {
@@ -1251,13 +1378,13 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
     console.log(`${'═'.repeat(80)}\n`);
     // ============================================================
-    // STEP 4: VIDEO GENERATION (Using GrokServiceV2 - Actual Video via /imagine)
+    // STEP 4: VIDEO GENERATION (Dynamic Provider Selection)
     // 🎬 Generate actual 10-second video with 720p resolution
     // Dynamically select images based on deep analysis recommendations
     // ============================================================
 
     console.log('\n' + '─'.repeat(80));
-    console.log('🎬 STEP 4: Video Generation (via Grok /imagine)');
+    console.log(`🎬 STEP 4: Video Generation (via ${finalVideoProvider})`);
     console.log('─'.repeat(80));
     await logger.startStage('video-generation');
     const step4Start = Date.now();
@@ -1281,8 +1408,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`    → Include product image in context`);
       }
 
-      // ========== INITIALIZE GROK BROWSER SESSION ==========
-      const videoGen = new GrokServiceV2({
+      // ========== INITIALIZE VIDEO GENERATION SERVICE (DYNAMIC) ==========
+      const videoGen = getVideoGenerationService(finalVideoProvider, {
         outputDir: tempDir,
         headless: false,
         debugMode: false
@@ -1292,13 +1419,20 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`  Duration: 10s`);
       console.log(`  Resolution: 720p`);
       console.log(`  Format: TikTok-friendly (9:16 aspect ratio)`);
-      console.log(`  Using: GrokServiceV2 /imagine page for native video generation`);
+      console.log(`  Provider: ${finalVideoProvider}`);
 
       try {
         // STEP 4.0: Initialize browser
-        console.log('\n🚀 Initializing Grok browser for video generation...');
-        await videoGen.initialize();
-        console.log('✅ Grok browser initialized');
+        console.log(`\n🚀 Initializing ${finalVideoProvider} browser for video generation...`);
+        // Support both init() and initialize() methods (different providers use different names)
+        if (typeof videoGen.init === 'function') {
+          await videoGen.init();
+        } else if (typeof videoGen.initialize === 'function') {
+          await videoGen.initialize();
+        } else {
+          throw new Error(`Video service does not have init() or initialize() method`);
+        }
+        console.log(`✅ ${finalVideoProvider} browser initialized`);
 
         // STEP 4.1: Select primary image for video (wearing or holding based on analysis)
         const primaryImagePath = imageRecommendations.preferHolding && holdingImagePath ? holdingImagePath : wearingImagePath;
@@ -1359,13 +1493,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           // Use wearing-focused prompt (default)
           if (normalizedLanguage === 'vi') {
             const scriptContent = videoScripts.map(s => `${s.segment}: ${s.script}`).join(' ');
-            videoPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-              'complete-tiktok-video',
-              productFocus,
-              { 
-                name: analysis.product?.garment_type, 
+            videoPrompt = VietnamesePromptBuilder.buildComprehensiveVideoPrompt(
+              scriptContent,
+              {
+                name: analysis.product?.garment_type,
                 details: analysis.product?.key_details,
-                scriptContent: scriptContent
+                color: analysis.product?.primary_color,
+                material: analysis.product?.fabric_type
+              },
+              {
+                videoDuration: 10,
+                voiceGender,
+                voicePace,
+                productFocus,
+                aspectRatio: '9:16',
+                platform: 'TikTok'
               }
             );
           } else {
@@ -1438,7 +1580,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       } finally {
         try {
           await videoGen.close();
-          console.log(`\n✅ Grok browser closed`);
+          console.log(`\n✅ ${finalVideoProvider} browser closed`);
         } catch (closeError) {
           console.warn('⚠️  Warning closing browser:', closeError.message);
         }

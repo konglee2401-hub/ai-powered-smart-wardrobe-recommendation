@@ -268,12 +268,14 @@ export default function ImageGenerationPage() {
     { id: 'grok', label: 'Grok', icon: '🤖' },
     { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
     { id: 'zai', label: 'Z.AI', icon: '💎' },
+    { id: 'bfl', label: 'BFL FLUX', icon: '🎨' },
   ];
   
   // Image Generation Providers (for generation step)
   const IMAGE_GEN_PROVIDERS = [
     { id: 'grok', label: 'Grok Browser', description: 'Fast, web-based' },
     { id: 'google-flow', label: 'Google Labs Flow', description: 'High quality, 4K capable' },
+    { id: 'bfl', label: 'BFL FLUX.2 Klein', description: 'High quality, virtual try-on' },
   ];
 
   // Load options
