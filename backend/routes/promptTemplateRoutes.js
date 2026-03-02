@@ -1,6 +1,7 @@
 import express from 'express';
 import PromptTemplate from '../models/PromptTemplate.js';
 import mongoose from 'mongoose';
+import { scanHardcodedPrompts } from '../utils/hardcodedPromptScanner.js';
 
 const router = express.Router();
 
@@ -127,6 +128,89 @@ router.get('/page/:page/step/:step', async (req, res) => {
   }
 });
 
+
+/**
+ * GET /api/prompt-templates/hardcoded/scan
+ * Scan source code and return hardcoded prompts preview
+ */
+router.get('/hardcoded/scan', async (req, res) => {
+  try {
+    const templates = await scanHardcodedPrompts();
+    res.json({
+      success: true,
+      data: templates,
+      count: templates.length,
+    });
+  } catch (error) {
+    console.error('Error scanning hardcoded prompts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to scan hardcoded prompts',
+    });
+  }
+});
+
+/**
+ * POST /api/prompt-templates/hardcoded/sync
+ * Scan source code and upsert hardcoded prompts into database
+ */
+router.post('/hardcoded/sync', async (req, res) => {
+  try {
+    const scannedTemplates = await scanHardcodedPrompts();
+
+    const operations = scannedTemplates.map((template) => ({
+      updateOne: {
+        filter: { sourceKey: template.sourceKey },
+        update: {
+          $set: {
+            name: template.name,
+            description: template.description,
+            purpose: template.purpose,
+            useCase: template.useCase,
+            templateType: template.templateType,
+            sourceType: template.sourceType,
+            content: template.content,
+            usedInPages: template.usedInPages,
+            tags: template.tags,
+            isActive: true,
+          },
+          $setOnInsert: {
+            isCore: false,
+            style: 'realistic',
+            sourceKey: template.sourceKey,
+            createdBy: req.user?.id || 'hardcoded-sync',
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    if (operations.length > 0) {
+      await PromptTemplate.bulkWrite(operations);
+    }
+
+    const sourceKeys = scannedTemplates.map((item) => item.sourceKey);
+    if (sourceKeys.length > 0) {
+      await PromptTemplate.updateMany(
+        { sourceType: 'hardcoded-scan', sourceKey: { $nin: sourceKeys } },
+        { $set: { isActive: false } }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Hardcoded prompts synced successfully',
+      count: scannedTemplates.length,
+    });
+  } catch (error) {
+    console.error('Error syncing hardcoded prompts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync hardcoded prompts',
+    });
+  }
+});
+
 /**
  * GET /api/prompt-templates/:id
  * Get single template by ID
@@ -183,7 +267,10 @@ router.post('/', async (req, res) => {
       usedInPages,
       isCore = false,
       tags = [],
-      metadata = {}
+      metadata = {},
+      purpose = '',
+      sourceType = 'manual',
+      sourceKey
     } = req.body;
 
     // Validation
@@ -206,6 +293,9 @@ router.post('/', async (req, res) => {
       isCore,
       tags,
       metadata,
+      purpose,
+      sourceType,
+      sourceKey,
       createdBy: req.user?.id || 'api'
     });
 
@@ -409,6 +499,9 @@ router.put('/:id', async (req, res) => {
       'usedInPages',
       'tags',
       'metadata',
+      'purpose',
+      'sourceType',
+      'sourceKey',
       'isActive'
     ];
 
