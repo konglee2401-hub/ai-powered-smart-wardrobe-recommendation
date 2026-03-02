@@ -22,6 +22,11 @@ export const trendAutomationApi = {
 
     return apiClient.post(`${BASE}/jobs/trigger?${params.toString()}`).then((r) => r.data);
   },
+  
+  // Upload to Google Drive APIs
+  getUploadStatus: () => apiClient.get(`${BASE}/videos/upload-status`).then((r) => r.data),
+  triggerUploadAll: () => apiClient.post(`${BASE}/videos/upload-to-drive`).then((r) => r.data),
+  triggerUploadSingle: (videoId) => apiClient.post(`${BASE}/videos/${videoId}/upload-to-drive`).then((r) => r.data),
 };
 
 export default trendAutomationApi;

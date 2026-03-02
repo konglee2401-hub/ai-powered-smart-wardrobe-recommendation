@@ -2142,7 +2142,16 @@ class GoogleFlowAutomationService {
       // STEP 5: Select Model (for both IMAGE and VIDEO)
       console.log(`\n   🤖 STEP ${this.type === 'image' ? 4 : 5}: Select Model`);
       const targetModel = this.options.model;
+      const allowedImageModels = ['Nano Banana Pro', 'Nano Banana 2'];
+      let effectiveTargetModel = targetModel;
+
+      if (this.type === 'image' && !allowedImageModels.includes(targetModel)) {
+        console.log(`   ⚠️  Unsupported image model "${targetModel}", fallback to "Nano Banana Pro"`);
+        effectiveTargetModel = 'Nano Banana Pro';
+      }
+
       console.log(`   > Target model: "${targetModel}"`);
+      console.log(`   > Effective model: "${effectiveTargetModel}"`);
       
       try {
         // Find and click the model dropdown button
@@ -2208,50 +2217,56 @@ class GoogleFlowAutomationService {
           // Now click the target model in the menu
           // IMPORTANT: Radix UI menus are rendered in a PORTAL at document.body level
           // They are NOT children of the trigger button, so we must search from document root
-          const modelSelected = await this.page.evaluate((target) => {
+          const modelSelected = await this.page.evaluate((target, type) => {
+            const normalize = (text = '') => text
+              .normalize('NFKC')
+              .replace(/🍌/g, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
+
+            const allowedImageModels = new Set(['nano banana pro', 'nano banana 2']);
+            const normalizedTarget = normalize(target);
+
             // Method 1: Find by role="menu" anywhere in document (portal)
             let menu = document.querySelector('[role="menu"]');
-            
+
             // Method 2: Find by Radix-specific attribute
             if (!menu) {
               menu = document.querySelector('[data-radix-menu-content]');
             }
-            
+
             // Method 3: Find by common portal container classes
             if (!menu) {
-              // Radix portals are often in a div at body level
               const portals = document.querySelectorAll('body > div > [role="menu"], body > [role="menu"]');
               if (portals.length > 0) {
                 menu = portals[0];
               }
             }
-            
+
             if (!menu) {
-              console.log(`[MODEL-MENU] Menu not found in DOM or portal`);
-              // Debug: Log what we can find
+              console.log('[MODEL-MENU] Menu not found in DOM or portal');
               const allMenus = document.querySelectorAll('[role="menu"]');
               const allRadix = document.querySelectorAll('[data-radix-menu-content]');
               console.log(`[MODEL-MENU] Debug: Found ${allMenus.length} [role="menu"], ${allRadix.length} [data-radix-menu-content]`);
               return false;
             }
-            
-            console.log(`[MODEL-MENU] Found menu element`);
-            
-            // Find all menu items - could be div[role="menuitem"] or button[role="menuitem"]
-            const items = menu.querySelectorAll('[role="menuitem"]');
+
+            const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
             console.log(`[MODEL-MENU] Found ${items.length} menu items`);
-            
-            // Look for target model in each menu item
+
             for (const item of items) {
-              // Model name is in span inside the menuitem
               const nameSpan = item.querySelector('span');
-              const text = nameSpan ? nameSpan.textContent.trim() : item.textContent.trim();
-              console.log(`[MODEL-MENU]  Item: "${text}"`);
-              
-              // Match by model name (partial match)
-              if (text.includes(target) || target.includes(text)) {
-                console.log(`[MODEL-MENU] ✓ Matched: "${text}"`);
-                // Click the button inside the menuitem
+              const rawText = nameSpan ? nameSpan.textContent.trim() : item.textContent.trim();
+              const text = normalize(rawText);
+              console.log(`[MODEL-MENU]  Item: "${rawText}" -> "${text}"`);
+
+              if (type === 'image' && !allowedImageModels.has(text)) {
+                continue;
+              }
+
+              if (text === normalizedTarget) {
+                console.log(`[MODEL-MENU] ✓ Exact matched: "${rawText}"`);
                 const btn = item.querySelector('button');
                 if (btn) {
                   btn.click();
@@ -2261,14 +2276,15 @@ class GoogleFlowAutomationService {
                 return true;
               }
             }
-            
+
             return false;
-          }, targetModel);
+          }, effectiveTargetModel, this.type);
           
           if (modelSelected) {
-            console.log(`   ✓ ${targetModel} selected\n`);
+            this.options.model = effectiveTargetModel;
+            console.log(`   ✓ ${effectiveTargetModel} selected\n`);
           } else {
-            console.log(`   ⚠️  Could not select ${targetModel} from menu\n`);
+            console.log(`   ⚠️  Could not select ${effectiveTargetModel} from menu\n`);
           }
         } else {
           console.log(`   ⚠️  Could not open model dropdown\n`);
