@@ -5048,6 +5048,259 @@ class GoogleFlowAutomationService {
       };
     }
   }
+
+  async generateVideo(videoPrompt, primaryImagePath, secondaryImagePath, options = {}) {
+    /**
+     * Generate a single video using Google Flow video generation
+     * @param {string} videoPrompt - The prompt/script for video generation
+     * @param {string} primaryImagePath - Main character/styling image
+     * @param {string} secondaryImagePath - Secondary/reference image
+     * @param {Object} options - Generation options {download, outputPath, reloadAfter}
+     * @returns {Object} - {success, path, url, duration, format}
+     */
+    
+    if (this.debugMode) {
+      console.log('\n🔧 [DEBUG] generateVideo() is disabled (debug mode)');
+      console.log('   - init() allowed');
+      console.log('   - navigateToFlow() allowed');
+      console.log('   - All other steps skipped\n');
+      
+      await this.init();
+      await this.navigateToFlow();
+      
+      console.log('\n✅ Browser open at Google Flow project (video mode)');
+      console.log('   (Manual testing enabled)\n');
+      
+      return {
+        success: true,
+        debugMode: true,
+        path: null,
+        url: null,
+        message: 'Debug mode: only opened project'
+      };
+    }
+
+    let videoPath = null;
+    let videoUrl = null;
+    let uploadedImageHrefs = [];
+
+    try {
+      const { download = true, outputPath = null, reloadAfter = false } = options;
+
+      console.log(`\n${'═'.repeat(80)}`);
+      console.log(`🎬 VIDEO GENERATION: Single video`);
+      console.log(`${'═'.repeat(80)}\n`);
+      console.log(`📸 Primary image: ${path.basename(primaryImagePath)}`);
+      console.log(`🔄 Secondary image: ${path.basename(secondaryImagePath)}`);
+      console.log();
+
+      // STEP 1: Initialize browser session
+      console.log('[INIT] 🚀 Initializing browser for video generation...');
+      await this.init();
+      console.log('[INIT] ✅ Browser initialized\n');
+
+      // STEP 2: Navigate to Google Flow project
+      console.log('[NAV] 🔗 Navigating to Google Flow video...');
+      await this.navigateToFlow();
+      console.log('[NAV] ✅ Navigated to project');
+      console.log('[DELAY] ⏳ Waiting 2 seconds...');
+      await this.page.waitForTimeout(2000);
+      console.log('[DELAY] ✅ Ready\n');
+
+      // STEP 3: Wait for page to be fully ready
+      console.log('[PAGE] ⏳ Waiting for page to load...');
+      await this.waitForPageReady();
+      console.log('[PAGE] ✅ Page ready');
+      await this.page.waitForTimeout(5000);
+      console.log('[DELAY] ✅ Ready\n');
+
+      // STEP 4: Switch to video tab
+      console.log('[VIDEO] 📹 Switching to video generation mode...');
+      const videoTabSwitched = await this.switchToVideoTab();
+      if (!videoTabSwitched) {
+        console.warn('[VIDEO] ⚠️  Video tab switch failed, but continuing...');
+      }
+      await this.page.waitForTimeout(1000);
+      console.log('[VIDEO] ✅ Video mode ready\n');
+
+      // STEP 5: Select video from components
+      console.log('[VIDEO] 🎬 Selecting video generation component...');
+      const videoSelected = await this.selectVideoFromComponents();
+      if (!videoSelected) {
+        console.warn('[VIDEO] ⚠️  Video component selection may have failed');
+      }
+      await this.page.waitForTimeout(1000);
+      console.log('[VIDEO] ✅ Ready to generate\n');
+
+      // STEP 6: Focus textbox and upload images
+      console.log('[UPLOAD] 📤 Focusing textbox and uploading reference images...');
+      await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      await this.page.waitForTimeout(300);
+
+      const pasteImageToTextbox = async (imagePath, label, cooldownMs = 5000) => {
+        console.log(`[UPLOAD] 📎 Pasting ${label}: ${path.basename(imagePath)}`);
+        const imageData = fs.readFileSync(imagePath);
+        const imageBase64 = Buffer.from(imageData).toString('base64');
+
+        await this.page.evaluate((base64Str) => {
+          return fetch(`data:image/png;base64,${base64Str}`)
+            .then(res => res.blob())
+            .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+            .then(() => true)
+            .catch(() => false);
+        }, imageBase64);
+
+        await this.page.waitForTimeout(500);
+        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        await this.page.waitForTimeout(120);
+
+        await this.page.keyboard.down('Control');
+        await this.page.keyboard.press('v');
+        await this.page.keyboard.up('Control');
+
+        console.log(`[UPLOAD] ✅ ${label} pasted`);
+        await this.page.waitForTimeout(cooldownMs);
+      };
+
+      // Upload both images
+      try {
+        await pasteImageToTextbox(primaryImagePath, 'primary (character) image', 5000);
+        await pasteImageToTextbox(secondaryImagePath, 'secondary (reference) image', 3000);
+        console.log('[UPLOAD] ✅ Image uploads complete\n');
+      } catch (uploadError) {
+        console.warn(`[UPLOAD] ⚠️  Image upload warning: ${uploadError.message}`);
+      }
+
+      // STEP 7: Focus textbox, paste video prompt and submit
+      console.log('[PROMPT] 📝 Entering video generation prompt...');
+      await this.page.evaluate(() => {
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        if (textbox) textbox.focus();
+        textbox?.setSelectionRange(0, 0);  // Cursor to start
+      });
+      await this.page.waitForTimeout(300);
+
+      // Copy prompt to clipboard
+      await this.page.evaluate((promptText) => {
+        navigator.clipboard.writeText(promptText).catch(() => {});
+      }, videoPrompt);
+      await this.page.waitForTimeout(200);
+
+      // Paste with Ctrl+V
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('v');
+      await this.page.keyboard.up('Control');
+
+      console.log('[PROMPT] ✅ Prompt entered');
+      console.log('[SUBMIT] 🖱️  Waiting for Submit button to be ready...');
+      
+      // Wait for send button to be enabled
+      const buttonReady = await this.waitForSendButtonEnabled();
+      if (!buttonReady) {
+        console.warn('[SUBMIT] ⚠️  Send button not ready, attempting anyway...');
+      }
+
+      await this.page.waitForTimeout(1000);
+
+      // Click submit button
+      console.log('[SUBMIT] 🖱️  Clicking Submit...');
+      const submitClicked = await this.page.evaluate(() => {
+        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]') ||
+                   document.querySelector('button[aria-label*="generate"], button[aria-label*="send"]');
+        if (btn && !btn.disabled) {
+          try {
+            btn.click();
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      if (!submitClicked) {
+        console.warn('[SUBMIT] ⚠️  Could not click submit via JavaScript, trying mouse...');
+        // Fallback: try to find and click via mouse
+        const submitBtn = await this.page.evaluate(() => {
+          const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Send"]');
+          if (btn) {
+            const rect = btn.getBoundingClientRect();
+            return {
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2)
+            };
+          }
+          return null;
+        });
+        
+        if (submitBtn) {
+          await this.page.mouse.move(submitBtn.x, submitBtn.y);
+          await this.page.waitForTimeout(100);
+          await this.page.mouse.down();
+          await this.page.waitForTimeout(50);
+          await this.page.mouse.up();
+          console.log('[SUBMIT] ✓ Submitted via mouse');
+        }
+      } else {
+        console.log('[SUBMIT] ✓ Submitted via JavaScript');
+      }
+
+      console.log('[WAIT] ⏳ Waiting for video generation (30 seconds max)...');
+      await this.page.waitForTimeout(30000);
+
+      // STEP 8: Download video if requested
+      if (download && outputPath) {
+        console.log('\n[DOWNLOAD] 📥 Downloading generated video...');
+        // Set outputDir so downloadVideo() knows where to save
+        const previousOutputDir = this.options.outputDir;
+        this.options.outputDir = outputPath; // Set to the directory path
+        
+        const video = await this.downloadVideo();
+        
+        // Restore previous outputDir
+        this.options.outputDir = previousOutputDir;
+        
+        if (video) {
+          videoPath = video;
+          console.log(`[DOWNLOAD] ✅ Video saved to: ${videoPath}`);
+        } else {
+          console.warn('[DOWNLOAD] ⚠️  Video download failed or returned no path');
+        }
+      }
+
+      // STEP 9: Reload if requested
+      if (reloadAfter) {
+        console.log('\n[RELOAD] ↻ Reloading page...');
+        await this.page.reload({ waitUntil: 'networkidle2' });
+        await this.page.waitForTimeout(2000);
+        console.log('[RELOAD] ✅ Page reloaded\n');
+      }
+
+      console.log(`\n${'═'.repeat(80)}`);
+      console.log(`✅ VIDEO GENERATION COMPLETE`);
+      console.log(`${'═'.repeat(80)}\n`);
+
+      return {
+        success: !!videoPath,
+        path: videoPath,
+        url: videoUrl,
+        duration: 10,
+        format: '9:16',
+        message: videoPath ? 'Video generated successfully' : 'Video generation began but download may have failed'
+      };
+
+    } catch (error) {
+      console.error(`\n❌ VIDEO GENERATION ERROR: ${error.message}`);
+      console.error(`Stack: ${error.stack}`);
+
+      return {
+        success: false,
+        path: null,
+        url: null,
+        error: error.message
+      };
+    }
+  }
 }
 
 export default GoogleFlowAutomationService;
