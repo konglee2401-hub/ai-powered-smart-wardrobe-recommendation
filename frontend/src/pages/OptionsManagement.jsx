@@ -20,12 +20,23 @@ function getImageUrl(url) {
   return url;
 }
 
+const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
+
+function normalizeSceneLockedImageUrls(scene = {}) {
+  const fromScene = scene?.sceneLockedImageUrls || {};
+  return {
+    '16:9': fromScene['16:9'] || null,
+    '9:16': fromScene['9:16'] || scene.sceneLockedImageUrl || null
+  };
+}
+
 /**
  * Compact Scene Card for Sidebar
  */
 function SceneSidebarCard({ scene, isSelected, onClick }) {
   const { t } = useTranslation();
-  const lockedImageUrl = getImageUrl(scene.sceneLockedImageUrl);
+  const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
+  const lockedImageUrl = getImageUrl(lockedImageUrls['9:16'] || lockedImageUrls['16:9']);
   const hasPrompt = scene.sceneLockedPrompt || scene.promptSuggestion;
   const sampleCount = (scene.sceneLockSamples || []).length;
 
@@ -262,13 +273,13 @@ function SceneDetailEditor({ scene, onRefresh }) {
     }
   };
 
-  const chooseDefaultImage = async (imageUrl) => {
+  const chooseDefaultImage = async (imageUrl, aspectRatio) => {
     clearMessages();
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/select-lock-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl })
+        body: JSON.stringify({ imageUrl, aspectRatio })
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Failed to lock image');
@@ -280,7 +291,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
   };
 
   const samples = scene.sceneLockSamples || [];
-  const lockedImageUrl = getImageUrl(scene.sceneLockedImageUrl);
+  const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
 
   return (
     <div style={{
@@ -656,38 +667,36 @@ function SceneDetailEditor({ scene, onRefresh }) {
           </div>
         </div>
 
-        {/* Locked Image Preview */}
-        {lockedImageUrl && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
-              <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
-              {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
-            </p>
-            <div style={{ 
-              display: 'inline-block',
-              padding: '0.5rem',
-              background: '#0f172a',
-              borderRadius: '10px',
-              border: '2px solid #22c55e'
-            }}>
-              <img 
-                src={lockedImageUrl} 
-                alt="Locked scene" 
-                style={{ 
-                  width: '160px', 
-                  height: '160px', 
-                  objectFit: 'cover', 
-                  borderRadius: '6px',
-                  display: 'block'
-                }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = `<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;color:#64748b;fontSize:0.8rem">Image not found</div>`;
-                }}
-              />
-            </div>
+        {/* Locked Image Preview by Aspect */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
+            <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
+            {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            {SCENE_LOCK_ASPECTS.map((ratio) => {
+              const ratioImageUrl = getImageUrl(lockedImageUrls[ratio]);
+              return (
+                <div key={ratio} style={{ padding: '0.75rem', background: '#0f172a', borderRadius: '10px', border: '1px solid #334155' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 600 }}>
+                    {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                  </p>
+                  {ratioImageUrl ? (
+                    <img
+                      src={ratioImageUrl}
+                      alt={`Locked scene ${ratio}`}
+                      style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', objectFit: 'cover', borderRadius: '6px', display: 'block' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem', background: '#1e293b', borderRadius: '6px' }}>
+                      {t('optionsManagement.noLockedImage', 'No locked image')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         {/* Preview Candidates */}
         {samples.length > 0 && (
@@ -695,76 +704,35 @@ function SceneDetailEditor({ scene, onRefresh }) {
             <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
               {t('optionsManagement.previewCandidates', 'Preview Candidates')}
             </p>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
-              gap: '1rem' 
-            }}>
-              {samples.map((sample, idx) => {
-                const sampleUrl = getImageUrl(sample.url);
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+              {SCENE_LOCK_ASPECTS.map((ratio) => {
+                const ratioSamples = sampleGroups[ratio] || [];
                 return (
-                  <div 
-                    key={idx} 
-                    style={{
-                      padding: '0.5rem',
-                      background: '#0f172a',
-                      borderRadius: '10px',
-                      border: sample.isDefault ? '2px solid #22c55e' : '1px solid #334155',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <img 
-                      src={sampleUrl} 
-                      alt={`Scene sample ${idx + 1}`} 
-                      style={{ 
-                        width: '100%', 
-                        height: '100px', 
-                        objectFit: 'cover', 
-                        borderRadius: '6px',
-                        display: 'block'
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.parentElement.querySelector('.img-placeholder').style.display = 'flex';
-                      }}
-                    />
-                    <div 
-                      className="img-placeholder" 
-                      style={{ 
-                        display: 'none',
-                        width: '100%', 
-                        height: '100px', 
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: '#1e293b',
-                        borderRadius: '6px',
-                        color: '#64748b',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      Image unavailable
-                    </div>
-                    <button 
-                      onClick={() => chooseDefaultImage(sample.url)} 
-                      style={{
-                        marginTop: '0.5rem',
-                        width: '100%',
-                        padding: '0.4rem 0.5rem',
-                        background: sample.isDefault ? '#22c55e' : '#374151',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#fff',
-                        fontSize: '0.75rem',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {sample.isDefault 
-                        ? t('optionsManagement.locked', '✓ Locked') 
-                        : t('optionsManagement.selectAsDefault', 'Select')
-                      }
-                    </button>
+                  <div key={ratio} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
+                    <p style={{ margin: '0 0 0.6rem 0', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                    </p>
+                    {ratioSamples.length === 0 ? (
+                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noSamplesForAspect', 'No preview samples for this aspect yet')}</p>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem' }}>
+                        {ratioSamples.map((sample, idx) => {
+                          const sampleUrl = getImageUrl(sample.url);
+                          const isAspectLocked = lockedImageUrls[ratio] === sample.url;
+                          return (
+                            <div key={`${ratio}-${idx}`} style={{ padding: '0.5rem', background: '#0f172a', borderRadius: '10px', border: isAspectLocked ? '2px solid #22c55e' : '1px solid #334155' }}>
+                              <img src={sampleUrl} alt={`Scene sample ${ratio} ${idx + 1}`} style={{ width: '100%', height: ratio === '16:9' ? '84px' : '120px', objectFit: 'cover', borderRadius: '6px', display: 'block' }} />
+                              <button
+                                onClick={() => chooseDefaultImage(sample.url, ratio)}
+                                style={{ marginTop: '0.5rem', width: '100%', padding: '0.4rem 0.5rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
+                              >
+                                {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
