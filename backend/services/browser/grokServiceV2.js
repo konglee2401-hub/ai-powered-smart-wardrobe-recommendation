@@ -2661,9 +2661,9 @@ class GrokServiceV2 extends BrowserService {
             element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true }));
             document.execCommand('selectAll', false, null);
             
-            // Delete
-            element.textContent = '';
-            element.innerHTML = '';
+            // Delete with backspace (safe for Slate editors)
+            element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }));
+            element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Backspace' }));
             
             // Trigger input event to notify React/Vue of change
             element.dispatchEvent(new Event('input', { bubbles: true }));
