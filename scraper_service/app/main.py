@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bson import ObjectId
 
-from .config import PORT, ENABLE_SCHEDULER
+from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize
 from .automation import discover_all, discover_playboard, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker
@@ -29,8 +29,14 @@ async def startup_event():
     ensure_indexes()
     get_or_create_settings()
     await start_worker()
+
+    if AUTO_ENQUEUE_PENDING_ON_STARTUP:
+        queued = await _enqueue_pending_videos(STARTUP_PENDING_ENQUEUE_LIMIT)
+        print(f'[startup] queued pending videos: {queued}')
+
     if ENABLE_SCHEDULER:
         await reload_scheduler()
+
 
 
 async def reload_scheduler():
@@ -48,6 +54,19 @@ def cron_to_args(expr):
         parts = ['0', '7', '*', '*', '*']
     minute, hour, day, month, dow = parts
     return {'minute': minute, 'hour': hour, 'day': day, 'month': month, 'day_of_week': dow}
+
+
+async def _enqueue_pending_videos(limit: int) -> int:
+    pending_cursor = videos.find({'downloadStatus': 'pending'}).sort([('views', -1), ('discoveredAt', -1)]).limit(limit)
+    pending_items = list(pending_cursor)
+
+    queued = 0
+    for item in pending_items:
+        priority = 1 if item.get('views', 0) > 1_000_000 else 5
+        await enqueue(str(item['_id']), priority)
+        queued += 1
+
+    return queued
 
 
 @app.get('/api/shorts-reels/stats/overview')
@@ -125,6 +144,20 @@ async def redownload(video_id: str):
     videos.update_one({'_id': v['_id']}, {'$set': {'downloadStatus': 'pending', 'failReason': ''}})
     await enqueue(str(v['_id']), 1 if v.get('views', 0) > 1_000_000 else 5)
     return {'success': True}
+
+
+@app.post('/api/shorts-reels/videos/trigger-pending-downloads')
+async def trigger_pending_downloads(limit: int = Query(default=200, ge=1, le=2000)):
+    """Manually enqueue videos that are currently in pending download state."""
+    queued = await _enqueue_pending_videos(limit)
+
+    return {
+        'success': True,
+        'queued': queued,
+        'pendingTotal': videos.count_documents({'downloadStatus': 'pending'}),
+        'queue': queue_stats(),
+        'message': 'No pending videos to enqueue' if queued == 0 else f'Queued {queued} pending videos'
+    }
 
 
 @app.get('/api/shorts-reels/logs')
