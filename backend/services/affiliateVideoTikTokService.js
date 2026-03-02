@@ -1286,60 +1286,88 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     try {
       // Upload generated images using OAuth (PARALLEL instead of sequential)
       if (driveService && wearingImagePath && holdingImagePath) {
-        const uploadPromises = [];
+        const uploadTasks = [];
+        const generatedTs = Date.now();
 
-        // UPLOAD wearing image (non-blocking internally, but collected in array)
+        const wearingExt = path.extname(wearingImagePath) || '.jpg';
+        const holdingExt = path.extname(holdingImagePath) || '.jpg';
+
+        const defaultWearingFilename = `Generated-Wearing-${flowId}-${generatedTs}${wearingExt}`;
+        const defaultHoldingFilename = `Generated-Holding-${flowId}-${generatedTs + 1}${holdingExt}`;
+
+        // Keep explicit generated filenames for DB asset creation later
+        wearingImageResult.assetFilename = defaultWearingFilename;
+        holdingImageResult.assetFilename = defaultHoldingFilename;
+
+        // UPLOAD wearing image
         if (fs.existsSync(wearingImagePath)) {
-          uploadPromises.push(
+          uploadTasks.push(
             driveService.uploadFile(
               wearingImagePath,
-              `Generated-Wearing-${flowId}.jpg`,
-              driveService.folderStructure?.outputs,
-              { 
-                flowId, 
-                type: 'change-clothes',
-                timestamp: new Date().toISOString()
+              defaultWearingFilename,
+              {
+                folderId: driveService.folderStructure?.outputs,
+                description: 'Generated wearing image from affiliate flow',
+                properties: {
+                  flowId,
+                  type: 'change-clothes',
+                  timestamp: new Date().toISOString()
+                }
               }
-            ).then(result => {
-              console.log(`  ✅ Wearing image uploaded to Drive`);
-              console.log(`     File ID: ${result.id}`);
-              return result;
-            }).catch(error => {
+            ).then(result => ({ kind: 'wearing', result })).catch(error => {
               console.warn(`  ⚠️ Wearing image upload failed: ${error.message}`);
-              return null;
+              return { kind: 'wearing', result: null };
             })
           );
         }
 
-        // Upload holding image (non-blocking internally, but collected in array)
+        // UPLOAD holding image
         if (fs.existsSync(holdingImagePath)) {
-          uploadPromises.push(
+          uploadTasks.push(
             driveService.uploadFile(
               holdingImagePath,
-              `Generated-Holding-${flowId}.jpg`,
-              driveService.folderStructure?.outputs,
-              { 
-                flowId, 
-                type: 'character-holding-product',
-                timestamp: new Date().toISOString()
+              defaultHoldingFilename,
+              {
+                folderId: driveService.folderStructure?.outputs,
+                description: 'Generated holding image from affiliate flow',
+                properties: {
+                  flowId,
+                  type: 'character-holding-product',
+                  timestamp: new Date().toISOString()
+                }
               }
-            ).then(result => {
-              console.log(`  ✅ Holding image uploaded to Drive`);
-              console.log(`     File ID: ${result.id}`);
-              return result;
-            }).catch(error => {
+            ).then(result => ({ kind: 'holding', result })).catch(error => {
               console.warn(`  ⚠️ Holding image upload failed: ${error.message}`);
-              return null;
+              return { kind: 'holding', result: null };
             })
           );
         }
 
         // 🔴 CRITICAL: WAIT for ALL uploads to complete before proceeding to STEP 3
-        if (uploadPromises.length > 0) {
-          console.log(`\n⏳ Waiting for ${uploadPromises.length} uploads to complete...`);
-          const uploadResults = await Promise.all(uploadPromises);
-          const successCount = uploadResults.filter(r => r).length;
-          console.log(`✅ Step 2.5 Complete: ${successCount}/${uploadPromises.length} uploads successful`);
+        if (uploadTasks.length > 0) {
+          console.log(`\n⏳ Waiting for ${uploadTasks.length} uploads to complete...`);
+          const uploadResults = await Promise.all(uploadTasks);
+          const successCount = uploadResults.filter(r => r?.result?.id).length;
+
+          for (const upload of uploadResults) {
+            if (upload.kind === 'wearing' && upload.result?.id) {
+              wearingImageResult.id = upload.result.id;
+              wearingImageResult.url = upload.result.webViewLink || null;
+              wearingImageResult.assetFilename = upload.result.name || wearingImageResult.assetFilename;
+              console.log(`  ✅ Wearing image uploaded to Drive`);
+              console.log(`     File ID: ${upload.result.id}`);
+            }
+
+            if (upload.kind === 'holding' && upload.result?.id) {
+              holdingImageResult.id = upload.result.id;
+              holdingImageResult.url = upload.result.webViewLink || null;
+              holdingImageResult.assetFilename = upload.result.name || holdingImageResult.assetFilename;
+              console.log(`  ✅ Holding image uploaded to Drive`);
+              console.log(`     File ID: ${upload.result.id}`);
+            }
+          }
+
+          console.log(`✅ Step 2.5 Complete: ${successCount}/${uploadTasks.length} uploads successful`);
         }
       } else {
         console.log(`⚠️ Skipping uploads (Drive service: ${!!driveService}, Files exist: ${fs.existsSync(wearingImagePath) && fs.existsSync(holdingImagePath)})`);
@@ -1708,44 +1736,41 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     // 5.1: Save wearing image
     try {
-      // 💫 CHECK: Wearing image - skip if already exists
-      const wearingFilename = path.basename(wearingImageResult.screenshotPath);
-      let wearingAssetExists = await checkExistingAsset(wearingFilename, 'generated-image');
-      
-      if (wearingAssetExists) {
-        console.log(`\n⏭️  Wearing image already exists in DB (skipping asset creation)`);
-        console.log(`   Existing Asset ID: ${wearingAssetExists.assetId}`);
-        if (wearingAssetExists.assetId) {
-          // Add to saved assets list even if skipped
-          savedAssets.images.push(wearingAssetExists);
-        }
-      } else {
-        console.log('\n📸 Saving wearing image to database...');
-        const wearingAssetResult = await AssetManager.saveAsset({
-          filename: wearingFilename,
-          mimeType: 'image/jpeg',
-          fileSize: fs.existsSync(wearingImagePath) ? fs.statSync(wearingImagePath).size : 0,
-          assetType: 'image',
-          assetCategory: 'generated-image',
-          userId: req.body.userId || 'system',
-          sessionId: flowId,
-          storage: {
-            location: 'google-drive',
+      console.log('\n📸 Saving wearing image to database...');
+      const wearingFileExt = path.extname(wearingImagePath) || '.jpg';
+      const wearingFilename = wearingImageResult.assetFilename || `Generated-Wearing-${flowId}-${Date.now()}${wearingFileExt}`;
+      const wearingOnDrive = !!wearingImageResult.id;
+
+      const wearingAssetResult = await AssetManager.saveAsset({
+        filename: wearingFilename,
+        mimeType: 'image/jpeg',
+        fileSize: fs.existsSync(wearingImagePath) ? fs.statSync(wearingImagePath).size : 0,
+        assetType: 'image',
+        assetCategory: 'generated-image',
+        userId: req.body.userId || 'system',
+        sessionId: flowId,
+        storage: {
+          location: wearingOnDrive ? 'google-drive' : 'local',
+          ...(wearingOnDrive && {
             googleDriveId: wearingImageResult.id,
             googleDrivePath: 'Affiliate AI/Images/Completed',
             url: wearingImageResult.url
-          },
-          metadata: {
-            format: 'jpeg',
-            type: 'character-wearing-product',
-            flowId
-          },
-          tags: ['generated', 'affiliate-video', 'wearing']
-        }, { verbose: true });
+          }),
+          ...(!wearingOnDrive && {
+            filePath: wearingImagePath
+          })
+        },
+        metadata: {
+          format: 'jpeg',
+          type: 'character-wearing-product',
+          flowId,
+          sourcePath: wearingImageResult.screenshotPath
+        },
+        tags: ['generated', 'affiliate-video', 'wearing']
+      }, { verbose: true });
 
-        if (wearingAssetResult.success) {
-          savedAssets.images.push(wearingAssetResult.asset);
-        }
+      if (wearingAssetResult.success) {
+        savedAssets.images.push(wearingAssetResult.asset);
       }
     } catch (assetError) {
       console.warn(`   ⚠️  Failed to save wearing image: ${assetError.message}`);
@@ -1753,44 +1778,41 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     // 5.2: Save holding image
     try {
-      // 💫 CHECK: Holding image - skip if already exists
-      const holdingFilename = path.basename(holdingImageResult.screenshotPath);
-      let holdingAssetExists = await checkExistingAsset(holdingFilename, 'generated-image');
-      
-      if (holdingAssetExists) {
-        console.log(`\n⏭️  Holding image already exists in DB (skipping asset creation)`);
-        console.log(`   Existing Asset ID: ${holdingAssetExists.assetId}`);
-        if (holdingAssetExists.assetId) {
-          // Add to saved assets list even if skipped
-          savedAssets.images.push(holdingAssetExists);
-        }
-      } else {
-        console.log('\n📸 Saving holding image to database...');
-        const holdingAssetResult = await AssetManager.saveAsset({
-          filename: holdingFilename,
-          mimeType: 'image/jpeg',
-          fileSize: fs.existsSync(holdingImagePath) ? fs.statSync(holdingImagePath).size : 0,
-          assetType: 'image',
-          assetCategory: 'generated-image',
-          userId: req.body.userId || 'system',
-          sessionId: flowId,
-          storage: {
-            location: 'google-drive',
+      console.log('\n📸 Saving holding image to database...');
+      const holdingFileExt = path.extname(holdingImagePath) || '.jpg';
+      const holdingFilename = holdingImageResult.assetFilename || `Generated-Holding-${flowId}-${Date.now()}${holdingFileExt}`;
+      const holdingOnDrive = !!holdingImageResult.id;
+
+      const holdingAssetResult = await AssetManager.saveAsset({
+        filename: holdingFilename,
+        mimeType: 'image/jpeg',
+        fileSize: fs.existsSync(holdingImagePath) ? fs.statSync(holdingImagePath).size : 0,
+        assetType: 'image',
+        assetCategory: 'generated-image',
+        userId: req.body.userId || 'system',
+        sessionId: flowId,
+        storage: {
+          location: holdingOnDrive ? 'google-drive' : 'local',
+          ...(holdingOnDrive && {
             googleDriveId: holdingImageResult.id,
             googleDrivePath: 'Affiliate AI/Images/Completed',
             url: holdingImageResult.url
-          },
-          metadata: {
-            format: 'jpeg',
-            type: 'character-holding-product',
-            flowId
-          },
-          tags: ['generated', 'affiliate-video', 'holding']
-        }, { verbose: true });
+          }),
+          ...(!holdingOnDrive && {
+            filePath: holdingImagePath
+          })
+        },
+        metadata: {
+          format: 'jpeg',
+          type: 'character-holding-product',
+          flowId,
+          sourcePath: holdingImageResult.screenshotPath
+        },
+        tags: ['generated', 'affiliate-video', 'holding']
+      }, { verbose: true });
 
-        if (holdingAssetResult.success) {
-          savedAssets.images.push(holdingAssetResult.asset);
-        }
+      if (holdingAssetResult.success) {
+        savedAssets.images.push(holdingAssetResult.asset);
       }
     } catch (assetError) {
       console.warn(`   ⚠️  Failed to save holding image: ${assetError.message}`);

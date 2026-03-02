@@ -2277,17 +2277,29 @@ class GoogleFlowAutomationService {
               }
             }
 
-            if (type === 'image' && items.length > 0) {
-              const firstItem = items[0];
-              const firstText = normalize(firstItem.textContent || '');
-              console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click first item: "${firstItem.textContent?.trim() || ''}" -> "${firstText}"`);
-              const firstBtn = firstItem.querySelector('button');
-              if (firstBtn) {
-                firstBtn.click();
-              } else {
-                firstItem.click();
+            if (type === 'image') {
+              // User-provided hard selector for first model option
+              const directFirstButtonSelector = '#radix-\\:roc\\: > div:nth-child(1) > div > button';
+              const directFirstButton = document.querySelector(directFirstButtonSelector);
+              if (directFirstButton) {
+                const directText = normalize(directFirstButton.textContent || '');
+                console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by direct selector: "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
+                directFirstButton.click();
+                return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
               }
-              return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+
+              if (items.length > 0) {
+                const firstItem = items[0];
+                const firstText = normalize(firstItem.textContent || '');
+                console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click first item: "${firstItem.textContent?.trim() || ''}" -> "${firstText}"`);
+                const firstBtn = firstItem.querySelector('button');
+                if (firstBtn) {
+                  firstBtn.click();
+                } else {
+                  firstItem.click();
+                }
+                return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+              }
             }
 
             return { selected: false, selectedModel: null, usedFallbackFirst: false };
