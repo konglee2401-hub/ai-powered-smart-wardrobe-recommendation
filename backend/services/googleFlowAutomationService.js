@@ -4170,7 +4170,17 @@ class GoogleFlowAutomationService {
   /**
    * Generate multiple images/videos sequentially with different prompts
    * Used for TikTok affiliate flow: wearing image + holding image
-   * For single item generation, just use prompts array with 1 element
+   * 
+   * NEW FLOW:
+   * 1. Upload images + Monitor until they appear in gallery
+   * 2. For each prompt:
+   *    - Paste prompt
+   *    - Submit
+   *    - Monitor hrefs for new generation
+   *    - If error: retry via "reuse command" on that href (max 5 times)
+   *    - If success: download
+   *    - Clear prompt text (Ctrl+A+Backspace)
+   * 3. Close browser
    */
   async generateMultiple(characterImagePath, productImagePath, prompts) {
     if (this.debugMode) {
@@ -4192,31 +4202,20 @@ class GoogleFlowAutomationService {
       };
     }
 
-    /**
-     * GENERATE MULTIPLE IMAGES - CORRECT FLOW FOR TIKTOK AFFILIATE
-     * 
-     * Key Requirements:
-     * - Upload images ONLY 1 TIME
-     * - Configure settings ONLY 1 TIME  
-     * - For each prompt: Enter -> Click generate -> Wait
-     * - If NOT last: Right-click -> "Reuse command" -> Clear prompt
-     * - If IS last: Right-click -> Download
-     */
-    
     console.log(`\n${'═'.repeat(80)}`);
     console.log(`📊 MULTI-IMAGE GENERATION: ${prompts.length} images`);
     console.log(`${'═'.repeat(80)}\n`);
 
     const results = [];
-    let lastGeneratedHref = null;
+    let uploadedImageHrefs = [];
 
     try {
-      // Initialize browser session
+      // STEP 1: Initialize browser session
       console.log('\n[INIT] 🚀 Initializing browser...');
       await this.init();
       console.log('[INIT] ✅ Browser initialized\n');
 
-      // Navigate to Google Flow project
+      // STEP 2: Navigate to Google Flow project
       console.log('[NAV] 🔗 Navigating to Google Flow...');
       await this.navigateToFlow();
       console.log('[NAV] ✅ Navigated to project');
@@ -4224,7 +4223,7 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(2000);
       console.log('[DELAY] ✅ Ready\n');
 
-      // Wait for page to be fully ready
+      // STEP 3: Wait for page to be fully ready
       console.log('[PAGE] ⏳ Waiting for page to load...');
       await this.waitForPageReady();
       console.log('[PAGE] ✅ Page ready');
@@ -4232,7 +4231,7 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(5000);
       console.log('[DELAY] ✅ Ready\n');
 
-      // STEP 1: Configure settings ONCE AT START
+      // STEP 4: Configure settings ONCE AT START
       console.log('[CONFIG] ⚙️  Configuring settings (ONE TIME)...');
       const settingsOk = await this.configureSettings();
       if (!settingsOk) {
@@ -4244,16 +4243,103 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(2000);
       console.log('[DELAY] ✅ Ready\n');
 
-      // STEP 2: Upload images ONCE AT START  
-      console.log('[UPLOAD] 📤 Uploading reference images (ONE TIME)...');
-      const existingImages = [];
-      await this.uploadImages(characterImagePath, productImagePath, existingImages);
-      console.log('[UPLOAD] ✅ Images uploaded');
+      // STEP 5: Focus textbox and capture initial hrefs BEFORE uploading
+      console.log('[HREFS] 📸 Capturing initial hrefs BEFORE upload...');
+      let initialHrefs = await this.page.evaluate(() => {
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        return Array.from(links).map(link => ({
+          href: link.getAttribute('href'),
+          src: link.querySelector('img')?.src || ''
+        }));
+      });
+      console.log(`[HREFS] ✓ Captured ${initialHrefs.length} initial items\n`);
+
+      // STEP 6: Focus on textbox, then upload images
+      console.log('[UPLOAD] 📤 Focusing textbox and uploading images...');
+      await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      await this.page.waitForTimeout(300);
+      
+      // Copy character image to clipboard
+      const charImgData = fs.readFileSync(characterImagePath);
+      const charBlob = Buffer.from(charImgData).toString('base64');
+      await this.page.evaluate((base64Str) => {
+        fetch(`data:image/png;base64,${base64Str}`)
+          .then(res => res.blob())
+          .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+          .catch(e => console.error('Failed to copy:', e));
+      }, charBlob);
+      await this.page.waitForTimeout(500);
+      
+      // Paste character image
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('v');
+      await this.page.keyboard.up('Control');
+      await this.page.waitForTimeout(1000);
+
+      // Copy product image to clipboard
+      const prodImgData = fs.readFileSync(productImagePath);
+      const prodBlob = Buffer.from(prodImgData).toString('base64');
+      await this.page.evaluate((base64Str) => {
+        fetch(`data:image/png;base64,${base64Str}`)
+          .then(res => res.blob())
+          .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+          .catch(e => console.error('Failed to copy:', e));
+      }, prodBlob);
+      await this.page.waitForTimeout(500);
+      
+      // Paste product image
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('v');
+      await this.page.keyboard.up('Control');
+      await this.page.waitForTimeout(1500);
+      
+      console.log('[UPLOAD] ✓ Images pasted to textbox');
       console.log('[DELAY] ⏳ Waiting 2 seconds...');
       await this.page.waitForTimeout(2000);
       console.log('[DELAY] ✅ Ready\n');
 
-      // STEP 3: GENERATE EACH PROMPT WITH DIFFERENT FLOW FOR LAST VS NON-LAST
+      // STEP 7: Monitor hrefs until uploaded images appear in gallery
+      console.log('[MONITOR] 👀 Monitoring hrefs until images appear in gallery...');
+      let uploadedHrefsAppeared = false;
+      let monitoringAttempts = 0;
+      const maxMonitoringAttempts = 60;  // Max 60 seconds
+      
+      while (!uploadedHrefsAppeared && monitoringAttempts < maxMonitoringAttempts) {
+        monitoringAttempts++;
+        
+        const currentHrefs = await this.page.evaluate(() => {
+          const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+          return Array.from(links).map(link => ({
+            href: link.getAttribute('href'),
+            src: link.querySelector('img')?.src || ''
+          }));
+        });
+        
+        // Check if we have more hrefs than before
+        if (currentHrefs.length > initialHrefs.length) {
+          uploadedImageHrefs = currentHrefs.slice(0, currentHrefs.length - initialHrefs.length);
+          console.log(`[MONITOR] ✓ Detected ${uploadedImageHrefs.length} new items with src`);
+          uploadedHrefsAppeared = true;
+          
+          // Focus textbox again
+          await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          await this.page.waitForTimeout(300);
+        }
+        
+        if (monitoringAttempts % 10 === 0) {
+          console.log(`[MONITOR] Attempt ${monitoringAttempts}/${maxMonitoringAttempts}s...`);
+        }
+        
+        await this.page.waitForTimeout(1000);
+      }
+      
+      if (!uploadedHrefsAppeared) {
+        throw new Error('Uploaded images did not appear in gallery after 60 seconds');
+      }
+      
+      console.log('[MONITOR] ✅ Images successfully appeared in gallery\n');
+
+      // STEP 8: Main prompt loop
       for (let i = 0; i < prompts.length; i++) {
         console.log(`\n${'═'.repeat(80)}`);
         console.log(`🎨 PROMPT ${i + 1}/${prompts.length}: Processing`);
@@ -4261,351 +4347,377 @@ class GoogleFlowAutomationService {
 
         const prompt = prompts[i];
         
-        // Validate prompt is a non-empty string
+        // Validate prompt
         if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-          console.error(`❌ PROMPT ${i + 1} INVALID: Expected non-empty string, got:`, {
-            type: typeof prompt,
-            value: prompt,
-            length: prompt?.length || 'undefined'
-          });
+          console.error(`❌ PROMPT ${i + 1} INVALID: Expected non-empty string`);
           results.push({
             success: false,
             imageNumber: i + 1,
-            error: `Invalid prompt: expected non-empty string, got ${typeof prompt}`
+            error: 'Invalid prompt'
           });
-          throw new Error(`Invalid prompt at index ${i}: ${typeof prompt}`);
+          throw new Error(`Invalid prompt at index ${i}`);
         }
-        
-        const isLastPrompt = (i === prompts.length - 1);
 
         try {
-          // STEP 0: For non-first iterations, ensure prompt field is completely clear
+          // STEP A: Clear previous prompt if not first iteration
           if (i > 0) {
-            console.log('[PRE-CLEAR] 🧹 Clearing prompt field before next iteration...');
-            await this.clearPromptText();
-            console.log('[PRE-CLEAR] ✓ Prompt field cleared');
+            console.log('[CLEAR] 🧹 Clearing previous prompt with Ctrl+A + Backspace...');
+            await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+            await this.page.waitForTimeout(200);
+            
+            // Select all
+            await this.page.keyboard.down('Control');
+            await this.page.keyboard.press('a');
+            await this.page.keyboard.up('Control');
+            await this.page.waitForTimeout(100);
+            
+            // Delete
+            await this.page.keyboard.press('Backspace');
+            await this.page.waitForTimeout(500);
+            
+            console.log('[CLEAR] ✓ Previous prompt cleared');
             console.log('[DELAY] ⏳ Waiting 1 second...');
             await this.page.waitForTimeout(1000);
             console.log('[DELAY] ✅ Ready\n');
           }
 
-          // STEP 0: Capture ALL initial hrefs BEFORE entering prompt
-          console.log('[STEP 0] 📎 Capturing ALL initial hrefs (BEFORE typing)...');
-          const initialHrefs = await this.getHrefsFromVirtuosoList();
-          console.log(`[STEP 0] ✓ Captured ${initialHrefs.length} baseline hrefs (before any changes)\n`);
+          // STEP B: Capture hrefs before entering new prompt
+          console.log('[STEP B] 📸 Capturing hrefs BEFORE prompt submission...');
+          const prePromptHrefs = await this.page.evaluate(() => {
+            const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+            return Array.from(links).map(link => link.getAttribute('href'));
+          });
+          console.log(`[STEP B] ✓ Captured ${prePromptHrefs.length} items\n`);
 
-          // STEP A: Enter prompt
-          console.log(`[STEP A] 📝 Entering prompt (${prompt.length} chars)...`);
+          // STEP C: Paste prompt
+          console.log(`[STEP C] 📝 Entering prompt (${prompt.length} chars)...`);
           const normalizedPrompt = prompt.normalize('NFC');
-          await this.enterPrompt(normalizedPrompt);
-          console.log('[STEP A] ✓ Prompt entered\n');
-
-          // STEP B: Click generate button
-          // ❌ COMMENTED OUT: enterPrompt() already clicks the submit button - no need for separate clickCreate()
-          // await this.clickCreate();
-          console.log('[STEP B] ✅ Generate button already clicked in enterPrompt()');
-          console.log('[DELAY] ⏳ Waiting 2 seconds...');
-          await this.page.waitForTimeout(2000);
-          console.log('[DELAY] ✅ Ready');
-
-          // STEP C: Wait for NEW generation to complete with href monitoring
-          console.log('[STEP C] ⏳ Waiting for NEW generation to complete (max 120s)...');
-          console.log('[STEP C] 📊 Monitoring hrefs for NEW image (checking ~every 1 second)...\n');
           
-          const startTime = Date.now();
+          // Copy to clipboard
+          await this.page.evaluate((text) => {
+            navigator.clipboard.writeText(text).catch(() => {});
+          }, normalizedPrompt);
+          await this.page.waitForTimeout(200);
+          
+          // Focus textbox
+          await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          await this.page.waitForTimeout(100);
+          
+          // Paste
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('v');
+          await this.page.keyboard.up('Control');
+          await this.page.waitForTimeout(1000);
+          
+          console.log('[STEP C] ✓ Prompt entered\n');
+
+          // STEP D: Capture hrefs again and submit
+          console.log('[STEP D] 📸 Capturing hrefs AFTER prompt entry...');
+          let promptSubmitHrefs = await this.page.evaluate(() => {
+            const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+            return Array.from(links).map(link => link.getAttribute('href'));
+          });
+          console.log(`[STEP D] ✓ Captured ${promptSubmitHrefs.length} items`);
+          
+          // Click submit button (same as enterPrompt logic)
+          console.log('[STEP D] 🖱️  Clicking submit button...');
+          const submitResult = await this.page.evaluate(() => {
+            const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+            if (!textbox) return { found: false };
+            
+            let container = textbox;
+            for (let i = 0; i < 5; i++) {
+              if (container.nextElementSibling?.querySelector('button')) {
+                container = container.parentElement;
+                break;
+              }
+              container = container.parentElement;
+            }
+            
+            const buttons = container.querySelectorAll('button');
+            for (const btn of buttons) {
+              const icon = btn.querySelector('i.google-symbols');
+              if (icon && icon.textContent.includes('arrow_forward')) {
+                if (!btn.disabled) {
+                  btn.click();
+                  return { found: true, clicked: true };
+                }
+              }
+            }
+            return { found: false };
+          });
+          
+          if (!submitResult.clicked) {
+            console.log('[STEP D] ⚠️  Submit button not found, continuing...');
+          } else {
+            console.log('[STEP D] ✓ Submit clicked');
+          }
+          
+          console.log('[DELAY] ⏳ Waiting 2 seconds for server...');
+          await this.page.waitForTimeout(2000);
+          console.log('[DELAY] ✅ Ready\n');
+
+          // STEP E: Monitor hrefs for new generation
+          console.log('[STEP E] ⏳ Monitoring hrefs for NEW generation (max 120s)...\n');
+          
           const timeoutMs = this.options.timeouts.generation || 120000;
+          const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
           let generationDetected = false;
           let monitoringAttempt = 0;
-          let failureRetryCount = 0; // Track retries for this prompt to prevent infinite loops
-          const maxMonitoringAttempts = Math.ceil(timeoutMs / 1000);
-          const maxFailureRetries = 5; // Max retries per prompt
-          let shouldTryFullRetry = false; // Flag to trigger full image re-add retry
+          let generatedHref = null;
 
-          // Monitor for NEW image (similar to uploadImages approach)
           while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
             monitoringAttempt++;
 
-            // ❌ DETECT AND HANDLE FAILED ITEMS - call handleGenerationFailureRetry() directly
-            // (Don't use click retry button - re-add images via right-click instead)
-            const failureDetected = await this.page.evaluate(() => {
-              // Find all items in the virtuoso list
-              const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
-              
-              // Check for failed items (warning icon + "Không thành công" text)
-              for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                
-                // Look for warning icon (indicates failure)
-                const warningIcon = item.querySelector('i.google-symbols');
-                const isFailed = (warningIcon && warningIcon.textContent.trim() === 'warning');
-                
-                if (isFailed) {
-                  const errorMsg = item.querySelector('[class*="dEfdsQ"]');
-                  return {
-                    found: true,
-                    position: i,
-                    message: errorMsg ? errorMsg.textContent.trim() : 'Unknown error'
-                  };
-                }
-              }
-              return { found: false };
+            // Get current hrefs
+            const currentData = await this.page.evaluate(() => {
+              const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+              return Array.from(links).map(link => {
+                const parent = link.closest('[data-tile-id]');
+                const hasError = parent?.querySelector('i.google-symbols')?.textContent.includes('warning');
+                return {
+                  href: link.getAttribute('href'),
+                  hasError: hasError || false,
+                  isNew: false
+                };
+              });
             });
-            
-            if (failureDetected.found) {
-              // 🔄 DETECTED FAILED ITEM - call handleGenerationFailureRetry() immediately
-              console.log(`[FAILURES] ❌ Failed item detected at position #${failureDetected.position}: "${failureDetected.message}"`);
-              console.log(`[FAILURES]    🔄 Calling full image re-add retry handler...\n`);
-              
-              failureRetryCount++;
-              
-              // Call retry handler to re-add images and repaste prompt
-              const retrySuccess = await this.handleGenerationFailureRetry(this.lastPromptSubmitted);
-              
-              if (retrySuccess) {
-                console.log(`[FAILURES]    ✓ Full retry submitted (attempt ${failureRetryCount}/${maxFailureRetries})`);
-                console.log(`[FAILURES]    📊 Resuming generation monitoring...\n`);
-                
-                // Wait for new generation to stabilize before continuing
-                await this.page.waitForTimeout(3000);
-                
-                // If we've exhausted retries, break and fail
-                if (failureRetryCount >= maxFailureRetries) {
-                  console.log(`\n❌ Failed items exhausted retries (${maxFailureRetries}) - generation failed\n`);
-                  shouldTryFullRetry = false;
-                  break;
-                }
-              } else {
-                console.log(`[FAILURES]    ❌ Retry handler failed\n`);
-                shouldTryFullRetry = false;
+
+            // Find new hrefs
+            for (const current of currentData) {
+              if (!promptSubmitHrefs.includes(current.href)) {
+                current.isNew = true;
+                generatedHref = current;
+                generationDetected = true;
                 break;
               }
             }
 
-            const result = await this.page.evaluate((oldHrefs) => {
-              const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-              const currentHrefs = Array.from(links).map(link => link.getAttribute('href'));
-              
-              // Check ALL hrefs for new ones
-              for (let i = 0; i < currentHrefs.length; i++) {
-                const currentHref = currentHrefs[i];
-                
-                // If this href is NOT in old list, it's a NEW one
-                if (!oldHrefs.includes(currentHref)) {
-                  return { found: true, newHref: currentHref, position: i };
-                }
-              }
-              return { found: false, totalHrefs: currentHrefs.length };
-            }, initialHrefs);
-            
-            if (result.found) {
-              console.log(`   ✅ NEW item detected at position #${result.position}! New image confirmed.\n`);
-              lastGeneratedHref = result.newHref;
-              generationDetected = true;
+            if (generationDetected) {
+              console.log(`[STEP E] ✓ NEW generation detected`);
+              console.log(`[STEP E]   - Has error: ${generatedHref.hasError}`);
               break;
             }
 
-            // Log progress every 10 attempts
-            if (monitoringAttempt % 10 === 0 && monitoringAttempt > 0) {
-              console.log(`   [GENERATION] Attempt ${monitoringAttempt}/${maxMonitoringAttempts} (elapsed: ${(monitoringAttempt).toFixed(0)}s)`);
+            if (monitoringAttempt % 10 === 0) {
+              console.log(`[STEP E] Attempt ${monitoringAttempt}/${maxMonitoringAttempts}s...`);
             }
 
-            // Check for failures every 5 seconds during monitoring
-            if (monitoringAttempt % 5 === 0) {
-              console.log(`   [MONITORING] Checking for failed items (every 5s)...`);
-            }
-            
             await this.page.waitForTimeout(1000);
           }
 
           if (!generationDetected) {
-            // If timeout/no generation detected
-            if (this.lastPromptSubmitted) {
-              console.log(`\n⏳ Generation timeout - attempting full image re-add retry...\n`);
-              
-              // Call retry handler to re-add images and repaste prompt
-              const retrySuccess = await this.handleGenerationFailureRetry(this.lastPromptSubmitted);
-              
-              if (retrySuccess) {
-                console.log(`\n🔄 Full retry submitted - resuming generation monitoring...\n`);
-                
-                // Reset monitoring counters for new attempt
-                generationDetected = false;
-                monitoringAttempt = 0;
-                failureRetryCount = 0;
-                shouldTryFullRetry = false;
-                
-                // Reset initial hrefs for new generation
-                initialHrefs = await this.page.evaluate(() => {
-                  const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
-                  return links.map(link => link.getAttribute('href'));
-                });
-                
-                // Continue the generation monitoring loop instead of breaking
-                continue;
-              }
-            }
-            
-            // If retry failed or no prompt stored, throw error
-            if (shouldTryFullRetry) {
-              throw new Error('Generation monitoring timed out and retry handler failed');
-            }
-            
             throw new Error('No new image generated within timeout period');
           }
 
-          const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
-          console.log(`[STEP C] ✅ NEW generation detected in ${elapsedSecs}s`);
-          console.log(`[STEP C] ✓ Generated href: ${lastGeneratedHref?.substring(0, 60)}...\n`);
+          // STEP F: Handle errors with retry loop
+          let retryCount = 0;
+          const maxRetries = 5;
+          let finalSuccess = !generatedHref.hasError;
 
-          // Wait for image to fully load in the UI (thumbnail, preview, context menu ready)
-          // This ensures the download option is available in the context menu
-          console.log('[STEP C.5] ⏳ Waiting for image UI to fully render (3 seconds)...');
-          await this.page.waitForTimeout(3000);
-          console.log('[STEP C.5] ✅ Image ready for download\n');
+          if (generatedHref.hasError) {
+            console.log('[STEP F] ❌ Generation failed - attempting retries via "reuse command"\n');
+            
+            while (retryCount < maxRetries && !finalSuccess) {
+              retryCount++;
+              console.log(`[RETRY] Attempt ${retryCount}/${maxRetries}...`);
+              
+              // Find the generated item position
+              const reuseResult = await this.page.evaluate((targetHref) => {
+                const link = document.querySelector(`a[href="${targetHref}"]`);
+                if (!link) return { found: false };
+                
+                const rect = link.getBoundingClientRect();
+                return {
+                  found: true,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2)
+                };
+              }, generatedHref.href);
 
-          // STEP D: Download the generated image/video
-          console.log('[STEP D] ⬇️  Downloading generated ' + (this.type === 'image' ? 'image' : 'video') + '...');
-          
-          let downloadedFile = await this.downloadItemViaContextMenu(lastGeneratedHref);
-          
-          if (!downloadedFile) {
-            throw new Error('Failed to download generated ' + (this.type === 'image' ? 'image' : 'video'));
+              if (!reuseResult.found) {
+                console.log('[RETRY] ⚠️  Generated item not found in DOM\n');
+                continue;
+              }
+
+              // Right-click on the generated image
+              console.log('[RETRY] 🖱️  Right-clicking on generated image...');
+              await this.page.mouse.move(reuseResult.x, reuseResult.y);
+              await this.page.waitForTimeout(300);
+              await this.page.mouse.down({ button: 'right' });
+              await this.page.waitForTimeout(50);
+              await this.page.mouse.up({ button: 'right' });
+              await this.page.waitForTimeout(800);
+
+              // Click "Sử dụng lại câu lệnh"
+              const reuseMenuResult = await this.page.evaluate(() => {
+                const buttons = document.querySelectorAll('button[role="menuitem"]');
+                for (const btn of buttons) {
+                  if (btn.textContent.includes('Sử dụng lại')) {
+                    const rect = btn.getBoundingClientRect();
+                    return {
+                      found: true,
+                      x: Math.round(rect.left + rect.width / 2),
+                      y: Math.round(rect.top + rect.height / 2)
+                    };
+                  }
+                }
+                return { found: false };
+              });
+
+              if (!reuseMenuResult.found) {
+                console.log('[RETRY] ⚠️  "Sử dụng lại câu lệnh" button not found\n');
+                await this.page.mouse.move(100, 100);
+                await this.page.waitForTimeout(300);
+                continue;
+              }
+
+              // Click the reuse button
+              console.log('[RETRY] 🖱️  Clicking "Sử dụng lại câu lệnh"...');
+              await this.page.mouse.move(reuseMenuResult.x, reuseMenuResult.y);
+              await this.page.waitForTimeout(200);
+              await this.page.mouse.down();
+              await this.page.waitForTimeout(100);
+              await this.page.mouse.up();
+              await this.page.waitForTimeout(1200);
+
+              // Submit
+              console.log('[RETRY] 🖱️  Clicking submit...');
+              const submitBtn = await this.page.evaluate(() => {
+                const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                if (!textbox) return { found: false };
+                
+                let container = textbox;
+                for (let i = 0; i < 5; i++) {
+                  container = container.parentElement;
+                }
+                
+                const buttons = container.querySelectorAll('button');
+                for (const btn of buttons) {
+                  const icon = btn.querySelector('i.google-symbols');
+                  if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+                    const rect = btn.getBoundingClientRect();
+                    return {
+                      found: true,
+                      x: Math.round(rect.left + rect.width / 2),
+                      y: Math.round(rect.top + rect.height / 2)
+                    };
+                  }
+                }
+                return { found: false };
+              });
+
+              if (submitBtn.found) {
+                await this.page.mouse.move(submitBtn.x, submitBtn.y);
+                await this.page.waitForTimeout(100);
+                await this.page.mouse.down();
+                await this.page.waitForTimeout(50);
+                await this.page.mouse.up();
+              }
+
+              console.log('[RETRY] Wait 2 seconds for resubmission...');
+              await this.page.waitForTimeout(2000);
+
+              // Check if error is gone
+              const stillError = await this.page.evaluate((targetHref) => {
+                const link = document.querySelector(`a[href="${targetHref}"]`);
+                if (!link) return false;
+                
+                const parent = link.closest('[data-tile-id]');
+                return parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
+              }, generatedHref.href);
+
+              finalSuccess = !stillError;
+              
+              if (finalSuccess) {
+                console.log('[RETRY] ✅ Error resolved!\n');
+              } else {
+                console.log(`[RETRY] ❌ Still failed, retrying... (${retryCount}/${maxRetries})\n`);
+              }
+            }
+
+            if (!finalSuccess) {
+              console.log('[STEP F] ❌ Max retries exhausted, moving to next prompt\n');
+              results.push({
+                success: false,
+                imageNumber: i + 1,
+                error: 'Generation failed after 5 retries'
+              });
+              continue;
+            }
           }
-          
-          // RENAME downloaded file to include image number to prevent collisions
-          // when multiple images are downloaded in same session
+
+          // STEP G: Download the generated image
+          console.log('[STEP G] ⏳ Waiting 3 seconds for image UI to render...');
+          await this.page.waitForTimeout(3000);
+
+          console.log('[STEP G] ⬇️  Downloading image...');
+          let downloadedFile = await this.downloadItemViaContextMenu(generatedHref.href);
+
+          if (!downloadedFile) {
+            throw new Error('Failed to download image');
+          }
+
+          // Rename to include image number
           const fileExt = path.extname(downloadedFile);
           const fileName = path.basename(downloadedFile, fileExt);
-          const imageNum = String(i + 1).padStart(2, '0');  // 01, 02, etc.
+          const imageNum = String(i + 1).padStart(2, '0');
           const renamedFileName = `${fileName}-img${imageNum}${fileExt}`;
           const renamedFilePath = path.join(path.dirname(downloadedFile), renamedFileName);
-          
+
           try {
             fs.renameSync(downloadedFile, renamedFilePath);
             downloadedFile = renamedFilePath;
-            console.log(`[STEP D] 📂 Renamed to: ${renamedFileName}`);
+            console.log(`[STEP G] 📂 Renamed to: ${renamedFileName}`);
           } catch (renameErr) {
-            console.log(`[STEP D] ⚠️  Could not rename file: ${renameErr.message}`);
-            // Continue with original name
+            console.log(`[STEP G] ⚠️  Could not rename: ${renameErr.message}`);
           }
-          
-          console.log(`[STEP D] ✅ Download complete: ${path.basename(downloadedFile)}\n`);
 
-          // STEP E: If NOT last, reuse command. If last, skip reuse
-          if (!isLastPrompt) {
-            // NOT LAST PROMPT: Reuse command for next prompt
-            console.log('[STEP E] 🔄 NOT LAST PROMPT - Reusing for next...');
-            
-            const reuseSuccess = await this.rightClickReuseCommand(lastGeneratedHref);
-            if (!reuseSuccess) {
-              throw new Error('Failed to reuse command');
-            }
-            console.log('[STEP E] ✅ Reuse command executed');
-            console.log('[DELAY] ⏳ Waiting 2 seconds...');
-            await this.page.waitForTimeout(2000);
-            console.log('[DELAY] ✅ Ready');
+          console.log(`[STEP G] ✅ Download complete: ${path.basename(downloadedFile)}\n`);
 
-            const clearSuccess = await this.clearPromptText();
-            if (!clearSuccess) {
-              console.log('[STEP E] ⚠️  Clear may have issues, but continuing...');
-            }
-            console.log('[STEP E] ✅ Prompt cleared');
-            console.log('[DELAY] ⏳ Waiting 2 seconds...');
-            await this.page.waitForTimeout(2000);
-            console.log('[DELAY] ✅ Ready\n');
-
-            console.log('[STEP E] ✅ Ready for next prompt\n');
-          } else {
-            // IS LAST PROMPT: No reuse needed
-            console.log('[STEP E] 🎯 LAST PROMPT - Generation and download complete\n');
-          }
-          
           results.push({
             success: true,
             imageNumber: i + 1,
-            href: lastGeneratedHref,
-            downloadedFile: downloadedFile,
-            action: isLastPrompt ? 'downloaded' : 'downloaded_and_reused'
+            href: generatedHref.href,
+            downloadedFile: downloadedFile
           });
 
-        } catch (generationError) {
-          console.error(`\n❌ PROMPT ${i + 1} FAILED: ${generationError.message}\n`);
-          
-          // If first attempt (i === 0) fails, pause for 180s to allow inspection
-          if (i === 0) {
-            console.warn('\n⚠️  ⏱️  FIRST ATTEMPT FAILED - PAUSING FOR 180 SECONDS FOR INSPECTION\n');
-            console.warn('📋 You have 3 minutes to inspect the browser and debug the issue\n');
-            console.warn('Current error:', generationError.message);
-            console.warn('Page URL:', await this.page.url());
-            
-            // Wait 180 seconds (3 minutes)
-            for (let second = 0; second < 180; second++) {
-              if (second % 30 === 0) {
-                console.log(`   ⏳ Inspection time: ${180 - second}s remaining...`);
-              }
-              await this.page.waitForTimeout(1000);
-            }
-            console.warn('\n⏱️  180 SECONDS INSPECTION TIME ENDED - Resuming process\n');
-          }
+        } catch (promptError) {
+          console.error(`\n❌ PROMPT ${i + 1} FAILED: ${promptError.message}\n`);
           
           results.push({
             success: false,
             imageNumber: i + 1,
-            error: generationError.message
+            error: promptError.message
           });
-          throw generationError;
+          throw promptError;
         }
       }
 
-      // STEP F: Create assets and log results
+      // Final: Close browser and return results
       console.log(`\n${'═'.repeat(70)}`);
-      console.log(`📁 STEP F: Creating assets and logging results`);
+      console.log(`✅ All prompts processed`);
       console.log(`${'═'.repeat(70)}\n`);
 
       const downloadedFiles = results
         .filter(r => r.success && r.downloadedFile)
         .map(r => r.downloadedFile);
 
-      console.log(`   📊 Downloaded files: ${downloadedFiles.length}`);
+      console.log(`[DOWNLOAD] Files downloaded: ${downloadedFiles.length}`);
       downloadedFiles.forEach((file, idx) => {
-        console.log(`     [${idx + 1}] ${path.basename(file)}`);
+        console.log(`  [${idx + 1}] ${path.basename(file)}`);
       });
       console.log('');
 
-      // Log session results
-      const sessionLog = {
-        timestamp: new Date().toISOString(),
-        type: this.type,
-        count: downloadedFiles.length,
-        files: downloadedFiles.map(f => ({
-          path: f,
-          name: path.basename(f),
-          size: fs.statSync(f).size
-        })),
-        results: results
-      };
-
-      console.log('   📋 Session log:');
-      console.log(JSON.stringify(sessionLog, null, 2));
-      console.log('');
-
-      // Save session log to file
-      const logFilePath = path.join(this.options.outputDir, `session-${Date.now()}.json`);
-      fs.writeFileSync(logFilePath, JSON.stringify(sessionLog, null, 2));
-      console.log(`   ✅ Session log saved: ${path.basename(logFilePath)}\n`);
-
-      // Wait 5 seconds before closing
-      console.log(`\n⏳ Waiting 5 seconds before closing browser...`);
-      await this.page.waitForTimeout(5000);
-      
-      // Close browser when done
+      // Close browser
+      console.log('⏳ Waiting 3 seconds before closing browser...');
+      await this.page.waitForTimeout(3000);
       await this.close();
+      console.log('✅ Browser closed\n');
 
-      // Return overall results with downloadedFiles list
       const successCount = results.filter(r => r.success).length;
-      console.log(`\n${'═'.repeat(70)}`);
-      console.log(`✅ COMPLETE: ${successCount}/${results.length} successful`);
-      console.log(`📁 Output directory: ${this.options.outputDir}`);
+      console.log(`${'═'.repeat(70)}`);
+      console.log(`📊 RESULTS: ${successCount}/${results.length} successful`);
       console.log(`${'═'.repeat(70)}\n`);
 
       return {
@@ -4613,12 +4725,11 @@ class GoogleFlowAutomationService {
         results: results,
         totalGenerated: successCount,
         totalRequested: results.length,
-        downloadedFiles: downloadedFiles,
-        sessionLog: logFilePath
+        downloadedFiles: downloadedFiles
       };
 
     } catch (error) {
-      console.error(`❌ Multi-generation failed: ${error.message}`);
+      console.error(`\n❌ Multi-generation failed: ${error.message}\n`);
       if (this.browser) {
         await this.close();
       }
