@@ -3982,10 +3982,11 @@ class GoogleFlowAutomationService {
       }
 
       console.log(`      ✓ Found image (${linkData.linkCount} total items)`);
+      console.log(`      ⏳ Moving mouse to image and waiting 3s before right-click...`);
 
       // Right-click on the image using mouse movement method
       await this.page.mouse.move(linkData.x, linkData.y);
-      await this.page.waitForTimeout(100);
+      await this.page.waitForTimeout(3000);  // Wait 3s for visual feedback before right-click
       await this.page.mouse.down({ button: 'right' });
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
@@ -4042,7 +4043,7 @@ class GoogleFlowAutomationService {
       await this.page.mouse.up();
 
       console.log(`      ✓ Added to command`);
-      await this.page.waitForTimeout(800);
+      await this.page.waitForTimeout(2000);  // Wait 2s before moving to next image
       
       return true;
 
@@ -4365,6 +4366,8 @@ class GoogleFlowAutomationService {
 
           console.log(`   📎 wearing href: ${this.uploadedImageRefs.wearing.href?.substring(0, 60) || '(none)'}`);
           console.log(`   📎 product href: ${this.uploadedImageRefs.product.href?.substring(0, 60) || '(none)'}`);
+          console.log('[MONITOR] ⏳ Waiting 3s for images to fully attach to prompt...');
+          await this.page.waitForTimeout(3000);
 
           await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
           await this.page.waitForTimeout(300);
@@ -4685,10 +4688,9 @@ class GoogleFlowAutomationService {
           });
           console.log(`[STEP D] ✓ Captured ${promptSubmitHrefs.length} items`);
           
-          // Delay before submit: first prompt 3s, chained prompts 2s
-          const preSubmitDelayMs = i > 0 ? 2000 : 3000;
-          console.log(`[STEP D] ⏳ Waiting ${preSubmitDelayMs / 1000} seconds for editor stabilization...`);
-          await this.page.waitForTimeout(preSubmitDelayMs);
+          // Delay before submit: wait 3s for Slate editor to fully load prompt
+          console.log('[STEP D] ⏳ Waiting 3 seconds for Slate editor to stabilize...');
+          await this.page.waitForTimeout(3000);
 
 
           // Click submit button
@@ -4830,6 +4832,11 @@ class GoogleFlowAutomationService {
                 break;
               }
 
+              // Wait 5s between each retry attempt for UI to stabilize
+              if (retryAttempt > 1) {
+                console.log('[STEP F][Retry] ⏳ Waiting 5s before next retry attempt...');
+                await this.page.waitForTimeout(5000);
+              }
               console.log(`[STEP F][Retry] Attempt ${retryAttempt}/3 - hovering error tile to reveal action buttons...`);
               await this.page.mouse.move(errorTile.tileCenter.x, errorTile.tileCenter.y);
               await this.page.waitForTimeout(450);
@@ -4885,8 +4892,25 @@ class GoogleFlowAutomationService {
                 await this.page.waitForTimeout(80);
                 await this.page.mouse.up();
 
-                console.log('[STEP F][Reuse] ⏳ Wait 2s, then submit...');
-                await this.page.waitForTimeout(2000);
+                console.log('[STEP F][Reuse] ⏳ Focusing textbox and clearing with Ctrl+A + Backspace...');
+                await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+                await this.page.waitForTimeout(300);
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('a');
+                await this.page.keyboard.up('Control');
+                await this.page.waitForTimeout(200);
+                await this.page.keyboard.press('Backspace');
+                await this.page.waitForTimeout(300);
+                
+                console.log('[STEP F][Reuse] ⏳ Pasting prompt from clipboard...');
+                // Old prompt should still be in clipboard from earlier Ctrl+C
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('v');
+                await this.page.keyboard.up('Control');
+                await this.page.waitForTimeout(1000);
+                
+                console.log('[STEP F][Reuse] ⏳ Waiting 3s for Slate editor to stabilize before submit...');
+                await this.page.waitForTimeout(3000);
 
                 const submitted = await clickSubmitButton();
                 if (!submitted) {
