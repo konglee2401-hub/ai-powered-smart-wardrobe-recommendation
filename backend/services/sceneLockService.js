@@ -61,7 +61,7 @@ export async function generateSceneLockPromptWithChatGPT(sceneOption, payload = 
 
   try {
     const prompt = buildSceneLockChatGPTPrompt(sceneOption, payload);
-    const raw = await chat.generateText(prompt);
+    const raw = await chat.sendPrompt(prompt);
     const parsed = extractFirstJsonObject(raw);
 
     if (!parsed || !parsed.sceneLockedPrompt) {
