@@ -2212,12 +2212,19 @@ class GoogleFlowAutomationService {
         if (modelDropdownClicked) {
           // Wait for dropdown menu to appear
           console.log(`   ✓ Model dropdown opened, waiting for menu...`);
-          await this.page.waitForTimeout(800);
+          await this.page.waitForTimeout(1000);
           
           // Now click the target model in the menu
           // IMPORTANT: Radix UI menus are rendered in a PORTAL at document.body level
           // They are NOT children of the trigger button, so we must search from document root
-          const modelSelectionResult = await this.page.evaluate((target, type) => {
+          let modelSelectionResult = null;
+          for (let modelSelectAttempt = 1; modelSelectAttempt <= 2; modelSelectAttempt++) {
+            if (modelSelectAttempt === 2) {
+              console.log('   ⏳ Retrying model selection after additional 1s wait...');
+              await this.page.waitForTimeout(1000);
+            }
+
+            modelSelectionResult = await this.page.evaluate((target, type) => {
             const normalize = (text = '') => text
               .normalize('NFKC')
               .replace(/🍌/g, '')
@@ -2228,36 +2235,42 @@ class GoogleFlowAutomationService {
             const allowedImageModels = new Set(['nano banana pro', 'nano banana 2']);
             const normalizedTarget = normalize(target);
 
-            // Method 1: Find by role="menu" anywhere in document (portal)
-            let menu = document.querySelector('[role="menu"]');
+            // Find the correct menu: prefer OPEN menu that actually contains menuitems
+            const candidateMenus = Array.from(document.querySelectorAll(
+              '[role="menu"][data-state="open"], [data-radix-menu-content][data-state="open"], [role="menu"], [data-radix-menu-content]'
+            ));
 
-            // Method 2: Find by Radix-specific attribute
-            if (!menu) {
-              menu = document.querySelector('[data-radix-menu-content]');
-            }
+            let menu = null;
+            let maxItemCount = 0;
+            const menuDebug = [];
 
-            // Method 3: Find by common portal container classes
-            if (!menu) {
-              const portals = document.querySelectorAll('body > div > [role="menu"], body > [role="menu"]');
-              if (portals.length > 0) {
-                menu = portals[0];
+            for (const candidate of candidateMenus) {
+              const itemCount = candidate.querySelectorAll('[role="menuitem"]').length;
+              menuDebug.push({
+                id: candidate.id || null,
+                role: candidate.getAttribute('role'),
+                state: candidate.getAttribute('data-state'),
+                itemCount
+              });
+
+              if (itemCount > maxItemCount) {
+                maxItemCount = itemCount;
+                menu = candidate;
               }
             }
 
-            if (!menu) {
-              console.log('[MODEL-MENU] Menu not found in DOM or portal');
-              const allMenus = document.querySelectorAll('[role="menu"]');
-              const allRadix = document.querySelectorAll('[data-radix-menu-content]');
-              console.log(`[MODEL-MENU] Debug: Found ${allMenus.length} [role="menu"], ${allRadix.length} [data-radix-menu-content]`);
+            if (!menu || maxItemCount === 0) {
+              console.log('[MODEL-MENU] No usable model menu found (menu with menuitems)');
+              console.log(`[MODEL-MENU] Candidates: ${JSON.stringify(menuDebug)}`);
               return { selected: false, selectedModel: null, usedFallbackFirst: false };
             }
 
             const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
-            console.log(`[MODEL-MENU] Found ${items.length} menu items`);
+            console.log(`[MODEL-MENU] Using menu id="${menu.id || 'n/a'}" with ${items.length} items`);
 
             for (const item of items) {
-              const nameSpan = item.querySelector('span');
-              const rawText = nameSpan ? nameSpan.textContent.trim() : item.textContent.trim();
+              const btn = item.querySelector('button') || item;
+              const rawText = (btn.textContent || item.textContent || '').trim();
               const text = normalize(rawText);
               console.log(`[MODEL-MENU]  Item: "${rawText}" -> "${text}"`);
 
@@ -2267,23 +2280,32 @@ class GoogleFlowAutomationService {
 
               if (text === normalizedTarget) {
                 console.log(`[MODEL-MENU] ✓ Exact matched: "${rawText}"`);
-                const btn = item.querySelector('button');
-                if (btn) {
-                  btn.click();
-                } else {
-                  item.click();
-                }
+                btn.click();
                 return { selected: true, selectedModel: text, usedFallbackFirst: false };
               }
             }
 
             if (type === 'image') {
-              // User-provided hard selector for first model option
-              const directFirstButtonSelector = '#radix-\\:roc\\: > div:nth-child(1) > div > button';
-              const directFirstButton = document.querySelector(directFirstButtonSelector);
+              // Prefer selector for FIRST OPTION in the active model menu (dynamic menu id)
+              let directFirstButton = null;
+              if (menu?.id) {
+                const escapedId = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(menu.id) : menu.id.replace(/:/g, '\\:');
+                const dynamicSelector = `#${escapedId} > div:nth-child(1) > div > button`;
+                directFirstButton = document.querySelector(dynamicSelector);
+                if (directFirstButton) {
+                  const directText = normalize(directFirstButton.textContent || '');
+                  console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by dynamic selector (${dynamicSelector}): "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
+                  directFirstButton.click();
+                  return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
+                }
+              }
+
+              // Legacy fallback selector kept for compatibility with earlier captured id
+              const legacySelector = '#radix-\\:roc\\: > div:nth-child(1) > div > button';
+              directFirstButton = document.querySelector(legacySelector);
               if (directFirstButton) {
                 const directText = normalize(directFirstButton.textContent || '');
-                console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by direct selector: "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
+                console.log(`[MODEL-MENU] ⚠️ No exact text match, fallback click by legacy selector: "${directFirstButton.textContent?.trim() || ''}" -> "${directText}"`);
                 directFirstButton.click();
                 return { selected: true, selectedModel: 'nano banana pro', usedFallbackFirst: true };
               }
@@ -2304,6 +2326,11 @@ class GoogleFlowAutomationService {
 
             return { selected: false, selectedModel: null, usedFallbackFirst: false };
           }, effectiveTargetModel, this.type);
+
+            if (modelSelectionResult?.selected) {
+              break;
+            }
+          }
           
           if (modelSelectionResult?.selected) {
             if (this.type === 'image' && modelSelectionResult.usedFallbackFirst) {
@@ -2332,16 +2359,19 @@ class GoogleFlowAutomationService {
         if (settingsClosed) {
           console.log('   ✓ Settings menu closed\n');
         } else {
-          console.log('   ⚠️  Could not close settings menu, clicking elsewhere...\n');
-          // Fallback: click on main canvas area to close menu
-          await this.page.evaluate(() => {
-            const mainArea = document.querySelector('[role="main"]') || document.querySelector('.canvas') || document.body;
-            mainArea.click();
-          });
+          console.log('   ⚠️  Could not close settings menu, sending Escape key...\n');
+          // Fallback: Send Escape key (safer than clicking body)
+          await this.page.keyboard.press('Escape');
           await this.page.waitForTimeout(500);
         }
       } catch (closeErr) {
-        console.log('   ⚠️  Error closing menu, continuing anyway...');
+        console.log('   ⚠️  Error closing menu, trying Escape key...');
+        try {
+          await this.page.keyboard.press('Escape');
+          await this.page.waitForTimeout(300);
+        } catch (kbErr) {
+          console.log('   ⚠️  Escape key also failed, continuing anyway...');
+        }
       }
 
       console.log('   ✅ Settings configuration complete\n');
@@ -3379,7 +3409,23 @@ class GoogleFlowAutomationService {
 
       // Wait for submenu to appear
       console.log('   ⏳ Waiting for submenu...');
-      await this.page.waitForTimeout(1500);
+      await this.page.waitForTimeout(2000);
+
+      let submenuReady = await this.page.evaluate(() => {
+        const openMenus = Array.from(document.querySelectorAll('[role="menu"][data-state="open"], [data-radix-menu-content][data-state="open"]'));
+        const hasSubmenuOptions = openMenus.some(menu => menu.querySelectorAll('[role="menuitem"]').length > 0);
+        return { hasSubmenuOptions, menuCount: openMenus.length };
+      });
+
+      if (!submenuReady.hasSubmenuOptions) {
+        console.log('   ⏳ Submenu not ready yet, waiting thêm 1.5s rồi query lại...');
+        await this.page.waitForTimeout(1500);
+        submenuReady = await this.page.evaluate(() => {
+          const openMenus = Array.from(document.querySelectorAll('[role="menu"][data-state="open"], [data-radix-menu-content][data-state="open"]'));
+          const hasSubmenuOptions = openMenus.some(menu => menu.querySelectorAll('[role="menuitem"]').length > 0);
+          return { hasSubmenuOptions, menuCount: openMenus.length };
+        });
+      }
 
       // Try to find and click the best quality option
       let selectedQuality = null;
@@ -3503,33 +3549,43 @@ class GoogleFlowAutomationService {
 
       if (!selectedQuality) {
         console.warn('   ⚠️  No quality option found, trying first available...\n');
-        
-        // Fallback: just click first submenu button
-        const firstOption = await this.page.evaluate(() => {
-          const menus = document.querySelectorAll('[role="menu"]');
-          if (menus.length < 2) return { found: false };
-          
-          const submenu = menus[menus.length - 1];
-          const buttons = submenu.querySelectorAll('[role="menuitem"]');
-          
-          if (buttons.length === 0) return { found: false };
-          
+
+        const getFirstSubmenuOption = async () => this.page.evaluate(() => {
+          const openMenus = Array.from(document.querySelectorAll('[role="menu"][data-state="open"], [data-radix-menu-content][data-state="open"]'));
+          const submenu = openMenus[openMenus.length - 1];
+          if (!submenu) return { found: false, reason: 'no-open-menu' };
+
+          const buttons = Array.from(submenu.querySelectorAll('[role="menuitem"]')).filter(btn => {
+            const rect = btn.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          });
+
+          if (buttons.length === 0) return { found: false, reason: 'no-visible-menuitems' };
+
           const firstBtn = buttons[0];
           const rect = firstBtn.getBoundingClientRect();
           return {
             found: true,
             x: Math.round(rect.left + rect.width / 2),
-            y: Math.round(rect.top + rect.height / 2)
+            y: Math.round(rect.top + rect.height / 2),
+            text: (firstBtn.textContent || '').trim()
           };
         });
 
+        let firstOption = await getFirstSubmenuOption();
         if (!firstOption.found) {
-          console.warn('   ⚠️  No submenu options available\n');
+          console.log('   ⏳ Submenu options chưa thấy, đợi thêm 1.5s rồi query lại...');
+          await this.page.waitForTimeout(1500);
+          firstOption = await getFirstSubmenuOption();
+        }
+
+        if (!firstOption.found) {
+          console.warn(`   ⚠️  No submenu options available (${firstOption.reason || 'unknown'})\n`);
           return null;
         }
 
         // Click first option with Method 2
-        console.log('   🖱️  Clicking first available option...');
+        console.log(`   🖱️  Clicking first available option: "${firstOption.text || 'unknown'}"...`);
         await this.page.mouse.move(firstOption.x, firstOption.y);
         await this.page.waitForTimeout(150);
         await this.page.mouse.down();
