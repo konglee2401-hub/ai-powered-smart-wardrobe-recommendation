@@ -4084,40 +4084,61 @@ class GoogleFlowAutomationService {
 
   async clearPromptText() {
     /**
-     * Clear all text from the prompt input field (Slate editor)
-     * Used after right-clicking "Sử dụng lại câu lệnh" to clear previous prompt
+     * Clear all content from the prompt input field (Slate editor)
+     * INCLUDES: text + attached images
+     * Used after right-clicking "Sử dụng lại câu lệnh" to clear previous prompt and images
      * 
-     * Note: execCommand doesn't work well with Slate, so we use keyboard shortcuts
+     * ⚠️ CRITICAL ISSUE FIXED:
+     * - When reuse command is clicked, previous command is reloaded WITH attached images
+     * - clearPromptText() must remove BOTH text AND images
+     * - Previously only cleared text, leaving images attached
+     * - This caused duplicate generation with unwanted images
      */
-    console.log('   🧹 Clearing prompt text...');
+    console.log('   🧹 Clearing prompt text AND images...');
 
     try {
-      // Clear prompt using JavaScript (more reliable than keyboard shortcuts)
+      // Clear ALL content using JavaScript (text + images)
       const cleared = await this.page.evaluate(() => {
         const slateEditor = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (!slateEditor) {
           return false;
         }
 
-        // Method 1: Clear Slate editor content
-        // Slate stores content in contentEditable div, clear both textContent and internal state
+        // Step 1: Remove all embedded images
+        const images = slateEditor.querySelectorAll('img');
+        console.log(`   [JS] Found ${images.length} embedded images`);
+        
+        // Remove each image
+        images.forEach(img => {
+          const parent = img.parentElement;
+          if (parent) {
+            parent.remove();
+          } else {
+            img.remove();
+          }
+        });
+
+        // Step 2: Clear all text content
+        // Slate stores content in contentEditable div
         slateEditor.textContent = '';
         slateEditor.innerHTML = '';
         
-        // Method 2: Trigger input events to notify React/framework of change
+        // Step 3: Trigger change events to notify React/Slate of changes
         const inputEvent = new Event('input', { bubbles: true });
         const changeEvent = new Event('change', { bubbles: true });
         slateEditor.dispatchEvent(inputEvent);
         slateEditor.dispatchEvent(changeEvent);
         
-        // Verify clearing
-        const remaining = slateEditor.textContent.trim().length;
-        console.log(`   [JS] Cleared - remaining: ${remaining} chars`);
-        return remaining === 0;
+        // Step 4: Verify clearing - check both text and remaining content
+        const remainingText = slateEditor.textContent.trim().length;
+        const remainingImages = slateEditor.querySelectorAll('img').length;
+        console.log(`   [JS] Cleared - remaining: text=${remainingText} chars, images=${remainingImages}`);
+        
+        return remainingText === 0 && remainingImages === 0;
       });
 
       if (cleared) {
-        console.log('   ✓ Prompt text cleared completely');
+        console.log('   ✓ Prompt text AND images cleared completely');
         return true;
       } else {
         // Fallback: Try keyboard approach
@@ -4125,7 +4146,7 @@ class GoogleFlowAutomationService {
         await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
         await this.page.waitForTimeout(200);
         
-        // Use ctrl+a (lowercase) instead of Control+A
+        // Select all and delete
         await this.page.keyboard.type('');  // Clear any pending keys
         await this.page.keyboard.down('Control');
         await this.page.keyboard.press('a');
