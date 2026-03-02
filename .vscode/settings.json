@@ -20,6 +20,10 @@
             "matchCommandLine": true
         },
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "/^node backend/scripts/scene-lock/run-scene-lock-workflow\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
