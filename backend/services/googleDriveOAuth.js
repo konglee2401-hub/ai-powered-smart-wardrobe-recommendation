@@ -850,6 +850,128 @@ class GoogleDriveOAuthService {
   }
 
   /**
+   * Find folder by name in parent folder
+   */
+  async findFolderByName(folderName, parentFolderId) {
+    try {
+      if (!this.initialized) {
+        await this.authenticate();
+      }
+
+      const response = await this.drive.files.list({
+        q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`,
+        spaces: 'drive',
+        pageSize: 1,
+        fields: 'files(id, name, webViewLink, parents)',
+      });
+
+      if (response.data.files && response.data.files.length > 0) {
+        return response.data.files[0];
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error finding folder ${folderName}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Create a new folder in parent folder
+   */
+  async createFolder(folderName, parentFolderId) {
+    try {
+      if (!this.initialized) {
+        await this.authenticate();
+      }
+
+      const fileMetadata = {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId],
+      };
+
+      const response = await this.drive.files.create({
+        resource: fileMetadata,
+        fields: 'id, name, webViewLink, parents',
+      });
+
+      console.log(`✅ Created folder: ${folderName} (${response.data.id})`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error creating folder ${folderName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload file buffer to Google Drive
+   */
+  async uploadFileBuffer(buffer, fileName, parentFolderId, mimeType = 'application/octet-stream') {
+    try {
+      if (!this.initialized) {
+        await this.authenticate();
+      }
+
+      const fileMetadata = {
+        name: fileName,
+        parents: [parentFolderId],
+        description: 'Uploaded from Smart Wardrobe App',
+        properties: {
+          appName: 'smart-wardrobe',
+          uploadedAt: new Date().toISOString(),
+        },
+      };
+
+      const { Readable } = await import('stream');
+      const stream = Readable.from(buffer);
+
+      const response = await this.drive.files.create({
+        resource: fileMetadata,
+        media: {
+          mimeType: mimeType,
+          body: stream,
+        },
+        fields: 'id, name, webViewLink, thumbnailLink, mimeType, size',
+      });
+
+      console.log(`✅ File uploaded: ${fileName} (${response.data.id})`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error uploading file ${fileName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * List all folders in parent folder
+   */
+  async listFolders(parentFolderId = null) {
+    try {
+      if (!this.initialized) {
+        await this.authenticate();
+      }
+
+      let query = `mimeType='application/vnd.google-apps.folder' and trashed=false`;
+      if (parentFolderId) {
+        query += ` and '${parentFolderId}' in parents`;
+      }
+
+      const response = await this.drive.files.list({
+        q: query,
+        spaces: 'drive',
+        pageSize: 50,
+        fields: 'files(id, name, webViewLink, parents, createdTime)',
+      });
+
+      return response.data.files || [];
+    } catch (error) {
+      console.error(`Error listing folders:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Get MIME type from file extension
    */
   getMimeType(filePath) {

@@ -334,3 +334,91 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
 @app.get('/healthz')
 async def healthz():
     return {'ok': True, 'time': time.time()}
+
+
+# ================================
+# Google Drive Upload Endpoints
+# ================================
+
+@app.post('/api/shorts-reels/videos/upload-to-drive')
+async def upload_downloaded_videos_to_drive():
+    """
+    Upload all downloaded videos to Google Drive
+    This triggers the Google Drive upload pipeline
+    """
+    try:
+        from .drive_upload_service import process_pending_uploads
+        
+        started = time.time()
+        
+        # Get all videos that are downloaded but not uploaded
+        pending = list(videos.find({'downloadStatus': 'done', 'uploadStatus': {'$ne': 'done'}}))
+        
+        if not pending:
+            return {'success': True, 'message': 'No pending uploads', 'processed': 0}
+        
+        print(f"\n📤 Starting upload of {len(pending)} videos to Google Drive...")
+        
+        # Process uploads
+        await process_pending_uploads()
+        
+        # Count results
+        uploaded = videos.count_documents({'uploadStatus': 'done'})
+        upload_failed = videos.count_documents({'uploadStatus': 'failed'})
+        
+        duration = int((time.time() - started) * 1000)
+        
+        return {
+            'success': True,
+            'processed': len(pending),
+            'uploaded': uploaded,
+            'failed': upload_failed,
+            'duration': duration
+        }
+    except Exception as e:
+        print(f"❌ Upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/api/shorts-reels/videos/upload-status')
+async def get_upload_status():
+    """Get current upload status for all videos"""
+    return {
+        'downloaded': videos.count_documents({'downloadStatus': 'done'}),
+        'uploaded': videos.count_documents({'uploadStatus': 'done'}),
+        'uploadFailed': videos.count_documents({'uploadStatus': 'failed'}),
+        'pendingUpload': videos.count_documents({'downloadStatus': 'done', 'uploadStatus': {'$ne': 'done'}}),
+        'withAssets': videos.count_documents({'assetId': {'$exists': True}})
+    }
+
+
+@app.post('/api/shorts-reels/videos/{video_id}/upload-to-drive')
+async def upload_single_video_to_drive(video_id: str):
+    """Upload a specific video to Google Drive"""
+    try:
+        from .drive_upload_service import get_drive_service
+        
+        video = videos.find_one({'_id': ObjectId(video_id)})
+        if not video:
+            raise HTTPException(status_code=404, detail='Video not found')
+        
+        if video.get('downloadStatus') != 'done':
+            raise HTTPException(status_code=400, detail='Video not downloaded yet')
+        
+        service = await get_drive_service()
+        success = await service.process_video_download(video_id)
+        
+        if success:
+            # Fetch updated video to return current state
+            updated = videos.find_one({'_id': ObjectId(video_id)})
+            return {
+                'success': True,
+                'video': normalize(updated),
+                'message': 'Video uploaded successfully'
+            }
+        else:
+            raise HTTPException(status_code=500, detail='Upload failed')
+    except Exception as e:
+        print(f"❌ Single video upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

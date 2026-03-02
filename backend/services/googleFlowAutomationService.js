@@ -2149,52 +2149,56 @@ class GoogleFlowAutomationService {
         // Button contains arrow_drop_down icon and model name
         console.log(`   > Searching for model dropdown button...`);
         
-        const modelDropdownClicked = await this.page.evaluate((target) => {
-          // Find button with arrow_drop_down icon (model dropdown indicator)
-          const buttons = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'));
-          
-          for (const btn of buttons) {
-            // Check if it has arrow_drop_down icon (model dropdown indicator)
-            const icon = btn.querySelector('i.google-symbols');
-            if (icon && icon.textContent.includes('arrow_drop_down')) {
-              // Check if it contains model name or is positioned correctly
-              const text = btn.textContent.trim();
-              const hasModelName = text.includes('Banana') || text.includes('Nano') || text.includes('Imagen') || text.includes('Veo');
-              
-              // 💫 FIX: Also check by positioning - settings button is usually bottom-right area
+        const modelDropdownButton = await this.page.evaluate(() => {
+          // PRIORITY: query inside settings menu container first
+          const settingsContainer = document.querySelector('[data-radix-menu-content].DropdownMenuContent, [data-radix-menu-content][role="menu"]');
+
+          const findButtonByArrowIcon = (root) => {
+            if (!root) return null;
+            const icons = Array.from(root.querySelectorAll('i.google-symbols'));
+            for (const icon of icons) {
+              const iconText = (icon.textContent || '').trim();
+              if (!iconText.includes('arrow_drop_down')) continue;
+
+              const btn = icon.closest('button[aria-haspopup="menu"], button');
+              if (!btn) continue;
+
               const rect = btn.getBoundingClientRect();
-              const hasProperSize = rect.width > 50 && rect.height > 20;
-              const hasProperPosition = rect.top > 600 && rect.left > 700;  // Bottom-right area
-              
-              if ((hasModelName || hasProperPosition) && hasProperSize) {
-                console.log(`[MODEL] Found model button: "${text.substring(0, 50)}" at (${Math.round(rect.left)}, ${Math.round(rect.top)})`);
-                
-                if (rect.width > 0 && rect.height > 0) {
-                  btn.click();
-                  console.log(`[MODEL] ✓ Clicked model dropdown`);
-                  return true;
-                }
-              }
+              if (rect.width <= 0 || rect.height <= 0) continue;
+
+              return {
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                text: (btn.textContent || '').trim().substring(0, 60),
+                source: root === settingsContainer ? 'settings-container' : 'document-fallback'
+              };
             }
-          }
-          
-          // 💫 FALLBACK: Search by position and icon only if name matching fails
-          console.log(`[MODEL] Name matching failed, trying position + icon fallback...`);
-          for (const btn of buttons) {
-            const icon = btn.querySelector('i.google-symbols');
-            if (icon && icon.textContent.includes('arrow_drop_down')) {
-              const rect = btn.getBoundingClientRect();
-              // Bottom-right button with proper size
-              if (rect.top > 600 && rect.left > 600 && rect.width > 40 && rect.height > 20) {
-                console.log(`[MODEL] Found by position fallback`);
-                btn.click();
-                return true;
-              }
-            }
-          }
-          
-          return false;
-        }, targetModel);
+            return null;
+          };
+
+          // Try in settings container first
+          const byContainer = findButtonByArrowIcon(settingsContainer);
+          if (byContainer) return { found: true, ...byContainer };
+
+          // Fallback: full document
+          const byDocument = findButtonByArrowIcon(document);
+          if (byDocument) return { found: true, ...byDocument };
+
+          return { found: false };
+        });
+
+        let modelDropdownClicked = false;
+        if (modelDropdownButton?.found) {
+          console.log(`   ✓ Found model dropdown button (${modelDropdownButton.source}): "${modelDropdownButton.text}"`);
+          console.log(`   🖱️  Clicking with LEFT mouse down/up...`);
+          await this.page.mouse.move(modelDropdownButton.x, modelDropdownButton.y);
+          await this.page.waitForTimeout(120);
+          await this.page.mouse.down({ button: 'left' });
+          await this.page.waitForTimeout(60);
+          await this.page.mouse.up({ button: 'left' });
+          modelDropdownClicked = true;
+        }
+
         
         if (modelDropdownClicked) {
           // Wait for dropdown menu to appear
@@ -4124,120 +4128,256 @@ class GoogleFlowAutomationService {
       });
       console.log(`[HREFS] ✓ Captured ${initialHrefs.length} initial items\n`);
 
-      // STEP 6: Focus on textbox, then upload images
+      // STEP 6: Focus on textbox, upload images with 5s cooldown between uploads
       console.log('[UPLOAD] 📤 Focusing textbox and uploading images...');
       await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
       await this.page.waitForTimeout(300);
-      
-      // Copy character image to clipboard
-      const charImgData = fs.readFileSync(characterImagePath);
-      const charBlob = Buffer.from(charImgData).toString('base64');
-      await this.page.evaluate((base64Str) => {
-        fetch(`data:image/png;base64,${base64Str}`)
-          .then(res => res.blob())
-          .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
-          .catch(e => console.error('Failed to copy:', e));
-      }, charBlob);
-      await this.page.waitForTimeout(500);
-      
-      // Paste character image
-      await this.page.keyboard.down('Control');
-      await this.page.keyboard.press('v');
-      await this.page.keyboard.up('Control');
-      await this.page.waitForTimeout(1000);
 
-      // Copy product image to clipboard
-      const prodImgData = fs.readFileSync(productImagePath);
-      const prodBlob = Buffer.from(prodImgData).toString('base64');
-      await this.page.evaluate((base64Str) => {
-        fetch(`data:image/png;base64,${base64Str}`)
-          .then(res => res.blob())
-          .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
-          .catch(e => console.error('Failed to copy:', e));
-      }, prodBlob);
-      await this.page.waitForTimeout(500);
-      
-      // Paste product image
-      await this.page.keyboard.down('Control');
-      await this.page.keyboard.press('v');
-      await this.page.keyboard.up('Control');
-      await this.page.waitForTimeout(1500);
-      
-      // 💫 NEW: Upload optional scene reference image
+      const pasteImageToTextbox = async (imagePath, label, cooldownMs = 5000) => {
+        console.log(`[UPLOAD] 📎 Pasting ${label}: ${path.basename(imagePath)}`);
+        const imageData = fs.readFileSync(imagePath);
+        const imageBase64 = Buffer.from(imageData).toString('base64');
+
+        await this.page.evaluate((base64Str) => {
+          return fetch(`data:image/png;base64,${base64Str}`)
+            .then(res => res.blob())
+            .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+            .then(() => true)
+            .catch(() => false);
+        }, imageBase64);
+
+        await this.page.waitForTimeout(500);
+        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        await this.page.waitForTimeout(120);
+
+        await this.page.keyboard.down('Control');
+        await this.page.keyboard.press('v');
+        await this.page.keyboard.up('Control');
+
+        console.log(`[UPLOAD] ✅ ${label} pasted. Cooling down ${cooldownMs / 1000}s...`);
+        await this.page.waitForTimeout(cooldownMs);
+      };
+
+      await pasteImageToTextbox(characterImagePath, 'character image', 5000);
+      await pasteImageToTextbox(productImagePath, 'product image', 5000);
+
+      // Optional scene image (does not change requirement: must detect at least 2 uploaded hrefs)
       if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
-        console.log('[UPLOAD] 📤 Uploading scene reference image...');
         try {
-          const sceneImgData = fs.readFileSync(options.sceneImagePath);
-          const sceneBlob = Buffer.from(sceneImgData).toString('base64');
-          await this.page.evaluate((base64Str) => {
-            fetch(`data:image/png;base64,${base64Str}`)
-              .then(res => res.blob())
-              .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
-              .catch(e => console.error('Failed to copy scene:', e));
-          }, sceneBlob);
-          await this.page.waitForTimeout(500);
-          
-          // Paste scene image
-          await this.page.keyboard.down('Control');
-          await this.page.keyboard.press('v');
-          await this.page.keyboard.up('Control');
-          await this.page.waitForTimeout(1500);
-          
+          await pasteImageToTextbox(options.sceneImagePath, 'scene reference image', 5000);
           console.log('[UPLOAD] ✓ Scene reference image pasted');
         } catch (sceneError) {
           console.warn(`[UPLOAD] ⚠️  Scene reference image upload failed (optional): ${sceneError.message}`);
-          // Don't throw - scene image is optional
         }
       }
-      
-      console.log('[UPLOAD] ✓ All images pasted to textbox');
-      console.log('[DELAY] ⏳ Waiting 2 seconds...');
-      await this.page.waitForTimeout(2000);
-      console.log('[DELAY] ✅ Ready\n');
 
-      // STEP 7: Monitor hrefs until uploaded images appear in gallery
-      console.log('[MONITOR] 👀 Monitoring hrefs until images appear in gallery...');
+      console.log('[UPLOAD] ✅ Upload actions finished. Start monitoring uploaded hrefs...\n');
+
+      // STEP 7: Monitor hrefs until at least 2 NEW uploaded items appear in gallery
+      console.log('[MONITOR] 👀 Monitoring virtuoso list for uploaded hrefs (need >= 2)...');
       let uploadedHrefsAppeared = false;
       let monitoringAttempts = 0;
-      const maxMonitoringAttempts = 60;  // Max 60 seconds
-      
+      const maxMonitoringAttempts = 90;  // Max 90 seconds
+      const initialHrefSet = new Set(initialHrefs.map(item => item.href).filter(Boolean));
+
       while (!uploadedHrefsAppeared && monitoringAttempts < maxMonitoringAttempts) {
         monitoringAttempts++;
-        
+
         const currentHrefs = await this.page.evaluate(() => {
           const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
           return Array.from(links).map(link => ({
             href: link.getAttribute('href'),
             src: link.querySelector('img')?.src || ''
-          }));
+          })).filter(item => !!item.href);
         });
-        
-        // Check if we have more hrefs than before
-        if (currentHrefs.length > initialHrefs.length) {
-          uploadedImageHrefs = currentHrefs.slice(0, currentHrefs.length - initialHrefs.length);
-          console.log(`[MONITOR] ✓ Detected ${uploadedImageHrefs.length} new items with src`);
+
+        const newUploadedItems = currentHrefs.filter(item => !initialHrefSet.has(item.href));
+
+        if (newUploadedItems.length >= 2) {
+          uploadedImageHrefs = newUploadedItems.slice(0, 2);
           uploadedHrefsAppeared = true;
-          
-          // Focus textbox again
+          console.log(`[MONITOR] ✅ Detected ${newUploadedItems.length} new hrefs (using first 2 as upload refs)`);
+
+          // Save stable refs for fallback stage
+          this.uploadedImageRefs = {
+            wearing: {
+              href: uploadedImageHrefs[0]?.href || null,
+              imgSrc: uploadedImageHrefs[0]?.src || null,
+              text: 'uploaded-ref-wearing'
+            },
+            product: {
+              href: uploadedImageHrefs[1]?.href || null,
+              imgSrc: uploadedImageHrefs[1]?.src || null,
+              text: 'uploaded-ref-product'
+            }
+          };
+
+          console.log(`   📎 wearing href: ${this.uploadedImageRefs.wearing.href?.substring(0, 60) || '(none)'}`);
+          console.log(`   📎 product href: ${this.uploadedImageRefs.product.href?.substring(0, 60) || '(none)'}`);
+
           await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
           await this.page.waitForTimeout(300);
+          break;
         }
-        
-        if (monitoringAttempts % 10 === 0) {
-          console.log(`[MONITOR] Attempt ${monitoringAttempts}/${maxMonitoringAttempts}s...`);
+
+        if (monitoringAttempts % 5 === 0) {
+          console.log(`[MONITOR] Attempt ${monitoringAttempts}/${maxMonitoringAttempts}: found ${newUploadedItems.length}/2 new hrefs`);
         }
-        
+
         await this.page.waitForTimeout(1000);
       }
-      
+
       if (!uploadedHrefsAppeared) {
-        throw new Error('Uploaded images did not appear in gallery after 60 seconds');
+        throw new Error('Uploaded images did not appear with đủ 2 href in gallery after 90 seconds');
       }
-      
-      console.log('[MONITOR] ✅ Images successfully appeared in gallery\n');
+
+      console.log('[MONITOR] ✅ Upload href validation passed (2 refs ready)\n');
+
+      const clickSubmitButton = async () => {
+        const submitResult = await this.page.evaluate(() => {
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          if (!textbox) return { found: false, clicked: false };
+
+          let container = textbox;
+          for (let i = 0; i < 6; i++) {
+            if (!container) break;
+            const hasButton = container.querySelector('button');
+            if (hasButton) break;
+            container = container.parentElement;
+          }
+
+          const buttons = container?.querySelectorAll('button') || [];
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i.google-symbols');
+            if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+              btn.click();
+              return { found: true, clicked: true };
+            }
+          }
+          return { found: buttons.length > 0, clicked: false };
+        });
+
+        return !!submitResult.clicked;
+      };
+
+      const detectLatestErrorTile = async () => {
+        return this.page.evaluate(() => {
+          const tiles = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]'));
+          for (let i = 0; i < Math.min(6, tiles.length); i++) {
+            const tile = tiles[i];
+            const tileText = (tile.textContent || '').toLowerCase();
+            const hasAnchor = !!tile.querySelector('a[href]');
+            const hasErrorText = tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi') || tileText.includes('lỗi');
+            const buttons = Array.from(tile.querySelectorAll('button')).map(btn => ({
+              text: (btn.textContent || '').trim().toLowerCase(),
+              rect: btn.getBoundingClientRect()
+            }));
+
+            const retryBtn = buttons.find(btn => btn.text.includes('thử lại') || btn.text.includes('retry'));
+            const reuseBtn = buttons.find(btn => btn.text.includes('sử dụng lại') || btn.text.includes('reuse') || btn.text.includes('dùng lại'));
+            const hasErrorState = hasErrorText;
+
+
+            if (hasErrorState) {
+              const tileRect = tile.getBoundingClientRect();
+              return {
+                found: true,
+                tileId: tile.getAttribute('data-tile-id') || null,
+                message: (tile.textContent || '').trim().substring(0, 180),
+                hasAnchor,
+                tileCenter: {
+                  x: Math.round(tileRect.left + tileRect.width / 2),
+                  y: Math.round(tileRect.top + tileRect.height / 2)
+                },
+                retryButton: retryBtn ? {
+                  x: Math.round(retryBtn.rect.left + retryBtn.rect.width / 2),
+                  y: Math.round(retryBtn.rect.top + retryBtn.rect.height / 2)
+                } : null,
+                reuseButton: reuseBtn ? {
+                  x: Math.round(reuseBtn.rect.left + reuseBtn.rect.width / 2),
+                  y: Math.round(reuseBtn.rect.top + reuseBtn.rect.height / 2)
+                } : null
+              };
+            }
+          }
+
+          return { found: false };
+        });
+      };
+
+      const waitForErrorTileCleared = async (targetTileId, timeoutMs = 18000) => {
+        const maxChecks = Math.ceil(timeoutMs / 1000);
+        for (let attempt = 1; attempt <= maxChecks; attempt++) {
+          const state = await this.page.evaluate((tileId) => {
+            if (!tileId) return { cleared: false };
+            const tile = document.querySelector(`[data-testid="virtuoso-item-list"] [data-tile-id="${tileId}"]`);
+            if (!tile) return { cleared: true };
+
+            const text = (tile.textContent || '').toLowerCase();
+            const stillError = text.includes('không thành công') || text.includes('đã xảy ra lỗi') || text.includes('failed') || text.includes('error');
+            return { cleared: !stillError };
+          }, targetTileId);
+
+          if (state.cleared) return true;
+          await this.page.waitForTimeout(1000);
+        }
+
+        return false;
+      };
+
+      const fallbackReAddUploadedImagesAndSubmit = async (promptText) => {
+        console.log('[FALLBACK] 📌 Re-add 2 uploaded images -> paste prompt -> wait 3s -> submit');
+
+        const refs = [
+          this.uploadedImageRefs?.wearing?.href,
+          this.uploadedImageRefs?.product?.href
+        ].filter(Boolean);
+
+        if (refs.length < 2) {
+          console.log('[FALLBACK] ⚠️  Missing uploaded href refs, cannot re-add 2 images');
+          return false;
+        }
+
+        for (const href of refs) {
+          const added = await this.addImageToCommand(href);
+          if (!added) {
+            console.log(`[FALLBACK] ⚠️  Failed to add href: ${href.substring(0, 60)}...`);
+            return false;
+          }
+          await this.page.waitForTimeout(500);
+        }
+
+        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        await this.page.waitForTimeout(150);
+
+        await this.page.keyboard.down('Control');
+        await this.page.keyboard.press('a');
+        await this.page.keyboard.up('Control');
+        await this.page.waitForTimeout(100);
+        await this.page.keyboard.press('Backspace');
+        await this.page.waitForTimeout(300);
+
+        await this.page.evaluate((text) => {
+          navigator.clipboard.writeText(text).catch(() => {});
+        }, promptText);
+
+        await this.page.waitForTimeout(200);
+        await this.page.keyboard.down('Control');
+        await this.page.keyboard.press('v');
+        await this.page.keyboard.up('Control');
+
+        console.log('[FALLBACK] ⏳ Wait 3s for Slate editor stable...');
+        await this.page.waitForTimeout(3000);
+
+        return clickSubmitButton();
+      };
+
+      let lastGeneratedHref = null;
 
       // STEP 8: Main prompt loop
       for (let i = 0; i < prompts.length; i++) {
+
+
         console.log(`\n${'═'.repeat(80)}`);
         console.log(`🎨 PROMPT ${i + 1}/${prompts.length}: Processing`);
         console.log(`${'═'.repeat(80)}\n`);
@@ -4256,27 +4396,32 @@ class GoogleFlowAutomationService {
         }
 
         try {
-          // STEP A: Clear previous prompt if not first iteration
+          // STEP A: From prompt #2 onward, reuse previous command from last generated href
           if (i > 0) {
-            console.log('[CLEAR] 🧹 Clearing previous prompt with Ctrl+A + Backspace...');
+            if (!lastGeneratedHref) {
+              throw new Error('Missing lastGeneratedHref for prompt chaining (cannot run reuse-command flow)');
+            }
+
+            console.log(`[CHAIN] 🔄 Reusing command from previous href...`);
+            const reused = await this.rightClickReuseCommand(lastGeneratedHref);
+            if (!reused) {
+              throw new Error('Failed to click "Sử dụng lại câu lệnh" on previous generated href');
+            }
+
             await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
             await this.page.waitForTimeout(200);
-            
-            // Select all
+
+            console.log('[CHAIN] 🧹 Clearing reused prompt text (Ctrl+A + Backspace)...');
             await this.page.keyboard.down('Control');
             await this.page.keyboard.press('a');
             await this.page.keyboard.up('Control');
             await this.page.waitForTimeout(100);
-            
-            // Delete
             await this.page.keyboard.press('Backspace');
-            await this.page.waitForTimeout(500);
-            
-            console.log('[CLEAR] ✓ Previous prompt cleared');
-            console.log('[DELAY] ⏳ Waiting 1 second...');
-            await this.page.waitForTimeout(1000);
-            console.log('[DELAY] ✅ Ready\n');
+            await this.page.waitForTimeout(400);
+
+            console.log('[CHAIN] ✅ Reuse attached images should remain; textbox cleaned for new prompt\n');
           }
+
 
           // STEP B: Capture hrefs before entering new prompt
           console.log('[STEP B] 📸 Capturing hrefs BEFORE prompt submission...');
@@ -4385,43 +4530,26 @@ class GoogleFlowAutomationService {
           });
           console.log(`[STEP D] ✓ Captured ${promptSubmitHrefs.length} items`);
           
-          // Click submit button (same as enterPrompt logic)
+          // Delay before submit: first prompt 3s, chained prompts 2s
+          const preSubmitDelayMs = i > 0 ? 2000 : 3000;
+          console.log(`[STEP D] ⏳ Waiting ${preSubmitDelayMs / 1000} seconds for editor stabilization...`);
+          await this.page.waitForTimeout(preSubmitDelayMs);
+
+
+          // Click submit button
           console.log('[STEP D] 🖱️  Clicking submit button...');
-          const submitResult = await this.page.evaluate(() => {
-            const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-            if (!textbox) return { found: false };
-            
-            let container = textbox;
-            for (let i = 0; i < 5; i++) {
-              if (container.nextElementSibling?.querySelector('button')) {
-                container = container.parentElement;
-                break;
-              }
-              container = container.parentElement;
-            }
-            
-            const buttons = container.querySelectorAll('button');
-            for (const btn of buttons) {
-              const icon = btn.querySelector('i.google-symbols');
-              if (icon && icon.textContent.includes('arrow_forward')) {
-                if (!btn.disabled) {
-                  btn.click();
-                  return { found: true, clicked: true };
-                }
-              }
-            }
-            return { found: false };
-          });
-          
-          if (!submitResult.clicked) {
-            console.log('[STEP D] ⚠️  Submit button not found, continuing...');
+          const submitClicked = await clickSubmitButton();
+
+          if (!submitClicked) {
+            console.log('[STEP D] ⚠️  Submit button not found or disabled');
           } else {
             console.log('[STEP D] ✓ Submit clicked');
           }
-          
+
           console.log('[DELAY] ⏳ Waiting 2 seconds for server...');
           await this.page.waitForTimeout(2000);
           console.log('[DELAY] ✅ Ready\n');
+
 
           // STEP E: Monitor hrefs for new generation
           console.log('[STEP E] ⏳ Monitoring hrefs for NEW generation (max 120s)...\n');
@@ -4435,72 +4563,56 @@ class GoogleFlowAutomationService {
           while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
             monitoringAttempt++;
 
-            // 💫 FIX: Get ALL items (not just those with href) to catch error items
+            // Strict detection: only treat as error when tile text contains
+            // "không thành công" or "lỗi" (per production behavior)
             const currentData = await this.page.evaluate(() => {
               const allItems = [];
-              
-              // 1. First get items WITH href links
+
+              // 1) Items with href
               const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
               for (const link of links) {
                 const parent = link.closest('[data-tile-id]');
-                const hasWarningIcon = parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
-                const parentText = parent?.textContent.toLowerCase() || '';
-                const hasErrorText = parentText.includes('không thành công') || parentText.includes('failed') || 
-                                    parentText.includes('error') || parentText.includes('lỗi');
-                const hasRetryButton = !!parent?.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
-                const styles = parent ? window.getComputedStyle(parent) : null;
-                const hasErrorStyling = styles?.opacity === '0.5' || parent?.classList?.contains('error');
-                const hasError = hasWarningIcon || hasRetryButton || hasErrorText || hasErrorStyling;
-                
+                const parentText = (parent?.textContent || '').toLowerCase();
+                const hasErrorText = parentText.includes('không thành công') || parentText.includes('đã xảy ra lỗi') || parentText.includes('lỗi');
+
                 allItems.push({
                   href: link.getAttribute('href'),
-                  hasError: hasError,
+                  hasError: hasErrorText,
                   isNew: false,
                   hasLink: true,
-                  tileId: parent?.getAttribute('data-tile-id'),
+                  tileId: parent?.getAttribute('data-tile-id') || null,
                   indicators: {
-                    warningIcon: hasWarningIcon,
-                    errorText: hasErrorText,
-                    retryButton: hasRetryButton,
-                    errorStyling: hasErrorStyling
+                    errorText: hasErrorText
                   }
                 });
               }
-              
-              // 2️⃣ CRITICAL: Also check for ERROR ITEMS that DON'T have href (failed generations)
-              const errorItems = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
-              for (const tile of errorItems) {
-                // Skip if already in allItems
+
+              // 2) Items without href but having explicit error text
+              const allTiles = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+              for (const tile of allTiles) {
                 const tileId = tile.getAttribute('data-tile-id');
                 if (allItems.some(item => item.tileId === tileId)) continue;
-                
-                // Check if this tile has error markers
-                const hasWarningIcon = !!tile.querySelector('i.google-symbols')?.textContent?.includes('warning');
-                const tileText = tile.textContent.toLowerCase() || '';
-                const hasErrorText = tileText.includes('không thành công') || tileText.includes('failed') || 
-                                    tileText.includes('error') || tileText.includes('lỗi');
-                const hasRetryButton = !!tile.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
-                
-                // If it looks like an error item, add it
-                if (hasWarningIcon || hasErrorText || hasRetryButton) {
+
+                const tileText = (tile.textContent || '').toLowerCase();
+                const hasErrorText = tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi') || tileText.includes('lỗi');
+
+                if (hasErrorText) {
                   allItems.push({
-                    href: null,  // No href for error items
-                    hasError: true,  // Definitely an error
-                    isNew: true,  // Error item is considered "new" generation
+                    href: null,
+                    hasError: true,
+                    isNew: true,
                     hasLink: false,
-                    tileId: tileId,
+                    tileId,
                     indicators: {
-                      warningIcon: hasWarningIcon,
-                      errorText: hasErrorText,
-                      retryButton: hasRetryButton,
-                      errorStyling: true
+                      errorText: true
                     }
                   });
                 }
               }
-              
+
               return allItems;
             });
+
 
             // Find new items (either new href OR new error item)
             for (const current of currentData) {
@@ -4528,11 +4640,9 @@ class GoogleFlowAutomationService {
               console.log(`[STEP E]   - Has error: ${generatedHref.hasError}`);
               if (generatedHref.hasError) {
                 console.log(`[STEP E]   - Error indicators:`);
-                console.log(`[STEP E]     • Warning icon: ${generatedHref.indicators.warningIcon}`);
-                console.log(`[STEP E]     • Error text: ${generatedHref.indicators.errorText}`);
-                console.log(`[STEP E]     • Retry button: ${generatedHref.indicators.retryButton}`);
-                console.log(`[STEP E]     • Error styling: ${generatedHref.indicators.errorStyling}`);
+                console.log(`[STEP E]     • Error text (strict): ${generatedHref.indicators.errorText}`);
               }
+
               break;
             }
 
@@ -4547,337 +4657,141 @@ class GoogleFlowAutomationService {
             throw new Error('No new image generated within timeout period');
           }
 
-          // STEP F: Handle errors with retry loop
-          let retryCount = 0;
-          const maxRetries = 5;
+          // STEP F: Handle errors with strict strategy order
           let finalSuccess = !generatedHref.hasError;
 
           if (generatedHref.hasError) {
-            console.log('[STEP F] ❌ Generation failed - attempting retries with multiple strategies\n');
-            
-            while (retryCount < maxRetries && !finalSuccess) {
-              retryCount++;
-              console.log(`${'─'.repeat(70)}`);
-              console.log(`[RETRY ${retryCount}/${maxRetries}] Starting retry attempt...\n`);
-              
-              let retryStrategyUsed = null;
-              
-              // 💫 FIX: For error items without href, find the error tile and click retry button first
-              if (!generatedHref.href && generatedHref.tileId) {
-                console.log('[RETRY] 🎯 Targeting ERROR ITEM (no href) - looking for retry button...');
-                try {
-                  const retryResult = await this.page.evaluate((targetTileId) => {
-                    const tile = document.querySelector(`[data-tile-id="${targetTileId}"]`);
-                    if (!tile) return { found: false };
-                    
-                    // Find refresh button (Thử lại)
-                    const buttons = tile.querySelectorAll('button');
-                    for (const btn of buttons) {
-                      const icon = btn.querySelector('i.google-symbols');
-                      const text = btn.textContent.toLowerCase();
-                      const ariaLabel = btn.getAttribute('aria-label') || '';
-                      
-                      // Look for refresh icon (Thử lại) or undo (Sử dụng lại)
-                      if (icon && (icon.textContent.includes('refresh') || icon.textContent.includes('undo'))) {
-                        const rect = btn.getBoundingClientRect();
-                        return {
-                          found: true,
-                          type: icon.textContent.includes('refresh') ? 'refresh' : 'undo',
-                          x: Math.round(rect.left + rect.width / 2),
-                          y: Math.round(rect.top + rect.height / 2)
-                        };
-                      }
-                    }
-                    return { found: false };
-                  }, generatedHref.tileId);
-                  
-                  if (retryResult.found) {
-                    console.log(`[RETRY]   ✓ Found ${retryResult.type} button on error tile`);
-                    console.log(`[RETRY]   🖱️  Clicking...`);
-                    await this.page.mouse.move(retryResult.x, retryResult.y);
-                    await this.page.waitForTimeout(200);
-                    await this.page.mouse.down();
-                    await this.page.waitForTimeout(100);
-                    await this.page.mouse.up();
-                    await this.page.waitForTimeout(1500);
-                    
-                    retryStrategyUsed = 'error-tile-' + retryResult.type;
-                    console.log('[RETRY]   ✓ Strategy executed');
-                  } else {
-                    console.log('[RETRY]   ⚠️  Retry button not found on error tile');
-                  }
-                } catch (strategyErr) {
-                  console.log(`[RETRY]   ⚠️  Error accessing error tile: ${strategyErr.message}`);
-                }
-              }
-              
-              // STRATEGY 1: Try "Sử dụng lại câu lệnh" (Reuse Command) via right-click menu
-              console.log('[RETRY] Strategy 1️⃣  - "Sử dụng lại câu lệnh" (right-click menu)...');
-              try {
-                const reuseResult = await this.page.evaluate((targetHref) => {
-                  const link = document.querySelector(`a[href="${targetHref}"]`);
-                  if (!link) return { found: false };
-                  
-                  const rect = link.getBoundingClientRect();
-                  return {
-                    found: true,
-                    x: Math.round(rect.left + rect.width / 2),
-                    y: Math.round(rect.top + rect.height / 2)
-                  };
-                }, generatedHref.href);
+            console.log('[STEP F] ❌ Generation failed - starting strict recovery flow');
 
-                if (reuseResult.found) {
-                  // Right-click on the generated image
-                  console.log('[RETRY]   📍 Found item, right-clicking...');
-                  await this.page.mouse.move(reuseResult.x, reuseResult.y);
-                  await this.page.waitForTimeout(300);
-                  await this.page.mouse.down({ button: 'right' });
-                  await this.page.waitForTimeout(50);
-                  await this.page.mouse.up({ button: 'right' });
-                  await this.page.waitForTimeout(1000);
+            const initialErrorTile = await detectLatestErrorTile();
+            const targetTileId = initialErrorTile?.tileId || generatedHref.tileId || null;
 
-                  // Look for "Sử dụng lại câu lệnh" button
-                  const reuseMenuResult = await this.page.evaluate(() => {
-                    const buttons = document.querySelectorAll('button[role="menuitem"]');
-                    for (const btn of buttons) {
-                      if (btn.textContent.includes('Sử dụng lại')) {
-                        const rect = btn.getBoundingClientRect();
-                        return {
-                          found: true,
-                          x: Math.round(rect.left + rect.width / 2),
-                          y: Math.round(rect.top + rect.height / 2),
-                          text: btn.textContent
-                        };
-                      }
-                    }
-                    return { found: false };
-                  });
-
-                  if (reuseMenuResult.found) {
-                    console.log(`[RETRY]   ✓ Found menu button: "${reuseMenuResult.text}"`);
-                    console.log('[RETRY]   🖱️  Clicking button...');
-                    await this.page.mouse.move(reuseMenuResult.x, reuseMenuResult.y);
-                    await this.page.waitForTimeout(200);
-                    await this.page.mouse.down();
-                    await this.page.waitForTimeout(100);
-                    await this.page.mouse.up();
-                    await this.page.waitForTimeout(1500);
-
-                    // Submit
-                    console.log('[RETRY]   🚀 Submitting with reused prompt...');
-                    const submitSuccess = await this.page.evaluate(() => {
-                      const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-                      if (!textbox) return false;
-                      
-                      let container = textbox;
-                      for (let j = 0; j < 5; j++) {
-                        container = container?.parentElement;
-                      }
-                      
-                      const buttons = container?.querySelectorAll('button');
-                      for (const btn of buttons || []) {
-                        const icon = btn.querySelector('i.google-symbols');
-                        if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
-                          btn.click();
-                          return true;
-                        }
-                      }
-                      return false;
-                    });
-
-                    if (submitSuccess) {
-                      retryStrategyUsed = 'reuse-command';
-                      console.log('[RETRY]   ✓ Strategy 1 executed');
-                    } else {
-                      console.log('[RETRY]   ⚠️  Submit failed, trying other strategies...');
-                    }
-                  } else {
-                    console.log('[RETRY]   ⚠️  "Sử dụng lại" button not found in menu');
-                  }
-                } else {
-                  console.log('[RETRY]   ⚠️  Item not found in DOM');
-                }
-
-                // Close any open menu
-                await this.page.mouse.move(100, 100);
-                await this.page.waitForTimeout(300);
-              } catch (strategyErr) {
-                console.log(`[RETRY]   ⚠️  Strategy 1 error: ${strategyErr.message}`);
+            // Strategy 1: Retry button "Thử lại" - max 3 times
+            let retryRecovered = false;
+            for (let retryAttempt = 1; retryAttempt <= 3 && !retryRecovered; retryAttempt++) {
+              const errorTile = await detectLatestErrorTile();
+              if (!errorTile.found) {
+                retryRecovered = true;
+                break;
               }
 
-              // STRATEGY 2: Look for visible "Thử lại" or "Retry" button on the error
-              if (!retryStrategyUsed) {
-                console.log('[RETRY] Strategy 2️⃣  - "Thử lại" button on error...');
-                try {
-                  const retryBtnResult = await this.page.evaluate((targetHref) => {
-                    const link = document.querySelector(`a[href="${targetHref}"]`);
-                    if (!link) return { found: false };
-                    
-                    const parent = link.closest('[data-tile-id]');
-                    if (!parent) return { found: false };
-                    
-                    // Look for buttons with "Thử lại", "Retry", or retry icon
-                    const buttons = parent.querySelectorAll('button');
-                    for (const btn of buttons) {
-                      const text = btn.textContent.toLowerCase();
-                      const ariaLabel = btn.getAttribute('aria-label') || '';
-                      if (text.includes('thử lại') || text.includes('retry') || ariaLabel.includes('retry')) {
-                        const rect = btn.getBoundingClientRect();
-                        return {
-                          found: true,
-                          x: Math.round(rect.left + rect.width / 2),
-                          y: Math.round(rect.top + rect.height / 2),
-                          text: btn.textContent
-                        };
-                      }
-                    }
-                    return { found: false };
-                  }, generatedHref.href);
+              console.log(`[STEP F][Retry] Attempt ${retryAttempt}/3 - hovering error tile to reveal action buttons...`);
+              await this.page.mouse.move(errorTile.tileCenter.x, errorTile.tileCenter.y);
+              await this.page.waitForTimeout(450);
 
-                  if (retryBtnResult.found) {
-                    console.log(`[RETRY]   ✓ Found button: "${retryBtnResult.text}"`);
-                    console.log('[RETRY]   🖱️  Clicking Retry button...');
-                    await this.page.mouse.move(retryBtnResult.x, retryBtnResult.y);
-                    await this.page.waitForTimeout(200);
-                    await this.page.mouse.down();
-                    await this.page.waitForTimeout(100);
-                    await this.page.mouse.up();
-                    await this.page.waitForTimeout(1500);
-                    
-                    retryStrategyUsed = 'retry-button';
-                    console.log('[RETRY]   ✓ Strategy 2 executed');
-                  } else {
-                    console.log('[RETRY]   ⚠️  No Retry button found');
-                  }
-                } catch (strategyErr) {
-                  console.log(`[RETRY]   ⚠️  Strategy 2 error: ${strategyErr.message}`);
-                }
+              const hoverTile = await detectLatestErrorTile();
+              if (!hoverTile.found || !hoverTile.retryButton) {
+                console.log('[STEP F][Retry] ⚠️  Retry button not visible after hover');
+                await this.page.waitForTimeout(1200);
+                continue;
               }
 
-              // STRATEGY 3: Manual retry - Clear textbox and re-enter prompt
-              if (!retryStrategyUsed) {
-                console.log('[RETRY] Strategy 3️⃣  - Manual re-enter prompt...');
-                try {
-                  console.log('[RETRY]   📍 Clearing textbox...');
-                  await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-                  await this.page.waitForTimeout(200);
-                  
-                  // Select all
-                  await this.page.keyboard.down('Control');
-                  await this.page.keyboard.press('a');
-                  await this.page.keyboard.up('Control');
-                  await this.page.waitForTimeout(100);
-                  
-                  // Delete
-                  await this.page.keyboard.press('Backspace');
-                  await this.page.waitForTimeout(500);
+              await this.page.mouse.move(hoverTile.retryButton.x, hoverTile.retryButton.y);
+              await this.page.waitForTimeout(120);
+              await this.page.mouse.down();
+              await this.page.waitForTimeout(80);
+              await this.page.mouse.up();
 
-                  console.log('[RETRY]   📝 Re-entering prompt...');
-                  // Re-paste the same prompt
-                  await this.page.evaluate((text) => {
-                    navigator.clipboard.writeText(text).catch(() => {});
-                  }, normalizedPrompt);
-                  await this.page.waitForTimeout(200);
-                  
-                  await this.page.keyboard.down('Control');
-                  await this.page.keyboard.press('v');
-                  await this.page.keyboard.up('Control');
-                  await this.page.waitForTimeout(1000);
+              console.log('[STEP F][Retry] ✅ Clicked "Thử lại", waiting response...');
+              await this.page.waitForTimeout(8000);
 
-                  console.log('[RETRY]   🚀 Resubmitting...');
-                  const submitSuccess = await this.page.evaluate(() => {
-                    const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-                    if (!textbox) return false;
-                    
-                    let container = textbox;
-                    for (let j = 0; j < 5; j++) {
-                      container = container?.parentElement;
-                    }
-                    
-                    const buttons = container?.querySelectorAll('button');
-                    for (const btn of buttons || []) {
-                      const icon = btn.querySelector('i.google-symbols');
-                      if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
-                        btn.click();
-                        return true;
-                      }
-                    }
-                    return false;
-                  });
-
-                  if (submitSuccess) {
-                    retryStrategyUsed = 'manual-reenter';
-                    console.log('[RETRY]   ✓ Strategy 3 executed');
-                  } else {
-                    console.log('[RETRY]   ⚠️  Submit failed');
-                  }
-                } catch (strategyErr) {
-                  console.log(`[RETRY]   ⚠️  Strategy 3 error: ${strategyErr.message}`);
-                }
-              }
-
-              if (!retryStrategyUsed) {
-                console.log('[RETRY] ⚠️  All strategies failed for this attempt');
-              } else {
-                console.log(`[RETRY] 🔄 Used: ${retryStrategyUsed}`);
-              }
-
-              // Wait for generation response
-              console.log('[RETRY] ⏳ Waiting for response (10s)...');
-              await this.page.waitForTimeout(10000);
-
-              // Check if error is gone
-              console.log('[RETRY] 🔍 Checking if error resolved...');
-              const stillError = await this.page.evaluate((targetHref) => {
-                const link = document.querySelector(`a[href="${targetHref}"]`);
-                if (!link) return null;
-                
-                const parent = link.closest('[data-tile-id]');
-                if (!parent) return null;
-                
-                // Use same multi-method detection as STEP E
-                const hasWarningIcon = parent?.querySelector('i.google-symbols')?.textContent.includes('warning') || false;
-                const parentText = parent?.textContent.toLowerCase() || '';
-                const hasErrorText = parentText.includes('không thành công') || 
-                                    parentText.includes('failed') || 
-                                    parentText.includes('error') ||
-                                    parentText.includes('lỗi');
-                const hasRetryButton = !!parent?.querySelector('button[aria-label*="retry"], button[aria-label*="thử lại"]');
-                const styles = parent ? window.getComputedStyle(parent) : null;
-                const hasErrorStyling = styles?.opacity === '0.5' || parent?.classList?.contains('error');
-                
-                return hasWarningIcon || hasErrorText || hasRetryButton || hasErrorStyling;
-              }, generatedHref.href);
-
-              if (stillError === null) {
-                console.log('[RETRY] ⚠️  Item disappeared from DOM, assuming success');
+              const cleared = await waitForErrorTileCleared(targetTileId, 10000);
+              if (cleared) {
+                retryRecovered = true;
                 finalSuccess = true;
-              } else if (stillError) {
-                console.log(`[RETRY] ❌ Still has error - will retry`);
-                if (retryCount < maxRetries) {
-                  console.log(`[RETRY] ⏳ Waiting 3s before next attempt...\n`);
-                  await this.page.waitForTimeout(3000);
+                console.log('[STEP F][Retry] ✅ Error cleared after retry');
+              }
+            }
+
+            // Strategy 2: "Sử dụng lại câu lệnh" - max 2 times, wait 2s then submit
+            if (!retryRecovered) {
+              console.log('[STEP F][Reuse] Retry strategy exhausted, switching to "Sử dụng lại câu lệnh"');
+              for (let reuseAttempt = 1; reuseAttempt <= 2 && !finalSuccess; reuseAttempt++) {
+                const errorTile = await detectLatestErrorTile();
+                if (!errorTile.found) {
+                  finalSuccess = true;
+                  break;
                 }
-              } else {
-                console.log('[RETRY] ✅ Error resolved!');
-                finalSuccess = true;
+
+                await this.page.mouse.move(errorTile.tileCenter.x, errorTile.tileCenter.y);
+                await this.page.waitForTimeout(500);
+
+                const hoverTile = await detectLatestErrorTile();
+                if (!hoverTile.found || !hoverTile.reuseButton) {
+                  console.log(`[STEP F][Reuse] Attempt ${reuseAttempt}/2: reuse button not visible`);
+                  await this.page.waitForTimeout(1200);
+                  continue;
+                }
+
+                console.log(`[STEP F][Reuse] Attempt ${reuseAttempt}/2: clicking "Sử dụng lại câu lệnh"`);
+                await this.page.mouse.move(hoverTile.reuseButton.x, hoverTile.reuseButton.y);
+                await this.page.waitForTimeout(120);
+                await this.page.mouse.down();
+                await this.page.waitForTimeout(80);
+                await this.page.mouse.up();
+
+                console.log('[STEP F][Reuse] ⏳ Wait 2s, then submit...');
+                await this.page.waitForTimeout(2000);
+
+                const submitted = await clickSubmitButton();
+                if (!submitted) {
+                  console.log('[STEP F][Reuse] ⚠️  Submit failed');
+                  continue;
+                }
+
+                await this.page.waitForTimeout(8000);
+                const cleared = await waitForErrorTileCleared(targetTileId, 10000);
+                if (cleared) {
+                  finalSuccess = true;
+                  console.log('[STEP F][Reuse] ✅ Error cleared after reuse + submit');
+                }
+              }
+            }
+
+            // Strategy 3: Re-add 2 uploaded image refs, paste prompt, wait 3s, submit
+            if (!finalSuccess) {
+              console.log('[STEP F][Fallback] Trying final fallback with uploaded image href refs...');
+              const submitted = await fallbackReAddUploadedImagesAndSubmit(normalizedPrompt);
+              if (submitted) {
+                await this.page.waitForTimeout(10000);
+                const latestError = await detectLatestErrorTile();
+                finalSuccess = !latestError.found;
               }
             }
 
             if (!finalSuccess) {
-              console.log('\n[STEP F] ❌ Max retries (5) exhausted after trying all strategies');
-              console.log('[STEP F] ℹ️  Strategies attempted: reuse-command, retry-button, manual-reenter');
-              console.log('[STEP F] Moving to next prompt...\n');
-              results.push({
-                success: false,
-                imageNumber: i + 1,
-                error: 'Generation failed after 5 retry attempts with all strategies'
-              });
-              continue;
-            } else {
-              console.log('\n[STEP F] ✅ Successfully recovered from error!\n');
+              throw new Error('Generation failed after all recovery strategies (Retry x3, Reuse x2, Re-add refs fallback)');
+            }
+
+            console.log('[STEP F] ✅ Successfully recovered from error');
+          }
+
+          // Refresh target href after recovery (or if initial detection had no href)
+          if (!generatedHref?.href) {
+            const refreshedHref = await this.page.evaluate((beforeHrefs) => {
+              const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+              for (const link of links) {
+                const href = link.getAttribute('href');
+                if (!href || beforeHrefs.includes(href)) continue;
+
+                const tile = link.closest('[data-tile-id]');
+                const tileText = (tile?.textContent || '').toLowerCase();
+                const isErrorTile = tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi') || tileText.includes('failed') || tileText.includes('error');
+                if (!isErrorTile) return href;
+              }
+              return null;
+            }, promptSubmitHrefs);
+
+            if (refreshedHref) {
+              generatedHref = { ...generatedHref, href: refreshedHref, hasError: false };
+              console.log(`[STEP F] 📎 Refreshed generated href: ${refreshedHref.substring(0, 60)}...`);
             }
           }
+
+          if (!generatedHref?.href) {
+            throw new Error('Recovery finished but no valid generated href found for download');
+          }
+
 
           // STEP G: Download the generated image
           console.log('[STEP G] ⏳ Waiting 3 seconds for image UI to render...');
@@ -4913,6 +4827,10 @@ class GoogleFlowAutomationService {
             href: generatedHref.href,
             downloadedFile: downloadedFile
           });
+
+          lastGeneratedHref = generatedHref.href;
+          console.log(`[CHAIN] 📎 Stored lastGeneratedHref for next prompt: ${lastGeneratedHref.substring(0, 60)}...`);
+
 
         } catch (promptError) {
           console.error(`\n❌ PROMPT ${i + 1} FAILED: ${promptError.message}\n`);
