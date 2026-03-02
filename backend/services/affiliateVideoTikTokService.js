@@ -1750,16 +1750,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         userId: req.body.userId || 'system',
         sessionId: flowId,
         storage: {
-          location: wearingOnDrive ? 'google-drive' : 'local',
-          ...(wearingOnDrive && {
-            googleDriveId: wearingImageResult.id,
-            googleDrivePath: 'Affiliate AI/Images/Completed',
-            url: wearingImageResult.url
-          }),
-          ...(!wearingOnDrive && {
-            filePath: wearingImagePath
-          })
+          location: wearingOnDrive ? 'google-drive' : 'local'
         },
+        cloudStorage: wearingOnDrive ? {
+          googleDriveId: wearingImageResult.id,
+          googleDrivePath: 'Affiliate AI/Images/Completed',
+          url: wearingImageResult.url,
+          status: 'synced'
+        } : undefined,
+        localStorage: !wearingOnDrive ? {
+          path: wearingImagePath,
+          size: fs.existsSync(wearingImagePath) ? fs.statSync(wearingImagePath).size : 0
+        } : undefined,
         metadata: {
           format: 'jpeg',
           type: 'character-wearing-product',
@@ -1792,16 +1794,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         userId: req.body.userId || 'system',
         sessionId: flowId,
         storage: {
-          location: holdingOnDrive ? 'google-drive' : 'local',
-          ...(holdingOnDrive && {
-            googleDriveId: holdingImageResult.id,
-            googleDrivePath: 'Affiliate AI/Images/Completed',
-            url: holdingImageResult.url
-          }),
-          ...(!holdingOnDrive && {
-            filePath: holdingImagePath
-          })
+          location: holdingOnDrive ? 'google-drive' : 'local'
         },
+        cloudStorage: holdingOnDrive ? {
+          googleDriveId: holdingImageResult.id,
+          googleDrivePath: 'Affiliate AI/Images/Completed',
+          url: holdingImageResult.url,
+          status: 'synced'
+        } : undefined,
+        localStorage: !holdingOnDrive ? {
+          path: holdingImagePath,
+          size: fs.existsSync(holdingImagePath) ? fs.statSync(holdingImagePath).size : 0
+        } : undefined,
         metadata: {
           format: 'jpeg',
           type: 'character-holding-product',

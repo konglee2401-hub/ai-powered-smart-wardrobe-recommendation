@@ -8,6 +8,7 @@ export default function ShortsReelsVideos() {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadingVideoId, setUploadingVideoId] = useState(null);
+  const [downloadTriggering, setDownloadTriggering] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const load = async () => {
@@ -57,6 +58,21 @@ export default function ShortsReelsVideos() {
       alert(`Upload failed: ${err.message}`);
     } finally {
       setUploadingVideoId(null);
+    }
+  };
+
+  const triggerPendingDownloads = async () => {
+    setDownloadTriggering(true);
+    try {
+      const result = await trendAutomationApi.triggerPendingDownloads(500);
+      alert(result?.message || `Queued ${result?.queued || 0} pending videos`);
+      setTimeout(() => {
+        load();
+      }, 500);
+    } catch (err) {
+      alert(`Trigger download failed: ${err.message}`);
+    } finally {
+      setDownloadTriggering(false);
     }
   };
 
@@ -140,6 +156,14 @@ export default function ShortsReelsVideos() {
             className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded font-medium text-sm transition"
           >
             {uploadLoading ? 'Uploading...' : `Upload All (${uploadStatus?.pendingUpload || 0})`}
+          </button>
+
+          <button
+            onClick={triggerPendingDownloads}
+            disabled={downloadTriggering}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded font-medium text-sm transition"
+          >
+            {downloadTriggering ? 'Triggering...' : 'Trigger Pending Downloads'}
           </button>
 
           <label className="flex items-center gap-2 text-sm cursor-pointer">

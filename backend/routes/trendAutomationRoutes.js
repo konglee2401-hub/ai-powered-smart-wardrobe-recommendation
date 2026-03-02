@@ -149,6 +149,7 @@ router.get('/channels', (req, res) => proxy(req, res, '/api/shorts-reels/channel
 router.post('/channels/:id/manual-scan', (req, res) => proxy(req, res, `/api/shorts-reels/channels/${req.params.id}/manual-scan`));
 router.get('/videos', (req, res) => proxy(req, res, '/api/shorts-reels/videos'));
 router.post('/videos/:id/re-download', (req, res) => proxy(req, res, `/api/shorts-reels/videos/${req.params.id}/re-download`));
+router.post('/videos/trigger-pending-downloads', (req, res) => proxy(req, res, '/api/shorts-reels/videos/trigger-pending-downloads'));
 router.get('/logs', (req, res) => proxy(req, res, '/api/shorts-reels/logs'));
 router.get('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));

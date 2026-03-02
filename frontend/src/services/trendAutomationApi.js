@@ -8,6 +8,7 @@ export const trendAutomationApi = {
   manualScanChannel: (id) => apiClient.post(`${BASE}/channels/${id}/manual-scan`).then((r) => r.data),
   getVideos: (params = {}) => apiClient.get(`${BASE}/videos`, { params }).then((r) => r.data),
   redownloadVideo: (id) => apiClient.post(`${BASE}/videos/${id}/re-download`).then((r) => r.data),
+  triggerPendingDownloads: (limit = 200) => apiClient.post(`${BASE}/videos/trigger-pending-downloads`, null, { params: { limit } }).then((r) => r.data),
   getLogs: (params = {}) => apiClient.get(`${BASE}/logs`, { params }).then((r) => r.data),
   getSettings: () => apiClient.get(`${BASE}/settings`).then((r) => r.data),
   updateSettings: (payload) => apiClient.post(`${BASE}/settings`, payload).then((r) => r.data),

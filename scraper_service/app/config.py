@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+_ = load_dotenv()
 
 PORT = int(os.getenv('PORT', '8001'))
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/smart_wardrobe')
@@ -21,3 +21,7 @@ PLAYBOARD_COOKIES_FILE = os.getenv('PLAYBOARD_COOKIES_FILE', '').strip()
 # Playboard login credentials
 PLAYBOARD_USER_EMAIL = os.getenv('PLAYBOARD_USER_EMAIL', '').strip()
 PLAYBOARD_USER_PASSWORD = os.getenv('PLAYBOARD_USER_PASSWORD', '').strip()
+
+# Startup pending download re-queue
+AUTO_ENQUEUE_PENDING_ON_STARTUP = os.getenv('AUTO_ENQUEUE_PENDING_ON_STARTUP', 'true').lower() == 'true'
+STARTUP_PENDING_ENQUEUE_LIMIT = int(os.getenv('STARTUP_PENDING_ENQUEUE_LIMIT', '300'))
