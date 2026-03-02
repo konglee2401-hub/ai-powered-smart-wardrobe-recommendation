@@ -5177,17 +5177,16 @@ class GoogleFlowAutomationService {
         const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (textbox) {
           textbox.focus();
-          // Clear existing content (contenteditable div)
-          textbox.innerHTML = '';
-          // Move cursor to start
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(textbox);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
         }
       });
+      await this.page.waitForTimeout(300);
+
+      // Clear existing content using Ctrl+A + Backspace (safe for Slate editor)
+      await this.page.keyboard.down('Control');
+      await this.page.keyboard.press('a');
+      await this.page.keyboard.up('Control');
+      await this.page.waitForTimeout(100);
+      await this.page.keyboard.press('Backspace');
       await this.page.waitForTimeout(300);
 
       // Copy prompt to clipboard
