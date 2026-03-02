@@ -34,11 +34,29 @@ class ChatGPTService extends BrowserService {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const closed = await this.page.evaluate(() => {
+          // Close cookie dialog specifically
+          const cookieCloseBtn = document.querySelector('[data-testid="close-button"]');
+          if (cookieCloseBtn && cookieCloseBtn.offsetParent !== null) {
+            cookieCloseBtn.click();
+            return true;
+          }
+          
+          // Or accept all cookies button
+          const acceptAllBtn = Array.from(document.querySelectorAll('button')).find(btn => 
+            btn.textContent.includes('Chấp nhận') || btn.textContent.includes('Accept all') || 
+            btn.textContent.includes('Accept')
+          );
+          if (acceptAllBtn && acceptAllBtn.offsetParent !== null) {
+            acceptAllBtn.click();
+            return true;
+          }
+          
+          // Fallback: generic close buttons (be more selective)
           const closeButtons = document.querySelectorAll(
-            'button[aria-label*="Close"], button[aria-label="close"], button[class*="close"], [role="button"][class*="dismiss"]'
+            'button[aria-label*="Close"], button[aria-label*="close"], button[aria-label*="Đóng"]'
           );
           for (const btn of closeButtons) {
-            if (btn.offsetParent !== null) { // visible
+            if (btn.offsetParent !== null && btn.dataset.testid === 'close-button') {
               btn.click();
               return true;
             }
