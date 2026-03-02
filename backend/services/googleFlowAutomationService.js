@@ -5175,8 +5175,18 @@ class GoogleFlowAutomationService {
       console.log('[PROMPT] 📝 Entering video generation prompt...');
       await this.page.evaluate(() => {
         const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        if (textbox) textbox.focus();
-        textbox?.setSelectionRange(0, 0);  // Cursor to start
+        if (textbox) {
+          textbox.focus();
+          // Clear existing content (contenteditable div)
+          textbox.innerHTML = '';
+          // Move cursor to start
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(textbox);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       });
       await this.page.waitForTimeout(300);
 
@@ -5251,9 +5261,14 @@ class GoogleFlowAutomationService {
       // STEP 8: Download video if requested
       if (download && outputPath) {
         console.log('\n[DOWNLOAD] 📥 Downloading generated video...');
-        // Set outputDir so downloadVideo() knows where to save
+        // Ensure outputPath exists
+        if (!fs.existsSync(outputPath)) {
+          fs.mkdirSync(outputPath, { recursive: true });
+        }
+        
+        // Set outputDir temporarily so downloadVideo() knows where to save
         const previousOutputDir = this.options.outputDir;
-        this.options.outputDir = outputPath; // Set to the directory path
+        this.options.outputDir = outputPath; // Pass directory to downloadVideo()
         
         const video = await this.downloadVideo();
         
@@ -5265,6 +5280,13 @@ class GoogleFlowAutomationService {
           console.log(`[DOWNLOAD] ✅ Video saved to: ${videoPath}`);
         } else {
           console.warn('[DOWNLOAD] ⚠️  Video download failed or returned no path');
+        }
+      } else {
+        if (!download) {
+          console.log('[DOWNLOAD] ℹ️  Download disabled in options');
+        }
+        if (!outputPath) {
+          console.log('[DOWNLOAD] ℹ️  No output path specified');
         }
       }
 
