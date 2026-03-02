@@ -24,9 +24,48 @@ class ChatGPTService extends BrowserService {
     console.log(`📍 Navigating to ${this.baseUrl}...`);
     await this.goto(this.baseUrl);
     
-    // Wait for page to load
+    // Wait for page to load - increased timeout as ChatGPT takes time to render
     console.log('⏳ Waiting for ChatGPT to load...');
-    await this.page.waitForTimeout(3000);
+    await this.page.waitForTimeout(15000); // Increased from 3s to 15s
+    
+    // Close any cookie/notification banners that might block input
+    console.log('🍪 Closing cookie/notification popups...');
+    let popupsClosed = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const closed = await this.page.evaluate(() => {
+          const closeButtons = document.querySelectorAll(
+            'button[aria-label*="Close"], button[aria-label="close"], button[class*="close"], [role="button"][class*="dismiss"]'
+          );
+          for (const btn of closeButtons) {
+            if (btn.offsetParent !== null) { // visible
+              btn.click();
+              return true;
+            }
+          }
+          return false;
+        });
+        if (closed) {
+          popupsClosed++;
+          console.log(`   ✓ Closed popup ${popupsClosed}`);
+          await this.page.waitForTimeout(800);
+        }
+      } catch (e) {
+        // Continue
+      }
+    }
+    if (popupsClosed > 0) {
+      console.log(`✅ Closed ${popupsClosed} popup(s)`);
+    }
+    
+    // Wait for textarea input to appear to ensure Chat interface is ready
+    console.log('⏳ Waiting for chat interface (textarea)...');
+    try {
+      await this.page.waitForSelector('textarea', { timeout: 10000 });
+      console.log('✅ Chat interface ready');
+    } catch (e) {
+      console.log('⚠️  Textarea not found after waiting, but continuing anyway...');
+    }
     
     console.log('✅ ChatGPT initialized successfully');
   }
@@ -57,30 +96,58 @@ class ChatGPTService extends BrowserService {
       ];
 
       let selector = null;
-      for (const s of inputSelectors) {
-        const el = await this.page.$(s);
-        if (el) {
-          selector = s;
-          break;
+      console.log('[STEP 1] 🔍 Looking for input box with selectors...');
+      
+      // Retry loop - try to find input box, close popups if needed
+      let foundInput = false;
+      for (let attempt = 0; attempt < 3 && !foundInput; attempt++) {
+        if (attempt > 0) {
+          console.log(`[STEP 1] Attempt ${attempt + 1}/3 - Closing potential popups and retrying...`);
+          // Try to close any popups that might be blocking
+          await this.page.evaluate(() => {
+            const closeButtons = document.querySelectorAll(
+              'button[aria-label*="Close"], button[aria-label="close"], button[class*="close"], [role="button"][class*="dismiss"]'
+            );
+            for (const btn of closeButtons) {
+              if (btn.offsetParent !== null) {
+                btn.click();
+              }
+            }
+          });
+          await this.page.waitForTimeout(1000);
+        }
+        
+        for (const s of inputSelectors) {
+          const el = await this.page.$(s);
+          if (el) {
+            selector = s;
+            console.log(`[STEP 1] ✅ Found input: ${s}`);
+            foundInput = true;
+            break;
+          }
         }
       }
 
       if (!selector) {
+        console.log('[STEP 1] ❌ No input box found after retries. Page content:');
+        const bodyHTML = await this.page.evaluate(() => document.body.innerHTML.substring(0, 500));
+        console.log(bodyHTML);
         throw new Error('Could not find ChatGPT input box');
       }
 
       // IMPORTANT: Insert full prompt in one shot (paste-style), avoid typing.
       // Typing multi-line prompts can emit Enter key events and submit prematurely.
+      console.log(`[STEP 2] 📝 Inserting prompt (${prompt.length} chars)...`);
       const inserted = await this.page.evaluate((sel, fullPrompt) => {
         const elem = document.querySelector(sel);
-        if (!elem) return false;
+        if (!elem) return { success: false, reason: 'element not found' };
 
         if (elem.tagName === 'TEXTAREA' || elem.tagName === 'INPUT') {
           elem.focus();
           elem.value = fullPrompt;
           elem.dispatchEvent(new Event('input', { bubbles: true }));
           elem.dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
+          return { success: true, method: 'textarea/input', valueLength: elem.value.length };
         }
 
         // contenteditable fallback
@@ -89,19 +156,21 @@ class ChatGPTService extends BrowserService {
           elem.textContent = fullPrompt;
           elem.dispatchEvent(new InputEvent('input', { bubbles: true, data: fullPrompt, inputType: 'insertText' }));
           elem.dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
+          return { success: true, method: 'contenteditable', valueLength: elem.textContent.length };
         }
 
-        return false;
+        return { success: false, reason: 'unsupported element type: ' + elem.tagName };
       }, selector, prompt);
 
-      if (!inserted) {
-        throw new Error('Failed to insert full prompt into ChatGPT input');
+      if (!inserted.success) {
+        throw new Error(`Failed to insert prompt: ${inserted.reason}`);
       }
+      console.log(`[STEP 2] ✅ Prompt inserted via ${inserted.method} (${inserted.valueLength} chars)`);
 
       await this.page.waitForTimeout(300);
 
       // Submit explicitly via send button first (preferred), Enter as fallback.
+      console.log('[STEP 3] 🖱️  Finding and clicking submit button...');
       const submittedByButton = await this.page.evaluate(() => {
         const candidates = [
           'button[data-testid="send-button"]',
@@ -116,22 +185,97 @@ class ChatGPTService extends BrowserService {
           for (const btn of buttons) {
             const disabled = btn.disabled || btn.getAttribute('aria-disabled') === 'true';
             if (!disabled && btn.offsetParent !== null) {
+              console.log('Found valid send button:', selector);
               btn.click();
-              return true;
+              return { success: true, selector: selector };
             }
           }
         }
-        return false;
+        return { success: false, foundButtons: document.querySelectorAll('button').length };
       });
 
-      if (!submittedByButton) {
+      if (!submittedByButton.success) {
+        console.log(`[STEP 3] ⚠️  Submit button not found (found ${submittedByButton.foundButtons} buttons total), using Enter key...`);
         await this.page.focus(selector);
         await this.page.keyboard.press('Enter');
+      } else {
+        console.log(`[STEP 3] ✅ Clicked submit button: ${submittedByButton.selector}`);
       }
 
       // Wait until assistant response is present and stable
+      console.log('[STEP 4] ⏳ Waiting 9 seconds for response...');
       await this.page.waitForTimeout(9000);
 
+      console.log('[STEP 5] 🔍 Extracting response text...');
+      const debugInfo = await this.page.evaluate(() => {
+        // First, let's see what's on the page
+        const candidates = [
+          '[data-message-author-role="assistant"]',
+          'article',
+          '.markdown'
+        ];
+
+        const foundElements = {};
+        for (const selector of candidates) {
+          const nodes = document.querySelectorAll(selector);
+          foundElements[selector] = nodes.length;
+        }
+
+        // Try to find response
+        for (const selector of candidates) {
+          const nodes = document.querySelectorAll(selector);
+          if (nodes.length > 0) {
+            const last = nodes[nodes.length - 1];
+            if (last?.innerText?.trim()) {
+              return {
+                found: true,
+                selector: selector,
+                textLength: last.innerText.trim().length,
+                preview: last.innerText.substring(0, 100)
+              };
+            }
+          }
+        }
+
+        const markdownBlocks = document.querySelectorAll('.markdown, pre, code');
+        if (markdownBlocks.length > 0) {
+          const last = markdownBlocks[markdownBlocks.length - 1];
+          if (last?.innerText?.trim()) {
+            return {
+              found: true,
+              selector: '.markdown/pre/code',
+              textLength: last.innerText.trim().length,
+              preview: last.innerText.substring(0, 100)
+            };
+          }
+        }
+
+        return {
+          found: false,
+          foundElements: foundElements,
+          bodyLength: document.body.innerText.length,
+          hasAssistantElements: !!document.querySelector('[data-message-author-role="assistant"]')
+        };
+      });
+
+      if (!debugInfo.found) {
+        console.log('[STEP 5] ❌ Response not found. Debug info:');
+        console.log(JSON.stringify(debugInfo, null, 2));
+        // Save page HTML for manual inspection
+        const html = await this.page.content();
+        const fs = (await import('fs')).default;
+        const path = (await import('path')).default;
+        const filePath = path.join(process.cwd(), 'temp', `chatgpt-response-debug-${Date.now()}.html`);
+        fs.writeFileSync(filePath, html);
+        console.log(`   📄 Page HTML saved: ${filePath}`);
+        throw new Error('Could not extract text response from ChatGPT');
+      }
+
+      console.log(`[STEP 5] ✅ Found response via ${debugInfo.selector}`);
+      console.log(`   📊 Text length: ${debugInfo.textLength} chars`);
+      console.log(`   📝 Preview: ${debugInfo.preview.substring(0, 50)}...`);
+
+      // Now get the actual response
       const response = await this.page.evaluate(() => {
         const candidates = [
           '[data-message-author-role="assistant"]',
