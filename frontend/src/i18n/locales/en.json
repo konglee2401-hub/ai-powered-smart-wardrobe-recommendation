@@ -537,7 +537,14 @@
     "imageLocked": "Image locked as default",
     "sceneList": "Scenes",
     "selectScene": "Select a scene from the list",
-    "hasPrompt": "Prompt"
+    "hasPrompt": "Prompt",
+    "aspectRatio": "Aspect Ratio",
+    "noLockedImage": "No locked image",
+    "previous": "Previous",
+    "savedLockedImages": "Saved Scene Locked Images (max 10)",
+    "noLockedHistoryForAspect": "No saved locked images for this aspect yet",
+    "imageDeleted": "Deleted locked image",
+    "noSamplesForAspect": "No preview samples for this aspect yet"
   },
   "oneClickCreator": {
     "title": "1-Click Creator",

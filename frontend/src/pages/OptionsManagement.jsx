@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
-  Settings, Loader2, AlertCircle, ImagePlus, Layers, ChevronRight
+  Settings, Loader2, AlertCircle, ImagePlus, Layers, ChevronRight, ChevronLeft, X, Trash2
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -20,12 +20,35 @@ function getImageUrl(url) {
   return url;
 }
 
+const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
+
+function normalizeSceneLockedImageUrls(scene = {}) {
+  const fromScene = scene?.sceneLockedImageUrls || {};
+  return {
+    '16:9': fromScene['16:9'] || null,
+    '9:16': fromScene['9:16'] || scene.sceneLockedImageUrl || null
+  };
+}
+
+
+function normalizeSceneLockedImageHistory(scene = {}) {
+  const history = Array.isArray(scene?.sceneLockedImageHistory) ? scene.sceneLockedImageHistory : [];
+  return history
+    .filter((item) => item && item.url)
+    .map((item) => ({
+      url: item.url,
+      aspectRatio: SCENE_LOCK_ASPECTS.includes(item.aspectRatio) ? item.aspectRatio : '9:16',
+      createdAt: item.createdAt || null
+    }));
+}
+
 /**
  * Compact Scene Card for Sidebar
  */
 function SceneSidebarCard({ scene, isSelected, onClick }) {
   const { t } = useTranslation();
-  const lockedImageUrl = getImageUrl(scene.sceneLockedImageUrl);
+  const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
+  const lockedImageUrl = getImageUrl(lockedImageUrls['9:16'] || lockedImageUrls['16:9']);
   const hasPrompt = scene.sceneLockedPrompt || scene.promptSuggestion;
   const sampleCount = (scene.sceneLockSamples || []).length;
 
@@ -158,6 +181,9 @@ function SceneDetailEditor({ scene, onRefresh }) {
   const [technicalDetails, setTechnicalDetails] = useState(JSON.stringify(scene.technicalDetails || {}, null, 2));
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [previewIndexByAspect, setPreviewIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
+  const [lockedHistoryIndexByAspect, setLockedHistoryIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
+  const [modalImageUrl, setModalImageUrl] = useState(null);
 
   // Sync local state when scene changes
   useEffect(() => {
@@ -165,6 +191,9 @@ function SceneDetailEditor({ scene, onRefresh }) {
     setSceneLockedPrompt(scene.sceneLockedPrompt || '');
     setUseSceneLock(scene.useSceneLock !== false);
     setTechnicalDetails(JSON.stringify(scene.technicalDetails || {}, null, 2));
+    setPreviewIndexByAspect({ '16:9': 0, '9:16': 0 });
+    setLockedHistoryIndexByAspect({ '16:9': 0, '9:16': 0 });
+    setModalImageUrl(null);
   }, [scene._id || scene.value]);
 
   const clearMessages = () => {
@@ -262,13 +291,13 @@ function SceneDetailEditor({ scene, onRefresh }) {
     }
   };
 
-  const chooseDefaultImage = async (imageUrl) => {
+  const chooseDefaultImage = async (imageUrl, aspectRatio) => {
     clearMessages();
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/select-lock-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl })
+        body: JSON.stringify({ imageUrl, aspectRatio })
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Failed to lock image');
@@ -279,8 +308,43 @@ function SceneDetailEditor({ scene, onRefresh }) {
     }
   };
 
+  const deleteLockedImage = async (imageUrl) => {
+    clearMessages();
+    try {
+      const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/locked-images`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl })
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message || 'Failed to delete locked image');
+      showSuccess(t('optionsManagement.imageDeleted', 'Deleted locked image'));
+      await onRefresh();
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const moveSlider = (setter, aspect, total, direction) => {
+    if (total <= 1) return;
+    setter((prev) => {
+      const current = prev[aspect] || 0;
+      const next = (current + direction + total) % total;
+      return { ...prev, [aspect]: next };
+    });
+  };
+
   const samples = scene.sceneLockSamples || [];
-  const lockedImageUrl = getImageUrl(scene.sceneLockedImageUrl);
+  const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
+  const lockedHistory = normalizeSceneLockedImageHistory(scene);
+  const sampleGroups = {
+    '16:9': samples.filter((sample) => (sample.aspectRatio || '1:1') === '16:9'),
+    '9:16': samples.filter((sample) => (sample.aspectRatio || '1:1') === '9:16')
+  };
+  const historyGroups = {
+    '16:9': lockedHistory.filter((item) => item.aspectRatio === '16:9'),
+    '9:16': lockedHistory.filter((item) => item.aspectRatio === '9:16')
+  };
 
   return (
     <div style={{
@@ -656,118 +720,174 @@ function SceneDetailEditor({ scene, onRefresh }) {
           </div>
         </div>
 
-        {/* Locked Image Preview */}
-        {lockedImageUrl && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
-              <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
-              {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
-            </p>
-            <div style={{ 
-              display: 'inline-block',
-              padding: '0.5rem',
-              background: '#0f172a',
-              borderRadius: '10px',
-              border: '2px solid #22c55e'
-            }}>
-              <img 
-                src={lockedImageUrl} 
-                alt="Locked scene" 
-                style={{ 
-                  width: '160px', 
-                  height: '160px', 
-                  objectFit: 'cover', 
-                  borderRadius: '6px',
-                  display: 'block'
-                }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = `<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;color:#64748b;fontSize:0.8rem">Image not found</div>`;
-                }}
-              />
-            </div>
+        {/* Locked Image Preview by Aspect */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
+            <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
+            {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            {SCENE_LOCK_ASPECTS.map((ratio) => {
+              const ratioImageUrl = getImageUrl(lockedImageUrls[ratio]);
+              return (
+                <div key={ratio} style={{ padding: '0.75rem', background: '#0f172a', borderRadius: '10px', border: '1px solid #334155' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 600 }}>
+                    {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                  </p>
+                  {ratioImageUrl ? (
+                    <img
+                      src={ratioImageUrl}
+                      alt={`Locked scene ${ratio}`}
+                      onClick={() => setModalImageUrl(ratioImageUrl)}
+                      style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', objectFit: 'cover', borderRadius: '6px', display: 'block', cursor: 'zoom-in' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem', background: '#1e293b', borderRadius: '6px' }}>
+                      {t('optionsManagement.noLockedImage', 'No locked image')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
-        {/* Preview Candidates */}
+        {/* Saved Locked Images (max 10) */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
+            {t('optionsManagement.savedLockedImages', 'Saved Scene Locked Images (max 10)')}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+            {SCENE_LOCK_ASPECTS.map((ratio) => {
+              const ratioHistory = historyGroups[ratio] || [];
+              const idx = Math.min(lockedHistoryIndexByAspect[ratio] || 0, Math.max(ratioHistory.length - 1, 0));
+              const current = ratioHistory[idx];
+              const currentUrl = current ? getImageUrl(current.url) : null;
+
+              return (
+                <div key={`saved-${ratio}`} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                    <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                    </p>
+                    <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{ratioHistory.length}</span>
+                  </div>
+
+                  {currentUrl ? (
+                    <div>
+                      <img
+                        src={currentUrl}
+                        alt={`Saved locked ${ratio}`}
+                        onClick={() => setModalImageUrl(currentUrl)}
+                        style={{ width: '100%', height: ratio === '16:9' ? '140px' : '220px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                      />
+                      <div style={{ marginTop: '0.6rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => moveSlider(setLockedHistoryIndexByAspect, ratio, ratioHistory.length, -1)}
+                          disabled={ratioHistory.length <= 1}
+                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioHistory.length > 1 ? 'pointer' : 'not-allowed' }}
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8', alignSelf: 'center' }}>{idx + 1}/{ratioHistory.length}</span>
+                        <button
+                          onClick={() => moveSlider(setLockedHistoryIndexByAspect, ratio, ratioHistory.length, 1)}
+                          disabled={ratioHistory.length <= 1}
+                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioHistory.length > 1 ? 'pointer' : 'not-allowed' }}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteLockedImage(current.url)}
+                          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.6rem', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={14} /> {t('optionsManagement.delete', 'Delete')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noLockedHistoryForAspect', 'No saved locked images for this aspect yet')}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Preview Candidates Slider */}
         {samples.length > 0 && (
           <div>
             <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
               {t('optionsManagement.previewCandidates', 'Preview Candidates')}
             </p>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
-              gap: '1rem' 
-            }}>
-              {samples.map((sample, idx) => {
-                const sampleUrl = getImageUrl(sample.url);
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+              {SCENE_LOCK_ASPECTS.map((ratio) => {
+                const ratioSamples = sampleGroups[ratio] || [];
+                const idx = Math.min(previewIndexByAspect[ratio] || 0, Math.max(ratioSamples.length - 1, 0));
+                const sample = ratioSamples[idx];
+                const sampleUrl = sample ? getImageUrl(sample.url) : null;
+                const isAspectLocked = sample ? lockedImageUrls[ratio] === sample.url : false;
+
                 return (
-                  <div 
-                    key={idx} 
-                    style={{
-                      padding: '0.5rem',
-                      background: '#0f172a',
-                      borderRadius: '10px',
-                      border: sample.isDefault ? '2px solid #22c55e' : '1px solid #334155',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <img 
-                      src={sampleUrl} 
-                      alt={`Scene sample ${idx + 1}`} 
-                      style={{ 
-                        width: '100%', 
-                        height: '100px', 
-                        objectFit: 'cover', 
-                        borderRadius: '6px',
-                        display: 'block'
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.parentElement.querySelector('.img-placeholder').style.display = 'flex';
-                      }}
-                    />
-                    <div 
-                      className="img-placeholder" 
-                      style={{ 
-                        display: 'none',
-                        width: '100%', 
-                        height: '100px', 
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: '#1e293b',
-                        borderRadius: '6px',
-                        color: '#64748b',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      Image unavailable
-                    </div>
-                    <button 
-                      onClick={() => chooseDefaultImage(sample.url)} 
-                      style={{
-                        marginTop: '0.5rem',
-                        width: '100%',
-                        padding: '0.4rem 0.5rem',
-                        background: sample.isDefault ? '#22c55e' : '#374151',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#fff',
-                        fontSize: '0.75rem',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {sample.isDefault 
-                        ? t('optionsManagement.locked', '✓ Locked') 
-                        : t('optionsManagement.selectAsDefault', 'Select')
-                      }
-                    </button>
+                  <div key={ratio} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
+                    <p style={{ margin: '0 0 0.6rem 0', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                    </p>
+                    {!sampleUrl ? (
+                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noSamplesForAspect', 'No preview samples for this aspect yet')}</p>
+                    ) : (
+                      <div>
+                        <img
+                          src={sampleUrl}
+                          alt={`Scene sample ${ratio}`}
+                          onClick={() => setModalImageUrl(sampleUrl)}
+                          style={{ width: '100%', height: ratio === '16:9' ? '180px' : '260px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                        />
+                        <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, -1)}
+                            disabled={ratioSamples.length <= 1}
+                            style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                          >
+                            <ChevronLeft size={14} />
+                          </button>
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{idx + 1}/{ratioSamples.length}</span>
+                          <button
+                            onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, 1)}
+                            disabled={ratioSamples.length <= 1}
+                            style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                          >
+                            <ChevronRight size={14} />
+                          </button>
+                          <button
+                            onClick={() => chooseDefaultImage(sample.url, ratio)}
+                            style={{ marginLeft: 'auto', padding: '0.4rem 0.7rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
+                          >
+                            {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {modalImageUrl && (
+          <div
+            onClick={() => setModalImageUrl(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+          >
+            <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+              <button
+                onClick={() => setModalImageUrl(null)}
+                style={{ position: 'absolute', top: '-2.2rem', right: 0, background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#e2e8f0', cursor: 'pointer', padding: '0.35rem 0.5rem' }}
+              >
+                <X size={16} />
+              </button>
+              <img src={modalImageUrl} alt="Scene preview full size" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px', border: '1px solid #334155' }} onClick={(e) => e.stopPropagation()} />
             </div>
           </div>
         )}
