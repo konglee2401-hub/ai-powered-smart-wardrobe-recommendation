@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import trendAutomationApi from '../../services/trendAutomationApi';
+import TrendAutomationLayout from '../../components/TrendAutomationLayout';
 
 export default function ShortsReelsLogs() {
   const [data, setData] = useState({ items: [] });
@@ -9,9 +10,8 @@ export default function ShortsReelsLogs() {
   }, []);
 
   return (
-    <div className="p-6 text-gray-100">
-      <h1 className="text-2xl font-bold mb-4">Job Logs</h1>
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 overflow-auto">
+    <TrendAutomationLayout title="Job Logs" subtitle="Nhật ký chạy discover/scan jobs.">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 overflow-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left border-b border-gray-700"><th>Type</th><th>Status</th><th>Found</th><th>Downloaded</th><th>Duration</th><th>Error</th><th>Ran At</th></tr></thead>
           <tbody>
@@ -29,6 +29,6 @@ export default function ShortsReelsLogs() {
           </tbody>
         </table>
       </div>
-    </div>
+    </TrendAutomationLayout>
   );
 }
