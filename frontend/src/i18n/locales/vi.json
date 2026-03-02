@@ -539,6 +539,10 @@
     "hasPrompt": "Prompt",
     "aspectRatio": "Tỷ lệ khung hình",
     "noLockedImage": "Chưa có ảnh khóa",
+    "previous": "Trước",
+    "savedLockedImages": "Danh sách Scene Locked Images đã lưu (tối đa 10)",
+    "noLockedHistoryForAspect": "Chưa có scene locked image đã lưu cho tỷ lệ này",
+    "imageDeleted": "Đã xóa scene locked image",
     "noSamplesForAspect": "Chưa có ảnh xem trước cho tỷ lệ này"
   },
   "oneClickCreator": {

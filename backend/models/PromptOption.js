@@ -155,6 +155,13 @@ const promptOptionSchema = new mongoose.Schema({
     isDefault: { type: Boolean, default: false }
   }],
 
+  // NEW: Saved scene locked images history (manual selected only)
+  sceneLockedImageHistory: [{
+    url: { type: String, default: '' },
+    aspectRatio: { type: String, default: '9:16' },
+    createdAt: { type: Date, default: Date.now }
+  }],
+
   // NEW: Preview image for UI
   previewImage: {
     type: String,
