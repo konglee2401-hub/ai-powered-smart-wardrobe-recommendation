@@ -1,18 +1,79 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import trendAutomationApi from '../../services/trendAutomationApi';
+import TrendAutomationLayout from '../../components/TrendAutomationLayout';
+
+const CATEGORY_OPTIONS = [
+  'All', 'Pets & Animal', 'Music', 'Gaming', 'News & Politics', 'People & Blogs',
+  'Travel & Event', 'Sports', 'Auto & Vehicles', 'Comedy', 'Entertainment',
+  'Film & Animation', 'Howto & Style', 'Education', 'Science & Technology',
+];
+
+const DIMENSION_OPTIONS = ['Most Viewed', 'Most Liked', 'Most Commented'];
+const PERIOD_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Year-End', 'Yearly', 'All-time'];
+const COUNTRY_OPTIONS = ['Worldwide', 'Viet Nam', 'Japan', 'South Korea', 'Taiwan', 'United States', 'India'];
 
 function StatCard({ title, value }) {
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
       <p className="text-gray-400 text-sm">{title}</p>
       <p className="text-2xl text-white font-bold mt-1">{value}</p>
     </div>
   );
 }
 
+function PickerColumn({ title, options, selected, onSelect, searchable = false }) {
+  const [search, setSearch] = useState('');
+
+  const visibleOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    return options.filter((option) => option.toLowerCase().includes(search.toLowerCase()));
+  }, [options, search]);
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-800">
+        <h3 className="font-semibold">{title}</h3>
+        {searchable && (
+          <input
+            className="w-full mt-2 bg-gray-950 border border-gray-700 rounded px-2 py-1.5 text-sm"
+            value={search}
+            placeholder={`Search ${title.toLowerCase()}...`}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+      </div>
+      <ul className="max-h-72 overflow-auto">
+        {visibleOptions.map((option) => {
+          const active = option === selected;
+          return (
+            <li key={option}>
+              <button
+                className={`w-full text-left px-4 py-2.5 text-sm border-b border-gray-800/70 transition ${
+                  active ? 'bg-red-600 text-white font-medium' : 'hover:bg-gray-800 text-gray-200'
+                }`}
+                onClick={() => onSelect(option)}
+              >
+                {option}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function ShortsReelsDashboard() {
   const [loading, setLoading] = useState(false);
+  const [triggering, setTriggering] = useState(false);
   const [data, setData] = useState(null);
+  const [selected, setSelected] = useState({
+    category: 'All',
+    dimension: 'Most Viewed',
+    country: 'Worldwide',
+    period: 'Weekly',
+    date: new Date().toISOString().slice(0, 10),
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -29,15 +90,31 @@ export default function ShortsReelsDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  const triggerManualScan = async () => {
+    setTriggering(true);
+    try {
+      await trendAutomationApi.triggerJob('scan', {
+        category: selected.category,
+        dimension: selected.dimension,
+        country: selected.country,
+        period: selected.period,
+        date: selected.date,
+      });
+      await fetchData();
+    } finally {
+      setTriggering(false);
+    }
+  };
+
   return (
-    <div className="p-6 text-gray-100 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Shorts/Reels Automation Dashboard</h1>
-        <div className="flex gap-2">
-          <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 rounded">Run Discover</button>
-          <button onClick={() => trendAutomationApi.triggerJob('scan')} className="px-4 py-2 bg-blue-600 rounded">Run Scan</button>
-          <button onClick={fetchData} className="px-4 py-2 bg-gray-700 rounded">Refresh</button>
-        </div>
+    <TrendAutomationLayout
+      title="Dashboard"
+      subtitle="Theo dõi tổng quan, trigger scan thủ công theo bộ lọc giống Playboard category UI."
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 rounded">Run Discover</button>
+        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 rounded disabled:opacity-50">{triggering ? 'Running scan...' : 'Run Scan With Filters'}</button>
+        <button onClick={fetchData} className="px-4 py-2 bg-gray-700 rounded">Refresh</button>
       </div>
 
       {loading && <p className="text-gray-400">Loading...</p>}
@@ -51,16 +128,30 @@ export default function ShortsReelsDashboard() {
         <StatCard title="Queue" value={`${data?.queue?.queued ?? 0}/${data?.queue?.running ?? 0}`} />
       </div>
 
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <section id="manual-scan" className="space-y-4">
+        <h3 className="text-xl font-semibold">Manual Scan Filters</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <PickerColumn title="Category" options={CATEGORY_OPTIONS} selected={selected.category} searchable onSelect={(value) => setSelected((prev) => ({ ...prev, category: value }))} />
+          <PickerColumn title="Dimension" options={DIMENSION_OPTIONS} selected={selected.dimension} onSelect={(value) => setSelected((prev) => ({ ...prev, dimension: value }))} />
+          <PickerColumn title="Country" options={COUNTRY_OPTIONS} selected={selected.country} searchable onSelect={(value) => setSelected((prev) => ({ ...prev, country: value }))} />
+          <PickerColumn title="Period" options={PERIOD_OPTIONS} selected={selected.period} onSelect={(value) => setSelected((prev) => ({ ...prev, period: value }))} />
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col gap-3">
+            <h3 className="font-semibold">Date</h3>
+            <input type="date" value={selected.date} onChange={(e) => setSelected((prev) => ({ ...prev, date: e.target.value }))} className="bg-gray-950 border border-gray-700 rounded px-3 py-2" />
+            <div className="text-xs text-gray-400 leading-relaxed">
+              {selected.category} / {selected.dimension} / {selected.country} / {selected.period}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
         <h2 className="text-lg font-semibold mb-4">Recent discovered videos</h2>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-gray-700">
-                <th className="py-2">Title</th>
-                <th>Platform</th>
-                <th>Views</th>
-                <th>Status</th>
+                <th className="py-2">Title</th><th>Platform</th><th>Topic</th><th>Views</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -68,6 +159,7 @@ export default function ShortsReelsDashboard() {
                 <tr key={item._id} className="border-b border-gray-800">
                   <td className="py-2 pr-2">{item.title}</td>
                   <td>{item.platform}</td>
+                  <td>{item.topic || '-'}</td>
                   <td>{item.views?.toLocaleString?.() || item.views}</td>
                   <td>{item.downloadStatus}</td>
                 </tr>
@@ -76,6 +168,6 @@ export default function ShortsReelsDashboard() {
           </table>
         </div>
       </div>
-    </div>
+    </TrendAutomationLayout>
   );
 }
