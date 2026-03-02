@@ -2195,7 +2195,7 @@ class GoogleFlowAutomationService {
         this.options.aspectRatio = '9:16';
       }
       if (!this.options.model) {
-        this.options.model = this.type === 'image' ? 'Nano Banana 2' : 'Veo 3.1 - Fast';
+        this.options.model = this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast';
       }
       if (!this.options.videoReferenceType) {
         this.options.videoReferenceType = 'ingredients'; // Default for VIDEO
