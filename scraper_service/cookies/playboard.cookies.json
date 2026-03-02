@@ -1,0 +1,52 @@
+[
+  {
+    "name": "utcOffset",
+    "value": "+07:00",
+    "domain": ".playboard.co",
+    "path": "/",
+    "expires": 1803978795,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "tz",
+    "value": "Asia/Saigon",
+    "domain": ".playboard.co",
+    "path": "/",
+    "expires": 1803978795,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.322740572.1772442796",
+    "domain": ".playboard.co",
+    "path": "/",
+    "expires": 1807002796.172901,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "AUTR",
+    "value": "JvT-F-VhyHN5KjDgu8Wl5ViU3YrFxV29RI99m8K5hYsAlwT289mK0XpviL2RCvKJ",
+    "domain": ".playboard.co",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga_M1J3WFM34Q",
+    "value": "GS2.1.s1772442795$o1$g1$t1772442801$j54$l0$h0",
+    "domain": ".playboard.co",
+    "path": "/",
+    "expires": 1807002801.30366,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

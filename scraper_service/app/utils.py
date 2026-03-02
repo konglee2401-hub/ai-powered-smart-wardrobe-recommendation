@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-TOPICS = ['hai', 'dance', 'cooking']
+TOPICS = ['funny', 'hai', 'dance', 'sexy dance', 'cooking']
 
 
 def now_utc():

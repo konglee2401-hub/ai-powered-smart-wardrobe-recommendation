@@ -41,8 +41,10 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
     // 💫 ENHANCED: Support both multipart/form-data (files) and JSON (base64 strings)
     let characterImageBuffer = null;
     let productImageBuffer = null;
+    let sceneImageBuffer = null;  // 💫 NEW: Optional scene reference image
     let characterImageName = 'character.jpg';
     let productImageName = 'product.jpg';
+    let sceneImageName = null;  // 💫 NEW: Scene image name
     
     // Check for multipart/form-data files (file upload)
     if (req.files?.characterImage && req.files?.productImage) {
@@ -51,6 +53,13 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       productImageBuffer = req.files.productImage[0].buffer;
       characterImageName = req.files.characterImage[0].originalname;
       productImageName = req.files.productImage[0].originalname;
+      
+      // 💫 NEW: Handle optional scene image file
+      if (req.files?.sceneImage) {
+        sceneImageBuffer = req.files.sceneImage[0].buffer;
+        sceneImageName = req.files.sceneImage[0].originalname;
+        console.log(`🎭 Scene image file found: ${sceneImageName}`);
+      }
     } 
     // 💫 NEW: Support JSON with base64 strings
     else if (req.body.characterImage && req.body.productImage) {
@@ -59,6 +68,7 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       // Extract base64 strings
       let charBase64 = req.body.characterImage;
       let prodBase64 = req.body.productImage;
+      let sceneBase64 = req.body.sceneImage;  // 💫 NEW: Optional scene image base64
       
       // Remove 'data:image/...;base64,' prefix if present
       if (charBase64.includes(',')) {
@@ -66,11 +76,22 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
         prodBase64 = prodBase64.split(',')[1];
       }
       
+      if (sceneBase64 && sceneBase64.includes(',')) {
+        sceneBase64 = sceneBase64.split(',')[1];
+      }
+      
       // Convert base64 to Buffer
       try {
         characterImageBuffer = Buffer.from(charBase64, 'base64');
         productImageBuffer = Buffer.from(prodBase64, 'base64');
         console.log(`  ✅ Converted base64 to buffers: char=${characterImageBuffer.length}B, prod=${productImageBuffer.length}B`);
+        
+        // 💫 NEW: Convert scene image base64 if provided
+        if (sceneBase64) {
+          sceneImageBuffer = Buffer.from(sceneBase64, 'base64');
+          sceneImageName = 'scene-reference.jpg';
+          console.log(`  ✅ Scene image converted: ${sceneImageBuffer.length}B`);
+        }
       } catch (decodeErr) {
         return res.status(400).json({
           success: false,
@@ -146,16 +167,20 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       ...req,
       imageBuffers: {
         characterImage: characterImageBuffer,
-        productImage: productImageBuffer
+        productImage: productImageBuffer,
+        sceneImage: sceneImageBuffer  // 💫 NEW: Optional scene image buffer
       },
       imageNames: {
         characterImage: characterImageName,
-        productImage: productImageName
+        productImage: productImageName,
+        sceneImage: sceneImageName  // 💫 NEW: Optional scene image name
       },
       // Override files for service compatibility
       files: {
         characterImage: [{ buffer: characterImageBuffer, originalname: characterImageName }],
-        productImage: [{ buffer: productImageBuffer, originalname: productImageName }]
+        productImage: [{ buffer: productImageBuffer, originalname: productImageName }],
+        // 💫 NEW: Add scene image to files if present
+        ...(sceneImageBuffer ? { sceneImage: [{ buffer: sceneImageBuffer, originalname: sceneImageName }] } : {})
       }
     };
     

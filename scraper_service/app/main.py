@@ -1,5 +1,6 @@
 import asyncio
 import time
+import random
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ from bson import ObjectId
 from .config import PORT, ENABLE_SCHEDULER
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize
-from .automation import discover_all, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker
+from .automation import discover_all, discover_playboard, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
 app.add_middleware(
@@ -98,7 +99,7 @@ async def get_videos(
     if platform:
         query['platform'] = platform
     if topic:
-        query['topic'] = topic
+        query['topics'] = topic
     if status:
         query['downloadStatus'] = status
     if minViews is not None:
@@ -164,6 +165,170 @@ async def trigger_job(type: str = Query(...)):
     if type == 'scan':
         return await scan_all_channels()
     raise HTTPException(status_code=400, detail='Invalid type. Use discover or scan')
+
+
+@app.get('/api/shorts-reels/playboard/config-options')
+async def get_playboard_config_options():
+    """Get available options for Playboard config (dimensions, categories, countries, periods)"""
+    return {
+        'dimensions': ['most-viewed', 'trending', 'rising'],
+        'categories': [
+            'All',
+            'Pets & Animal',
+            'Music',
+            'Gaming',
+            'News & Politics',
+            'People & Blogs',
+            'Travel & Event',
+            'Sports',
+            'Auto & Vehicles',
+            'Comedy',
+            'Entertainment',
+            'Film & Animation',
+            'Howto & Style',
+            'Education',
+            'Science & Technology'
+        ],
+        'countries': [
+            'Worldwide',
+            'United States',
+            'United Kingdom',
+            'Viet Nam',
+            'India',
+            'Brazil',
+            'Germany',
+            'France',
+            'Japan',
+            'South Korea',
+            'Mexico',
+            'Canada',
+            'Australia'
+        ],
+        'periods': ['weekly', 'monthly', 'yearly'],
+        'sampleConfig': {
+            'dimension': 'most-viewed',
+            'category': 'Howto & Style',
+            'country': 'Viet Nam',
+            'period': 'weekly',
+            'isActive': True,
+            'priority': 10
+        }
+    }
+
+
+@app.get('/api/shorts-reels/playboard/configs')
+async def get_playboard_configs():
+    """Get saved Playboard discovery configs from settings"""
+    setting = get_or_create_settings()
+    configs = setting.get('playboardConfigs', [])
+    return {'configs': configs, 'total': len(configs)}
+
+
+@app.post('/api/shorts-reels/playboard/configs')
+async def save_playboard_config(config: dict):
+    """Save new Playboard discovery config to settings"""
+    if not config.get('dimension') or not config.get('category'):
+        raise HTTPException(status_code=400, detail='dimension and category are required')
+    
+    setting = get_or_create_settings()
+    configs = setting.get('playboardConfigs', [])
+    
+    # Add timestamp and ensure required fields
+    config['createdAt'] = datetime.utcnow().isoformat()
+    config['isActive'] = config.get('isActive', True)
+    config['priority'] = config.get('priority', 5)
+    
+    configs.append(config)
+    update_settings({'playboardConfigs': configs})
+    
+    return {'success': True, 'config': config, 'totalConfigs': len(configs)}
+
+
+@app.delete('/api/shorts-reels/playboard/configs/{config_id}')
+async def delete_playboard_config(config_id: int):
+    """Delete Playboard discovery config by index"""
+    setting = get_or_create_settings()
+    configs = setting.get('playboardConfigs', [])
+    
+    if config_id < 0 or config_id >= len(configs):
+        raise HTTPException(status_code=404, detail='Config not found')
+    
+    configs.pop(config_id)
+    update_settings({'playboardConfigs': configs})
+    
+    return {'success': True, 'totalConfigs': len(configs)}
+
+
+@app.post('/api/shorts-reels/playboard/configs/{config_id}')
+async def update_playboard_config(config_id: int, updates: dict):
+    """Update Playboard discovery config"""
+    setting = get_or_create_settings()
+    configs = setting.get('playboardConfigs', [])
+    
+    if config_id < 0 or config_id >= len(configs):
+        raise HTTPException(status_code=404, detail='Config not found')
+    
+    configs[config_id].update(updates)
+    configs[config_id]['updatedAt'] = datetime.utcnow().isoformat()
+    update_settings({'playboardConfigs': configs})
+    
+    return {'success': True, 'config': configs[config_id]}
+
+
+@app.post('/api/shorts-reels/playboard/manual-discover')
+async def manual_discover_playboard(config: dict, topics: list[str] | None = None):
+    """
+    Manual trigger Playboard discovery with custom config & topic filter.
+    
+    Config format:
+    {
+        "dimension": "most-viewed",    # or "trending", "rising"
+        "category": "All",             # or specific category
+        "country": "Worldwide",        # or specific country
+        "period": "weekly",            # or "monthly", "yearly"
+        "isActive": true,
+        "priority": 10
+    }
+    
+    Topics: ["Fashion", "Beauty", "Lifestyle"] or None (all topics)
+    """
+    started = time.time()
+    
+    if not config:
+        raise HTTPException(status_code=400, detail='config is required')
+    
+    # Import TOPICS from utils if topics param not provided
+    from .utils import TOPICS
+    target_topics = topics if topics else TOPICS
+    
+    found = 0
+    failed = 0
+    
+    try:
+        for topic in target_topics:
+            try:
+                await asyncio.sleep(3 + random.random() * 2)
+                print(f"[ManualDiscover] Discovering {topic} with config: {config.get('category')} / {config.get('country')}")
+                item_count = await discover_playboard(config, topic)
+                found += item_count
+            except Exception as e:
+                print(f"[ManualDiscover] Failed for topic {topic}: {e}")
+                failed += 1
+        
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'success', isManual=True, itemsFound=found, failedTopics=failed, duration=duration)
+        
+        return {
+            'success': True,
+            'itemsFound': found,
+            'failedTopics': failed,
+            'duration': duration,
+            'topicsProcessed': len(target_topics)
+        }
+    except Exception as ex:
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'failed', isManual=True, itemsFound=found, error=str(ex), duration=duration)
+        raise HTTPException(status_code=500, detail=f'Manual discovery failed: {str(ex)}')
 
 
 @app.get('/healthz')

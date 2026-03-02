@@ -74,8 +74,67 @@ async function loadPromptSuggestion(optionValue, category) {
 
 
 /**
+ * Get comprehensive scene reference info including locked prompt and optional reference image
+ * Returns both text directive and reference image info for proper image generation
+ */
+async function getSceneReferenceInfo(sceneValue, selectedOptions = {}, language = 'en') {
+  if (!sceneValue) return { prompt: '', imageUrl: null, hasImage: false };
+
+  let option = null;
+  try {
+    option = await PromptOption.findOne({ value: sceneValue, category: 'scene' });
+  } catch (error) {
+    console.warn(`Could not load scene option for scene reference ${sceneValue}:`, error.message);
+  }
+
+  const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+  
+  // Get the canonical locked prompt
+  const canonical = normalizedLanguage === 'vi'
+    ? (option?.sceneLockedPromptVi?.trim() || option?.sceneLockedPrompt?.trim())
+    : (option?.sceneLockedPrompt?.trim() || option?.sceneLockedPromptVi?.trim());
+
+  if (!canonical && !option?.sceneLockedImageUrl) {
+    return { prompt: '', imageUrl: null, hasImage: false };
+  }
+
+  // Get technical details if available
+  const technicalDetails = option?.technicalDetails || {};
+  const detailParts = Object.entries(technicalDetails)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ');
+
+  // Build prompt directive
+  let promptDirective = '';
+  if (canonical) {
+    promptDirective = `Scene Locked Prompt: ${canonical}`;
+    if (detailParts) {
+      promptDirective += `. Fixed technical details: ${detailParts}`;
+    }
+  } else {
+    const fallback = normalizedLanguage === 'vi'
+      ? (option?.promptSuggestionVi?.trim() || option?.promptSuggestion?.trim() || sceneValue)
+      : (option?.promptSuggestion?.trim() || option?.promptSuggestionVi?.trim() || sceneValue);
+    promptDirective = fallback;
+  }
+
+  // Get scene reference image URL if available
+  const imageUrl = option?.sceneLockedImageUrl || option?.previewImage || null;
+  
+  return {
+    prompt: promptDirective,
+    imageUrl: imageUrl,
+    hasImage: !!(imageUrl),
+    sceneValue: sceneValue,
+    sceneLabel: option?.label || sceneValue,
+    useSceneLock: option?.useSceneLock !== false
+  };
+}
+
+/**
  * Build a locked scene directive to keep scene consistency across generations
  * Priority: sceneLockedPrompt > promptSuggestion > option value
+ * NOW RETURNS: Text prompt + Optional reference image info
  */
 async function buildLockedSceneDirective(sceneValue, selectedOptions = {}, language = 'en') {
   if (!sceneValue) return '';
@@ -284,9 +343,23 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
 
   const negativePrompt = buildNegativePrompt(analysis?.product, selectedOptions);
 
+  // 💫 NEW: Get scene reference image info if available
+  let sceneReferenceImage = null;
+  if (selectedOptions?.scene) {
+    const sceneInfo = await getSceneReferenceInfo(selectedOptions.scene, selectedOptions, normalizedLanguage);
+    if (sceneInfo.hasImage && sceneInfo.imageUrl) {
+      sceneReferenceImage = {
+        url: sceneInfo.imageUrl,
+        sceneValue: sceneInfo.sceneValue,
+        sceneLabel: sceneInfo.sceneLabel
+      };
+    }
+  }
+
   return {
     prompt: (promptStr || '').toString().trim(),
-    negativePrompt: (negativePrompt || '').toString().trim()
+    negativePrompt: (negativePrompt || '').toString().trim(),
+    sceneReferenceImage: sceneReferenceImage
   };
 }
 
@@ -434,6 +507,28 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   parts.push('High realism, professional fashion photography.');
   parts.push('Sharp focus, natural skin texture.');
   parts.push('Realistic fabric texture and accurate anatomy.\n');
+
+  // ==========================================
+  // 💫 NEW: SCENE REFERENCE IMAGE HANDLING
+  // ==========================================
+  if (selectedOptions.scene) {
+    const sceneInfo = await getSceneReferenceInfo(selectedOptions.scene, selectedOptions, language);
+    
+    if (sceneInfo.prompt) {
+      parts.push('[SCENE LOCK INSTRUCTION]');
+      parts.push(sceneInfo.prompt);
+      
+      // If scene has a reference image, add instruction for AI to use it
+      if (sceneInfo.hasImage && sceneInfo.imageUrl) {
+        parts.push(`\n[SCENE REFERENCE IMAGE]`);
+        parts.push(`A reference image of the scene environment is provided.`);
+        parts.push(`Use the reference image to replicate the background, lighting, props, and atmosphere.`);
+        parts.push(`Keep: backdrop composition, floor material, lighting angles, prop placement, and overall ambiance.`);
+        parts.push(`ONLY replace the character and clothing - keep EVERYTHING ELSE identical to the reference image.`);
+      }
+      parts.push('');
+    }
+  }
 
   // ==========================================
   // HARD CONSTRAINTS
@@ -1786,4 +1881,5 @@ function buildNegativePrompt(product, selectedOptions) {
 // Removing the old, unnecessary export statements that were causing the crash.
 
 // Export Flux-optimized prompt builder for BFL provider
-export { buildFluxPrompt, buildFluxWearingPrompt, buildFluxHoldingPrompt };
+// Export new scene reference info function for image generation
+export { buildFluxPrompt, buildFluxWearingPrompt, buildFluxHoldingPrompt, getSceneReferenceInfo };

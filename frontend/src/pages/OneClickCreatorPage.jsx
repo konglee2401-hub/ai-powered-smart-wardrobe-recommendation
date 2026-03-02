@@ -574,7 +574,9 @@ export default function OneClickCreatorPage() {
   // Upload states
   const [characterImage, setCharacterImage] = useState(null);
   const [productImage, setProductImage] = useState(null);
+  const [sceneImage, setSceneImage] = useState(null); // 💫 NEW: Optional scene reference image
   const fileInputRef = useRef(null);
+  const sceneFileInputRef = useRef(null); // 💫 NEW: Ref for scene file input
 
   // Gallery Picker State
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
@@ -760,13 +762,17 @@ export default function OneClickCreatorPage() {
     recommendedOptions,
     analysisResult,
     flowId,  // 💫 Accept flowId from caller to ensure session continuity
-    language = 'en'  // 💫 Accept language parameter for prompt generation
+    language = 'en',  // 💫 Accept language parameter for prompt generation
+    sceneImageBase64 = null  // 💫 NEW: Optional scene reference image base64
   ) => {
     try {
       console.log('🎬 Starting Affiliate Video TikTok Flow');
       console.log(`📋 Parameters received:`);
       console.log(`  Character base64: ${characterImageBase64?.substring(0, 50)}...${characterImageBase64?.length}B`);
       console.log(`  Product base64: ${productImageBase64?.substring(0, 50)}...${productImageBase64?.length}B`);
+      if (sceneImageBase64) {
+        console.log(`  Scene base64: ${sceneImageBase64?.substring(0, 50)}...${sceneImageBase64?.length}B`);
+      }
       console.log(`  Options: ${JSON.stringify(recommendedOptions)}`);
       console.log(`  Analysis: ${analysisResult ? 'present' : 'missing'}`);
       console.log(`  Flow ID: ${flowId}`);  // 💫 Log flowId
@@ -779,6 +785,7 @@ export default function OneClickCreatorPage() {
       const payload = {
         characterImage: characterImageBase64,
         productImage: productImageBase64,
+        sceneImage: sceneImageBase64,  // 💫 NEW: Optional scene image
         videoDuration: tiktokVideoDuration,
         voiceGender,
         voicePace,
@@ -957,14 +964,21 @@ export default function OneClickCreatorPage() {
     console.log('📸 Converting images to base64...');
     console.log(`Character image length: ${characterImage.length}B`);
     console.log(`Product image length: ${productImage.length}B`);
+    if (sceneImage) {
+      console.log(`Scene image length: ${sceneImage.length}B`);
+    }
     
     const charBase64 = characterImage.split(',')[1];
     const prodBase64 = productImage.split(',')[1];
+    const sceneBase64 = sceneImage ? sceneImage.split(',')[1] : null;  // 💫 NEW: Extract scene image base64
     
     // 💫 LOG: Verify base64 was extracted
     console.log(`✅ Extracted base64 strings:`);
     console.log(`  Character: ${charBase64?.substring(0, 50)}...${charBase64?.length}B`);
     console.log(`  Product: ${prodBase64?.substring(0, 50)}...${prodBase64?.length}B`);
+    if (sceneBase64) {
+      console.log(`  Scene: ${sceneBase64?.substring(0, 50)}...${sceneBase64?.length}B`);
+    }
 
     // Create sessions for each quantity
     const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1));
@@ -1082,7 +1096,8 @@ export default function OneClickCreatorPage() {
               recommendedOptions,
               analysisResult,
               flowId,  // 💫 Pass flowId to the flow
-              i18n.language || 'en'  // 💫 Pass language for Vietnamese prompt support
+              i18n.language || 'en',  // 💫 Pass language for Vietnamese prompt support
+              sceneBase64  // 💫 NEW: Pass scene image base64 (optional)
             );
 
             // Update session with results
@@ -1337,7 +1352,7 @@ export default function OneClickCreatorPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
       {/* Header */}
-      <div className="bg-gray-900/50 border-b border-gray-800 sticky top-0 z-50">
+      <div className="bg-gray-900/50 border-b border-gray-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sparkles className="w-6 h-6 text-amber-400" />
@@ -1715,6 +1730,61 @@ export default function OneClickCreatorPage() {
                     {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
+              </div>
+
+              {/* 💫 NEW: Scene Reference Image (Optional) */}
+              <div className="border border-dashed border-gray-600 rounded-lg p-3 bg-gray-900/50">
+                <p className="text-xs uppercase text-gray-400 font-semibold mb-2 flex items-center gap-2">
+                  <Wand2 className="w-3 h-3" /> Scene Reference Image (Optional)
+                </p>
+                <p className="text-xs text-gray-500 mb-3">Upload a reference image of your scene to ensure consistent background and lighting across all generations.</p>
+                
+                <div className="flex gap-2">
+                  <div
+                    onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
+                    className="flex-1 border-2 border-dashed border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors disabled:opacity-50 relative group"
+                  >
+                    {sceneImage ? (
+                      <>
+                        <img src={sceneImage} alt="Scene" className="w-full h-24 object-cover rounded" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-4">
+                        <ImageIcon className="w-5 h-5 mx-auto text-gray-500 mb-1" />
+                        <p className="text-xs text-gray-400">Click to add scene image</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {sceneImage && (
+                    <button
+                      onClick={() => setSceneImage(null)}
+                      disabled={isGenerating}
+                      className="px-2 py-2 text-xs rounded bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 transition-colors flex items-center gap-1"
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+                
+                <input
+                  ref={sceneFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={isGenerating}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => setSceneImage(evt.target?.result);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
               </div>
             </div>
 

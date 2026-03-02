@@ -1,43 +1,1199 @@
 import asyncio
+import json
 import os
 import random
+import sys
 import time
 from datetime import datetime
+from typing import Dict, List
+from urllib.parse import parse_qs, urlparse
 
 from bson import ObjectId
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
+
+try:
+    import nodriver as nd
+except Exception:
+    nd = None
 
 from .config import (
     DOWNLOAD_ROOT,
+    PLAYBOARD_COOKIES_FILE,
+    PLAYBOARD_USER_EMAIL,
+    PLAYBOARD_USER_PASSWORD,
     SCRAPER_ENGINE,
     SCRAPER_HEADLESS,
     SCRAPER_LOCALE,
     SCRAPER_TIMEZONE,
     SCRAPER_PROXY,
+    SCRAPER_PROXIES,
 )
 from .db import channels, videos
 from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
 from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, match_topic
 
-try:
-    import nodriver as nd
-except Exception:  # nodriver is optional at runtime
-    nd = None
-
 UA = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
 ]
 
 queue = asyncio.PriorityQueue()
 running_jobs = 0
 worker_task = None
+_proxy_index = 0
+FAIL_FAST_TIMEOUTS_MS = [18000, 30000, 50000]
+
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
+
+def _proxy_pool() -> List[str]:
+    pool = [x for x in SCRAPER_PROXIES if x]
+    if not pool and SCRAPER_PROXY:
+        pool = [SCRAPER_PROXY]
+    return pool
+
+
+def _mask_proxy(proxy: str) -> str:
+    if not proxy:
+        return ''
+    parsed = urlparse(proxy if '://' in proxy else f'http://{proxy}')
+    host = parsed.hostname or 'unknown'
+    port = parsed.port or ''
+    return f'{host}:{port}'
+
+
+def _next_proxy() -> str | None:
+    global _proxy_index
+    pool = _proxy_pool()
+    if not pool:
+        return None
+    proxy = pool[_proxy_index % len(pool)]
+    _proxy_index += 1
+    print(f"[DEBUG] Proxy selected: {_mask_proxy(proxy)}")
+    return proxy
+
+
+async def _is_proxy_healthy(proxy: str | None, timeout_sec: float = 2.5) -> bool:
+    if not proxy:
+        return True
+    parsed = urlparse(proxy if '://' in proxy else f'http://{proxy}')
+    host = parsed.hostname
+    port = parsed.port
+    if not host or not port:
+        return False
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout_sec)
+        writer.close()
+        await writer.wait_closed()
+        return True
+    except Exception:
+        return False
+
+
+async def _next_healthy_proxy() -> str | None:
+    pool = _proxy_pool()
+    if not pool:
+        return None
+
+    checked = set()
+    while len(checked) < len(pool):
+        proxy = _next_proxy()
+        if not proxy:
+            return None
+        if proxy in checked:
+            continue
+        checked.add(proxy)
+        ok = await _is_proxy_healthy(proxy)
+        if ok:
+            print(f"[DEBUG] Proxy health-check OK: {_mask_proxy(proxy)}")
+            return proxy
+        print(f"[DEBUG] Proxy health-check FAIL: {_mask_proxy(proxy)}")
+    return None
+
+
+def _extract_playboard_link_info(href: str | None) -> Dict[str, str]:
+    if not href:
+        return {'video_id': '', 'channel_id': '', 'youtube_url': ''}
+
+    raw = href if href.startswith('http') else f'https://playboard.co{href}'
+    parsed = urlparse(raw)
+    path = parsed.path or ''
+    query = parse_qs(parsed.query or '')
+
+    video_id = ''
+    if '/video/' in path:
+        video_id = path.split('/video/')[-1].split('/')[0].split('?')[0]
+
+    channel_id = (query.get('channelId') or [''])[0]
+    youtube_url = f'https://www.youtube.com/watch?v={video_id}' if video_id else ''
+
+    return {'video_id': video_id, 'channel_id': channel_id, 'youtube_url': youtube_url}
+
+
+async def _apply_playboard_cookies(context) -> None:
+    if not PLAYBOARD_COOKIES_FILE:
+        return
+    if not os.path.exists(PLAYBOARD_COOKIES_FILE):
+        print(f'[DEBUG] Cookie file not found: {PLAYBOARD_COOKIES_FILE}')
+        return
+
+    try:
+        with open(PLAYBOARD_COOKIES_FILE, 'r', encoding='utf-8') as f:
+            cookies = json.load(f)
+        if isinstance(cookies, list) and cookies:
+            await context.add_cookies(cookies)
+            print(f'[DEBUG] Applied {len(cookies)} cookies')
+    except Exception as e:
+        print(f'[DEBUG] Apply cookies failed: {e}')
+
+
+def _proxy_for_playwright(proxy: str | None) -> Dict | None:
+    if not proxy:
+        return None
+    raw = proxy if '://' in proxy else f'http://{proxy}'
+    parsed = urlparse(raw)
+    if not parsed.hostname or not parsed.port:
+        return None
+    cfg = {'server': f'{parsed.scheme}://{parsed.hostname}:{parsed.port}'}
+    if parsed.username:
+        cfg['username'] = parsed.username
+    if parsed.password:
+        cfg['password'] = parsed.password
+    return cfg
+
+
+def _proxy_server_only(proxy: str | None) -> str | None:
+    cfg = _proxy_for_playwright(proxy)
+    return cfg.get('server') if cfg else None
+
+
+# Mapping of UI category names to Playboard URL slugs (discovered via category click script)
+PLAYBOARD_CATEGORY_MAPPING = {
+    'All': 'all',
+    'Pets & Animal': 'animals',
+    'Music': 'music',
+    'Gaming': 'gaming',
+    'News & Politics': 'news',
+    'People & Blogs': 'vlog',
+    'Travel & Event': 'travel',
+    'Sports': 'sports',
+    'Auto & Vehicles': 'vehicles',
+    'Comedy': 'comedy',
+    'Entertainment': 'entertainment',
+    'Film & Animation': 'film',
+    'Howto & Style': 'howto',
+    'Education': 'education',
+    'Science & Technology': 'science'
+}
+
+def build_playboard_url(config: Dict) -> str:
+    dimension = str(config.get('dimension', 'most-viewed')).strip().lower()
+    category = str(config.get('category', 'All')).strip()
+    country = str(config.get('country', 'Worldwide')).strip()
+    period = str(config.get('period', 'weekly')).strip().lower()
+
+    # Use mapping for known categories, fallback to simple slug
+    if category in PLAYBOARD_CATEGORY_MAPPING:
+        category_slug = PLAYBOARD_CATEGORY_MAPPING[category] + '-videos'
+    else:
+        category_slug = category.lower().replace('&', 'and').replace('/', ' ').replace('  ', ' ').replace(' ', '-')
+        category_slug = 'all-videos' if category_slug == 'all' else f'{category_slug}-videos'
+
+    country_slug = country.lower().replace('  ', ' ').replace(' ', '-')
+    url = f'https://playboard.co/en/chart/short/{dimension}-{category_slug}-in-{country_slug}-{period}'
+    print(f'[Playboard URL built] {url}')
+    return url
+
+
+async def human_scroll(page, times: int = 8):
+    for _ in range(times):
+        await page.mouse.wheel(0, random.randint(700, 1400))
+        await asyncio.sleep(random.uniform(2.0, 4.0))
+
+
+async def _playboard_login(page) -> bool:
+    """
+    Detect and login to Playboard if needed
+    Returns True if login was successful or not needed, False if login failed
+    """
+    try:
+        print('[DEBUG] Checking if Playboard login is needed...')
+        
+        # Check for "Too many requests" error
+        too_many_requests = await page.locator('text=Too many requests').count()
+        if too_many_requests > 0:
+            print('[DEBUG] Detected "Too many requests" error, need to sign in')
+        
+        # Check for Sign in link/button (on error page it's an <a> tag)
+        sign_in_link = await page.locator('a[href*="/account/signin"], a:has-text("Sign in"), button:has-text("Sign in")').count()
+        
+        if too_many_requests == 0 and sign_in_link == 0:
+            print('[DEBUG] No login needed, page loaded successfully')
+            return True
+        
+        if not PLAYBOARD_USER_EMAIL or not PLAYBOARD_USER_PASSWORD:
+            print('[ERROR] Playboard credentials not configured in .env (PLAYBOARD_USER_EMAIL, PLAYBOARD_USER_PASSWORD)')
+            return False
+        
+        print(f'[DEBUG] Playboard login required, attempting login as {PLAYBOARD_USER_EMAIL}...')
+        
+        # Click sign in link/button (prioritize the <a> link from error page)
+        sign_in_element = page.locator('a[href*="/account/signin"]').first
+        if await sign_in_element.count() == 0:
+            sign_in_element = page.locator('a:has-text("Sign in"), button:has-text("Sign in")').first
+        
+        await sign_in_element.click(timeout=5000)
+        print('[DEBUG] Clicked Sign in button/link')
+        await asyncio.sleep(3)
+        
+        # Wait for login form to appear
+        await page.wait_for_selector('input[name="email"], input[name="password"]', timeout=10000)
+        await asyncio.sleep(1)
+        
+        # Fill email field - use input[name="email"]
+        email_field = page.locator('input[name="email"]')
+        if await email_field.count() > 0:
+            await email_field.fill(PLAYBOARD_USER_EMAIL)
+            print(f'[DEBUG] Entered email: {PLAYBOARD_USER_EMAIL}')
+            await asyncio.sleep(0.5)
+        
+        # Fill password field - use input[name="password"]
+        password_field = page.locator('input[name="password"]')
+        if await password_field.count() > 0:
+            await password_field.fill(PLAYBOARD_USER_PASSWORD)
+            print('[DEBUG] Entered password')
+            await asyncio.sleep(0.5)
+        
+        # Click submit button - button[type="submit"]
+        submit_button = page.locator('button[type="submit"]')
+        if await submit_button.count() > 0:
+            await submit_button.click(timeout=5000)
+            print('[DEBUG] Clicked submit button')
+            await asyncio.sleep(3)
+        
+        # Wait for page to fully load after login
+        try:
+            await page.wait_for_load_state('networkidle', timeout=15000)
+        except:
+            await asyncio.sleep(2)
+        
+        print('[DEBUG] Playboard login completed successfully')
+        
+        # 💾 SAVE COOKIES for next time!
+        try:
+            if PLAYBOARD_COOKIES_FILE:
+                cookies = await page.context.cookies()
+                os.makedirs(os.path.dirname(PLAYBOARD_COOKIES_FILE), exist_ok=True)
+                with open(PLAYBOARD_COOKIES_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(cookies, f, indent=2)
+                print(f'[DEBUG] Saved {len(cookies)} cookies to {PLAYBOARD_COOKIES_FILE}')
+        except Exception as cookie_err:
+            print(f'[DEBUG] Warning: Could not save cookies: {cookie_err}')
+        
+        return True
+        
+    except Exception as e:
+        print(f'[DEBUG] Playboard login failed: {e}')
+        return False
+
+
+async def _collect_playwright(url: str, proxy: str | None, timeout_ms: int) -> List[Dict]:
+    # 💡 Skip proxy if we have valid cookies (session is already authenticated)
+    cookies_exist = False
+    if PLAYBOARD_COOKIES_FILE:
+        cookies_path = os.path.normpath(PLAYBOARD_COOKIES_FILE)
+        cookies_exist = os.path.isfile(cookies_path)
+        if cookies_exist:
+            proxy = None
+            print(f'[DEBUG] Cookies file found ({cookies_path}), skipping proxy')
+    
+    proxy_cfg = _proxy_for_playwright(proxy)
+    async with async_playwright() as p:
+        browser = None
+        context = None
+        page = None
+        try:
+            launch_args = ['--no-default-browser-check']
+            launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': launch_args}
+            if proxy_cfg:
+                launch_kwargs['proxy'] = proxy_cfg
+                print(f'[DEBUG] Using proxy: {proxy_cfg.get("server")}')
+            else:
+                print(f'[DEBUG] No proxy (direct connection)')
+
+            browser = await p.chromium.launch(**launch_kwargs)
+            context = await browser.new_context(
+                user_agent=random.choice(UA),
+                locale=SCRAPER_LOCALE,
+                timezone_id=SCRAPER_TIMEZONE,
+                viewport={'width': 1280 + random.randint(-80, 120), 'height': 900 + random.randint(-60, 80)},
+            )
+            page = await context.new_page()
+            await page.add_init_script(
+                """
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
+                """
+            )
+            await _apply_playboard_cookies(context)
+
+            # 🔄 Add random delay to avoid rate limiting (3-15 seconds)
+            delay = random.uniform(3, 15)
+            print(f'[DEBUG] Random delay {delay:.1f}s before request to avoid rate limiting...')
+            await asyncio.sleep(delay)
+
+            await page.goto(url, wait_until='domcontentloaded', timeout=timeout_ms)
+            await asyncio.sleep(5)
+            
+            # 💫 Check if login is needed and perform login if necessary
+            login_ok = await _playboard_login(page)
+            if not login_ok:
+                print('[DEBUG] Login check returned false, returning empty results')
+                return []
+            
+            # ⏳ Wait for content and scroll first
+            print('[DEBUG] Waiting for content to settle...')
+            await asyncio.sleep(2)
+            
+            # Aggressive scrolling to trigger lazy loading
+            print('[DEBUG] Scrolling page to load all content...')
+            for i in range(3):
+                height = await page.evaluate('document.body.scrollHeight')
+                await page.evaluate(f'window.scrollTo(0, {height})')
+                await asyncio.sleep(1)
+            
+            # Wait for table to appear
+            print('[DEBUG] Waiting for table...')
+            try:
+                # Try to wait for video links to appear (more reliable than table)
+                await page.wait_for_selector('a[href*="/en/video/"]', timeout=5000)
+                print('[DEBUG] Found video links on page')
+            except:
+                print('[DEBUG] Video links not found by wait_for_selector, continuing anyway')
+            
+            await human_scroll(page, 8)
+
+            # 🚀 Extract all video data via JavaScript (faster & more reliable)
+            extract_script = """
+            () => {
+                const videos = [];
+                
+                // Try multiple selector strategies
+                // Strategy 1: Look for tbody tr (table structure)
+                let rows = Array.from(document.querySelectorAll('tbody tr'));
+                
+                // Strategy 2: If no tbody, look for div-based rows
+                if (rows.length === 0) {
+                    rows = Array.from(document.querySelectorAll('[class*="row"][class*="video"], tr[data-video], [role="row"]'));
+                }
+                
+                // Strategy 3: If still nothing, find all video links and work backwards
+                if (rows.length === 0) {
+                    const videoLinks = Array.from(document.querySelectorAll('a[href*="/en/video/"]'));
+                    rows = videoLinks.map(link => link.closest('[class*="table__row"]') || link.closest('tr') || link.closest('div[class*="item"]')).filter(Boolean);
+                }
+                
+                for (let i = 0; i < rows.length && i < 100; i++) {
+                    const row = rows[i];
+                    
+                    // Try to find video link with /en/video/ href
+                    const videoLink = row.querySelector('a[href*="/en/video/"]');
+                    if (!videoLink) continue;
+                    
+                    const href = videoLink.getAttribute('href') || '';
+                    
+                    // Extract video ID from /en/video/{ID}?channelId={CHANNEL_ID}
+                    const videoMatch = href.match(/\\/en\\/video\\/([a-zA-Z0-9_-]+)/);
+                    if (!videoMatch) continue;
+                    
+                    const videoId = videoMatch[1];
+                    
+                    // Extract channel ID from query param
+                    const channelMatch = href.match(/channelId=([a-zA-Z0-9_-]+)/);
+                    const channelId = channelMatch ? channelMatch[1] : '';
+                    
+                    // Try to find title - multiple selectors
+                    let title = '';
+                    const titleSelector = row.querySelector('a.title__label h3, [class*="title"] h3, h3, a[class*="title"]');
+                    if (titleSelector) {
+                        title = titleSelector.innerText || titleSelector.textContent || '';
+                    }
+                    
+                    // Try to find views - look for numbers
+                    let views = 0;
+                    const cellsOrText = Array.from(row.querySelectorAll('td, div[class*="cell"], span, strong'));
+                    for (const elem of cellsOrText) {
+                        const text = elem.innerText || elem.textContent || '';
+                        const numMatch = text.match(/(\\d{1,3}(?:,\\d{3})*)/);
+                        if (numMatch) {
+                            const num = parseInt(numMatch[0].replace(/,/g, ''));
+                            if (num > views) views = num;  // Take the largest number (views)
+                        }
+                    }
+                    
+                    // Find channel name
+                    let channelName = '';
+                    const channelLinkElem = row.querySelector('a[href*="/channel/"], [class*="channel"] a, a[class*="channel"]');
+                    if (channelLinkElem) {
+                        channelName = channelLinkElem.getAttribute('title') || channelLinkElem.innerText || channelLinkElem.textContent || '';
+                    }
+                    
+                    if (videoId && views >= 50000) {
+                        videos.push({
+                            rank: (i + 1).toString(),
+                            title: title.substring(0, 100),
+                            views: views,
+                            viewsFormatted: views.toLocaleString(),
+                            channel_name: channelName.substring(0, 40),
+                            channel_id: channelId,
+                            video_id: videoId,
+                            youtube_url: `https://www.youtube.com/watch?v=${videoId}`,
+                            url: `https://www.youtube.com/watch?v=${videoId}`
+                        });
+                    }
+                }
+                
+                return videos;
+            }
+            """
+            
+            results = await page.evaluate(extract_script)
+            print(f'[DEBUG] JavaScript extraction found {len(results)} videos (all filters: {[r.get("video_id") for r in results[:3]]})')
+            
+            return [r for r in results if r['views'] > 50000 and r.get('video_id')]
+
+            
+        except Exception as e:
+            print(f'[ERROR] Playwright collection error: {e}')
+            raise
+        finally:
+            # ✅ Ensure proper cleanup even if errors occur
+            try:
+                if page:
+                    await page.close()
+            except Exception as e:
+                print(f'[WARNING] Error closing page: {e}')
+            try:
+                if context:
+                    await context.close()
+            except Exception as e:
+                print(f'[WARNING] Error closing context: {e}')
+            try:
+                if browser:
+                    await browser.close()
+            except Exception as e:
+                print(f'[WARNING] Error closing browser: {e}')
+
+
+async def _collect_nodriver(url: str, proxy: str | None, timeout_ms: int) -> List[Dict]:
+    """
+    Collect Playboard data using nodriver (undetected Chrome)
+    Proper implementation with page load waiting, cookies, and login handling
+    """
+    if nd is None:
+        return await _collect_playwright(url, proxy, timeout_ms)
+
+    browser = None
+    try:
+        # Configure browser launch arguments
+        proxy_server = _proxy_server_only(proxy)
+        browser_args = ['--no-default-browser-check', '--lang=vi-VN']
+        if proxy_server:
+            browser_args.append(f'--proxy-server={proxy_server}')
+
+        print(f'[DEBUG] Starting nodriver browser...')
+        browser = await nd.start(
+            headless=SCRAPER_HEADLESS,
+            browser_args=browser_args,
+            lang=SCRAPER_LOCALE
+        )
+
+        # Navigate to URL with proper timeout
+        print(f'[DEBUG] Navigating to {url}...')
+        tab = await asyncio.wait_for(
+            browser.get(url),
+            timeout=min(timeout_ms / 1000, 60)  # Max 60 seconds
+        )
+
+        # ✅ CRITICAL FIX: Check if tab is None
+        if tab is None:
+            print('[ERROR] nodriver: browser.get() returned None - fallback to Playwright')
+            if browser:
+                try:
+                    await browser.stop()
+                except Exception:
+                    pass
+            return await _collect_playwright(url, proxy, timeout_ms)
+
+        print('[DEBUG] Tab created successfully')
+
+        # ✅ CRITICAL FIX: Wait for page content to load (was missing!)
+        # nodriver doesn't auto-wait like Playwright, so we must wait manually
+        print('[DEBUG] Waiting for page content to load...')
+        try:
+            # Wait for table or content to appear
+            await asyncio.wait_for(
+                tab.wait_for_selector(
+                    'table, [data-testid*="item"], #app table tbody tr',
+                    timeout=30
+                ),
+                timeout=min(timeout_ms / 1000, 35)
+            )
+            print('[DEBUG] Page content loaded successfully')
+        except Exception as wait_err:
+            print(f'[WARNING] Page content wait failed: {wait_err}')
+            print('[DEBUG] Continuing anyway with current page state...')
+
+        # Wait a bit for dynamic content
+        await asyncio.sleep(3)
+
+        # ✅ NEW: Apply cookies for authentication/session
+        if PLAYBOARD_COOKIES_FILE and os.path.exists(PLAYBOARD_COOKIES_FILE):
+            try:
+                with open(PLAYBOARD_COOKIES_FILE, 'r', encoding='utf-8') as f:
+                    cookies_data = json.load(f)
+                if isinstance(cookies_data, list):
+                    for cookie in cookies_data:
+                        try:
+                            await tab.send_cdp_cmd('Network.setCookie', {
+                                'cookie': {
+                                    'name': cookie.get('name', ''),
+                                    'value': cookie.get('value', ''),
+                                    'url': url,
+                                    'domain': cookie.get('domain', 'playboard.co'),
+                                    'path': cookie.get('path', '/'),
+                                    'secure': cookie.get('secure', False),
+                                    'httpOnly': cookie.get('httpOnly', False),
+                                }
+                            })
+                        except Exception:
+                            pass
+                    print(f'[DEBUG] Applied {len(cookies_data)} cookies to nodriver')
+            except Exception as cook_err:
+                print(f'[DEBUG] Cookie application failed: {cook_err}')
+
+        # ✅ NEW: Check for login requirement and handle
+        print('[DEBUG] Checking for login requirement in nodriver...')
+        try:
+            # Check for "Too many requests" error
+            too_many = await asyncio.wait_for(
+                tab.find('Too many requests', best_match=True),
+                timeout=5
+            )
+            if too_many:
+                print('[DEBUG] nodriver detected "Too many requests" - attempting login...')
+                await _nodriver_login(tab)
+                await asyncio.sleep(3)
+        except Exception:
+            pass  # No "too many requests" error
+
+        try:
+            # Check for Sign in button
+            sign_in = await asyncio.wait_for(
+                tab.find('Sign in', best_match=True),
+                timeout=5
+            )
+            if sign_in:
+                print('[DEBUG] nodriver detected Sign in button - attempting login...')
+                await _nodriver_login(tab)
+                await asyncio.sleep(3)
+        except Exception:
+            pass  # No sign in button found
+
+        # Set webdriver and language properties
+        try:
+            await tab.evaluate(
+                """
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'languages', {get: () => ['vi-VN','vi','en-US','en']});
+                """
+            )
+            print('[DEBUG] Anti-detection properties set')
+        except Exception as eval_err:
+            print(f'[WARNING] Could not set navigator properties: {eval_err}')
+
+        # Scroll to load content
+        print('[DEBUG] Scrolling page to load content...')
+        try:
+            for i in range(8):
+                await tab.evaluate('window.scrollBy(0, 1200)')
+                await asyncio.sleep(2 + random.random() * 2)
+                if i % 2 == 0:
+                    print(f'   [SCROLL] {i+1}/8')
+        except Exception as scroll_err:
+            print(f'[WARNING] Scroll failed: {scroll_err}')
+
+        # Extract data with proper error handling
+        print('[DEBUG] Extracting table data...')
+        js = """
+          (() => {
+            const rows = Array.from(document.querySelectorAll('#app table tbody tr, table tbody tr, tr')).slice(0, 45);
+            return rows.map((r) => {
+              const linkEl = r.querySelector('td.thumbnail a, td:nth-child(1) a, td:nth-child(2) a');
+              const titleEl = r.querySelector('td.title h3, td.title a.title__label h3, td.title a');
+              const viewsEl = r.querySelector('td.score, td.score span, td:nth-child(4), td.views');
+              const channelEl = r.querySelector('td.channel span.name, td.channel a .name, td:nth-child(5) a');
+              return {
+                title: titleEl ? (titleEl.innerText || '').trim() : '',
+                views_text: viewsEl ? (viewsEl.innerText || '').trim() : '',
+                href: linkEl ? (linkEl.getAttribute('href') || '') : '',
+                channel_name: channelEl ? (channelEl.innerText || '').trim() : '',
+              }
+            })
+          })()
+        """
+
+        rows = None
+        try:
+            rows = await asyncio.wait_for(
+                tab.evaluate(js),
+                timeout=10
+            )
+        except Exception as eval_err:
+            print(f'[WARNING] Data extraction failed: {eval_err}')
+            rows = None
+
+        # Process results
+        out = []
+        if rows:
+            print(f'[DEBUG] Extracted {len(rows)} rows from table')
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+
+                href = (r.get('href') or '').strip()
+                if not href:
+                    continue
+
+                link_info = _extract_playboard_link_info(href)
+                video_id = link_info.get('video_id', '')
+                if not video_id:
+                    continue
+
+                out.append({
+                    'title': ((r.get('title') or f'Playboard video {video_id}').strip())[:180],
+                    'views': parse_views((r.get('views_text') or '').strip()),
+                    'url': link_info.get('youtube_url') or f'https://www.youtube.com/watch?v={video_id}',
+                    'video_id': video_id,
+                    'channel_name': (r.get('channel_name') or '').strip(),
+                    'channel_id': link_info.get('channel_id') or '',
+                })
+        else:
+            print('[WARNING] No rows extracted - page may not have loaded properly')
+
+        print(f'[DEBUG] nodriver extraction complete: {len(out)} videos found')
+        return [r for r in out if r['views'] > 50000 and r.get('video_id')]
+
+    except Exception as e:
+        print(f'[ERROR] nodriver collection failed: {type(e).__name__}: {str(e)[:200]}')
+        # Don't raise - let it fall back to Playwright
+        return await _collect_playwright(url, proxy, timeout_ms)
+    finally:
+        # Clean up browser
+        if browser:
+            try:
+                await asyncio.wait_for(browser.stop(), timeout=10)
+                print('[DEBUG] nodriver browser stopped')
+            except Exception as stop_err:
+                print(f'[WARNING] Could not stop nodriver browser: {stop_err}')
+
+
+async def _nodriver_login(tab) -> bool:
+    """
+    Login to Playboard in nodriver
+    Uses nodriver's find() and click() methods
+    """
+    try:
+        print('[DEBUG] Attempting nodriver login...')
+
+        if not PLAYBOARD_USER_EMAIL or not PLAYBOARD_USER_PASSWORD:
+            print('[ERROR] Credentials not configured')
+            return False
+
+        # Click sign in button
+        try:
+            sign_in_btn = await asyncio.wait_for(
+                tab.find('Sign in', best_match=True),
+                timeout=5
+            )
+            if sign_in_btn:
+                print('[DEBUG] Found Sign in button, clicking...')
+                await sign_in_btn.click()
+                await asyncio.sleep(2)
+        except Exception as btn_err:
+            print(f'[DEBUG] Sign in button click failed: {btn_err}')
+            return False
+
+        # Fill email
+        try:
+            email_input = await asyncio.wait_for(
+                tab.select('input[type=email]'),
+                timeout=5
+            )
+            if email_input:
+                print(f'[DEBUG] Filling email: {PLAYBOARD_USER_EMAIL}')
+                await email_input.send_keys(PLAYBOARD_USER_EMAIL)
+                await asyncio.sleep(1)
+        except Exception as email_err:
+            print(f'[DEBUG] Email input failed: {email_err}')
+
+        # Fill password
+        try:
+            pwd_input = await asyncio.wait_for(
+                tab.select('input[type=password]'),
+                timeout=5
+            )
+            if pwd_input:
+                print('[DEBUG] Filling password')
+                await pwd_input.send_keys(PLAYBOARD_USER_PASSWORD)
+                await asyncio.sleep(1)
+        except Exception as pwd_err:
+            print(f'[DEBUG] Password input failed: {pwd_err}')
+
+        # Click login button
+        try:
+            login_btn = await asyncio.wait_for(
+                tab.find('Login', best_match=True),
+                timeout=5
+            )
+            if login_btn:
+                print('[DEBUG] Clicking login button')
+                await login_btn.click()
+                await asyncio.sleep(5)
+        except Exception as login_err:
+            print(f'[DEBUG] Login button click failed: {login_err}')
+
+        print('[DEBUG] nodriver login completed')
+        return True
+
+    except Exception as e:
+        print(f'[DEBUG] nodriver login error: {e}')
+        return False
+
+
+async def _collect_playboard_cards(url: str) -> List[Dict]:
+    print(f'[DEBUG] Scraping Playboard -> {url}')
+
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+    last_error = None
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[DEBUG] No healthy proxy available, stop retry')
+            break
+
+        try:
+            # 💫 PRIMARY: Always try Playwright first (more stable)
+            try:
+                return await _collect_playwright(url, proxy, timeout_ms)
+            except PlaywrightTimeoutError as e:
+                last_error = e
+                print(f'[DEBUG] Playwright timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)} -> retry next proxy')
+                continue
+            except Exception as e:
+                print(f'[DEBUG] Playwright failed: {e}')
+                
+                # 💫 FALLBACK: Try nodriver if Playwright fails
+                if nd is not None:
+                    try:
+                        print(f'[DEBUG] Attempting nodriver as fallback with proxy {_mask_proxy(proxy)}...')
+                        return await _collect_nodriver(url, proxy, timeout_ms)
+                    except Exception as nodriver_err:
+                        print(f'[nodriver fallback also failed] {nodriver_err}')
+                        last_error = nodriver_err
+                else:
+                    last_error = e
+                
+                continue
+                
+        except asyncio.TimeoutError as e:
+            last_error = e
+            print(f'[DEBUG] Collection timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)} -> retry next proxy')
+            continue
+        except Exception as e:
+            last_error = e
+            print(f'[DEBUG] Unexpected error with proxy {_mask_proxy(proxy)}: {e}')
+            continue
+
+    if last_error:
+        print(f'[DEBUG] Playboard collect failed after all retries: {last_error}')
+    return []
+
+
+async def _collect_youtube_cards(topic: str, keywords: List[str]) -> List[Dict]:
+    query = f"{(keywords[0] if keywords else topic)} shorts"
+    url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}&sp=EgIYAQ%253D%253D"
+    print(f'[DEBUG] YouTube search → {url}')
+
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[DEBUG] No healthy proxy for YouTube collect')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy)
+
+        try:
+            async with async_playwright() as p:
+                launch_args = ['--no-default-browser-check']
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': launch_args}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context = await browser.new_context(
+                    user_agent=random.choice(UA),
+                    locale=SCRAPER_LOCALE,
+                    timezone_id=SCRAPER_TIMEZONE,
+                    viewport={'width': 1280 + random.randint(-80, 120), 'height': 900 + random.randint(-60, 80)},
+                )
+                page = await context.new_page()
+                await page.add_init_script(
+                    """
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
+                    """
+                )
+
+                await page.goto(url, wait_until='domcontentloaded', timeout=timeout_ms)
+                await asyncio.sleep(4)
+                await human_scroll(page, 8)
+
+                links = page.locator('a[href*="/shorts/"]')
+                count = await links.count()
+                print(f'[DEBUG] Found {count} shorts links')
+
+                seen = set()
+                out = []
+                for j in range(min(count, 60)):
+                    link = links.nth(j)
+                    try:
+                        href = await link.get_attribute('href')
+                        if not href:
+                            continue
+                        full = href if href.startswith('http') else f'https://www.youtube.com{href}'
+                        video_id = extract_youtube_id(full)
+                        if not video_id or video_id in seen:
+                            continue
+                        seen.add(video_id)
+
+                        title = ''
+                        try:
+                            title = (await link.inner_text(timeout=1000)).strip()
+                        except Exception:
+                            pass
+                        if not title:
+                            title = f'Shorts {video_id}'
+
+                        out.append(
+                            {
+                                'title': title[:180],
+                                'views': 100001,
+                                'url': full,
+                                'channel_name': 'youtube-channel',
+                                'channel_id': f'yt-{video_id[:8]}',
+                            }
+                        )
+                    except Exception:
+                        continue
+
+                await context.close()
+                await browser.close()
+                return out
+
+        except PlaywrightTimeoutError:
+            print(f'[DEBUG] YouTube goto timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)} -> retry next proxy')
+            continue
+        except Exception as e:
+            print(f'[DEBUG] YouTube collect failed with proxy {_mask_proxy(proxy)}: {e}')
+            continue
+
+    return []
+
+
+async def discover_playboard(config: Dict, topic: str):
+    setting = get_or_create_settings()
+    min_views = setting.get('minViewsFilter', 300000)
+    topic_keywords = setting.get('keywords', {}).get(topic, [topic])
+
+    url = build_playboard_url(config)
+    print(f"[discover_playboard] Collecting cards from {url[:80]}...")
+    cards = await _collect_playboard_cards(url)
+    print(f"[discover_playboard] Collected {len(cards) if cards else 0} cards from Playboard")
+
+    # Filter cards by views and topic match
+    filtered_cards = []
+    for i, card in enumerate(cards or []):
+        title = card.get('title', '')
+        views = card.get('views', 0)
+        video_url = card.get('url', '')
+        
+        if views < min_views or not video_url:
+            print(f"[discover_playboard] Card {i+1}: Filtered (views={views:,}, url={bool(video_url)})")
+            continue
+
+        if not match_topic(title, topic, topic_keywords):
+            print(f"[discover_playboard] Card {i+1}: Topic mismatch - {title[:40]}")
+            continue
+        
+        filtered_cards.append(card)
+        print(f"[discover_playboard] Card {i+1}: Passed filter - {title[:40]}")
+    
+    print(f"[discover_playboard] {len(filtered_cards)} cards passed filters for topic {topic}")
+    
+    # Process filtered cards (save channels, videos, queue download)
+    if filtered_cards:
+        result = await process_playboard_cards(filtered_cards, topic)
+        found = result.get('success', 0)
+        queued = result.get('queued', 0)
+        failed = result.get('failed', 0)
+    else:
+        print(f"[discover_playboard] No cards to process, skipping")
+        found = 0
+        queued = 0
+        failed = 0
+
+    print(f"[Playboard {topic} | {config.get('category')} {config.get('country')} {config.get('period')}] -> Found {found} videos, Queued {queued} for download")
+    return {
+        'status': 'success' if found > 0 or queued > 0 else 'no_matches',
+        'itemsFound': found,
+        'itemsQueued': queued,
+        'failedTopics': failed,
+        'topic': topic
+    }
+
+
+async def discover_youtube(topic: str):
+    setting = get_or_create_settings()
+    min_views = setting.get('minViewsFilter', 100000)
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    cards = await _collect_youtube_cards(topic, keywords)
+
+    found = 0
+    for card in cards:
+        title = card.get('title', '')
+        views = card.get('views', 0)
+        video_url = card.get('url', '')
+        if views < min_views or not video_url:
+            continue
+        if not match_topic(title, topic, keywords):
+            continue
+
+        video_id = extract_youtube_id(video_url)
+        if not video_id:
+            continue
+
+        # Save mới nếu chưa có, đã có thì bỏ qua
+        existing = videos.find_one({'platform': 'youtube', 'videoId': video_id})
+        if existing:
+            continue
+
+        ch = upsert_channel('youtube', card.get('channel_id') or f'yt-{video_id[:8]}', card.get('channel_name') or 'youtube-channel', topic)
+        v = upsert_video(
+            {
+                'platform': 'youtube',
+                'videoId': video_id,
+                'title': title,
+                'views': views,
+                'url': video_url,
+                'topic': topic,
+                'thumbnail': '',
+                'channelId': ch['_id'],
+            }
+        )
+        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
+        found += 1
+
+    return found
+
+
+async def discover_all():
+    started = time.time()
+    setting = get_or_create_settings()
+    if not setting.get('isEnabled', True):
+        return {'skipped': True}
+
+    found = 0
+    try:
+        # Get active configs sorted by priority
+        configs = setting.get('playboardConfigs', [])
+        if not configs:
+            # Fallback to defaults if no configs in DB
+            configs = [
+                {'dimension': 'most-viewed', 'category': 'All', 'country': 'Worldwide', 'period': 'weekly', 'isActive': True, 'priority': 10},
+                {'dimension': 'most-viewed', 'category': 'Howto & Style', 'country': 'Viet Nam', 'period': 'weekly', 'isActive': True, 'priority': 8},
+            ]
+
+        # Filter only active configs and sort by priority (highest first)
+        active_configs = [c for c in configs if c.get('isActive', True)]
+        active_configs.sort(key=lambda x: x.get('priority', 5), reverse=True)
+
+        print(f'[DEBUG] Running discover with {len(active_configs)} active configs')
+
+        for topic in TOPICS:
+            for cfg in active_configs:
+                await asyncio.sleep(12 + random.random() * 5)
+                try:
+                    print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
+                    found += await discover_playboard(cfg, topic)
+                except Exception as e:
+                    print(f"[DEBUG] discover_playboard failed: {e}")
+            try:
+                found += await discover_youtube(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_youtube failed: {e}")
+
+
+        log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
+        return {'success': True, 'itemsFound': found}
+    except Exception as ex:
+        log_job('discover', 'failed', itemsFound=found, duration=int((time.time() - started) * 1000), error=str(ex))
+        raise
+
+
+async def scan_single_channel(channel):
+    setting = get_or_create_settings()
+    min_views = setting.get('minViewsFilter', 100000)
+
+    channel_id = channel.get('channelId', '')
+    platform = channel.get('platform', 'youtube')
+
+    if platform == 'youtube':
+        handle = channel_id.replace('@', '') if channel_id.startswith('@') else channel_id
+        target_url = f'https://www.youtube.com/@{handle}/shorts'
+        link_selector = 'a[href*="/shorts/"]'
+    else:
+        target_url = f'https://www.facebook.com/{channel_id}/reels'
+        link_selector = 'a[href*="/reel/"]'
+
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+    found = 0
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print(f'[DEBUG] No healthy proxy for scan channel {channel_id}')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy)
+
+        try:
+            async with async_playwright() as p:
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context = await browser.new_context(
+                    user_agent=random.choice(UA),
+                    locale=SCRAPER_LOCALE,
+                    timezone_id=SCRAPER_TIMEZONE,
+                    viewport={'width': 1280, 'height': 900},
+                )
+                page = await context.new_page()
+
+                try:
+                    await page.goto(target_url, wait_until='domcontentloaded', timeout=timeout_ms)
+                    await asyncio.sleep(4)
+                    await human_scroll(page, 8)
+
+                    links = page.locator(link_selector)
+                    count = await links.count()
+                    print(f'[DEBUG] Scan channel {channel_id}: {count} links')
+
+                    seen = set()
+                    for j in range(min(count, 40)):
+                        try:
+                            href = await links.nth(j).get_attribute('href')
+                            if not href:
+                                continue
+                            full = href if href.startswith('http') else (
+                                f'https://www.youtube.com{href}' if platform == 'youtube' else f'https://www.facebook.com{href}'
+                            )
+                            video_id = extract_youtube_id(full) if platform == 'youtube' else extract_reel_id(full)
+                            if not video_id or video_id in seen:
+                                continue
+                            seen.add(video_id)
+
+                            existing = videos.find_one({'platform': platform, 'videoId': video_id})
+                            if existing and existing.get('downloadStatus') == 'done':
+                                continue
+
+                            topic_value = channel.get('topics', 'hai')
+                            if isinstance(topic_value, list):
+                                topic_value = topic_value[0] if topic_value else 'hai'
+
+                            v = upsert_video(
+                                {
+                                    'platform': platform,
+                                    'videoId': video_id,
+                                    'title': f'{platform} video {video_id}',
+                                    'views': max(min_views, 100001),
+                                    'url': full,
+                                    'topic': topic_value,
+                                    'thumbnail': '',
+                                    'channelId': str(channel['_id']),
+                                }
+                            )
+                            await enqueue(v['_id'], 5)
+                            found += 1
+                        except Exception:
+                            continue
+
+                finally:
+                    await context.close()
+                    await browser.close()
+
+                break
+
+        except PlaywrightTimeoutError:
+            print(f'[DEBUG] scan goto timeout {timeout_ms}ms for {channel_id} with proxy {_mask_proxy(proxy)} -> retry next proxy')
+            continue
+        except Exception as e:
+            print(f'[DEBUG] scan failed for {channel_id} with proxy {_mask_proxy(proxy)}: {e}')
+            continue
+
+    channels.update_one({'_id': channel['_id']}, {'$set': {'lastScanned': datetime.utcnow(), 'updatedAt': datetime.utcnow()}})
+    return found
+
+
+async def scan_all_channels():
+    started = time.time()
+    setting = get_or_create_settings()
+    if not setting.get('isEnabled', True):
+        return {'skipped': True}
+
+    found = 0
+    try:
+        for c in channels.find({'isActive': True}).sort([('priority', -1)]).limit(100):
+            found += await scan_single_channel(c)
+
+        log_job('scan-channel', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
+        return {'success': True, 'itemsFound': found}
+    except Exception as ex:
+        log_job('scan-channel', 'failed', itemsFound=found, duration=int((time.time() - started) * 1000), error=str(ex))
+        raise
 
 
 def build_download_path(video):
     d = datetime.utcnow().strftime('%Y-%m-%d')
-    return os.path.join(DOWNLOAD_ROOT, video['platform'], video.get('topic', 'misc'), d, f"{video['videoId']}.mp4")
+    return os.path.join(DOWNLOAD_ROOT, video['platform'], video.get('topics', 'misc'), d, f"{video['videoId']}.mp4")
 
 
 async def enqueue(video_id, priority=5):
@@ -83,315 +1239,124 @@ async def process_download(video_id, attempts):
             {'_id': doc['_id']},
             {'$set': {'downloadStatus': 'done', 'localPath': out, 'downloadedAt': datetime.utcnow(), 'failReason': ''}},
         )
-        log_job('download', 'success', platform=doc.get('platform'), topic=doc.get('topic'), itemsDownloaded=1, duration=int((time.time() - started) * 1000))
+        log_job(
+            'download',
+            'success',
+            platform=doc.get('platform'),
+            topic=doc.get('topics'),
+            itemsDownloaded=1,
+            duration=int((time.time() - started) * 1000),
+        )
     except Exception as ex:
         retry = attempts < 2
         videos.update_one({'_id': doc['_id']}, {'$set': {'downloadStatus': 'pending' if retry else 'failed', 'failReason': str(ex)}})
-        log_job('download', 'partial' if retry else 'failed', platform=doc.get('platform'), topic=doc.get('topic'), duration=int((time.time() - started) * 1000), error=str(ex))
+        log_job(
+            'download',
+            'partial' if retry else 'failed',
+            platform=doc.get('platform'),
+            topic=doc.get('topics'),
+            duration=int((time.time() - started) * 1000),
+            error=str(ex),
+        )
         if retry:
             await queue.put((5, str(doc['_id']), attempts + 1))
 
 
-async def _collect_cards(url: str, card_selector: str, link_selector: str, text_selector: str | None, scroll_count: int = 8):
-    """
-    Try nodriver first (if configured/available) then fallback to Playwright.
-    Returns list[{'href': str, 'text': str}]
-    """
-    use_nodriver = SCRAPER_ENGINE == 'nodriver' and nd is not None
-
-    if use_nodriver:
-        try:
-            return await _collect_cards_nodriver(url, card_selector, link_selector, text_selector, scroll_count)
-        except Exception:
-            # fallback to playwright silently to keep the pipeline running
-            pass
-
-    return await _collect_cards_playwright(url, card_selector, link_selector, text_selector, scroll_count)
-
-
-async def _collect_cards_nodriver(url: str, card_selector: str, link_selector: str, text_selector: str | None, scroll_count: int):
-    browser_args = [
-        '--disable-blink-features=AutomationControlled',
-        '--no-default-browser-check',
-        '--lang=vi-VN',
-    ]
-    if SCRAPER_PROXY:
-        browser_args.append(f'--proxy-server={SCRAPER_PROXY}')
-
-    browser = await nd.start(
-        headless=SCRAPER_HEADLESS,
-        browser_args=browser_args,
-        lang=SCRAPER_LOCALE,
-    )
-    tab = await browser.get(url)
-
-    await tab.evaluate(
-        """
-        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        Object.defineProperty(navigator, 'languages', {get: () => ['vi-VN','vi','en-US','en']});
-        Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
-        """
-    )
-
-    for _ in range(scroll_count):
-        await tab.evaluate('window.scrollBy(0, 1200)')
-        await asyncio.sleep(0.9 + random.random() * 0.8)
-
-    text_node_expr = f"c.querySelector({text_selector!r})" if text_selector else 'c'
-
-    js = f"""
-      (() => {{
-        const cards = Array.from(document.querySelectorAll('{card_selector}')).slice(0, 30);
-        return cards.map((c) => {{
-          const link = c.querySelector('{link_selector}');
-          const href = link ? link.getAttribute('href') || '' : '';
-          const textNode = {text_node_expr};
-          const text = textNode ? (textNode.innerText || c.innerText || '').trim() : (c.innerText || '').trim();
-          return {{ href, text }};
-        }});
-      }})()
-    """
-    items = await tab.evaluate(js)
-
-    await browser.stop()
-    return items or []
-
-
-async def _collect_cards_playwright(url: str, card_selector: str, link_selector: str, text_selector: str | None, scroll_count: int):
-    async with async_playwright() as p:
-        launch_args = [
-            '--disable-blink-features=AutomationControlled',
-            '--no-default-browser-check',
-            '--disable-dev-shm-usage',
-        ]
-        if SCRAPER_PROXY:
-            launch_args.append(f'--proxy-server={SCRAPER_PROXY}')
-
-        browser = await p.chromium.launch(headless=SCRAPER_HEADLESS, args=launch_args)
-        context = await browser.new_context(
-            user_agent=random.choice(UA),
-            locale=SCRAPER_LOCALE,
-            timezone_id=SCRAPER_TIMEZONE,
-            viewport={'width': 1366 + random.randint(-80, 120), 'height': 900 + random.randint(-80, 120)},
-            color_scheme='dark',
-        )
-
-        page = await context.new_page()
-        await page.add_init_script(
-            """
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
-            window.chrome = window.chrome || { runtime: {} };
-            """
-        )
-        await page.goto(url, wait_until='domcontentloaded', timeout=60000)
-
-        for _ in range(scroll_count):
-            await page.mouse.wheel(0, random.randint(900, 1500))
-            await page.wait_for_timeout(850 + random.randint(50, 900))
-
-        cards = page.locator(card_selector)
-        count = await cards.count()
-        out = []
-        for i in range(min(count, 30)):
-            card = cards.nth(i)
-            href = await card.locator(link_selector).first.get_attribute('href') if await card.locator(link_selector).count() else ''
-            if text_selector:
-                txt = await card.locator(text_selector).first.inner_text() if await card.locator(text_selector).count() else ''
-                if not txt:
-                    txt = await card.inner_text()
-            else:
-                txt = await card.inner_text()
-            out.append({'href': href or '', 'text': txt or ''})
-
-        await context.close()
-        await browser.close()
-        return out
-
-
-async def discover_all():
-    started = time.time()
-    setting = get_or_create_settings()
-    if not setting.get('isEnabled', True):
-        return {'skipped': True}
-
-    found = 0
-    try:
-        for topic in TOPICS:
-            found += await discover_youtube(topic, setting)
-            found += await discover_facebook(topic, setting)
-
-        log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
-        return {'success': True, 'itemsFound': found}
-    except Exception as ex:
-        log_job('discover', 'failed', itemsFound=found, duration=int((time.time() - started) * 1000), error=str(ex))
-        raise
-
-
-async def discover_youtube(topic, setting):
-    keywords = setting.get('keywords', {}).get(topic, [topic])
-    query = f"{keywords[0]} shorts"
-    min_views = setting.get('minViewsFilter', 100000)
-    found = 0
-
-    cards = await _collect_cards(
-        url=f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}&sp=EgIYAQ%253D%253D",
-        card_selector='ytd-video-renderer, ytd-reel-item-renderer',
-        link_selector='a#thumbnail, a[href*="watch"], a[href*="/shorts/"]',
-        text_selector=None,
-        scroll_count=6,
-    )
-
-    for row in cards:
-        href = row.get('href')
-        if not href:
-            continue
-
-        text = row.get('text', '')
-        views = parse_views(text)
-        if views < min_views:
-            continue
-        if not match_topic(text, topic, keywords):
-            continue
-
-        url = href if href.startswith('http') else f'https://www.youtube.com{href}'
-        video_id = extract_youtube_id(url)
-        channel_name = 'youtube-channel'
-        channel_id = f'yt-{video_id[:8]}'
-
-        ch = upsert_channel('youtube', channel_id, channel_name, topic)
-        v = upsert_video({
-            'platform': 'youtube',
-            'videoId': video_id,
-            'title': text[:180],
-            'views': views,
-            'url': url,
-            'topic': topic,
-            'thumbnail': '',
-            'channelId': ch['_id'],
-        })
-        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
-        found += 1
-
-    return found
-
-
-async def discover_facebook(topic, setting):
-    keywords = setting.get('keywords', {}).get(topic, [topic])
-    keyword = keywords[0]
-    min_views = setting.get('minViewsFilter', 100000)
-    found = 0
-
-    cards = await _collect_cards(
-        url=f"https://www.facebook.com/search/reels/?q={keyword}",
-        card_selector='a[href*="/reel/"]',
-        link_selector=':scope',
-        text_selector=None,
-        scroll_count=10,
-    )
-
-    for row in cards:
-        href = row.get('href')
-        if not href:
-            continue
-        text = row.get('text', '')
-        views = parse_views(text)
-        if views < min_views:
-            continue
-        if not match_topic(text, topic, keywords):
-            continue
-
-        url = href if href.startswith('http') else f'https://www.facebook.com{href}'
-        vid = extract_reel_id(url)
-        ch = upsert_channel('facebook', f'fb-{vid[:8]}', 'facebook-page', topic)
-        v = upsert_video({
-            'platform': 'facebook',
-            'videoId': vid,
-            'title': text[:120],
-            'views': views,
-            'url': url,
-            'topic': topic,
-            'thumbnail': '',
-            'channelId': ch['_id'],
-        })
-        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
-        found += 1
-
-    return found
-
-
-async def scan_single_channel(channel):
-    setting = get_or_create_settings()
-    min_views = setting.get('minViewsFilter', 100000)
-    found = 0
-
-    target_url = (
-        f"https://www.youtube.com/@{channel['channelId'].replace('@', '')}/shorts"
-        if channel['platform'] == 'youtube'
-        else f"https://www.facebook.com/{channel['channelId']}/reels"
-    )
-
-    selector = 'a[href*="/shorts/"]' if channel['platform'] == 'youtube' else 'a[href*="/reel/"]'
-
-    cards = await _collect_cards(
-        url=target_url,
-        card_selector=selector,
-        link_selector=':scope',
-        text_selector=None,
-        scroll_count=8,
-    )
-
-    for row in cards:
-        href = row.get('href')
-        if not href:
-            continue
-
-        full = href if href.startswith('http') else ('https://www.youtube.com' + href if channel['platform'] == 'youtube' else 'https://www.facebook.com' + href)
-        video_id = extract_youtube_id(full) if channel['platform'] == 'youtube' else extract_reel_id(full)
-
-        existing = videos.find_one({'platform': channel['platform'], 'videoId': video_id})
-        if existing and existing.get('downloadStatus') == 'done':
-            continue
-
-        text = row.get('text', '')
-        views = parse_views(text)
-        if views < min_views:
-            continue
-
-        v = upsert_video({
-            'platform': channel['platform'],
-            'videoId': video_id,
-            'title': text[:120],
-            'views': views,
-            'url': full,
-            'topic': (channel.get('topic') or ['hai'])[0],
-            'thumbnail': '',
-            'channelId': str(channel['_id']),
-        })
-        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
-        found += 1
-
-    channels.update_one({'_id': channel['_id']}, {'$set': {'lastScanned': datetime.utcnow(), 'updatedAt': datetime.utcnow()}})
-    return found
-
-
-async def scan_all_channels():
-    started = time.time()
-    setting = get_or_create_settings()
-    if not setting.get('isEnabled', True):
-        return {'skipped': True}
-
-    found = 0
-    try:
-        for c in channels.find({'isActive': True}).sort([('priority', -1)]).limit(100):
-            found += await scan_single_channel(c)
-
-        log_job('scan-channel', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
-        return {'success': True, 'itemsFound': found}
-    except Exception as ex:
-        log_job('scan-channel', 'failed', itemsFound=found, duration=int((time.time() - started) * 1000), error=str(ex))
-        raise
-
-
 def queue_stats():
     return {'queued': queue.qsize(), 'running': running_jobs, 'started': worker_task is not None, 'engine': SCRAPER_ENGINE}
+
+
+async def process_playboard_cards(cards: List[Dict], topic: str):
+    """
+    Process Playboard cards:
+    1. Save/Update channel records
+    2. Save/Update video records
+    3. Queue videos for download
+    
+    Args:
+        cards: List of video cards extracted from Playboard
+        topic: Topic category (e.g. 'viral-shorts', 'trending-videos')
+    """
+    if not cards:
+        print('[INFO] No cards to process')
+        return {'success': 0, 'failed': 0, 'queued': 0}
+    
+    success = 0
+    failed = 0
+    queued = 0
+    
+    print(f'[INFO] Processing {len(cards)} Playboard cards for topic: {topic}')
+    
+    for i, card in enumerate(cards, 1):
+        try:
+            # Extract video ID and channel ID
+            video_id = card.get('video_id', '')
+            channel_id = card.get('channel_id', '') or f'yt-{video_id[:12]}'
+            channel_name = card.get('channel_name', '') or 'YouTube Channel'
+            title = card.get('title', 'Untitled Video')
+            views = card.get('views', 0)
+            youtube_url = card.get('youtube_url') or f'https://www.youtube.com/watch?v={video_id}'
+            
+            if not video_id:
+                print(f'[WARN] Card {i}: Missing video_id, skipping')
+                failed += 1
+                continue
+            
+            # 1️⃣ Save/Update Channel
+            channel = None
+            channel_obj_id = None
+            try:
+                channel = upsert_channel('youtube', channel_id, channel_name, topic)
+                if channel:
+                    channel_obj_id = str(channel['_id'])
+                    print(f'[OK] Card {i}: Channel saved - {channel_name} ({channel_id})')
+                else:
+                    print(f'[WARN] Card {i}: Channel upsert returned None')
+                    failed += 1
+                    continue
+            except Exception as ch_err:
+                print(f'[WARN] Card {i}: Failed to save channel - {ch_err}')
+                failed += 1
+                continue  # Skip video if channel save fails
+            
+            if not channel_obj_id:
+                print(f'[WARN] Card {i}: No channel ObjectId available')
+                failed += 1
+                continue
+            
+            # 2️⃣ Save/Update Video
+            try:
+                video_payload = {
+                    'platform': 'youtube',
+                    'videoId': video_id,
+                    'title': title[:200],
+                    'views': views,
+                    'url': youtube_url,
+                    'topic': topic,
+                    'thumbnail': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
+                    'channelId': channel_obj_id,
+                }
+                video = upsert_video(video_payload)
+                print(f'[OK] Card {i}: Video saved - {title[:50]}... ({video_id})')
+                
+                # 3️⃣ Queue for download
+                if video:
+                    video_id_str = str(video['_id'])
+                    await queue.put((0, video_id_str, 0))  # Priority 0 = high priority
+                    queued += 1
+                    print(f'[OK] Card {i}: Queued for download')
+                
+                success += 1
+                
+            except Exception as vid_err:
+                print(f'[WARN] Card {i}: Failed to save video - {vid_err}')
+                failed += 1
+        
+        except Exception as e:
+            print(f'[ERROR] Card {i}: {e}')
+            failed += 1
+    
+    result = {'success': success, 'failed': failed, 'queued': queued}
+    print(f'[SUMMARY] Processed {len(cards)} cards: {success} saved, {failed} failed, {queued} queued for download')
+    
+    return result

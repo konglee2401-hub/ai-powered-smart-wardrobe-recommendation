@@ -36,7 +36,8 @@ router.post('/generate-unified', generateUnifiedEndpoint);
 
 router.post('/affiliate-video-tiktok', upload.fields([
   { name: 'characterImage', maxCount: 1 },
-  { name: 'productImage', maxCount: 1 }
+  { name: 'productImage', maxCount: 1 },
+  { name: 'sceneImage', maxCount: 1 }  // 💫 NEW: Optional scene reference image
 ]), executeAffiliateVideoTikTokEndpoint);
 
 // 💫 Get flow preview data (Step 2 images for real-time display)

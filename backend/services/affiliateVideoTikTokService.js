@@ -11,7 +11,7 @@
  */
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
-import { buildDetailedPrompt, buildFluxPrompt } from './smartPromptBuilder.js';
+import { buildDetailedPrompt, buildFluxPrompt, getSceneReferenceInfo } from './smartPromptBuilder.js';
 import GrokServiceV2 from './browser/grokServiceV2.js';
 import BFLPlaygroundService from './browser/bflPlaygroundService.js';
 import GoogleFlowAutomationService from './googleFlowAutomationService.js';
@@ -187,10 +187,12 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
 
     const characterFile = req.files.characterImage[0];
     const productFile = req.files.productImage[0];
+    const sceneFile = req.files?.sceneImage?.[0];  // 💫 NEW: Optional scene image
     
     // 💫 NEW: Save buffer to temp file if needed
     let characterFilePath = characterFile.path;
     let productFilePath = productFile.path;
+    let sceneFilePath = null;  // 💫 NEW: Optional scene image path
     
     if (!characterFilePath && characterFile.buffer) {
       characterFilePath = path.join(tempDir, `character-${Date.now()}.jpg`);
@@ -203,9 +205,27 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       fs.writeFileSync(productFilePath, productFile.buffer);
       console.log(`💾 Saved product image to: ${productFilePath}`);
     }
+    
+    // 💫 NEW: Handle optional scene image
+    if (sceneFile) {
+      sceneFilePath = sceneFile.path;
+      if (!sceneFilePath && sceneFile.buffer) {
+        sceneFilePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
+        fs.writeFileSync(sceneFilePath, sceneFile.buffer);
+        console.log(`💾 Saved scene image to: ${sceneFilePath}`);
+      }
+    } else if (req.imageBuffers?.sceneImage) {
+      // 💫 NEW: Handle scene image from controller buffer
+      sceneFilePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
+      fs.writeFileSync(sceneFilePath, req.imageBuffers.sceneImage);
+      console.log(`💾 Saved scene image (from buffer) to: ${sceneFilePath}`);
+    }
 
     console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size || characterFile.buffer?.length} bytes)`);
     console.log(`📦 Product: ${productFile.originalname} (${productFile.size || productFile.buffer?.length} bytes)`);
+    if (sceneFilePath) {
+      console.log(`🎬 Scene: ${path.basename(sceneFilePath)} (reference image for styling)`);  // 💫 NEW
+    }
 
     const {
       videoDuration = 20,
@@ -967,6 +987,44 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`  Holding data type: ${typeof holdingPromptData}, keys: ${Object.keys(holdingPromptData || {}).join(', ')}`);
     }
 
+    // 💫 NEW: Extract and merge scene locked prompt if scene option is selected
+    console.log(`\n🎬 INCORPORATING SCENE LOCKED PROMPT:`);
+    if (baseOptions.scene) {
+      try {
+        const sceneRefInfo = await getSceneReferenceInfo(baseOptions.scene, baseOptions, language);
+        
+        if (sceneRefInfo && sceneRefInfo.prompt) {
+          console.log(`  ✅ Scene locked prompt found for "${sceneRefInfo.sceneLabel}"`);
+          console.log(`     Length: ${sceneRefInfo.prompt.length} chars`);
+          
+          // Merge scene locked prompt into both wearing and holding prompts
+          if (wearingPromptData?.prompts?.prompt) {
+            const sceneDirective = `\n\n[LOCKED SCENE DIRECTIVE]: ${sceneRefInfo.prompt}`;
+            wearingPromptData.prompts.prompt += sceneDirective;
+            console.log(`  ✅ Merged into change-clothes prompt (new total: ${wearingPromptData.prompts.prompt.length} chars)`);
+          }
+          
+          if (holdingPromptData?.prompts?.prompt) {
+            const sceneDirective = `\n\n[LOCKED SCENE DIRECTIVE]: ${sceneRefInfo.prompt}`;
+            holdingPromptData.prompts.prompt += sceneDirective;
+            console.log(`  ✅ Merged into holding-product prompt (new total: ${holdingPromptData.prompts.prompt.length} chars)`);
+          }
+          
+          // Also pass scene locked prompt info in baseOptions for reference
+          baseOptions.sceneLockedPrompt = sceneRefInfo.prompt;
+          baseOptions.sceneLockedImageUrl = sceneRefInfo.imageUrl;
+          baseOptions.useSceneLock = sceneRefInfo.useSceneLock;
+        } else {
+          console.log(`  ℹ️ No scene locked prompt for "${baseOptions.scene}"`);
+        }
+      } catch (sceneError) {
+        console.warn(`  ⚠️ Could not extract scene locked prompt: ${sceneError.message}`);
+        // Continue anyway - scene locked prompt is optional
+      }
+    } else {
+      console.log(`  ℹ️ No scene option selected`);
+    }
+
     // ============================================================
     // STEP 2: GENERATE BOTH IMAGES (Optimized - Single Browser)
     // ============================================================
@@ -1013,6 +1071,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`\n🔄 Generating BOTH images (wearing + holding) from character & product...`);
       console.log(`   Character input: ${path.basename(characterFilePath)}`);
       console.log(`   Product input: ${path.basename(productFilePath)}`);
+      if (sceneFilePath) {  // 💫 NEW: Log scene image if present
+        console.log(`   Scene input: ${path.basename(sceneFilePath)}`);
+      }
       console.log(`   Output directory: ${outputDir}`);
       console.log(`   Provider: ${finalImageProvider}`);
       
@@ -1020,11 +1081,24 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       let multiGenResult;
       try {
         console.log(`\n⏳ Calling generateMultiple (this may take 60-180 seconds)...`);
+        // 💫 NEW: Pass sceneImagePath and scene locked prompt info in options
+        const genOptions = { outputDir };
+        if (sceneFilePath) {
+          genOptions.sceneImagePath = sceneFilePath;
+        }
+        // 💫 NEW: Pass scene locked prompt metadata
+        if (baseOptions.sceneLockedPrompt) {
+          genOptions.sceneLockedPrompt = baseOptions.sceneLockedPrompt;
+          genOptions.sceneLockedImageUrl = baseOptions.sceneLockedImageUrl;
+          genOptions.useSceneLock = baseOptions.useSceneLock;
+          genOptions.sceneName = baseOptions.scene;
+        }
+        
         multiGenResult = await imageGen.generateMultiple(
           characterFilePath,
           productFilePath,
           [wearingPrompt, holdingPrompt],
-          { outputDir }
+          genOptions
         );
         console.log(`✅ generateMultiple completed (returned result object)`);
       } catch (genMultiError) {
