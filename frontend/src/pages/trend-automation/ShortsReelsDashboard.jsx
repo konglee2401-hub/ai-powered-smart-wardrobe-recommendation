@@ -66,7 +66,9 @@ function PickerColumn({ title, options, selected, onSelect, searchable = false }
 export default function ShortsReelsDashboard() {
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [data, setData] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState(null);
   const [selected, setSelected] = useState({
     category: 'All',
     dimension: 'Most Viewed',
@@ -84,9 +86,21 @@ export default function ShortsReelsDashboard() {
     }
   };
 
+  const fetchUploadStatus = async () => {
+    try {
+      setUploadStatus(await trendAutomationApi.getUploadStatus());
+    } catch (err) {
+      console.error('Failed to load upload status:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
-    const timer = setInterval(fetchData, 15000);
+    fetchUploadStatus();
+    const timer = setInterval(() => {
+      fetchData();
+      fetchUploadStatus();
+    }, 15000);
     return () => clearInterval(timer);
   }, []);
 
@@ -106,15 +120,32 @@ export default function ShortsReelsDashboard() {
     }
   };
 
+  const triggerUploadAll = async () => {
+    setUploadLoading(true);
+    try {
+      const result = await trendAutomationApi.triggerUploadAll();
+      alert(`Upload started: ${result.processed} videos queued`);
+      setTimeout(() => {
+        fetchUploadStatus();
+        fetchData();
+      }, 1000);
+    } catch (err) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
   return (
     <TrendAutomationLayout
       title="Dashboard"
       subtitle="Theo dõi tổng quan, trigger scan thủ công theo bộ lọc giống Playboard category UI."
     >
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 rounded">Run Discover</button>
-        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 rounded disabled:opacity-50">{triggering ? 'Running scan...' : 'Run Scan With Filters'}</button>
-        <button onClick={fetchData} className="px-4 py-2 bg-gray-700 rounded">Refresh</button>
+        <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition">Run Discover</button>
+        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Running scan...' : 'Run Scan With Filters'}</button>
+        <button onClick={triggerUploadAll} disabled={uploadLoading || uploadStatus?.pendingUpload === 0} className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{uploadLoading ? 'Uploading...' : `Upload All (${uploadStatus?.pendingUpload || 0})`}</button>
+        <button onClick={() => { fetchData(); fetchUploadStatus(); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition">Refresh</button>
       </div>
 
       {loading && <p className="text-gray-400">Loading...</p>}
@@ -127,6 +158,35 @@ export default function ShortsReelsDashboard() {
         <StatCard title="Failed" value={data?.failed ?? 0} />
         <StatCard title="Queue" value={`${data?.queue?.queued ?? 0}/${data?.queue?.running ?? 0}`} />
       </div>
+
+      {/* Upload Stats Section */}
+      {uploadStatus && (
+        <div>
+          <h3 className="text-lg font-semibold mb-3">Google Drive Upload Status</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-gradient-to-br from-green-900 to-green-950 border border-green-700 rounded-lg p-4">
+              <p className="text-green-300 text-sm font-medium">Downloaded</p>
+              <p className="text-3xl font-bold text-green-200 mt-1">{uploadStatus.downloaded}</p>
+            </div>
+            <div className="bg-gradient-to-br from-blue-900 to-blue-950 border border-blue-700 rounded-lg p-4">
+              <p className="text-blue-300 text-sm font-medium">Pending Upload</p>
+              <p className="text-3xl font-bold text-blue-200 mt-1">{uploadStatus.pendingUpload}</p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-900 to-purple-950 border border-purple-700 rounded-lg p-4">
+              <p className="text-purple-300 text-sm font-medium">Uploaded</p>
+              <p className="text-3xl font-bold text-purple-200 mt-1">{uploadStatus.uploaded}</p>
+            </div>
+            <div className="bg-gradient-to-br from-orange-900 to-orange-950 border border-orange-700 rounded-lg p-4">
+              <p className="text-orange-300 text-sm font-medium">Upload Failed</p>
+              <p className="text-3xl font-bold text-orange-200 mt-1">{uploadStatus.uploadFailed}</p>
+            </div>
+            <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 border border-indigo-700 rounded-lg p-4">
+              <p className="text-indigo-300 text-sm font-medium">With Assets</p>
+              <p className="text-3xl font-bold text-indigo-200 mt-1">{uploadStatus.withAssets}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section id="manual-scan" className="space-y-4">
         <h3 className="text-xl font-semibold">Manual Scan Filters</h3>
