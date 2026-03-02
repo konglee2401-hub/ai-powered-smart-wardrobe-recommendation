@@ -536,7 +536,10 @@
     "imageLocked": "Đã khóa hình làm mặc định",
     "sceneList": "Danh sách Cảnh",
     "selectScene": "Chọn một cảnh từ danh sách",
-    "hasPrompt": "Prompt"
+    "hasPrompt": "Prompt",
+    "aspectRatio": "Tỷ lệ khung hình",
+    "noLockedImage": "Chưa có ảnh khóa",
+    "noSamplesForAspect": "Chưa có ảnh xem trước cho tỷ lệ này"
   },
   "oneClickCreator": {
     "title": "Tạo 1-Click",
