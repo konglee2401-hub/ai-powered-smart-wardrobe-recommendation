@@ -1,20 +1,91 @@
 import BrowserService from './browserService.js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * ChatGPT Browser Service
  * Automates ChatGPT for image analysis via web UI
+ * 
+ * Features:
+ * - Auto-loads saved ChatGPT sessions to avoid repeated logins
+ * - Reuses authentication cookies and localStorage
+ * - Falls back to direct access if session unavailable
  */
 class ChatGPTService extends BrowserService {
   constructor(options = {}) {
     super(options);
     this.baseUrl = 'https://chatgpt.com';
     this.debug = options.debug || false; // Enable debug mode to save screenshots/HTML
+    this.sessionPath = options.sessionPath || path.join(
+      path.dirname(path.dirname(__dirname)), 
+      'data', 
+      'chatgpt-session.json'
+    );
   }
 
   /**
-   * Initialize ChatGPT (no login needed for web interface)
+   * Load saved ChatGPT session
+   */
+  loadSavedSession() {
+    try {
+      if (!fs.existsSync(this.sessionPath)) {
+        console.log(`   ℹ️  No saved ChatGPT session found at: ${this.sessionPath}`);
+        return null;
+      }
+
+      const sessionData = JSON.parse(fs.readFileSync(this.sessionPath, 'utf8'));
+      console.log(`   ✅ Loaded saved ChatGPT session`);
+      return sessionData;
+    } catch (error) {
+      console.log(`   ⚠️  Could not load session: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Apply saved session to page
+   */
+  async applySavedSession(sessionData) {
+    if (!sessionData) return false;
+
+    try {
+      // Set cookies
+      if (sessionData.cookies && sessionData.cookies.length > 0) {
+        // Filter to only same-domain cookies to avoid issues
+        const validCookies = sessionData.cookies.filter(cookie => {
+          const domain = cookie.domain || '';
+          return domain.includes('chatgpt') || domain.includes('openai') || !domain;
+        });
+        
+        if (validCookies.length > 0) {
+          await this.page.setCookie(...validCookies);
+          console.log(`   ✓ Applied ${validCookies.length} cookies`);
+        }
+      }
+
+      // Set localStorage
+      if (sessionData.localStorage && Object.keys(sessionData.localStorage).length > 0) {
+        await this.page.evaluate((items) => {
+          for (const [key, value] of Object.entries(items)) {
+            localStorage.setItem(key, value);
+          }
+        }, sessionData.localStorage);
+        console.log(`   ✓ Applied ${Object.keys(sessionData.localStorage).length} localStorage items`);
+      }
+
+      return true;
+    } catch (error) {
+      console.log(`   ⚠️  Could not fully apply session: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Initialize ChatGPT with saved session support
    */
   async initialize() {
     console.log('🚀 Starting ChatGPT initialization...');
@@ -22,7 +93,21 @@ class ChatGPTService extends BrowserService {
     await this.launch();
     
     console.log(`📍 Navigating to ${this.baseUrl}...`);
+    
+    // Load and apply saved session before first navigation
+    console.log('💾 Checking for saved ChatGPT session...');
+    const savedSession = this.loadSavedSession();
+    
+    // First navigation to set up page context
     await this.goto(this.baseUrl);
+    
+    // Apply saved session if available
+    if (savedSession) {
+      console.log('📝 Applying saved session...');
+      await this.applySavedSession(savedSession);
+      // Reload page with session applied
+      await this.goto(this.baseUrl);
+    }
     
     // Wait for page to load - increased timeout as ChatGPT takes time to render
     console.log('⏳ Waiting for ChatGPT to load...');
