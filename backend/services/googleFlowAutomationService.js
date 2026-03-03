@@ -4296,6 +4296,122 @@ class GoogleFlowAutomationService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // SHARED GENERATION PATTERN - Used by both generateMultiple and generateVideo
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Shared generation orchestration pattern for image/video
+   * Encapsulates: prompt entry -> submission -> monitoring -> download
+   * 
+   * Used by:
+   * - generateMultiple() - iterates over multiple prompts
+   * - generateVideo() - single prompt generation
+   * 
+   * @param {string} promptText - Prompt/script to generate
+   * @param {Object} config - {characterImagePath, outputDir, type, etc}
+   * @returns {Promise<Object>} - {success, href, downloadedFile, error}
+   * 
+   * PHASE 5 DESIGN: This method demonstrates how image and video flows
+   * are essentially identical - only management difference is settings config
+   * which happens BEFORE calling this shared method.
+   */
+  async _sharedGenerationFlow(promptText, config = {}) {
+    const {
+      characterImagePath,
+      outputDir = this.options.outputDir,
+      timeoutSeconds = 120,
+      isVideoMode = false,
+      storagePrefix = 'gen'
+    } = config;
+
+    console.log(`\n[SHARED-FLOW] 🎨 Starting generation (${isVideoMode ? 'video' : 'image'} mode)`);
+
+    try {
+      // ═══ PHASE A: PROMPT ENTRY AND SUBMISSION ═══
+      console.log('[SHARED-FLOW] 📝 PHASE A: Entering and submitting prompt...');
+      
+      // Store prompt for retry
+      this.lastPromptSubmitted = promptText;
+
+      // Use PromptManager if available
+      if (this.promptManager) {
+        console.log('[SHARED-FLOW] ✓ Using PromptManager for entry');
+        await this.promptManager.enterPrompt(promptText);
+        await this.page.waitForTimeout(2000);
+        
+        const submitted = await this.promptManager.submit();
+        if (!submitted) {
+          console.log('[SHARED-FLOW] ⚠️  PromptManager submit returned false, falling back to original submit');
+          await this.submit();
+        }
+      } else {
+        // Fallback: use original inline submit logic
+        console.log('[SHARED-FLOW] ✓ Using inline entry/submit logic (no PromptManager)');
+        await this.enterPrompt(promptText);
+        await this.submit();
+      }
+
+      console.log('[SHARED-FLOW] ⏳ Waiting for server acknowledgment...');
+      await this.page.waitForTimeout(2000);
+      console.log('[SHARED-FLOW] ✅ PHASE A complete\n');
+
+      // ═══ PHASE B: GENERATION MONITORING ═══
+      console.log('[SHARED-FLOW] ⏳ PHASE B: Monitoring generation...');
+
+      let generationResult;
+      if (this.generationMonitor) {
+        console.log('[SHARED-FLOW] ✓ Using GenerationMonitor');
+        generationResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds));
+      } else {
+        console.log('[SHARED-FLOW] ✓ Using inline monitoring logic (fallback)');
+        const href = await this.monitorGeneration(timeoutSeconds);
+        generationResult = { success: !!href, href };
+      }
+
+      if (!generationResult?.success || !generationResult?.href) {
+        console.log('[SHARED-FLOW] ⚠️  Generation monitoring failed or timed out');
+        return { success: false, href: null, error: 'Generation failed' };
+      }
+
+      console.log(`[SHARED-FLOW] ✅ PHASE B complete (href: ${generationResult.href.substring(0, 50)}...)\n`);
+
+      // ═══ PHASE C: DOWNLOAD ═══
+      console.log('[SHARED-FLOW] ⬇️  PHASE C: Downloading result...');
+      console.log('[SHARED-FLOW] ⏳ Waiting 3s for UI render...');
+      await this.page.waitForTimeout(3000);
+
+      let downloadedFile;
+      if (this.generationDownloader) {
+        console.log('[SHARED-FLOW] ✓ Using GenerationDownloader');
+        downloadedFile = await this.generationDownloader.downloadItemViaContextMenu(generationResult.href);
+      } else {
+        console.log('[SHARED-FLOW] ✓ Using inline download logic (fallback)');
+        downloadedFile = await this.downloadItemViaContextMenu(generationResult.href);
+      }
+
+      if (!downloadedFile) {
+        console.log('[SHARED-FLOW] ⚠️  Download failed');
+        return { success: false, href: generationResult.href, error: 'Download failed' };
+      }
+
+      console.log(`[SHARED-FLOW] ✅ PHASE C complete (file: ${path.basename(downloadedFile)})\n`);
+      console.log('[SHARED-FLOW] ✅ SHARED GENERATION FLOW COMPLETE\n');
+
+      return {
+        success: true,
+        href: generationResult.href,
+        downloadedFile,
+        method: this.generationDownloader ? 'manager' : 'fallback'
+      };
+
+    } catch (error) {
+      console.error(`[SHARED-FLOW] ❌ Error in generation flow: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+
 
   async reuseLastCommand() {
     /**
