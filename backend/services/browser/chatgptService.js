@@ -188,16 +188,19 @@ class ChatGPTService extends BrowserService {
     // Try to load and apply saved session
     const sessionData = this.loadSavedSession();
     if (sessionData) {
-      console.log('📂 Found saved session, applying...');
-      console.log('   ⏳ Step 1: Applying cookies, localStorage, sessionStorage...');
+      console.log('📂 Found saved session, applying...\n');
+      console.log('   ⏳ STEP 1: Applying cookies, localStorage, sessionStorage...');
       await this.applySavedSession(sessionData);
       
-      // CRITICAL: Wait for cookies to settle into browser
-      console.log('   ⏳ Step 2: Waiting 3 seconds for cookies to settle...');
-      await this.page.waitForTimeout(3000);
+      // CRITICAL: Wait for cookies to settle into browser - with visible progress
+      console.log('\n   ⏳ STEP 2: Waiting for cookies to settle (3 seconds)...');
+      for (let i = 3; i > 0; i--) {
+        console.log(`      Waiting... ${i}s remaining`);
+        await this.page.waitForTimeout(1000);
+      }
       
       // Verify cookies were actually set
-      console.log('   ✓ Verifying cookies applied...');
+      console.log('\n   ✓ STEP 3: Verifying cookies applied...');
       const verifyResult = await this.page.evaluate(() => {
         const cookies = document.cookie.split(';').map(c => c.trim().split('=')[0]);
         const hasAuthCookie = cookies.some(c => 
@@ -214,20 +217,30 @@ class ChatGPTService extends BrowserService {
         };
       });
       
-      console.log(`   ✓ Cookies in page: ${verifyResult.cookieCount}, Auth cookies: ${verifyResult.hasAuthCookie ? '✅' : '❌'}`);
-      console.log(`   ✓ LocalStorage items: ${verifyResult.localStorageSize}, SessionStorage items: ${verifyResult.sessionStorageSize}`);
+      console.log(`      ✓ Cookies in page: ${verifyResult.cookieCount}`);
+      console.log(`      ✓ Auth cookies present: ${verifyResult.hasAuthCookie ? '✅ YES' : '❌ NO'}`);
+      console.log(`      ✓ LocalStorage items: ${verifyResult.localStorageSize}`);
+      console.log(`      ✓ SessionStorage items: ${verifyResult.sessionStorageSize}\n`);
       
       // CRITICAL: Wait another moment before reload to ensure everything settles
-      console.log('   ⏳ Step 3: Waiting 2 seconds before page reload...');
-      await this.page.waitForTimeout(2000);
+      console.log('   ⏳ STEP 4: Waiting before page reload (2 seconds)...');
+      for (let i = 2; i > 0; i--) {
+        console.log(`      Waiting... ${i}s remaining`);
+        await this.page.waitForTimeout(1000);
+      }
       
       // Reload page with saved session applied
-      console.log('   🔄 Step 4: Reloading page with applied session...');
+      console.log('\n   🔄 STEP 5: Reloading page with applied session...');
       await this.page.reload({ waitUntil: 'networkidle2', timeout: 120000 });
+      console.log('   ✓ Page reload complete');
       
       // Wait for page to fully stabilize after reload
-      console.log('   ⏳ Step 5: Waiting 3 seconds for page to stabilize after reload...');
-      await this.page.waitForTimeout(3000);
+      console.log('\n   ⏳ STEP 6: Waiting for page to stabilize after reload (3 seconds)...');
+      for (let i = 3; i > 0; i--) {
+        console.log(`      Waiting... ${i}s remaining`);
+        await this.page.waitForTimeout(1000);
+      }
+      console.log('\n   ✓ Session initialization complete!\n');
     }
     
     // Handle potential Cloudflare challenge
