@@ -189,7 +189,6 @@ export function VideoProduction() {
     { id: 'overview', label: t('videoProduction.overview'), icon: BarChart3 },
     { id: 'creator', label: t('videoProduction.createMashup'), icon: Video },
     { id: 'processing', label: t('videoProduction.processing'), icon: Play },
-    { id: 'scanner', label: t('videoProduction.queueScanner'), icon: Zap },
     { id: 'queue', label: t('videoProduction.queue'), icon: Zap2 },
     { id: 'accounts', label: t('videoProduction.accounts'), icon: Users },
     { id: 'media', label: t('videoProduction.mediaLibrary'), icon: Library },
@@ -256,7 +255,6 @@ export function VideoProduction() {
 
       {activeTab === 'creator' && <VideoMashupCreator />}
       {activeTab === 'processing' && <ProcessingMonitor />}
-      {activeTab === 'scanner' && <QueueScannerPanel />}
 
       {activeTab === 'accounts' && (
         <div className="space-y-6">
@@ -474,7 +472,12 @@ export function VideoProduction() {
         </div>
       )}
 
-      {activeTab === 'queue' && <QueueStatus />}
+      {activeTab === 'queue' && (
+        <div className="space-y-6">
+          <QueueStatus />
+          <QueueScannerPanel />
+        </div>
+      )}
 
       {activeTab === 'media' && (
         <div className="space-y-6">

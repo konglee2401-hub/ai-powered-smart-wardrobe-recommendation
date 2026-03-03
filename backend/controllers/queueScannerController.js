@@ -13,7 +13,9 @@ export class QueueScannerController {
    */
   static async triggerScan(req, res) {
     try {
-      const { autoPublish = false, accountIds = [], platform = "youtube" } = req.body || {};
+      await queueScannerCronJob.loadScheduleSettings();
+      const persisted = queueScannerCronJob.scheduleConfig || {};
+      const { autoPublish = persisted.autoPublish || false, accountIds = persisted.accountIds || [], platform = persisted.platform || 'youtube' } = req.body || {};
       const result = await queueScannerCronJob.scanAndProcess({ autoPublish, accountIds, platform });
       res.json(result);
     } catch (error) {
@@ -30,6 +32,7 @@ export class QueueScannerController {
    */
   static async getStatus(req, res) {
     try {
+      await queueScannerCronJob.loadScheduleSettings();
       const status = queueScannerCronJob.getStatus();
       const queueVideos = googleDriveIntegration.listQueueVideos();
       
@@ -58,12 +61,20 @@ export class QueueScannerController {
    */
   static async initialize(req, res) {
     try {
-      const { intervalMinutes = 60, autoPublish = false, accountIds = [], platform = "youtube" } = req.body;
-      const scheduleConfig = queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform });
-      
+      const { intervalMinutes = 60, autoPublish = false, accountIds = [], platform = 'youtube', enabled = true } = req.body;
+      let scheduleConfig;
+
+      if (enabled) {
+        scheduleConfig = queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform }, { persist: true });
+      } else {
+        scheduleConfig = queueScannerCronJob.disableSchedule({ persist: true });
+      }
+
       res.json({
         success: true,
-        message: `Queue Scanner initialized with ${intervalMinutes} minute interval`,
+        message: enabled
+          ? `Queue Scanner initialized with ${intervalMinutes} minute interval`
+          : 'Queue Scanner scheduler disabled',
         schedule: scheduleConfig
       });
     } catch (error) {
@@ -71,6 +82,55 @@ export class QueueScannerController {
         success: false,
         error: error.message
       });
+    }
+  }
+
+
+  /**
+   * Get saved scanner settings from DB
+   * GET /api/queue-scanner/settings
+   */
+  static async getSettings(req, res) {
+    try {
+      const config = await queueScannerCronJob.loadScheduleSettings();
+      res.json({ success: true, data: config });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Save scanner settings to DB and apply runtime scheduler
+   * PUT /api/queue-scanner/settings
+   */
+  static async saveSettings(req, res) {
+    try {
+      const {
+        intervalMinutes = 60,
+        autoPublish = false,
+        accountIds = [],
+        platform = 'youtube',
+        enabled = true
+      } = req.body || {};
+
+      const schedule = enabled
+        ? queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform }, { persist: true })
+        : queueScannerCronJob.disableSchedule({ persist: true });
+
+      if (!enabled) {
+        await queueScannerCronJob.saveScheduleSettings({
+          ...queueScannerCronJob.scheduleConfig,
+          intervalMinutes,
+          autoPublish,
+          accountIds,
+          platform,
+          enabled: false
+        });
+      }
+
+      res.json({ success: true, data: schedule });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
     }
   }
 
