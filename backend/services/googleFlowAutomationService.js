@@ -1,6 +1,17 @@
 /**
  * GoogleFlowAutomationService - Unified service for Image and Video generation
  * Supports both image and video workflows through single service
+ * 
+ * PHASE 5 REFACTORING: Adapter pattern - delegates to modular managers
+ * - SessionManager: Browser and page lifecycle
+ * - TokenManager: Token clearing and session refresh
+ * - PromptManager: Prompt entry and submission
+ * - ImageUploadManager: Image upload and conversion
+ * - NavigationManager: UI navigation and clicking
+ * - SettingsManager: Settings configuration
+ * - GenerationMonitor: Generation progress monitoring
+ * - GenerationDownloader: Download via context menu
+ * - ErrorRecoveryManager: Failure recovery
  */
 
 import puppeteer from 'puppeteer-extra';
@@ -10,6 +21,17 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import ContentSafetyFilter from './contentSafetyFilter.js';
 import sharp from 'sharp';
+
+// Import Phase 5 adapter managers
+import SessionManager from './google-flow/core/SessionManager.js';
+import TokenManager from './google-flow/session/TokenManager.js';
+import PromptManager from './google-flow/core/PromptManager.js';
+import ImageUploadManager from './google-flow/upload/ImageUploadManager.js';
+import NavigationManager from './google-flow/ui-controls/NavigationManager.js';
+import SettingsManager from './google-flow/ui-controls/SettingsManager.js';
+import GenerationMonitor from './google-flow/generation/GenerationMonitor.js';
+import GenerationDownloader from './google-flow/generation/GenerationDownloader.js';
+import ErrorRecoveryManager from './google-flow/error-handling/ErrorRecoveryManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
@@ -52,6 +74,17 @@ class GoogleFlowAutomationService {
     if (this.debugMode) {
       console.log('🔧 DEBUG MODE ENABLED - Automation disabled, manual testing only\n');
     }
+
+    // PHASE 5: Initialize modular managers (will be instantiated after init())
+    this.sessionManager = null;
+    this.tokenManager = null;
+    this.promptManager = null;
+    this.imageUploadManager = null;
+    this.navigationManager = null;
+    this.settingsManager = null;
+    this.generationMonitor = null;
+    this.generationDownloader = null;
+    this.errorRecoveryManager = null;
   }
 
   async init() {
@@ -93,6 +126,39 @@ class GoogleFlowAutomationService {
 
     // Load session and check token freshness
     await this.loadSession();
+
+    // PHASE 5: Instantiate all modular managers
+    console.log('   🔧 Initializing modular managers...');
+    this.sessionManager = new SessionManager(this.options);
+    this.sessionManager.browser = this.browser;
+    this.sessionManager.page = this.page;
+    this.sessionManager.sessionData = this.sessionData;
+
+    this.tokenManager = new TokenManager(this.sessionManager);
+    this.promptManager = new PromptManager();
+    this.promptManager.page = this.page;
+    
+    this.imageUploadManager = new ImageUploadManager();
+    this.imageUploadManager.page = this.page;
+    
+    this.navigationManager = new NavigationManager();
+    this.navigationManager.page = this.page;
+    
+    this.settingsManager = new SettingsManager();
+    this.settingsManager.page = this.page;
+    
+    this.generationMonitor = new GenerationMonitor();
+    this.generationMonitor.page = this.page;
+    
+    this.generationDownloader = new GenerationDownloader();
+    this.generationDownloader.page = this.page;
+    this.generationDownloader.options = this.options;
+    
+    this.errorRecoveryManager = new ErrorRecoveryManager();
+    this.errorRecoveryManager.page = this.page;
+    this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
+    this.errorRecoveryManager.lastPrompt = this.lastPromptSubmitted;
+    console.log('   ✅ Managers initialized\n');
     
     console.log('✅ Initialized\n');
   }
@@ -3937,10 +4003,187 @@ class GoogleFlowAutomationService {
   }
 
   async close() {
+    try {
+      // Close all managers (they don't own browser/page, so no cleanup needed)
+      // Just a placeholder for future manager cleanup
+      if (this.tokenManager) {
+        // TokenManager has no cleanup needed currently
+      }
+      if (this.errorRecoveryManager) {
+        // ErrorRecoveryManager has no cleanup needed currently
+      }
+    } catch (error) {
+      console.error('Error closing managers:', error.message);
+    }
+
+    // Close browser session
     if (this.browser) {
       await this.browser.close();
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 5 ADAPTER METHODS - Delegation to Modular Managers
+  // These methods delegate work to specialized managers
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Adapter method: Switch to image tab mode (via NavigationManager)
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _switchToImageTab() {
+    try {
+      if (this.navigationManager) {
+        return await this.navigationManager.selectTab('image');
+      }
+      // Fallback to old implementation if manager not available
+      return await this.selectTab('image');
+    } catch (error) {
+      console.error('Error switching to image tab:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Adapter method: Switch to video tab mode (via NavigationManager)
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _switchToVideoTab() {
+    try {
+      if (this.navigationManager) {
+        return await this.navigationManager.switchToVideoTab();
+      }
+      // Fallback to old implementation
+      return await this.switchToVideoTab();
+    } catch (error) {
+      console.error('Error switching to video tab:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Adapter method: Configure generation settings (via SettingsManager)
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _delegateConfigureSettings() {
+    try {
+      if (this.settingsManager) {
+        return await this.settingsManager.configureSettings({
+          aspectRatio: this.options.aspectRatio,
+          count: this.type === 'image' ? this.options.imageCount : this.options.videoCount,
+          model: this.options.model,
+          type: this.type
+        });
+      }
+      // Fallback to original configureSettings method
+      return await this.configureSettings();
+    } catch (error) {
+      console.error('Error configuring settings:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Adapter method: Enter prompt text (via PromptManager)
+   * @param {string} text - Prompt text to enter
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _delegateEnterPrompt(text) {
+    try {
+      if (this.promptManager) {
+        await this.promptManager.enterPrompt(text);
+        this.lastPromptSubmitted = text;
+        return true;
+      }
+      // Fallback to original method
+      return await this.enterPrompt(text);
+    } catch (error) {
+      console.error('Error entering prompt:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Adapter method: Submit prompt (via PromptManager)
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _delegateSubmitPrompt() {
+    try {
+      if (this.promptManager) {
+        return await this.promptManager.submit();
+      }
+      // Fallback: call original submit method (which is the send button press)
+      // In original: checkSendButton() and then submit()
+      return await this.submit();
+    } catch (error) {
+      console.error('Error submitting prompt:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Adapter method: Monitor generation progress (via GenerationMonitor)
+   * @param {number} timeoutSeconds - Timeout for monitoring
+   * @returns {Promise<Object>} - Result object
+   */
+  async _delegateMonitorGeneration(timeoutSeconds = 180) {
+    try {
+      if (this.generationMonitor) {
+        return await this.generationMonitor.monitorGeneration(timeoutSeconds);
+      }
+      // Fallback to original monitoring
+      return await this.monitorGeneration(timeoutSeconds);
+    } catch (error) {
+      console.error('Error monitoring generation:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Adapter method: Download item via context menu (via GenerationDownloader)
+   * @param {string} href - Item href to download
+   * @returns {Promise<Object>} - Download result
+   */
+  async _delegateDownloadItem(href) {
+    try {
+      if (this.generationDownloader) {
+        return await this.generationDownloader.downloadItemViaContextMenu(href);
+      }
+      // Fallback to original
+      return await this.downloadItemViaContextMenu(href);
+    } catch (error) {
+      console.error('Error downloading item:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Adapter method: Handle generation failure/recovery (via ErrorRecoveryManager)
+   * @param {string} prompt - Original prompt to retry
+   * @param {Array} imagePaths - Image paths to re-upload
+   * @returns {Promise<boolean>} - True if recovery successful
+   */
+  async _delegateHandleFailure(prompt, imagePaths) {
+    try {
+      if (this.errorRecoveryManager) {
+        // Set up error recovery with tracking info
+        if (this.uploadedImageRefs) {
+          this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
+        }
+        if (this.lastPromptSubmitted) {
+          this.errorRecoveryManager.lastPrompt = this.lastPromptSubmitted;
+        }
+        return await this.errorRecoveryManager.handleGenerationFailureRetry();
+      }
+      // Fallback to original handling
+      return await this.handleGenerationFailureRetry();
+    } catch (error) {
+      console.error('Error handling failure:', error.message);
+      return false;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
 
   async reuseLastCommand() {
     /**
