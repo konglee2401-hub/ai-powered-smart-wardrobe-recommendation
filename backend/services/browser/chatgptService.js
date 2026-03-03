@@ -62,15 +62,12 @@ class ChatGPTService extends BrowserService {
     try {
       // Set cookies
       if (sessionData.cookies && sessionData.cookies.length > 0) {
-        // Filter to only same-domain cookies to avoid issues
-        const validCookies = sessionData.cookies.filter(cookie => {
-          const domain = cookie.domain || '';
-          return domain.includes('chatgpt') || domain.includes('openai') || !domain;
-        });
-        
-        if (validCookies.length > 0) {
-          await this.page.setCookie(...validCookies);
-          console.log(`   ✓ Applied ${validCookies.length} cookies`);
+        // Don't filter - apply all cookies, let browser handle domain validation
+        try {
+          await this.page.setCookie(...sessionData.cookies);
+          console.log(`   ✓ Applied ${sessionData.cookies.length} cookies`);
+        } catch (e) {
+          console.log(`   ⚠️  Some cookies failed (${sessionData.cookies.length} attempted): ${e.message}`);
         }
       }
 
@@ -78,10 +75,28 @@ class ChatGPTService extends BrowserService {
       if (sessionData.localStorage && Object.keys(sessionData.localStorage).length > 0) {
         await this.page.evaluate((items) => {
           for (const [key, value] of Object.entries(items)) {
-            localStorage.setItem(key, value);
+            try {
+              localStorage.setItem(key, value);
+            } catch (e) {
+              // Storage quota exceeded, skip this item
+            }
           }
         }, sessionData.localStorage);
         console.log(`   ✓ Applied ${Object.keys(sessionData.localStorage).length} localStorage items`);
+      }
+
+      // Set sessionStorage (CRITICAL - was missing!)
+      if (sessionData.sessionStorage && Object.keys(sessionData.sessionStorage).length > 0) {
+        await this.page.evaluate((items) => {
+          for (const [key, value] of Object.entries(items)) {
+            try {
+              sessionStorage.setItem(key, value);
+            } catch (e) {
+              // Storage quota exceeded, skip this item
+            }
+          }
+        }, sessionData.sessionStorage);
+        console.log(`   ✓ Applied ${Object.keys(sessionData.sessionStorage).length} sessionStorage items`);
       }
 
       return true;
@@ -997,7 +1012,11 @@ class ChatGPTService extends BrowserService {
     // Check initial state
     try {
       const initialState = await this.page.evaluate(() => {
-        const messages = document.querySelectorAll('[role="article"]');
+        // Support multiple message container selectors
+        let messages = document.querySelectorAll('article[data-turn]');
+        if (messages.length === 0) messages = document.querySelectorAll('[role="article"]');
+        if (messages.length === 0) messages = document.querySelectorAll('[data-testid*="conversation-turn"]');
+        
         return {
           messageCount: messages.length,
           lastMessageLength: messages.length > 0 ? (messages[messages.length - 1].innerText || '').length : 0
@@ -1011,16 +1030,24 @@ class ChatGPTService extends BrowserService {
     while (Date.now() - startTime < maxWait) {
       // Check page state
       const state = await this.page.evaluate(() => {
-        // Get last message (response)
-        const messages = document.querySelectorAll('[role="article"]');
+        // Get last message (response) - try multiple selector strategies
+        let messages = document.querySelectorAll('article[data-turn]');
+        if (messages.length === 0) messages = document.querySelectorAll('[role="article"]');
+        if (messages.length === 0) messages = document.querySelectorAll('[data-testid*="conversation-turn"]');
+        
         if (messages.length < 2) return { hasContent: false, length: 0, isLoading: true };
         
         const lastMessage = messages[messages.length - 1];
         const text = lastMessage.innerText || lastMessage.textContent || '';
         
-        // Check for loading indicators
-        const hasLoadingSpinner = !!document.querySelector('[class*="animate"], .animate-spin, .spinner');
-        const hasLoadingText = text.includes('thinking') || text.includes('generating');
+        // Check for loading indicators (multiple methods)
+        const hasLoadingSpinner = !!(
+          document.querySelector('[class*="animate"], .animate-spin, .spinner') ||
+          document.querySelector('[class*="loading"]')
+        );
+        const hasLoadingText = text.toLowerCase().includes('thinking') || 
+                              text.toLowerCase().includes('generating') ||
+                              text.toLowerCase().includes('processing');
         
         return {
           hasContent: text.length > 50,
@@ -1068,8 +1095,10 @@ class ChatGPTService extends BrowserService {
       let fullText = '';
       let extractMethod = 'none';
       
-      // ===== METHOD 1: Get text directly from assistant message element =====
-      const assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
+      // ===== METHOD 1: Get text directly from assistant message element (new article structure) =====
+      let assistantMessage = document.querySelector('article[data-turn="assistant"]');
+      if (!assistantMessage) assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
+      
       if (assistantMessage) {
         // Try innerText first (preserves formatting)
         let text = assistantMessage.innerText || assistantMessage.textContent || '';
@@ -1081,7 +1110,9 @@ class ChatGPTService extends BrowserService {
       
       // ===== METHOD 2: Try markdown container inside assistant message =====
       if (fullText.length < 100) {
-        const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        let assistantMsg = document.querySelector('article[data-turn="assistant"]');
+        if (!assistantMsg) assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        
         if (assistantMsg) {
           // Look for markdown prose container
           const markdownDiv = assistantMsg.querySelector('.markdown, [class*="prose"], [class*="message-content"]');
@@ -1097,7 +1128,9 @@ class ChatGPTService extends BrowserService {
       
       // ===== METHOD 3: Try to extract from the main response div =====
       if (fullText.length < 100) {
-        const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        let assistantMsg = document.querySelector('article[data-turn="assistant"]');
+        if (!assistantMsg) assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
+        
         if (assistantMsg) {
           // Get all paragraph text
           const paragraphs = Array.from(assistantMsg.querySelectorAll('p, div, span'))
@@ -1117,7 +1150,9 @@ class ChatGPTService extends BrowserService {
       
       // ===== FALLBACK: Get all assistant message content =====
       if (fullText.length < 100) {
-        const allMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
+        let allMessages = document.querySelectorAll('article[data-turn="assistant"]');
+        if (allMessages.length === 0) allMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
+        
         if (allMessages.length > 0) {
           const lastMsg = allMessages[allMessages.length - 1];
           const text = lastMsg.innerText || lastMsg.textContent || '';
