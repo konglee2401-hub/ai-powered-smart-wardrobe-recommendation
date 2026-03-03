@@ -6,18 +6,25 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Define ChatGPT persistent profile directory
+const CHATGPT_PROFILE_DIR = path.join(path.dirname(path.dirname(__dirname)), 'data', 'chatgpt-profile');
+
 /**
  * ChatGPT Browser Service
  * Automates ChatGPT for image analysis via web UI
  * 
  * Features:
- * - Auto-loads saved ChatGPT sessions to avoid repeated logins
- * - Reuses authentication cookies and localStorage
- * - Falls back to direct access if session unavailable
+ * - Uses persistent Chrome profile to maintain session across runs
+ * - Automatically restores cookies and authentication from previous login
+ * - No repeated Cloudflare challenges thanks to persistent session
  */
 class ChatGPTService extends BrowserService {
   constructor(options = {}) {
-    super(options);
+    // Pass userDataDir to parent class for persistent session
+    super({
+      ...options,
+      userDataDir: options.userDataDir || CHATGPT_PROFILE_DIR
+    });
     this.baseUrl = 'https://chatgpt.com';
     this.debug = options.debug || false; // Enable debug mode to save screenshots/HTML
     this.sessionPath = options.sessionPath || path.join(
@@ -85,6 +92,72 @@ class ChatGPTService extends BrowserService {
   }
 
   /**
+   * Handle Cloudflare challenge if it appears
+   */
+  async handleCloudflareChallenge() {
+    try {
+      // Wait a bit for page to stabilize
+      await this.page.waitForTimeout(2000);
+      
+      // Check if Cloudflare challenge is present
+      const hasChallenge = await this.page.evaluate(() => {
+        const iframeChallenge = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+        const challengeForm = document.querySelector('form[action*="challenge"]');
+        const cfTurnstile = document.querySelector('div[data-testid="turnstile"]') || 
+                           document.querySelector('#cf-turnstile') ||
+                           document.querySelector('[data-callback="verifyCallback"]');
+        const cfChallenge = document.body.innerText?.includes('One more step') ||
+                           document.body.innerText?.includes('Verifying your browser');
+        
+        return !!(iframeChallenge || challengeForm || cfTurnstile || cfChallenge);
+      });
+
+      if (hasChallenge) {
+        console.log('🔐 Cloudflare challenge detected, waiting for verification...');
+        
+        // Wait for Cloudflare to complete - typically 5-15 seconds
+        let attempts = 0;
+        const maxAttempts = 60;  // Max 60 seconds
+        
+        while (attempts < maxAttempts) {
+          await this.page.waitForTimeout(1000);
+          
+          const stillHasChallenge = await this.page.evaluate(() => {
+            const iframeChallenge = document.querySelector('iframe[src*="challenges.cloudflare.com"]');
+            const challengeForm = document.querySelector('form[action*="challenge"]');
+            const cfTurnstile = document.querySelector('div[data-testid="turnstile"]') || 
+                               document.querySelector('#cf-turnstile');
+            const cfChallenge = document.body.innerText?.includes('One more step') ||
+                               document.body.innerText?.includes('Verifying your browser');
+            
+            return !!(iframeChallenge || challengeForm || cfTurnstile || cfChallenge);
+          });
+          
+          if (!stillHasChallenge) {
+            console.log('✅ Cloudflare verification completed');
+            await this.page.waitForTimeout(3000);  // Wait for page to fully load after challenge
+            return true;
+          }
+          
+          attempts++;
+          if (attempts % 10 === 0) {
+            console.log(`   ⏳ Verifying... (${attempts}s elapsed)`);
+          }
+        }
+        
+        console.log('⚠️  Cloudflare verification timeout');
+        return false;
+      } else {
+        console.log('   ✓ No Cloudflare challenge detected');
+        return true;
+      }
+    } catch (error) {
+      console.log(`   ⚠️  Could not check Cloudflare: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Initialize ChatGPT with saved session support
    */
   async initialize() {
@@ -94,24 +167,27 @@ class ChatGPTService extends BrowserService {
     
     console.log(`📍 Navigating to ${this.baseUrl}...`);
     
-    // Load and apply saved session before first navigation
-    console.log('💾 Checking for saved ChatGPT session...');
-    const savedSession = this.loadSavedSession();
+    // Navigate to ChatGPT first
+    await this.goto(this.baseUrl, { waitUntil: 'networkidle2', timeout: 120000 });
     
-    // First navigation to set up page context
-    await this.goto(this.baseUrl);
-    
-    // Apply saved session if available
-    if (savedSession) {
-      console.log('📝 Applying saved session...');
-      await this.applySavedSession(savedSession);
-      // Reload page with session applied
-      await this.goto(this.baseUrl);
+    // Try to load and apply saved session
+    const sessionData = this.loadSavedSession();
+    if (sessionData) {
+      console.log('📂 Found saved session, applying...');
+      await this.applySavedSession(sessionData);
+      
+      // Reload page with saved session applied
+      console.log('🔄 Reloading page with saved session...');
+      await this.page.reload({ waitUntil: 'networkidle2', timeout: 120000 });
     }
     
-    // Wait for page to load - increased timeout as ChatGPT takes time to render
+    // Handle potential Cloudflare challenge
+    console.log('🔐 Checking for Cloudflare challenge...');
+    await this.handleCloudflareChallenge();
+    
+    // Wait for page to fully render
     console.log('⏳ Waiting for ChatGPT to load...');
-    await this.page.waitForTimeout(15000); // Increased from 3s to 15s
+    await this.page.waitForTimeout(5000);
     
     // Close any cookie/notification banners that might block input
     console.log('🍪 Closing cookie/notification popups...');
@@ -163,10 +239,41 @@ class ChatGPTService extends BrowserService {
     
     // Wait for textarea input to appear to ensure Chat interface is ready
     console.log('⏳ Waiting for chat interface (textarea)...');
-    try {
-      await this.page.waitForSelector('textarea', { timeout: 10000 });
+    
+    // First try to find textarea directly
+    let textareaFound = await this.page.$('textarea');
+    
+    // If not found, try clicking "New chat" button to activate textarea
+    if (!textareaFound) {
+      console.log('   → No textarea found yet, looking for "New chat" button...');
+      try {
+        const newChatBtn = await this.page.evaluate(() => {
+          // Look for "New chat" button
+          return Array.from(document.querySelectorAll('button')).find(btn => 
+            btn.textContent.includes('New chat') || btn.textContent.includes('New Chat')
+          )?.tagName === 'BUTTON';
+        });
+
+        if (newChatBtn) {
+          console.log('   → Found "New chat" button, clicking...');
+          await this.page.evaluate(() => {
+            const btn = Array.from(document.querySelectorAll('button')).find(b => 
+              b.textContent.includes('New chat') || b.textContent.includes('New Chat')
+            );
+            if (btn) btn.click();
+          });
+          
+          await this.page.waitForTimeout(2000);
+          textareaFound = await this.page.$('textarea');
+        }
+      } catch (e) {
+        console.log(`   → Could not click "New chat": ${e.message}`);
+      }
+    }
+
+    if (textareaFound) {
       console.log('✅ Chat interface ready');
-    } catch (e) {
+    } else {
       console.log('⚠️  Textarea not found after waiting, but continuing anyway...');
     }
     

@@ -27,6 +27,7 @@ class BrowserService {
       timeout: options.timeout || 60000,
       viewport: options.viewport || { width: 1280, height: 720 }, // 1280x720 for maximum visibility
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userDataDir: options.userDataDir || null,  // Custom user data directory for persistent sessions
       ...options
     };
   }
@@ -36,25 +37,41 @@ class BrowserService {
    */
   async launch(options = {}) {
     const chromeProfile = options.chromeProfile || this.options.chromeProfile || 'Profile 1';
-    console.log(`🚀 Launching browser with ${chromeProfile}...`);
+    console.log('🚀 Launching browser...');
     console.log('🕵️  Applying stealth measures to bypass bot detection...');
     
-    // Get Chrome User Data directory
-    const chromeUserDataDir = path.join(
-      process.env.LOCALAPPDATA || process.env.HOME,
-      'Google',
-      'Chrome',
-      'User Data'
-    );
+    // Get Chrome User Data directory - use custom if provided, otherwise default
+    let chromeUserDataDir = this.options.userDataDir;
+    const useCustomProfile = !!this.options.userDataDir;
+    
+    if (!chromeUserDataDir) {
+      chromeUserDataDir = path.join(
+        process.env.LOCALAPPDATA || process.env.HOME,
+        'Google',
+        'Chrome',
+        'User Data'
+      );
+    }
+    
+    console.log(`📁 Using Chrome profile: ${chromeUserDataDir}`);
     
     try {
+      // Build args array - different handling for custom vs system profile
+      const baseArgs = [
+        `--user-data-dir=${chromeUserDataDir}`, // Use Chrome User Data directory
+      ];
+      
+      // Only use --profile-directory for system Chrome, not for custom persistent profiles
+      if (!useCustomProfile) {
+        baseArgs.push(`--profile-directory=${chromeProfile}`); // Use specified profile only for system Chrome
+      }
+      
       // Try with real Chrome first (using specified profile)
       this.browser = await puppeteer.launch({
         channel: 'chrome', // Use real Chrome installation
         headless: false, // Keep visible for manual interaction
         args: [
-          `--user-data-dir=${chromeUserDataDir}`, // Use Chrome User Data directory
-          `--profile-directory=${chromeProfile}`, // Use specified profile
+          ...baseArgs,
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
