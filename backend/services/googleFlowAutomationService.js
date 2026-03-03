@@ -130,6 +130,9 @@ class GoogleFlowAutomationService {
     this.sessionManager.browser = this.browser;
     this.sessionManager.page = this.page;
     this.sessionManager.sessionData = this.sessionData;
+    
+    // Load session from file
+    await this.sessionManager.loadSession();
 
     this.tokenManager = new TokenManager(this.sessionManager);
     this.promptManager = new PromptManager();
@@ -161,22 +164,11 @@ class GoogleFlowAutomationService {
   }
 
   async navigateToFlow() {
-    const url = this.options.projectId
-      ? `${this.options.baseUrl}/project/${this.options.projectId}`
-      : this.options.baseUrl;
-
-    console.log('🌐 Navigating to Google Flow...\n');
-    console.log(`   Target URL: ${url}\n`);
-
-    console.log('🌐 Page navigation in progress...');
-    await this.page.goto(url, { waitUntil: 'networkidle2', timeout: this.options.timeouts.pageLoad });
-    await this.waitForPageReady();
+    // Delegate to SessionManager which handles the full navigation flow
+    await this.sessionManager.navigateToFlow();
     
-    // ✅ RESTORE session tokens AFTER navigation when page is ready
-    await this.restoreSessionBeforeNavigation();
-    
-    // ✅ CHECK & REFRESH tokens NOW that we're on the project page with prompt box available
-    await this.ensureFreshTokens();
+    // Check & refresh tokens after navigation
+    await this.tokenManager.ensureFreshTokens();
     
     console.log('✅ Google Flow loaded and logged in\n');
   }
