@@ -1,5 +1,24 @@
 # Google Flow - Progressive Migration Strategy
 
+## Adapter Pattern: The Blueprint
+
+We use **Adapter Pattern** to ensure zero breaking changes:
+
+```
+Original File Location (UNCHANGED):
+  backend/services/googleFlowAutomationService.js
+         ↓
+  Becomes ADAPTER that delegates to:
+         ↓
+  ├── SessionManager (Phase 2)
+  ├── PromptManager (Phase 3)
+  ├── ImageUploadManager (Phase 3)
+  ├── GenerationMonitor (Phase 4)
+  └── + Utilities (Phase 1 ✅)
+```
+
+**Result**: All external imports continue working without any changes.
+
 ## Goal
 Incrementally refactor GoogleFlowAutomationService without breaking existing functionality.
 
