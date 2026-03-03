@@ -107,13 +107,32 @@ export default function ShortsReelsDashboard() {
   const triggerManualScan = async () => {
     setTriggering(true);
     try {
-      await trendAutomationApi.triggerJob('scan', {
+      const mapDimension = (d) => ({
+        'Most Viewed': 'most-viewed',
+        'Most Liked': 'trending',
+        'Most Commented': 'rising',
+      }[d] || 'most-viewed');
+
+      const mapPeriod = (p) => ({
+        Daily: 'weekly',
+        Weekly: 'weekly',
+        Monthly: 'monthly',
+        'Year-End': 'yearly',
+        Yearly: 'yearly',
+        'All-time': 'yearly',
+      }[p] || 'weekly');
+
+      const config = {
+        dimension: mapDimension(selected.dimension),
         category: selected.category,
-        dimension: selected.dimension,
         country: selected.country,
-        period: selected.period,
-        date: selected.date,
-      });
+        period: mapPeriod(selected.period),
+        isActive: true,
+        priority: 10,
+      };
+
+      const result = await trendAutomationApi.manualDiscoverPlayboard(config);
+      console.log('Manual discover result', result);
       await fetchData();
     } finally {
       setTriggering(false);
@@ -143,7 +162,7 @@ export default function ShortsReelsDashboard() {
     >
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition">Run Discover</button>
-        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Running scan...' : 'Run Scan With Filters'}</button>
+        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Scanning...' : 'Scan Channels From Filters'}</button>
         <button onClick={triggerUploadAll} disabled={uploadLoading || uploadStatus?.pendingUpload === 0} className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{uploadLoading ? 'Uploading...' : `Upload All (${uploadStatus?.pendingUpload || 0})`}</button>
         <button onClick={() => { fetchData(); fetchUploadStatus(); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition">Refresh</button>
       </div>

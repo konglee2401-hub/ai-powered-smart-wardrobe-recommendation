@@ -1871,10 +1871,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     // 5.3: Save generated videos
-    const allGeneratedVideos = videoGenerationResult?.videos || [];
-    for (const videoData of allGeneratedVideos) {
+    const generatedVideos = videoGenerationResult?.videos || [];
+    if (generatedVideos.length === 0) {
+      console.log(`   ℹ️  No videos to save (video generation may have failed)`);
+    }
+    
+    for (const videoData of generatedVideos) {
       try {
-        console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);
+        console.log(`\n🎬 Saving video (${videoData.primaryImage || 'single'}) to database...`);
         const videoAssetResult = await AssetManager.saveAsset({
           filename: path.basename(videoData.path),
           mimeType: 'video/mp4',

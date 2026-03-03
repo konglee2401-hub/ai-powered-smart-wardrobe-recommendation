@@ -10,7 +10,8 @@ from bson import ObjectId
 from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize
-from .automation import discover_all, discover_playboard, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker
+from .automation import discover_all, discover_playboard, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records
+
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
 app.add_middleware(
@@ -34,8 +35,17 @@ async def startup_event():
         queued = await _enqueue_pending_videos(STARTUP_PENDING_ENQUEUE_LIMIT)
         print(f'[startup] queued pending videos: {queued}')
 
+    # Auto-clean obviously invalid YouTube records (e.g. test IDs) on startup
+    try:
+        cleanup_result = await cleanup_invalid_youtube_records(limit=1000)
+        if cleanup_result.get('deleted'):
+            print(f"[startup] cleaned invalid youtube records: {cleanup_result}")
+    except Exception as e:
+        print(f"[startup] cleanup invalid youtube records failed: {e}")
+
     if ENABLE_SCHEDULER:
         await reload_scheduler()
+
 
 
 
@@ -99,8 +109,11 @@ async def manual_scan(channel_id: str):
     ch = channels.find_one({'_id': ObjectId(channel_id)})
     if not ch:
         raise HTTPException(status_code=404, detail='Channel not found')
-    found = await scan_single_channel(ch)
+
+    # Manual scan: run direct (no proxy), always headless
+    found = await scan_single_channel(ch, use_proxy=False, headless_override=True)
     return {'success': True, 'itemsFound': found}
+
 
 
 @app.get('/api/shorts-reels/videos')
@@ -196,8 +209,10 @@ async def trigger_job(type: str = Query(...)):
     if type == 'discover':
         return await discover_all()
     if type == 'scan':
-        return await scan_all_channels()
+        # Manual scan from dashboard: run without proxy, always headless
+        return await scan_all_channels(use_proxy=False, headless_override=True)
     raise HTTPException(status_code=400, detail='Invalid type. Use discover or scan')
+
 
 
 @app.get('/api/shorts-reels/playboard/config-options')
