@@ -12,6 +12,8 @@ const router = Router();
 router.post('/scan-now', QueueScannerController.triggerScan);
 router.get('/status', QueueScannerController.getStatus);
 router.post('/initialize', QueueScannerController.initialize);
+router.get('/settings', QueueScannerController.getSettings);
+router.put('/settings', QueueScannerController.saveSettings);
 router.get('/queue-videos', QueueScannerController.listQueueVideos);
 router.get('/random-sub-video', QueueScannerController.getRandomSubVideo);
 
