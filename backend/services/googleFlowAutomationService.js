@@ -4184,6 +4184,118 @@ class GoogleFlowAutomationService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 5 ORCHESTRATION HELPERS - Complex workflow wrappers
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Internal orchestration: Enter prompt via PromptManager
+   * Retrieves text from clipboard, validates it, stores for retry
+   * @param {string} promptText - Text to enter
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _internalEnterPromptViaManager(promptText) {
+    try {
+      this.lastPromptSubmitted = promptText; // Store for potential retry
+      if (this.promptManager) {
+        await this.promptManager.enterPrompt(promptText);
+        return true;
+      }
+      return await this._delegateEnterPrompt(promptText);
+    } catch (error) {
+      console.error('[PROMPT] Error entering via manager:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Internal orchestration: Submit prompt via PromptManager  
+   * Clicks send button and waits for submission
+   * @returns {Promise<boolean>} - True if submission successful
+   */
+  async _internalSubmitPromptViaManager() {
+    try {
+      if (this.promptManager) {
+        return await this.promptManager.submit();
+      }
+      return await this._delegateSubmitPrompt();
+    } catch (error) {
+      console.error('[PROMPT] Error submitting via manager:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Internal orchestration: Complete prompt entry and submission cycle
+   * Combines entering prompt + submission + validation
+   * @param {string} promptText - Text to submit
+   * @returns {Promise<boolean>} - True if cycle successful
+   */
+  async _internalCompletePromptCycle(promptText) {
+    try {
+      // Step 1: Enter prompt
+      if (!await this._internalEnterPromptViaManager(promptText)) {
+        console.log('[PROMPT-CYCLE] ⚠️  Failed to enter prompt');
+        return false;
+      }
+
+      // Step 2: Wait for UI stabilization
+      console.log('[PROMPT-CYCLE] ⏳ Waiting 1s for prompt to stabilize...');
+      await this.page.waitForTimeout(1000);
+
+      // Step 3: Submit prompt
+      if (!await this._internalSubmitPromptViaManager()) {
+        console.log('[PROMPT-CYCLE] ⚠️  Failed to submit prompt');
+        return false;
+      }
+
+      // Step 4: Wait for server acknowledgment
+      console.log('[PROMPT-CYCLE] ⏳ Waiting 2s for server...');
+      await this.page.waitForTimeout(2000);
+
+      console.log('[PROMPT-CYCLE] ✅ Prompt cycle complete');
+      return true;
+    } catch (error) {
+      console.error('[PROMPT-CYCLE] Error in prompt cycle:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Internal orchestration: Complete generation cycle
+   * Monitor -> Detect -> Download workflow
+   * @param {number} timeoutSeconds - Monitoring timeout
+   * @returns {Promise<Object>} - Generation result with href
+   */
+  async _internalCompleteGenerationCycle(timeoutSeconds = 120) {
+    try {
+      // Use GenerationMonitor if available
+      if (this.generationMonitor) {
+        const monitorResult = await this.generationMonitor.monitorGeneration(timeoutSeconds);
+        if (monitorResult?.success) {
+          return {
+            success: true,
+            href: monitorResult.href || null,
+            isNew: true,
+            method: 'manager'
+          };
+        }
+      }
+
+      // Fallback to original monitoring
+      const result = await this.monitorGeneration(timeoutSeconds);
+      return {
+        success: !!result,
+        href: result,
+        isNew: true,
+        method: 'fallback'
+      };
+    } catch (error) {
+      console.error('[GEN-CYCLE] Error in generation cycle:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
 
   async reuseLastCommand() {
     /**
