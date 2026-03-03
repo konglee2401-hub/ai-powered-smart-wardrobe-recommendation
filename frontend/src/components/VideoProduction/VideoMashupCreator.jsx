@@ -9,24 +9,29 @@ import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '@/config/api.js';
-import { Upload, Play, Volume2, Settings, HardDrive, ArrowRight, Check } from 'lucide-react';
+import { Upload, Play, Settings, HardDrive, ArrowRight, Check } from 'lucide-react';
 
 
 export function VideoMashupCreator() {
   const { addToQueue } = useVideoProductionStore();
   
-  const [step, setStep] = useState(1); // 1-4
+  const [step, setStep] = useState(1); // 1-3
+
   const [loading, setLoading] = useState(false);
+  const [uploadingMain, setUploadingMain] = useState(false);
+
   
   // Step 1: Upload main video
   const [mainVideo, setMainVideo] = useState(null);
   const fileInputRef = useRef(null);
   
-  // Step 2: Select sub-video
+  // Step 1: Select main + sub videos
   const [subVideo, setSubVideo] = useState(null);
+  const [showMainVideoGallery, setShowMainVideoGallery] = useState(false);
   const [showSubVideoGallery, setShowSubVideoGallery] = useState(false);
   
-  // Step 3: Settings
+  // Step 2: Settings
+
   const [config, setConfig] = useState({
     layout: '2-3-1-3', // 2/3 main + 1/3 sub
     duration: 30,
@@ -35,85 +40,166 @@ export function VideoMashupCreator() {
     quality: 'high'
   });
   
-  // Step 4: Confirm & Queue
+  // Step 3: Confirm & Queue
   const [queuedItem, setQueuedItem] = useState(null);
+
+
+  const normalizeGalleryVideo = (video) => {
+    if (!video) return null;
+
+    const mediaId = video.assetId || video.mediaId || video.id;
+    const name = video.name;
+    const thumbnail = video.thumbnail || video.url || 'https://via.placeholder.com/120x90?text=Video';
+
+    if (!mediaId || !name) return null;
+
+    return {
+      mediaId,
+      name,
+      duration: video.duration || 30,
+      size: video.size,
+      thumbnail,
+      source: 'gallery'
+    };
+  };
 
   // ===== STEP 1: Upload Main Video =====
   const handleUploadMain = async (file) => {
-    if (!file.type.startsWith('video/')) {
+    if (!file || !file.type || !file.type.startsWith('video/')) {
       toast.error('Please upload a video file');
       return;
     }
 
     try {
       setLoading(true);
+      setUploadingMain(true);
+
+      const apiUrl = API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
       const formData = new FormData();
-      // Backend cloud gallery expects field name `file`
       formData.append('file', file);
       formData.append('type', 'video');
       formData.append('tags', 'source-video,mashup-main');
 
-      const apiUrl = API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/drive/upload`, {
-
+      const uploadResponse = await fetch(`${apiUrl}/drive/upload`, {
         method: 'POST',
         body: formData
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+      }
 
-      const json = await response.json();
-      const uploaded = json.data || json;
+      const uploadJson = await uploadResponse.json();
+      if (!uploadJson.success) {
+        throw new Error(uploadJson.message || 'Drive upload failed');
+      }
+
+      const uploadedFile = uploadJson.file || uploadJson.data || uploadJson;
+      if (!uploadedFile?.id) {
+        throw new Error('Uploaded file ID is missing');
+      }
+
+      const uploadSource = String(uploadedFile.source || '').toLowerCase();
+      const isDriveFile = uploadSource === 'google-drive' || Boolean(uploadedFile.webViewLink || uploadedFile.webContentLink);
+
+      const assetPayload = {
+        filename: uploadedFile.name || file.name,
+        mimeType: uploadedFile.mimeType || file.type,
+        fileSize: uploadedFile.size || file.size,
+        assetType: 'video',
+        assetCategory: 'source-video',
+        userId: 'anonymous',
+        storage: {
+          location: isDriveFile ? 'google-drive' : 'local',
+          googleDriveId: isDriveFile ? uploadedFile.id : undefined,
+          googleDrivePath: isDriveFile ? 'Affiliate AI/Videos/Uploaded/App' : undefined,
+          url: uploadedFile.webViewLink || uploadedFile.webContentLink || uploadedFile.url || null
+        },
+        cloudStorage: isDriveFile
+          ? {
+              location: 'google-drive',
+              googleDriveId: uploadedFile.id,
+              webViewLink: uploadedFile.webViewLink || uploadedFile.webContentLink || null,
+              thumbnailLink: uploadedFile.thumbnailLink || null,
+              status: 'synced'
+            }
+          : undefined,
+        metadata: {
+          uploadedVia: 'video-mashup-creator'
+        },
+        tags: ['source-video', 'mashup-main'],
+        autoReplace: true
+      };
+
+      const assetResponse = await fetch(`${apiUrl}/assets/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(assetPayload)
+      });
+
+      if (!assetResponse.ok) {
+        throw new Error(`Asset creation failed with status ${assetResponse.status}`);
+      }
+
+      const assetJson = await assetResponse.json();
+      if (!assetJson.success || !assetJson.asset?.assetId) {
+        throw new Error(assetJson.error || 'Asset creation failed');
+      }
+
+      const createdAsset = assetJson.asset;
 
       setMainVideo({
-        // Use cloud media id as mediaId for downstream processing
-        mediaId: uploaded.id || uploaded.assetId,
-        name: uploaded.name || file.name,
-        duration: uploaded.duration || 30,
-        size: file.size,
-        thumbnail: uploaded.thumbnail || uploaded.url || 'https://via.placeholder.com/120x90?text=Video'
+        mediaId: createdAsset.assetId,
+        name: createdAsset.filename || file.name,
+        duration: 30,
+        size: createdAsset.fileSize || file.size,
+        thumbnail: `${apiUrl}/assets/proxy/${createdAsset.assetId}`,
+        source: 'upload'
       });
-      toast.success('Main video uploaded!');
-      setStep(2);
+
+      toast.success('Main video uploaded and saved to gallery!');
+
     } catch (error) {
       toast.error(`Upload failed: ${error.message}`);
     } finally {
+      setUploadingMain(false);
       setLoading(false);
     }
   };
 
 
+  const handleSelectMainVideo = (video) => {
+    const normalized = normalizeGalleryVideo(video);
+
+    if (!normalized) {
+      toast.error('Selected main video is missing required fields');
+      return;
+    }
+
+    setMainVideo(normalized);
+    setShowMainVideoGallery(false);
+    toast.success('Main video selected from gallery!');
+
+  };
+
   // ===== STEP 2: Select Sub-Video =====
   const handleSelectSubVideo = (video) => {
-    if (!video) {
-      console.error('❌ No video selected from gallery');
-      toast.error('Failed to select video');
+    const normalized = normalizeGalleryVideo(video);
+
+    if (!normalized) {
+      toast.error('Selected sub-video is missing required fields');
       return;
     }
-    
-    // Gallery picker returns video with: {assetId, id, name, url, thumbnail, type, category, ...}
-    const mediaId = video.assetId || video.mediaId || video.id;
-    const name = video.name;
-    const thumbnail = video.thumbnail || video.url || 'https://via.placeholder.com/120x90?text=Video';
-    
-    if (!mediaId || !name) {
-      console.error('❌ Invalid video item from gallery:', video);
-      toast.error('Selected video is missing required fields');
-      return;
-    }
-    
-    console.log(`🎬 Sub-video selected from gallery:`, { mediaId, name, thumbnail });
-    
-    setSubVideo({
-      mediaId,
-      name,
-      duration: video.duration || 30,
-      thumbnail
-    });
+
+    setSubVideo(normalized);
     setShowSubVideoGallery(false);
     toast.success('Sub-video selected!');
-    setStep(3);
+
   };
+
 
   // ===== STEP 3: Configure =====
   const handleConfigure = () => {
@@ -121,7 +207,8 @@ export function VideoMashupCreator() {
       toast.error('Please select both videos');
       return;
     }
-    setStep(4);
+    setStep(3);
+
   };
 
   // ===== STEP 4: Queue Video =====
@@ -160,318 +247,342 @@ export function VideoMashupCreator() {
   };
 
   // ===== UI RENDERING =====
+  const steps = [
+    { id: 1, title: 'Videos', subtitle: 'Chọn cả main + sub video' },
+    { id: 2, title: 'Settings', subtitle: 'Cấu hình mashup' },
+    { id: 3, title: 'Review', subtitle: 'Xác nhận và queue' }
+  ];
+
+
   return (
     <div className="space-y-6">
-      {/* Progress Bar */}
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <div className="flex justify-between mb-3">
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} className="flex items-center">
-              <div className={`flex-1 h-2 rounded transition ${
-                s <= step ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-700'
-              }`} />
-              {s < 4 && <ArrowRight className={`w-4 h-4 mx-2 ${s <= step ? 'text-purple-400' : 'text-gray-600'}`} />}
-            </div>
-          ))}
-        </div>
-        <div className="text-sm text-gray-400 font-semibold">
-          Step {step} of 4: {
-            step === 1 ? 'Upload Main Video (2/3)' :
-            step === 2 ? 'Select Sub-Video (1/3)' :
-            step === 3 ? 'Configure Settings' :
-            'Review & Create'
-          }
+      <div className="bg-gray-800/90 rounded-xl p-4 border border-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {steps.map((item) => {
+            const completed = step > item.id;
+            const active = step === item.id;
+
+            return (
+              <div
+                key={item.id}
+                className={`rounded-lg border p-3 transition ${
+                  active
+                    ? 'border-purple-500 bg-purple-500/10'
+                    : completed
+                      ? 'border-green-500/40 bg-green-500/10'
+                      : 'border-gray-700 bg-gray-900/40'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                      completed
+                        ? 'bg-green-500 text-black'
+                        : active
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-gray-700 text-gray-300'
+                    }`}
+                  >
+                    {completed ? '✓' : item.id}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{item.title}</p>
+                    <p className="text-xs text-gray-400">{item.subtitle}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Step 1: Upload Main Video */}
-      {step === 1 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-purple-500/50 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Upload className="w-5 h-5 text-purple-400" />
-            Upload Main Video (2/3 of screen)
-          </h3>
-          
-          <div 
-            className="border-2 border-dashed border-purple-400 rounded-lg p-8 text-center hover:border-purple-300 hover:bg-purple-500/5 transition cursor-pointer"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const file = e.dataTransfer.files[0];
-              if (file) handleUploadMain(file);
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                console.log('📂 File input onChange:', file && { name: file.name, type: file.type, size: file.size });
-                if (file) handleUploadMain(file);
-              }}
+      <div className="overflow-x-auto">
+        <div className="flex gap-6 items-start" style={{ minWidth: '980px' }}>
+          <div className="space-y-4 order-2 flex-1 min-w-0">
+          {step === 1 && (
+            <div className="bg-gray-800 rounded-xl p-6 border border-purple-500/40 space-y-6">
+              <h3 className="text-xl font-semibold flex items-center gap-2 text-white">
+                <Upload className="w-5 h-5 text-purple-400" />
+                Chọn 2 video đầu vào (Main + Sub)
+              </h3>
 
-              className="hidden"
-            />
-            <label 
-              onClick={() => fileInputRef.current?.click()}
-              className="cursor-pointer"
-            >
-              <Upload className="w-12 h-12 mx-auto mb-3 text-purple-400" />
-              <p className="font-semibold text-white">Drag & drop main video here</p>
-              <p className="text-sm text-gray-400 mt-1">or click to select file</p>
-              <p className="text-xs text-gray-500 mt-2">Recommended: MP4, 15-60 seconds</p>
-            </label>
-          </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="space-y-3 rounded-lg border border-purple-500/40 bg-purple-900/10 p-4">
+                  <h4 className="font-semibold text-white">Main Video (2/3)</h4>
 
-          {mainVideo && (
-            <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-4">
-              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-400" /> Main Video Ready
-              </h4>
-              <div className="flex gap-4">
-                <img 
-                  src={mainVideo.thumbnail} 
-                  alt="preview" 
-                  className="w-32 h-24 object-cover rounded-lg"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-white">{mainVideo.name}</p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    Duration: {mainVideo.duration}s
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    Size: {(mainVideo.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+                  <div
+                    className={`relative border-2 border-dashed rounded-lg p-6 text-center transition ${
+                      uploadingMain
+                        ? 'border-purple-300 bg-purple-500/10'
+                        : 'border-purple-400 hover:border-purple-300 hover:bg-purple-500/5 cursor-pointer'
+                    }`}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (uploadingMain) return;
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleUploadMain(file);
+                    }}
+                  >
+                    {uploadingMain && (
+                      <div className="absolute inset-0 bg-gray-900/80 rounded-lg flex flex-col items-center justify-center z-10">
+                        <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mb-3" />
+                        <p className="text-purple-200 font-semibold">Đang upload và tạo asset...</p>
+                        <p className="text-xs text-gray-400 mt-1">Vui lòng chờ, không tắt tab</p>
+                      </div>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadMain(file);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                      disabled={uploadingMain}
+                    />
+                    <label
+                      onClick={() => !uploadingMain && fileInputRef.current?.click()}
+                      className={uploadingMain ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
+                    >
+                      <Upload className="w-10 h-10 mx-auto mb-2 text-purple-400" />
+                      <p className="font-semibold text-white">Upload video mới</p>
+                      <p className="text-xs text-gray-400 mt-1">Kéo thả hoặc click để chọn file</p>
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={() => setShowMainVideoGallery(true)}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60"
+                    disabled={uploadingMain}
+                  >
+                    <HardDrive className="w-5 h-5" />
+                    Chọn Main từ Gallery
+                  </button>
+
+                  {mainVideo && (
+                    <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3">
+                      <p className="text-sm font-medium text-white break-all">{mainVideo.name}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-blue-500/40 bg-blue-900/10 p-4">
+                  <h4 className="font-semibold text-white flex items-center gap-2">
+                    <Play className="w-4 h-4 text-blue-400" />
+                    Sub Video (1/3)
+                  </h4>
+
+                  <p className="text-xs text-gray-400">Chọn từ gallery để dùng lại asset có sẵn.</p>
+
+                  <button
+                    onClick={() => setShowSubVideoGallery(true)}
+                    className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <HardDrive className="w-5 h-5" />
+                    Chọn Sub từ Gallery
+                  </button>
+
+                  {subVideo && (
+                    <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
+                      <p className="text-sm font-medium text-white break-all">{subVideo.name}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
               <button
                 onClick={() => setStep(2)}
-                className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2"
-                disabled={loading}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={!mainVideo || !subVideo || uploadingMain}
               >
-                Continue <ArrowRight className="w-4 h-4" />
+                Tiếp tục tới Settings <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Step 2: Select Sub-Video */}
-      {step === 2 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-blue-500/50 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Play className="w-5 h-5 text-blue-400" />
-            Select Sub-Video (1/3 of screen, right side)
-          </h3>
-          
-          <p className="text-gray-400 text-sm">
-            Choose a video that will appear on the right side of your main video
-          </p>
 
-          <button
-            onClick={() => setShowSubVideoGallery(true)}
-            className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-          >
-            <HardDrive className="w-5 h-5" />
-            Browse Local Videos
-          </button>
+          {step === 2 && (
+            <div className="bg-gray-800 rounded-xl p-6 border border-green-500/40 space-y-4">
+              <h3 className="text-xl font-semibold flex items-center gap-2 text-white">
+                <Settings className="w-5 h-5 text-green-400" />
+                Configure Settings
+              </h3>
 
-          {subVideo && (
-            <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4">
-              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-400" /> Sub-Video Selected
-              </h4>
-              <div className="flex gap-4">
-                <img 
-                  src={subVideo.thumbnail} 
-                  alt={subVideo.name}
-                  className="w-32 h-24 object-cover rounded-lg"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-white">{subVideo.name}</p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    Duration: {subVideo.duration}s
-                  </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block font-semibold">Duration (seconds)</label>
+                  <input
+                    type="number"
+                    value={config.duration}
+                    onChange={(e) => setConfig({ ...config, duration: parseInt(e.target.value) })}
+                    min="15"
+                    max="120"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block font-semibold">Platform</label>
+                  <select
+                    value={config.platform}
+                    onChange={(e) => setConfig({ ...config, platform: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
+                  >
+                    <option value="youtube">YouTube Shorts (9:16)</option>
+                    <option value="tiktok">TikTok (9:16)</option>
+                    <option value="instagram">Instagram Reels (9:16)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block font-semibold">Quality</label>
+                  <select
+                    value={config.quality}
+                    onChange={(e) => setConfig({ ...config, quality: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
+                  >
+                    <option value="standard">Standard (720p)</option>
+                    <option value="high">High (1080p)</option>
+                    <option value="4k">Ultra (4K)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block font-semibold">Layout</label>
+                  <div className="text-sm text-gray-300 bg-gray-700 border border-gray-600 rounded px-3 py-2">Main 2/3 + Sub 1/3</div>
                 </div>
               </div>
+
               <div className="flex gap-2 mt-4">
                 <button
                   onClick={() => setStep(1)}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition"
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition font-semibold"
                 >
                   Back
                 </button>
                 <button
-                  onClick={() => setStep(3)}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2"
+                  onClick={handleConfigure}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2"
                 >
-                  Continue <ArrowRight className="w-4 h-4" />
+                  Review <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="bg-gray-800 rounded-xl p-6 border border-pink-500/40 space-y-4">
+              <h3 className="text-xl font-semibold flex items-center gap-2 text-white">
+                <Check className="w-5 h-5 text-pink-400" />
+                Review & Create Mashup
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-700/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-400 font-semibold mb-1">Main Video</p>
+                  <img src={mainVideo?.thumbnail} alt="main" className="w-full h-24 object-cover rounded-lg mb-2" />
+                  <p className="text-sm font-medium text-white truncate">{mainVideo?.name}</p>
+                </div>
+
+                <div className="bg-gray-700/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-400 font-semibold mb-1">Sub Video</p>
+                  <img src={subVideo?.thumbnail} alt="sub" className="w-full h-24 object-cover rounded-lg mb-2" />
+                  <p className="text-sm font-medium text-white truncate">{subVideo?.name}</p>
+                </div>
+              </div>
+
+              <div className="bg-pink-900/30 border border-pink-500/50 rounded-lg p-4 space-y-2">
+                <h4 className="font-semibold text-pink-300">Configuration</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-300">
+                  <div><span className="text-gray-400">Duration:</span> {config.duration}s</div>
+                  <div><span className="text-gray-400">Platform:</span> {config.platform}</div>
+                  <div><span className="text-gray-400">Quality:</span> {config.quality}</div>
+                  <div><span className="text-gray-400">Layout:</span> 2/3 + 1/3</div>
+                </div>
+              </div>
+
+              {queuedItem && (
+                <div className="bg-green-900/30 border border-green-500 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-300 mb-1">✓ Successfully Queued!</h4>
+                  <p className="text-sm text-gray-300">Queue ID: {queuedItem.queueId}</p>
+                  <p className="text-xs text-gray-400 mt-1">Video is ready for processing</p>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition font-semibold"
+                  disabled={loading}
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleCreateMashup}
+                  className="flex-1 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 px-4 py-2 rounded-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={loading}
+                >
+                  {loading ? '⏳ Creating...' : '✓ Create Mashup'}
                 </button>
               </div>
             </div>
           )}
         </div>
-      )}
 
-      {/* Step 3: Configure Settings */}
-      {step === 3 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-green-500/50 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Settings className="w-5 h-5 text-green-400" />
-            Configure Settings
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-400 mb-2 block font-semibold">Duration (seconds)</label>
-              <input
-                type="number"
-                value={config.duration}
-                onChange={(e) => setConfig({...config, duration: parseInt(e.target.value)})}
-                min="15"
-                max="120"
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
-              />
-            </div>
+        <aside className="order-1 w-80 shrink-0 space-y-4 max-h-[calc(100vh-6rem)] overflow-auto">
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 space-y-3">
+            <h4 className="text-white font-semibold">Thông tin đã chọn</h4>
 
-            <div>
-              <label className="text-sm text-gray-400 mb-2 block font-semibold">Platform</label>
-              <select
-                value={config.platform}
-                onChange={(e) => setConfig({...config, platform: e.target.value})}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
-              >
-                <option value="youtube">YouTube Shorts (9:16)</option>
-                <option value="tiktok">TikTok (9:16)</option>
-                <option value="instagram">Instagram Reels (9:16)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400 mb-2 block font-semibold">Quality</label>
-              <select
-                value={config.quality}
-                onChange={(e) => setConfig({...config, quality: e.target.value})}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-green-500 focus:outline-none"
-              >
-                <option value="standard">Standard (720p)</option>
-                <option value="high">High (1080p)</option>
-                <option value="4k">Ultra (4K)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-400 mb-2 block font-semibold">Layout</label>
-              <div className="text-sm text-gray-300 bg-gray-700 border border-gray-600 rounded px-3 py-2">
-                Main 2/3 + Sub 1/3
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4 mt-4">
-            <h4 className="font-semibold text-green-300 mb-2">Preview Layout</h4>
-            <div className="flex gap-2 h-24">
-              <div className="flex-[2] bg-gray-700 rounded-lg border-2 border-green-500 flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-xs text-gray-400">Main Video (2/3)</p>
-                  <p className="text-sm font-semibold text-gray-300">{mainVideo?.name}</p>
+            <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+              <p className="text-xs text-gray-400 mb-2">Main Video</p>
+              {mainVideo ? (
+                <div className="space-y-2">
+                  <img src={mainVideo.thumbnail} alt={mainVideo.name} className="w-full h-24 object-cover rounded" />
+                  <p className="text-sm text-white break-all">{mainVideo.name}</p>
+                  <span className="inline-flex text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300">
+                    {mainVideo.source === 'upload' ? 'Uploaded mới' : 'Từ Gallery'}
+                  </span>
                 </div>
-              </div>
-              <div className="flex-1 bg-gray-700 rounded-lg border-2 border-blue-500 flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-xs text-gray-400">Sub (1/3)</p>
-                  <p className="text-xs font-semibold text-gray-300">{subVideo?.name}</p>
+              ) : (
+                <p className="text-sm text-gray-500">Chưa chọn main video</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+              <p className="text-xs text-gray-400 mb-2">Sub Video</p>
+              {subVideo ? (
+                <div className="space-y-2">
+                  <img src={subVideo.thumbnail} alt={subVideo.name} className="w-full h-24 object-cover rounded" />
+                  <p className="text-sm text-white break-all">{subVideo.name}</p>
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm text-gray-500">Chưa chọn sub video</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 text-sm text-gray-300">
+              <p className="text-xs text-gray-400 mb-2">Config hiện tại</p>
+              <p>Duration: {config.duration}s</p>
+              <p>Platform: {config.platform}</p>
+              <p>Quality: {config.quality}</p>
             </div>
           </div>
-
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={() => setStep(2)}
-              className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition font-semibold"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleConfigure}
-              className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2"
-            >
-              Review <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+          </aside>
         </div>
-      )}
+      </div>
 
-      {/* Step 4: Review & Create */}
-      {step === 4 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-pink-500/50 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Check className="w-5 h-5 text-pink-400" />
-            Review & Create Mashup
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 font-semibold mb-1">Main Video (2/3)</p>
-              <img 
-                src={mainVideo?.thumbnail} 
-                alt="main"
-                className="w-full h-24 object-cover rounded-lg mb-2"
-              />
-              <p className="text-sm font-medium text-white truncate">{mainVideo?.name}</p>
-            </div>
+      <GalleryPicker
+        isOpen={showMainVideoGallery}
+        onClose={() => setShowMainVideoGallery(false)}
+        onSelect={handleSelectMainVideo}
+        assetType="video"
+        title="Select Main Video"
+      />
 
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 font-semibold mb-1">Sub Video (1/3)</p>
-              <img 
-                src={subVideo?.thumbnail} 
-                alt="sub"
-                className="w-full h-24 object-cover rounded-lg mb-2"
-              />
-              <p className="text-sm font-medium text-white truncate">{subVideo?.name}</p>
-            </div>
-          </div>
-
-          <div className="bg-pink-900/30 border border-pink-500/50 rounded-lg p-4 space-y-2">
-            <h4 className="font-semibold text-pink-300">Configuration</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm text-gray-300">
-              <div><span className="text-gray-400">Duration:</span> {config.duration}s</div>
-              <div><span className="text-gray-400">Platform:</span> {config.platform}</div>
-              <div><span className="text-gray-400">Quality:</span> {config.quality}</div>
-              <div><span className="text-gray-400">Layout:</span> 2/3 + 1/3</div>
-            </div>
-          </div>
-
-          {queuedItem && (
-            <div className="bg-green-900/30 border border-green-500 rounded-lg p-4">
-              <h4 className="font-semibold text-green-300 mb-1">✓ Successfully Queued!</h4>
-              <p className="text-sm text-gray-300">Queue ID: {queuedItem.queueId}</p>
-              <p className="text-xs text-gray-400 mt-1">Video is ready for processing</p>
-            </div>
-          )}
-
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={() => setStep(3)}
-              className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition font-semibold"
-              disabled={loading}
-            >
-              Back
-            </button>
-            <button
-              onClick={handleCreateMashup}
-              className="flex-1 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 px-4 py-2 rounded-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-              disabled={loading}
-            >
-              {loading ? '⏳ Creating...' : '✓ Create Mashup'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Sub-Video Gallery */}
       <GalleryPicker
         isOpen={showSubVideoGallery}
         onClose={() => setShowSubVideoGallery(false)}
