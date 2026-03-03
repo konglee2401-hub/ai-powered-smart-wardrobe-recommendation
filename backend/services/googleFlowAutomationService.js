@@ -4700,7 +4700,7 @@ class GoogleFlowAutomationService {
 
       // STEP 4: Configure settings ONCE AT START
       console.log('[CONFIG] ⚙️  Configuring settings (ONE TIME)...');
-      const settingsOk = await this.configureSettings();
+      const settingsOk = await this._delegateConfigureSettings();
       if (!settingsOk) {
         console.log('[CONFIG] ⚠️  Settings might be incomplete, continuing...');
       } else {
