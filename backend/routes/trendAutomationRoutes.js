@@ -116,8 +116,12 @@ router.post('/playboard/configs/add', protect, async (req, res) => {
   }
 });
 
+// Manual discover Playboard with filters
+router.post('/playboard/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/playboard/manual-discover'));
+
 // Delete playboard config
 router.delete('/playboard/configs/:index', protect, async (req, res) => {
+
   try {
     const index = parseInt(req.params.index, 10);
     const setting = await TrendSetting.getOrCreateDefault();

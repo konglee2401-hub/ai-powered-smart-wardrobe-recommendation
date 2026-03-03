@@ -1076,12 +1076,21 @@ async def scan_single_channel(channel, use_proxy: bool = True, headless_override
     platform = channel.get('platform', 'youtube')
 
     if platform == 'youtube':
-        handle = channel_id.replace('@', '') if channel_id.startswith('@') else channel_id
-        target_url = f'https://www.youtube.com/@{handle}/shorts'
+        # Support both handle (@channel) and channel ID (UCxxxx)
+        if channel_id.startswith('@'):
+            handle = channel_id[1:]
+            target_url = f'https://www.youtube.com/@{handle}/shorts'
+        elif channel_id.startswith('UC'):
+            target_url = f'https://www.youtube.com/channel/{channel_id}/shorts'
+        else:
+            # Fallback: treat as handle without @
+            target_url = f'https://www.youtube.com/@{channel_id}/shorts'
         link_selector = 'a[href*="/shorts/"]'
     else:
         target_url = f'https://www.facebook.com/{channel_id}/reels'
         link_selector = 'a[href*="/reel/"]'
+
+    print(f"[DEBUG] Scan target URL for {channel_id}: {target_url}")
 
     pool = _proxy_pool() if use_proxy else []
     attempts = max(len(pool), 1)

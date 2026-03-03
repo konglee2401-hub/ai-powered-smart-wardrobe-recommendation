@@ -4758,14 +4758,19 @@ class GoogleFlowAutomationService {
               throw new Error('Missing lastGeneratedHref for prompt chaining (cannot run reuse-command flow)');
             }
 
-            console.log(`[CHAIN] 🔄 Reusing command from previous href...`);
+            console.log(`\n[CHAIN] 🔄 Reusing command from previous href...`);
             const reused = await this.rightClickReuseCommand(lastGeneratedHref);
             if (!reused) {
               throw new Error('Failed to click "Sử dụng lại câu lệnh" on previous generated href');
             }
 
-            await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+            // FIXED: Ensure focus + click before clearing
+            console.log('[CHAIN] 📌 Focusing and clicking textbox before clearing...');
+            const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+            await this.page.focus(containerSelector);
             await this.page.waitForTimeout(200);
+            await this.page.click(containerSelector);
+            await this.page.waitForTimeout(300);
 
             console.log('[CHAIN] 🧹 Clearing reused prompt text (Ctrl+A + Backspace)...');
             await this.page.keyboard.down('Control');
@@ -4775,7 +4780,7 @@ class GoogleFlowAutomationService {
             await this.page.keyboard.press('Backspace');
             await this.page.waitForTimeout(400);
 
-            console.log('[CHAIN] ✅ Reuse attached images should remain; textbox cleaned for new prompt\n');
+            console.log('[CHAIN] ✅ Textbox cleared - ready for new prompt\n');
           }
 
 
@@ -4790,6 +4795,20 @@ class GoogleFlowAutomationService {
           // STEP C: Paste prompt
           console.log(`[STEP C] 📝 Entering prompt (${prompt.length} chars)...`);
           const normalizedPrompt = prompt.normalize('NFC');
+          
+          // LOG: Compare prompts for debugging
+          if (i > 0) {
+            const previousPrompt = prompts[i - 1];
+            const isSamePrompt = prompt === previousPrompt;
+            const firstChars = Math.min(60, prompt.length);
+            console.log(`[COMPARE] Prompt ${i} vs ${i-1}: ${isSamePrompt ? '🔄 SAME' : '📝 DIFFERENT'}`);
+            console.log(`[COMPARE] Prompt ${i} sample: "${normalizedPrompt.substring(0, firstChars)}..."`);
+            if (isSamePrompt) {
+              console.warn(`[COMPARE] ⚠️  WARNING: Prompt ${i} is identical to prompt ${i-1} - possible copy/paste issue!`);
+            }
+          } else {
+            console.log(`[COMPARE] Prompt 0 (first, nothing to compare): "${normalizedPrompt.substring(0, 60)}..."`);
+          }
           
           // Copy to clipboard
           await this.page.evaluate((text) => {
@@ -4918,17 +4937,22 @@ class GoogleFlowAutomationService {
           while (!generationDetected && monitoringAttempt < maxMonitoringAttempts) {
             monitoringAttempt++;
 
-            // Strict detection: only treat as error when tile text contains
-            // "không thành công" or "lỗi" (per production behavior)
+            // IMPROVED detection: Only treat as error when explicitly confirmed
+            // Check: 1) NO loading indicator (%), 2) Has explicit "Không thành công" text
             const currentData = await this.page.evaluate(() => {
               const allItems = [];
 
-              // 1) Items with href
+              // 1) Items with href (successful generated items)
               const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
               for (const link of links) {
                 const parent = link.closest('[data-tile-id]');
                 const parentText = (parent?.textContent || '').toLowerCase();
-                const hasErrorText = parentText.includes('không thành công') || parentText.includes('đã xảy ra lỗi') || parentText.includes('lỗi');
+                
+                // Only mark as error if explicitly has "Không thành công" text (no % loading)
+                const hasErrorText = parentText.includes('không thành công') && !parentText.includes('%');
+                
+                // Count buttons when hovering - generated items have 3 buttons
+                const buttonCount = parent?.querySelectorAll('button').length || 0;
 
                 allItems.push({
                   href: link.getAttribute('href'),
@@ -4936,30 +4960,44 @@ class GoogleFlowAutomationService {
                   isNew: false,
                   hasLink: true,
                   tileId: parent?.getAttribute('data-tile-id') || null,
+                  buttonCount: buttonCount,  // NEW: 3 for generated, 2 for uploaded
                   indicators: {
-                    errorText: hasErrorText
+                    errorText: hasErrorText,
+                    hasLoadingPercent: parentText.includes('%')
                   }
                 });
               }
 
-              // 2) Items without href but having explicit error text
+              // 2) Items without href (loading or error items)
               const allTiles = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
               for (const tile of allTiles) {
                 const tileId = tile.getAttribute('data-tile-id');
                 if (allItems.some(item => item.tileId === tileId)) continue;
 
                 const tileText = (tile.textContent || '').toLowerCase();
-                const hasErrorText = tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi') || tileText.includes('lỗi');
+                
+                // NEW: Check for loading indicator first
+                const hasLoadingPercent = tileText.includes('%');
+                
+                // Only mark as error if has explicit "Không thành công" WITHOUT loading %
+                const hasErrorText = (tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi')) && !hasLoadingPercent;
+                
+                // Count buttons for identification
+                const buttonCount = tile.querySelectorAll('button').length || 0;
 
-                if (hasErrorText) {
+                // Only add if it's actually an error (has explicit error text) OR still loading (has %)
+                if (hasErrorText || hasLoadingPercent) {
                   allItems.push({
                     href: null,
-                    hasError: true,
+                    hasError: hasErrorText,  // Only TRUE if confirmed error
                     isNew: true,
                     hasLink: false,
+                    isLoading: hasLoadingPercent,  // NEW: Distinguish loading from error
                     tileId,
+                    buttonCount: buttonCount,
                     indicators: {
-                      errorText: true
+                      errorText: hasErrorText,
+                      hasLoadingPercent: hasLoadingPercent
                     }
                   });
                 }
@@ -4973,9 +5011,9 @@ class GoogleFlowAutomationService {
             for (const current of currentData) {
               // Item is new if:
               // 1. It has href and that href is not in promptSubmitHrefs, OR
-              // 2. It's an error item (hasError=true and no href)
+              // 2. It's an ERROR (confirmed error, not loading)
               const isNewHref = current.href && !promptSubmitHrefs.includes(current.href);
-              const isNewError = !current.href && current.hasError;  // Error item with no link = NEW error
+              const isNewError = !current.href && current.hasError && !current.isLoading;  // FIXED: Skip loading items
               
               if (isNewHref || isNewError) {
                 current.isNew = true;
@@ -4989,13 +5027,16 @@ class GoogleFlowAutomationService {
               console.log(`[STEP E] ✓ NEW generation detected`);
               if (generatedHref.href) {
                 console.log(`[STEP E]   - Href: ${generatedHref.href.substring(0, 60)}...`);
+                console.log(`[STEP E]   - Buttons when hover: ${generatedHref.buttonCount} (3=generated, 2=uploaded)`);
               } else {
-                console.log(`[STEP E]   - Type: ERROR ITEM (no href - fast detection!)`);
+                console.log(`[STEP E]   - Type: ERROR ITEM (no href)`);
               }
               console.log(`[STEP E]   - Has error: ${generatedHref.hasError}`);
-              if (generatedHref.hasError) {
-                console.log(`[STEP E]   - Error indicators:`);
-                console.log(`[STEP E]     • Error text (strict): ${generatedHref.indicators.errorText}`);
+              console.log(`[STEP E]   - Still loading: ${generatedHref.isLoading || false}`);
+              if (generatedHref.hasError || generatedHref.isLoading) {
+                console.log(`[STEP E]   - Indicators:`);
+                console.log(`[STEP E]     • Has "Không thành công": ${generatedHref.indicators.errorText}`);
+                console.log(`[STEP E]     • Has loading %: ${generatedHref.indicators.hasLoadingPercent}`);
               }
 
               break;
