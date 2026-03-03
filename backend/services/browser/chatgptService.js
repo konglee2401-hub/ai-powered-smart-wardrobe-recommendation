@@ -741,11 +741,11 @@ class ChatGPTService extends BrowserService {
 
       // Step 7: Wait for response
       console.log('📍 STEP 7: Waiting for ChatGPT response...');
-      console.log('⏳ This may take up to 60 seconds...\n');
+      console.log('⏳ This may take up to 120 seconds...\n');
       
       let response = '';
       try {
-        response = await this.waitForResponse(60000);
+        response = await this.waitForResponse(120000);  // FIXED: Increased from 60s to 120s for complex analysis
         console.log(`   ✅ Response received (${response.length} characters)`);
       } catch (waitError) {
         console.error('❌ Response wait failed:', waitError.message);

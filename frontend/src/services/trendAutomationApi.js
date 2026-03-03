@@ -12,7 +12,9 @@ export const trendAutomationApi = {
   getLogs: (params = {}) => apiClient.get(`${BASE}/logs`, { params }).then((r) => r.data),
   getSettings: () => apiClient.get(`${BASE}/settings`).then((r) => r.data),
   updateSettings: (payload) => apiClient.post(`${BASE}/settings`, payload).then((r) => r.data),
+  manualDiscoverPlayboard: (config) => apiClient.post(`${BASE}/playboard/manual-discover`, config).then((r) => r.data),
   triggerJob: (type, filters = {}) => {
+
     const params = new URLSearchParams({ type });
 
     Object.entries(filters).forEach(([key, value]) => {
