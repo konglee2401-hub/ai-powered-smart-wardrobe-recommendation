@@ -1714,7 +1714,7 @@ class GoogleFlowAutomationService {
       const outputPath = path.join(this.options.outputDir, filename);
 
       // Download via context menu
-      const downloadSuccess = await this.downloadItemViaContextMenu(latestHref);
+      const downloadSuccess = await this._delegateDownloadItem(latestHref);
       
       if (!downloadSuccess) {
         console.warn('⚠️  Download action failed');
@@ -5711,7 +5711,7 @@ class GoogleFlowAutomationService {
           await this.page.waitForTimeout(3000);
 
           console.log('[STEP G] ⬇️  Downloading image...');
-          let downloadedFile = await this.downloadItemViaContextMenu(generatedHref.href);
+          let downloadedFile = await this._delegateDownloadItem(generatedHref.href);
 
           if (!downloadedFile) {
             throw new Error('Failed to download image');
