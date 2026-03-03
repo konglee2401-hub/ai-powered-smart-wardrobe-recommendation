@@ -10,6 +10,13 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Define Grok persistent profile directory (to avoid repeated Cloudflare challenges)
+const GROK_PROFILE_DIR = path.join(path.dirname(path.dirname(__dirname)), 'data', 'grok-profile');
 
 /**
  * Grok Service V2 - Full Automation with Cloudflare Bypass
@@ -21,8 +28,12 @@ class GrokServiceV2 extends BrowserService {
     // Create session manager for Grok
     const sessionManager = new SessionManager('grok');
     
-    // Pass session manager to parent
-    super({ ...options, sessionManager });
+    // Pass session manager and persistent profile to parent
+    super({ 
+      ...options, 
+      sessionManager,
+      userDataDir: options.userDataDir || GROK_PROFILE_DIR
+    });
     this.baseUrl = 'https://grok.com';
     
     // Navigate URL priority:
