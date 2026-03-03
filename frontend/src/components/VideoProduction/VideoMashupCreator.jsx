@@ -19,14 +19,17 @@ export function VideoMashupCreator() {
 
   const [loading, setLoading] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
+  const [uploadingSub, setUploadingSub] = useState(false);
 
   
-  // Step 1: Upload main video
+  // Step 1: Upload main + sub video
   const [mainVideo, setMainVideo] = useState(null);
   const fileInputRef = useRef(null);
+  const subFileInputRef = useRef(null);
   
   // Step 1: Select main + sub videos
   const [subVideo, setSubVideo] = useState(null);
+
   const [showMainVideoGallery, setShowMainVideoGallery] = useState(false);
   const [showSubVideoGallery, setShowSubVideoGallery] = useState(false);
   
@@ -50,6 +53,7 @@ export function VideoMashupCreator() {
     const mediaId = video.assetId || video.mediaId || video.id;
     const name = video.name;
     const thumbnail = video.thumbnail || video.url || 'https://via.placeholder.com/120x90?text=Video';
+    const isVideoPreview = /\.(mp4|mov|webm|m4v|avi)(\?|$)/i.test(thumbnail) || thumbnail.includes('/assets/proxy/');
 
     if (!mediaId || !name) return null;
 
@@ -59,9 +63,31 @@ export function VideoMashupCreator() {
       duration: video.duration || 30,
       size: video.size,
       thumbnail,
+      previewType: isVideoPreview ? 'video' : 'image',
       source: 'gallery'
     };
   };
+
+  const renderVideoPreview = (video, className = 'w-full h-24 object-cover rounded') => {
+    if (!video?.thumbnail) return null;
+
+    const isVideo = video.previewType === 'video';
+    if (isVideo) {
+      return (
+        <video
+          src={video.thumbnail}
+          className={className}
+          controls
+          preload="metadata"
+          playsInline
+          muted
+        />
+      );
+    }
+
+    return <img src={video.thumbnail} alt={video.name} className={className} />;
+  };
+
 
   // ===== STEP 1: Upload Main Video =====
   const handleUploadMain = async (file) => {
@@ -170,8 +196,116 @@ export function VideoMashupCreator() {
     }
   };
 
+  const handleUploadSub = async (file) => {
+    if (!file || !file.type || !file.type.startsWith('video/')) {
+      toast.error('Please upload a video file');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setUploadingSub(true);
+
+      const apiUrl = API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'video');
+      formData.append('tags', 'source-video,mashup-sub');
+
+      const uploadResponse = await fetch(`${apiUrl}/drive/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+      }
+
+      const uploadJson = await uploadResponse.json();
+      if (!uploadJson.success) {
+        throw new Error(uploadJson.message || 'Drive upload failed');
+      }
+
+      const uploadedFile = uploadJson.file || uploadJson.data || uploadJson;
+      if (!uploadedFile?.id) {
+        throw new Error('Uploaded file ID is missing');
+      }
+
+      const uploadSource = String(uploadedFile.source || '').toLowerCase();
+      const isDriveFile = uploadSource === 'google-drive' || Boolean(uploadedFile.webViewLink || uploadedFile.webContentLink);
+
+      const assetPayload = {
+        filename: uploadedFile.name || file.name,
+        mimeType: uploadedFile.mimeType || file.type,
+        fileSize: uploadedFile.size || file.size,
+        assetType: 'video',
+        assetCategory: 'source-video',
+        userId: 'anonymous',
+        storage: {
+          location: isDriveFile ? 'google-drive' : 'local',
+          googleDriveId: isDriveFile ? uploadedFile.id : undefined,
+          googleDrivePath: isDriveFile ? 'Affiliate AI/Videos/Uploaded/App' : undefined,
+          url: uploadedFile.webViewLink || uploadedFile.webContentLink || uploadedFile.url || null
+        },
+        cloudStorage: isDriveFile
+          ? {
+              location: 'google-drive',
+              googleDriveId: uploadedFile.id,
+              webViewLink: uploadedFile.webViewLink || uploadedFile.webContentLink || null,
+              thumbnailLink: uploadedFile.thumbnailLink || null,
+              status: 'synced'
+            }
+          : undefined,
+        metadata: {
+          uploadedVia: 'video-mashup-creator'
+        },
+        tags: ['source-video', 'mashup-sub'],
+        autoReplace: true
+      };
+
+      const assetResponse = await fetch(`${apiUrl}/assets/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(assetPayload)
+      });
+
+      if (!assetResponse.ok) {
+        throw new Error(`Asset creation failed with status ${assetResponse.status}`);
+      }
+
+      const assetJson = await assetResponse.json();
+      if (!assetJson.success || !assetJson.asset?.assetId) {
+        throw new Error(assetJson.error || 'Asset creation failed');
+      }
+
+      const createdAsset = assetJson.asset;
+
+      setSubVideo({
+        mediaId: createdAsset.assetId,
+        name: createdAsset.filename || file.name,
+        duration: 30,
+        size: createdAsset.fileSize || file.size,
+        thumbnail: `${apiUrl}/assets/proxy/${createdAsset.assetId}`,
+        previewType: 'video',
+        source: 'upload'
+      });
+
+      toast.success('Sub video uploaded and saved to gallery!');
+
+    } catch (error) {
+      toast.error(`Upload failed: ${error.message}`);
+    } finally {
+      setUploadingSub(false);
+      setLoading(false);
+    }
+  };
+
 
   const handleSelectMainVideo = (video) => {
+
     const normalized = normalizeGalleryVideo(video);
 
     if (!normalized) {
@@ -297,7 +431,8 @@ export function VideoMashupCreator() {
       </div>
 
       <div className="overflow-x-auto">
-        <div className="flex gap-6 items-start" style={{ minWidth: '980px' }}>
+        <div className="flex gap-6 items-start" style={{ minWidth: '920px' }}>
+
           <div className="space-y-4 order-2 flex-1 min-w-0">
           {step === 1 && (
             <div className="bg-gray-800 rounded-xl p-6 border border-purple-500/40 space-y-6">
@@ -306,7 +441,7 @@ export function VideoMashupCreator() {
                 Chọn 2 video đầu vào (Main + Sub)
               </h3>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3 rounded-lg border border-purple-500/40 bg-purple-900/10 p-4">
                   <h4 className="font-semibold text-white">Main Video (2/3)</h4>
 
@@ -364,7 +499,8 @@ export function VideoMashupCreator() {
                   </button>
 
                   {mainVideo && (
-                    <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3">
+                    <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3 space-y-2">
+                      {renderVideoPreview(mainVideo, 'w-full h-28 object-cover rounded')}
                       <p className="text-sm font-medium text-white break-all">{mainVideo.name}</p>
                     </div>
                   )}
@@ -376,11 +512,54 @@ export function VideoMashupCreator() {
                     Sub Video (1/3)
                   </h4>
 
-                  <p className="text-xs text-gray-400">Chọn từ gallery để dùng lại asset có sẵn.</p>
+                  <div
+                    className={`relative border-2 border-dashed rounded-lg p-6 text-center transition ${
+                      uploadingSub
+                        ? 'border-blue-300 bg-blue-500/10'
+                        : 'border-blue-400 hover:border-blue-300 hover:bg-blue-500/5 cursor-pointer'
+                    }`}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (uploadingSub) return;
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleUploadSub(file);
+                    }}
+                  >
+                    {uploadingSub && (
+                      <div className="absolute inset-0 bg-gray-900/80 rounded-lg flex flex-col items-center justify-center z-10">
+                        <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-3" />
+                        <p className="text-blue-200 font-semibold">Đang upload và tạo asset...</p>
+                        <p className="text-xs text-gray-400 mt-1">Vui lòng chờ, không tắt tab</p>
+                      </div>
+                    )}
+
+                    <input
+                      ref={subFileInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadSub(file);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                      disabled={uploadingSub}
+                    />
+                    <label
+                      onClick={() => !uploadingSub && subFileInputRef.current?.click()}
+                      className={uploadingSub ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
+                    >
+                      <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
+                      <p className="font-semibold text-white">Upload video mới</p>
+                      <p className="text-xs text-gray-400 mt-1">Kéo thả hoặc click để chọn file</p>
+                    </label>
+                  </div>
 
                   <button
                     onClick={() => setShowSubVideoGallery(true)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                    className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60"
+                    disabled={uploadingSub}
                   >
                     <HardDrive className="w-5 h-5" />
                     Chọn Sub từ Gallery
@@ -397,7 +576,7 @@ export function VideoMashupCreator() {
               <button
                 onClick={() => setStep(2)}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 px-4 py-2 rounded-lg transition font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                disabled={!mainVideo || !subVideo || uploadingMain}
+                disabled={!mainVideo || !subVideo || uploadingMain || uploadingSub}
               >
                 Tiếp tục tới Settings <ArrowRight className="w-4 h-4" />
               </button>
@@ -484,13 +663,13 @@ export function VideoMashupCreator() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-700/50 rounded-lg p-3">
                   <p className="text-xs text-gray-400 font-semibold mb-1">Main Video</p>
-                  <img src={mainVideo?.thumbnail} alt="main" className="w-full h-24 object-cover rounded-lg mb-2" />
+                  {mainVideo && renderVideoPreview(mainVideo, 'w-full h-24 object-cover rounded-lg mb-2')}
                   <p className="text-sm font-medium text-white truncate">{mainVideo?.name}</p>
                 </div>
 
                 <div className="bg-gray-700/50 rounded-lg p-3">
                   <p className="text-xs text-gray-400 font-semibold mb-1">Sub Video</p>
-                  <img src={subVideo?.thumbnail} alt="sub" className="w-full h-24 object-cover rounded-lg mb-2" />
+                  {subVideo && renderVideoPreview(subVideo, 'w-full h-24 object-cover rounded-lg mb-2')}
                   <p className="text-sm font-medium text-white truncate">{subVideo?.name}</p>
                 </div>
               </div>
@@ -533,7 +712,7 @@ export function VideoMashupCreator() {
           )}
         </div>
 
-        <aside className="order-1 w-80 shrink-0 space-y-4 max-h-[calc(100vh-6rem)] overflow-auto">
+        <aside className="order-1 w-64 shrink-0 space-y-4 max-h-[calc(100vh-6rem)] overflow-auto">
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 space-y-3">
             <h4 className="text-white font-semibold">Thông tin đã chọn</h4>
 
@@ -556,7 +735,7 @@ export function VideoMashupCreator() {
               <p className="text-xs text-gray-400 mb-2">Sub Video</p>
               {subVideo ? (
                 <div className="space-y-2">
-                  <img src={subVideo.thumbnail} alt={subVideo.name} className="w-full h-24 object-cover rounded" />
+                  {renderVideoPreview(subVideo, 'w-full h-24 object-cover rounded')}
                   <p className="text-sm text-white break-all">{subVideo.name}</p>
                 </div>
               ) : (
