@@ -5566,7 +5566,7 @@ class GoogleFlowAutomationService {
 
   async generateVideo(videoPrompt, primaryImagePath, secondaryImagePath, options = {}) {
     /**
-     * Generate a single video using Google Flow video generation
+     * Generate a single video using Google Flow video generation (matches image generation flow)
      * @param {string} videoPrompt - The prompt/script for video generation
      * @param {string} primaryImagePath - Main character/styling image
      * @param {string} secondaryImagePath - Secondary/reference image
@@ -5596,7 +5596,6 @@ class GoogleFlowAutomationService {
     }
 
     let videoPath = null;
-    let videoUrl = null;
     let uploadedImageHrefs = [];
 
     try {
@@ -5626,6 +5625,7 @@ class GoogleFlowAutomationService {
       console.log('[PAGE] ⏳ Waiting for page to load...');
       await this.waitForPageReady();
       console.log('[PAGE] ✅ Page ready');
+      console.log('[DELAY] ⏳ Waiting 5 seconds...');
       await this.page.waitForTimeout(5000);
       console.log('[DELAY] ✅ Ready\n');
 
@@ -5647,7 +5647,18 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(1000);
       console.log('[VIDEO] ✅ Ready to generate\n');
 
-      // STEP 6: Focus textbox and upload images
+      // STEP 6: Capture initial hrefs BEFORE uploading
+      console.log('[HREFS] 📸 Capturing initial hrefs BEFORE upload...');
+      let initialHrefs = await this.page.evaluate(() => {
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        return Array.from(links).map(link => ({
+          href: link.getAttribute('href'),
+          src: link.querySelector('img')?.src || ''
+        }));
+      });
+      console.log(`[HREFS] ✓ Captured ${initialHrefs.length} initial items\n`);
+
+      // STEP 7: Focus textbox and upload images
       console.log('[UPLOAD] 📤 Focusing textbox and uploading reference images...');
       await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
       await this.page.waitForTimeout(300);
@@ -5673,30 +5684,127 @@ class GoogleFlowAutomationService {
         await this.page.keyboard.press('v');
         await this.page.keyboard.up('Control');
 
-        console.log(`[UPLOAD] ✅ ${label} pasted`);
+        console.log(`[UPLOAD] ✅ ${label} pasted. Cooling down ${cooldownMs / 1000}s...`);
         await this.page.waitForTimeout(cooldownMs);
       };
 
       // Upload both images
-      try {
-        await pasteImageToTextbox(primaryImagePath, 'primary (character) image', 5000);
-        await pasteImageToTextbox(secondaryImagePath, 'secondary (reference) image', 3000);
-        console.log('[UPLOAD] ✅ Image uploads complete\n');
-      } catch (uploadError) {
-        console.warn(`[UPLOAD] ⚠️  Image upload warning: ${uploadError.message}`);
+      await pasteImageToTextbox(primaryImagePath, 'primary (character) image', 5000);
+      await pasteImageToTextbox(secondaryImagePath, 'secondary (reference) image', 5000);
+      console.log('[UPLOAD] ✅ Upload actions finished. Start monitoring uploaded hrefs...\n');
+
+      // STEP 8: Monitor hrefs until at least 2 NEW uploaded items appear
+      console.log('[MONITOR] 👀 Monitoring virtuoso list for uploaded hrefs (need >= 2)...');
+      let uploadedHrefsAppeared = false;
+      let monitoringAttempts = 0;
+      const maxMonitoringAttempts = 90;  // Max 90 seconds
+      const initialHrefSet = new Set(initialHrefs.map(item => item.href).filter(Boolean));
+
+      while (!uploadedHrefsAppeared && monitoringAttempts < maxMonitoringAttempts) {
+        monitoringAttempts++;
+
+        const currentHrefs = await this.page.evaluate(() => {
+          const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+          return Array.from(links).map(link => ({
+            href: link.getAttribute('href'),
+            src: link.querySelector('img')?.src || ''
+          })).filter(item => !!item.href);
+        });
+
+        const newUploadedItems = currentHrefs.filter(item => !initialHrefSet.has(item.href));
+
+        if (newUploadedItems.length >= 2) {
+          uploadedImageHrefs = newUploadedItems.slice(0, 2);
+          uploadedHrefsAppeared = true;
+          console.log(`[MONITOR] ✅ Detected ${newUploadedItems.length} new hrefs (using first 2 as upload refs)`);
+
+          // Save stable refs for rebuild if needed
+          this.uploadedImageRefs = {
+            primary: {
+              href: uploadedImageHrefs[0]?.href || null,
+              imgSrc: uploadedImageHrefs[0]?.src || null,
+              text: 'uploaded-ref-primary'
+            },
+            secondary: {
+              href: uploadedImageHrefs[1]?.href || null,
+              imgSrc: uploadedImageHrefs[1]?.src || null,
+              text: 'uploaded-ref-secondary'
+            }
+          };
+
+          console.log(`   📎 primary href: ${this.uploadedImageRefs.primary.href?.substring(0, 60) || '(none)'}`);
+          console.log(`   📎 secondary href: ${this.uploadedImageRefs.secondary.href?.substring(0, 60) || '(none)'}`);
+          console.log('[MONITOR] ⏳ Waiting 3s for images to fully attach to prompt...');
+          await this.page.waitForTimeout(3000);
+
+          await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          await this.page.waitForTimeout(300);
+          break;
+        }
+
+        if (monitoringAttempts % 5 === 0) {
+          console.log(`[MONITOR] Attempt ${monitoringAttempts}/${maxMonitoringAttempts}: found ${newUploadedItems.length}/2 new hrefs`);
+        }
+
+        await this.page.waitForTimeout(1000);
       }
 
-      // STEP 7: Focus textbox, paste video prompt and submit
-      console.log('[PROMPT] 📝 Entering video generation prompt...');
-      await this.page.evaluate(() => {
+      if (!uploadedHrefsAppeared) {
+        throw new Error('Uploaded images did not appear with 2 hrefs in gallery after 90 seconds');
+      }
+
+      console.log('[MONITOR] ✅ Upload href validation passed (2 refs ready)\n');
+
+      // STEP 9: Validate images in preview container
+      console.log('[VALIDATE] 🔍 Validating images in preview container...');
+      const previewValidation = await this.page.evaluate(() => {
         const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        if (textbox) {
-          textbox.focus();
-        }
+        if (!textbox) return { imageCount: 0, valid: false };
+        
+        const previewContainer = textbox.parentElement?.parentElement;
+        if (!previewContainer) return { imageCount: 0, valid: false };
+        
+        const firstDivChild = previewContainer.children[0];
+        if (!firstDivChild) return { imageCount: 0, valid: false };
+        
+        const imagePreviews = firstDivChild.querySelectorAll('button[data-card-open="false"]');
+        const imageCount = imagePreviews.length;
+        
+        return {
+          imageCount: imageCount,
+          valid: imageCount === 2
+        };
       });
+
+      console.log(`[VALIDATE] Image previews found: ${previewValidation.imageCount}/2`);
+      if (!previewValidation.valid) {
+        console.log('[VALIDATE] ⏳ Waiting 3 seconds for images to load...');
+        await this.page.waitForTimeout(3000);
+        
+        const validationRetry = await this.page.evaluate(() => {
+          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          if (!textbox) return { imageCount: 0, valid: false };
+          const previewContainer = textbox.parentElement?.parentElement;
+          if (!previewContainer) return { imageCount: 0, valid: false };
+          const firstChild = previewContainer.children[0];
+          if (!firstChild) return { imageCount: 0, valid: false };
+          const imagePreviews = firstChild.querySelectorAll('button[data-card-open="false"]');
+          return { imageCount: imagePreviews.length, valid: imagePreviews.length === 2 };
+        });
+
+        console.log(`[VALIDATE] Retry: ${validationRetry.imageCount}/2 images`);
+        if (!validationRetry.valid) {
+          throw new Error(`Image preview validation failed: Expected 2 images, found ${validationRetry.imageCount}`);
+        }
+      }
+      console.log('[VALIDATE] ✅ Images validated\n');
+
+      // STEP 10: Enter prompt
+      console.log('[PROMPT] 📝 Entering video generation prompt...');
+      await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
       await this.page.waitForTimeout(300);
 
-      // Clear existing content using Ctrl+A + Backspace (safe for Slate editor)
+      // Clear content
       await this.page.keyboard.down('Control');
       await this.page.keyboard.press('a');
       await this.page.keyboard.up('Control');
@@ -5704,107 +5812,222 @@ class GoogleFlowAutomationService {
       await this.page.keyboard.press('Backspace');
       await this.page.waitForTimeout(300);
 
-      // Copy prompt to clipboard
-      await this.page.evaluate((promptText) => {
-        navigator.clipboard.writeText(promptText).catch(() => {});
+      // Clear clipboard before writing
+      console.log('[PROMPT] 🧹 Clearing clipboard...');
+      await this.page.evaluate(() => {
+        navigator.clipboard.writeText('').catch(() => {});
+      });
+      await this.page.waitForTimeout(100);
+
+      // Copy prompt to clipboard with verification
+      console.log('[PROMPT] 📋 Copying prompt to clipboard...');
+      const clipboardSuccess = await this.page.evaluate((text) => {
+        return navigator.clipboard.writeText(text)
+          .then(() => true)
+          .catch((e) => {
+            console.error(`Clipboard write failed: ${e.message}`);
+            return false;
+          });
       }, videoPrompt);
       await this.page.waitForTimeout(200);
 
-      // Paste with Ctrl+V
+      if (!clipboardSuccess) {
+        console.warn('[PROMPT] ⚠️  Clipboard write may have failed, continuing anyway...');
+      }
+
+      // Paste prompt
+      console.log('[PROMPT] ⏳ Pasting prompt with Ctrl+V...');
       await this.page.keyboard.down('Control');
       await this.page.keyboard.press('v');
       await this.page.keyboard.up('Control');
-
-      console.log('[PROMPT] ✅ Prompt entered');
-      console.log('[SUBMIT] 🖱️  Waiting for Submit button to be ready...');
-      
-      // Wait for send button to be enabled
-      const buttonReady = await this.waitForSendButtonEnabled();
-      if (!buttonReady) {
-        console.warn('[SUBMIT] ⚠️  Send button not ready, attempting anyway...');
-      }
-
       await this.page.waitForTimeout(1000);
 
-      // Click submit button
-      console.log('[SUBMIT] 🖱️  Clicking Submit...');
+      console.log('[PROMPT] ✅ Prompt entered\n');
+
+      // STEP 11: Capture hrefs before submit
+      console.log('[STEP D] 📸 Capturing hrefs AFTER prompt entry...');
+      let preSubmitHrefs = await this.page.evaluate(() => {
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        return Array.from(links).map(link => link.getAttribute('href'));
+      });
+      console.log(`[STEP D] ✓ Captured ${preSubmitHrefs.length} items\n`);
+
+      // STEP 12: Submit with container-based button detection
+      console.log('[SUBMIT] 🖱️  Clicking submit button...');
       const submitClicked = await this.page.evaluate(() => {
-        const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Tạo"], button[aria-label*="Send"]') ||
-                   document.querySelector('button[aria-label*="generate"], button[aria-label*="send"]');
-        if (btn && !btn.disabled) {
-          try {
-            btn.click();
-            return true;
-          } catch (e) {
-            return false;
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        if (!textbox) return { found: false, clicked: false };
+
+        // Find container by going up from textbox
+        let container = textbox;
+        for (let i = 0; i < 6; i++) {
+          if (!container) break;
+          const hasButton = container.querySelector('button');
+          if (hasButton) break;
+          container = container.parentElement;
+        }
+
+        const buttons = container?.querySelectorAll('button') || [];
+        for (const btn of buttons) {
+          const icon = btn.querySelector('i.google-symbols');
+          if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+            try {
+              btn.click();
+              return { found: true, clicked: true };
+            } catch (e) {
+              console.error(`Failed to click arrow forward: ${e.message}`);
+            }
           }
         }
-        return false;
+        return { found: buttons.length > 0, clicked: false };
       });
 
-      if (!submitClicked) {
-        console.warn('[SUBMIT] ⚠️  Could not click submit via JavaScript, trying mouse...');
-        // Fallback: try to find and click via mouse
-        const submitBtn = await this.page.evaluate(() => {
-          const btn = document.querySelector('button[aria-label*="Generate"], button[aria-label*="Send"]');
-          if (btn) {
-            const rect = btn.getBoundingClientRect();
-            return {
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
-            };
-          }
-          return null;
-        });
-        
-        if (submitBtn) {
-          await this.page.mouse.move(submitBtn.x, submitBtn.y);
-          await this.page.waitForTimeout(100);
-          await this.page.mouse.down();
-          await this.page.waitForTimeout(50);
-          await this.page.mouse.up();
-          console.log('[SUBMIT] ✓ Submitted via mouse');
-        }
+      if (!submitClicked.clicked) {
+        console.warn('[SUBMIT] ⚠️  Submit button not found or disabled');
       } else {
-        console.log('[SUBMIT] ✓ Submitted via JavaScript');
+        console.log('[SUBMIT] ✓ Submit clicked');
       }
 
-      console.log('[WAIT] ⏳ Waiting for video generation (30 seconds max)...');
-      await this.page.waitForTimeout(30000);
+      console.log('[DELAY] ⏳ Waiting 2 seconds for server...');
+      await this.page.waitForTimeout(2000);
+      console.log('[DELAY] ✅ Ready\n');
 
-      // STEP 8: Download video if requested
+      // STEP 13: Monitor generation
+      console.log('[MONITOR] ⏳ Monitoring hrefs for NEW video generation (max 180s)...\n');
+      
+      const timeoutMs = this.options.timeouts.generation || 180000;
+      const maxGenerationAttempts = Math.ceil(timeoutMs / 1000);
+      let generationDetected = false;
+      let monitoringAttempt = 0;
+      let generatedHref = null;
+
+      while (!generationDetected && monitoringAttempt < maxGenerationAttempts) {
+        monitoringAttempt++;
+
+        // Check for new video items OR errors
+        const currentData = await this.page.evaluate(() => {
+          const allItems = [];
+
+          // Items with href (successful generated items)
+          const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+          for (const link of links) {
+            const parent = link.closest('[data-tile-id]');
+            const parentText = (parent?.textContent || '').toLowerCase();
+            
+            // Only mark as error if explicitly has "Không thành công" text (no % loading)
+            const hasErrorText = parentText.includes('không thành công') && !parentText.includes('%');
+
+            allItems.push({
+              href: link.getAttribute('href'),
+              hasError: hasErrorText,
+              isNew: false,
+              hasLink: true,
+              tileId: parent?.getAttribute('data-tile-id') || null,
+              indicators: {
+                errorText: hasErrorText,
+                hasLoadingPercent: parentText.includes('%')
+              }
+            });
+          }
+
+          // Items without href (loading or error items)
+          const allTiles = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+          for (const tile of allTiles) {
+            const tileId = tile.getAttribute('data-tile-id');
+            if (allItems.some(item => item.tileId === tileId)) continue;
+
+            const tileText = (tile.textContent || '').toLowerCase();
+            const hasLoadingPercent = tileText.includes('%');
+            const hasErrorText = (tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi')) && !hasLoadingPercent;
+
+            if (hasErrorText || hasLoadingPercent) {
+              allItems.push({
+                href: null,
+                hasError: hasErrorText,
+                isNew: true,
+                hasLink: false,
+                isLoading: hasLoadingPercent,
+                tileId,
+                indicators: {
+                  errorText: hasErrorText,
+                  hasLoadingPercent: hasLoadingPercent
+                }
+              });
+            }
+          }
+
+          return allItems;
+        });
+
+        // Find new items
+        for (const current of currentData) {
+          const isNewHref = current.href && !preSubmitHrefs.includes(current.href);
+          const isNewError = !current.href && current.hasError && !current.isLoading;
+
+          if (isNewHref || isNewError) {
+            current.isNew = true;
+            generatedHref = current;
+            generationDetected = true;
+            break;
+          }
+        }
+
+        if (generationDetected) {
+          console.log(`[MONITOR] ✓ NEW generation detected`);
+          if (generatedHref.href) {
+            console.log(`[MONITOR]   - Href: ${generatedHref.href.substring(0, 60)}...`);
+          } else {
+            console.log(`[MONITOR]   - Type: ERROR ITEM (no href)`);
+          }
+          console.log(`[MONITOR]   - Has error: ${generatedHref.hasError}`);
+          if (generatedHref.hasError || generatedHref.isLoading) {
+            console.log(`[MONITOR]   - Indicators:`);
+            console.log(`[MONITOR]     • Has "Không thành công": ${generatedHref.indicators.errorText}`);
+            console.log(`[MONITOR]     • Has loading %: ${generatedHref.indicators.hasLoadingPercent}`);
+          }
+          break;
+        }
+
+        if (monitoringAttempt % 20 === 0) {
+          console.log(`[MONITOR] Attempt ${monitoringAttempt}/${maxGenerationAttempts}s...`);
+        }
+
+        await this.page.waitForTimeout(1000);
+      }
+
+      if (!generationDetected) {
+        throw new Error('No new video generated within timeout period (180s)');
+      }
+
+      if (generatedHref.hasError) {
+        throw new Error('Video generation failed with error');
+      }
+
+      console.log('[MONITOR] ✅ Video generation complete\n');
+
+      // STEP 14: Download video if requested
       if (download && outputPath) {
-        console.log('\n[DOWNLOAD] 📥 Downloading generated video...');
-        // Ensure outputPath exists
+        console.log('[DOWNLOAD] 📥 Downloading generated video...');
         if (!fs.existsSync(outputPath)) {
           fs.mkdirSync(outputPath, { recursive: true });
         }
-        
-        // Set outputDir temporarily so downloadVideo() knows where to save
+
         const previousOutputDir = this.options.outputDir;
-        this.options.outputDir = outputPath; // Pass directory to downloadVideo()
-        
+        this.options.outputDir = outputPath;
+
         const video = await this.downloadVideo();
-        
-        // Restore previous outputDir
+
         this.options.outputDir = previousOutputDir;
-        
+
         if (video) {
           videoPath = video;
           console.log(`[DOWNLOAD] ✅ Video saved to: ${videoPath}`);
         } else {
           console.warn('[DOWNLOAD] ⚠️  Video download failed or returned no path');
         }
-      } else {
-        if (!download) {
-          console.log('[DOWNLOAD] ℹ️  Download disabled in options');
-        }
-        if (!outputPath) {
-          console.log('[DOWNLOAD] ℹ️  No output path specified');
-        }
       }
 
-      // STEP 9: Reload if requested
+      // STEP 15: Reload if requested
       if (reloadAfter) {
         console.log('\n[RELOAD] ↻ Reloading page...');
         await this.page.reload({ waitUntil: 'networkidle2' });
@@ -5819,10 +6042,9 @@ class GoogleFlowAutomationService {
       return {
         success: !!videoPath,
         path: videoPath,
-        url: videoUrl,
         duration: 10,
         format: '9:16',
-        message: videoPath ? 'Video generated successfully' : 'Video generation began but download may have failed'
+        message: videoPath ? 'Video generated successfully' : 'Video generation detected but download may have been skipped'
       };
 
     } catch (error) {
@@ -5832,7 +6054,6 @@ class GoogleFlowAutomationService {
       return {
         success: false,
         path: null,
-        url: null,
         error: error.message
       };
     }
