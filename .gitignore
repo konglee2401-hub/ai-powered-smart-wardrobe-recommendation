@@ -19,10 +19,12 @@ backend/test-images/
 backend/test-videos/
 backend/test-results/
 
-# Drive authentication
+# Authentication and sensitive data
 drive-token.json
 lab-flow-auth.json
 backend/.sessions/
+backend/data/chatgpt-session.json
+backend/data/*.json
 
 # Environment and config
 coverage/
