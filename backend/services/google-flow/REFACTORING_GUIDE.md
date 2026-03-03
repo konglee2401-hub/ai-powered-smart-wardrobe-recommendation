@@ -1,5 +1,27 @@
 # Google Flow Automation Service - Refactoring Guide
 
+## ⚠️ CRITICAL: Backward Compatibility First
+
+**Golden Rule**: External services that import this file should NOT require any changes.
+
+### What's Protected
+```
+✅ Import path: './googleFlowAutomationService.js' (unchanged)
+✅ Constructor: new GoogleFlowAutomationService({...}) (unchanged)
+✅ All public methods: generateMultiple(), generateVideo(), etc. (all available)
+✅ Configuration object structure (unchanged)
+✅ Return values and method signatures (unchanged)
+```
+
+### Services That Will Continue Working Without Changes
+- ✅ `affiliateVideoTikTokService.js`
+- ✅ `multiVideoGenerationService.js`
+- ✅ `multiFlowOrchestrator.js`
+- ✅ `sceneLockService.js`
+- ✅ All test files (10+ files)
+
+**See** [BACKWARD_COMPATIBILITY_STRATEGY.md](./BACKWARD_COMPATIBILITY_STRATEGY.md) for detailed implementation approach using Adapter Pattern.
+
 ## Overview
 Refactoring the 5844-line `googleFlowAutomationService.js` into modular, maintainable components organized by responsibility.
 
