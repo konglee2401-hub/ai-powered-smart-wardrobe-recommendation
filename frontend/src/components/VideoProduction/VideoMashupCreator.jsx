@@ -8,7 +8,9 @@ import React, { useState, useRef } from 'react';
 import useVideoProductionStore from '@/stores/videoProductionStore.js';
 import GalleryPicker from '@/components/GalleryPicker';
 import toast from 'react-hot-toast';
+import { API_BASE_URL } from '@/config/api.js';
 import { Upload, Play, Volume2, Settings, HardDrive, ArrowRight, Check } from 'lucide-react';
+
 
 export function VideoMashupCreator() {
   const { addToQueue } = useVideoProductionStore();
@@ -52,7 +54,8 @@ export function VideoMashupCreator() {
       formData.append('tags', 'source-video,mashup-main');
 
       const apiUrl = API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/cloud-gallery/upload`, {
+      const response = await fetch(`${apiUrl}/drive/upload`, {
+
         method: 'POST',
         body: formData
       });
@@ -202,7 +205,12 @@ export function VideoMashupCreator() {
               ref={fileInputRef}
               type="file"
               accept="video/*"
-              onChange={(e) => e.target.files?.[0] && handleUploadMain(e.target.files[0])}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                console.log('📂 File input onChange:', file && { name: file.name, type: file.type, size: file.size });
+                if (file) handleUploadMain(file);
+              }}
+
               className="hidden"
             />
             <label 
