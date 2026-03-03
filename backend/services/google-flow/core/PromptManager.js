@@ -78,7 +78,8 @@ class PromptManager {
 
       // Use ClipboardHelper to paste prompt
       console.log(`   📋 Entering prompt: "${prompt.substring(0, 60)}..."`);
-      await ClipboardHelper.enterTextCompletely(prompt);
+      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+      await ClipboardHelper.enterTextCompletely(prompt, textboxSelector);
 
       console.log('   ✓ Prompt entered');
 
