@@ -77,7 +77,7 @@ class ImageUploadManager {
           console.log('   🔄 Converting to PNG...');
           const pngBuffer = await this.convertImageToPNG(imagePath);
 
-          // Copy to clipboard
+          // Copy to clipboard (helper accepts both file path and buffer)
           console.log('   📋 Copying to clipboard...');
           await ClipboardHelper.copyImageToClipboard(pngBuffer);
 
