@@ -429,7 +429,7 @@ class ChatGPTService extends BrowserService {
       // Wait for response to complete
       let lastLength = 0;
       let stableCount = 0;
-      const maxWait = 120000; // 120 seconds max
+      const maxWait = 180000; // 180 seconds max (increased from 120s for better ChatGPT processing time)
       const startTime = Date.now();
 
       while (Date.now() - startTime < maxWait) {
