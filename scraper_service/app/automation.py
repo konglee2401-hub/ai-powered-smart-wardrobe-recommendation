@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import sys
 import time
 from datetime import datetime
@@ -43,6 +44,8 @@ running_jobs = 0
 worker_task = None
 _proxy_index = 0
 FAIL_FAST_TIMEOUTS_MS = [18000, 30000, 50000]
+YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
+YTDLP_TIMEOUT_SEC = 180
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -1065,7 +1068,7 @@ async def discover_all():
         raise
 
 
-async def scan_single_channel(channel):
+async def scan_single_channel(channel, use_proxy: bool = True, headless_override: bool | None = None):
     setting = get_or_create_settings()
     min_views = setting.get('minViewsFilter', 100000)
 
@@ -1080,7 +1083,7 @@ async def scan_single_channel(channel):
         target_url = f'https://www.facebook.com/{channel_id}/reels'
         link_selector = 'a[href*="/reel/"]'
 
-    pool = _proxy_pool()
+    pool = _proxy_pool() if use_proxy else []
     attempts = max(len(pool), 1)
     found = 0
 
@@ -1091,11 +1094,14 @@ async def scan_single_channel(channel):
             print(f'[DEBUG] No healthy proxy for scan channel {channel_id}')
             break
 
-        proxy_cfg = _proxy_for_playwright(proxy)
+        proxy_cfg = _proxy_for_playwright(proxy) if proxy else None
 
         try:
             async with async_playwright() as p:
-                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                launch_kwargs = {
+                    'headless': SCRAPER_HEADLESS if headless_override is None else headless_override,
+                    'args': ['--no-default-browser-check'],
+                }
                 if proxy_cfg:
                     launch_kwargs['proxy'] = proxy_cfg
 
@@ -1173,7 +1179,7 @@ async def scan_single_channel(channel):
     return found
 
 
-async def scan_all_channels():
+async def scan_all_channels(use_proxy: bool = True, headless_override: bool | None = None):
     started = time.time()
     setting = get_or_create_settings()
     if not setting.get('isEnabled', True):
@@ -1182,7 +1188,7 @@ async def scan_all_channels():
     found = 0
     try:
         for c in channels.find({'isActive': True}).sort([('priority', -1)]).limit(100):
-            found += await scan_single_channel(c)
+            found += await scan_single_channel(c, use_proxy=use_proxy, headless_override=headless_override)
 
         log_job('scan-channel', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
         return {'success': True, 'itemsFound': found}
@@ -1191,9 +1197,53 @@ async def scan_all_channels():
         raise
 
 
+
 def build_download_path(video):
     d = datetime.utcnow().strftime('%Y-%m-%d')
     return os.path.join(DOWNLOAD_ROOT, video['platform'], video.get('topics', 'misc'), d, f"{video['videoId']}.mp4")
+
+
+def _is_valid_download_target(doc: Dict) -> tuple[bool, str]:
+    platform = (doc.get('platform') or '').lower()
+    video_id = str(doc.get('videoId') or '').strip()
+    url = str(doc.get('url') or '').strip()
+
+    if not url:
+        return False, 'missing url'
+
+    if platform == 'youtube' and not YOUTUBE_VIDEO_ID_RE.match(video_id):
+        return False, f'invalid youtube videoId: {video_id}'
+
+    return True, ''
+
+
+async def cleanup_invalid_youtube_records(limit: int = 1000) -> dict:
+    """Delete obviously invalid YouTube records (e.g. test IDs, wrong format)."""
+    # Match any youtube platform with malformed videoId (not 11-char ID) or test urls
+    query = {
+        'platform': 'youtube',
+        '$or': [
+            {'videoId': {'$not': YOUTUBE_VIDEO_ID_RE}},
+            {'url': {'$regex': 'test_video', '$options': 'i'}},
+            {'title': {'$regex': 'test', '$options': 'i'}},
+        ],
+    }
+
+    invalid_docs = list(videos.find(query, {'_id': 1, 'videoId': 1, 'url': 1}).limit(limit))
+    if not invalid_docs:
+        return {'deleted': 0, 'matched': 0}
+
+    invalid_ids = [doc['_id'] for doc in invalid_docs]
+    res = videos.delete_many({'_id': {'$in': invalid_ids}})
+
+    log_job(
+        'cleanup-invalid-youtube',
+        'success',
+        deleted=res.deleted_count,
+        matched=len(invalid_docs),
+    )
+
+    return {'deleted': res.deleted_count, 'matched': len(invalid_docs)}
 
 
 async def enqueue(video_id, priority=5):
@@ -1225,15 +1275,62 @@ async def process_download(video_id, attempts):
         return
 
     try:
+        is_valid, invalid_reason = _is_valid_download_target(doc)
+        if not is_valid:
+            videos.update_one(
+                {'_id': doc['_id']},
+                {'$set': {'downloadStatus': 'failed', 'failReason': invalid_reason, 'updatedAt': datetime.utcnow()}},
+            )
+            log_job(
+                'download',
+                'failed',
+                platform=doc.get('platform'),
+                topic=doc.get('topics'),
+                duration=int((time.time() - started) * 1000),
+                error=invalid_reason,
+            )
+            return
+
         videos.update_one({'_id': doc['_id']}, {'$set': {'downloadStatus': 'downloading', 'updatedAt': datetime.utcnow()}})
         out = build_download_path(doc)
         os.makedirs(os.path.dirname(out), exist_ok=True)
 
-        cmd = ['yt-dlp', doc['url'], '-f', 'best[height<=1080]', '-o', out, '--no-warnings', '--write-thumbnail', '--write-description']
-        proc = await asyncio.create_subprocess_exec(*cmd, stderr=asyncio.subprocess.PIPE)
-        _, err = await proc.communicate()
+        cmd = [
+            'yt-dlp',
+            doc['url'],
+            '-f',
+            'best[height<=1080]',
+            '-o',
+            out,
+            '--no-warnings',
+            '--no-playlist',
+            '--socket-timeout',
+            '20',
+            '--retries',
+            '1',
+            '--fragment-retries',
+            '1',
+            '--write-thumbnail',
+            '--write-description',
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            raise RuntimeError(f'yt-dlp timeout after {YTDLP_TIMEOUT_SEC}s')
+
         if proc.returncode != 0:
-            raise RuntimeError((err or b'').decode('utf-8') or f'yt-dlp code {proc.returncode}')
+            err_text = (err_bytes or b'').decode('utf-8', errors='ignore').strip()
+            out_text = (out_bytes or b'').decode('utf-8', errors='ignore').strip()
+            reason = err_text or out_text or f'yt-dlp code {proc.returncode}'
+            raise RuntimeError(reason[-2000:])
 
         videos.update_one(
             {'_id': doc['_id']},

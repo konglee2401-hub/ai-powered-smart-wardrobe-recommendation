@@ -3942,25 +3942,33 @@ class GoogleFlowAutomationService {
      * - Multi-image upload flow (uploadImages)
      * - Per-segment image selection (prepareSegmentImages)
      * 
+     * Key: Re-query list from fresh DOM each time since items append and positions change
+     * 
      * @param {string} itemHref - The href attribute value to find
      * @returns {Promise<boolean>} - True if image was added successfully
      */
     try {
-      // Find the item with this href
+      console.log(`      🔍 Searching for image in virtuoso list...`);
+      
+      // FRESH QUERY: Find the item with this href from current list
       const linkData = await this.page.evaluate((targetHref) => {
-        // Capture all links to find exact match
+        // Re-query all links in virtuoso list (list may have changed due to appended items)
         const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+        console.log(`[Query] Total items in list: ${allLinks.length}`);
         
-        // Find exact match
-        for (const link of allLinks) {
+        // Find exact match by href
+        for (let idx = 0; idx < allLinks.length; idx++) {
+          const link = allLinks[idx];
           const href = link.getAttribute('href');
           if (href === targetHref) {
             const rect = link.getBoundingClientRect();
             return {
               found: true,
+              index: idx,
               x: Math.round(rect.left + rect.width / 2),
               y: Math.round(rect.top + rect.height / 2),
-              linkCount: allLinks.length
+              linkCount: allLinks.length,
+              foundHref: href.substring(0, 50)
             };
           }
         }
@@ -3972,8 +3980,9 @@ class GoogleFlowAutomationService {
 
       if (!linkData.found) {
         console.log(`      ⚠️  Image not found by href: ${itemHref.substring(0, 60)}...`);
+        console.log(`      📊 List has ${linkData.linkCount} items (list may have grown with error/success items)`);
         if (linkData && linkData.allHrefs && linkData.allHrefs.length > 0) {
-          console.log(`      📎 Available hrefs (${linkData.allHrefs.length}):`);
+          console.log(`      📎 First 5 hrefs in list:`);
           for (let i = 0; i < Math.min(5, linkData.allHrefs.length); i++) {
             console.log(`         [${i}] ${linkData.allHrefs[i].substring(0, 50)}...`);
           }
@@ -3981,12 +3990,12 @@ class GoogleFlowAutomationService {
         return false;
       }
 
-      console.log(`      ✓ Found image (${linkData.linkCount} total items)`);
-      console.log(`      ⏳ Moving mouse to image and waiting 3s before right-click...`);
+      console.log(`      ✓ Found image at list index ${linkData.index} (${linkData.linkCount} total items in list)`);
+      console.log(`      ⏳ Moving mouse to image for hover menu detection...`);
 
       // Move mouse to image and wait for hover menu to appear
       await this.page.mouse.move(linkData.x, linkData.y);
-      await this.page.waitForTimeout(500);  // Initial wait for hover detection
+      await this.page.waitForTimeout(800);  // Slightly longer wait for hover detection
       
       // Verify hover menu with 3 buttons appears before right-clicking
       console.log(`      🔍 Verifying hover menu appears with action buttons...`);
@@ -4047,18 +4056,44 @@ class GoogleFlowAutomationService {
       }
       
       if (!hoverMenuFound) {
-        console.log(`      ⚠️  Hover menu did not appear - attempting right-click anyway`);
+        console.log(`      ⚠️  Hover menu did not appear - but proceeding with right-click`);
       } else {
-        console.log(`      ✅ Hover menu confirmed visible, proceeding with right-click`);
+        console.log(`      ✅ Hover menu confirmed visible`);
       }
       
-      await this.page.waitForTimeout(500);  // Final wait before right-click
+      // RE-QUERY: Get fresh rect from item before right-click (list may have changed)
+      console.log(`      🔍 Re-querying item position before right-click (list may have changed)...`);
+      const freshRect = await this.page.evaluate((targetHref) => {
+        const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+        const targetLink = allLinks.find(link => link.getAttribute('href') === targetHref);
+        
+        if (!targetLink) {
+          return { found: false };
+        }
+        
+        const rect = targetLink.getBoundingClientRect();
+        return {
+          found: true,
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2)
+        };
+      }, itemHref);
+
+      if (!freshRect.found) {
+        console.log(`      ⚠️  Item disappeared after hover - cannot proceed with right-click`);
+        return false;
+      }
+
+      // Right-click at fresh position
+      console.log(`      🖱️  Right-clicking at current position...`);
+      await this.page.mouse.move(freshRect.x, freshRect.y);
+      await this.page.waitForTimeout(200);  // Small delay after move
       await this.page.mouse.down({ button: 'right' });
       await this.page.waitForTimeout(50);
       await this.page.mouse.up({ button: 'right' });
       
       // Wait for context menu to appear
-      console.log(`      ⏳ Waiting for context menu...`);
+      console.log(`      ⏳ Waiting for context menu (1.5s)...`);
       await this.page.waitForTimeout(1500);
 
       // Find and click "Thêm vào câu lệnh" button
@@ -5007,40 +5042,74 @@ class GoogleFlowAutomationService {
             // Strategy 4: Test prompt - verify server is working with minimal input
             if (!finalSuccess) {
               console.log('[STEP F][TestPrompt] Testing server with short prompt...');
+              const testPrompt = 'Test generation';
+              
+              // Ensure window/document is focused first
+              console.log('[STEP F][TestPrompt] 🔍 Ensuring window focus...');
+              await this.page.evaluate(() => {
+                window.focus();
+                document.body.focus();
+              });
+              await this.page.waitForTimeout(300);
               
               // Get textbox and clear it
-              console.log('[STEP F][TestPrompt] 🔍 Focusing textbox with enhanced focus logic...');
-              await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-              await this.page.waitForTimeout(500);  // Longer wait for focus to stick
-              
-              // Click textbox to ensure focus is active
-              await this.page.click('.iTYalL[role="textbox"][data-slate-editor="true"]');
-              await this.page.waitForTimeout(300);
-              
-              console.log('[STEP F][TestPrompt] ⏳ Clearing textbox with Ctrl+A + Backspace...');
-              await this.page.keyboard.down('Control');
-              await this.page.keyboard.press('a');
-              await this.page.keyboard.up('Control');
+              console.log('[STEP F][TestPrompt] 🔍 Focusing textbox...');
+              const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+              await this.page.focus(containerSelector);
               await this.page.waitForTimeout(200);
-              await this.page.keyboard.press('Backspace');
-              await this.page.waitForTimeout(500);  // Longer wait after clearing
               
-              // Type short test prompt
-              const testPrompt = 'Test generation';
-              console.log('[STEP F][TestPrompt] 📝 Copying test prompt to clipboard...');
-              await this.page.evaluate((text) => {
-                navigator.clipboard.writeText(text).catch(() => {});
-              }, testPrompt);
+              // Click to ensure focus is active
+              await this.page.click(containerSelector);
               await this.page.waitForTimeout(300);
               
-              console.log('[STEP F][TestPrompt] ⏳ Pasting test prompt with Ctrl+V...');
-              await this.page.keyboard.down('Control');
-              await this.page.keyboard.press('v');
-              await this.page.keyboard.up('Control');
-              await this.page.waitForTimeout(1000);  // Wait for paste to complete
+              // Clear textbox - use evaluate to clear DOM content + Slate state
+              console.log('[STEP F][TestPrompt] ⏳ Clearing textbox (DOM + Slate state)...');
+              await this.page.evaluate((selector) => {
+                const element = document.querySelector(selector);
+                if (element) {
+                  // Clear all text content
+                  element.innerHTML = '';
+                  element.textContent = '';
+                  // Dispatch input event to notify Slate editor of change
+                  element.dispatchEvent(new Event('input', { bubbles: true }));
+                  element.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }, containerSelector);
+              await this.page.waitForTimeout(500);
               
-              console.log('[STEP F][TestPrompt] ⏳ Waiting 2s for editor to stabilize...');
-              await this.page.waitForTimeout(2000);  // Let editor process the pasted text
+              // Re-focus after clearing
+              await this.page.focus(containerSelector);
+              await this.page.waitForTimeout(300);
+              
+              console.log('[STEP F][TestPrompt] 📝 Copying test prompt to clipboard...');
+              const clipboardSuccess = await this.page.evaluate(async (text) => {
+                try {
+                  await navigator.clipboard.writeText(text);
+                  return true;
+                } catch (e) {
+                  console.error('Clipboard write failed:', e.message);
+                  return false;
+                }
+              }, testPrompt);
+              
+              if (!clipboardSuccess) {
+                console.log('[STEP F][TestPrompt] ⚠️  Clipboard write failed, skipping paste...');
+              } else {
+                console.log('[STEP F][TestPrompt] ✓ Clipboard write successful');
+                await this.page.waitForTimeout(300);
+                
+                console.log('[STEP F][TestPrompt] ⏳ Pasting test prompt with Ctrl+V...');
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('v');
+                await this.page.keyboard.up('Control');
+                
+                // Wait longer for paste to complete in Slate editor
+                console.log('[STEP F][TestPrompt] ⏳ Waiting for paste to complete...');
+                await this.page.waitForTimeout(1500);
+              }
+              
+              console.log('[STEP F][TestPrompt] ⏳ Waiting 2s for Slate editor to stabilize...');
+              await this.page.waitForTimeout(2000);
               
               console.log('[STEP F][TestPrompt] 🧪 Submitting test prompt...');
               await this.page.waitForTimeout(1000);

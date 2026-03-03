@@ -150,9 +150,14 @@ router.post('/channels/:id/manual-scan', (req, res) => proxy(req, res, `/api/sho
 router.get('/videos', (req, res) => proxy(req, res, '/api/shorts-reels/videos'));
 router.post('/videos/:id/re-download', (req, res) => proxy(req, res, `/api/shorts-reels/videos/${req.params.id}/re-download`));
 router.post('/videos/trigger-pending-downloads', (req, res) => proxy(req, res, '/api/shorts-reels/videos/trigger-pending-downloads'));
+// Google Drive upload + status
+router.get('/videos/upload-status', (req, res) => proxy(req, res, '/api/shorts-reels/videos/upload-status'));
+router.post('/videos/upload-to-drive', (req, res) => proxy(req, res, '/api/shorts-reels/videos/upload-to-drive'));
+router.post('/videos/:id/upload-to-drive', (req, res) => proxy(req, res, `/api/shorts-reels/videos/${req.params.id}/upload-to-drive`));
 router.get('/logs', (req, res) => proxy(req, res, '/api/shorts-reels/logs'));
 router.get('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/jobs/trigger', (req, res) => proxy(req, res, '/api/shorts-reels/jobs/trigger'));
+
 
 export default router;
