@@ -1,1 +1,31 @@
-[]
+[
+  {
+    "queueId": "queue-1772512194171-4ua977uq5",
+    "videoConfig": {
+      "layout": "2-3-1-3",
+      "duration": 30,
+      "platform": "youtube",
+      "aspectRatio": "9:16",
+      "quality": "high",
+      "mainMediaId": "asset-1772510540431-yanralx1d",
+      "subMediaId": "asset-1772511776662-58a6d5358"
+    },
+    "platform": "youtube",
+    "contentType": "mashup",
+    "priority": "high",
+    "scheduleTime": "2026-03-03T04:29:54.171Z",
+    "accountIds": null,
+    "status": "pending",
+    "createdAt": "2026-03-03T04:29:54.171Z",
+    "startedAt": null,
+    "completedAt": null,
+    "uploadedAt": null,
+    "uploadUrl": null,
+    "uploadedByAccount": null,
+    "errorCount": 0,
+    "errorLog": [],
+    "metadata": {},
+    "retry": 0,
+    "maxRetries": 3
+  }
+]
