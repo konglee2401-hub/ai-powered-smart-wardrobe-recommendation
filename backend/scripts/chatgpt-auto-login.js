@@ -25,11 +25,17 @@ const __dirname = path.dirname(__filename);
 puppeteer.use(StealthPlugin());
 
 const SESSION_PATH = path.join(path.dirname(__dirname), 'data', 'chatgpt-session.json');
+const CHATGPT_PROFILE_DIR = path.join(path.dirname(__dirname), 'data', 'chatgpt-profile');
 const DATA_DIR = path.dirname(SESSION_PATH);
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Ensure ChatGPT profile directory exists
+if (!fs.existsSync(CHATGPT_PROFILE_DIR)) {
+  fs.mkdirSync(CHATGPT_PROFILE_DIR, { recursive: true });
 }
 
 class ChatGPTSessionManager {
@@ -97,30 +103,23 @@ class ChatGPTSessionManager {
   async launchBrowser() {
     console.log('🚀 Launching browser...');
     
-    const chromeUserDataDir = path.join(
-      process.env.LOCALAPPDATA || process.env.HOME,
-      'Google',
-      'Chrome',
-      'User Data'
-    );
+    // Use dedicated ChatGPT profile directory to persist session
+    console.log(`📁 Using ChatGPT profile: ${CHATGPT_PROFILE_DIR}`);
 
     try {
       this.browser = await puppeteer.launch({
         channel: 'chrome',
         headless: false,
         args: [
-          `--user-data-dir=${chromeUserDataDir}`,
-          '--profile-directory=Default',
-          '--no-sandbox',  // Same as Google Flow - required for manual auth
-          '--disable-setuid-sandbox',  // Same as Google Flow
+          `--user-data-dir=${CHATGPT_PROFILE_DIR}`,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
           '--disable-dev-shm-usage',
-          '--no-first-run',
-          '--no-default-browser-check',
-          '--disable-sync',  // Disable sync to avoid "browser may not be secure" warning
-          '--disable-extensions',  // Disable extensions
-          '--disable-popup-blocking',
-          '--start-maximized'
+          '--start-maximized',
+          '--disable-sync',
+          '--disable-extensions',
+          '--disable-popup-blocking'
         ],
         defaultViewport: null,
         timeout: 120000
@@ -257,78 +256,97 @@ class ChatGPTSessionManager {
     }
   }
 
-  /**
-   * Check if user is authenticated
-   */
   async isAuthenticated() {
     try {
-      // Check for chat interface
-      const hasChat = await this.page.$('textarea[placeholder*="Message"], textarea[placeholder*="chat"]');
-      if (hasChat) return true;
+      // First, quick URL check - if we're not on chatgpt.com main domain, we're not authenticated
+      const currentUrl = this.page.url();
+      if (!currentUrl.includes('chatgpt.com')) {
+        return false;
+      }
+      // If we're on auth pages, not authenticated yet
+      if (currentUrl.includes('auth.openai.com') || currentUrl.includes('/auth/')) {
+        return false;
+      }
 
-      // Check for authenticated user indication
-      const hasUserMenu = await this.page.$('[data-testid="user-menu"]');
-      if (hasUserMenu) return true;
+      // Direct and simple element checks from actual ChatGPT DOM
+      const authStatus = await this.page.evaluate(() => {
+        try {
+          // Check 1: Main chat textarea (id="prompt-textarea")
+          const hasTextarea = !!document.querySelector('textarea[id="prompt-textarea"]') || 
+                             !!document.querySelector('textarea[name="prompt-textarea"]') ||
+                             !!document.querySelector('textarea[placeholder*="Ask"]');
 
-      // Check for specific ChatGPT auth elements
-      const isLoggedIn = await this.page.evaluate(() => {
-        // Look for authenticated user indicators
-        const userElement = document.querySelector('[data-testid="user-menu"]');
-        const chatArea = document.querySelector('[data-testid="chat"], main');
-        const authenticated = !!(userElement || (chatArea && !document.querySelector('[role="button"]:has-text("Log in")')));
-        return authenticated;
+          // Check 2: Profile button with user name/image
+          const hasProfileButton = !!document.querySelector('img[alt="Profile image"]') ||
+                                  !!document.querySelector('[class*="profile"]');
+
+          // Check 3: Create new chat button (data-testid="create-new-chat-button")
+          const hasCreateButton = !!document.querySelector('[data-testid="create-new-chat-button"]');
+
+          // Check 4: No login button visible
+          const loginButtons = Array.from(document.querySelectorAll('button, a'))
+            .filter(el => {
+              const text = el.textContent.toLowerCase();
+              return (text.includes('log in') || 
+                      text.includes('sign in') || 
+                      text.includes('sign up'));
+            })
+            .filter(el => {
+              // Filter for visible elements only
+              return el.offsetHeight > 0 && el.offsetWidth > 0;
+            });
+          const hasLoginButton = loginButtons.length > 0;
+
+          // Check 5: Page title should be ChatGPT
+          const isCorrectPage = document.title.includes('ChatGPT') || 
+                               document.body.innerText.includes('What are you working on');
+
+          // Determine authentication status
+          const isAuthed = (hasTextarea && hasCreateButton && !hasLoginButton) ||
+                          (hasProfileButton && hasCreateButton && !hasLoginButton);
+
+          return {
+            hasTextarea,
+            hasProfileButton,
+            hasCreateButton,
+            hasLoginButton,
+            isCorrectPage,
+            isAuthed,
+            pageTitle: document.title
+          };
+        } catch (e) {
+          return { isAuthed: false, error: e.message };
+        }
       });
 
-      return isLoggedIn;
+      return authStatus.isAuthed;
     } catch (error) {
       return false;
     }
   }
 
   /**
-   * Wait for manual authentication (like Google Flow)
+   * Wait for user to manually login and press Enter
    */
-  async waitForManualAuthentication() {
-    console.log('⏳ Waiting for you to login/authenticate manually...');
-    console.log('   The browser is open - please login if prompted');
-    console.log('   (This script will automatically detect when you\'re done)\n');
+  async waitForManualLoginWithEnter() {
+    console.log('\n🔓 MANUAL LOGIN REQUIRED\n');
+    console.log('A browser window will open. Please:');
+    console.log('  1. Login to ChatGPT manually');
+    console.log('  2. When logged in successfully, press ENTER in this terminal\n');
     
-    const maxWaitTime = 10 * 60 * 1000; // 10 minutes
-    const startTime = Date.now();
-    let lastAuthCheck = 0;
-
+    // Read one line of input (just pressing Enter)
     return new Promise((resolve) => {
-      const checkInterval = setInterval(async () => {
-        try {
-          // Check for authentication every 2 seconds
-          if (Date.now() - lastAuthCheck > 2000) {
-            const isAuthed = await this.isAuthenticated();
-            
-            if (isAuthed) {
-              console.log('\n✅ Authentication detected!\n');
-              clearInterval(checkInterval);
-              resolve(true);
-              return;
-            }
-            
-            lastAuthCheck = Date.now();
-          }
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
 
-          // Check for timeout
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          if (elapsed > 0 && elapsed % 30 === 0) {
-            console.log(`   ⏳ Still waiting... (${elapsed}s elapsed)`);
-          }
-
-          if (Date.now() - startTime > maxWaitTime) {
-            console.warn('\n⏱️  Authentication timeout (10 minutes). Proceeding as-is.\n');
-            clearInterval(checkInterval);
-            resolve(false);
-          }
-        } catch (error) {
-          // Page might be changing, continue waiting
-        }
-      }, 1000);
+      rl.question('Press ENTER when you\'re logged in: ', () => {
+        rl.close();
+        console.log('\n✅ Got your confirmation!');
+        console.log('⏳ Checking authentication...\n');
+        resolve(true);
+      });
     });
   }
 
@@ -406,28 +424,27 @@ class ChatGPTSessionManager {
       console.log('\n📝 Manual authentication required\n');
       await this.handleSecurityWarnings();
 
-      const success = await this.waitForManualAuthentication();
+      // Wait for user to press Enter
+      await this.waitForManualLoginWithEnter();
       
-      if (success) {
-        // Give page a moment to fully stabilize
-        await this.page.waitForTimeout(2000);
+      // Give page a moment to stabilize
+      await this.page.waitForTimeout(2000);
+      
+      // Check if authenticated now
+      const isAuthed = await this.isAuthenticated();
+      
+      if (isAuthed) {
+        console.log('✅ Authentication confirmed!\n');
         
         // Capture and save session
         const sessionData = await this.captureSession();
         if (sessionData) {
           this.saveSession(sessionData);
+          console.log('✅ Session saved successfully!\n');
         }
         return true;
       } else {
-        // Timeout - still try to capture if authenticated
-        console.log('⏳ Checking current authentication status...');
-        if (await this.isAuthenticated()) {
-          const sessionData = await this.captureSession();
-          if (sessionData) {
-            this.saveSession(sessionData);
-            return true;
-          }
-        }
+        console.log('❌ Not authenticated. Please make sure you logged in correctly and try again.\n');
         return false;
       }
     } catch (error) {
