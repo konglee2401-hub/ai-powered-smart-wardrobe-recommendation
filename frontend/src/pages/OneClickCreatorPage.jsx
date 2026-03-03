@@ -371,126 +371,68 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
         })}
       </div>
 
-      {/* Image Preview */}
-      {session.image && (
-        <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">{t('oneClickCreator.generatedImage')}</p>
-          <img src={session.image} alt="Generated" className="w-full h-32 object-cover rounded" />
-        </div>
-      )}
-
-      {/* Analysis Preview (Character, Product, Scripts, Voiceover) */}
-      {(session.analysis || session.characterAnalysis || session.scripts) && (
-        <div className="mb-4 bg-gray-900/30 rounded p-3 border border-gray-700">
-          <div className="text-xs text-gray-400 mb-2 font-semibold">📊 {t('oneClickCreator.analysisScripts')}</div>
-          
-          {/* Character & Product Info */}
-          {session.analysis && (
-            <div className="space-y-2 mb-3 text-xs">
-              {session.analysis.character && (
-                <div>
-                  <span className="text-gray-500">👤 {t('oneClickCreator.characterLabel')}:</span>
-                  <span className="text-gray-300 ml-2">{session.analysis.character.age}, {session.analysis.character.gender}, {session.analysis.character.style}</span>
-                </div>
-              )}
-              {session.analysis.product && (
-                <div>
-                  <span className="text-gray-500">📦 {t('oneClickCreator.productLabel')}:</span>
-                  <span className="text-gray-300 ml-2">{session.analysis.product.garment_type} - {session.analysis.product.primary_color}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Video Scripts */}
-          {session.analysis?.videoScripts && session.analysis.videoScripts.length > 0 && (
-            <div className="mb-2">
-              <div className="text-gray-500 text-xs mb-1">🎬 {t('oneClickCreator.videoSegments')}:</div>
-              <div className="space-y-1">
-                {session.analysis.videoScripts.slice(0, 3).map((seg, idx) => (
-                  <div key={idx} className="text-gray-400 text-xs truncate">
-                    [{seg.segment}] {seg.duration}s: "{seg.script.substring(0, 50)}..."
-                  </div>
-                ))}
-                {session.analysis.videoScripts.length > 3 && (
-                  <div className="text-gray-500 text-xs italic">... +{session.analysis.videoScripts.length - 3} {t('oneClickCreator.more')}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Voiceover Preview */}
-          {session.analysis?.voiceoverScript && (
-            <div className="mb-2">
-              <div className="text-gray-500 text-xs mb-1">🎙️ {t('oneClickCreator.voiceover')}:</div>
-              <div className="text-gray-400 text-xs line-clamp-2">"{session.analysis.voiceoverScript.substring(0, 100)}..."</div>
-            </div>
-          )}
-
-          {/* Hashtags */}
-          {session.analysis?.hashtags && session.analysis.hashtags.length > 0 && (
+      {/* Compact Step Previews */}
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <details className="bg-gray-900/40 border border-gray-700 rounded p-2">
+          <summary className="text-xs text-gray-300 cursor-pointer">📝 Step 1 Prompts</summary>
+          <div className="mt-2 space-y-2">
             <div>
-              <div className="text-gray-500 text-xs mb-1">#️⃣ {t('oneClickCreator.hashtags')}:</div>
-              <div className="flex flex-wrap gap-1">
-                {session.analysis.hashtags.slice(0, 5).map((tag, idx) => (
-                  <span key={idx} className="text-gray-400 text-xs bg-gray-800 px-2 py-0.5 rounded">#{tag}</span>
-                ))}
-                {session.analysis.hashtags.length > 5 && (
-                  <span className="text-gray-500 text-xs px-2 py-0.5">+{session.analysis.hashtags.length - 5}</span>
-                )}
-              </div>
+              <p className="text-[11px] text-gray-500 mb-1">Wearing prompt</p>
+              <pre className="text-[11px] text-gray-300 whitespace-pre-wrap max-h-24 overflow-y-auto">{session.step1Prompts?.wearing || 'Waiting...'}</pre>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Step 2 Preview Images (from polling) */}
-      {session.step2Images && (
-        <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">📸 {t('oneClickCreator.step2PreviewImages')}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-gray-900/50 rounded overflow-hidden">
-              <img 
-                src={session.step2Images.wearing} 
-                alt="Wearing" 
-                className="w-full h-32 object-cover"
-              />
-              <p className="text-xs text-gray-500 text-center py-1">{t('oneClickCreator.wearing')}</p>
-            </div>
-            <div className="bg-gray-900/50 rounded overflow-hidden">
-              <img 
-                src={session.step2Images.holding} 
-                alt="Holding" 
-                className="w-full h-32 object-cover"
-              />
-              <p className="text-xs text-gray-500 text-center py-1">{t('oneClickCreator.holding')}</p>
+            <div>
+              <p className="text-[11px] text-gray-500 mb-1">Holding prompt</p>
+              <pre className="text-[11px] text-gray-300 whitespace-pre-wrap max-h-24 overflow-y-auto">{session.step1Prompts?.holding || 'Waiting...'}</pre>
             </div>
           </div>
-        </div>
-      )}
+        </details>
 
-      {/* Videos Preview */}
-      {session.videos?.length > 0 && (
-        <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">
-            {t('oneClickCreator.generatedVideos')} ({session.videos.filter(v => v).length}/{session.videosCount})
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {session.videos.map((video, idx) => (
-              <div key={idx} className="relative bg-black rounded aspect-video flex items-center justify-center">
-                {video ? (
-                  <video src={video} controls className="w-full h-full rounded" />
-                ) : (
-                  <div className="text-gray-500 text-xs text-center">
-                    <Clock className="w-4 h-4 mx-auto mb-1" />
-                    {t('oneClickCreator.pending')}
-                  </div>
-                )}
-              </div>
-            ))}
+        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.step2Images}>
+          <summary className="text-xs text-gray-300 cursor-pointer">📸 Step 2 Images</summary>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="bg-gray-950/70 rounded overflow-hidden">
+              {session.step2Images?.wearing ? <img src={session.step2Images.wearing} alt="Wearing" className="w-full h-24 object-cover" /> : <div className="h-24 flex items-center justify-center text-[11px] text-gray-500">Waiting</div>}
+              <p className="text-[11px] text-gray-500 text-center py-1">Wearing</p>
+            </div>
+            <div className="bg-gray-950/70 rounded overflow-hidden">
+              {session.step2Images?.holding ? <img src={session.step2Images.holding} alt="Holding" className="w-full h-24 object-cover" /> : <div className="h-24 flex items-center justify-center text-[11px] text-gray-500">Waiting</div>}
+              <p className="text-[11px] text-gray-500 text-center py-1">Holding</p>
+            </div>
           </div>
-        </div>
-      )}
+        </details>
+
+        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.analysis?.videoScripts?.length}>
+          <summary className="text-xs text-gray-300 cursor-pointer">🎬 Step 3 Scripts & Hashtags</summary>
+          <div className="mt-2 space-y-2">
+            <div className="max-h-28 overflow-y-auto space-y-1">
+              {(session.analysis?.videoScripts || []).length > 0 ? (session.analysis.videoScripts.map((seg, idx) => (
+                <div key={idx} className="text-[11px] text-gray-300">
+                  <span className="text-gray-400">[{seg.segment}] {seg.duration}s:</span> {seg.script}
+                </div>
+              ))) : <p className="text-[11px] text-gray-500">Waiting...</p>}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {(session.analysis?.hashtags || []).length > 0 ? session.analysis.hashtags.map((tag, idx) => (
+                <span key={idx} className="text-[11px] bg-gray-800 text-gray-300 px-2 py-0.5 rounded">#{String(tag).replace('#', '')}</span>
+              )) : <p className="text-[11px] text-gray-500">No hashtags yet</p>}
+            </div>
+          </div>
+        </details>
+
+        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.videos?.length}>
+          <summary className="text-xs text-gray-300 cursor-pointer">🎥 Step 4 Videos</summary>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {(session.videos || []).length > 0 ? session.videos.map((video, idx) => (
+              <video key={idx} src={video} controls className="w-full h-24 object-cover rounded bg-black" />
+            )) : <p className="text-[11px] text-gray-500 col-span-2">Waiting...</p>}
+          </div>
+        </details>
+
+        <details className="col-span-2 bg-gray-900/40 border border-gray-700 rounded p-2" open={!!(session.ttsText || session.analysis?.voiceoverScript)}>
+          <summary className="text-xs text-gray-300 cursor-pointer">🎙️ Step 5 TTS Text</summary>
+          <pre className="mt-2 text-[11px] text-gray-300 whitespace-pre-wrap max-h-28 overflow-y-auto">{session.ttsText || session.analysis?.voiceoverScript || 'Waiting...'}</pre>
+        </details>
+      </div>
 
       {/* Logs */}
       <div className="border-t border-gray-700 pt-3">
@@ -643,15 +585,6 @@ export default function OneClickCreatorPage() {
     }
   }, [useCase]);
 
-  // 💫 NEW: Start preview polling when flowId is set
-  useEffect(() => {
-    if (tiktokFlowId && sessions.length > 0) {
-      const currentSession = sessions[0]; // Poll for first/active session
-      console.log(`🔄 Starting preview polling for flowId: ${tiktokFlowId}, sessionId: ${currentSession.id}`);
-      startPreviewPolling(tiktokFlowId, currentSession.id);
-    }
-  }, [tiktokFlowId]);
-
   // Add log to session
   const addLog = (sessionId, message) => {
     setSessions(prev => prev.map(s => {
@@ -712,48 +645,85 @@ export default function OneClickCreatorPage() {
    * Steps: 1-Analyze, 2-Recommend, 3-Select Settings, 4-Generate 2 Images Parallel, 
    *        5-Deep Analysis, 6-Generate Video, 7-Generate Voiceover, 8-Finalize
    */
-  const startPreviewPolling = (flowId, sessionId) => {
+  const startPreviewPolling = (flowId, sessionId, stopRef = { stop: false }) => {
     const pollPreview = async () => {
       try {
         const response = await fetch(`/api/ai/affiliate-video-tiktok/preview/${flowId}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.preview?.step2) {
-            // Images are ready, update session
-            setSessions(prev => prev.map(s => {
-              if (s.id === sessionId) {
-                return {
-                  ...s,
-                  step2Images: {
-                    wearing: data.preview.step2.wearingImagePath,
-                    holding: data.preview.step2.holdingImagePath
-                  }
-                };
-              }
-              return s;
-            }));
-            addLog(sessionId, '📸 Step 2 preview images received');
-            return true; // Stop polling
+        if (!response.ok) return false;
+
+        const data = await response.json();
+        const preview = data.preview || {};
+
+        setSessions(prev => prev.map(s => {
+          if (s.id !== sessionId) return s;
+
+          const nextSession = { ...s };
+
+          if (preview.step1) {
+            nextSession.step1Prompts = {
+              wearing: preview.step1.wearingPrompt,
+              holding: preview.step1.holdingPrompt
+            };
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'analyze' ? { ...step, completed: true, inProgress: false } : step);
           }
-        }
+
+          if (preview.step2) {
+            nextSession.step2Images = {
+              wearing: preview.step2.wearingImagePath,
+              holding: preview.step2.holdingImagePath
+            };
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-images-parallel' ? { ...step, completed: true, inProgress: false } : step);
+          }
+
+          if (preview.step3) {
+            nextSession.analysis = {
+              ...(nextSession.analysis || {}),
+              videoScripts: preview.step3.videoScripts || [],
+              hashtags: preview.step3.hashtags || [],
+              voiceoverScript: preview.step3.voiceoverScript || ''
+            };
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'deep-analysis' ? { ...step, completed: true, inProgress: false } : step);
+          }
+
+          if (preview.step4) {
+            nextSession.videos = (preview.step4.videos || []).map(v => v.path || v.url).filter(Boolean);
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-video' ? { ...step, completed: true, inProgress: false } : step);
+          }
+
+          if (preview.step5) {
+            nextSession.ttsText = preview.step5.ttsText || nextSession.ttsText;
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-voiceover' ? { ...step, completed: true, inProgress: false } : step);
+          }
+
+          if (preview.status === 'completed') {
+            nextSession.completed = true;
+            nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, completed: true, inProgress: false }));
+          }
+
+          return nextSession;
+        }));
+
+        return preview.status === 'completed' || preview.status === 'failed' || stopRef.stop;
       } catch (e) {
-        // Polling endpoint not ready yet, continue
+        return stopRef.stop;
       }
-      return false;
     };
 
-    // Poll every 2 seconds for 2 minutes
     let pollCount = 0;
-    const maxPolls = 60;
-    
+    const maxPolls = 300;
+
     const pollInterval = setInterval(async () => {
       pollCount++;
       const shouldStop = await pollPreview();
-      
-      if (shouldStop || pollCount >= maxPolls) {
+      if (shouldStop || pollCount >= maxPolls || stopRef.stop) {
         clearInterval(pollInterval);
       }
-    }, 2000);
+    }, 1500);
+
+    return () => {
+      stopRef.stop = true;
+      clearInterval(pollInterval);
+    };
   };
 
   const handleAffiliateVideoTikTokFlow = async (
@@ -763,7 +733,8 @@ export default function OneClickCreatorPage() {
     analysisResult,
     flowId,  // 💫 Accept flowId from caller to ensure session continuity
     language = 'en',  // 💫 Accept language parameter for prompt generation
-    sceneImageBase64 = null  // 💫 NEW: Optional scene reference image base64
+    sceneImageBase64 = null,  // 💫 NEW: Optional scene reference image base64
+    sessionId = null
   ) => {
     try {
       console.log('🎬 Starting Affiliate Video TikTok Flow');
@@ -800,11 +771,18 @@ export default function OneClickCreatorPage() {
       };
       
       console.log(`📤 Sending request to /api/ai/affiliate-video-tiktok`);
+
+      const stopRef = { stop: false };
+      const stopPolling = startPreviewPolling(flowId, sessionId, stopRef);
+
       const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      stopRef.stop = true;
+      if (typeof stopPolling === 'function') stopPolling();
 
       if (!mainFlowResponse.ok) {
         const errorData = await mainFlowResponse.json().catch(() => ({}));
@@ -814,106 +792,19 @@ export default function OneClickCreatorPage() {
 
       const mainFlowData = await mainFlowResponse.json();
       console.log(`✅ Backend response received:`, mainFlowData);
-      
+
       if (!mainFlowData.success) {
-        console.error(`❌ Backend returned error:`, mainFlowData);
         throw new Error(mainFlowData.error || mainFlowData.message || 'Main flow failed');
       }
 
-      console.log('✅ Main flow complete (Steps 1-3)');
-      console.log(`  Flow ID: ${mainFlowData.data?.flowId}`);
-      console.log(`  Step 2 results: ${mainFlowData.data?.step2 ? Object.keys(mainFlowData.data.step2).join(', ') : 'N/A'}`);
-      console.log(`  Step 3 results: ${mainFlowData.data?.step3 ? Object.keys(mainFlowData.data.step3).join(', ') : 'N/A'}`);
-      setTiktokFlowId(mainFlowData.data.flowId);
-      
-      // Extract results
-      const wearingImage = mainFlowData.data.step2.images?.wearing;
-      const holdingImage = mainFlowData.data.step2.images?.holding;
-      const analysisForVideoGen = mainFlowData.data.step3;
+      setTiktokFlowId(mainFlowData.flowId || mainFlowData.data?.flowId || flowId);
+      setDeepAnalysisResult(mainFlowData.data?.step3?.analysis || null);
+      setSuggestedHashtags(mainFlowData.data?.step3?.analysis?.hashtags || []);
+      setGeneratedVideo(mainFlowData.data?.step4?.videos?.[0] || null);
+      setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || mainFlowData.data?.step3?.analysis?.voiceoverScript || null);
 
-      // Step 4: Deep analysis result
-      setDeepAnalysisResult(analysisForVideoGen);
-      setSuggestedHashtags(analysisForVideoGen.hashtags || []);
+      return mainFlowData;
 
-      // Step 5: Generate video
-      console.log('🎬 Generating video...');
-      const videoResponse = await fetch('/api/ai/affiliate-video-tiktok/generate-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wearingImageUrl: wearingImage,
-          holdingImageUrl: holdingImage,
-          videoScripts: analysisForVideoGen.videoScripts,
-          videoDuration: tiktokVideoDuration || 20,
-          aspectRatio: '9:16',
-        }),
-      });
-
-      if (!videoResponse.ok) {
-        throw new Error(`Video generation error: ${videoResponse.status}`);
-      }
-
-      const videoData = await videoResponse.json();
-      if (!videoData.success) {
-        throw new Error(videoData.message || 'Video generation failed');
-      }
-
-      setGeneratedVideo(videoData.data.video);
-      console.log('✅ Video generated');
-
-      // Step 6: Generate voiceover
-      console.log('🔊 Generating voiceover...');
-      
-      const voiceoverResponse = await fetch('/api/ai/affiliate-video-tiktok/generate-voiceover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          voiceoverScript: analysisForVideoGen.voiceoverScript,
-          voiceGender: voiceGender,
-          voicePace: voicePace,
-          videoDuration: tiktokVideoDuration || 20,
-        }),
-      });
-
-      if (!voiceoverResponse.ok) {
-        throw new Error(`Voiceover generation error: ${voiceoverResponse.status}`);
-      }
-
-      const voiceoverData = await voiceoverResponse.json();
-      if (!voiceoverData.success) {
-        throw new Error(voiceoverData.message || 'Voiceover generation failed');
-      }
-
-      setGeneratedVoiceover(voiceoverData.data.audio);
-      console.log('✅ Voiceover generated');
-
-      // Step 7: Finalize package
-      console.log('📦 Finalizing package...');
-      const finalizeResponse = await fetch('/api/ai/affiliate-video-tiktok/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrl: videoData.data.video.url,
-          voiceoverUrl: voiceoverData.data.audio.url,
-          wearingImageUrl: wearingImage,
-          holdingImageUrl: holdingImage,
-          productImageUrl: productImageBase64,
-          hashtags: analysisForVideoGen.hashtags,
-          videoDuration: tiktokVideoDuration || 20,
-        }),
-      });
-
-      if (!finalizeResponse.ok) {
-        throw new Error(`Finalization error: ${finalizeResponse.status}`);
-      }
-
-      const finalData = await finalizeResponse.json();
-      if (!finalData.success) {
-        throw new Error(finalData.message || 'Finalization failed');
-      }
-
-      console.log('✅ Complete TikTok package ready!', finalData.data);
-      return finalData.data;
     } catch (error) {
       console.error('❌ TikTok flow error:', error);
       throw error;
@@ -1095,9 +986,10 @@ export default function OneClickCreatorPage() {
               prodBase64,
               recommendedOptions,
               analysisResult,
-              flowId,  // 💫 Pass flowId to the flow
-              i18n.language || 'en',  // 💫 Pass language for Vietnamese prompt support
-              sceneBase64  // 💫 NEW: Pass scene image base64 (optional)
+              flowId,
+              i18n.language || 'en',
+              sceneBase64,
+              sessionId
             );
 
             // Update session with results

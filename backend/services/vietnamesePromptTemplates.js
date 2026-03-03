@@ -214,21 +214,23 @@ Hình ảnh 2: Nhân vật cầm sản phẩm trong tay
 Hình ảnh 3: Sản phẩm (chi tiết)
 
 Trọng tâm Sản phẩm: Toàn bộ trang phục
-Thời lượng Video: {videoDuration} giây
+Tổng thời lượng chiến dịch: {videoDuration} giây
+Provider video hiện tại: {videoProvider}
+Thời lượng mỗi clip cần tạo: {clipDuration} giây
 Giọng nói: {voiceGender} (tốc độ {voicePace})
 
 ===== NHIỆM VỤ =====
-1. TẠO 3-4 PHÂN đoạn KỊCH BẢN VIDEO:
-   - Phân đoạn 1: Hook (3s) - Thu hút sự chú ý ngay lập tức
-   - Phân đoạn 2: Giới thiệu (4-5s) - Giới thiệu trang phục
-   - Phân đoạn 3: Giới thiệu tính năng (5-6s) - Làm nổi bật chi tiết chính
-   - Phân đoạn 4: Gọi hành động (2-3s) - Kết luận hấp dẫn
+1. TẠO 3-4 PHÂN ĐOẠN KỊCH BẢN VIDEO CHO ĐÚNG {clipDuration} GIÂY:
+   - Bắt buộc chia timeline theo từng giây, không chồng lấn, không khoảng trống
+   - Segment đầu bắt đầu từ giây 0
+   - Segment cuối kết thúc đúng tại giây {clipDuration}
+   - Mỗi segment dùng định dạng thời gian [start-ends], ví dụ [0-2s], [2-6s]
 
 2. TẠO KỊCH BẢN VOICEOVER (Toàn bộ):
    - Giọng nói: {voiceGender} native speaker
    - Tốc độ: {voicePace} paced, energetic
    - Khoảng cách giọng: Thân thiện, quyến rũ, chuyên nghiệp
-   - Độ dài: Phù hợp với {videoDuration}s video
+   - Độ dài: Phù hợp chính xác với {clipDuration}s video
 
 3. ĐỀ XUẤT HASHTAG:
    - 5-8 hashtag liên quan
@@ -241,25 +243,29 @@ Chỉ trả lại JSON hợp lệ:
   "videoScripts": [
     {
       "segment": "Hook",
-      "duration": 3,
+      "timeRange": "0-2s",
+      "duration": 2,
       "image": "wearing",
       "script": "Mở đầu hấp dẫn tại đây..."
     },
     {
       "segment": "Introduction",
-      "duration": 5,
+      "timeRange": "2-5s",
+      "duration": 3,
       "image": "wearing",
       "script": "Giới thiệu trang phục tại đây..."
     },
     {
       "segment": "Features",
-      "duration": 6,
+      "timeRange": "5-8s",
+      "duration": 3,
       "image": "holding",
       "script": "Làm nổi bật chi tiết tại đây..."
     },
     {
       "segment": "CTA",
-      "duration": 3,
+      "timeRange": "8-{clipDuration}s",
+      "duration": 2,
       "image": "wearing",
       "script": "Gọi hành động tại đây..."
     }

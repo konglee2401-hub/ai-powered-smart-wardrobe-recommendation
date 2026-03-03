@@ -138,15 +138,17 @@ class VietnamesePromptBuilder {
    * @param {object} config - { videoDuration, voiceGender, voicePace }
    */
   static buildDeepAnalysisPrompt(productFocus = 'full-outfit', config = {}) {
-    const { videoDuration = 30, voiceGender = 'female', voicePace = 'fast' } = config;
+    const { videoDuration = 30, voiceGender = 'female', voicePace = 'fast', clipDuration = 10, videoProvider = 'grok' } = config;
     
     let template = VIETNAM_PROMPTS.deepAnalysis[productFocus] || VIETNAM_PROMPTS.deepAnalysis['full-outfit'];
     
     // Replace variables in template
     template = template
-      .replace('{videoDuration}', videoDuration)
-      .replace('{voiceGender}', voiceGender)
-      .replace('{voicePace}', voicePace);
+      .replace(/\{videoDuration\}/g, videoDuration)
+      .replace(/\{voiceGender\}/g, voiceGender)
+      .replace(/\{voicePace\}/g, voicePace)
+      .replace(/\{clipDuration\}/g, clipDuration)
+      .replace(/\{videoProvider\}/g, videoProvider);
     
     return template;
   }
