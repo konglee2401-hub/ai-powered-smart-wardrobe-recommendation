@@ -124,9 +124,6 @@ class GoogleFlowAutomationService {
     this.options.userDownloadsDir = userDownloadsDir;
     console.log(`   📥 Monitoring downloads in: ${userDownloadsDir}`);
 
-    // Load session and check token freshness
-    await this.loadSession();
-
     // PHASE 5: Instantiate all modular managers
     console.log('   🔧 Initializing modular managers...');
     this.sessionManager = new SessionManager(this.options);
