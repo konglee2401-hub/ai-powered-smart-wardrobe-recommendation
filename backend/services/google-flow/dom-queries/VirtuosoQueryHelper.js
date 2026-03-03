@@ -41,17 +41,18 @@ export class VirtuosoQueryHelper {
 
   /**
    * Find NEW hrefs not in previous set
-   * @param {Set<string>} previousHrefs - Known hrefs to exclude
+   * @param {Array<string>} previousHrefs - Known hrefs to exclude (as array, not Set)
    * @returns {Array<Object>} - Array of {href, isNew, position}
    */
   static async findNewHrefs(previousHrefs) {
-    return this.page.evaluate((prevSet) => {
+    return this.page.evaluate((prevArray) => {
       const newItems = [];
       const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
       
       links.forEach((link, position) => {
         const href = link.getAttribute('href');
-        if (href && !prevSet.has(href)) {
+        // Use array.includes() instead of set.has() - works with JSON-serializable data
+        if (href && !prevArray.includes(href)) {
           const parent = link.closest('[data-tile-id]');
           newItems.push({
             href,
@@ -63,7 +64,7 @@ export class VirtuosoQueryHelper {
       });
       
       return newItems;
-    }, new Set(previousHrefs));
+    }, previousHrefs);  // Pass array directly, not as new Set()
   }
 
   /**
