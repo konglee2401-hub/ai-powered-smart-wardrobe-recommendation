@@ -1001,13 +1001,15 @@ class ChatGPTService extends BrowserService {
    * Wait for ChatGPT to finish responding
    */
   async waitForResponse(maxWait = 120000) {
-    console.log('⏳ Waiting for ChatGPT response...');
+    console.log('⏳ Waiting for ChatGPT response (streaming)...');
     console.log(`⏱️  Timeout: ${maxWait}ms = ${Math.round(maxWait / 1000)}s`);
+    console.log('   Monitoring for streaming completion (no new content for 5s)...\n');
     
     const startTime = Date.now();
     let lastProgressLog = Date.now();
+    let lastContentLength = 0;
     let stableCount = 0;
-    const stabileThreshold = 3;
+    const stableThreshold = 5;  // 5 seconds of no change = complete
     
     // Check initial state
     try {
@@ -1035,7 +1037,7 @@ class ChatGPTService extends BrowserService {
         if (messages.length === 0) messages = document.querySelectorAll('[role="article"]');
         if (messages.length === 0) messages = document.querySelectorAll('[data-testid*="conversation-turn"]');
         
-        if (messages.length < 2) return { hasContent: false, length: 0, isLoading: true };
+        if (messages.length < 2) return { hasContent: false, length: 0, isLoading: true, hasContinue: false };
         
         const lastMessage = messages[messages.length - 1];
         const text = lastMessage.innerText || lastMessage.textContent || '';
@@ -1049,36 +1051,65 @@ class ChatGPTService extends BrowserService {
                               text.toLowerCase().includes('generating') ||
                               text.toLowerCase().includes('processing');
         
+        // Check if there's a "Continue generating" button (response not complete)
+        const continueBtn = document.querySelector('button[aria-label*="continue"], button:has-text("Continue"), [data-testid*="continue"]');
+        const hasContinue = !!continueBtn;
+        
         return {
           hasContent: text.length > 50,
           length: text.length,
           isLoading: hasLoadingSpinner || hasLoadingText,
+          hasContinue: hasContinue,
           text: text.substring(0, 200)
         };
       });
       
-      // Progress logging every 10 seconds
+      // Progress logging every 5 seconds
       const now = Date.now();
-      if (now - lastProgressLog > 10000) {
+      if (now - lastProgressLog > 5000) {
         const elapsed = Math.round((now - startTime) / 1000);
-        console.log(`⏳ (${elapsed}s) Content: ${state.length}ch, Loading: ${state.isLoading ? '🔄 yes' : '✅ no'}`);
+        const deltaLength = state.length - lastContentLength;
+        const deltaSign = deltaLength > 0 ? '📝' : (deltaLength < 0 ? '❌' : '⏸️');
+        console.log(`⏳ (${elapsed}s) Content: ${state.length}ch (Δ${deltaSign}${Math.abs(deltaLength)}ch), Loading: ${state.isLoading ? '🔄' : '⏹️'}, Continue: ${state.hasContinue ? '📢' : '✅'}`);
         lastProgressLog = now;
       }
       
-      // Check if response is complete
-      if (state.hasContent && !state.isLoading) {
-        stableCount++;
-        if (stableCount >= stabileThreshold) {
-          console.log(`✅ Response complete! (${state.length} characters)`);
-          break;
+      // Check if response stream is complete
+      // Complete when:
+      // 1. Has content
+      // 2. Content length hasn't changed for stableThreshold (5 seconds)
+      // 3. No loading spinner/text
+      // 4. No "Continue generating" button
+      if (state.hasContent && !state.hasContinue) {
+        if (state.length === lastContentLength) {
+          // Content hasn't grown - increment stable counter
+          stableCount++;
+          
+          if (stableCount >= stableThreshold && !state.isLoading) {
+            console.log(`\n✅ Response streaming COMPLETE!`);
+            console.log(`   - Final length: ${state.length} characters`);
+            console.log(`   - Stable for ${stableCount} seconds of monitoring`);
+            console.log(`   - No "Continue" button visible`);
+            break;
+          }
+        } else {
+          // Content is still growing - reset counter and track new length
+          stableCount = 0;
+          lastContentLength = state.length;
+          console.log(`📝 New content streaming: +${state.length - lastContentLength}ch (total: ${state.length}ch)`);
         }
       } else {
         stableCount = 0;
+        lastContentLength = state.length;
+        
         if (!state.hasContent) {
           console.log(`⏳ Waiting for content (${state.length}ch)...`);
         }
         if (state.isLoading) {
           console.log(`🔄 ChatGPT is processing...`);
+        }
+        if (state.hasContinue) {
+          console.log(`📢 "Continue generating" button visible - response truncated`);
         }
       }
       
@@ -1086,7 +1117,7 @@ class ChatGPTService extends BrowserService {
     }
     
     const totalSeconds = Math.round((Date.now() - startTime) / 1000);
-    console.log(`Response wait completed after ${totalSeconds}s`);
+    console.log(`\n⏱️  Response wait completed after ${totalSeconds}s`);
     
     // Extract response text - support both JSON (new format) and text (old format)
     console.log('📍 STEP 11: Extracting response...');
