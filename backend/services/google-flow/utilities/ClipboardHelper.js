@@ -50,18 +50,25 @@ export class ClipboardHelper {
 
   /**
    * Paste image data to clipboard
-   * @param {string} imagePath - Path to image file
+   * @param {string|Buffer} imagePathOrBuffer - Path to image file OR Buffer containing image data
    * @param {number} cooldownMs - Wait time after paste
    * @returns {boolean}
    */
-  static async copyImageToClipboard(imagePath, cooldownMs = 500) {
+  static async copyImageToClipboard(imagePathOrBuffer, cooldownMs = 500) {
     const fs = (await import('fs')).default;
     const path = (await import('path')).default;
     
-    console.log(`[CLIPBOARD] 🖼️  Copying image: ${path.basename(imagePath)}`);
+    // Handle both file path and buffer
+    let imageData;
+    if (typeof imagePathOrBuffer === 'string') {
+      console.log(`[CLIPBOARD] 🖼️  Copying image: ${path.basename(imagePathOrBuffer)}`);
+      imageData = fs.readFileSync(imagePathOrBuffer);
+    } else {
+      console.log(`[CLIPBOARD] 🖼️  Copying image from buffer (${imagePathOrBuffer.length} bytes)`);
+      imageData = imagePathOrBuffer;
+    }
     
     try {
-      const imageData = fs.readFileSync(imagePath);
       const imageBase64 = Buffer.from(imageData).toString('base64');
 
       const success = await this.page.evaluate((base64Str) => {
