@@ -2,8 +2,8 @@ import express from 'express';
 import Asset from '../models/Asset.js';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 import { fileURLToPath } from 'url';
+import driveService from '../services/googleDriveOAuth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -103,6 +103,51 @@ router.get('/proxy/:assetId', async (req, res) => {
     // ✅ REFACTORED: Smarter storage priority with better fallbacks
     
     // STEP 1: Try hybrid local storage (new format)
+
+    const streamFromGoogleDriveApi = async (fileId, sourceLabel) => {
+      try {
+        const authResult = await driveService.authenticate();
+        if (!authResult?.authenticated || !driveService.drive) {
+          throw new Error('Google Drive OAuth not authenticated');
+        }
+
+        console.log(`☁️ Fetching from Google Drive API (${sourceLabel}): ${fileId}`);
+        const driveResponse = await driveService.drive.files.get(
+          { fileId, alt: 'media' },
+          { responseType: 'stream' }
+        );
+
+        const driveStream = driveResponse?.data;
+        if (!driveStream) {
+          throw new Error('Empty stream from Google Drive API');
+        }
+
+        const contentLength = driveResponse?.headers?.['content-length'];
+        if (contentLength) {
+          res.setHeader('Content-Length', contentLength);
+        }
+
+        driveStream.on('error', (err) => {
+          if (err?.code === 'ECONNRESET' || err?.message?.includes('aborted')) {
+            console.warn(`⚠️ Client aborted stream (${sourceLabel}): ${err.message}`);
+            return;
+          }
+
+          console.error(`Error streaming from Google Drive API: ${err.message}`);
+          if (!res.headersSent) {
+            res.status(500).json({ success: false, error: 'Error streaming from Google Drive API' });
+          }
+        });
+
+        driveStream.pipe(res);
+        console.log('✅ Streaming Google Drive file via OAuth API');
+        return true;
+      } catch (err) {
+        console.warn(`⚠️ Google Drive API fetch failed (${sourceLabel}): ${err.message}`);
+        return false;
+      }
+    };
+
     if (asset.localStorage?.path) {
       const filePath = asset.localStorage.path;
       console.log(`   🔍 Checking local storage: ${filePath}`);
@@ -158,134 +203,18 @@ router.get('/proxy/:assetId', async (req, res) => {
       }
     }
     
-    // STEP 3: Try hybrid cloud storage (new format)
+    // STEP 3: Try hybrid cloud storage (new format) via OAuth API
     if (asset.cloudStorage?.googleDriveId) {
-      try {
-        console.log(`☁️ Fetching from Google Drive (hybrid): ${asset.cloudStorage.googleDriveId}`);
-        
-        const fileId = asset.cloudStorage.googleDriveId;
-        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
-        
-        const response = await axios.get(driveUrl, {
-          responseType: 'stream',
-          timeout: 30000,
-          maxRedirects: 5,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0',
-            'Referer': 'https://drive.google.com/'
-          }
-        });
-        
-        const contentType = response.headers['content-type'] || '';
-        if (contentType.includes('text/html')) {
-          console.warn(`⚠️  Google Drive returned HTML (${fileId}), retrying with confirm=d`);
-          const retryUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=d`;
-          const retryResponse = await axios.get(retryUrl, {
-            responseType: 'stream',
-            timeout: 30000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0'
-            }
-          });
-          
-          if (retryResponse.headers['content-length']) {
-            res.setHeader('Content-Length', retryResponse.headers['content-length']);
-          }
-          console.log(`✅ Retry succeeded`);
-          retryResponse.data.pipe(res);
-          retryResponse.data.on('error', (err) => {
-            console.error(`Error streaming from Google Drive: ${err.message}`);
-            if (!res.headersSent) {
-              res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
-            }
-          });
-          return;
-        }
-        
-        if (response.headers['content-length']) {
-          res.setHeader('Content-Length', response.headers['content-length']);
-        }
-        
-        console.log(`✅ Streaming Google Drive image`);
-        response.data.pipe(res);
-        response.data.on('error', (err) => {
-          console.error(`Error streaming from Google Drive: ${err.message}`);
-          if (!res.headersSent) {
-            res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
-          }
-        });
-        return;
-        
-      } catch (driveError) {
-        console.error(`❌ Google Drive hybrid fetch error: ${driveError.message}`);
-        // Fall through to legacy cloud storage below
-      }
+      const streamed = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'hybrid');
+      if (streamed) return;
     }
-    
-    // STEP 4: Try legacy cloud storage fallback
+
+    // STEP 4: Try legacy cloud storage fallback via OAuth API (no legacy public URL fetch)
     if (asset.storage?.googleDriveId) {
-      try {
-        console.log(`☁️ Fetching from Google Drive (legacy): ${asset.storage.googleDriveId}`);
-        
-        const fileId = asset.storage.googleDriveId;
-        const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
-        
-        const response = await axios.get(driveUrl, {
-          responseType: 'stream',
-          timeout: 30000,
-          maxRedirects: 5,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0',
-            'Referer': 'https://drive.google.com/'
-          }
-        });
-        
-        const contentType = response.headers['content-type'] || '';
-        if (contentType.includes('text/html')) {
-          console.warn(`⚠️  Google Drive returned HTML (${fileId}), retrying with confirm=d`);
-          const retryUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=d`;
-          const retryResponse = await axios.get(retryUrl, {
-            responseType: 'stream',
-            timeout: 30000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0'
-            }
-          });
-          
-          if (retryResponse.headers['content-length']) {
-            res.setHeader('Content-Length', retryResponse.headers['content-length']);
-          }
-          console.log(`✅ Retry succeeded`);
-          retryResponse.data.pipe(res);
-          retryResponse.data.on('error', (err) => {
-            console.error(`Error streaming from Google Drive: ${err.message}`);
-            if (!res.headersSent) {
-              res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
-            }
-          });
-          return;
-        }
-        
-        if (response.headers['content-length']) {
-          res.setHeader('Content-Length', response.headers['content-length']);
-        }
-        
-        console.log(`✅ Streaming Google Drive image`);
-        response.data.pipe(res);
-        response.data.on('error', (err) => {
-          console.error(`Error streaming from Google Drive: ${err.message}`);
-          if (!res.headersSent) {
-            res.status(500).json({ success: false, error: 'Error streaming from Google Drive' });
-          }
-        });
-        return;
-        
-      } catch (driveError) {
-        console.error(`❌ Google Drive legacy fetch error: ${driveError.message}`);
-        // Fall through to final error below
-      }
+      const streamed = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'legacy');
+      if (streamed) return;
     }
-    
+
     // STEP 5: No valid storage location found
     console.log(`❌ No valid storage location found for asset ${assetId}`);
     console.log(`   Asset structure: ${JSON.stringify({localStorage: asset.localStorage, cloudStorage: asset.cloudStorage, storage: asset.storage})}`);
