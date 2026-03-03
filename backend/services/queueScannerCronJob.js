@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import GoogleDriveIntegration from './googleDriveIntegration.js';
 import videoMashupGenerator from './videoMashupGenerator.js';
 import VideoQueueService from './videoQueueService.js';
+import QueueScannerSettings from '../models/QueueScannerSettings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const googleDriveIntegration = new GoogleDriveIntegration();
@@ -21,7 +22,8 @@ class QueueScannerCronJob {
     this.mediaDir = path.join(__dirname, '../media');
     this.isRunning = false;
     this.scheduleIntervalRef = null;
-    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [] };
+    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [], platform: 'youtube', enabled: false };
+    this.settingsLoaded = false;
     this.ensureDirectories();
   }
 
@@ -170,10 +172,53 @@ class QueueScannerCronJob {
     }
   }
 
+  async loadScheduleSettings() {
+    if (this.settingsLoaded) {
+      return this.scheduleConfig;
+    }
+
+    try {
+      const settings = await QueueScannerSettings.findOne({ key: 'default' }).lean();
+      if (settings) {
+        this.scheduleConfig = {
+          intervalMinutes: settings.intervalMinutes || 60,
+          autoPublish: !!settings.autoPublish,
+          accountIds: settings.accountIds || [],
+          platform: settings.platform || 'youtube',
+          enabled: !!settings.enabled
+        };
+
+        if (settings.enabled) {
+          this.initializeSchedule(this.scheduleConfig.intervalMinutes, this.scheduleConfig, { persist: false });
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to load queue scanner settings from DB:', error.message);
+    }
+
+    this.settingsLoaded = true;
+    return this.scheduleConfig;
+  }
+
+  async saveScheduleSettings(config = this.scheduleConfig) {
+    await QueueScannerSettings.findOneAndUpdate(
+      { key: 'default' },
+      {
+        key: 'default',
+        enabled: !!config.enabled,
+        intervalMinutes: config.intervalMinutes || 60,
+        autoPublish: !!config.autoPublish,
+        accountIds: config.accountIds || [],
+        platform: config.platform || 'youtube'
+      },
+      { upsert: true, new: true }
+    );
+  }
+
   /**
    * Initialize CronJob - runs at specified interval
    */
-  initializeSchedule(intervalMinutes = 60, options = {}) {
+  initializeSchedule(intervalMinutes = 60, options = {}, control = { persist: true }) {
     if (this.scheduleIntervalRef) {
       clearInterval(this.scheduleIntervalRef);
       this.scheduleIntervalRef = null;
@@ -183,7 +228,8 @@ class QueueScannerCronJob {
       intervalMinutes,
       autoPublish: !!options.autoPublish,
       accountIds: options.accountIds || [],
-      platform: options.platform || 'youtube'
+      platform: options.platform || 'youtube',
+      enabled: true
     };
 
     console.log(`⏰ Initializing Queue Scanner CronJob (every ${intervalMinutes} minutes)`);
@@ -192,7 +238,33 @@ class QueueScannerCronJob {
       await this.scanAndProcess(this.scheduleConfig);
     }, intervalMinutes * 60 * 1000);
 
+    if (control?.persist !== false) {
+      this.saveScheduleSettings(this.scheduleConfig).catch(err => {
+        console.error('❌ Failed to persist queue scanner settings:', err.message);
+      });
+    }
+
     console.log('✓ Queue Scanner CronJob initialized');
+    return this.scheduleConfig;
+  }
+
+  disableSchedule(options = { persist: true }) {
+    if (this.scheduleIntervalRef) {
+      clearInterval(this.scheduleIntervalRef);
+      this.scheduleIntervalRef = null;
+    }
+
+    this.scheduleConfig = {
+      ...this.scheduleConfig,
+      enabled: false
+    };
+
+    if (options?.persist !== false) {
+      this.saveScheduleSettings(this.scheduleConfig).catch(err => {
+        console.error('❌ Failed to persist disabled queue scanner settings:', err.message);
+      });
+    }
+
     return this.scheduleConfig;
   }
 

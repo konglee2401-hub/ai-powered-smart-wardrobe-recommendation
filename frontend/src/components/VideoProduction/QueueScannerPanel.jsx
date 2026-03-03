@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Zap, Eye, BarChart3, AlertCircle, Check } from 'lucide-react';
+import { Zap, Eye, AlertCircle, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useVideoProductionStore from '@/stores/videoProductionStore.js';
 
@@ -19,8 +19,24 @@ export function QueueScannerPanel() {
 
   useEffect(() => {
     checkStatus();
+    loadSettings();
     getAllAccounts();
   }, [getAllAccounts]);
+
+
+  const loadSettings = async () => {
+    try {
+      const response = await fetch('/api/queue-scanner/settings');
+      const result = await response.json();
+      if (result.success && result.data) {
+        setIntervalMinutes(result.data.intervalMinutes || 60);
+        setAutoPublish(!!result.data.autoPublish);
+        setSelectedAccounts(result.data.accountIds || []);
+      }
+    } catch (error) {
+      console.error('Failed to load scanner settings:', error);
+    }
+  };
 
   const checkStatus = async () => {
     try {
@@ -60,15 +76,32 @@ export function QueueScannerPanel() {
 
   const handleInitializeSchedule = async () => {
     try {
-      const response = await fetch('/api/queue-scanner/initialize', {
-        method: 'POST',
+      const response = await fetch('/api/queue-scanner/settings', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intervalMinutes, autoPublish, accountIds: selectedAccounts })
+        body: JSON.stringify({ enabled: true, intervalMinutes, autoPublish, accountIds: selectedAccounts })
       });
 
       const result = await response.json();
       if (result.success) {
         toast.success(`Queue Scanner scheduled every ${intervalMinutes} minutes`);
+        await checkStatus();
+      }
+    } catch (error) {
+      toast.error(`Error: ${error.message}`);
+    }
+  };
+
+  const handleDisableSchedule = async () => {
+    try {
+      const response = await fetch('/api/queue-scanner/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false, intervalMinutes, autoPublish, accountIds: selectedAccounts })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success('Queue Scanner scheduler disabled');
         await checkStatus();
       }
     } catch (error) {
@@ -85,13 +118,17 @@ export function QueueScannerPanel() {
       <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700 space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2"><Zap className="w-5 h-5 text-yellow-400" />Queue Scanner + Scheduler</h3>
 
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid md:grid-cols-3 gap-3">
           <button onClick={handleTriggerScan} disabled={isScanning} className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 px-4 py-2 rounded-lg font-semibold transition">
             {isScanning ? '⏳ Scanning...' : '▶ Trigger Scan Now'}
           </button>
 
           <button onClick={handleInitializeSchedule} className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-4 py-2 rounded-lg font-semibold transition">
             ⏰ Save Scheduler
+          </button>
+
+          <button onClick={handleDisableSchedule} className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg font-semibold transition">
+            ⏹ Disable Scheduler
           </button>
         </div>
 
@@ -117,7 +154,7 @@ export function QueueScannerPanel() {
         </div>
       </div>
 
-      {status && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Eye className="w-5 h-5 text-blue-400" />Status</h4><p className="text-sm text-gray-300">Queue count: {status.queueCount || 0}</p><p className="text-sm text-gray-300">Running: {status.isRunning ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Configured interval: {status.scheduleConfig?.intervalMinutes || '-'} minutes</p><p className="text-sm text-gray-300">Auto publish: {status.scheduleConfig?.autoPublish ? 'Yes' : 'No'}</p></div>}
+      {status && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Eye className="w-5 h-5 text-blue-400" />Status</h4><p className="text-sm text-gray-300">Queue count: {status.queueCount || 0}</p><p className="text-sm text-gray-300">Running: {status.isRunning ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Scheduler enabled: {status.scheduleConfig?.enabled ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Configured interval: {status.scheduleConfig?.intervalMinutes || '-'} minutes</p><p className="text-sm text-gray-300">Auto publish: {status.scheduleConfig?.autoPublish ? 'Yes' : 'No'}</p></div>}
 
       {results.length > 0 && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Check className="w-5 h-5 text-green-400" />Last Scan Results ({results.length})</h4><div className="space-y-2">{results.map((result, idx) => <div key={idx} className="bg-gray-700/40 rounded p-2 text-sm">{result.queueVideo} - {result.status}</div>)}</div></div>}
 
