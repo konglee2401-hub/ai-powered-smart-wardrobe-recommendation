@@ -5,19 +5,26 @@
  * Simplifies imports: from './google-flow' instead of './google-flow/core/xxx'
  */
 
+// ========== PHASE 1: Foundation Utilities ✅ ==========
 // DOM Queries
-export { DOMElementFinder } from './dom-queries/DOMElementFinder.js';
-export { VirtuosoQueryHelper } from './dom-queries/VirtuosoQueryHelper.js';
+export { default as DOMElementFinder } from './dom-queries/DOMElementFinder.js';
+export { default as VirtuosoQueryHelper } from './dom-queries/VirtuosoQueryHelper.js';
 
 // Utilities
-export { ClipboardHelper } from './utilities/ClipboardHelper.js';
-export { MouseInteractionHelper } from './utilities/MouseInteractionHelper.js';
+export { default as ClipboardHelper } from './utilities/ClipboardHelper.js';
+export { default as MouseInteractionHelper } from './utilities/MouseInteractionHelper.js';
 
-// Will be added in next phases:
-// export { SessionManager } from './core/SessionManager.js';
-// export { PromptManager } from './core/PromptManager.js';
-// export { ImageUploadManager } from './upload/ImageUploadManager.js';
-// export { GenerationMonitor } from './generation/GenerationMonitor.js';
-// export { ErrorRecoveryManager } from './error-handling/ErrorRecoveryManager.js';
-// export { NavigationManager } from './ui-controls/NavigationManager.js';
-// export { SettingsManager } from './ui-controls/SettingsManager.js';
+// ========== PHASE 2: Session & Token Management ✅ ==========
+export { default as SessionManager } from './core/SessionManager.js';
+export { default as TokenManager } from './session/TokenManager.js';
+
+// ========== PHASE 3: Core Automation ✅ ==========
+export { default as PromptManager } from './core/PromptManager.js';
+export { default as ImageUploadManager } from './upload/ImageUploadManager.js';
+export { default as NavigationManager } from './ui-controls/NavigationManager.js';
+export { default as SettingsManager } from './ui-controls/SettingsManager.js';
+
+// ========== PHASE 4: Generation & Monitoring ✅ ==========
+export { default as GenerationMonitor } from './generation/GenerationMonitor.js';
+export { default as GenerationDownloader } from './generation/GenerationDownloader.js';
+export { default as ErrorRecoveryManager } from './error-handling/ErrorRecoveryManager.js';

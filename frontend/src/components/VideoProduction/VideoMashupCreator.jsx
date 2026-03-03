@@ -46,23 +46,29 @@ export function VideoMashupCreator() {
     try {
       setLoading(true);
       const formData = new FormData();
-      formData.append('videoFile', file);
-      formData.append('contentType', 'main');
-      
-      const response = await fetch('/api/media/upload-source', {
+      // Backend cloud gallery expects field name `file`
+      formData.append('file', file);
+      formData.append('type', 'video');
+      formData.append('tags', 'source-video,mashup-main');
+
+      const apiUrl = API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/cloud-gallery/upload`, {
         method: 'POST',
         body: formData
       });
-      
+
       if (!response.ok) throw new Error('Upload failed');
-      
-      const data = await response.json();
+
+      const json = await response.json();
+      const uploaded = json.data || json;
+
       setMainVideo({
-        mediaId: data.mediaId,
-        name: file.name,
-        duration: data.duration || 30,
+        // Use cloud media id as mediaId for downstream processing
+        mediaId: uploaded.id || uploaded.assetId,
+        name: uploaded.name || file.name,
+        duration: uploaded.duration || 30,
         size: file.size,
-        thumbnail: data.thumbnail || 'https://via.placeholder.com/120x90?text=Video'
+        thumbnail: uploaded.thumbnail || uploaded.url || 'https://via.placeholder.com/120x90?text=Video'
       });
       toast.success('Main video uploaded!');
       setStep(2);
@@ -72,6 +78,7 @@ export function VideoMashupCreator() {
       setLoading(false);
     }
   };
+
 
   // ===== STEP 2: Select Sub-Video =====
   const handleSelectSubVideo = (video) => {
