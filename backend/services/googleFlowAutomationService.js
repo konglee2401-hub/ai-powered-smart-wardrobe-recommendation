@@ -3582,14 +3582,111 @@ class GoogleFlowAutomationService {
 
           if (errorDetected.found) {
             console.warn(`   ⚠️  Error popup detected and closed: "${errorDetected.message}"`);
-            console.log(`   💡 This likely means ${quality} upscaling failed. Trying next quality option...`);
+            console.log(`   💡 2K upscaling failed - fallback to 1K (original size)`);
             
             // Close any open menus
             await this.page.keyboard.press('Escape');
-            await this.page.waitForTimeout(300);
+            await this.page.waitForTimeout(500);
             
-            // Continue to next quality option instead of giving up
-            continue;
+            // FALLBACK: Right-click again to open fresh menu for 1K download
+            console.log('   🔄 Re-opening menu to select 1K...');
+            
+            // Find the item again
+            const retryLinkData = await this.page.evaluate((targetHref) => {
+              const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+              for (const link of allLinks) {
+                if (link.getAttribute('href') === targetHref) {
+                  const rect = link.getBoundingClientRect();
+                  return {
+                    found: true,
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2)
+                  };
+                }
+              }
+              return { found: false };
+            }, newHref);
+
+            if (!retryLinkData.found) {
+              console.warn('   ⚠️  Item not found for fallback retry, aborting');
+              return null;
+            }
+
+            // Right-click again
+            console.log('   🖱️  Right-clicking item again...');
+            await this.page.mouse.move(retryLinkData.x, retryLinkData.y);
+            await this.page.waitForTimeout(400);
+            await this.page.mouse.down({ button: 'right' });
+            await this.page.waitForTimeout(50);
+            await this.page.mouse.up({ button: 'right' });
+
+            // Wait for context menu
+            await this.page.waitForTimeout(2000);
+
+            // Click "Tải xuống" (Download) button again
+            console.log('   🖱️  Clicking "Tải xuống" button...');
+            const retryDownloadClicked = await this.page.evaluate(() => {
+              const buttons = document.querySelectorAll('[role="menuitem"]');
+              for (const btn of buttons) {
+                const text = btn.textContent.toLowerCase();
+                if ((text.includes('tải xuống') || text.includes('download')) && !text.includes('ngoài')) {
+                  try {
+                    btn.click();
+                    return true;
+                  } catch (e) {
+                    console.error(`Failed to click download: ${e.message}`);
+                  }
+                }
+              }
+              return false;
+            });
+
+            if (!retryDownloadClicked) {
+              console.warn('   ⚠️  Failed to click download on fallback retry');
+              return null;
+            }
+
+            // Wait for submenu
+            console.log('   ⏳ Waiting for 1K submenu...');
+            await this.page.waitForTimeout(2000);
+
+            // Click 1K option
+            console.log('   🖱️  Clicking 1K (original size)...');
+            const retry1KClicked = await this.page.evaluate(() => {
+              const buttons = document.querySelectorAll('[role="menuitem"]');
+              for (const btn of buttons) {
+                const text = btn.textContent.toLowerCase();
+                // Match "1k" or "1K" but not as part of "2k", "4k", etc
+                if (/\b1[kK]\b/.test(text)) {
+                  try {
+                    btn.click();
+                    return true;
+                  } catch (e) {
+                    console.error(`Failed to click 1K: ${e.message}`);
+                  }
+                }
+              }
+              return false;
+            });
+
+            if (!retry1KClicked) {
+              console.warn('   ⚠️  Failed to click 1K option on fallback retry');
+              // Try to click first available option as last resort
+              console.log('   💡 Clicking first available option...');
+              await this.page.evaluate(() => {
+                const buttons = document.querySelectorAll('[role="menuitem"]');
+                if (buttons.length > 0) {
+                  buttons[0].click();
+                  return true;
+                }
+                return false;
+              });
+            } else {
+              console.log('   ✅ 1K selected via fallback');
+              selectedQuality = '1K';
+            }
+            
+            break;  // Exit quality loop and proceed to wait for file
           }
           
           break;
