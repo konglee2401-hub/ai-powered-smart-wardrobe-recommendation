@@ -59,6 +59,8 @@ class ImageUploadManager {
       console.log(`   ℹ️  Initial items in gallery: ${initialHrefs.length}`);
 
       // Upload each image
+      let currentHrefs = [...initialHrefs]; // Track hrefs for detecting new items after each upload
+      
       for (let idx = 0; idx < imagesToUpload.length; idx++) {
         const imagePath = imagesToUpload[idx];
         const filename = path.basename(imagePath);
@@ -103,7 +105,7 @@ class ImageUploadManager {
           }
 
           // Check if new image was added
-          const newHref = await VirtuosoQueryHelper.findNewHrefs(initialHrefs);
+          const newHref = await VirtuosoQueryHelper.findNewHrefs(currentHrefs);
           
           if (newHref && newHref.length > 0) {
             console.log(`   ✓ Image uploaded successfully`);
@@ -111,14 +113,19 @@ class ImageUploadManager {
             // Store reference
             const uploadKey = `img_${idx + 1}_${filename}`;
             this.uploadedImageRefs[uploadKey] = {
-              href: newHref[0],
+              href: newHref[0].href,
               filename: filename,
               uploadedAt: new Date()
             };
 
-            uploadedImages.push(newHref[0]);
+            uploadedImages.push(newHref[0].href);
+            
+            // Update currentHrefs to include this newly uploaded image for the next iteration
+            // This ensures the next image detection compares against the updated baseline
+            currentHrefs.push(newHref[0].href);
+            console.log(`   📎 Updated baseline for next image detection\n`);
           } else {
-            console.warn(`   ⚠️  Upload may have failed (no new image detected)`);
+            console.warn(`   ⚠️  Upload may have failed (no new image detected)\n`);
           }
 
         } catch (error) {
