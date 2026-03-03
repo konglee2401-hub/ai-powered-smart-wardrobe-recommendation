@@ -4810,17 +4810,35 @@ class GoogleFlowAutomationService {
             console.log(`[COMPARE] Prompt 0 (first, nothing to compare): "${normalizedPrompt.substring(0, 60)}..."`);
           }
           
+          // FIXED: Clear clipboard first to avoid pasting old content
+          console.log('[STEP C] 🧹 Clearing clipboard...');
+          await this.page.evaluate(() => {
+            navigator.clipboard.writeText('').catch(() => {});  // Clear clipboard
+          });
+          await this.page.waitForTimeout(100);
+          
           // Copy to clipboard
-          await this.page.evaluate((text) => {
-            navigator.clipboard.writeText(text).catch(() => {});
+          console.log('[STEP C] 📋 Copying prompt to clipboard...');
+          const clipboardSuccess = await this.page.evaluate((text) => {
+            return navigator.clipboard.writeText(text)
+              .then(() => true)
+              .catch((e) => {
+                console.error(`Clipboard write failed: ${e.message}`);
+                return false;
+              });
           }, normalizedPrompt);
           await this.page.waitForTimeout(200);
+          
+          if (!clipboardSuccess) {
+            console.warn('[STEP C] ⚠️  Clipboard write may have failed, continuing anyway...');
+          }
           
           // Focus textbox
           await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
           await this.page.waitForTimeout(100);
           
           // Paste
+          console.log('[STEP C] ⏳ Pasting prompt with Ctrl+V...');
           await this.page.keyboard.down('Control');
           await this.page.keyboard.press('v');
           await this.page.keyboard.up('Control');
