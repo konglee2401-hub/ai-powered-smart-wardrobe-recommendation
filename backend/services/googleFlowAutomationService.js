@@ -1456,8 +1456,8 @@ class GoogleFlowAutomationService {
           console.log(`      imageNumber: ${result.imageNumber}`);
           console.log(`      downloadedFile: ${result.downloadedFile}`);
           console.log(`      href: ${result.href?.substring(0, 80) || 'N/A'}...`);
-          if (result.downloadedFile && require('fs').existsSync(result.downloadedFile)) {
-            const fileSize = require('fs').statSync(result.downloadedFile).size;
+          if (result.downloadedFile && fs.existsSync(result.downloadedFile)) {
+            const fileSize = fs.statSync(result.downloadedFile).size;
             console.log(`      fileSize: ${(fileSize / 1024).toFixed(2)}KB`);
           }
         } else {
