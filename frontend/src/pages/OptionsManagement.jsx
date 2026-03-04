@@ -167,7 +167,7 @@ function SceneSidebarCard({ scene, isSelected, onClick }) {
  * Full Scene Detail Editor
  */
 function SceneDetailEditor({ scene, onRefresh }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [generatingImages, setGeneratingImages] = useState(false);
@@ -244,7 +244,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
         body: JSON.stringify({
           imageCount,
           aspectRatio,
-          prompt: sceneLockedPrompt || promptSuggestion
+          prompt: sceneLockedPrompt || promptSuggestion,
+          language: i18n.language || 'en'
         })
       });
       const data = await response.json();
@@ -757,7 +758,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
           <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
             {t('optionsManagement.savedLockedImages', 'Saved Scene Locked Images (max 10)')}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
             {SCENE_LOCK_ASPECTS.map((ratio) => {
               const ratioHistory = historyGroups[ratio] || [];
               const idx = Math.min(lockedHistoryIndexByAspect[ratio] || 0, Math.max(ratioHistory.length - 1, 0));
@@ -779,7 +780,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                         src={currentUrl}
                         alt={`Saved locked ${ratio}`}
                         onClick={() => setModalImageUrl(currentUrl)}
-                        style={{ width: '100%', height: ratio === '16:9' ? '140px' : '220px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                        style={{ width: '100%', height: ratio === '16:9' ? '120px' : '180px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
                       />
                       <div style={{ marginTop: '0.6rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
                         <button
@@ -820,7 +821,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
             <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
               {t('optionsManagement.previewCandidates', 'Preview Candidates')}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '0.75rem' }}>
               {SCENE_LOCK_ASPECTS.map((ratio) => {
                 const ratioSamples = sampleGroups[ratio] || [];
                 const idx = Math.min(previewIndexByAspect[ratio] || 0, Math.max(ratioSamples.length - 1, 0));
@@ -841,7 +842,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                           src={sampleUrl}
                           alt={`Scene sample ${ratio}`}
                           onClick={() => setModalImageUrl(sampleUrl)}
-                          style={{ width: '100%', height: ratio === '16:9' ? '180px' : '260px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                          style={{ width: '100%', height: ratio === '16:9' ? '140px' : '210px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
                         />
                         <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <button
