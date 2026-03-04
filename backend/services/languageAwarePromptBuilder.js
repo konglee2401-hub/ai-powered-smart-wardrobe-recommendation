@@ -79,7 +79,9 @@ export async function buildLanguageAwarePrompt(
   // Map detailed prompt format to standard format {positive, negative}
   const englishPrompt = {
     positive: detailedPrompt.prompt || '',
-    negative: detailedPrompt.negativePrompt || ''
+    negative: detailedPrompt.negativePrompt || '',
+    // 💫 NEW: Preserve scene reference image info
+    sceneReferenceImage: detailedPrompt.sceneReferenceImage || null
   };
 
   // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
