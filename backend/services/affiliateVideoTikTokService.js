@@ -304,8 +304,18 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {},
       sceneImage: sceneImageBase64 = null,
+      disableSceneReferenceTransfer = true,  // 💫 NEW: Control scene reference network transfer
       imageSource = { character: 'upload', product: 'upload' }  // 🎯 Track image source from frontend
     } = req.body;
+
+    // 💫 NEW: Normalize image source and determine skip policies
+    const normalizedImageSource = {
+      character: String(imageSource?.character || 'upload').toLowerCase(),
+      product: String(imageSource?.product || 'upload').toLowerCase()
+    };
+    const skipCharacterDriveUpload = normalizedImageSource.character === 'gallery';
+    const skipProductDriveUpload = normalizedImageSource.product === 'gallery';
+    const skipSceneReferenceNetworkTransfer = disableSceneReferenceTransfer !== false;
 
     // Extract providers from options if not in body directly
     const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
@@ -316,6 +326,13 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     console.log(`  Image Provider: ${finalImageProvider}`);
     console.log(`  Video Provider: ${finalVideoProvider}`);
     console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
+    console.log(`  Image source: character=${normalizedImageSource.character}, product=${normalizedImageSource.product}`);
+    if (skipCharacterDriveUpload || skipProductDriveUpload) {
+      console.log('  Drive upload policy: skip original image upload for gallery-selected inputs');
+    }
+    if (skipSceneReferenceNetworkTransfer) {
+      console.log('  Scene reference policy: no network download/upload in affiliate flow');
+    }
 
     // Resolve optional scene reference for Google Flow image generation
     // Priority: uploaded scene file/base64 -> scene locked image by selected scene/aspect
@@ -338,17 +355,21 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     }
 
     if (!finalSceneImagePath) {
-      try {
-        const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: '9:16' }, language);
-        if (sceneInfo?.imageUrl) {
-          const sceneResponse = await axios.get(sceneInfo.imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
-          const sceneExt = path.extname(new URL(sceneInfo.imageUrl).pathname) || '.jpg';
-          finalSceneImagePath = path.join(tempDir, `scene-locked-${Date.now()}${sceneExt}`);
-          fs.writeFileSync(finalSceneImagePath, Buffer.from(sceneResponse.data));
-          console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+      if (skipSceneReferenceNetworkTransfer) {
+        console.log('↩️  Skipping scene locked image download (network transfer disabled for affiliate flow)');
+      } else {
+        try {
+          const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: '9:16' }, language);
+          if (sceneInfo?.imageUrl) {
+            const sceneResponse = await axios.get(sceneInfo.imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
+            const sceneExt = path.extname(new URL(sceneInfo.imageUrl).pathname) || '.jpg';
+            finalSceneImagePath = path.join(tempDir, `scene-locked-${Date.now()}${sceneExt}`);
+            fs.writeFileSync(finalSceneImagePath, Buffer.from(sceneResponse.data));
+            console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+          }
+        } catch (sceneLockedError) {
+          console.warn(`⚠️ Could not load scene locked image: ${sceneLockedError.message}`);
         }
-      } catch (sceneLockedError) {
-        console.warn(`⚠️ Could not load scene locked image: ${sceneLockedError.message}`);
       }
     }
 
