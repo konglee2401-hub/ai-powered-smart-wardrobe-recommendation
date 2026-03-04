@@ -47,18 +47,14 @@ class ErrorRecoveryManager {
    * @returns {boolean} - Success status
    */
   async handleGenerationFailureRetry(prompt, uploadedRefs = {}) {
-    console.log('\n🔄 HANDLING GENERATION FAILURE - RETRYING...\n');
-    
     if (!prompt || !uploadedRefs) {
-      console.warn('⚠️  Missing prompt or image references, cannot retry');
+      console.warn('⚠️  Cannot retry: missing prompt or image references');
       return false;
     }
 
     try {
       // Step 1: Wait for UI stabilization
-      console.log('   ⏳ [1] Waiting 5 seconds for UI to stabilize...');
       await this.page.waitForTimeout(5000);
-      console.log('   ✓ Stabilized\n');
       
       // Step 2: Re-add uploaded images
       const imageKeys = Object.keys(uploadedRefs);
@@ -68,21 +64,13 @@ class ErrorRecoveryManager {
         const key = imageKeys[keyIdx];
         const ref = uploadedRefs[key];
         
-        console.log(`   🖱️  [2.${keyIdx + 1}] Re-adding "${key}" image...`);
-        
         let addSuccess = false;
         let attemptCount = 0;
         
         while (!addSuccess && attemptCount < maxRetries) {
           attemptCount++;
           
-          if (attemptCount > 1) {
-            console.log(`   🔄 Attempt ${attemptCount}/${maxRetries}...`);
-          }
-          
           try {
-            // Query current position
-            console.log(`   🔍 Querying position of "${key}" image...`);
             const linkData = await this.page.evaluate((targetHref) => {
               const link = document.querySelector(`a[href="${targetHref}"]`);
               if (!link) return { found: false };
@@ -96,8 +84,6 @@ class ErrorRecoveryManager {
             }, ref.href);
             
             if (!linkData.found) {
-              console.log(`   ⚠️  "${key}" image not found${attemptCount < maxRetries ? ', retrying...' : ''}`);
-              
               if (attemptCount < maxRetries) {
                 await this.page.waitForTimeout(1000);
                 continue;
@@ -106,10 +92,7 @@ class ErrorRecoveryManager {
               }
             }
             
-            console.log(`   ✓ Found at (${linkData.x}, ${linkData.y})`);
-            
             // Right-click on image
-            console.log(`   🖱️  Right-clicking...`);
             await this.page.mouse.move(linkData.x, linkData.y);
             await this.page.waitForTimeout(300);
             await this.page.mouse.down({ button: 'right' });
@@ -133,8 +116,6 @@ class ErrorRecoveryManager {
             });
             
             if (!addBtn) {
-              console.log(`   ⚠️  "Thêm vào" button not found${attemptCount < maxRetries ? ', retrying...' : ''}`);
-              
               await this.page.mouse.move(100, 100);
               await this.page.waitForTimeout(300);
               
@@ -147,7 +128,6 @@ class ErrorRecoveryManager {
             }
             
             // Click "Thêm vào" button
-            console.log(`   ✓ Clicking "Thêm vào câu lệnh"...`);
             await this.page.mouse.move(addBtn.x, addBtn.y);
             await this.page.waitForTimeout(200);
             await this.page.mouse.down();
@@ -155,7 +135,6 @@ class ErrorRecoveryManager {
             await this.page.mouse.up();
             await this.page.waitForTimeout(1200);
             
-            console.log(`   ✓ "${key}" image added\n`);
             addSuccess = true;
             
             // Move mouse away
@@ -163,8 +142,6 @@ class ErrorRecoveryManager {
             await this.page.waitForTimeout(300);
             
           } catch (e) {
-            console.log(`   ❌ Error on attempt ${attemptCount}: ${e.message}${attemptCount < maxRetries ? ', retrying...' : ''}`);
-            
             await this.page.mouse.move(100, 100);
             await this.page.waitForTimeout(300);
             
@@ -173,14 +150,9 @@ class ErrorRecoveryManager {
             }
           }
         }
-        
-        if (!addSuccess) {
-          console.warn(`   ⚠️  Could not add "${key}" after ${maxRetries} attempts\n`);
-        }
       }
       
       // Step 3: Re-paste original prompt
-      console.log(`   📋 [3] Re-entering original prompt...\n`);
       
       // Focus textbox
       await this.page.evaluate(() => {
@@ -202,13 +174,9 @@ class ErrorRecoveryManager {
       await this.page.waitForTimeout(50);
       await this.page.keyboard.up('Control');
       
-      console.log(`   ✓ Prompt re-pasted\n`);
-      console.log('   ⏳ [4] Waiting 5s for prompt to process...');
       await this.page.waitForTimeout(5000);
-      console.log('   ✓ Ready\n');
       
       // Step 4: Click submit button
-      console.log(`   🖱️  [5] Clicking submit button...`);
       const submitClicked = await this.page.evaluate(() => {
         const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (!textbox) return { found: false };
@@ -241,16 +209,14 @@ class ErrorRecoveryManager {
         await this.page.mouse.down();
         await this.page.waitForTimeout(50);
         await this.page.mouse.up();
-        console.log(`   ✓ Submitted\n`);
         
         return true;
       } else {
-        console.warn('   ⚠️  Submit button not found');
         return false;
       }
       
     } catch (error) {
-      console.error(`\n❌ Retry failed: ${error.message}`);
+      console.error(`❌ Retry failed: ${error.message}`);
       return false;
     }
   }
