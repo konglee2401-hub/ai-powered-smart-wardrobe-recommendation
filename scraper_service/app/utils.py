@@ -54,3 +54,9 @@ def match_topic(text: str, topic: str, keywords: list[str]) -> bool:
     if topic == 'dance':
         return bool(re.search(r'dance|nhảy|vũ đạo|choreo', t))
     return bool(re.search(r'cook|recipe|nấu|món|bếp', t))
+
+
+
+def extract_douyin_id(url: str) -> str:
+    m = re.search(r'/video/([0-9]+)', url or "")
+    return m.group(1) if m else url

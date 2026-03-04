@@ -14,6 +14,7 @@ export const trendAutomationApi = {
   updateSettings: (payload) => apiClient.post(`${BASE}/settings`, payload).then((r) => r.data),
   manualDiscoverPlayboard: (config) => apiClient.post(`${BASE}/playboard/manual-discover`, config).then((r) => r.data),
   manualDiscoverDailyhaha: (topics = null) => apiClient.post(`${BASE}/dailyhaha/manual-discover`, topics ? { topics } : {}).then((r) => r.data),
+  manualDiscoverDouyin: (topics = null) => apiClient.post(`${BASE}/douyin/manual-discover`, topics ? { topics } : {}).then((r) => r.data),
   triggerJob: (type, filters = {}) => {
 
     const params = new URLSearchParams({ type });

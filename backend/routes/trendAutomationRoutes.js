@@ -119,6 +119,7 @@ router.post('/playboard/configs/add', protect, async (req, res) => {
 // Manual discover Playboard with filters
 router.post('/playboard/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/playboard/manual-discover'));
 router.post('/dailyhaha/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/dailyhaha/manual-discover'));
+router.post('/douyin/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/douyin/manual-discover'));
 
 // Delete playboard config
 router.delete('/playboard/configs/:index', protect, async (req, res) => {

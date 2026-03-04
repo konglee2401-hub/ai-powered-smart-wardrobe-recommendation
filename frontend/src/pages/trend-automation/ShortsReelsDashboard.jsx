@@ -135,6 +135,8 @@ export default function ShortsReelsDashboard() {
       let result;
       if (selected.source === 'dailyhaha') {
         result = await trendAutomationApi.manualDiscoverDailyhaha();
+      } else if (selected.source === 'douyin') {
+        result = await trendAutomationApi.manualDiscoverDouyin();
       } else {
         result = await trendAutomationApi.manualDiscoverPlayboard(config);
       }
@@ -231,6 +233,7 @@ export default function ShortsReelsDashboard() {
             >
               <option value="playboard">Playboard</option>
               <option value="dailyhaha">DailyHaha</option>
+              <option value="douyin">Douyin</option>
             </select>
             <div className="text-xs text-gray-400 leading-relaxed">
               {selected.source} / {selected.category} / {selected.dimension} / {selected.country} / {selected.period}

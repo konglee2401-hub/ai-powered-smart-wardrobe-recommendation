@@ -197,6 +197,7 @@ export default function ShortsReelsVideos() {
             <option value="">All platform</option>
             <option value="youtube">YouTube</option>
             <option value="dailyhaha">DailyHaha</option>
+            <option value="douyin">Douyin</option>
             <option value="facebook">Facebook</option>
           </select>
         </div>
