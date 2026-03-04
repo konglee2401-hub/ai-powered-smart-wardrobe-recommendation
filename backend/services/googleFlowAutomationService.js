@@ -1067,11 +1067,12 @@ class GoogleFlowAutomationService {
       }
 
       // Optional scene image
+      let sceneRef = null;
       if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
         try {
           console.log(`[UPLOAD] 📎 Pasting scene image: ${path.basename(options.sceneImagePath)}`);
           await pasteImage(options.sceneImagePath, 'scene');
-          const sceneRef = await this.checkSingleImageUpload('scene', 45);
+          sceneRef = await this.checkSingleImageUpload('scene', 45);
           if (sceneRef) {
             console.log(`[UPLOAD] ✅ Scene confirmed: ${sceneRef.substring(0, 80)}\n`);
           } else {
@@ -1085,12 +1086,16 @@ class GoogleFlowAutomationService {
       // Store confirmed refs
       this.uploadedImageRefs = {
         wearing: { href: charRef, text: 'wearing', validated: true },
-        product: { href: productRef, text: 'product', validated: true }
+        product: { href: productRef, text: 'product', validated: true },
+        ...(sceneRef ? { scene: { href: sceneRef, text: 'scene', validated: true } } : {})
       };
       
-      console.log(`[UPLOAD] 📦 Both images confirmed and stored`);
+      console.log(`[UPLOAD] 📦 Uploaded references confirmed and stored`);
       console.log(`   [0] wearing: ${charRef.substring(0, 80)}`);
       console.log(`   [1] product: ${productRef.substring(0, 80)}\n`);
+      if (sceneRef) {
+        console.log(`   [2] scene: ${sceneRef.substring(0, 80)}\n`);
+      }
       
       // Update managers with uploaded refs so they can identify generated images
       if (this.generationMonitor) {
@@ -1211,11 +1216,12 @@ class GoogleFlowAutomationService {
 
         const refs = [
           this.uploadedImageRefs?.wearing?.href,
-          this.uploadedImageRefs?.product?.href
+          this.uploadedImageRefs?.product?.href,
+          this.uploadedImageRefs?.scene?.href
         ].filter(Boolean);
 
         if (refs.length < 2) {
-          console.log('[FALLBACK] ⚠️  Missing uploaded href refs, cannot re-add 2 images');
+          console.log('[FALLBACK] ⚠️  Missing uploaded href refs, cannot re-add reference images');
           return false;
         }
 
@@ -1728,15 +1734,37 @@ class GoogleFlowAutomationService {
         throw e;
       }
 
+      // Optional scene image for video generation
+      let sceneRef = null;
+      if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
+        try {
+          console.log(`[UPLOAD] 📎 Pasting scene image: ${path.basename(options.sceneImagePath)}`);
+          await pasteImage(options.sceneImagePath, 'scene');
+          console.log('[UPLOAD] 📤 Scene image pasted, checking upload...');
+          sceneRef = await this.checkSingleImageUpload('scene', 45);
+          if (sceneRef) {
+            console.log(`[UPLOAD] ✅ Scene confirmed: ${sceneRef.substring(0, 80)}\n`);
+          } else {
+            console.warn('[UPLOAD] ⚠️  Scene image check failed, continuing without it');
+          }
+        } catch (e) {
+          console.warn(`[UPLOAD] ⚠️  Scene image error: ${e.message}, continuing`);
+        }
+      }
+
       // Store confirmed refs
       this.uploadedImageRefs = {
         primary: { href: primaryRef, text: 'primary', validated: true },
-        secondary: { href: secondaryRef, text: 'secondary', validated: true }
+        secondary: { href: secondaryRef, text: 'secondary', validated: true },
+        ...(sceneRef ? { scene: { href: sceneRef, text: 'scene', validated: true } } : {})
       };
       
-      console.log(`[UPLOAD] 📦 Both images confirmed and stored`);
+      console.log(`[UPLOAD] 📦 Uploaded references confirmed and stored`);
       console.log(`   [0] primary: ${primaryRef.substring(0, 80)}`);
       console.log(`   [1] secondary: ${secondaryRef.substring(0, 80)}\n`);
+      if (sceneRef) {
+        console.log(`   [2] scene: ${sceneRef.substring(0, 80)}\n`);
+      }
       
       // Update managers with uploaded refs so they can identify generated video
       if (this.generationMonitor) {
@@ -1805,4 +1833,3 @@ class GoogleFlowAutomationService {
 }
 
 export default GoogleFlowAutomationService;
-
