@@ -10,10 +10,11 @@ export default function ShortsReelsVideos() {
   const [uploadingVideoId, setUploadingVideoId] = useState(null);
   const [downloadTriggering, setDownloadTriggering] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [platform, setPlatform] = useState('');
 
   const load = async () => {
     try {
-      const videos = await trendAutomationApi.getVideos({ status, limit: 100 });
+      const videos = await trendAutomationApi.getVideos({ status, platform, limit: 100 });
       setData(videos);
     } catch (err) {
       console.error('Failed to load videos:', err);
@@ -79,7 +80,7 @@ export default function ShortsReelsVideos() {
   useEffect(() => {
     load();
     loadUploadStatus();
-  }, [status]);
+  }, [status, platform]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -88,7 +89,7 @@ export default function ShortsReelsVideos() {
       loadUploadStatus();
     }, 10000);
     return () => clearInterval(timer);
-  }, [autoRefresh, status]);
+  }, [autoRefresh, status, platform]);
 
   const getStatusBadge = (status) => {
     const colors = {
@@ -186,6 +187,18 @@ export default function ShortsReelsVideos() {
             <option value="downloading">Downloading</option>
             <option value="done">Downloaded</option>
             <option value="failed">Failed</option>
+          </select>
+
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+            className="bg-gray-950 border border-gray-700 rounded px-3 py-2 text-sm"
+          >
+            <option value="">All platform</option>
+            <option value="youtube">YouTube</option>
+            <option value="dailyhaha">DailyHaha</option>
+            <option value="douyin">Douyin</option>
+            <option value="facebook">Facebook</option>
           </select>
         </div>
       </div>
