@@ -689,29 +689,51 @@ class GoogleFlowAutomationService {
         if (!lightRetrySuccess) {
           console.log('[SHARED-FLOW] 🔄 Condition 2: Trying heavier recovery (full rehash)...\n');
           
-          // HEAVIER FALLBACK: Full flow rehash (re-paste images + re-enter prompt + resubmit)
-          const recoverySuccess = await this.errorRecoveryManager?.handleGenerationFailureRetry(
-            this.lastPromptSubmitted,
-            this.uploadedImageRefs
-          );
+          // HEAVIER FALLBACK: Full flow rehash with retry loop (max 2 attempts)
+          let heavyRecoverySuccess = false;
+          const maxHeavyRetries = 2;
           
-          if (!recoverySuccess) {
-            console.log('[SHARED-FLOW] ❌ Both retry methods failed');
-            return { success: false, href: null, error: 'Generation and recovery both failed' };
+          for (let heavyAttempt = 1; heavyAttempt <= maxHeavyRetries; heavyAttempt++) {
+            console.log(`[SHARED-FLOW] 📍 Rehash attempt ${heavyAttempt}/${maxHeavyRetries}`);
+            
+            const recoverySuccess = await this.errorRecoveryManager?.handleGenerationFailureRetry(
+              this.lastPromptSubmitted,
+              this.uploadedImageRefs
+            );
+            
+            if (!recoverySuccess) {
+              if (heavyAttempt < maxHeavyRetries) {
+                console.log(`[SHARED-FLOW] ⚠️  Rehash attempt ${heavyAttempt} failed, retrying...\n`);
+                await this.page.waitForTimeout(3000);
+                continue;
+              } else {
+                console.log('[SHARED-FLOW] ❌ All rehash attempts failed');
+                return { success: false, href: null, error: 'Generation and recovery both failed' };
+              }
+            }
+            
+            console.log(`[SHARED-FLOW] ✅ Rehash attempt ${heavyAttempt} submitted, monitoring...\n`);
+            
+            // Wait for recovery generation
+            await this.page.waitForTimeout(5000);
+            const recoveryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);
+            
+            if (recoveryMonitorResult?.success && recoveryMonitorResult?.href) {
+              generationResult = recoveryMonitorResult;
+              heavyRecoverySuccess = true;
+              break;  // Success, exit retry loop
+            } else {
+              if (heavyAttempt < maxHeavyRetries) {
+                console.log(`[SHARED-FLOW] ⚠️  Rehash monitoring attempt ${heavyAttempt} failed, retrying...\n`);
+                await this.page.waitForTimeout(2000);
+              }
+            }
           }
           
-          console.log('[SHARED-FLOW] ✅ Recovery succeeded, waiting for generation...\n');
-          
-          // Wait for recovery generation
-          await this.page.waitForTimeout(5000);
-          const recoveryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Still expect 1
-          
-          if (!recoveryMonitorResult?.success || !recoveryMonitorResult?.href) {
-            console.log('[SHARED-FLOW] ⚠️  Generation monitoring after recovery failed');
+          if (!heavyRecoverySuccess) {
+            console.log('[SHARED-FLOW] ❌ All recovery attempts exhausted');
             return { success: false, href: null, error: 'Recovery monitoring failed' };
           }
-          
-          generationResult = recoveryMonitorResult;
         }
       }
       
