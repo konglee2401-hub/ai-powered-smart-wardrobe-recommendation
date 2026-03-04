@@ -1104,13 +1104,37 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                     viewport={'width': 1366, 'height': 920},
                 )
                 page = await context.new_page()
+                await page.add_init_script(
+                    """
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'vi-VN', 'vi', 'en-US', 'en'] });
+                    """
+                )
 
                 try:
                     await page.goto(search_url, wait_until='domcontentloaded', timeout=timeout_ms)
                     await asyncio.sleep(5)
                     await human_scroll(page, 8)
 
+                    diagnostics = await page.evaluate(
+                        """() => {
+                            const bodyText = (document.body?.innerText || '').slice(0, 4000);
+                            const challengeWords = ['验证', '验证码', '风控', 'captcha', 'robot'];
+                            const hasChallenge = challengeWords.some(w => bodyText.toLowerCase().includes(w.toLowerCase()));
+                            return {
+                                page_title: document.title || '',
+                                href_total: document.querySelectorAll('a[href]').length,
+                                video_links: document.querySelectorAll('a[href*="/video/"]').length,
+                                note_links: document.querySelectorAll('a[href*="/note/"]').length,
+                                user_links: document.querySelectorAll('a[href*="/user/"]').length,
+                                has_challenge: hasChallenge,
+                            };
+                        }"""
+                    )
+                    print(f"[douyin][debug] diagnostics={diagnostics}")
+
                     raw_cards = await page.evaluate(
+
                         """() => {
                             const normalize = (href) => {
                                 if (!href) return '';
@@ -1119,7 +1143,8 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                                 return `https://www.douyin.com${href}`;
                             };
 
-                            const links = Array.from(document.querySelectorAll('a[href*="/video/"]'));
+                            const links = Array.from(document.querySelectorAll('a[href*="/video/"], a[href*="/note/"], a[href*="/share/video/"]'));
+
                             const out = [];
                             const seen = new Set();
 
@@ -1146,15 +1171,39 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                                 if (out.length >= 80) break;
                             }
 
+                            if (out.length === 0) {
+                                const html = document.documentElement?.innerHTML || '';
+                                const regex = new RegExp('(?:\\\\/|/)(?:video|note)(?:\\\\/|/)(\\d{8,22})', 'g');
+
+                                const ids = new Set();
+                                let match;
+                                while ((match = regex.exec(html)) !== null) {
+                                    const id = match[1];
+                                    if (!id || ids.has(id)) continue;
+                                    ids.add(id);
+                                    out.push({
+                                        url: `https://www.douyin.com/video/${id}`,
+                                        title: `Douyin video ${id}`,
+                                        channel_url: '',
+                                        channel_name: '',
+                                    });
+                                    if (out.length >= 80) break;
+                                }
+                            }
+
                             return out;
+
                         }"""
                     )
 
+                    invalid_count = 0
                     for item in raw_cards or []:
                         url = str(item.get('url') or '').strip()
                         video_id = extract_douyin_id(url)
                         if not url or not video_id.isdigit():
+                            invalid_count += 1
                             continue
+
 
                         channel_url = str(item.get('channel_url') or '').strip()
                         channel_match = re.search(r'/user/([^/?]+)', channel_url)
@@ -1171,7 +1220,8 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                             'thumbnail': '',
                         })
 
-                    print(f'[douyin] collected {len(cards)} cards for topic={topic}')
+                    print(f'[douyin] collected {len(cards)} cards for topic={topic} (invalid_id_or_url={invalid_count})')
+
                 finally:
                     await context.close()
                     await browser.close()
