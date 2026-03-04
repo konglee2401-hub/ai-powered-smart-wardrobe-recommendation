@@ -515,7 +515,23 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
     parts.push('Style: modern, professional');
   }
   
-  parts.push('Camera: eye-level.');
+  const cameraAngle = selectedOptions.cameraAngle || 'eye-level';
+  parts.push(`Camera: ${cameraAngle}.`);
+  if (selectedOptions.cameraLock?.framing) {
+    parts.push(`Framing lock: ${selectedOptions.cameraLock.framing}.`);
+  }
+  if (selectedOptions.cameraLock?.lens) {
+    parts.push(`Lens lock: ${selectedOptions.cameraLock.lens} equivalent.`);
+  }
+  if (selectedOptions.cameraLock?.cameraDistance) {
+    parts.push(`Camera distance lock: ${selectedOptions.cameraLock.cameraDistance}.`);
+  }
+  if (selectedOptions.cameraLock?.subjectBackgroundDistance) {
+    parts.push(`Subject/background distance: ${selectedOptions.cameraLock.subjectBackgroundDistance}.`);
+  }
+  if (selectedOptions.cameraLock?.horizonAlignment) {
+    parts.push(`Horizon alignment: ${selectedOptions.cameraLock.horizonAlignment}.`);
+  }
   parts.push('Color palette: neutral.\n');
 
   parts.push('High realism, professional fashion photography.');
@@ -714,7 +730,20 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   parts.push('- Hand position: Comfortable natural holding position');
   parts.push('- Garment orientation: Clearly visible, not hidden or folded');
   parts.push('- Angle: Best angle to show garment details');
-  parts.push('- Lighting on garment: Well-lit, colors true-to-life\n');
+  parts.push('- Lighting on garment: Well-lit, colors true-to-life');
+  if (selectedOptions.holdingPresentation?.method) {
+    parts.push(`- Holding method: ${selectedOptions.holdingPresentation.method}`);
+  }
+  if (selectedOptions.holdingPresentation?.handPlacement) {
+    parts.push(`- Hand placement: ${selectedOptions.holdingPresentation.handPlacement}`);
+  }
+  if (selectedOptions.holdingPresentation?.orientation) {
+    parts.push(`- Product orientation: ${selectedOptions.holdingPresentation.orientation}`);
+  }
+  if (selectedOptions.holdingPresentation?.notes) {
+    parts.push(`- Practical notes: ${selectedOptions.holdingPresentation.notes}`);
+  }
+  parts.push('');
 
   // ==========================================
   // HAIR & MAKEUP
@@ -743,7 +772,23 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
     parts.push('Style: modern, professional');
   }
   
-  parts.push('Camera: eye-level.');
+  const cameraAngle = selectedOptions.cameraAngle || 'eye-level';
+  parts.push(`Camera: ${cameraAngle}.`);
+  if (selectedOptions.cameraLock?.framing) {
+    parts.push(`Framing lock: ${selectedOptions.cameraLock.framing}.`);
+  }
+  if (selectedOptions.cameraLock?.lens) {
+    parts.push(`Lens lock: ${selectedOptions.cameraLock.lens} equivalent.`);
+  }
+  if (selectedOptions.cameraLock?.cameraDistance) {
+    parts.push(`Camera distance lock: ${selectedOptions.cameraLock.cameraDistance}.`);
+  }
+  if (selectedOptions.cameraLock?.subjectBackgroundDistance) {
+    parts.push(`Subject/background distance: ${selectedOptions.cameraLock.subjectBackgroundDistance}.`);
+  }
+  if (selectedOptions.cameraLock?.horizonAlignment) {
+    parts.push(`Horizon alignment: ${selectedOptions.cameraLock.horizonAlignment}.`);
+  }
   parts.push('Color palette: neutral.\n');
 
   parts.push('High realism, professional fashion photography.');
