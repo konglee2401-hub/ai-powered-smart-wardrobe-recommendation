@@ -1145,6 +1145,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           const uploadResults = await Promise.all(uploadPromises);
           const successCount = uploadResults.filter(r => r).length;
           console.log(`✅ Step 2.5 Complete: ${successCount}/${uploadPromises.length} uploads successful`);
+          
+          // 💫 CRITICAL FIX: Capture Google Drive metadata from upload results
+          console.log(`\n📌 CAPTURING DRIVE METADATA`);
+          uploadResults.forEach((result, idx) => {
+            if (result && result.id) {
+              // Find the corresponding image in imageResults
+              const originalIdx = idx;  // Map back to imageResults index
+              if (imageResults[originalIdx]) {
+                imageResults[originalIdx].googleDriveId = result.id;
+                imageResults[originalIdx].googleDriveWebViewLink = result.webViewLink;
+                console.log(`   ✅ Image ${originalIdx}: Stored Drive ID = ${result.id}`);
+                console.log(`      Drive Link: ${result.webViewLink}`);
+              }
+            }
+          });
         }
       } else {
         console.log(`⚠️ Skipping uploads (Drive service not available)`);
@@ -1436,18 +1451,29 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           userId: req.body.userId || 'system',
           sessionId: flowId,
           storage: {
-            location: 'local',
+            location: imageResults[0].googleDriveId ? 'hybrid' : 'local',  // 💫 hybrid = has both
             path: imageResults[0].screenshotPath,
-            url: imageResults[0].href || imageResults[0].screenshotPath
+            url: imageResults[0].href || imageResults[0].screenshotPath,
+            // 💫 FIX: Include Drive metadata captured in Step 2.5
+            googleDriveId: imageResults[0].googleDriveId || null,
+            webViewLink: imageResults[0].googleDriveWebViewLink || null
           },
           cloudStorage: {
+            location: 'google-drive',
             localPath: imageResults[0].screenshotPath,
+            googleDriveId: imageResults[0].googleDriveId || null,
+            webViewLink: imageResults[0].googleDriveWebViewLink || null,
+            status: imageResults[0].googleDriveId ? 'synced' : 'pending',
             googleDrivePath: 'Affiliate AI/Images/Completed'
           },
+          // 💫 FIX: Add sync status
+          syncStatus: imageResults[0].googleDriveId ? 'synced' : 'pending',
           metadata: {
             format: 'jpeg',
             type: 'character-variation-1',
-            flowId
+            flowId,
+            // 💫 Include drive metadata for reference
+            driveId: imageResults[0].googleDriveId || null
           },
           tags: ['generated', 'affiliate-video', 'character-variation']
         }, { verbose: true });
@@ -1482,18 +1508,29 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             userId: req.body.userId || 'system',
             sessionId: flowId,
             storage: {
-              location: 'local',
+              location: imageResults[varIdx].googleDriveId ? 'hybrid' : 'local',  // 💫 hybrid = has both
               path: imageResults[varIdx].screenshotPath,
-              url: imageResults[varIdx].href || imageResults[varIdx].screenshotPath
+              url: imageResults[varIdx].href || imageResults[varIdx].screenshotPath,
+              // 💫 FIX: Include Drive metadata captured in Step 2.5
+              googleDriveId: imageResults[varIdx].googleDriveId || null,
+              webViewLink: imageResults[varIdx].googleDriveWebViewLink || null
             },
             cloudStorage: {
+              location: 'google-drive',
               localPath: imageResults[varIdx].screenshotPath,
+              googleDriveId: imageResults[varIdx].googleDriveId || null,
+              webViewLink: imageResults[varIdx].googleDriveWebViewLink || null,
+              status: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
               googleDrivePath: 'Affiliate AI/Images/Completed'
             },
+            // 💫 FIX: Add sync status
+            syncStatus: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
             metadata: {
               format: 'jpeg',
               type: `character-variation-${varIdx + 1}`,
-              flowId
+              flowId,
+              // 💫 Include drive metadata for reference
+              driveId: imageResults[varIdx].googleDriveId || null
             },
             tags: ['generated', 'affiliate-video', 'character-variation']
           }, { verbose: true });
