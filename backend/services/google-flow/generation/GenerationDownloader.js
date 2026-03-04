@@ -25,19 +25,28 @@ import { MouseInteractionHelper } from '../index.js';
 class GenerationDownloader {
   constructor(page, options = {}) {
     this.page = page;
-    this.options = {
-      outputDir: options.outputDir || './downloads',
-      modelName: options.modelName || 'Nano Banana Pro',
-      mediaType: options.mediaType || 'image',
-      userDownloadsDir: options.userDownloadsDir || path.join(process.env.USERPROFILE || '', 'Downloads'),
-      downloadTimeoutSeconds: typeof options.downloadTimeoutSeconds === 'number' ? options.downloadTimeoutSeconds : 25,  // 20-30s timeout, default 25
-      ...options  // Spread last, but with null checks above
+    
+    // Assign properties with explicit defaults, spread options FIRST so explicit assignments override
+    const baseOptions = {
+      ...options
     };
     
-    // Ensure downloadTimeoutSeconds is always a valid number
-    if (typeof this.options.downloadTimeoutSeconds !== 'number' || isNaN(this.options.downloadTimeoutSeconds)) {
-      this.options.downloadTimeoutSeconds = 25;
+    this.options = {
+      outputDir: baseOptions.outputDir || './downloads',
+      modelName: baseOptions.modelName || 'Nano Banana Pro',
+      mediaType: baseOptions.mediaType || 'image',
+      userDownloadsDir: baseOptions.userDownloadsDir || path.join(process.env.USERPROFILE || '', 'Downloads')
+    };
+    
+    // Handle downloadTimeoutSeconds carefully - ensure it's always a valid positive number
+    let timeoutValue = baseOptions.downloadTimeoutSeconds;
+    if (typeof timeoutValue === 'number' && timeoutValue > 0 && !isNaN(timeoutValue)) {
+      this.options.downloadTimeoutSeconds = timeoutValue;
+    } else {
+      this.options.downloadTimeoutSeconds = 30;  // 30 seconds default (20-30s range)
     }
+    
+    console.log(`[DOWNLOADER-INIT] Timeout set to: ${this.options.downloadTimeoutSeconds}s`);
     
     // Bind utilities
     MouseInteractionHelper.page = page;
@@ -251,37 +260,41 @@ class GenerationDownloader {
       console.log('   ✓ Quality submenu ready\n');
 
       // ═══════════════════════════════════════════════════════════════════
-      // RETRY LOOP: Try qualities until one succeeds
-      // On timeout or dialog: fallback to next lower quality
+      // TWO-ATTEMPT STRATEGY:
+      // 1. Try first quality (2K/1080p)
+      // 2. If dialog or timeout → close dialog and retry with fallback (1K/720p)
+      // 3. If that fails → close browser
       // ═══════════════════════════════════════════════════════════════════
-      let selectedQuality = null;
-      let downloadSuccess = false;
-      let attemptedQualities = [];
       
-      for (const quality of qualityOptions) {
-        // Skip if already tried
-        if (attemptedQualities.includes(quality.toUpperCase())) {
-          console.log(`   ⏭️  Skipping ${quality} (already attempted)`);
+      const qualityAttempts = [
+        { quality: qualityOptions[0], isFallback: false },  // First: 2K/1080p
+        { quality: qualityOptions[qualityOptions.length > 1 ? 1 : 0], isFallback: true }  // Second: 1K/720p (or first if only one)
+      ];
+      
+      for (let attemptIdx = 0; attemptIdx < qualityAttempts.length; attemptIdx++) {
+        const { quality, isFallback } = qualityAttempts[attemptIdx];
+        const attemptNum = attemptIdx + 1;
+        
+        if (isFallback && quality === qualityAttempts[0].quality) {
+          console.log('   ⏭️  Skipping fallback (only one quality available)\n');
           continue;
         }
         
-        console.log(`   🔍 Attempting quality: ${quality}...`);
-        attemptedQualities.push(quality.toUpperCase());
+        console.log(`   📍 ATTEMPT ${attemptNum}: Trying ${quality}${isFallback ? ' (fallback)' : ''}...`);
         
+        // Find and click quality option in submenu
         const qualityInfo = await this.page.evaluate((targetQuality) => {
-          // Find the QUALITY submenu (not main menu) - it has aria-labelledby attribute
+          // Re-check submenu exists (might be closed from previous click)
           const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
           if (!submenu || submenu.offsetHeight === 0) {
             return { found: false, disabled: true, reason: 'submenu not visible' };
           }
           
-          // Search ONLY in quality submenu buttons
+          // Search for matching quality button
           const buttons = submenu.querySelectorAll('button[role="menuitem"]');
-          
           for (const btn of buttons) {
             const isDisabled = btn.getAttribute('aria-disabled') === 'true';
             
-            // Match quality by exact span text (not textContent.includes)
             let matchesQuality = false;
             for (const span of btn.querySelectorAll('span')) {
               if (span.textContent.trim().toUpperCase() === targetQuality.toUpperCase()) {
@@ -290,16 +303,8 @@ class GenerationDownloader {
               }
             }
             
-            // Check if button matches quality and is enabled
             if (matchesQuality && !isDisabled) {
-              const rect = btn.getBoundingClientRect();
-              return {
-                found: true,
-                quality: targetQuality,
-                x: Math.round(rect.left + rect.width / 2),
-                y: Math.round(rect.top + rect.height / 2),
-                disabled: false
-              };
+              return { found: true, disabled: false };
             } else if (matchesQuality && isDisabled) {
               return { found: true, disabled: true, reason: 'disabled' };
             }
@@ -308,182 +313,157 @@ class GenerationDownloader {
           return { found: false, disabled: true, reason: 'not in submenu' };
         }, quality);
 
-        if (qualityInfo.found) {
-          if (qualityInfo.disabled) {
-            console.log(`   ℹ️  ${quality} found but disabled (${qualityInfo.reason})`);
-            continue;
-          }
-          
-          selectedQuality = quality;
-          console.log(`   ✓ Found enabled option: ${quality}`);
-          console.log(`   🖱️  Clicking ${quality}...`);
-          
-          const clickSuccess = await this.page.evaluate((targetQuality) => {
-            // Find the QUALITY submenu (not main menu)
-            const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
-            if (!submenu) return false;
-            
-            // Search ONLY in quality submenu buttons
-            const buttons = submenu.querySelectorAll('button[role="menuitem"]');
-            for (const btn of buttons) {
-              const isDisabled = btn.getAttribute('aria-disabled') === 'true';
-              
-              // Match quality by exact span text
-              let matchesQuality = false;
-              for (const span of btn.querySelectorAll('span')) {
-                if (span.textContent.trim().toUpperCase() === targetQuality.toUpperCase()) {
-                  matchesQuality = true;
-                  break;
-                }
-              }
-              
-              if (matchesQuality && !isDisabled) {
-                try {
-                  btn.click();
-                  return true;
-                } catch (e) {
-                  console.error(`Failed to click ${targetQuality}: ${e.message}`);
-                }
-              }
-            }
-            return false;
-          }, quality);
-
-          if (!clickSuccess) {
-            console.log(`   ⚠️  Failed to click ${quality}, trying next quality...`);
-            continue;
-          }
-
-          console.log(`   ✅ ${quality} selected. Waiting for download with timeout monitoring...`);
-
-          // ═══════════════════════════════════════════════════════════════════
-          // TIMEOUT + DIALOG DETECTION DURING DOWNLOAD
-          // Race condition: download completion vs timeout+dialog check
-          // ═══════════════════════════════════════════════════════════════════
-          const timeoutMs = this.options.downloadTimeoutSeconds * 1000;  // 25s default (20-30s range)
-          const dialogCheckInterval = 2000;  // Check every 2s
-          
-          let downloadCompleated = false;
-          let dialogDetected = false;
-          let timeoutOccurred = false;
-          
-          // Start timeout timer
-          const timeoutPromise = new Promise(resolve => 
-            setTimeout(() => {
-              timeoutOccurred = true;
-              resolve('TIMEOUT');
-            }, timeoutMs)
-          );
-          
-          // Start dialog check loop
-          const dialogCheckPromise = (async () => {
-            const startTime = Date.now();
-            while (!downloadCompleated && !dialogDetected && !timeoutOccurred) {
-              // Check for error dialog
-              const dialogInfo = await this.detectResolutionErrorDialog();
-              if (dialogInfo.detected) {
-                console.log(`   ⚠️  Resolution error dialog detected: ${dialogInfo.message}`);
-                dialogDetected = true;
-                
-                // Try to close the dialog
-                await this.closeErrorDialog();
-                return 'DIALOG_DETECTED';
-              }
-              
-              // Check periodically
-              await this.page.waitForTimeout(dialogCheckInterval);
-              const elapsed = Math.round((Date.now() - startTime) / 1000);
-              if (elapsed % 10 === 0) {
-                console.log(`   ⏳ Waiting for download... (${elapsed}s/${this.options.downloadTimeoutSeconds}s)`);
-              }
-            }
-            return 'DOWNLOAD_OK';
-          })();
-          
-          // Start download completion check
-          const downloadPromise = (async () => {
-            const downloadFile = await this.waitForDownloadCompletion();
-            downloadCompleated = true;
-            return downloadFile;
-          })();
-          
-          // Race: download vs timeout vs dialog
-          const downloadedFile = await Promise.race([
-            downloadPromise,
-            timeoutPromise,
-            dialogCheckPromise
-          ]);
-
-          // Check what happened
-          if (downloadedFile && typeof downloadedFile === 'string' && downloadedFile.includes(path.sep)) {
-            // Success! Return the file
-            const fileSize = fs.statSync(downloadedFile).size;
-            console.log(`   ✓ Downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
-            console.log(`\n✅ Download confirmed\n`);
-            return downloadedFile;
-          } else if (timeoutOccurred) {
-            console.log(`   ❌ Download timeout (${this.options.downloadTimeoutSeconds}s) with ${quality}`);
-            console.log(`   🔄 Falling back to next quality...\n`);
-            continue;  // Try next quality
-          } else if (dialogDetected) {
-            console.log(`   ❌ Resolution upgrade error with ${quality}`);
-            console.log(`   🔄 Falling back to next quality...\n`);
-            continue;  // Try next quality
-          } else {
-            console.log(`   ⚠️  Unexpected download result with ${quality}`);
-            console.log(`   🔄 Falling back to next quality...\n`);
-            continue;  // Try next quality
-          }
-        } else {
+        if (!qualityInfo.found) {
           console.log(`   ℹ️  ${quality} not found (${qualityInfo.reason})`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
+          }
+          continue;
         }
-      }
 
-      // If loop completes without success
-      if (!selectedQuality || !downloadSuccess) {
-        console.warn('\n   ⚠️  All quality options exhausted or failed');
-        console.log(`   🔄 Attempting final fallback: any available quality...\n`);
+        if (qualityInfo.disabled) {
+          console.log(`   ℹ️  ${quality} found but disabled (${qualityInfo.reason})`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
+          }
+          continue;
+        }
+
+        console.log(`   ✓ Found enabled option: ${quality}`);
+        console.log(`   🖱️  Clicking ${quality}...`);
         
-        const fallbackClicked = await this.page.evaluate(() => {
-          // Find the QUALITY submenu
+        // Click the quality option
+        const clickSuccess = await this.page.evaluate((targetQuality) => {
           const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
           if (!submenu) return false;
           
           const buttons = submenu.querySelectorAll('button[role="menuitem"]');
-          
-          // Try to click the first enabled button
           for (const btn of buttons) {
             const isDisabled = btn.getAttribute('aria-disabled') === 'true';
-            if (!isDisabled) {
+            
+            let matchesQuality = false;
+            for (const span of btn.querySelectorAll('span')) {
+              if (span.textContent.trim().toUpperCase() === targetQuality.toUpperCase()) {
+                matchesQuality = true;
+                break;
+              }
+            }
+            
+            if (matchesQuality && !isDisabled) {
               try {
                 btn.click();
                 return true;
               } catch (e) {
-                console.error(`Failed to click fallback: ${e.message}`);
+                console.error(`Failed to click ${targetQuality}: ${e.message}`);
               }
             }
           }
           return false;
-        });
+        }, quality);
 
-        if (fallbackClicked) {
-          console.log(`   ✅ Fallback quality selected. Waiting for download...`);
-          const fallbackFile = await this.waitForDownloadCompletion();
-          
-          if (fallbackFile) {
-            const fileSize = fs.statSync(fallbackFile).size;
-            console.log(`   ✓ Downloaded: ${path.basename(fallbackFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
-            console.log(`\n✅ Download confirmed (fallback)\n`);
-            return fallbackFile;
-          } else {
-            console.warn('   ⚠️  Fallback download also timed out\n');
-            return null;
+        if (!clickSuccess) {
+          console.log(`   ⚠️  Failed to click ${quality}`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
           }
+          continue;
+        }
+
+        console.log(`   ✅ ${quality} selected (${isFallback ? 'fallback' : 'preferred'}). Waiting for download...\n`);
+        console.log(`   ⏳ Monitoring download (${this.options.downloadTimeoutSeconds}s timeout)...`);
+        console.log(`   📋 Watching for: file completion OR error dialog\n`);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TIMEOUT + DIALOG DETECTION DURING DOWNLOAD
+        // Race condition: download completion vs timeout+dialog check
+        // ═══════════════════════════════════════════════════════════════════
+        const timeoutMs = this.options.downloadTimeoutSeconds * 1000;  // 30s default
+        const dialogCheckInterval = 2000;  // Check every 2s
+        
+        let downloadCompleated = false;
+        let dialogDetected = false;
+        let timeoutOccurred = false;
+        
+        // Start timeout timer
+        const timeoutPromise = new Promise(resolve => 
+          setTimeout(() => {
+            timeoutOccurred = true;
+            resolve('TIMEOUT');
+          }, timeoutMs)
+        );
+        
+        // Start dialog check loop
+        const dialogCheckPromise = (async () => {
+          const startTime = Date.now();
+          while (!downloadCompleated && !dialogDetected && !timeoutOccurred) {
+            // Check for error dialog
+            const dialogInfo = await this.detectResolutionErrorDialog();
+            if (dialogInfo.detected) {
+              console.log(`\n   ⚠️  Resolution error dialog detected: ${dialogInfo.message}`);
+              dialogDetected = true;
+              
+              // Try to close the dialog
+              await this.closeErrorDialog();
+              return 'DIALOG_DETECTED';
+            }
+            
+            // Check periodically (less spam)
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            if (elapsed % 15 === 0 && elapsed > 0) {
+              console.log(`   ⏳ Still waiting... (${elapsed}s/${this.options.downloadTimeoutSeconds}s)`);
+            }
+            
+            await this.page.waitForTimeout(dialogCheckInterval);
+          }
+          return 'DOWNLOAD_OK';
+        })();
+        
+        // Start download completion check
+        const downloadPromise = (async () => {
+          const downloadFile = await this.waitForDownloadCompletion();
+          downloadCompleated = true;
+          return downloadFile;
+        })();
+        
+        // Race: download vs timeout vs dialog
+        const downloadedFile = await Promise.race([
+          downloadPromise,
+          timeoutPromise,
+          dialogCheckPromise
+        ]);
+
+        // Check what happened
+        if (downloadedFile && typeof downloadedFile === 'string' && downloadedFile.includes(path.sep)) {
+          // SUCCESS! File downloaded
+          const fileSize = fs.statSync(downloadedFile).size;
+          console.log(`\n   ✓ Downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
+          console.log(`✅ Download confirmed (${quality})\n`);
+          return downloadedFile;
+        } else if (timeoutOccurred) {
+          console.log(`\n   ❌ Download timeout (${this.options.downloadTimeoutSeconds}s) with ${quality}`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
+          }
+          continue;  // Try next quality
+        } else if (dialogDetected) {
+          console.log(`\n   ❌ Resolution upgrade error dialog with ${quality}`);
+          console.log(`   ℹ️  This quality may not be available for your current settings`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
+          }
+          continue;  // Try next quality
         } else {
-          console.warn('   ⚠️  Could not select any quality option');
-          return null;
+          console.log(`\n   ⚠️  Unexpected download result with ${quality}`);
+          if (attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   🔄 Trying fallback quality...\n`);
+          }
+          continue;  // Try next quality
         }
       }
+
+      // Both attempts exhausted with no success
+      console.warn('\n   ⚠️  All quality attempts exhausted (no successful download)\n');
+      return null;
 
     } catch (error) {
       console.error(`   ❌ Error downloading: ${error.message}\n`);
