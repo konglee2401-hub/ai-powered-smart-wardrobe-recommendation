@@ -58,5 +58,22 @@ def match_topic(text: str, topic: str, keywords: list[str]) -> bool:
 
 
 def extract_douyin_id(url: str) -> str:
-    m = re.search(r'/video/([0-9]+)', url or "")
-    return m.group(1) if m else url
+    raw = (url or '').strip()
+    if not raw:
+        return ''
+
+    patterns = [
+        r'/video/([0-9]+)',
+        r'/note/([0-9]+)',
+        r'/share/video/([0-9]+)',
+        r'modal_id=([0-9]+)',
+        r'item_id=([0-9]+)',
+    ]
+
+    for p in patterns:
+        m = re.search(p, raw)
+        if m:
+            return m.group(1)
+
+    return raw if raw.isdigit() else ''
+

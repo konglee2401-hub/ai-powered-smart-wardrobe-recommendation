@@ -762,12 +762,22 @@ class GoogleFlowAutomationService {
 
       if (!downloadedFile) {
         console.log('[SHARED-FLOW] ⚠️  Download failed');
-        return { success: false, href: generationResult.href, error: 'Download failed' };
+        
+        // 🔴 FINAL FAILURE: Close browser when all download attempts exhausted
+        if (this.generationDownloader && this.page) {
+          console.log('[SHARED-FLOW] 🔴 Initiating browser cleanup due to download failure...');
+          try {
+            await this.generationDownloader.closeBrowserOnFailure();
+          } catch (closeError) {
+            console.error(`[SHARED-FLOW] ⚠️  Error during browser cleanup: ${closeError.message}`);
+          }
+        }
+        
+        return { success: false, href: generationResult.href, error: 'Download failed after all retries - browser closed' };
       }
 
       console.log(`[SHARED-FLOW] ✅ PHASE C complete (file: ${path.basename(downloadedFile)})\n`);
       console.log('[SHARED-FLOW] ✅ SHARED GENERATION FLOW COMPLETE\n');
-
       return {
         success: true,
         href: generationResult.href,
