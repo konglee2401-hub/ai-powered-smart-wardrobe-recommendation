@@ -24,7 +24,7 @@ class PromptManager {
     this.debugMode = options.debugMode || false;
     
     // Bind utilities to this page instance
-    ClipboardHelper.page = page;
+    // ClipboardHelper now accepts page as parameter - no binding needed
     MouseInteractionHelper.page = page;
   }
 
@@ -65,21 +65,14 @@ class PromptManager {
 
       // Clear any existing text
       console.log('   🧹 Clearing existing text...');
-      await this.page.evaluate(() => {
-        const box = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        if (box) {
-          // Clear all children (slate editor structure)
-          box.innerHTML = '';
-          // Also clear contenteditable content
-          box.textContent = '';
-        }
-      });
+      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+      await ClipboardHelper.clearTextbox(this.page, textboxSelector);
       await this.page.waitForTimeout(200);
 
       // Use ClipboardHelper to paste prompt
       console.log(`   📋 Entering prompt: "${prompt.substring(0, 60)}..."`);
-      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
-      await ClipboardHelper.enterTextCompletely(prompt, textboxSelector);
+      // Copy to clipboard and paste via Ctrl+V (proper way to interact with Slate)
+      await ClipboardHelper.copyAndPaste(this.page, prompt, textboxSelector);
 
       console.log('   ✓ Prompt entered');
 

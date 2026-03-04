@@ -6,8 +6,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Define ChatGPT persistent profile directory
-const CHATGPT_PROFILE_DIR = path.join(path.dirname(path.dirname(__dirname)), 'data', 'chatgpt-profile');
+// Define ChatGPT persistent profile directories
+const CHATGPT_PROFILE_BASE = path.join(path.dirname(path.dirname(__dirname)), 'data', 'chatgpt-profiles');
+const CHATGPT_DEFAULT_SESSION = path.join(CHATGPT_PROFILE_BASE, 'default', 'session.json');  // 💫 Shared across all flows
 
 /**
  * ChatGPT Browser Service
@@ -17,21 +18,29 @@ const CHATGPT_PROFILE_DIR = path.join(path.dirname(path.dirname(__dirname)), 'da
  * - Uses persistent Chrome profile to maintain session across runs
  * - Automatically restores cookies and authentication from previous login
  * - No repeated Cloudflare challenges thanks to persistent session
+ * - Each flow gets unique Chrome profile to prevent parallel execution conflicts
+ * - BUT all flows share the same session.json (loads latest auth from previous run)
  */
 class ChatGPTService extends BrowserService {
   constructor(options = {}) {
+    // 🔐 Support flowId for flow-specific Chrome profile isolation
+    // This prevents "profile locked by another process" errors when flows run in parallel
+    const flowId = options.flowId || 'default';
+    const profileDir = path.join(CHATGPT_PROFILE_BASE, flowId);  // Per-flow Chrome profile dir
+    
     // Pass userDataDir to parent class for persistent session
     super({
       ...options,
-      userDataDir: options.userDataDir || CHATGPT_PROFILE_DIR
+      userDataDir: profileDir  // Each flow gets own Chrome profile
     });
+    
     this.baseUrl = 'https://chatgpt.com';
     this.debug = options.debug || false; // Enable debug mode to save screenshots/HTML
-    this.sessionPath = options.sessionPath || path.join(
-      path.dirname(path.dirname(__dirname)), 
-      'data', 
-      'chatgpt-session.json'
-    );
+    this.flowId = flowId;
+    this.profileDir = profileDir;
+    // 💫 FIX: Use SHARED session file, not per-flow
+    // This ensures all flows load the latest auth tokens from previous run
+    this.sessionPath = CHATGPT_DEFAULT_SESSION;
   }
 
   /**
@@ -102,6 +111,73 @@ class ChatGPTService extends BrowserService {
       return true;
     } catch (error) {
       console.log(`   ⚠️  Could not fully apply session: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user is authenticated on ChatGPT
+   */
+  async isAuthenticated() {
+    try {
+      const currentUrl = this.page.url();
+      
+      // If we're on auth pages, not authenticated
+      if (currentUrl.includes('auth.openai.com') || currentUrl.includes('/auth/')) {
+        return false;
+      }
+
+      // Check for authentication indicators
+      const authStatus = await this.page.evaluate(() => {
+        try {
+          // Check 1: Prompt textarea exists
+          const hasTextarea = !!document.querySelector('textarea[id="prompt-textarea"]') || 
+                             !!document.querySelector('textarea[name="prompt-textarea"]') ||
+                             !!document.querySelector('textarea[placeholder*="Ask"]') ||
+                             !!document.querySelector('textarea');
+
+          // Check 2: Profile button/image visible
+          const hasProfileButton = !!document.querySelector('img[alt="Profile image"]') ||
+                                  !!document.querySelector('[class*="profile"]') ||
+                                  !!document.querySelector('button[aria-label*="Profile"]');
+
+          // Check 3: Create new chat button
+          const hasCreateButton = !!document.querySelector('[data-testid="create-new-chat-button"]') ||
+                                 Array.from(document.querySelectorAll('button')).some(b => 
+                                   b.textContent.includes('New chat') || b.textContent.includes('New Chat')
+                                 );
+
+          // Check 4: No login button visible
+          const loginButtons = Array.from(document.querySelectorAll('button, a'))
+            .filter(el => {
+              const text = el.textContent.toLowerCase();
+              return (text.includes('log in') || 
+                      text.includes('sign in') || 
+                      text.includes('sign up'));
+            })
+            .filter(el => el.offsetHeight > 0 && el.offsetWidth > 0);
+          
+          const hasLoginButton = loginButtons.length > 0;
+
+          // Determine authentication
+          const isAuthed = (hasTextarea && !hasLoginButton) ||
+                          (hasProfileButton && hasCreateButton && !hasLoginButton);
+
+          return {
+            hasTextarea,
+            hasProfileButton,
+            hasCreateButton,
+            hasLoginButton,
+            isAuthed
+          };
+        } catch (e) {
+          return { isAuthed: false, error: e.message };
+        }
+      });
+
+      return authStatus.isAuthed;
+    } catch (error) {
+      console.log(`⚠️  Error checking authentication: ${error.message}`);
       return false;
     }
   }
@@ -185,6 +261,35 @@ class ChatGPTService extends BrowserService {
     // Navigate to ChatGPT first
     await this.goto(this.baseUrl, { waitUntil: 'networkidle2', timeout: 120000 });
     
+    // CRITICAL: Accept/close cookie modal BEFORE loading session
+    // Closing cookie modal without accepting might trigger page reset
+    console.log('🍪 Handling cookie consent...');
+    try {
+      const acceptBtn = await this.page.evaluate(() => {
+        // Find and click accept all cookies button
+        const btn = Array.from(document.querySelectorAll('button')).find(b => 
+          b.textContent.includes('Chấp nhận') || 
+          b.textContent.includes('Accept all') || 
+          b.textContent.includes('Accept') ||
+          b.getAttribute('aria-label')?.includes('accept')
+        );
+        if (btn && btn.offsetParent !== null) {
+          btn.click();
+          return true;
+        }
+        return false;
+      });
+      
+      if (acceptBtn) {
+        console.log('   ✓ Clicked Accept Cookies button');
+        await this.page.waitForTimeout(2000);  // Wait for modal to close
+      } else {
+        console.log('   ✓ No cookie modal found');
+      }
+    } catch (e) {
+      console.log(`   ⚠️  Could not handle cookie modal: ${e.message}`);
+    }
+    
     // Try to load and apply saved session
     const sessionData = this.loadSavedSession();
     if (sessionData) {
@@ -240,7 +345,18 @@ class ChatGPTService extends BrowserService {
         console.log(`      Waiting... ${i}s remaining`);
         await this.page.waitForTimeout(1000);
       }
-      console.log('\n   ✓ Session initialization complete!\n');
+      
+      // NEW: Check if actually authenticated
+      console.log('\n   ✓ STEP 7: Verifying authentication...');
+      const isAuthed = await this.isAuthenticated();
+      
+      if (isAuthed) {
+        console.log('   ✅ Successfully authenticated with saved session!\n');
+      } else {
+        console.log('   ❌ Saved session expired or invalid - user not authenticated\n');
+        console.log('⚠️  Session expired. Proceeding without saved session.\n');
+        // Continue without session - user may need to login manually
+      }
     }
     
     // Handle potential Cloudflare challenge
@@ -250,54 +366,6 @@ class ChatGPTService extends BrowserService {
     // Wait for page to fully render
     console.log('⏳ Waiting for ChatGPT to load...');
     await this.page.waitForTimeout(5000);
-    
-    // Close any cookie/notification banners that might block input
-    console.log('🍪 Closing cookie/notification popups...');
-    let popupsClosed = 0;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const closed = await this.page.evaluate(() => {
-          // Close cookie dialog specifically
-          const cookieCloseBtn = document.querySelector('[data-testid="close-button"]');
-          if (cookieCloseBtn && cookieCloseBtn.offsetParent !== null) {
-            cookieCloseBtn.click();
-            return true;
-          }
-          
-          // Or accept all cookies button
-          const acceptAllBtn = Array.from(document.querySelectorAll('button')).find(btn => 
-            btn.textContent.includes('Chấp nhận') || btn.textContent.includes('Accept all') || 
-            btn.textContent.includes('Accept')
-          );
-          if (acceptAllBtn && acceptAllBtn.offsetParent !== null) {
-            acceptAllBtn.click();
-            return true;
-          }
-          
-          // Fallback: generic close buttons (be more selective)
-          const closeButtons = document.querySelectorAll(
-            'button[aria-label*="Close"], button[aria-label*="close"], button[aria-label*="Đóng"]'
-          );
-          for (const btn of closeButtons) {
-            if (btn.offsetParent !== null && btn.dataset.testid === 'close-button') {
-              btn.click();
-              return true;
-            }
-          }
-          return false;
-        });
-        if (closed) {
-          popupsClosed++;
-          console.log(`   ✓ Closed popup ${popupsClosed}`);
-          await this.page.waitForTimeout(800);
-        }
-      } catch (e) {
-        // Continue
-      }
-    }
-    if (popupsClosed > 0) {
-      console.log(`✅ Closed ${popupsClosed} popup(s)`);
-    }
     
     // Wait for textarea input to appear to ensure Chat interface is ready
     console.log('⏳ Waiting for chat interface (textarea)...');
@@ -1099,7 +1167,14 @@ class ChatGPTService extends BrowserService {
                               text.toLowerCase().includes('processing');
         
         // Check if there's a "Continue generating" button (response not complete)
-        const continueBtn = document.querySelector('button[aria-label*="continue"], button:has-text("Continue"), [data-testid*="continue"]');
+        // Use valid CSS selector or iterate through buttons
+        let continueBtn = document.querySelector('button[aria-label*="continue"], [data-testid*="continue"]');
+        if (!continueBtn) {
+          // Fallback: search through buttons for "Continue" text
+          continueBtn = Array.from(document.querySelectorAll('button')).find(btn => 
+            btn.textContent.includes('Continue') && btn.offsetParent !== null
+          );
+        }
         const hasContinue = !!continueBtn;
         
         return {
@@ -1125,25 +1200,30 @@ class ChatGPTService extends BrowserService {
       // Complete when:
       // 1. Has content
       // 2. Content length hasn't changed for stableThreshold (5 seconds)
-      // 3. No loading spinner/text
-      // 4. No "Continue generating" button
+      // 3. No "Continue generating" button
+      // 4. (OPTIONALLY: No loading spinner/text, but don't REQUIRE it)
       if (state.hasContent && !state.hasContinue) {
         if (state.length === lastContentLength) {
           // Content hasn't grown - increment stable counter
           stableCount++;
           
-          if (stableCount >= stableThreshold && !state.isLoading) {
+          // 🔥 FIX: Remove the "!state.isLoading" requirement
+          // Sometimes ChatGPT shows loading indicator even after response is complete
+          // If content is stable for 5+ seconds AND no Continue button, it's done
+          if (stableCount >= stableThreshold) {
             console.log(`\n✅ Response streaming COMPLETE!`);
             console.log(`   - Final length: ${state.length} characters`);
             console.log(`   - Stable for ${stableCount} seconds of monitoring`);
             console.log(`   - No "Continue" button visible`);
+            console.log(`   - Loading indicator: ${state.isLoading ? 'Still showing (but ignoring)' : 'Cleared'}`);
             break;
           }
         } else {
           // Content is still growing - reset counter and track new length
+          const deltaLength = state.length - lastContentLength;
           stableCount = 0;
           lastContentLength = state.length;
-          console.log(`📝 New content streaming: +${state.length - lastContentLength}ch (total: ${state.length}ch)`);
+          console.log(`📝 New content streaming: +${deltaLength}ch (total: ${state.length}ch)`);
         }
       } else {
         stableCount = 0;
@@ -1173,21 +1253,57 @@ class ChatGPTService extends BrowserService {
       let fullText = '';
       let extractMethod = 'none';
       
-      // ===== METHOD 1: Get text directly from assistant message element (new article structure) =====
-      let assistantMessage = document.querySelector('article[data-turn="assistant"]');
-      if (!assistantMessage) assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
+      // ===== METHOD 0: NEW - Extract ALL <p> tags with <br> handling =====
+      // ChatGPT HTML renders responses across MULTIPLE <p> tags with <br> instead of newlines
+      // FIX: Combine ALL p tags, don't just take the longest one
+      if (fullText.length < 100) {
+        const pTags = document.querySelectorAll('article[data-turn="assistant"] p, [data-message-author-role="assistant"] p');
+        if (pTags.length > 0) {
+          // Combine text from ALL p tags (not just the longest)
+          const allTexts = [];
+          for (const p of pTags) {
+            // Convert <br> to newlines and get text
+            const html = p.innerHTML;
+            const text = html
+              .replace(/<br\s*\/?>/gi, '\n')  // Replace <br> with newline
+              .replace(/<[^>]*>/g, '')  // Remove all other HTML tags
+              .replace(/&nbsp;/gi, ' ')  // Replace &nbsp; with space
+              .replace(/&lt;/g, '<')     // Decode HTML entities
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/\n\n+/g, '\n')  // Collapse multiple newlines to single
+              .trim();
+            
+            if (text.length > 5) {
+              allTexts.push(text);
+            }
+          }
+          
+          if (allTexts.length > 0) {
+            fullText = allTexts.join('\n');  // Combine all with newlines
+            extractMethod = 'p-tag-with-br-handling-ALL';
+          }
+        }
+      }
       
-      if (assistantMessage) {
-        // Try innerText first (preserves formatting)
-        let text = assistantMessage.innerText || assistantMessage.textContent || '';
-        if (text.length > 100) {  // Require meaningful response
-          fullText = text;
-          extractMethod = 'direct-assistant-element';
+      // ===== METHOD 1: Get text directly from assistant message element (new article structure) =====
+      if (fullText.length < 500) {  // Changed from < 100 to < 500 to ensure we get complete responses
+        let assistantMessage = document.querySelector('article[data-turn="assistant"]');
+        if (!assistantMessage) assistantMessage = document.querySelector('[data-message-author-role="assistant"]');
+        
+        if (assistantMessage) {
+          // Try innerText first (preserves formatting)
+          let text = assistantMessage.innerText || assistantMessage.textContent || '';
+          if (text.length > 500) {  // Require complete response
+            fullText = text;
+            extractMethod = 'direct-assistant-element';
+          }
         }
       }
       
       // ===== METHOD 2: Try markdown container inside assistant message =====
-      if (fullText.length < 100) {
+      if (fullText.length < 500) {  // Changed from < 100 to < 500
         let assistantMsg = document.querySelector('article[data-turn="assistant"]');
         if (!assistantMsg) assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
         
@@ -1196,7 +1312,7 @@ class ChatGPTService extends BrowserService {
           const markdownDiv = assistantMsg.querySelector('.markdown, [class*="prose"], [class*="message-content"]');
           if (markdownDiv) {
             const text = markdownDiv.innerText || markdownDiv.textContent || '';
-            if (text.length > 100) {
+            if (text.length > 500) {
               fullText = text;
               extractMethod = 'markdown-container';
             }
@@ -1205,36 +1321,36 @@ class ChatGPTService extends BrowserService {
       }
       
       // ===== METHOD 3: Try to extract from the main response div =====
-      if (fullText.length < 100) {
+      if (fullText.length < 500) {  // Changed from < 100 to < 500
         let assistantMsg = document.querySelector('article[data-turn="assistant"]');
         if (!assistantMsg) assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
         
         if (assistantMsg) {
-          // Get all paragraph text
-          const paragraphs = Array.from(assistantMsg.querySelectorAll('p, div, span'))
+          // Get all paragraph text and combine
+          const paragraphs = Array.from(assistantMsg.querySelectorAll('p'))
             .map(el => {
               const text = el.innerText || el.textContent || '';
               return text.trim();
             })
-            .filter(t => t.length > 10)
+            .filter(t => t.length > 0)
             .join('\n');
           
-          if (paragraphs.length > 100) {
+          if (paragraphs.length > 500) {
             fullText = paragraphs;
-            extractMethod = 'element-tree-combined';
+            extractMethod = 'all-paragraphs-combined';
           }
         }
       }
       
       // ===== FALLBACK: Get all assistant message content =====
-      if (fullText.length < 100) {
+      if (fullText.length < 500) {  // Changed from < 100 to < 500
         let allMessages = document.querySelectorAll('article[data-turn="assistant"]');
         if (allMessages.length === 0) allMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
         
         if (allMessages.length > 0) {
           const lastMsg = allMessages[allMessages.length - 1];
           const text = lastMsg.innerText || lastMsg.textContent || '';
-          if (text.length > 100) {
+          if (text.length > 500) {
             fullText = text;
             extractMethod = 'last-assistant-message';
           }
@@ -1242,7 +1358,7 @@ class ChatGPTService extends BrowserService {
       }
       
       // ===== FINAL FALLBACK: Search for response by markers (old format) =====
-      if (fullText.length < 100) {
+      if (fullText.length < 500) {  // Changed from < 100 to < 500
         const allText = document.body.innerText || document.body.textContent || '';
         const charProfileIndex = allText.lastIndexOf('*** CHARACTER PROFILE START ***');
         if (charProfileIndex > 0) {
@@ -1715,6 +1831,98 @@ class ChatGPTService extends BrowserService {
       }
       
       throw error;
+    }
+  }
+
+  /**
+   * 💾 Capture and save current session before closing
+   * This ensures cookies + auth tokens are persisted for next run
+   */
+  async captureAndSaveSession() {
+    if (!this.page) return false;
+    
+    try {
+      console.log('📸 Capturing session before closing...');
+      
+      // Get current cookies
+      const cookies = await this.page.cookies();
+      
+      // Get localStorage
+      const localStorage = await this.page.evaluate(() => {
+        const items = {};
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          items[key] = window.localStorage.getItem(key);
+        }
+        return items;
+      });
+      
+      // Get sessionStorage
+      const sessionStorage = await this.page.evaluate(() => {
+        const items = {};
+        for (let i = 0; i < window.sessionStorage.length; i++) {
+          const key = window.sessionStorage.key(i);
+          items[key] = window.sessionStorage.getItem(key);
+        }
+        return items;
+      });
+      
+      // Check authentication status
+      const isAuthed = await this.isAuthenticated();
+      
+      const sessionData = {
+        cookies,
+        localStorage,
+        sessionStorage,
+        timestamp: new Date().toISOString(),
+        url: this.page.url(),
+        isAuthenticated: isAuthed
+      };
+      
+      // 💾 Ensure session directory exists before saving
+      const sessionDir = path.dirname(this.sessionPath);
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+        console.log(`   📁 Created session directory: ${sessionDir}`);
+      }
+      
+      // 💾 Save to file
+      fs.writeFileSync(this.sessionPath, JSON.stringify(sessionData, null, 2));
+      
+      console.log('   ✅ Session captured and saved');
+      console.log(`      - Cookies: ${cookies.length}`);
+      console.log(`      - LocalStorage items: ${Object.keys(localStorage).length}`);
+      console.log(`      - SessionStorage items: ${Object.keys(sessionStorage).length}`);
+      console.log(`      - Authenticated: ${isAuthed ? '✅' : '❌'}`);
+      console.log(`      - Saved to: ${this.sessionPath}`);
+      
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Failed to capture session: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 🔐 Override close() to save session before closing browser
+   */
+  async close() {
+    try {
+      // Capture + save session BEFORE closing browser
+      await this.captureAndSaveSession();
+      
+      // Then close browser using parent method
+      await super.close();
+      
+      console.log('✅ ChatGPT browser closed with session saved');
+    } catch (error) {
+      console.error(`❌ Error during close: ${error.message}`);
+      // Still try to close browser even if session capture fails
+      try {
+        await super.close();
+      } catch (e) {
+        console.error(`❌ Failed to close browser: ${e.message}`);
+      }
     }
   }
 }

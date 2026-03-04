@@ -53,9 +53,10 @@ class GenerationDownloader {
     let qualityOptions = [];
     if (this.options.mediaType === 'image' && this.options.modelName === 'Nano Banana Pro') {
       qualityOptions = ['2k', '2K', '1k', '1K'];
-      console.log(`   ℹ️  Model: ${this.options.modelName} (trying 2K first)`);
+      console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first)`);
     } else if (this.options.mediaType === 'image') {
       qualityOptions = ['1k', '1K'];
+      console.log(`   ℹ️  Image (trying 1K first)`);
     } else {
       qualityOptions = ['1080p', '1080P', '720p', '720P'];
       console.log(`   ℹ️  Video (trying 1080P first)`);
@@ -131,37 +132,96 @@ class GenerationDownloader {
       console.log('   ⏳ Waiting for submenu...');
       await this.page.waitForTimeout(2000);
 
-      // Select quality option
+      // Verify submenu is ready
+      const submenuReady = await this.page.evaluate(() => {
+        const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+        if (!submenu) return false;
+        const buttons = submenu.querySelectorAll('button[role="menuitem"]');
+        return buttons.length > 0;
+      });
+
+      if (!submenuReady) {
+        console.warn('   ⚠️  Quality submenu not ready!');
+        return null;
+      }
+
+      console.log('   ✓ Quality submenu ready');
+
+      // Select quality option - SCOPED TO QUALITY SUBMENU ONLY
       let selectedQuality = null;
       for (const quality of qualityOptions) {
+        console.log(`   🔍 Checking for quality: ${quality}...`);
+        
         const qualityInfo = await this.page.evaluate((targetQuality) => {
-          const buttons = document.querySelectorAll('[role="menuitem"]');
+          // Find the QUALITY submenu (not main menu) - it has aria-labelledby attribute
+          const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+          if (!submenu || submenu.offsetHeight === 0) {
+            return { found: false, disabled: true, reason: 'submenu not visible' };
+          }
+          
+          // Search ONLY in quality submenu buttons
+          const buttons = submenu.querySelectorAll('button[role="menuitem"]');
           
           for (const btn of buttons) {
-            const text = btn.textContent.toLowerCase();
+            const isDisabled = btn.getAttribute('aria-disabled') === 'true';
             
-            if (text.includes(targetQuality.toLowerCase())) {
+            // Match quality by exact span text (not textContent.includes)
+            let matchesQuality = false;
+            for (const span of btn.querySelectorAll('span')) {
+              if (span.textContent.trim().toUpperCase() === targetQuality.toUpperCase()) {
+                matchesQuality = true;
+                break;
+              }
+            }
+            
+            // Check if button matches quality and is enabled
+            if (matchesQuality && !isDisabled) {
               const rect = btn.getBoundingClientRect();
               return {
                 found: true,
                 quality: targetQuality,
                 x: Math.round(rect.left + rect.width / 2),
-                y: Math.round(rect.top + rect.height / 2)
+                y: Math.round(rect.top + rect.height / 2),
+                disabled: false
               };
+            } else if (matchesQuality && isDisabled) {
+              return { found: true, disabled: true, reason: 'disabled' };
             }
           }
           
-          return { found: false };
+          return { found: false, disabled: true, reason: 'not in submenu' };
         }, quality);
 
         if (qualityInfo.found) {
+          if (qualityInfo.disabled) {
+            console.log(`   ℹ️  ${quality} found but disabled (${qualityInfo.reason})`);
+            continue;
+          }
+          
           selectedQuality = quality;
+          console.log(`   ✓ Found enabled option: ${quality}`);
           console.log(`   🖱️  Clicking ${quality}...`);
           
           const clickSuccess = await this.page.evaluate((targetQuality) => {
-            const buttons = document.querySelectorAll('[role="menuitem"]');
+            // Find the QUALITY submenu (not main menu)
+            const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+            if (!submenu) return false;
+            
+            // Search ONLY in quality submenu buttons
+            const buttons = submenu.querySelectorAll('button[role="menuitem"]');
             for (const btn of buttons) {
-              if (btn.textContent.toLowerCase().includes(targetQuality.toLowerCase())) {
+              const isDisabled = btn.getAttribute('aria-disabled') === 'true';
+              
+              // Match quality by exact span text
+              let matchesQuality = false;
+              for (const span of btn.querySelectorAll('span')) {
+                if (span.textContent.trim().toUpperCase() === targetQuality.toUpperCase()) {
+                  matchesQuality = true;
+                  break;
+                }
+              }
+              
+              if (matchesQuality && !isDisabled) {
                 try {
                   btn.click();
                   return true;
@@ -177,34 +237,46 @@ class GenerationDownloader {
             console.log(`   ✅ ${quality} selected`);
             break;
           }
+        } else {
+          console.log(`   ℹ️  ${quality} not found (${qualityInfo.reason})`);
         }
       }
 
       if (!selectedQuality) {
-        console.warn('   ⚠️  No quality option found, trying first available...');
+        console.warn('   ⚠️  None of the preferred qualities found. Trying 1K as fallback...');
         
-        const firstOption = await this.page.evaluate(() => {
-          const buttons = document.querySelectorAll('[role="menuitem"]');
-          if (buttons.length > 0) {
-            try {
-              const rect = buttons[0].getBoundingClientRect();
-              return {
-                x: Math.round(rect.left + rect.width / 2),
-                y: Math.round(rect.top + rect.height / 2)
-              };
-            } catch (e) {
-              return null;
+        const fallbackClicked = await this.page.evaluate(() => {
+          // Find the QUALITY submenu
+          const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+          if (!submenu) return false;
+          
+          const buttons = submenu.querySelectorAll('button[role="menuitem"]');
+          
+          // Specifically look for 1K, not just any first button
+          for (const btn of buttons) {
+            const isDisabled = btn.getAttribute('aria-disabled') === 'true';
+            if (isDisabled) continue;
+            
+            // Look for 1K span
+            for (const span of btn.querySelectorAll('span')) {
+              if (span.textContent.trim().toUpperCase() === '1K') {
+                try {
+                  btn.click();
+                  return true;
+                } catch (e) {
+                  console.error(`Failed to click 1K: ${e.message}`);
+                }
+              }
             }
           }
-          return null;
+          return false;
         });
 
-        if (firstOption) {
-          await this.page.mouse.move(firstOption.x, firstOption.y);
-          await this.page.waitForTimeout(150);
-          await this.page.mouse.down();
-          await this.page.waitForTimeout(100);
-          await this.page.mouse.up();
+        if (fallbackClicked) {
+          console.log(`   ✅ 1K selected (fallback)`);
+          selectedQuality = '1K';
+        } else {
+          console.warn('   ⚠️  Could not select any quality option');
         }
       }
 
@@ -273,6 +345,15 @@ class GenerationDownloader {
     const videoExtensions = ['.mp4', '.mkv', '.mov', '.avi'];
     const allowedExtensions = this.options.mediaType === 'video' ? videoExtensions : imageExtensions;
 
+    // 🔍 DEBUG: Log initial state
+    console.log(`\n🔥 DEBUG: waitForDownloadCompletion() started`);
+    console.log(`   outputDir: ${this.options.outputDir}`);
+    console.log(`   mediaType: ${this.options.mediaType}`);
+    console.log(`   initialFiles count: ${initialFiles.length}`);
+    if (initialFiles.length <= 10) {
+      console.log(`   initialFiles: ${initialFiles.join(', ')}`);
+    }
+
     for (let attempt = 0; attempt < maxWaitAttempts; attempt++) {
       // Check output directory
       let currentFiles = fs.readdirSync(this.options.outputDir);
@@ -286,7 +367,16 @@ class GenerationDownloader {
       });
 
       if (newFiles.length > 0) {
-        return path.join(this.options.outputDir, newFiles[0]);
+        // 🔍 DEBUG: Found new files
+        console.log(`   ✅ Found ${newFiles.length} new file(s) at attempt ${attempt}:`);
+        newFiles.forEach((f, idx) => {
+          const fullPath = path.join(this.options.outputDir, f);
+          const fileSize = fs.existsSync(fullPath) ? (fs.statSync(fullPath).size / 1024).toFixed(2) : 'N/A';
+          console.log(`      [${idx}] ${f} (${fileSize}KB)`);
+        });
+        const result = path.join(this.options.outputDir, newFiles[0]);
+        console.log(`   Returning: ${result}`);
+        return result;
       }
 
       // Check user Downloads folder
@@ -298,12 +388,16 @@ class GenerationDownloader {
         });
         
         if (downloadedFiles.length > 0) {
+          // 🔍 DEBUG: Found files in Downloads
+          console.log(`   ✅ Found ${downloadedFiles.length} file(s) in Downloads folder`);
+          console.log(`      files: ${downloadedFiles.slice(0, 3).join(', ')}`);
           // Move to output directory
           const sourcePath = path.join(this.options.userDownloadsDir, downloadedFiles[0]);
           const destPath = path.join(this.options.outputDir, downloadedFiles[0]);
           
           try {
             fs.renameSync(sourcePath, destPath);
+            console.log(`   Moved: ${downloadedFiles[0]}`);
             return destPath;
           } catch (err) {
             console.log(`   ⚠️  Could not move file: ${err.message}`);
@@ -320,6 +414,7 @@ class GenerationDownloader {
       await this.page.waitForTimeout(500);
     }
 
+    console.log(`   ❌ Timeout - no new files found after ${maxWaitAttempts} attempts (${(maxWaitAttempts * 0.5).toFixed(0)}s)`);
     return null;
   }
 }

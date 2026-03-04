@@ -17,14 +17,14 @@ import url from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '.env') });
+// Load environment variables from backend/.env (2 levels up from scripts/setup/)
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const clientId = process.env.OAUTH_CLIENT_ID;
 const clientSecret = process.env.OAUTH_CLIENT_SECRET;
 const callbackPort = 5000;
 const redirectUri = `http://localhost:${callbackPort}/api/drive/auth-callback`;
-const tokenPath = path.join(__dirname, 'config/drive-token.json');
+const tokenPath = path.join(__dirname, '../../config/drive-token.json');
 
 console.log(`
 ╔════════════════════════════════════════════════════════════════╗

@@ -27,9 +27,7 @@ class ImageUploadManager {
     this.options = options;
     this.uploadedImageRefs = {}; // Store refs of uploaded images
     
-    // Bind utilities to this page instance
-    ClipboardHelper.page = page;
-    VirtuosoQueryHelper.page = page;
+    // Bind MouseInteractionHelper to this page instance (others accept page as parameter)
     MouseInteractionHelper.page = page;
   }
 
@@ -55,7 +53,7 @@ class ImageUploadManager {
 
     try {
       // Capture initial state
-      const initialHrefs = await VirtuosoQueryHelper.getHrefsFromVirtuosoList();
+      const initialHrefs = await VirtuosoQueryHelper.getHrefsFromVirtuosoList(this.page);
       console.log(`   ℹ️  Initial items in gallery: ${initialHrefs.length}`);
 
       // Upload each image
@@ -79,7 +77,7 @@ class ImageUploadManager {
 
           // Copy to clipboard (helper accepts both file path and buffer)
           console.log('   📋 Copying to clipboard...');
-          await ClipboardHelper.copyImageToClipboard(pngBuffer);
+          await ClipboardHelper.copyImageToClipboard(this.page, pngBuffer);
 
           // Find textbox and paste
           console.log('   📌 Finding prompt textbox...');
@@ -105,7 +103,7 @@ class ImageUploadManager {
           }
 
           // Check if new image was added
-          const newHref = await VirtuosoQueryHelper.findNewHrefs(currentHrefs);
+          const newHref = await VirtuosoQueryHelper.findNewHrefs(this.page, currentHrefs);
           
           if (newHref && newHref.length > 0) {
             console.log(`   ✓ Image uploaded successfully`);

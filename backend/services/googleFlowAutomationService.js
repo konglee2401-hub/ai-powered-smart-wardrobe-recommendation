@@ -29,6 +29,7 @@ import PromptManager from './google-flow/core/PromptManager.js';
 import ImageUploadManager from './google-flow/upload/ImageUploadManager.js';
 import NavigationManager from './google-flow/ui-controls/NavigationManager.js';
 import SettingsManager from './google-flow/ui-controls/SettingsManager.js';
+import PreGenerationMonitor from './google-flow/generation/PreGenerationMonitor.js';
 import GenerationMonitor from './google-flow/generation/GenerationMonitor.js';
 import GenerationDownloader from './google-flow/generation/GenerationDownloader.js';
 import ErrorRecoveryManager from './google-flow/error-handling/ErrorRecoveryManager.js';
@@ -82,6 +83,7 @@ class GoogleFlowAutomationService {
     this.imageUploadManager = null;
     this.navigationManager = null;
     this.settingsManager = null;
+    this.preGenerationMonitor = null; // NEW: Capture baseline before generation
     this.generationMonitor = null;
     this.generationDownloader = null;
     this.errorRecoveryManager = null;
@@ -144,11 +146,22 @@ class GoogleFlowAutomationService {
     this.navigationManager = new NavigationManager();
     this.navigationManager.page = this.page;
     
-    this.settingsManager = new SettingsManager();
-    this.settingsManager.page = this.page;
+    this.settingsManager = new SettingsManager(this.page, {
+      type: this.type,
+      imageCount: this.options.imageCount,
+      videoCount: this.options.videoCount,
+      aspectRatio: this.options.aspectRatio,
+      model: this.options.model,
+      videoReferenceType: this.options.videoReferenceType
+    });
+    
+    this.preGenerationMonitor = new PreGenerationMonitor();
+    this.preGenerationMonitor.page = this.page;
     
     this.generationMonitor = new GenerationMonitor();
     this.generationMonitor.page = this.page;
+    this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
+    this.generationMonitor.setPreGenerationMonitor(this.preGenerationMonitor); // NEW: Pass baseline monitor
     
     this.generationDownloader = new GenerationDownloader();
     this.generationDownloader.page = this.page;
@@ -283,18 +296,51 @@ class GoogleFlowAutomationService {
   }
 
   /**
+   * Adapter method: Select video generation mode (via NavigationManager)
+   * @returns {Promise<boolean>} - True if successful
+   */
+  async _selectVideoFromComponents() {
+    try {
+      if (this.navigationManager) {
+        return await this.navigationManager.selectVideoFromComponents();
+      }
+      // Fallback to direct page operation
+      return await this.page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = btn.textContent.toLowerCase();
+          if (text.includes('video') && !btn.disabled) {
+            try {
+              btn.click();
+              return true;
+            } catch (e) {
+              // Continue searching
+            }
+          }
+        }
+        return false;
+      });
+    } catch (error) {
+      console.error('Error selecting video mode:', error.message);
+      return false;
+    }
+  }
+
+  /**
    * Adapter method: Configure generation settings (via SettingsManager)
    * @returns {Promise<boolean>} - True if successful
    */
   async _delegateConfigureSettings() {
     try {
       if (this.settingsManager) {
-        return await this.settingsManager.configureSettings({
-          aspectRatio: this.options.aspectRatio,
-          count: this.type === 'image' ? this.options.imageCount : this.options.videoCount,
-          model: this.options.model,
-          type: this.type
-        });
+        // Update SettingsManager options with current type and settings
+        this.settingsManager.options.type = this.type;
+        this.settingsManager.options.aspectRatio = this.options.aspectRatio;
+        this.settingsManager.options.model = this.options.model;
+        this.settingsManager.options.imageCount = this.options.imageCount;
+        this.settingsManager.options.videoCount = this.options.videoCount;
+        
+        return await this.settingsManager.configureSettings();
       }
       // Fallback to original configureSettings method
       return await this.configureSettings();
@@ -345,12 +391,13 @@ class GoogleFlowAutomationService {
   /**
    * Adapter method: Monitor generation progress (via GenerationMonitor)
    * @param {number} timeoutSeconds - Timeout for monitoring
+   * @param {number} expectedNewHrefs - How many new images to expect (default 1)
    * @returns {Promise<Object>} - Result object
    */
-  async _delegateMonitorGeneration(timeoutSeconds = 180) {
+  async _delegateMonitorGeneration(timeoutSeconds = 180, expectedNewHrefs = 1) {
     try {
       if (this.generationMonitor) {
-        return await this.generationMonitor.monitorGeneration(timeoutSeconds);
+        return await this.generationMonitor.monitorGeneration(timeoutSeconds, expectedNewHrefs);
       }
       // Fallback to original monitoring
       return await this.monitorGeneration(timeoutSeconds);
@@ -368,6 +415,8 @@ class GoogleFlowAutomationService {
   async _delegateDownloadItem(href) {
     try {
       if (this.generationDownloader) {
+        // Ensure mediaType is set correctly before downloading
+        this.generationDownloader.options.mediaType = this.type;
         return await this.generationDownloader.downloadItemViaContextMenu(href);
       }
       // Fallback to original
@@ -485,13 +534,14 @@ class GoogleFlowAutomationService {
    * Internal orchestration: Complete generation cycle
    * Monitor -> Detect -> Download workflow
    * @param {number} timeoutSeconds - Monitoring timeout
+   * @param {number} expectedNewHrefs - How many new images to expect (default 1)
    * @returns {Promise<Object>} - Generation result with href
    */
-  async _internalCompleteGenerationCycle(timeoutSeconds = 120) {
+  async _internalCompleteGenerationCycle(timeoutSeconds = 120, expectedNewHrefs = 1) {
     try {
       // Use GenerationMonitor if available
       if (this.generationMonitor) {
-        const monitorResult = await this.generationMonitor.monitorGeneration(timeoutSeconds);
+        const monitorResult = await this.generationMonitor.monitorGeneration(timeoutSeconds, expectedNewHrefs);
         if (monitorResult?.success) {
           return {
             success: true,
@@ -551,6 +601,13 @@ class GoogleFlowAutomationService {
       // ═══ PHASE A: PROMPT ENTRY AND SUBMISSION ═══
       console.log('[SHARED-FLOW] 📝 PHASE A: Entering and submitting prompt...');
       
+      // BEFORE SUBMIT: Refresh baseline to account for any page changes
+      // This ensures we have the most current snapshot before generation starts
+      console.log('[SHARED-FLOW] 🔄 Refreshing baseline before submit...');
+      if (this.preGenerationMonitor) {
+        await this.preGenerationMonitor.refreshBaseline();
+      }
+      
       // Store prompt for retry
       this.lastPromptSubmitted = promptText;
 
@@ -558,7 +615,8 @@ class GoogleFlowAutomationService {
       if (this.promptManager) {
         console.log('[SHARED-FLOW] ✓ Using PromptManager for entry');
         await this.promptManager.enterPrompt(promptText);
-        await this.page.waitForTimeout(2000);
+        console.log('[SHARED-FLOW] ⏳ Waiting 5s for Slate editor to stabilize...');
+        await this.page.waitForTimeout(5000);  // 5s to let editor stabilize
         
         const submitted = await this.promptManager.submit();
         if (!submitted) {
@@ -569,6 +627,8 @@ class GoogleFlowAutomationService {
         // Fallback: use original inline submit logic
         console.log('[SHARED-FLOW] ✓ Using inline entry/submit logic (no PromptManager)');
         await this.enterPrompt(promptText);
+        console.log('[SHARED-FLOW] ⏳ Waiting 5s for Slate editor to stabilize...');
+        await this.page.waitForTimeout(5000);  // 5s to let editor stabilize before submit
         await this.submit();
       }
 
@@ -582,7 +642,7 @@ class GoogleFlowAutomationService {
       let generationResult;
       if (this.generationMonitor) {
         console.log('[SHARED-FLOW] ✓ Using GenerationMonitor');
-        generationResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds));
+        generationResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Expect 1 new image (sequential upload)
       } else {
         console.log('[SHARED-FLOW] ✓ Using inline monitoring logic (fallback)');
         const href = await this.monitorGeneration(timeoutSeconds);
@@ -591,7 +651,73 @@ class GoogleFlowAutomationService {
 
       if (!generationResult?.success || !generationResult?.href) {
         console.log('[SHARED-FLOW] ⚠️  Generation monitoring failed or timed out');
-        return { success: false, href: null, error: 'Generation failed' };
+        console.log(`[SHARED-FLOW] 📋 Result: success=${generationResult?.success}, href=${generationResult?.href ? 'found' : 'null'}`);
+        if (generationResult?.error) {
+          console.log(`[SHARED-FLOW] 📋 Error: ${generationResult.error}`);
+        }
+        console.log('[SHARED-FLOW] 🔄 Condition 1: Trying lighter retry via click buttons...\n');
+        
+        // LIGHTER RETRY: Try clicking refresh/undo buttons (3 attempts, 5s apart)
+        let lightRetrySuccess = false;
+        if (this.errorRecoveryManager) {
+          if (generationResult?.href) {
+            console.log(`[SHARED-FLOW] 🔧 Attempting light retry with href: ${generationResult.href.substring(0, 60)}...`);
+            lightRetrySuccess = await this.errorRecoveryManager.retryGenerationViaClickButtons(
+              generationResult.href, 
+              3  // max 3 attempts
+            );
+          } else {
+            console.log('[SHARED-FLOW] ⚠️  No href available for light retry, proceeding to heavy recovery');
+          }
+          
+          if (lightRetrySuccess) {
+            console.log('[SHARED-FLOW] ✅ Light retry succeeded, continuing with monitoring...\n');
+            // Wait for potential new generation after retry
+            await this.page.waitForTimeout(5000);
+            // Try monitoring again
+            const retryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Still expect 1
+            if (retryMonitorResult?.success && retryMonitorResult?.href) {
+              generationResult = retryMonitorResult;
+              // Continue to download phase
+            } else {
+              console.log('[SHARED-FLOW] ⚠️  Re-monitoring after light retry failed');
+              lightRetrySuccess = false;
+            }
+          }
+        }
+        
+        if (!lightRetrySuccess) {
+          console.log('[SHARED-FLOW] 🔄 Condition 2: Trying heavier recovery (full rehash)...\n');
+          
+          // HEAVIER FALLBACK: Full flow rehash (re-paste images + re-enter prompt + resubmit)
+          const recoverySuccess = await this.errorRecoveryManager?.handleGenerationFailureRetry(
+            this.lastPromptSubmitted,
+            this.uploadedImageRefs
+          );
+          
+          if (!recoverySuccess) {
+            console.log('[SHARED-FLOW] ❌ Both retry methods failed');
+            return { success: false, href: null, error: 'Generation and recovery both failed' };
+          }
+          
+          console.log('[SHARED-FLOW] ✅ Recovery succeeded, waiting for generation...\n');
+          
+          // Wait for recovery generation
+          await this.page.waitForTimeout(5000);
+          const recoveryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Still expect 1
+          
+          if (!recoveryMonitorResult?.success || !recoveryMonitorResult?.href) {
+            console.log('[SHARED-FLOW] ⚠️  Generation monitoring after recovery failed');
+            return { success: false, href: null, error: 'Recovery monitoring failed' };
+          }
+          
+          generationResult = recoveryMonitorResult;
+        }
+      }
+      
+      if (!generationResult?.success || !generationResult?.href) {
+        console.log('[SHARED-FLOW] ❌ All recovery attempts exhausted');
+        return { success: false, href: null, error: 'Generation failed after all retries' };
       }
 
       console.log(`[SHARED-FLOW] ✅ PHASE B complete (href: ${generationResult.href.substring(0, 50)}...)\n`);
@@ -604,6 +730,8 @@ class GoogleFlowAutomationService {
       let downloadedFile;
       if (this.generationDownloader) {
         console.log('[SHARED-FLOW] ✓ Using GenerationDownloader');
+        // 🔥 CRITICAL: Set mediaType BEFORE downloading
+        this.generationDownloader.options.mediaType = this.type;
         downloadedFile = await this.generationDownloader.downloadItemViaContextMenu(generationResult.href);
       } else {
         console.log('[SHARED-FLOW] ✓ Using inline download logic (fallback)');
@@ -629,6 +757,191 @@ class GoogleFlowAutomationService {
       console.error(`[SHARED-FLOW] ❌ Error in generation flow: ${error.message}`);
       return { success: false, error: error.message };
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Check for a SINGLE image upload (simpler than checking 2)
+   * Call this after pasting each image
+   * 
+   * STRICT: Must have BOTH href AND img tag
+   * 
+   * @returns {string|null} - href of the new image, or null if failed
+   */
+  async checkSingleImageUpload(imageLabel = 'image', timeoutSeconds = 45) {
+    console.log(`[UPLOAD-CHECK] 🔍 Checking for ${imageLabel} upload...`);
+    
+    // 🔥 DEBUG: Check DOM structure first
+    const domDebugInfo = await this.page.evaluate(() => {
+      const virtuosoList = document.querySelector('[data-testid="virtuoso-item-list"]');
+      const allLinks = document.querySelectorAll('a[href]');
+      const allImages = document.querySelectorAll('img');
+      const linksWithImg = document.querySelectorAll('a[href] img');
+      
+      return {
+        virtuosoListExists: !!virtuosoList,
+        virtuosoListSelector: virtuosoList ? virtuosoList.className : 'N/A',
+        totalAnchorLinks: allLinks.length,
+        totalImages: allImages.length,
+        linksWithImages: linksWithImg.length,
+        virtuosoItemsCount: virtuosoList ? virtuosoList.querySelectorAll('a[href]').length : 0
+      };
+    });
+    
+    console.log(`[UPLOAD-CHECK] 📋 DOM DEBUG INFO:`);
+    console.log(`   Virtuoso list exists: ${domDebugInfo.virtuosoListExists}`);
+    console.log(`   Total anchor links on page: ${domDebugInfo.totalAnchorLinks}`);
+    console.log(`   Total images on page: ${domDebugInfo.totalImages}`);
+    console.log(`   Links with images: ${domDebugInfo.linksWithImages}`);
+    console.log(`   Items in virtuoso list: ${domDebugInfo.virtuosoItemsCount}`);
+    
+    // Capture baseline of current items BEFORE we start checking for new ones
+    // 💫 VIRTUALIZATION FIX: Only check first 15 items (tail items disappear in virtuoso list)
+    let baselineItems = await this.page.evaluate(() => {
+      const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+      const firstLinks = Array.from(links).slice(0, 15);  // Only first 15
+      return firstLinks.map((link, idx) => {
+        const href = link.getAttribute('href');
+        const img = link.querySelector('img');
+        const imgTag = img ? `<img src="${img.getAttribute('src')?.substring(0, 50) || 'N/A'}...">` : 'NO IMG';
+        return { 
+          idx,
+          href, 
+          hasImg: !!img,
+          imgInfo: imgTag
+        };
+      }).filter(item => item.href);
+    });
+    
+    const baselineHrefs = new Set(baselineItems.map(item => item.href));
+    console.log(`[UPLOAD-CHECK] 📸 BASELINE: ${baselineItems.length} items`);
+    baselineItems.forEach((item, idx) => {
+      console.log(`   [${idx}] ${item.hasImg ? '✓' : '✗'} img | ${item.href.substring(0, 70)}...`);
+    });
+    
+    const startTime = Date.now();
+    const timeoutMs = timeoutSeconds * 1000;
+    let checkCount = 0;
+    let lastNewCount = 0;
+    
+    while (Date.now() - startTime < timeoutMs) {
+      checkCount++;
+      
+      // 💫 STRICT: Check BOTH href and img present
+      // 💫 VIRTUALIZATION FIX: Only check first 15 items
+      const currentItems = await this.page.evaluate((baselineHrefs) => {
+        const baseline = new Set(baselineHrefs);
+        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+        const firstLinks = Array.from(links).slice(0, 15);  // Only first 15
+        
+        const allItems = firstLinks.map((link, idx) => {
+          const href = link.getAttribute('href');
+          const img = link.querySelector('img');
+          const hasImg = !!img;
+          return { 
+            idx,
+            href, 
+            hasImg, 
+            isNew: !baseline.has(href),
+            imgSrc: img ? img.getAttribute('src')?.substring(0, 40) : 'N/A'
+          };
+        }).filter(item => item.href);
+        
+        // Only count NEW items with BOTH href + img
+        const newValid = allItems.filter(item => item.isNew && item.hasImg);
+        const newInvalid = allItems.filter(item => item.isNew && !item.hasImg);
+        
+        return {
+          totalItems: allItems.length,
+          newValidCount: newValid.length,
+          newValidItems: newValid,
+          newInvalidCount: newInvalid.length,
+          newInvalidItems: newInvalid,
+          allNewItems: allItems.filter(item => item.isNew),
+          allItems: allItems  // All items for debug
+        };
+      }, Array.from(baselineHrefs));
+      
+      // Log detailed progress
+      const statusIcon = currentItems.newValidCount > lastNewCount ? '📈' : '  ';
+      console.log(`[UPLOAD-CHECK] Check ${checkCount}: NEW valid=${currentItems.newValidCount} | NEW invalid=${currentItems.newInvalidCount} | Total=${currentItems.totalItems} ${statusIcon}`);
+      
+      // Show ALL new items found
+      if (currentItems.allNewItems.length > 0) {
+        console.log(`   📍 New items found:`);
+        currentItems.allNewItems.forEach((item, idx) => {
+          console.log(`      [${idx}] ${item.hasImg ? '✓' : '✗'} img | ${item.href.substring(0, 70)}... | src=${item.imgSrc}`);
+        });
+      }
+      
+      // If found 1 new valid image, we're done
+      if (currentItems.newValidCount >= 1) {
+        const newRef = currentItems.newValidItems[0];
+        console.log(`[UPLOAD-CHECK] ✅ SUCCESS: ${imageLabel} uploaded (href + img both present)`);
+        console.log(`   └─ ${newRef.href.substring(0, 100)}\n`);
+        return newRef.href;
+      }
+      
+      lastNewCount = currentItems.newValidCount;
+      
+      // Wait before next check
+      await this.page.waitForTimeout(1000);
+    }
+    
+    // Timeout - show what we found
+    console.error(`[UPLOAD-CHECK] ❌ TIMEOUT: ${imageLabel} not found after ${timeoutSeconds}s`);
+    
+    // 🔥 FINAL DEBUG: Check final state
+    const finalState = await this.page.evaluate((baselineHrefs) => {
+      const baseline = new Set(baselineHrefs);
+      const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
+      const firstLinks = Array.from(links).slice(0, 20);  // Check more on final
+      
+      const allItems = firstLinks.map((link, idx) => {
+        const href = link.getAttribute('href');
+        const img = link.querySelector('img');
+        return { 
+          idx,
+          href, 
+          hasImg: !!img, 
+          isNew: !baseline.has(href),
+          imgSrc: img ? img.getAttribute('src')?.substring(0, 40) : 'N/A'
+        };
+      });
+      
+      return {
+        totalItemsScanned: allItems.length,
+        newValid: allItems.filter(i => i.isNew && i.hasImg),
+        newInvalid: allItems.filter(i => i.isNew && !i.hasImg),
+        allItems: allItems
+      };
+    }, Array.from(baselineHrefs));
+    
+    console.error(`[UPLOAD-CHECK] 📊 FINAL STATE:`);
+    console.error(`   Total items: ${finalState.totalItemsScanned}`);
+    console.error(`   New valid: ${finalState.newValid.length}`);
+    console.error(`   New invalid: ${finalState.newInvalid.length}`);
+    if (finalState.allItems.length > 0) {
+      console.error(`   All items:`);
+      finalState.allItems.slice(0, 10).forEach(item => {
+        const marker = item.isNew ? '🆕' : '   ';
+        console.error(`      ${marker} [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href.substring(0, 70)}...`);
+      });
+    }
+    
+    if (finalState.newValid.length > 0) {
+      console.log(`[UPLOAD-CHECK] ✅ Found ${finalState.newValid.length} valid new item(s) on final check`);
+      return finalState.newValid[0].href;
+    }
+    if (finalState.newInvalid.length > 0) {
+      console.warn(`[UPLOAD-CHECK] ⚠️  Found ${finalState.newInvalid.length} new href(s) but no img tag`);
+      console.warn(`   This suggests images uploaded but renders still pending...`);
+      return finalState.newInvalid[0].href;  // Return even without img as fallback
+    }
+    
+    console.error(`[UPLOAD-CHECK] ❌ No new items found at all`);
+    return null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -668,7 +981,7 @@ class GoogleFlowAutomationService {
     console.log(`📊 MULTI-IMAGE GENERATION: ${prompts.length} images`);
     console.log(`${'═'.repeat(80)}\n`);
     console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
-    console.log(`📦 Product image: ${path.basename(productImagePath)}`);
+    console.log(`📦 Product image: ${productImagePath ? path.basename(productImagePath) : '(using character as placeholder)'}`);
     if (options.sceneImagePath) {
       console.log(`🎬 Scene image: ${path.basename(options.sceneImagePath)} (reference)`);
     }
@@ -698,8 +1011,8 @@ class GoogleFlowAutomationService {
       await this._delegateConfigureSettings();
       await this.page.waitForTimeout(2000);
 
-      // STEP 5-7: Upload images (unchanged logic)
-      console.log('[UPLOAD] 📤 Uploading reference images...');
+      // STEP 5-7: Upload images SEQUENTIALLY (one at a time, check each)
+      console.log('[UPLOAD] 📤 Uploading reference images (SEQUENTIAL)...');
       console.log(`[UPLOAD] 📎 Pasting character image: ${path.basename(characterImagePath)}`);
       await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
       await this.page.waitForTimeout(300);
@@ -723,51 +1036,77 @@ class GoogleFlowAutomationService {
         await this.page.waitForTimeout(5000);
       };
 
-      await pasteImage(characterImagePath, 'character');
-      await pasteImage(productImagePath, 'product');
+      // 💫 NEW: Upload image 1, check it, then upload image 2, check it
+      let charRef = null;
+      try {
+        await pasteImage(characterImagePath, 'character');
+        console.log('[UPLOAD] 📤 Character image pasted, checking upload...');
+        charRef = await this.checkSingleImageUpload('character', 45);
+        if (!charRef) {
+          throw new Error('Character image upload check failed');
+        }
+        console.log(`[UPLOAD] ✅ Character confirmed: ${charRef.substring(0, 80)}\n`);
+      } catch (e) {
+        console.error(`[UPLOAD] ❌ Character image failed: ${e.message}`);
+        throw e;
+      }
+
+      let productRef = null;
+      try {
+        console.log(`[UPLOAD] 📎 Pasting product image: ${productImagePath ? path.basename(productImagePath) : '(character placeholder)'}`);
+        await pasteImage(productImagePath, 'product');
+        console.log('[UPLOAD] 📤 Product image pasted, checking upload...');
+        productRef = await this.checkSingleImageUpload('product', 45);
+        if (!productRef) {
+          throw new Error('Product image upload check failed');
+        }
+        console.log(`[UPLOAD] ✅ Product confirmed: ${productRef.substring(0, 80)}\n`);
+      } catch (e) {
+        console.error(`[UPLOAD] ❌ Product image failed: ${e.message}`);
+        throw e;
+      }
+
+      // Optional scene image
       if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
         try {
+          console.log(`[UPLOAD] 📎 Pasting scene image: ${path.basename(options.sceneImagePath)}`);
           await pasteImage(options.sceneImagePath, 'scene');
+          const sceneRef = await this.checkSingleImageUpload('scene', 45);
+          if (sceneRef) {
+            console.log(`[UPLOAD] ✅ Scene confirmed: ${sceneRef.substring(0, 80)}\n`);
+          } else {
+            console.warn('[UPLOAD] ⚠️  Scene image check failed, continuing without it');
+          }
         } catch (e) {
-          console.warn(`[UPLOAD] ⚠️  Scene image failed: ${e.message}`);
+          console.warn(`[UPLOAD] ⚠️  Scene image error: ${e.message}, continuing`);
         }
       }
 
-      console.log('[UPLOAD] ✅ Images uploaded. Monitoring for hrefs...');
-      
-      // Wait for at least 2 uploaded hrefs
-      let uploadedRefs = [];
-      let initialHrefs = await this.page.evaluate(() => {
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-        return Array.from(links).map(l => l.getAttribute('href'));
-      });
-      const initialSet = new Set(initialHrefs);
-
-      let uploadMonitor = 0;
-      while (uploadedRefs.length < 2 && uploadMonitor < 90) {
-        uploadMonitor++;
-        const currentHrefs = await this.page.evaluate(() => {
-          const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-          return Array.from(links).map(l => l.getAttribute('href'));
-        });
-        uploadedRefs = currentHrefs.filter(h => !initialSet.has(h));
-        
-        if (uploadedRefs.length >= 2) break;
-        if (uploadMonitor % 10 === 0) {
-          console.log(`[UPLOAD] Waiting for hrefs... ${uploadedRefs.length}/2 (${uploadMonitor}s)`);
-        }
-        await this.page.waitForTimeout(1000);
-      }
-
-      if (uploadedRefs.length < 2) {
-        throw new Error('Uploaded images did not appear after 90 seconds');
-      }
-
-      // Store for fallback
+      // Store confirmed refs
       this.uploadedImageRefs = {
-        wearing: { href: uploadedRefs[0], text: 'wearing' },
-        product: { href: uploadedRefs[1], text: 'product' }
+        wearing: { href: charRef, text: 'wearing', validated: true },
+        product: { href: productRef, text: 'product', validated: true }
       };
+      
+      console.log(`[UPLOAD] 📦 Both images confirmed and stored`);
+      console.log(`   [0] wearing: ${charRef.substring(0, 80)}`);
+      console.log(`   [1] product: ${productRef.substring(0, 80)}\n`);
+      
+      // Update managers with uploaded refs so they can identify generated images
+      if (this.generationMonitor) {
+        this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
+      }
+      if (this.errorRecoveryManager) {
+        this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
+      }
+
+      // CAPTURE BASELINE: After upload completes, capture current state as baseline
+      // This baseline includes the 2 uploaded images
+      // When generation completes, we'll find hrefs NOT in this baseline = generated image
+      console.log('[UPLOAD] 📸 Capturing baseline hrefs for generation detection...');
+      if (this.preGenerationMonitor) {
+        await this.preGenerationMonitor.captureBaselineHrefs();
+      }
 
       console.log('[UPLOAD] ✅ Ready to generate\n');
 
@@ -924,6 +1263,28 @@ class GoogleFlowAutomationService {
 
         const prompt = prompts[i];
         
+        // 💫 NEW: Before each iteration (except first), refresh settings and ensure image mode
+        if (i > 0) {
+          console.log(`\n[CHAIN] 🔧 Preparing for iteration ${i + 1}...`);
+          console.log('[CHAIN] 🔧 Re-configuring image settings...');
+          await this._delegateConfigureSettings();
+          await this.page.waitForTimeout(1500);
+          
+          console.log('[CHAIN] 📸 Ensuring we are in Image mode...');
+          const navigationManager = this.navigationManager || 
+            (this.contextManagers?.navigationManager);
+          if (navigationManager && navigationManager.selectTab) {
+            const imageTabSelected = await navigationManager.selectTab('Image');
+            if (imageTabSelected) {
+              console.log('[CHAIN] ✅ Image tab confirmed active');
+            } else {
+              console.log('[CHAIN] ⚠️  Could not explicitly select Image tab, continuing...');
+            }
+          }
+          await this.page.waitForTimeout(1000);
+          console.log('[CHAIN] ✅ Settings and mode ready\n');
+        }
+        
         // Validate prompt
         if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
           console.error(`❌ PROMPT ${i + 1} INVALID: Expected non-empty string`);
@@ -938,11 +1299,67 @@ class GoogleFlowAutomationService {
         try {
           // STEP A: For subsequent prompts, reuse previous command
           if (i > 0 && lastGeneratedHref) {
-            console.log(`[CHAIN] 🔄 Reusing command from previous generation...`);
-            const reused = await this.rightClickReuseCommand(lastGeneratedHref);
-            if (!reused) {
-              throw new Error('Failed to reuse command');
+            console.log(`[CHAIN] 🔄 Reusing command from previous generation (iteration ${i + 1})...`);
+            console.log(`[CHAIN] 📌 Using href: ${lastGeneratedHref.substring(0, 80)}...`);
+            
+            // Right-click the image to open context menu and select "Sử dụng lại câu lệnh"
+            const reuseSuccess = await this.page.evaluate((href) => {
+              // Find item by href
+              const link = document.querySelector(`a[href="${href}"]`);
+              if (!link) {
+                console.log('[CHAIN] ❌ Item not found for reuse');
+                return false;
+              }
+
+              // Get position and right-click
+              const rect = link.getBoundingClientRect();
+              const x = Math.round(rect.left + rect.width / 2);
+              const y = Math.round(rect.top + rect.height / 2);
+
+              // Simulate right-click via event (can't do actual right-click in evaluate)
+              const event = new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: x,
+                clientY: y
+              });
+              link.dispatchEvent(event);
+              return true;
+            }, lastGeneratedHref);
+
+            if (!reuseSuccess) {
+              console.error(`[CHAIN] ❌ Failed to trigger context menu for reuse`);
+              throw new Error('Failed to reuse command: could not find item');
             }
+
+            // Wait for context menu to appear
+            console.log('[CHAIN] ⏳ Waiting for context menu...');
+            await this.page.waitForTimeout(1000);
+
+            // Click "Sử dụng lại câu lệnh" in context menu
+            const clickedReuse = await this.page.evaluate(() => {
+              const menuItems = document.querySelectorAll('[role="menuitem"]');
+              for (const item of menuItems) {
+                const text = item.textContent.toLowerCase();
+                if (text.includes('sử dụng lại') || text.includes('use') && text.includes('command')) {
+                  try {
+                    item.click();
+                    return true;
+                  } catch (e) {
+                    return false;
+                  }
+                }
+              }
+              return false;
+            });
+
+            if (!clickedReuse) {
+              console.warn('[CHAIN] ⚠️  Could not find/click "Sử dụng lại" option');
+              throw new Error('Failed to click reuse command option');
+            }
+
+            console.log('[CHAIN] ✓ Clicked "Sử dụng lại câu lệnh"');
+            await this.page.waitForTimeout(1500);
 
             console.log('[CHAIN] 🧹 Clearing textbox for new prompt...');
             const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
@@ -959,12 +1376,15 @@ class GoogleFlowAutomationService {
             await this.page.keyboard.press('Backspace');
             await this.page.waitForTimeout(400);
             console.log('[CHAIN] ✅ Ready for new prompt\n');
+          } else if (i > 0 && !lastGeneratedHref) {
+            console.warn(`[CHAIN] ⚠️  No lastGeneratedHref available for iteration ${i + 1}, cannot reuse command`);
+            throw new Error('Cannot reuse command: no previous href');
           }
 
           // STEP B-G: Use shared generation flow
           // This encapsulates: prompt entry → submit → monitor → download
           const genResult = await this._sharedGenerationFlow(prompt, {
-            timeoutSeconds: 120,
+            timeoutSeconds: 300,
             isImageMode: true
           });
 
@@ -977,21 +1397,21 @@ class GoogleFlowAutomationService {
           const fileName = path.basename(genResult.downloadedFile, fileExt);
           const imageNum = String(i + 1).padStart(2, '0');
           const renamedName = `${fileName}-img${imageNum}${fileExt}`;
-          const renamedPath = path.join(path.dirname(genResult.downloadedFile), renamedName);
+          let finalFilePath = path.join(path.dirname(genResult.downloadedFile), renamedName);  // Use let instead of const
 
           try {
-            fs.renameSync(genResult.downloadedFile, renamedPath);
-            console.log(`[FILE] 📂 Renamed to: ${path.basename(renamedPath)}`);
+            fs.renameSync(genResult.downloadedFile, finalFilePath);
+            console.log(`[FILE] 📂 Renamed to: ${path.basename(finalFilePath)}`);
           } catch (e) {
             console.warn(`[FILE] ⚠️  Rename failed: ${e.message}`);
-            renamedPath = genResult.downloadedFile;
+            finalFilePath = genResult.downloadedFile;  // Safe to reassign since it's let
           }
 
           results.push({
             success: true,
             imageNumber: i + 1,
             href: genResult.href,
-            downloadedFile: renamedPath
+            downloadedFile: finalFilePath
           });
 
           lastGeneratedHref = genResult.href;
@@ -1020,6 +1440,23 @@ class GoogleFlowAutomationService {
       console.log(`[DOWNLOAD] Files downloaded: ${downloadedFiles.length}`);
       downloadedFiles.forEach((file, idx) => {
         console.log(`  [${idx + 1}] ${path.basename(file)}`);
+      });
+
+      // 🔍 DEBUG: Show detailed results structure
+      console.log(`\n🔥 DEBUG: Detailed results array from generateMultiple():`);
+      results.forEach((result, idx) => {
+        console.log(`\n  [${idx}] Success: ${result.success}`);
+        if (result.success) {
+          console.log(`      imageNumber: ${result.imageNumber}`);
+          console.log(`      downloadedFile: ${result.downloadedFile}`);
+          console.log(`      href: ${result.href?.substring(0, 80) || 'N/A'}...`);
+          if (result.downloadedFile && require('fs').existsSync(result.downloadedFile)) {
+            const fileSize = require('fs').statSync(result.downloadedFile).size;
+            console.log(`      fileSize: ${(fileSize / 1024).toFixed(2)}KB`);
+          }
+        } else {
+          console.log(`      error: ${result.error}`);
+        }
       });
 
       console.log('\n⏳ Waiting 3 seconds before closing browser...');
@@ -1109,8 +1546,46 @@ class GoogleFlowAutomationService {
 
       // STEP 4: Video-specific setup
       console.log('[VIDEO] 📹 Switching to video generation mode...');
-      await this.switchToVideoTab();
-      await this.selectVideoFromComponents();
+      await this._switchToVideoTab();
+      
+      // 🔥 DEBUG: Check DOM after switching to video tab
+      let domStateAfterTabSwitch = await this.page.evaluate(() => {
+        return {
+          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
+          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+          textEditor: !!document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]'),
+          allTextAreas: document.querySelectorAll('[role="textbox"]').length,
+          componentButtons: document.querySelectorAll('button').length,
+          videoButtonExists: !!Array.from(document.querySelectorAll('button')).find(b => b.textContent.toLowerCase().includes('video'))
+        };
+      });
+      console.log('[VIDEO] 🔍 DOM state after tab switch:');
+      console.log(`   Virtuoso list: ${domStateAfterTabSwitch.virtuosoList ? '✓' : '✗'}`);
+      console.log(`   Virtuoso items visible: ${domStateAfterTabSwitch.virtuosoItems}`);
+      console.log(`   Text editor: ${domStateAfterTabSwitch.textEditor ? '✓' : '✗'}`);
+      console.log(`   All textboxes: ${domStateAfterTabSwitch.allTextAreas}`);
+      console.log(`   Buttons on page: ${domStateAfterTabSwitch.componentButtons}`);
+      console.log(`   Video button found: ${domStateAfterTabSwitch.videoButtonExists ? '✓' : '✗'}\n`);
+      
+      await this._selectVideoFromComponents();
+      
+      // 🔥 DEBUG: Check DOM after selecting video
+      const domStateAfterVideoSelect = await this.page.evaluate(() => {
+        return {
+          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
+          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+          textEditor: !!document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]'),
+          visibleTextEditors: document.querySelectorAll('[role="textbox"]:not([style*="display: none"])').length,
+          imageElements: document.querySelectorAll('img').length
+        };
+      });
+      console.log('[VIDEO] 🔍 DOM state after video selection:');
+      console.log(`   Virtuoso list: ${domStateAfterVideoSelect.virtuosoList ? '✓' : '✗'}`);
+      console.log(`   Virtuoso items visible: ${domStateAfterVideoSelect.virtuosoItems}`);
+      console.log(`   Expected text editor: ${domStateAfterVideoSelect.textEditor ? '✓' : '✗'}`);
+      console.log(`   All visible textboxes: ${domStateAfterVideoSelect.visibleTextEditors}`);
+      console.log(`   Image elements on page: ${domStateAfterVideoSelect.imageElements}\n`);
+      
       await this.page.waitForTimeout(1000);
       console.log('[VIDEO] ✅ Video mode ready\n');
 
@@ -1118,6 +1593,19 @@ class GoogleFlowAutomationService {
       console.log('[CONFIG] ⚙️  Configuring video settings...');
       await this._delegateConfigureSettings();
       await this.page.waitForTimeout(2000);
+      
+      // 🔥 DEBUG: Check DOM after config
+      const domStateAfterConfig = await this.page.evaluate(() => {
+        return {
+          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
+          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+          virtuosoItemsSlice15: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 15).length
+        };
+      });
+      console.log('[VIDEO] 🔍 DOM state after config:');
+      console.log(`   Virtuoso list: ${domStateAfterConfig.virtuosoList ? '✓' : '✗'}`);
+      console.log(`   Virtuoso items total: ${domStateAfterConfig.virtuosoItems}`);
+      console.log(`   First 15 items: ${domStateAfterConfig.virtuosoItemsSlice15}\n`);
 
       // STEP 6-8: Upload images (same as image generation)
       console.log('[UPLOAD] 📤 Uploading reference images...');
@@ -1142,36 +1630,128 @@ class GoogleFlowAutomationService {
         await this.page.waitForTimeout(5000);
       };
 
-      await pasteImage(primaryImagePath, 'primary');
-      await pasteImage(secondaryImagePath, 'secondary');
-      console.log('[UPLOAD] ✅ Images uploaded. Monitoring for hrefs...');
-
-      // Wait for at least 2 uploaded hrefs
-      let uploadedRefs = [];
-      let initialHrefs = await this.page.evaluate(() => {
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-        return Array.from(links).map(l => l.getAttribute('href'));
-      });
-      const initialSet = new Set(initialHrefs);
-
-      let uploadMonitor = 0;
-      while (uploadedRefs.length < 2 && uploadMonitor < 90) {
-        uploadMonitor++;
-        const currentHrefs = await this.page.evaluate(() => {
-          const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-          return Array.from(links).map(l => l.getAttribute('href'));
+      // 💫 NEW: Upload image 1, check it, then upload image 2, check it (SEQUENTIAL)
+      let primaryRef = null;
+      try {
+        console.log(`[UPLOAD] 📎 Before pasting primary: checking virtuoso state...`);
+        const virtuosoBeforePrimary = await this.page.evaluate(() => {
+          return {
+            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map(l => ({
+              href: l.getAttribute('href').substring(0, 50),
+              hasImg: !!l.querySelector('img')
+            }))
+          };
         });
-        uploadedRefs = currentHrefs.filter(h => !initialSet.has(h));
+        console.log(`   Items before paste: ${virtuosoBeforePrimary.itemsCount}`);
         
-        if (uploadedRefs.length >= 2) break;
-        if (uploadMonitor % 10 === 0) {
-          console.log(`[UPLOAD] Waiting for hrefs... ${uploadedRefs.length}/2 (${uploadMonitor}s)`);
-        }
+        await pasteImage(primaryImagePath, 'primary');
+        console.log('[UPLOAD] 📤 Primary image pasted, waiting for virtuoso to update...');
+        
+        // 🔥 DEBUG: Check virtuoso state immediately after paste
         await this.page.waitForTimeout(1000);
+        const virtuosoAfterPaste = await this.page.evaluate(() => {
+          return {
+            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+            imageElements: document.querySelectorAll('[data-testid="virtuoso-item-list"] img').length,
+            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map((l, idx) => ({
+              idx,
+              href: l.getAttribute('href').substring(0, 50),
+              hasImg: !!l.querySelector('img'),
+              imgSrc: l.querySelector('img')?.getAttribute('src')?.substring(0, 30) || 'N/A'
+            }))
+          };
+        });
+        console.log(`   Items after paste: ${virtuosoAfterPaste.itemsCount} (was: ${virtuosoBeforePrimary.itemsCount})`);
+        console.log(`   Image elements in list: ${virtuosoAfterPaste.imageElements}`);
+        if (virtuosoAfterPaste.firstItems.length > 0) {
+          virtuosoAfterPaste.firstItems.forEach(item => {
+            console.log(`      [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href}... | img=${item.imgSrc}`);
+          });
+        }
+        
+        console.log('[UPLOAD] 📤 Primary image pasted, checking upload...');
+        primaryRef = await this.checkSingleImageUpload('primary', 45);
+        if (!primaryRef) {
+          throw new Error('Primary image upload check failed');
+        }
+        console.log(`[UPLOAD] ✅ Primary confirmed: ${primaryRef.substring(0, 80)}\n`);
+      } catch (e) {
+        console.error(`[UPLOAD] ❌ Primary image failed: ${e.message}`);
+        throw e;
       }
 
-      if (uploadedRefs.length < 2) {
-        throw new Error('Uploaded images did not appear after 90 seconds');
+      let secondaryRef = null;
+      try {
+        console.log(`[UPLOAD] 📎 Before pasting secondary: checking virtuoso state...`);
+        const virtuosoBeforeSecondary = await this.page.evaluate(() => {
+          return {
+            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length
+          };
+        });
+        console.log(`   Items before paste: ${virtuosoBeforeSecondary.itemsCount}`);
+        
+        console.log(`[UPLOAD] 📎 Pasting secondary image: ${path.basename(secondaryImagePath)}`);
+        await pasteImage(secondaryImagePath, 'secondary');
+        console.log('[UPLOAD] 📤 Secondary image pasted, waiting for virtuoso to update...');
+        
+        // 🔥 DEBUG: Check virtuoso state immediately after paste
+        await this.page.waitForTimeout(1000);
+        const virtuosoAfterSecondaryPaste = await this.page.evaluate(() => {
+          return {
+            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
+            imageElements: document.querySelectorAll('[data-testid="virtuoso-item-list"] img').length,
+            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map((l, idx) => ({
+              idx,
+              href: l.getAttribute('href').substring(0, 50),
+              hasImg: !!l.querySelector('img'),
+              imgSrc: l.querySelector('img')?.getAttribute('src')?.substring(0, 30) || 'N/A'
+            }))
+          };
+        });
+        console.log(`   Items after paste: ${virtuosoAfterSecondaryPaste.itemsCount} (was: ${virtuosoBeforeSecondary.itemsCount})`);
+        console.log(`   Image elements in list: ${virtuosoAfterSecondaryPaste.imageElements}`);
+        if (virtuosoAfterSecondaryPaste.firstItems.length > 0) {
+          virtuosoAfterSecondaryPaste.firstItems.forEach(item => {
+            console.log(`      [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href}... | img=${item.imgSrc}`);
+          });
+        }
+        
+        console.log('[UPLOAD] 📤 Secondary image pasted, checking upload...');
+        secondaryRef = await this.checkSingleImageUpload('secondary', 45);
+        if (!secondaryRef) {
+          throw new Error('Secondary image upload check failed');
+        }
+        console.log(`[UPLOAD] ✅ Secondary confirmed: ${secondaryRef.substring(0, 80)}\n`);
+      } catch (e) {
+        console.error(`[UPLOAD] ❌ Secondary image failed: ${e.message}`);
+        throw e;
+      }
+
+      // Store confirmed refs
+      this.uploadedImageRefs = {
+        primary: { href: primaryRef, text: 'primary', validated: true },
+        secondary: { href: secondaryRef, text: 'secondary', validated: true }
+      };
+      
+      console.log(`[UPLOAD] 📦 Both images confirmed and stored`);
+      console.log(`   [0] primary: ${primaryRef.substring(0, 80)}`);
+      console.log(`   [1] secondary: ${secondaryRef.substring(0, 80)}\n`);
+      
+      // Update managers with uploaded refs so they can identify generated video
+      if (this.generationMonitor) {
+        this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
+      }
+      if (this.errorRecoveryManager) {
+        this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
+      }
+
+      // CAPTURE BASELINE: After upload completes, capture current state as baseline
+      // This baseline includes the 2 uploaded images
+      // When generation completes, we'll find hrefs NOT in this baseline = generated video
+      console.log('[UPLOAD] 📸 Capturing baseline hrefs for generation detection...');
+      if (this.preGenerationMonitor) {
+        await this.preGenerationMonitor.captureBaselineHrefs();
       }
 
       console.log('[UPLOAD] ✅ Ready to generate\n');
