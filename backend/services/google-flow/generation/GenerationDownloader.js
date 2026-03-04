@@ -30,9 +30,14 @@ class GenerationDownloader {
       modelName: options.modelName || 'Nano Banana Pro',
       mediaType: options.mediaType || 'image',
       userDownloadsDir: options.userDownloadsDir || path.join(process.env.USERPROFILE || '', 'Downloads'),
-      downloadTimeoutSeconds: options.downloadTimeoutSeconds || 25,  // 20-30s timeout
-      ...options
+      downloadTimeoutSeconds: typeof options.downloadTimeoutSeconds === 'number' ? options.downloadTimeoutSeconds : 25,  // 20-30s timeout, default 25
+      ...options  // Spread last, but with null checks above
     };
+    
+    // Ensure downloadTimeoutSeconds is always a valid number
+    if (typeof this.options.downloadTimeoutSeconds !== 'number' || isNaN(this.options.downloadTimeoutSeconds)) {
+      this.options.downloadTimeoutSeconds = 25;
+    }
     
     // Bind utilities
     MouseInteractionHelper.page = page;
@@ -410,7 +415,7 @@ class GenerationDownloader {
           ]);
 
           // Check what happened
-          if (downloadedFile && typeof downloadedFile === 'string' && downloadFile.includes(path.sep)) {
+          if (downloadedFile && typeof downloadedFile === 'string' && downloadedFile.includes(path.sep)) {
             // Success! Return the file
             const fileSize = fs.statSync(downloadedFile).size;
             console.log(`   ✓ Downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);

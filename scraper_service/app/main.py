@@ -385,21 +385,12 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
 async def manual_discover_dailyhaha(payload: dict | None = None):
     started = time.time()
 
-    from .utils import TOPICS
-    topics = (payload or {}).get('topics') if isinstance(payload, dict) else None
-    target_topics = topics if topics else TOPICS
-
     found = 0
     failed = 0
 
     try:
-        for topic in target_topics:
-            try:
-                await asyncio.sleep(1 + random.random())
-                found += await discover_dailyhaha(topic)
-            except Exception as e:
-                print(f"[ManualDailyHaha] Failed for topic {topic}: {e}")
-                failed += 1
+        await asyncio.sleep(1 + random.random())
+        found += await discover_dailyhaha('hai')
 
         duration = int((time.time() - started) * 1000)
         log_job('discover', 'success', isManual=True, platform='dailyhaha', itemsFound=found, failedTopics=failed, duration=duration)
@@ -409,7 +400,8 @@ async def manual_discover_dailyhaha(payload: dict | None = None):
             'itemsFound': found,
             'failedTopics': failed,
             'duration': duration,
-            'topicsProcessed': len(target_topics)
+            'topicsProcessed': 1,
+            'mode': 'all-videos-no-topic-filter'
         }
     except Exception as ex:
         duration = int((time.time() - started) * 1000)

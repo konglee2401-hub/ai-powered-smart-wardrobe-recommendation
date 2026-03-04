@@ -75,7 +75,7 @@ export default function ShortsReelsDashboard() {
     country: 'Worldwide',
     period: 'Weekly',
     date: new Date().toISOString().slice(0, 10),
-    source: 'playboard',
+    source: 'dailyhaha',
   });
 
   const fetchData = async () => {
@@ -135,8 +135,6 @@ export default function ShortsReelsDashboard() {
       let result;
       if (selected.source === 'dailyhaha') {
         result = await trendAutomationApi.manualDiscoverDailyhaha();
-      } else if (selected.source === 'douyin') {
-        result = await trendAutomationApi.manualDiscoverDouyin();
       } else {
         result = await trendAutomationApi.manualDiscoverPlayboard(config);
       }
@@ -169,8 +167,8 @@ export default function ShortsReelsDashboard() {
       subtitle="Theo dõi tổng quan, trigger scan thủ công theo bộ lọc giống Playboard category UI."
     >
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition">Run Discover</button>
-        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Scanning...' : 'Scan Channels From Filters'}</button>
+        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Scanning...' : 'Run DailyHaha Test'}</button>
+        <button onClick={() => trendAutomationApi.triggerJob('scan')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition">Run Channel Scan</button>
         <button onClick={triggerUploadAll} disabled={uploadLoading || uploadStatus?.pendingUpload === 0} className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{uploadLoading ? 'Uploading...' : `Upload All (${uploadStatus?.pendingUpload || 0})`}</button>
         <button onClick={() => { fetchData(); fetchUploadStatus(); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition">Refresh</button>
       </div>
@@ -231,9 +229,7 @@ export default function ShortsReelsDashboard() {
               onChange={(e) => setSelected((prev) => ({ ...prev, source: e.target.value }))}
               className="bg-gray-950 border border-gray-700 rounded px-3 py-2"
             >
-              <option value="playboard">Playboard</option>
-              <option value="dailyhaha">DailyHaha</option>
-              <option value="douyin">Douyin</option>
+                <option value="dailyhaha">DailyHaha</option>
             </select>
             <div className="text-xs text-gray-400 leading-relaxed">
               {selected.source} / {selected.category} / {selected.dimension} / {selected.country} / {selected.period}
