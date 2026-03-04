@@ -102,6 +102,22 @@ router.get('/proxy/:assetId', async (req, res) => {
     
     // ✅ REFACTORED: Smarter storage priority with better fallbacks
     
+    // 💫 FIX: NEW STEP 0: Try Google Drive FIRST if we have the ID
+    if (asset.cloudStorage?.googleDriveId) {
+      console.log(`\n☁️ PRIORITY: Attempting Google Drive (ID: ${asset.cloudStorage.googleDriveId})`);
+      const driveStream = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'cloudStorage.googleDriveId');
+      if (driveStream) return;
+      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
+    }
+    
+    // Also check legacy storage.googleDriveId
+    if (asset.storage?.googleDriveId && !asset.cloudStorage?.googleDriveId) {
+      console.log(`\n☁️ Attempting Google Drive from storage (ID: ${asset.storage.googleDriveId})`);
+      const driveStream = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'storage.googleDriveId');
+      if (driveStream) return;
+      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
+    }
+    
     // STEP 1: Try hybrid local storage (new format)
 
     const streamFromGoogleDriveApi = async (fileId, sourceLabel) => {
