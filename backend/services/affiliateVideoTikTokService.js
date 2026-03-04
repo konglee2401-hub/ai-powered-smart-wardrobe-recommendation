@@ -262,10 +262,12 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
 
     const characterFile = req.files.characterImage[0];
     const productFile = req.files.productImage[0];
+    const sceneFile = req.files.sceneImage?.[0] || null;
     
     // 💫 NEW: Save buffer to temp file if needed
     let characterFilePath = characterFile.path;
     let productFilePath = productFile.path;
+    let sceneImagePath = sceneFile?.path || null;
     
     if (!characterFilePath && characterFile.buffer) {
       characterFilePath = path.join(tempDir, `character-${Date.now()}.jpg`);
@@ -279,8 +281,17 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       console.log(`💾 Saved product image to: ${productFilePath}`);
     }
 
+    if (sceneFile && !sceneImagePath && sceneFile.buffer) {
+      sceneImagePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
+      fs.writeFileSync(sceneImagePath, sceneFile.buffer);
+      console.log(`💾 Saved scene image to: ${sceneImagePath}`);
+    }
+
     console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size || characterFile.buffer?.length} bytes)`);
     console.log(`📦 Product: ${productFile.originalname} (${productFile.size || productFile.buffer?.length} bytes)`);
+    if (sceneFile) {
+      console.log(`🎭 Scene (uploaded): ${sceneFile.originalname} (${sceneFile.size || sceneFile.buffer?.length} bytes)`);
+    }
 
     const {
       videoDuration = 20,
@@ -292,6 +303,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       imageProvider = 'bfl',  // 💫 Default to BFL Playground
       videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {},
+      sceneImage: sceneImageBase64 = null,
       imageSource = { character: 'upload', product: 'upload' }  // 🎯 Track image source from frontend
     } = req.body;
 
@@ -304,6 +316,42 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     console.log(`  Image Provider: ${finalImageProvider}`);
     console.log(`  Video Provider: ${finalVideoProvider}`);
     console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
+
+    // Resolve optional scene reference for Google Flow image generation
+    // Priority: uploaded scene file/base64 -> scene locked image by selected scene/aspect
+    let finalSceneImagePath = sceneImagePath;
+
+    if (!finalSceneImagePath && sceneImageBase64) {
+      try {
+        const cleanB64 = String(sceneImageBase64).includes(',')
+          ? String(sceneImageBase64).split(',')[1]
+          : String(sceneImageBase64);
+        const sceneBuffer = Buffer.from(cleanB64, 'base64');
+        if (sceneBuffer.length > 0) {
+          finalSceneImagePath = path.join(tempDir, `scene-base64-${Date.now()}.jpg`);
+          fs.writeFileSync(finalSceneImagePath, sceneBuffer);
+          console.log(`💾 Saved scene image from base64: ${finalSceneImagePath}`);
+        }
+      } catch (sceneDecodeError) {
+        console.warn(`⚠️ Failed to decode sceneImage base64: ${sceneDecodeError.message}`);
+      }
+    }
+
+    if (!finalSceneImagePath) {
+      try {
+        const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: '9:16' }, language);
+        if (sceneInfo?.imageUrl) {
+          const sceneResponse = await axios.get(sceneInfo.imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
+          const sceneExt = path.extname(new URL(sceneInfo.imageUrl).pathname) || '.jpg';
+          finalSceneImagePath = path.join(tempDir, `scene-locked-${Date.now()}${sceneExt}`);
+          fs.writeFileSync(finalSceneImagePath, Buffer.from(sceneResponse.data));
+          console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+        }
+      } catch (sceneLockedError) {
+        console.warn(`⚠️ Could not load scene locked image: ${sceneLockedError.message}`);
+      }
+    }
+
 
     // ============================================================
     // STEP 1: CHATGPT BROWSER AUTOMATION ANALYSIS (Non-blocking)
@@ -1075,7 +1123,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         multiGenResult = await imageGen.generateMultiple(
           characterFilePath,
           productFilePath,  // ✅ Use actual product reference image (for context, not worn)
-          [prompt1, prompt2]  // 2 prompts: wearing + holding
+          [prompt1, prompt2],  // 2 prompts: wearing + holding
+          {
+            ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
+          }
         );
       } catch (genMultiError) {
         console.error('❌ generateMultiple threw error:', genMultiError.message);
