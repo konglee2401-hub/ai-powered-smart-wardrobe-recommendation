@@ -28,6 +28,12 @@ def extract_youtube_id(url: str) -> str:
     m = re.search(r'[?&]v=([^&]+)', url or '')
     if m:
         return m.group(1)
+    m = re.search(r'youtu\.be/([^?&/]+)', url or '')
+    if m:
+        return m.group(1)
+    m = re.search(r'/embed/([^?&/]+)', url or '')
+    if m:
+        return m.group(1)
     m = re.search(r'/shorts/([^?&/]+)', url or '')
     if m:
         return m.group(1)
