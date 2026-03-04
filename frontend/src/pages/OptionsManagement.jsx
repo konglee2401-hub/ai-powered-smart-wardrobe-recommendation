@@ -809,7 +809,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                         src={currentUrl}
                         alt={`Saved locked ${ratio}`}
                         onClick={() => setModalImageUrl(currentUrl)}
-                        style={{ width: '100%', height: ratio === '16:9' ? '120px' : '180px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                        style={{ width: '100%', height: ratio === '16:9' ? '140px' : '240px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
                       />
                       <div style={{ marginTop: '0.6rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
                         <button

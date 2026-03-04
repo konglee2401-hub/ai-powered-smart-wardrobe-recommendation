@@ -75,17 +75,11 @@ export default function ScenePickerModal({ isOpen, onClose, scenes = [], selecte
           <button onClick={onClose} className="text-gray-300 hover:text-white">✕</button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {scenes.map((scene) => {
             const locked = getLockedPrompt(scene);
             const isActive = selectedScene === scene.value;
             const imageUrl = getImageUrl(getSceneImageUrl(scene));
-            
-            // Determine container aspect ratio based on selected aspect
-            const isPortrait = aspectRatio === '9:16';
-            const containerClass = isPortrait 
-              ? 'aspect-[9/16]' 
-              : 'aspect-[16/9]';
 
             return (
               <button
@@ -94,11 +88,11 @@ export default function ScenePickerModal({ isOpen, onClose, scenes = [], selecte
                   onSelect(scene.value, scene);
                   onClose();
                 }}
-                className={`text-left border rounded-lg p-3 transition flex flex-col gap-3 ${isActive ? 'border-purple-500 bg-purple-900/30' : 'border-gray-700 bg-gray-800 hover:border-gray-500'}`}
+                className={`text-left border rounded-lg p-2 transition flex flex-col gap-2 ${isActive ? 'border-purple-500 bg-purple-900/30' : 'border-gray-700 bg-gray-800 hover:border-gray-500'}`}
               >
-                {/* Large preview image */}
+                {/* Thumbnail image */}
                 {imageUrl ? (
-                  <div className={`relative w-full ${containerClass} shrink-0 overflow-hidden rounded border border-gray-600`}>
+                  <div className="relative w-full aspect-square shrink-0 overflow-hidden rounded border border-gray-600">
                     <img
                       src={imageUrl}
                       alt={scene.label}
@@ -109,23 +103,23 @@ export default function ScenePickerModal({ isOpen, onClose, scenes = [], selecte
                         if (placeholder) placeholder.classList.remove('hidden');
                       }}
                     />
-                    <div className="img-placeholder hidden absolute inset-0 rounded border border-dashed border-gray-600 bg-gray-700/70 text-xs text-gray-300 flex items-center justify-center text-center px-2">
+                    <div className="img-placeholder hidden absolute inset-0 rounded border border-dashed border-gray-600 bg-gray-700/70 text-xs text-gray-300 flex items-center justify-center text-center px-1">
                       Image unavailable
                     </div>
                   </div>
                 ) : (
-                  <div className={`w-full ${containerClass} rounded border border-gray-700 bg-gray-700 flex items-center justify-center text-xs text-gray-300`}>
+                  <div className="w-full aspect-square rounded border border-gray-700 bg-gray-700 flex items-center justify-center text-xs text-gray-300">
                     No Image
                   </div>
                 )}
                 
                 {/* Scene info */}
-                <div className="flex-1">
-                  <div className="text-white font-medium">{scene.label}</div>
-                  <div className="text-xs text-gray-400 mt-1">{scene.description}</div>
-                  <details className="mt-2">
-                    <summary className="text-xs text-purple-300 cursor-pointer">Locked prompt</summary>
-                    <p className="text-xs text-gray-300 mt-1 line-clamp-6">{locked || 'No locked prompt yet'}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium text-sm truncate">{scene.label}</div>
+                  <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{scene.description}</div>
+                  <details className="mt-1">
+                    <summary className="text-xs text-purple-300 cursor-pointer">Prompt</summary>
+                    <p className="text-xs text-gray-300 mt-1 line-clamp-3">{locked || 'No locked prompt yet'}</p>
                   </details>
                 </div>
               </button>
