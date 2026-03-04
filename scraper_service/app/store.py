@@ -31,6 +31,12 @@ def get_or_create_settings():
         'proxyList': [],
         'telegramBotToken': '',
         'isEnabled': True,
+        'discoverSources': {
+            'playboard': True,
+            'youtube': True,
+            'dailyhaha': True,
+            'douyin': False,
+        },
         'playboardConfigs': DEFAULT_PLAYBOARD_CONFIGS,
     }
     doc = settings.find_one_and_update(

@@ -1016,11 +1016,7 @@ async def _collect_dailyhaha_cards() -> List[Dict]:
     return cards
 
 
-async def discover_dailyhaha(topic: str):
-    setting = get_or_create_settings()
-    keywords = setting.get('keywords', {}).get(topic, [topic])
-    min_views = min(int(setting.get('minViewsFilter', 100000) or 100000), 10000)
-
+async def discover_dailyhaha(topic: str = 'hai'):
     cards = await _collect_dailyhaha_cards()
     found = 0
 
@@ -1029,9 +1025,7 @@ async def discover_dailyhaha(topic: str):
         views = int(card.get('views', 0) or 0)
         page_url = card.get('url', '')
 
-        if views < min_views or not page_url:
-            continue
-        if not match_topic(title, topic, keywords):
+        if not page_url:
             continue
 
         video_slug = page_url.rstrip('/').split('/')[-1].replace('.htm', '').strip()
@@ -1050,7 +1044,7 @@ async def discover_dailyhaha(topic: str):
         if not youtube_id or not YOUTUBE_VIDEO_ID_RE.match(youtube_id):
             continue
 
-        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', topic)
+        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', 'hai')
         v = upsert_video(
             {
                 'platform': 'dailyhaha',
@@ -1058,7 +1052,7 @@ async def discover_dailyhaha(topic: str):
                 'title': title,
                 'views': views,
                 'url': youtube_url,
-                'topic': topic,
+                'topic': 'hai',
                 'thumbnail': card.get('thumbnail') or f'https://img.youtube.com/vi/{youtube_id}/maxresdefault.jpg',
                 'channelId': channel['_id'],
             }
@@ -1066,7 +1060,7 @@ async def discover_dailyhaha(topic: str):
         await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
         found += 1
 
-    print(f'[DailyHaha {topic}] -> queued {found} videos')
+    print(f'[DailyHaha all] -> queued {found} videos')
     return found
 
 
@@ -1383,6 +1377,12 @@ async def discover_all():
 
     found = 0
     try:
+        discover_sources = setting.get('discoverSources', {}) or {}
+        use_playboard = discover_sources.get('playboard', True)
+        use_youtube = discover_sources.get('youtube', True)
+        use_dailyhaha = discover_sources.get('dailyhaha', True)
+        use_douyin = discover_sources.get('douyin', False)
+
         # Get active configs sorted by priority
         configs = setting.get('playboardConfigs', [])
         if not configs:
@@ -1396,30 +1396,38 @@ async def discover_all():
         active_configs = [c for c in configs if c.get('isActive', True)]
         active_configs.sort(key=lambda x: x.get('priority', 5), reverse=True)
 
-        print(f'[DEBUG] Running discover with {len(active_configs)} active configs')
+        print(
+            '[DEBUG] Running discover with '
+            f'{len(active_configs)} active configs '
+            f'| sources: playboard={use_playboard}, youtube={use_youtube}, dailyhaha={use_dailyhaha}, douyin={use_douyin}'
+        )
 
         for topic in TOPICS:
-            for cfg in active_configs:
-                await asyncio.sleep(12 + random.random() * 5)
-                try:
-                    print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
-                    result = await discover_playboard(cfg, topic)
-                    found += int(result.get('itemsFound', 0))
-                except Exception as e:
-                    print(f"[DEBUG] discover_playboard failed: {e}")
+            if use_playboard:
+                for cfg in active_configs:
+                    await asyncio.sleep(12 + random.random() * 5)
+                    try:
+                        print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
+                        result = await discover_playboard(cfg, topic)
+                        found += int(result.get('itemsFound', 0))
+                    except Exception as e:
+                        print(f"[DEBUG] discover_playboard failed: {e}")
             try:
-                found += await discover_youtube(topic)
+                if use_youtube:
+                    found += await discover_youtube(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_youtube failed: {e}")
             try:
-                found += await discover_dailyhaha(topic)
-            except Exception as e:
-                print(f"[DEBUG] discover_dailyhaha failed: {e}")
-            try:
-                found += await discover_douyin(topic)
+                if use_douyin:
+                    found += await discover_douyin(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_douyin failed: {e}")
 
+        try:
+            if use_dailyhaha:
+                found += await discover_dailyhaha('hai')
+        except Exception as e:
+            print(f"[DEBUG] discover_dailyhaha failed: {e}")
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
         return {'success': True, 'itemsFound': found}

@@ -47,13 +47,24 @@ def extract_reel_id(url: str) -> str:
 
 def match_topic(text: str, topic: str, keywords: list[str]) -> bool:
     t = (text or '').lower()
+    normalized_topic = (topic or '').strip().lower()
+
     if any((k or '').lower() in t for k in (keywords or [])):
         return True
-    if topic == 'hai':
-        return bool(re.search(r'funny|comedy|hài|meme', t))
-    if topic == 'dance':
-        return bool(re.search(r'dance|nhảy|vũ đạo|choreo', t))
-    return bool(re.search(r'cook|recipe|nấu|món|bếp', t))
+
+    topic_patterns = {
+        'funny': r'funny|comedy|hài|meme|joke|lol',
+        'hai': r'funny|comedy|hài|meme|joke|lol',
+        'dance': r'dance|nhảy|vũ đạo|choreo|choreography',
+        'sexy dance': r'sexy\s*dance|hot\s*dance|tiktok\s*dance|dance|nhảy|vũ đạo',
+        'cooking': r'cook|cooking|recipe|nấu|món|bếp|food',
+    }
+
+    pattern = topic_patterns.get(normalized_topic)
+    if pattern:
+        return bool(re.search(pattern, t))
+
+    return False
 
 
 

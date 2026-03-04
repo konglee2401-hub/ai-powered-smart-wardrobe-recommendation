@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import TrendSetting from '../models/TrendSetting.js';
 import { protect } from '../middleware/auth.js';
+import trendYoutubeUploadService from '../services/trendYoutubeUploadService.js';
 
 const router = express.Router();
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
@@ -165,5 +166,56 @@ router.get('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/setting
 router.post('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/jobs/trigger', (req, res) => proxy(req, res, '/api/shorts-reels/jobs/trigger'));
 
+router.get('/youtube/oauth-url', async (req, res) => {
+  try {
+    const data = trendYoutubeUploadService.getAuthorizationUrl();
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/youtube/oauth-exchange', async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    const data = await trendYoutubeUploadService.exchangeCodeForToken(code);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/youtube/oauth/callback', async (req, res) => {
+  try {
+    const { code, error } = req.query || {};
+    if (error) {
+      return res.status(400).send(`YouTube OAuth failed: ${error}`);
+    }
+    if (!code) {
+      return res.status(400).send('Missing OAuth code');
+    }
+
+    await trendYoutubeUploadService.exchangeCodeForToken(String(code));
+    return res.send('YouTube OAuth success. Token saved. You can close this tab.');
+  } catch (err) {
+    return res.status(500).send(`YouTube OAuth callback error: ${err.message}`);
+  }
+});
+
+router.post('/dailyhaha/upload-to-youtube-test', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const result = await trendYoutubeUploadService.uploadOneDailyhahaVideo(payload);
+    res.json(result);
+  } catch (error) {
+    const status = error.code === 'YOUTUBE_TOKEN_MISSING' ? 401 : 500;
+    res.status(status).json({
+      success: false,
+      error: error.message,
+      authUrl: error.authUrl || null,
+      redirectUri: error.redirectUri || null
+    });
+  }
+});
 
 export default router;
