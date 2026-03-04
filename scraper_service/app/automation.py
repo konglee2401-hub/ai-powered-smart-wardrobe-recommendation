@@ -7,7 +7,8 @@ import sys
 import time
 from datetime import datetime
 from typing import Dict, List
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urljoin
+from urllib.request import Request, urlopen
 
 from bson import ObjectId
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -46,6 +47,8 @@ _proxy_index = 0
 FAIL_FAST_TIMEOUTS_MS = [18000, 30000, 50000]
 YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
 YTDLP_TIMEOUT_SEC = 180
+DAILYHAHA_HOME = "https://www.dailyhaha.com/videos/"
+DAILYHAHA_CHANNEL_ID = "dailyhaha-videos"
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -928,6 +931,137 @@ async def _collect_youtube_cards(topic: str, keywords: List[str]) -> List[Dict]:
     return []
 
 
+async def _fetch_html(url: str, timeout_sec: int = 25) -> str:
+    def _do_fetch() -> str:
+        req = Request(url, headers={'User-Agent': random.choice(UA)})
+        with urlopen(req, timeout=timeout_sec) as resp:
+            return resp.read().decode('utf-8', errors='ignore')
+
+    return await asyncio.to_thread(_do_fetch)
+
+
+async def _resolve_dailyhaha_youtube_url(video_page_url: str) -> str:
+    try:
+        html = await _fetch_html(video_page_url, timeout_sec=20)
+    except Exception as ex:
+        print(f'[dailyhaha] fetch detail failed: {video_page_url} -> {ex}')
+        return ''
+
+    patterns = [
+        r'"src"\s*:\s*"(https://www\.youtube\.com/watch\?v=[^"&]+)',
+        r'"src"\s*:\s*"(https://www\.youtube\.com/embed/[^"?&]+)',
+        r'src=\"(https://www\.youtube\.com/embed/[^"?&]+)',
+        r'(https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11})',
+        r'(https://youtu\.be/[A-Za-z0-9_-]{11})',
+    ]
+
+    for pattern in patterns:
+        m = re.search(pattern, html, flags=re.IGNORECASE)
+        if not m:
+            continue
+        url = m.group(1).replace('\\/', '/').replace('&amp;', '&')
+        video_id = extract_youtube_id(url)
+        if video_id and YOUTUBE_VIDEO_ID_RE.match(video_id):
+            return f'https://www.youtube.com/watch?v={video_id}'
+
+    return ''
+
+
+async def _collect_dailyhaha_cards() -> List[Dict]:
+    try:
+        html = await _fetch_html(DAILYHAHA_HOME, timeout_sec=25)
+    except Exception as ex:
+        print(f'[dailyhaha] fetch home failed: {ex}')
+        return []
+
+    cards: List[Dict] = []
+    seen = set()
+
+    anchor_pattern = re.compile(
+        r'<a\s+href=\"(?P<href>/[^\"]+)\"\s+class=\"item\s+video\"[^>]*>\s*'
+        r'<div\s+class=\"info\">(?P<title>.*?)<div\s+class=\"views\">(?P<views>[0-9,]+)</div>.*?'
+        r'<img\s+src=\"(?P<thumb>/[^\"]+)\"',
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for match in anchor_pattern.finditer(html):
+        href = (match.group('href') or '').strip()
+        title = re.sub(r'<[^>]+>', '', (match.group('title') or '')).strip()
+        views_text = (match.group('views') or '').strip()
+        thumb = (match.group('thumb') or '').strip()
+
+        if not href or href in seen:
+            continue
+        seen.add(href)
+
+        page_url = urljoin('https://www.dailyhaha.com', href)
+        cards.append(
+            {
+                'title': title[:180],
+                'views': parse_views(views_text),
+                'url': page_url,
+                'thumbnail': urljoin('https://www.dailyhaha.com', thumb) if thumb else '',
+            }
+        )
+
+    print(f'[dailyhaha] collected {len(cards)} cards')
+    return cards
+
+
+async def discover_dailyhaha(topic: str):
+    setting = get_or_create_settings()
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    min_views = min(int(setting.get('minViewsFilter', 100000) or 100000), 10000)
+
+    cards = await _collect_dailyhaha_cards()
+    found = 0
+
+    for card in cards:
+        title = card.get('title', '')
+        views = int(card.get('views', 0) or 0)
+        page_url = card.get('url', '')
+
+        if views < min_views or not page_url:
+            continue
+        if not match_topic(title, topic, keywords):
+            continue
+
+        video_slug = page_url.rstrip('/').split('/')[-1].replace('.htm', '').strip()
+        if not video_slug:
+            continue
+
+        existing = videos.find_one({'platform': 'dailyhaha', 'videoId': video_slug})
+        if existing:
+            continue
+
+        youtube_url = await _resolve_dailyhaha_youtube_url(page_url)
+        if not youtube_url:
+            continue
+
+        youtube_id = extract_youtube_id(youtube_url)
+        if not youtube_id or not YOUTUBE_VIDEO_ID_RE.match(youtube_id):
+            continue
+
+        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', topic)
+        v = upsert_video(
+            {
+                'platform': 'dailyhaha',
+                'videoId': video_slug,
+                'title': title,
+                'views': views,
+                'url': youtube_url,
+                'topic': topic,
+                'thumbnail': card.get('thumbnail') or f'https://img.youtube.com/vi/{youtube_id}/maxresdefault.jpg',
+                'channelId': channel['_id'],
+            }
+        )
+        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
+        found += 1
+
+    print(f'[DailyHaha {topic}] -> queued {found} videos')
+    return found
+
+
 async def discover_playboard(config: Dict, topic: str):
     setting = get_or_create_settings()
     min_views = setting.get('minViewsFilter', 300000)
@@ -1052,13 +1186,18 @@ async def discover_all():
                 await asyncio.sleep(12 + random.random() * 5)
                 try:
                     print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
-                    found += await discover_playboard(cfg, topic)
+                    result = await discover_playboard(cfg, topic)
+                    found += int(result.get('itemsFound', 0))
                 except Exception as e:
                     print(f"[DEBUG] discover_playboard failed: {e}")
             try:
                 found += await discover_youtube(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_youtube failed: {e}")
+            try:
+                found += await discover_dailyhaha(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_dailyhaha failed: {e}")
 
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))

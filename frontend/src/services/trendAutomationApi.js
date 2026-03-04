@@ -13,6 +13,7 @@ export const trendAutomationApi = {
   getSettings: () => apiClient.get(`${BASE}/settings`).then((r) => r.data),
   updateSettings: (payload) => apiClient.post(`${BASE}/settings`, payload).then((r) => r.data),
   manualDiscoverPlayboard: (config) => apiClient.post(`${BASE}/playboard/manual-discover`, config).then((r) => r.data),
+  manualDiscoverDailyhaha: (topics = null) => apiClient.post(`${BASE}/dailyhaha/manual-discover`, topics ? { topics } : {}).then((r) => r.data),
   triggerJob: (type, filters = {}) => {
 
     const params = new URLSearchParams({ type });
