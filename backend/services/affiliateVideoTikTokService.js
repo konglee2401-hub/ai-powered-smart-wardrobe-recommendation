@@ -23,6 +23,7 @@ import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
 import axios from 'axios';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 // ============================================================
 // MAIN AFFILIATE VIDEO TIKTOK FLOW
@@ -998,9 +999,6 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       // 🔥 VALIDATION: Check if files are identical (duplicate detection)
       if (imageResults.length === 2 && imageResults[0].screenshotPath && imageResults[1].screenshotPath) {
         try {
-          const fs = require('fs');
-          const crypto = require('crypto');
-          
           const hash1 = crypto
             .createHash('sha256')
             .update(fs.readFileSync(imageResults[0].screenshotPath))
@@ -1118,9 +1116,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           console.log(`   imgType: ${imgType}`);
           console.log(`   screenshotPath: ${img.screenshotPath}`);
           console.log(`   uploadFileName: ${uploadFileName}`);
-          console.log(`   file exists: ${require('fs').existsSync(img.screenshotPath)}`);
-          if (require('fs').existsSync(img.screenshotPath)) {
-            console.log(`   file size: ${(require('fs').statSync(img.screenshotPath).size / 1024).toFixed(2)}KB`);
+          console.log(`   file exists: ${fs.existsSync(img.screenshotPath)}`);
+          if (fs.existsSync(img.screenshotPath)) {
+            console.log(`   file size: ${(fs.statSync(img.screenshotPath).size / 1024).toFixed(2)}KB`);
           }
           
           return driveService.uploadFile(
