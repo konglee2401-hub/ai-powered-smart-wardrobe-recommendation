@@ -185,7 +185,7 @@ router.post('/youtube/oauth-exchange', async (req, res) => {
   }
 });
 
-router.get('/youtube/oauth/callback', async (req, res) => {
+router.get(['/youtube/oauth/callback', '/youtube/oauth/callback-v2'], async (req, res) => {
   try {
     const { code, error } = req.query || {};
     if (error) {
