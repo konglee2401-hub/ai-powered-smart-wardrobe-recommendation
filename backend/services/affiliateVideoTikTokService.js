@@ -1695,7 +1695,6 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     // 5.3: Save generated videos
-    const allGeneratedVideos = videoGenerationResult?.videos || [];
     for (const videoData of allGeneratedVideos) {
       try {
         console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);
