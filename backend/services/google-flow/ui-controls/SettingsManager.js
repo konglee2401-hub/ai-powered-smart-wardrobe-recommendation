@@ -43,8 +43,7 @@ class SettingsManager {
     };
     this.debugMode = options.debugMode || false;
     
-    // Bind utilities
-    DOMElementFinder.page = page;
+    // Bind utilities (only MouseInteractionHelper is currently active)
     MouseInteractionHelper.page = page;
   }
 
@@ -296,31 +295,41 @@ class SettingsManager {
       console.log('[SETTINGS] Finding settings button...');
       
       const btnInfo = await this.page.evaluate(() => {
-        const allButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
+        // 💫 NEW: Try finding settings via class "iRwVpo" container first (more reliable)
+        let settingsBtn = document.querySelector('.iRwVpo button[aria-haspopup="menu"]');
         
-        console.log(`[SETTINGS] Found ${allButtons.length} dropdown buttons`);
-        
-        for (const btn of allButtons) {
-          const text = btn.textContent.toLowerCase();
-          const box = btn.getBoundingClientRect();
+        if (!settingsBtn) {
+          // Fallback: search all dropdown buttons
+          const allButtons = document.querySelectorAll('button[aria-haspopup="menu"]');
           
-          const isBananaModel = text.includes('banana');
-          const hasRatioMarker = text.includes('crop') || btn.innerHTML.includes('crop_');
-          const hasCount = /x[1-4]/.test(text);
-          
-          if ((isBananaModel || (hasRatioMarker && hasCount)) && 
-              box.width > 100 && box.height > 30 && 
-              box.top > 50) {
-            return {
-              x: Math.round(box.x + box.width / 2),
-              y: Math.round(box.y + box.height / 2),
-              visible: box.width > 0 && box.height > 0,
-              text: btn.textContent.substring(0, 50)
-            };
+          for (const btn of allButtons) {
+            const text = btn.textContent.toLowerCase();
+            const box = btn.getBoundingClientRect();
+            
+            const isBananaModel = text.includes('banana');
+            const hasRatioMarker = text.includes('crop') || btn.innerHTML.includes('crop_');
+            const hasCount = /x[1-4]/.test(text);
+            
+            if ((isBananaModel || (hasRatioMarker && hasCount)) && 
+                box.width > 100 && box.height > 30 && 
+                box.top > 50) {
+              settingsBtn = btn;
+              break;
+            }
           }
         }
         
-        return null;
+        if (!settingsBtn) {
+          return null;
+        }
+        
+        const box = settingsBtn.getBoundingClientRect();
+        return {
+          x: Math.round(box.x + box.width / 2),
+          y: Math.round(box.y + box.height / 2),
+          visible: box.width > 0 && box.height > 0,
+          text: settingsBtn.textContent.substring(0, 50)
+        };
       });
 
       if (!btnInfo) {

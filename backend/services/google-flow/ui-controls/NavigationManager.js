@@ -24,8 +24,7 @@ class NavigationManager {
     this.options = options;
     this.debugMode = options.debugMode || false;
     
-    // Bind utilities to this page instance
-    DOMElementFinder.page = page;
+    // Bind utilities to this page instance (only MouseInteractionHelper is currently active)
     MouseInteractionHelper.page = page;
   }
 

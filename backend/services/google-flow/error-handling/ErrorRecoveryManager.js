@@ -29,9 +29,8 @@ class ErrorRecoveryManager {
     this.lastPrompt = null;
     
     // Bind utilities
-    ClipboardHelper.page = page;
+    // ClipboardHelper and VirtuosoQueryHelper now accept page as parameter - no binding needed
     MouseInteractionHelper.page = page;
-    VirtuosoQueryHelper.page = page;
   }
 
   /**
@@ -275,6 +274,143 @@ class ErrorRecoveryManager {
    */
   getLastPrompt() {
     return this.lastPrompt;
+  }
+
+  /**
+   * Retry generation via clicking refresh/undo buttons (lighter approach)
+   * Tries up to 3 times with context menu retry options
+   * 
+   * Flow:
+   * 1. Right-click on failed item → look for "Thử lại" option → click it
+   * 2. If not found, look for "Sử dụng lại câu lệnh" button (undo)
+   * 3. If found, click it and submit again
+   * 
+   * @param {string} targetHref - href of the failed generation item
+   * @param {number} maxRetries - number of retry attempts
+   * @returns {boolean} - success status
+   */
+  async retryGenerationViaClickButtons(targetHref, maxRetries = 3) {
+    console.log(`\n[RETRY-BUTTONS] 🔄 Attempting retry via click buttons (max ${maxRetries} attempts)...\n`);
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[RETRY-BUTTONS] Attempt ${attempt}/${maxRetries}`);
+        
+        // Find the failed item position
+        const itemResult = await this.page.evaluate((href) => {
+          const link = document.querySelector(`a[href="${href}"]`);
+          if (!link) return { found: false };
+          const rect = link.getBoundingClientRect();
+          return {
+            found: true,
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2)
+          };
+        }, targetHref);
+
+        if (!itemResult.found) {
+          console.log(`[RETRY-BUTTONS] ⚠️  Item link not found`);
+          await this.page.waitForTimeout(5000);
+          continue;
+        }
+
+        // Right-click on the failed item
+        console.log(`[RETRY-BUTTONS] 🖱️  Right-clicking at (${itemResult.x}, ${itemResult.y})`);
+        await this.page.mouse.move(itemResult.x, itemResult.y);
+        await this.page.waitForTimeout(300);
+        await this.page.mouse.down({ button: 'right' });
+        await this.page.waitForTimeout(50);
+        await this.page.mouse.up({ button: 'right' });
+        await this.page.waitForTimeout(1000);
+
+        // Look for retry option in context menu
+        const menuOption = await this.page.evaluate(() => {
+          const items = document.querySelectorAll('[role="menuitem"]');
+          for (const item of items) {
+            const text = item.textContent || '';
+            const lowerText = text.toLowerCase();
+            
+            // Look for retry/reuse/undo options
+            if (text.includes('Thử lại') || text.includes('Sử dụng lại') ||
+                text.includes('hoàn tác') || text.includes('khôi phục') ||
+                lowerText.includes('retry') || lowerText.includes('undo') ||
+                lowerText.includes('restore')) {
+              const rect = item.getBoundingClientRect();
+              return {
+                found: true,
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.top + rect.height / 2),
+                text: text.substring(0, 50)
+              };
+            }
+          }
+          return { found: false };
+        });
+
+        if (menuOption.found) {
+          console.log(`[RETRY-BUTTONS] ✓ Found option: "${menuOption.text}"`);
+          
+          // Click the retry option
+          await this.page.mouse.move(menuOption.x, menuOption.y);
+          await this.page.waitForTimeout(200);
+          await this.page.mouse.down();
+          await this.page.waitForTimeout(100);
+          await this.page.mouse.up();
+          await this.page.waitForTimeout(1500);
+
+          // Check if it's "Sử dụng lại câu lệnh" (reuse) - need to submit
+          if (menuOption.text.includes('Sử dụng lại')) {
+            console.log(`[RETRY-BUTTONS] 📤 Reuse detected, clicking submit button...`);
+            
+            const submitBtn = await this.page.evaluate(() => {
+              const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+              if (!textbox) return { found: false };
+              let container = textbox;
+              for (let i = 0; i < 5; i++) {
+                container = container.parentElement;
+              }
+              const buttons = container.querySelectorAll('button');
+              for (const btn of buttons) {
+                const icon = btn.querySelector('i.google-symbols');
+                if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
+                  const rect = btn.getBoundingClientRect();
+                  return {
+                    found: true,
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2)
+                  };
+                }
+              }
+              return { found: false };
+            });
+
+            if (submitBtn.found) {
+              await this.page.mouse.move(submitBtn.x, submitBtn.y);
+              await this.page.waitForTimeout(100);
+              await this.page.mouse.down();
+              await this.page.waitForTimeout(50);
+              await this.page.mouse.up();
+              console.log(`[RETRY-BUTTONS] ✓ Submit clicked`);
+            }
+          }
+
+          console.log(`[RETRY-BUTTONS] ✅ Retry triggered on attempt ${attempt}\n`);
+          return true;
+        } else {
+          console.log(`[RETRY-BUTTONS] ⚠️  No menu option found`);
+        }
+
+        // Wait before next attempt
+        await this.page.waitForTimeout(5000);
+
+      } catch (err) {
+        console.error(`[RETRY-BUTTONS] ❌ Error on attempt ${attempt}: ${err.message}`);
+        await this.page.waitForTimeout(5000);
+      }
+    }
+
+    console.log(`[RETRY-BUTTONS] ❌ Failed after ${maxRetries} attempts\n`);
+    return false;
   }
 
   /**

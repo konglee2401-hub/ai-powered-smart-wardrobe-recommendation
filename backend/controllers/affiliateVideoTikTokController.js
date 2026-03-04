@@ -184,8 +184,36 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       }
     };
     
-    // Call the flow service
-    return executeAffiliateVideoTikTokFlow(flowReq, res);
+    // 🔴 TIMEOUT PROTECTION: Ensure request completes or sends error within 12 minutes
+    const flowTimeoutMs = 12 * 60 * 1000;  // 12 minutes
+    let responseComplete = false;
+    
+    // Wrap response.json() to track if response was already sent
+    const originalJson = res.json.bind(res);
+    res.json = function(data) {
+      responseComplete = true;
+      return originalJson(data);
+    };
+    
+    const timeout = setTimeout(() => {
+      if (!responseComplete) {
+        console.error(`🔴 TIMEOUT: Affiliate TikTok flow exceeded ${flowTimeoutMs/1000}s`);
+        responseComplete = true;  // Mark to prevent double-sending
+        res.status(504).json({
+          success: false,
+          error: `Backend flow timeout after ${flowTimeoutMs/1000}s. Please try again.`,
+          flowId: flowReq.body.flowId,
+          stage: 'unknown',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }, flowTimeoutMs);
+    
+    try {
+      await executeAffiliateVideoTikTokFlow(flowReq, res);
+    } finally {
+      clearTimeout(timeout);
+    }
 
   } catch (error) {
     console.error('💥 ENDPOINT ERROR:', error);

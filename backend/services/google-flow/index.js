@@ -25,6 +25,7 @@ export { default as NavigationManager } from './ui-controls/NavigationManager.js
 export { default as SettingsManager } from './ui-controls/SettingsManager.js';
 
 // ========== PHASE 4: Generation & Monitoring ✅ ==========
+export { default as PreGenerationMonitor } from './generation/PreGenerationMonitor.js';
 export { default as GenerationMonitor } from './generation/GenerationMonitor.js';
 export { default as GenerationDownloader } from './generation/GenerationDownloader.js';
 export { default as ErrorRecoveryManager } from './error-handling/ErrorRecoveryManager.js';

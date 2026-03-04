@@ -63,7 +63,7 @@ const ASPECT_RATIOS = [
 ];
 
 // 📊 Image Generation Configuration
-const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per session
+const DESIRED_OUTPUT_COUNT = 1;  // 💫 Default: Generate 1 session per click (user can increase in UI)
 
 // Workflow steps - will be set dynamically in component using translations
 let WORKFLOW_STEPS = [
@@ -523,6 +523,9 @@ export default function OneClickCreatorPage() {
   // Gallery Picker State
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const [galleryPickerFor, setGalleryPickerFor] = useState(null); // 'character' or 'product'
+  
+  // 🎯 Track image source: gallery or file upload (to skip Drive upload for gallery images)
+  const [imageSource, setImageSource] = useState({ character: 'upload', product: 'upload' }); // 'upload' or 'gallery'
 
   // Settings
   const [useCase, setUseCase] = useState('change-clothes');
@@ -767,7 +770,8 @@ export default function OneClickCreatorPage() {
         generateVoiceover: true,
         flowId,  // 💫 Pass flowId in payload to maintain session
         language: language || 'en',  // 💫 Pass language for prompt generation (STEP 1, 3, 4)
-        options: recommendedOptions || {}
+        options: recommendedOptions || {},
+        imageSource: imageSource  // 🎯 Pass image source tracking to skip Drive upload for gallery images
       };
       
       console.log(`📤 Sending request to /api/ai/affiliate-video-tiktok`);
@@ -1552,6 +1556,7 @@ export default function OneClickCreatorPage() {
                           const reader = new FileReader();
                           reader.onload = (evt) => setCharacterImage(evt.target?.result);
                           reader.readAsDataURL(file);
+                          setImageSource(prev => ({ ...prev, character: 'upload' })); // 🎯 Mark as uploaded file
                         }
                       }}
                     />
@@ -1586,6 +1591,7 @@ export default function OneClickCreatorPage() {
                           const reader = new FileReader();
                           reader.onload = (evt) => setProductImage(evt.target?.result);
                           reader.readAsDataURL(file);
+                          setImageSource(prev => ({ ...prev, product: 'upload' })); // 🎯 Mark as uploaded file
                         }
                       };
                       input.click();
@@ -1764,6 +1770,7 @@ export default function OneClickCreatorPage() {
                 reader.onload = (evt) => {
                   const dataUrl = evt.target?.result;
                   setCharacterImage(dataUrl);
+                  setImageSource(prev => ({ ...prev, character: 'gallery' })); // 🎯 Mark as from gallery
                   console.log(`✨ Character image updated as data URL (${dataUrl?.length}B)`);
                 };
                 reader.readAsDataURL(blob);
@@ -1790,6 +1797,7 @@ export default function OneClickCreatorPage() {
                 reader.onload = (evt) => {
                   const dataUrl = evt.target?.result;
                   setProductImage(dataUrl);
+                  setImageSource(prev => ({ ...prev, product: 'gallery' })); // 🎯 Mark as from gallery
                   console.log(`✨ Product image updated as data URL (${dataUrl?.length}B)`);
                 };
                 reader.readAsDataURL(blob);

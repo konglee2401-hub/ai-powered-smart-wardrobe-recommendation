@@ -11,11 +11,12 @@
 export class VirtuosoQueryHelper {
   /**
    * Get all hrefs from virtuoso list (generated items)
+   * @param {Object} page - Puppeteer page object
    * @param {Object} filterOptions - {excludeLoading, excludeError, includeOnlyNew}
    * @returns {Array<string>} - Array of hrefs
    */
-  static async getHrefsFromVirtuosoList(filterOptions = {}) {
-    return this.page.evaluate((options) => {
+  static async getHrefsFromVirtuosoList(page, filterOptions = {}) {
+    return page.evaluate((options) => {
       const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
       const hrefs = [];
       
@@ -41,11 +42,12 @@ export class VirtuosoQueryHelper {
 
   /**
    * Find NEW hrefs not in previous set
+   * @param {Object} page - Puppeteer page object
    * @param {Array<string>} previousHrefs - Known hrefs to exclude (as array, not Set)
    * @returns {Array<Object>} - Array of {href, isNew, position}
    */
-  static async findNewHrefs(previousHrefs) {
-    return this.page.evaluate((prevArray) => {
+  static async findNewHrefs(page, previousHrefs) {
+    return page.evaluate((prevArray) => {
       const newItems = [];
       const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
       
@@ -69,11 +71,12 @@ export class VirtuosoQueryHelper {
 
   /**
    * Get item at specific position in virtuoso list
+   * @param {Object} page - Puppeteer page object
    * @param {number} position - Position index (0 = first/newest)
    * @returns {string|null} - href of item at position
    */
-  static async getHrefByPosition(position) {
-    return this.page.evaluate((pos) => {
+  static async getHrefByPosition(page, position) {
+    return page.evaluate((pos) => {
       const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
       if (position < 0 || position >= links.length) return null;
       return links[pos].getAttribute('href');
@@ -82,10 +85,11 @@ export class VirtuosoQueryHelper {
 
   /**
    * Find generated image item (has image preview thumbnail)
+   * @param {Object} page - Puppeteer page object
    * @returns {Object|null} - {href, thumbnail, dimensions}
    */
-  static async findGeneratedImageItem() {
-    return this.page.evaluate(() => {
+  static async findGeneratedImageItem(page) {
+    return page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
       
       for (const link of links) {
@@ -113,21 +117,23 @@ export class VirtuosoQueryHelper {
 
   /**
    * Get item count in virtuoso list
+   * @param {Object} page - Puppeteer page object
    * @returns {number}
    */
-  static async getItemCount() {
-    return this.page.evaluate(() => {
+  static async getItemCount(page) {
+    return page.evaluate(() => {
       return Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).length;
     });
   }
 
   /**
    * Check if item exists with href in virtuoso
+   * @param {Object} page - Puppeteer page object
    * @param {string} href - Href to find
    * @returns {boolean}
    */
-  static async hrefExists(href) {
-    return this.page.evaluate((targetHref) => {
+  static async hrefExists(page, href) {
+    return page.evaluate((targetHref) => {
       const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
       return Array.from(links).some(link => link.getAttribute('href') === targetHref);
     }, href);
@@ -135,10 +141,11 @@ export class VirtuosoQueryHelper {
 
   /**
    * Get all tile data with detailed status
+   * @param {Object} page - Puppeteer page object
    * @returns {Array<Object>}
    */
-  static async getAllTileData() {
-    return this.page.evaluate(() => {
+  static async getAllTileData(page) {
+    return page.evaluate(() => {
       const tiles = [];
       const allTiles = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
       

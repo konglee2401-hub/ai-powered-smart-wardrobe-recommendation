@@ -24,16 +24,17 @@ const __dirname = path.dirname(__filename);
 
 puppeteer.use(StealthPlugin());
 
-const SESSION_PATH = path.join(path.dirname(__dirname), 'data', 'chatgpt-session.json');
-const CHATGPT_PROFILE_DIR = path.join(path.dirname(__dirname), 'data', 'chatgpt-profile');
+// 💫 Use same path as ChatGPTService for session sharing
+const CHATGPT_PROFILE_BASE = path.join(path.dirname(__dirname), 'data', 'chatgpt-profiles');
+const SESSION_PATH = path.join(CHATGPT_PROFILE_BASE, 'default', 'session.json');
+const CHATGPT_PROFILE_DIR = path.join(CHATGPT_PROFILE_BASE, 'default');  // Shared default profile
 const DATA_DIR = path.dirname(SESSION_PATH);
 
-// Ensure data directory exists
+// Ensure all directories exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Ensure ChatGPT profile directory exists
 if (!fs.existsSync(CHATGPT_PROFILE_DIR)) {
   fs.mkdirSync(CHATGPT_PROFILE_DIR, { recursive: true });
 }
@@ -69,6 +70,13 @@ class ChatGPTSessionManager {
    */
   saveSession(sessionData) {
     try {
+      // 💫 Ensure session directory exists before saving
+      const sessionDir = path.dirname(this.sessionPath);
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+        console.log(`   📁 Created session directory: ${sessionDir}`);
+      }
+
       fs.writeFileSync(this.sessionPath, JSON.stringify(sessionData, null, 2));
       console.log(`✅ Session saved to: ${this.sessionPath}`);
       return true;
