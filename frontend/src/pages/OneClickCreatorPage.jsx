@@ -649,13 +649,68 @@ export default function OneClickCreatorPage() {
    *        5-Deep Analysis, 6-Generate Video, 7-Generate Voiceover, 8-Finalize
    */
   const startPreviewPolling = (flowId, sessionId, stopRef = { stop: false }) => {
+    const POLL_INTERVAL_MS = 1500;
+    const NO_DATA_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+    const pollingStartedAt = Date.now();
+    let lastSuccessfulFetchAt = Date.now();
+    let lastUsefulDataAt = Date.now();
+    let isPolling = false;
+
+    const markSessionPollingStopped = (errorMessage) => {
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          error: errorMessage || s.error,
+          steps: (s.steps || []).map(step => ({ ...step, inProgress: false }))
+        };
+      }));
+    };
+
     const pollPreview = async () => {
+      const now = Date.now();
+
+      // Safety timeout if no successful response for too long
+      if (now - lastSuccessfulFetchAt > NO_DATA_TIMEOUT_MS) {
+        markSessionPollingStopped('Preview polling stopped: no successful response for over 5 minutes.');
+        return true;
+      }
+
       try {
         const response = await fetch(`/api/ai/affiliate-video-tiktok/preview/${flowId}`);
-        if (!response.ok) return false;
 
+        if (!response.ok) {
+          // Stop immediately on backend 5xx to avoid infinite noisy polling
+          if (response.status >= 500) {
+            markSessionPollingStopped(`Preview polling stopped due to server error (${response.status}).`);
+            return true;
+          }
+
+          // For non-500 errors, stop if stale for too long
+          if (Date.now() - pollingStartedAt > NO_DATA_TIMEOUT_MS) {
+            markSessionPollingStopped('Preview polling stopped: no valid preview data within 5 minutes.');
+            return true;
+          }
+
+          return false;
+        }
+
+        lastSuccessfulFetchAt = Date.now();
         const data = await response.json();
         const preview = data.preview || {};
+        const hasUsefulData = !!(
+          preview.status || preview.step1 || preview.step2 || preview.step3 || preview.step4 || preview.step5
+        );
+
+        if (hasUsefulData) {
+          lastUsefulDataAt = Date.now();
+        }
+
+        // Stop if API keeps responding but no meaningful data for 5 minutes
+        if (!hasUsefulData && Date.now() - lastUsefulDataAt > NO_DATA_TIMEOUT_MS) {
+          markSessionPollingStopped('Preview polling stopped: no preview updates for over 5 minutes.');
+          return true;
+        }
 
         setSessions(prev => prev.map(s => {
           if (s.id !== sessionId) return s;
@@ -703,25 +758,43 @@ export default function OneClickCreatorPage() {
             nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, completed: true, inProgress: false }));
           }
 
+          if (preview.status === 'failed') {
+            nextSession.error = nextSession.error || 'Flow failed';
+            nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, inProgress: false }));
+          }
+
           return nextSession;
         }));
 
         return preview.status === 'completed' || preview.status === 'failed' || stopRef.stop;
       } catch (e) {
+        // Stop polling if no data can be fetched for too long
+        if (Date.now() - lastSuccessfulFetchAt > NO_DATA_TIMEOUT_MS) {
+          markSessionPollingStopped('Preview polling stopped: unable to fetch preview for over 5 minutes.');
+          return true;
+        }
+
         return stopRef.stop;
       }
     };
 
     let pollCount = 0;
-    const maxPolls = 300;
+    const maxPolls = Math.ceil(NO_DATA_TIMEOUT_MS / POLL_INTERVAL_MS) + 120; // keep hard cap with buffer
 
     const pollInterval = setInterval(async () => {
-      pollCount++;
-      const shouldStop = await pollPreview();
-      if (shouldStop || pollCount >= maxPolls || stopRef.stop) {
-        clearInterval(pollInterval);
+      if (isPolling || stopRef.stop) return;
+      isPolling = true;
+
+      try {
+        pollCount++;
+        const shouldStop = await pollPreview();
+        if (shouldStop || pollCount >= maxPolls || stopRef.stop) {
+          clearInterval(pollInterval);
+        }
+      } finally {
+        isPolling = false;
       }
-    }, 1500);
+    }, POLL_INTERVAL_MS);
 
     return () => {
       stopRef.stop = true;
