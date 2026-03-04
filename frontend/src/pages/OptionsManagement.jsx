@@ -167,7 +167,7 @@ function SceneSidebarCard({ scene, isSelected, onClick }) {
  * Full Scene Detail Editor
  */
 function SceneDetailEditor({ scene, onRefresh }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [generatingImages, setGeneratingImages] = useState(false);
