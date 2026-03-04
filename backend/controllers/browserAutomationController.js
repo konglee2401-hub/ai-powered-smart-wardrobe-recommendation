@@ -2221,10 +2221,16 @@ export async function serveGeneratedImage(req, res) {
       const searchPaths = [
         path.join(tempDir, 'google-flow-downloads', id),
         path.join(tempDir, 'image-gen-results', id),
-        path.join(tempDir, id)
+        path.join(tempDir, id),
+        path.join(process.cwd(), 'backend', 'temp', 'google-flow-downloads', id),
+        path.join(process.cwd(), 'backend', 'temp', 'image-gen-results', id),
+        path.join(process.cwd(), 'backend', 'temp', id),
+        path.join(process.cwd(), 'generated-images', id),
+        path.join(process.cwd(), 'backend', 'generated-images', id)
       ];
       
       console.log(`🔍 Global mapping miss. Searching in ${searchPaths.length} locations...`);
+
       
       for (const searchPath of searchPaths) {
         if (fs.existsSync(searchPath)) {
@@ -2244,17 +2250,24 @@ export async function serveGeneratedImage(req, res) {
       });
     }
     
-    // Security check: ensure path is within temp directory
+    // Security check: ensure path is within allowed directories
     const realPath = path.resolve(filePath);
-    const tempBasePath = path.resolve(tempDir);
-    
-    if (!realPath.startsWith(tempBasePath)) {
-      console.error(`🚨 Security violation: Attempted to access file outside temp dir:`, realPath);
+    const allowedBasePaths = [
+      path.resolve(tempDir),
+      path.resolve(path.join(process.cwd(), 'backend', 'temp')),
+      path.resolve(path.join(process.cwd(), 'generated-images')),
+      path.resolve(path.join(process.cwd(), 'backend', 'generated-images')),
+    ];
+
+    const isAllowed = allowedBasePaths.some((basePath) => realPath.startsWith(basePath));
+    if (!isAllowed) {
+      console.error(`🚨 Security violation: Attempted to access file outside allowed dirs:`, realPath);
       return res.status(403).json({
         success: false,
         error: 'Access denied'
       });
     }
+
     
     // Determine content type
     const ext = path.extname(filePath).toLowerCase();

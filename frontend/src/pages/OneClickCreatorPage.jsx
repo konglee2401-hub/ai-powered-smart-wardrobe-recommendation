@@ -1821,6 +1821,7 @@ export default function OneClickCreatorPage() {
         scenes={sceneOptions}
         selectedScene={selectedScene}
         language={i18n.language || 'en'}
+        aspectRatio={aspectRatio}
         onSelect={(value, scene) => {
           setSelectedScene(value);
           const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
