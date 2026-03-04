@@ -104,6 +104,17 @@ function getVideoGenerationService(provider, options = {}) {
       });
   }
 }
+
+/**
+ * Get fixed clip duration per video provider.
+ * - Google Flow: 8s/clip
+ * - Grok Imagine: 10s/clip
+ */
+function getProviderClipDuration(provider = 'grok') {
+  const normalized = String(provider || '').toLowerCase();
+  if (normalized.includes('google')) return 8;
+  return 10;
+}
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
@@ -139,7 +150,7 @@ const flowPreviewStore = new Map();
  * Get current flow preview data (for Step 2 image display)
  */
 export function getFlowPreview(flowId) {
-  return flowPreviewStore.get(flowId) || { status: 'not-found', step2Images: null };
+  return flowPreviewStore.get(flowId) || { status: 'not-found' };
 }
 
 /**
@@ -163,7 +174,14 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
   await logger.init();
   
   // Initialize preview store for this flow
-  updateFlowPreview(flowId, { status: 'started', step2Images: null });
+  updateFlowPreview(flowId, {
+    status: 'started',
+    step1: null,
+    step2: null,
+    step3: null,
+    step4: null,
+    step5: null
+  });
 
   try {
     await logger.startStage('initialization');
@@ -242,10 +260,12 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     // Extract providers from options if not in body directly
     const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
     const finalVideoProvider = options.videoProvider || videoProvider || 'grok';
+    const providerClipDuration = getProviderClipDuration(finalVideoProvider);
     
     console.log(`\n🔌 PROVIDER CONFIGURATION:`);
     console.log(`  Image Provider: ${finalImageProvider}`);
     console.log(`  Video Provider: ${finalVideoProvider}`);
+    console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
 
     // ============================================================
     // STEP 1: CHATGPT BROWSER AUTOMATION ANALYSIS (Non-blocking)
@@ -1068,6 +1088,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       console.log(`   Wearing: ${wearingPrompt.substring(0, 80)}...`);
       console.log(`   Holding: ${holdingPrompt.substring(0, 80)}...`);
       
+      updateFlowPreview(flowId, {
+        status: 'step1-complete',
+        step1: {
+          wearingPrompt,
+          holdingPrompt
+        }
+      });
+      
       console.log(`\n🔄 Generating BOTH images (wearing + holding) from character & product...`);
       console.log(`   Character input: ${path.basename(characterFilePath)}`);
       console.log(`   Product input: ${path.basename(productFilePath)}`);
@@ -1454,7 +1482,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         voiceGender,
         voicePace,
         productFocus,
-        language  // 💫 Add language to config
+        language,  // 💫 Add language to config
+        videoProvider: finalVideoProvider,
+        clipDuration: providerClipDuration
       }
     );
 
@@ -1481,6 +1511,15 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
     console.log(`${'═'.repeat(80)}\n`);
     // ============================================================
+    updateFlowPreview(flowId, {
+      status: 'step3-complete',
+      step3: {
+        videoScripts: deepAnalysis.data.videoScripts || [],
+        hashtags: deepAnalysis.data.hashtags || [],
+        voiceoverScript: deepAnalysis.data.voiceoverScript || ''
+      }
+    });
+
     // STEP 4: VIDEO GENERATION (Dynamic Provider Selection)
     // 🎬 Generate actual 10-second video with 720p resolution
     // Dynamically select images based on deep analysis recommendations
@@ -1519,7 +1558,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       });
 
       console.log(`\n📝 VIDEO GENERATION PARAMETERS:`);
-      console.log(`  Duration: 10s`);
+      console.log(`  Duration: ${providerClipDuration}s`);
       console.log(`  Resolution: 720p`);
       console.log(`  Format: TikTok-friendly (9:16 aspect ratio)`);
       console.log(`  Provider: ${finalVideoProvider}`);
@@ -1605,7 +1644,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
                 material: analysis.product?.fabric_type
               },
               {
-                videoDuration: 10,
+                videoDuration: providerClipDuration,
                 voiceGender,
                 voicePace,
                 productFocus,
@@ -1619,7 +1658,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               scriptContent,
               analysis,
               {
-                videoDuration: 10,
+                videoDuration: providerClipDuration,
                 voiceGender,
                 voicePace,
                 productFocus,
@@ -1656,7 +1695,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           console.log(`\n✅ VIDEO GENERATION SUCCESSFUL`);
           console.log(`   File: ${path.basename(videoResult.path)}`);
           console.log(`   Size: ${(videoSize / 1024 / 1024).toFixed(2)} MB`);
-          console.log(`   Duration: 10 seconds`);
+          console.log(`   Duration: ${providerClipDuration} seconds`);
           console.log(`   Resolution: 720p (9:16 TikTok format)`);
           console.log(`   Primary image: ${imageRecommendations.preferHolding ? 'Character holding product' : 'Character wearing product'}`);
 
@@ -1666,7 +1705,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               type: 'tiktok-video',
               path: videoResult.path,
               url: videoResult.url,
-              duration: 10,
+              duration: providerClipDuration,
               resolution: '720p',
               size: videoSize,
               format: '9:16',
@@ -1711,7 +1750,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         generatedCount: videoGenerationResult.totalCount,
         duration: step4Duration,
         resolution: '720p',
-        videoDuration: '10s'
+        videoDuration: `${providerClipDuration}s`
       });
     } else {
       console.error(`\n❌ STEP 4 FAILED: ${videoGenerationResult?.error || 'Unknown error'}`);
@@ -1720,6 +1759,15 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         duration: step4Duration
       });
     }
+
+    updateFlowPreview(flowId, {
+      status: videoGenerationResult?.success ? 'step4-complete' : 'step4-failed',
+      step4: {
+        videos: videoGenerationResult?.videos || [],
+        totalCount: videoGenerationResult?.totalCount || 0,
+        error: videoGenerationResult?.error || null
+      }
+    });
 
     // ============================================================
     // STEP 5: 💫 AUTO-SAVE GENERATED ASSETS TO DATABASE
@@ -1823,6 +1871,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     // 5.3: Save generated videos
+    const allGeneratedVideos = videoGenerationResult?.videos || [];
     for (const videoData of allGeneratedVideos) {
       try {
         console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);
@@ -1889,15 +1938,16 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: 'completed',
             duration: `${step2Duration}s`,
             images: {
-              wearing: wearingImageResult?.path || 'N/A',
-              holding: holdingImageResult?.path || 'N/A'
+              wearing: wearingImageResult?.url || wearingImageResult?.screenshotPath || 'N/A',
+              holding: holdingImageResult?.url || holdingImageResult?.screenshotPath || 'N/A'
             }
           },
           step3: {
             status: 'completed',
             duration: `${step3Duration}s`,
             analysis: {
-              videoScripts: deepAnalysis?.data?.videoScripts?.length || 0,
+              videoScripts: deepAnalysis?.data?.videoScripts || [],
+              voiceoverScript: deepAnalysis?.data?.voiceoverScript || '',
               voiceoverLength: deepAnalysis?.data?.voiceoverScript?.length || 0,
               hashtags: deepAnalysis?.data?.hashtags || []
             }
@@ -1906,7 +1956,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: videoGenerationResult?.error && videoGenerationResult?.totalCount === 0 ? 'failed' : 'completed',
             duration: `${step4Duration}s`,
             totalVideos: videoGenerationResult?.totalCount || 0,
+            videos: (videoGenerationResult?.videos || []).map(v => ({
+              path: v.path,
+              url: v.url,
+              duration: v.duration,
+              resolution: v.resolution
+            })),
             error: videoGenerationResult?.error || null
+          },
+          step5: {
+            status: 'completed',
+            ttsText: deepAnalysis?.data?.voiceoverScript || '',
+            savedAssets: {
+              images: savedAssets.images.length,
+              videos: savedAssets.videos.length
+            }
           }
         },
         metadata: {
@@ -1923,6 +1987,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           }
         }
       };
+
+      updateFlowPreview(flowId, {
+        status: 'completed',
+        step5: {
+          ttsText: deepAnalysis?.data?.voiceoverScript || '',
+          hashtags: deepAnalysis?.data?.hashtags || []
+        },
+        final: {
+          totalDuration: `${totalDuration}s`,
+          videos: (videoGenerationResult?.videos || []).map(v => v.path || v.url).filter(Boolean)
+        }
+      });
 
       // Mark session as completed and store final artifacts
       const generatedImagePaths = [];
@@ -1989,12 +2065,13 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
   
   try {
     const { wearingImage, holdingImage, productImage } = images;
-    const { videoDuration, voiceGender, voicePace, productFocus, language = 'en' } = config;
+    const { videoDuration, voiceGender, voicePace, productFocus, language = 'en', videoProvider = 'grok', clipDuration } = config;
 
     console.log('\n🧠 STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
     console.log(`   Images: wearing, holding, product`);
     console.log(`   Voice: ${voiceGender} (${voicePace} pace)`);
-    console.log(`   Duration: ${videoDuration}s`);
+    console.log(`   Duration target: ${videoDuration}s`);
+    console.log(`   Provider clip: ${clipDuration || getProviderClipDuration(videoProvider)}s (${videoProvider})`);
 
     // Build detailed prompt for ChatGPT video analysis
     // 💫 Use Vietnamese prompts if language='vi'
@@ -2004,7 +2081,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     if (normalizedLanguage === 'vi') {
       deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
         productFocus,
-        { videoDuration, voiceGender, voicePace }
+        { videoDuration, voiceGender, voicePace, clipDuration: clipDuration || getProviderClipDuration(videoProvider), videoProvider }
       );
     } else {
       deepAnalysisPrompt = buildDeepAnalysisPrompt(
@@ -2014,7 +2091,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
           holding: typeof holdingImage === 'string' ? holdingImage : holdingImage.screenshotPath,
           product: productImage
         },
-        { videoDuration, voiceGender, voicePace, productFocus }
+        { videoDuration, voiceGender, voicePace, productFocus, videoProvider, clipDuration }
       );
     }
 
@@ -2379,11 +2456,14 @@ function parseVideoSegments(text) {
   
   // Try to find segment markers like [INTRO], [WEARING], [HOLDING], [CTA] with optional [IMAGES: ...]
   // Pattern: [SEGMENT_NAME] (duration) [IMAGES: image1, image2] : script\n- Reason: reason text
-  const segmentPattern = /\[(\w+)\]\s*\((\d+)s?\)\s*(?:\[IMAGES?:\s*([^\]]+)\])?\s*:?\s*([\s\S]*?)(?=\[(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
+  const segmentPattern = /\[(\w+)\]\s*(?:\((\d+)s?\)|\[(\d{1,2})-(\d{1,2})s?\])\s*(?:\[IMAGES?:\s*([^\]]+)\])?\s*:?\s*([\s\S]*?)(?=\[(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
   
   let match;
   while ((match = segmentPattern.exec(text)) !== null) {
-    const [, segmentName, duration, imagesStr, script] = match;
+    const [, segmentName, durationRaw, startSecond, endSecond, imagesStr, script] = match;
+    const computedDuration = durationRaw
+      ? parseInt(durationRaw, 10)
+      : Math.max(1, (parseInt(endSecond || '0', 10) - parseInt(startSecond || '0', 10)));
     
     // Parse image composition from [IMAGES: wearing, product, ...]
     let imageComposition = [];
@@ -2405,7 +2485,7 @@ function parseVideoSegments(text) {
       
       segments.push({
         segment: segmentName.toLowerCase(),
-        duration: parseInt(duration) || 5,
+        duration: computedDuration || 5,
         script: scriptOnly.trim(),
         imageComposition: imageComposition  // NEW: Store array of images
       });
@@ -2456,8 +2536,9 @@ function parseHashtags(text) {
 }
 
 function buildDeepAnalysisPrompt(analysis, images, config) {
-  const { wearing, holding, product } = images;
-  const { videoDuration, voiceGender, voicePace, productFocus } = config;
+  const { videoDuration, voiceGender, voicePace, productFocus, videoProvider = 'grok', clipDuration } = config;
+  const providerDuration = clipDuration || getProviderClipDuration(videoProvider);
+  const segmentCount = Math.max(2, Math.ceil(providerDuration / 2));
 
   return `
 You are a professional video content creator for TikTok affiliate marketing.
@@ -2474,39 +2555,46 @@ IMAGES PROVIDED:
 2. "holding" - Character holding/presenting the product
 3. "product" - Original product reference
 
-YOUR TASK:
-Generate content for a TikTok video (9:16 format, ${videoDuration} seconds).
+VIDEO GENERATION CONTEXT:
+- Requested total campaign duration: ${videoDuration} seconds
+- Current provider: ${videoProvider}
+- Duration per generated video clip: ${providerDuration} seconds
 
-IMPORTANT: Format your response with these EXACT section markers for parsing:
+YOUR TASK:
+Generate content for ONE TikTok clip (9:16 format, ${providerDuration} seconds).
+
+IMPORTANT: Return exactly these sections and formatting for parser compatibility.
 
 🎬 VIDEO SEGMENTS:
-Create ${Math.ceil(videoDuration / 5)} short video segments. For EACH segment, use this format:
-[SEGMENT_NAME] (duration_in_seconds) [IMAGES: image1, image2, ...] :
-Your narration text here (3-7 seconds of script)
+Create ${segmentCount} short segments that fully fit inside ${providerDuration} seconds.
+For each segment, use this exact format:
+[SEGMENT_NAME] [startSecond-endSecond] [IMAGES: image1, image2, ...]:
+Narration for that exact time range.
 - Reason: Why these images work for this segment
 
-Example:
-[INTRO] (3s) [IMAGES: wearing, product]:
-Check out this amazing new look! Perfect for any occasion.
-- Reason: Show product on body combined with standalone product shot
+Rules:
+- First segment must start at 0.
+- Last segment must end exactly at ${providerDuration}.
+- Time ranges must be continuous with no gaps or overlaps.
+- Allowed images: wearing, holding, product.
 
-[WEARING] (5s) [IMAGES: wearing]:
-See how perfectly it fits and looks.
-- Reason: Focus on fit and styling
+Example format:
+[INTRO] [0-2s] [IMAGES: wearing, product]:
+Hook line that grabs attention immediately.
+- Reason: fast opening with body-fit + product clarity
 
-[HOLDING] (4s) [IMAGES: holding, product]:
-The details are absolutely stunning. Premium quality clear.
-- Reason: Close-up details of the product
+[FEATURES] [2-6s] [IMAGES: wearing, holding]:
+Highlight fit, material, and key details naturally.
+- Reason: mix styling view and detail showcase
 
-[CTA] (3s) [IMAGES: product]:
-Get yours now! Link in bio! Limited stock!
-- Reason: Product-focused call-to-action
+[CTA] [6-${providerDuration}s] [IMAGES: product]:
+Strong purchase CTA and urgency.
+- Reason: product-only frame improves conversion focus
 
 🎙️ VOICEOVER:
-Write a cohesive ${voiceGender} narrator script:
+Write a cohesive ${voiceGender} narrator script for exactly ${providerDuration} seconds.
 - Pace: ${voicePace}
 - Tone: Enthusiastic, relatable, trendy
-- Length: ~30-40 seconds
 - Include pain points and product benefits
 - End with strong CTA
 
@@ -2518,8 +2606,7 @@ REQUIREMENTS:
 - Fast-paced, engaging narration
 - Focus on product benefits and style appeal
 - Optimize for affiliate conversion while maintaining authenticity
-- Each segment should flow naturally into the next
-- Image composition should vary: some segments 1 image, some 2 images, strategically selected
+- Segment timeline must be second-level accurate for downstream video generation
 `;
 }
 
@@ -2943,4 +3030,3 @@ function buildCharacterHoldingProductPrompt(analysis, selectedOptions = {}, prod
 
   return prompt;
 }
-

@@ -12,6 +12,7 @@ import { executeAffiliateVideoTikTokFlow, formatVoiceoverForTTS, getFlowPreview 
 import GoogleDriveService from '../services/googleDriveService.js';
 import path from 'path';
 import fs from 'fs';
+import SessionLog from '../models/SessionLog.js';
 
 // ============================================================
 // MAIN ENDPOINT: POST /api/flows/affiliate-video-tiktok
@@ -761,10 +762,50 @@ export async function getAffiliateVideoPreviewEndpoint(req, res) {
   }
 }
 
+
+/**
+ * 💫 GET Flow Session Status from DB
+ * Used by frontend polling to stop when session is completed/failed
+ */
+export async function getAffiliateVideoSessionStatusEndpoint(req, res) {
+  try {
+    const { flowId } = req.params;
+
+    if (!flowId) {
+      return res.status(400).json({ success: false, error: 'Flow ID is required' });
+    }
+
+    const session = await SessionLog.findOne({ sessionId: flowId })
+      .select('sessionId status updatedAt completedAt error');
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        flowId,
+        status: 'not-found',
+        error: 'Session not found in DB'
+      });
+    }
+
+    return res.json({
+      success: true,
+      flowId,
+      status: session.status,
+      updatedAt: session.updatedAt,
+      completedAt: session.completedAt || null,
+      error: session.error || null
+    });
+  } catch (error) {
+    console.error('❌ Error getting affiliate session status:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
+
 export default {
   executeAffiliateVideoTikTokEndpoint,
   generateVideoFromAnalysisEndpoint,
   generateVoiceoverEndpoint,
   finalizeAffiliateVideoEndpoint,
-  getAffiliateVideoPreviewEndpoint
+  getAffiliateVideoPreviewEndpoint,
+  getAffiliateVideoSessionStatusEndpoint
 };
