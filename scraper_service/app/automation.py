@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import datetime
 from typing import Dict, List
-from urllib.parse import parse_qs, urlparse, urljoin
+from urllib.parse import parse_qs, urlparse, urljoin, quote
 from urllib.request import Request, urlopen
 
 from bson import ObjectId
@@ -33,7 +33,7 @@ from .config import (
 )
 from .db import channels, videos
 from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
-from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, match_topic
+from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, extract_douyin_id, match_topic
 
 UA = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
@@ -49,6 +49,14 @@ YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
 YTDLP_TIMEOUT_SEC = 180
 DAILYHAHA_HOME = "https://www.dailyhaha.com/videos/"
 DAILYHAHA_CHANNEL_ID = "dailyhaha-videos"
+DOUYIN_SEARCH_BASE = "https://www.douyin.com/jingxuan/search/{keyword}?type=general"
+DOUYIN_TOPIC_KEYWORDS = {
+    "funny": "幽默",
+    "hai": "搞笑",
+    "dance": "舞蹈",
+    "sexy dance": "热舞",
+    "cooking": "美食",
+}
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -1062,6 +1070,165 @@ async def discover_dailyhaha(topic: str):
     return found
 
 
+
+
+async def _collect_douyin_cards(topic: str) -> List[Dict]:
+    keyword = DOUYIN_TOPIC_KEYWORDS.get(topic, topic)
+    search_url = DOUYIN_SEARCH_BASE.format(keyword=quote(keyword))
+    print(f'[douyin] search topic={topic} keyword={keyword} url={search_url}')
+
+    cards: List[Dict] = []
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[douyin] no healthy proxy available')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy) if proxy else None
+
+        try:
+            async with async_playwright() as p:
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context = await browser.new_context(
+                    user_agent=random.choice(UA),
+                    locale=SCRAPER_LOCALE,
+                    timezone_id=SCRAPER_TIMEZONE,
+                    viewport={'width': 1366, 'height': 920},
+                )
+                page = await context.new_page()
+
+                try:
+                    await page.goto(search_url, wait_until='domcontentloaded', timeout=timeout_ms)
+                    await asyncio.sleep(5)
+                    await human_scroll(page, 8)
+
+                    raw_cards = await page.evaluate(
+                        """() => {
+                            const normalize = (href) => {
+                                if (!href) return '';
+                                if (href.startsWith('http')) return href;
+                                if (href.startsWith('//')) return `https:${href}`;
+                                return `https://www.douyin.com${href}`;
+                            };
+
+                            const links = Array.from(document.querySelectorAll('a[href*="/video/"]'));
+                            const out = [];
+                            const seen = new Set();
+
+                            for (const link of links) {
+                                const videoUrl = normalize(link.getAttribute('href'));
+                                if (!videoUrl || seen.has(videoUrl)) continue;
+                                seen.add(videoUrl);
+
+                                const card = link.closest('li, article, div');
+                                const titleNode = card?.querySelector('h3, h4, [data-e2e*="desc"], [data-e2e*="title"]');
+                                const title = (titleNode?.textContent || link.textContent || '').trim();
+
+                                const channelLink = card?.querySelector('a[href*="/user/"]');
+                                const channelUrl = normalize(channelLink?.getAttribute('href') || '');
+                                const channelName = (channelLink?.textContent || '').trim();
+
+                                out.push({
+                                    url: videoUrl,
+                                    title,
+                                    channel_url: channelUrl,
+                                    channel_name: channelName,
+                                });
+
+                                if (out.length >= 80) break;
+                            }
+
+                            return out;
+                        }"""
+                    )
+
+                    for item in raw_cards or []:
+                        url = str(item.get('url') or '').strip()
+                        video_id = extract_douyin_id(url)
+                        if not url or not video_id.isdigit():
+                            continue
+
+                        channel_url = str(item.get('channel_url') or '').strip()
+                        channel_match = re.search(r'/user/([^/?]+)', channel_url)
+                        channel_id = channel_match.group(1) if channel_match else f'dy-{video_id[:8]}'
+
+                        title = str(item.get('title') or '').strip()
+                        cards.append({
+                            'video_id': video_id,
+                            'url': f'https://www.douyin.com/video/{video_id}',
+                            'title': title[:180] if title else f'Douyin video {video_id}',
+                            'views': 100001,
+                            'channel_id': channel_id,
+                            'channel_name': str(item.get('channel_name') or '').strip() or f'douyin-{channel_id[:12]}',
+                            'thumbnail': '',
+                        })
+
+                    print(f'[douyin] collected {len(cards)} cards for topic={topic}')
+                finally:
+                    await context.close()
+                    await browser.close()
+
+                if cards:
+                    break
+
+        except PlaywrightTimeoutError:
+            print(f'[douyin] timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)}')
+            continue
+        except Exception as ex:
+            print(f'[douyin] collect failed with proxy {_mask_proxy(proxy)}: {ex}')
+            continue
+
+    return cards
+
+
+async def discover_douyin(topic: str):
+    setting = get_or_create_settings()
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    cards = await _collect_douyin_cards(topic)
+    found = 0
+
+    for card in cards:
+        title = card.get('title', '')
+        if not match_topic(title, topic, keywords) and topic != 'funny':
+            # Topic Chinese keyword đã lọc theo query; vẫn giữ check title cho đồng nhất
+            continue
+
+        video_id = card.get('video_id', '')
+        if not video_id:
+            continue
+
+        existing = videos.find_one({'platform': 'douyin', 'videoId': video_id})
+        if existing:
+            continue
+
+        channel = upsert_channel('douyin', card.get('channel_id') or f'dy-{video_id[:8]}', card.get('channel_name') or 'douyin-channel', topic)
+        v = upsert_video(
+            {
+                'platform': 'douyin',
+                'videoId': video_id,
+                'title': title,
+                'views': int(card.get('views', 100001) or 100001),
+                'url': card.get('url') or f'https://www.douyin.com/video/{video_id}',
+                'topic': topic,
+                'thumbnail': card.get('thumbnail', ''),
+                'channelId': channel['_id'],
+            }
+        )
+        await enqueue(v['_id'], 5)
+        found += 1
+
+    print(f'[Douyin {topic}] -> queued {found} videos')
+    return found
+
+
 async def discover_playboard(config: Dict, topic: str):
     setting = get_or_create_settings()
     min_views = setting.get('minViewsFilter', 300000)
@@ -1198,6 +1365,10 @@ async def discover_all():
                 found += await discover_dailyhaha(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_dailyhaha failed: {e}")
+            try:
+                found += await discover_douyin(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_douyin failed: {e}")
 
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
@@ -1225,6 +1396,9 @@ async def scan_single_channel(channel, use_proxy: bool = True, headless_override
             # Fallback: treat as handle without @
             target_url = f'https://www.youtube.com/@{channel_id}/shorts'
         link_selector = 'a[href*="/shorts/"]'
+    elif platform == 'douyin':
+        target_url = f'https://www.douyin.com/user/{channel_id}'
+        link_selector = 'a[href*="/video/"]'
     else:
         target_url = f'https://www.facebook.com/{channel_id}/reels'
         link_selector = 'a[href*="/reel/"]'
@@ -1278,9 +1452,16 @@ async def scan_single_channel(channel, use_proxy: bool = True, headless_override
                             if not href:
                                 continue
                             full = href if href.startswith('http') else (
-                                f'https://www.youtube.com{href}' if platform == 'youtube' else f'https://www.facebook.com{href}'
+                                f'https://www.youtube.com{href}' if platform == 'youtube' else (
+                                    f'https://www.douyin.com{href}' if platform == 'douyin' else f'https://www.facebook.com{href}'
+                                )
                             )
-                            video_id = extract_youtube_id(full) if platform == 'youtube' else extract_reel_id(full)
+                            if platform == 'youtube':
+                                video_id = extract_youtube_id(full)
+                            elif platform == 'douyin':
+                                video_id = extract_douyin_id(full)
+                            else:
+                                video_id = extract_reel_id(full)
                             if not video_id or video_id in seen:
                                 continue
                             seen.add(video_id)
