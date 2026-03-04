@@ -55,8 +55,8 @@ class GenerationDownloader {
       qualityOptions = ['2k', '2K', '1k', '1K'];
       console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first)`);
     } else if (this.options.mediaType === 'image') {
-      qualityOptions = ['1k', '1K'];
-      console.log(`   ℹ️  Image (trying 1K first)`);
+      qualityOptions = ['2k', '2K', '1k', '1K'];  // 💫 Default: Try 2K first, then 1K
+      console.log(`   ℹ️  Image (trying 2K first)`);
     } else {
       qualityOptions = ['1080p', '1080P', '720p', '720P'];
       console.log(`   ℹ️  Video (trying 1080P first)`);
