@@ -469,6 +469,8 @@ export const browserAutomationAPI = {
       productImageBase64: options.productImageBase64,
       characterImagePath: options.characterImagePath,
       productImagePath: options.productImagePath,
+      // 💫 NEW: Pass scene reference image
+      sceneReferenceImage: options.sceneReferenceImage || null,
       // 💫 Pass conversation ID to reuse
       grokConversationId: options.grokConversationId,
       grokUrl: options.grokUrl,

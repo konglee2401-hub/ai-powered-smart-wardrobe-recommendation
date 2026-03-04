@@ -176,7 +176,15 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
       if (response?.success || response?.positive) {
         const prompt = response.positive || response.data?.positive || '';
         addLog(sessionId, `✓ Image prompt generated (${language}, ${prompt.length} chars)`);
-        return prompt;
+        // 💫 NEW: Return entire response to include sceneReferenceImage
+        if (response.sceneReferenceImage) {
+          addLog(sessionId, `✓ Scene reference image included`);
+        }
+        return {
+          positive: prompt,
+          negative: response.negative || '',
+          sceneReferenceImage: response.sceneReferenceImage || null
+        };
       }
     } catch (langError) {
       console.warn('Language-aware prompt builder failed, trying template service:', langError);
@@ -210,7 +218,12 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
     const prompt = result.data.renderedPrompt || result.data;
     
     addLog(sessionId, '✓ Image prompt generated from template');
-    return prompt;
+    // 💫 NEW: Return object structure for consistency
+    return {
+      positive: prompt,
+      negative: '',
+      sceneReferenceImage: null
+    };
   } catch (templateError) {
     console.warn('Template-based generation failed, using fallback:', templateError);
     // Fallback to hardcoded prompt
@@ -219,7 +232,12 @@ async function generateImagePromptFromTemplate(useCase, productFocus, recommende
       `Mood: ${recommendedOptions.mood}. Style: ${recommendedOptions.style}. ` +
       `Colors: ${recommendedOptions.colorPalette}. Camera: ${recommendedOptions.cameraAngle}. ` +
       `Use case: ${useCase}. High quality, detailed, professional.`;
-    return imagePrompt;
+    // 💫 NEW: Return object structure for consistency
+    return {
+      positive: imagePrompt,
+      negative: '',
+      sceneReferenceImage: null
+    };
   }
 }
 
@@ -1056,7 +1074,7 @@ export default function OneClickCreatorPage() {
 
         try {
           // Generate image prompt using language-aware builder (with fallback to templates)
-          const imagePrompt = await generateImagePromptFromTemplate(
+          const promptResult = await generateImagePromptFromTemplate(
             useCase,
             productFocus,
             recommendedOptions,
@@ -1064,6 +1082,16 @@ export default function OneClickCreatorPage() {
             sessionId,
             addLog
           );
+
+          // 💫 NEW: Extract prompt text and scene reference image
+          const imagePrompt = typeof promptResult === 'string' ? promptResult : (promptResult?.positive || '');
+          const sceneReferenceImage = promptResult?.sceneReferenceImage || null;
+
+          if (sceneReferenceImage?.url) {
+            addLog(sessionId, `✅ Scene reference image found: ${sceneReferenceImage.sceneLabel}`);
+          } else {
+            addLog(sessionId, `ℹ️  No scene reference image available`);
+          }
 
           addLog(sessionId, 'Calling image generation...');
 
@@ -1083,6 +1111,7 @@ export default function OneClickCreatorPage() {
               imageGenProvider: imageProvider,
               characterImageBase64: charBase64,
               productImageBase64: prodBase64,
+              sceneReferenceImage: sceneReferenceImage,  // 💫 NEW: Pass scene reference image
               aspectRatio: generationAspectRatio,
               imageCount: DESIRED_OUTPUT_COUNT,
               grokConversationId: analysisResult?.grokConversationId,

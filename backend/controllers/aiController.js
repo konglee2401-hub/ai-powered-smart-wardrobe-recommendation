@@ -1163,6 +1163,7 @@ const buildPrompt = async (req, res) => {
       }
     }
 
+    // 💫 NEW: Include scene reference image info in response
     res.json({
       success: true,
       data: {
@@ -1171,7 +1172,8 @@ const buildPrompt = async (req, res) => {
         language,
         mode,
         useCase,
-        length: positive.length
+        length: positive.length,
+        sceneReferenceImage: promptResult?.sceneReferenceImage || null
       }
     });
 
