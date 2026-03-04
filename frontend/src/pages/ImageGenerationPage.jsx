@@ -2311,6 +2311,7 @@ export default function ImageGenerationPage() {
         scenes={sceneOptions}
         selectedScene={selectedOptions.scene}
         language={i18n.language || 'en'}
+        aspectRatio={aspectRatio}
         onSelect={(value, scene) => {
           setSelectedOptions(prev => ({ ...prev, scene: value }));
           // Store full scene object for accessing locked image and other properties

@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Heart, Trash2, Copy, Download } from 'lucide-react';
-import driveAPI from '../services/driveAPI';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './GalleryManagement.css';
 
 const GalleryManagement = ({ 
@@ -9,26 +7,31 @@ const GalleryManagement = ({
   selectedImages = [],
   viewMode = 'grid' 
 }) => {
+
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    contentType: 'all',      // all, generated, uploaded, drive
+    contentType: 'all',      // all, uploaded, drive
     dateRange: 'all',
     provider: 'all',
     search: ''
   });
+
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedForBatch, setSelectedForBatch] = useState([]);
+  const [imageErrors, setImageErrors] = useState({});
+  const fileInputRef = useRef(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const contentTypes = [
     { value: 'all', label: 'All Media', icon: '🎨' },
-    { value: 'generated', label: 'Generated', icon: '✨', color: 'generated' },
-    { value: 'uploaded', label: 'Uploaded', icon: '📤', color: 'uploaded' },
+    { value: 'uploaded', label: 'Uploaded / Local', icon: '📤', color: 'uploaded' },
     { value: 'drive', label: 'Cloud Drive', icon: '☁️', color: 'drive' }
   ];
+
 
   const sortOptions = [
     { value: 'newest', label: 'Newest First' },
@@ -38,71 +41,101 @@ const GalleryManagement = ({
     { value: 'usage', label: 'Most Used' }
   ];
 
-  // Generate mock images for demonstration with content types
-  const generateMockImages = useCallback(() => {
-    const contentTypeOptions = ['generated', 'uploaded', 'drive'];
-    const providers = ['OpenRouter', 'NVIDIA', 'Replicate', 'Fal.ai', 'Manual', 'Google Drive'];
-    
-    return Array.from({ length: 50 }, (_, i) => ({
-      id: `media-${i + 1}`,
-      name: `Media ${i + 1}`,
-      url: `https://picsum.photos/300/300?random=${i + 100}`,
-      thumbnail: `https://picsum.photos/150/150?random=${i + 100}`,
-      contentType: contentTypeOptions[i % contentTypeOptions.length],
-      provider: providers[i % providers.length],
-      createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      size: Math.floor(Math.random() * 5000000) + 100000,
-      isFavorite: Math.random() > 0.8,
-      usageCount: Math.floor(Math.random() * 10),
-      dimensions: { width: 1024, height: 1024 },
-      tags: ['fashion', 'editorial', 'product']
-    }));
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  const mapSortParam = useCallback((sort) => {
+    switch (sort) {
+      case 'oldest':
+        return 'createdAt_asc';
+      case 'name':
+        return 'name_asc';
+      case 'size':
+        return 'size_desc';
+      case 'usage':
+        return 'usage_desc';
+      default:
+        return 'createdAt_desc';
+    }
   }, []);
 
   useEffect(() => {
     loadGallery();
   }, [filters, sortBy, currentPage]);
 
+  const buildSources = (asset) => {
+    const proxyUrl = asset.assetId ? `${API_BASE}/assets/proxy/${asset.assetId}` : null;
+    const candidates = [
+      proxyUrl,
+      asset.storage?.url,
+      asset.cloudStorage?.thumbnailLink,
+      asset.cloudStorage?.webViewLink,
+      asset.storage?.localPath,
+    ].filter(Boolean);
+
+    // Deduplicate while preserving order
+    return [...new Set(candidates)];
+  };
+
   const loadGallery = async () => {
     setLoading(true);
     try {
-      // Get mock data
-      const mockImages = generateMockImages();
-      let allImages = [...mockImages];
-      
-      // Try to load files from Google Drive
-      try {
-        const driveFiles = await driveAPI.listFiles();
-        const driveImages = driveFiles.map(file => ({
-          id: `drive-${file.id}`,
-          name: file.name,
-          url: file.thumbnailLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
-          thumbnail: file.thumbnailLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
-          contentType: 'drive',
-          provider: 'Google Drive',
-          createdAt: file.createdTime,
-          size: parseInt(file.size) || 0,
-          isFavorite: false,
-          usageCount: 0,
-          driveId: file.id,
-          webViewLink: file.webViewLink,
-        }));
-        allImages = [...allImages, ...driveImages];
-      } catch (error) {
-        console.warn('Could not load Google Drive files:', error);
+      const params = new URLSearchParams({
+        assetType: 'image',
+        page: currentPage,
+        limit: 60,
+        sortBy: mapSortParam(sortBy),
+      });
+
+      if (filters.search) {
+        params.append('query', filters.search);
       }
-      
-      const filteredImages = filterImages(allImages, filters);
+
+      const response = await fetch(`${API_BASE}/assets/gallery?${params}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch gallery items');
+      }
+
+      const data = await response.json();
+      const assets = data.assets || [];
+
+      const transformedImages = assets.map(asset => {
+        const sources = buildSources(asset);
+        const firstSource = sources[0];
+        return {
+          id: asset._id || asset.assetId,
+          assetId: asset.assetId,
+          name: asset.filename || asset.name || 'Untitled',
+          url: firstSource,
+          thumbnail: firstSource,
+          sources,
+          sourceIndex: 0,
+          contentType: asset.storage?.location === 'google-drive' ? 'drive' : 'uploaded',
+          provider: asset.storage?.location || asset.provider || 'system',
+          createdAt: asset.createdAt || new Date().toISOString(),
+          size: asset.fileSize || 0,
+          isFavorite: !!asset.isFavorite,
+          usageCount: asset.usageCount || 0,
+          category: asset.assetCategory,
+        };
+      });
+
+      const filteredImages = filterImages(transformedImages, filters);
       const sortedImages = sortImages(filteredImages, sortBy);
-      
+
       setImages(sortedImages);
-      setTotalPages(Math.ceil(sortedImages.length / 20));
+      setImageErrors({});
+      setTotalPages(data.pagination?.pages || 1);
     } catch (error) {
       console.error('Failed to load gallery:', error);
+      setImages([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
   };
+
+
 
   const filterImages = (images, filters) => {
     return images.filter(image => {
@@ -159,6 +192,23 @@ const GalleryManagement = ({
     }
   };
 
+  const handleImageError = (imageId) => {
+    setImages(prev => prev.map(img => {
+      if (img.id !== imageId) return img;
+      const nextIndex = (img.sourceIndex || 0) + 1;
+      if (img.sources && nextIndex < img.sources.length) {
+        return { ...img, sourceIndex: nextIndex, url: img.sources[nextIndex], thumbnail: img.sources[nextIndex] };
+      }
+      return img;
+    }));
+
+    setImageErrors(prev => {
+      const currentCount = prev[imageId]?.count || 0;
+      return { ...prev, [imageId]: { count: currentCount + 1, failed: true } };
+    });
+  };
+
+
   const handleBatchSelect = () => {
     onBatchSelect?.(selectedForBatch);
     setSelectedForBatch([]);
@@ -178,38 +228,142 @@ const GalleryManagement = ({
     }
   };
 
-  const deleteImage = async (imageId, e) => {
-    e.stopPropagation();
+  const deleteImage = async (image, e) => {
+    e?.stopPropagation?.();
     if (!confirm('Are you sure you want to delete this media?')) return;
-    
     try {
-      setImages(prev => prev.filter(img => img.id !== imageId));
+      const assetId = image.assetId || image.id;
+      await fetch(`${API_BASE}/assets/${assetId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteFile: true })
+      });
+      setImages(prev => prev.filter(img => img.id !== image.id));
     } catch (error) {
       console.error('Failed to delete media:', error);
+      alert('Xoá không thành công. Vui lòng thử lại.');
     }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedForBatch.length === 0) return;
+    if (!confirm(`Xoá ${selectedForBatch.length} ảnh đã chọn?`)) return;
+    setActionLoading(true);
+    try {
+      await Promise.all(selectedForBatch.map(img => {
+        const assetId = img.assetId || img.id;
+        return fetch(`${API_BASE}/assets/${assetId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deleteFile: true })
+        });
+      }));
+      setImages(prev => prev.filter(img => !selectedForBatch.some(sel => sel.id === img.id)));
+      setSelectedForBatch([]);
+      setSelectMode(false);
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      alert('Xoá hàng loạt thất bại. Vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const clearBrokenImages = () => {
+    const brokenIds = Object.keys(imageErrors);
+    if (brokenIds.length === 0) return;
+    setImages(prev => prev.filter(img => !brokenIds.includes(img.id)));
+    setImageErrors({});
   };
 
   const copyImageUrl = (image, e) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(image.url);
+    navigator.clipboard.writeText(image.url || image.sources?.[0] || '');
   };
 
   const exportSelected = () => {
     selectedForBatch.forEach(image => {
       const link = document.createElement('a');
-      link.href = image.url;
+      link.href = image.url || image.sources?.[0];
       link.download = image.name;
       link.click();
     });
   };
 
+  const handleRename = async (image, e) => {
+    e.stopPropagation();
+    const newName = prompt('Nhập tên mới', image.name);
+    if (!newName || newName === image.name) return;
+    try {
+      const assetId = image.assetId || image.id;
+      await fetch(`${API_BASE}/assets/${assetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: newName })
+      });
+      setImages(prev => prev.map(img => img.id === image.id ? { ...img, name: newName } : img));
+    } catch (error) {
+      console.error('Rename failed:', error);
+      alert('Đổi tên thất bại.');
+    }
+  };
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setActionLoading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const uploadRes = await fetch(`${API_BASE}/drive/upload`, {
+        method: 'POST',
+        body: form
+      });
+      const uploadData = await uploadRes.json();
+      const uploaded = uploadData.file;
+      if (!uploaded?.id) {
+        throw new Error('Upload failed');
+      }
+
+      // Register asset record
+      const assetPayload = {
+        filename: uploaded.name || file.name,
+        mimeType: uploaded.mimeType || file.type,
+        fileSize: uploaded.size || file.size,
+        assetType: 'image',
+        assetCategory: 'uploaded-image',
+        storage: {
+          location: uploaded.source === 'local' ? 'local' : 'google-drive',
+          googleDriveId: uploaded.id,
+          url: uploaded.webViewLink || uploaded.thumbnailLink,
+          localPath: uploaded.localPath,
+        },
+        metadata: {}
+      };
+
+      await fetch(`${API_BASE}/assets/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assetPayload)
+      });
+
+      await loadGallery();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Upload thất bại hoặc Drive chưa cấu hình.');
+    } finally {
+      setActionLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   // Calculate content type counts
+
   const contentTypeCounts = {
     all: images.length,
-    generated: images.filter(img => img.contentType === 'generated').length,
     uploaded: images.filter(img => img.contentType === 'uploaded').length,
     drive: images.filter(img => img.contentType === 'drive').length
   };
+
 
   if (loading) {
     return (
@@ -225,17 +379,47 @@ const GalleryManagement = ({
       {/* Header */}
       <div className="gallery-header">
         <div className="header-info">
-          <h2>🖼️ My Gallery</h2>
-          <p>{images.length} media • {selectedForBatch.length} selected</p>
+          <p className="header-meta">{images.length} media • {selectedForBatch.length} selected</p>
         </div>
 
         <div className="header-actions">
+
           <button 
             className={`mode-toggle ${selectMode ? 'active' : ''}`}
             onClick={() => setSelectMode(!selectMode)}
           >
             {selectMode ? '✕ Exit Select' : '☑️ Select'}
           </button>
+
+          <div className="view-toggle">
+            <button 
+              className={`icon-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid"
+            >
+              ⬜
+            </button>
+            <button 
+              className={`icon-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="List"
+            >
+              ☰
+            </button>
+          </div>
+
+          <button className="mode-toggle" onClick={loadGallery} disabled={loading}>
+            🔄 Refresh
+          </button>
+
+          <button className="mode-toggle" onClick={clearBrokenImages} disabled={Object.keys(imageErrors).length === 0}>
+            🧹 Clear lỗi
+          </button>
+
+          <button className="mode-toggle" onClick={() => fileInputRef.current?.click()} disabled={actionLoading}>
+            ➕ Upload
+          </button>
+
 
           {selectMode && selectedForBatch.length > 0 && (
             <>
@@ -249,10 +433,16 @@ const GalleryManagement = ({
               }}>
                 Export
               </button>
+              <button onClick={deleteSelected} style={{
+                background: 'linear-gradient(135deg, #ef4444, #f97316)'
+              }} disabled={actionLoading}>
+                🗑️ Delete selected
+              </button>
             </>
           )}
         </div>
       </div>
+
 
       {/* Filters */}
       <div className="gallery-filters">
@@ -334,6 +524,14 @@ const GalleryManagement = ({
         </div>
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => handleUpload(e.target.files?.[0])}
+      />
+
       {/* Gallery Grid */}
       <div className={`gallery-grid ${viewMode}`}>
         {images.map(image => (
@@ -343,7 +541,18 @@ const GalleryManagement = ({
             onClick={() => handleImageClick(image)}
           >
             <div className="item-image">
-              <img src={image.thumbnail || image.url} alt={image.name} loading="lazy" />
+              <img 
+                src={image.thumbnail || image.url} 
+                alt={image.name} 
+                loading="lazy"
+                onError={() => handleImageError(image.id)}
+              />
+
+              {imageErrors[image.id]?.failed && (
+                <div className="item-error">
+                  <div>⚠️ Image unavailable</div>
+                </div>
+              )}
               
               <div className="item-overlay">
                 <div className="item-actions">
@@ -362,7 +571,14 @@ const GalleryManagement = ({
                     📋
                   </button>
                   <button 
-                    onClick={(e) => deleteImage(image.id, e)}
+                    onClick={(e) => handleRename(image, e)}
+                    className="copy-btn"
+                    title="Rename"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    onClick={(e) => deleteImage(image, e)}
                     className="delete-btn"
                     title="Delete"
                   >
@@ -378,6 +594,7 @@ const GalleryManagement = ({
               </div>
             </div>
 
+
             <div className="item-info">
               <div className="item-name">{image.name}</div>
               <div className="item-meta">
@@ -390,6 +607,9 @@ const GalleryManagement = ({
               </div>
               <div className="item-meta">
                 <span className="item-provider">{image.provider}</span>
+                {image.category && (
+                  <span className="item-usage">{image.category}</span>
+                )}
                 {image.usageCount > 0 && (
                   <span className="item-usage">Used {image.usageCount}x</span>
                 )}
@@ -398,6 +618,7 @@ const GalleryManagement = ({
           </div>
         ))}
       </div>
+
 
       {/* Pagination */}
       {totalPages > 1 && (

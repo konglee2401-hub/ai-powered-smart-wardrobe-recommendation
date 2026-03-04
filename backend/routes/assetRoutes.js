@@ -99,27 +99,8 @@ router.get('/proxy/:assetId', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
     res.setHeader('Content-Type', asset.mimeType || 'image/jpeg');
     res.setHeader('Content-Disposition', `inline; filename="${asset.filename}"`);
-    
-    // ✅ REFACTORED: Smarter storage priority with better fallbacks
-    
-    // 💫 FIX: NEW STEP 0: Try Google Drive FIRST if we have the ID
-    if (asset.cloudStorage?.googleDriveId) {
-      console.log(`\n☁️ PRIORITY: Attempting Google Drive (ID: ${asset.cloudStorage.googleDriveId})`);
-      const driveStream = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'cloudStorage.googleDriveId');
-      if (driveStream) return;
-      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
-    }
-    
-    // Also check legacy storage.googleDriveId
-    if (asset.storage?.googleDriveId && !asset.cloudStorage?.googleDriveId) {
-      console.log(`\n☁️ Attempting Google Drive from storage (ID: ${asset.storage.googleDriveId})`);
-      const driveStream = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'storage.googleDriveId');
-      if (driveStream) return;
-      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
-    }
-    
-    // STEP 1: Try hybrid local storage (new format)
 
+    // Helper: Google Drive streaming (defined BEFORE use to avoid TDZ)
     const streamFromGoogleDriveApi = async (fileId, sourceLabel) => {
       try {
         const authResult = await driveService.authenticate();
@@ -163,7 +144,26 @@ router.get('/proxy/:assetId', async (req, res) => {
         return false;
       }
     };
+    
+    // ✅ Smarter storage priority with better fallbacks
 
+    // STEP 0: Try Google Drive FIRST if we have the ID
+    if (asset.cloudStorage?.googleDriveId) {
+      console.log(`\n☁️ PRIORITY: Attempting Google Drive (ID: ${asset.cloudStorage.googleDriveId})`);
+      const driveStream = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'cloudStorage.googleDriveId');
+      if (driveStream) return;
+      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
+    }
+    
+    // Also check legacy storage.googleDriveId
+    if (asset.storage?.googleDriveId && !asset.cloudStorage?.googleDriveId) {
+      console.log(`\n☁️ Attempting Google Drive from storage (ID: ${asset.storage.googleDriveId})`);
+      const driveStream = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'storage.googleDriveId');
+      if (driveStream) return;
+      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
+    }
+    
+    // STEP 1: Try hybrid local storage (new format)
     if (asset.localStorage?.path) {
       const filePath = asset.localStorage.path;
       console.log(`   🔍 Checking local storage: ${filePath}`);
@@ -191,31 +191,43 @@ router.get('/proxy/:assetId', async (req, res) => {
         console.error(`   ❌ Error checking local file: ${err.message}`);
       }
     }
-    
-    // STEP 2: Try legacy storage.url field (for backward compatibility)
-    if (asset.storage?.url && typeof asset.storage.url === 'string' && asset.storage.url.startsWith('/')) {
-      const filePath = asset.storage.url;
-      console.log(`   🔍 Checking legacy local storage: ${filePath}`);
-      
+
+    // STEP 1b: Try legacy/local path stored under storage.localPath
+    if (asset.storage?.localPath) {
+      const filePath = asset.storage.localPath;
+      console.log(`   🔍 Checking storage.localPath: ${filePath}`);
       try {
         if (fs.existsSync(filePath)) {
-          console.log(`   ✅ Found legacy local file: ${filePath}`);
           const fileSize = fs.statSync(filePath).size;
           res.setHeader('Content-Length', fileSize);
-          console.log(`   💾 Serving legacy local file (${fileSize} bytes)`);
-          
-          const fileStream = fs.createReadStream(filePath);
-          fileStream.on('error', (err) => {
-            console.error(`   ❌ Error streaming legacy local file: ${err.message}`);
-            if (!res.headersSent) {
-              res.status(500).json({ success: false, error: 'Error streaming file' });
-            }
-          });
-          fileStream.pipe(res);
+          fs.createReadStream(filePath).pipe(res);
+          console.log('   ✅ Served storage.localPath file');
           return;
         }
       } catch (err) {
-        console.error(`   ❌ Error checking legacy local file: ${err.message}`);
+        console.error(`   ❌ Error streaming storage.localPath: ${err.message}`);
+      }
+    }
+    
+    // STEP 2: Try legacy storage.url field (absolute or relative)
+    if (asset.storage?.url && typeof asset.storage.url === 'string') {
+      const url = asset.storage.url;
+      if (url.startsWith('/')) {
+        console.log(`   🔍 Checking legacy local storage: ${url}`);
+        try {
+          if (fs.existsSync(url)) {
+            const fileSize = fs.statSync(url).size;
+            res.setHeader('Content-Length', fileSize);
+            fs.createReadStream(url).pipe(res);
+            console.log('   ✅ Served legacy local file');
+            return;
+          }
+        } catch (err) {
+          console.error(`   ❌ Error checking legacy local file: ${err.message}`);
+        }
+      } else if (url.startsWith('http')) {
+        console.log(`   🌐 Redirecting to remote URL: ${url}`);
+        return res.redirect(url);
       }
     }
     
@@ -236,6 +248,7 @@ router.get('/proxy/:assetId', async (req, res) => {
     console.log(`   Asset structure: ${JSON.stringify({localStorage: asset.localStorage, cloudStorage: asset.cloudStorage, storage: asset.storage})}`);
     res.status(400).json({ success: false, error: 'No valid storage location found', assetId, storageStatus: {
       hasLocalPath: !!asset.localStorage?.path,
+      hasStorageLocalPath: !!asset.storage?.localPath,
       hasCloudId: !!asset.cloudStorage?.googleDriveId,
       hasStorageUrl: !!asset.storage?.url,
       hasStorageDriveId: !!asset.storage?.googleDriveId
@@ -246,6 +259,7 @@ router.get('/proxy/:assetId', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 
 /**
  * GET /api/assets/stream/:assetId

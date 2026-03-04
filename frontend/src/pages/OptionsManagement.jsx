@@ -12,13 +12,33 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
  */
 function getImageUrl(url) {
   if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+  const appHost = API_BASE_URL.replace('/api', '');
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (url.includes('/api/v1/browser-automation/generated-image/')) {
+      const filename = decodeURIComponent(url.split('/api/v1/browser-automation/generated-image/').pop() || '');
+      return `${appHost}/api/v1/browser-automation/generated-image/${encodeURIComponent(filename)}`;
+    }
+    return url;
+  }
+
+  if (url.startsWith('/api/')) {
+    return `${appHost}${url}`;
+  }
+
   const tempMatch = url.match(/[\/\\]temp[\/\\](.+)/i);
   if (tempMatch) {
-    return `${API_BASE_URL.replace('/api', '')}/temp/${tempMatch[1].replace(/\\/g, '/')}`;
+    return `${appHost}/temp/${tempMatch[1].replace(/\\/g, '/')}`;
   }
+
+  if (/[.](png|jpe?g|webp|gif)$/i.test(url) && !url.includes('/')) {
+    return `${appHost}/api/v1/browser-automation/generated-image/${encodeURIComponent(url)}`;
+  }
+
   return url;
 }
+
 
 const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
 
@@ -184,6 +204,13 @@ function SceneDetailEditor({ scene, onRefresh }) {
   const [previewIndexByAspect, setPreviewIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
   const [lockedHistoryIndexByAspect, setLockedHistoryIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
   const [modalImageUrl, setModalImageUrl] = useState(null);
+
+  const aspectGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
+    gap: '0.75rem'
+  };
+
 
   // Sync local state when scene changes
   useEffect(() => {
@@ -727,7 +754,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
             <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
             {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+          <div style={aspectGridStyle}>
+
             {SCENE_LOCK_ASPECTS.map((ratio) => {
               const ratioImageUrl = getImageUrl(lockedImageUrls[ratio]);
               return (
@@ -740,7 +768,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                       src={ratioImageUrl}
                       alt={`Locked scene ${ratio}`}
                       onClick={() => setModalImageUrl(ratioImageUrl)}
-                      style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', objectFit: 'cover', borderRadius: '6px', display: 'block', cursor: 'zoom-in' }}
+                      style={{ width: '100%', height: ratio === '16:9' ? '120px' : '220px', objectFit: 'contain', borderRadius: '6px', display: 'block', cursor: 'zoom-in', background: '#020617' }}
                     />
                   ) : (
                     <div style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem', background: '#1e293b', borderRadius: '6px' }}>
@@ -758,7 +786,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
           <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
             {t('optionsManagement.savedLockedImages', 'Saved Scene Locked Images (max 10)')}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+          <div style={aspectGridStyle}>
+
             {SCENE_LOCK_ASPECTS.map((ratio) => {
               const ratioHistory = historyGroups[ratio] || [];
               const idx = Math.min(lockedHistoryIndexByAspect[ratio] || 0, Math.max(ratioHistory.length - 1, 0));
@@ -821,7 +850,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
             <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
               {t('optionsManagement.previewCandidates', 'Preview Candidates')}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '0.75rem' }}>
+            <div style={aspectGridStyle}>
+
               {SCENE_LOCK_ASPECTS.map((ratio) => {
                 const ratioSamples = sampleGroups[ratio] || [];
                 const idx = Math.min(previewIndexByAspect[ratio] || 0, Math.max(ratioSamples.length - 1, 0));
@@ -842,7 +872,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                           src={sampleUrl}
                           alt={`Scene sample ${ratio}`}
                           onClick={() => setModalImageUrl(sampleUrl)}
-                          style={{ width: '100%', height: ratio === '16:9' ? '140px' : '210px', objectFit: 'cover', borderRadius: '6px', cursor: 'zoom-in' }}
+                          style={{ width: '100%', height: ratio === '16:9' ? '160px' : '260px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
                         />
                         <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <button

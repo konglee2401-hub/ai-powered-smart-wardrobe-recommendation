@@ -35,8 +35,8 @@ const GalleryPage = () => {
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem',
+          alignItems: 'flex-start',
+          marginBottom: '1.25rem',
           flexWrap: 'wrap',
           gap: '1rem'
         }}>
@@ -57,80 +57,8 @@ const GalleryPage = () => {
               {t('gallery.subtitle')}
             </p>
           </div>
-          
-          <div style={{
-            display: 'flex',
-            gap: '0.75rem',
-            flexWrap: 'wrap'
-          }}>
-            <button 
-              onClick={() => setViewMode('grid')}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: viewMode === 'grid' ? 'none' : '1px solid #475569',
-                background: viewMode === 'grid' 
-                  ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' 
-                  : '#1e293b',
-                color: '#f1f5f9',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.3s ease',
-                boxShadow: viewMode === 'grid' ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (viewMode !== 'grid') {
-                  e.target.style.background = '#334155';
-                  e.target.style.borderColor = '#64748b';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (viewMode !== 'grid') {
-                  e.target.style.background = '#1e293b';
-                  e.target.style.borderColor = '#475569';
-                }
-              }}
-            >
-              <Grid3x3 size={18} /> {t('gallery.grid')}
-            </button>
-            <button 
-              onClick={() => setViewMode('list')}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: viewMode === 'list' ? 'none' : '1px solid #475569',
-                background: viewMode === 'list' 
-                  ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' 
-                  : '#1e293b',
-                color: '#f1f5f9',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.3s ease',
-                boxShadow: viewMode === 'list' ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (viewMode !== 'list') {
-                  e.target.style.background = '#334155';
-                  e.target.style.borderColor = '#64748b';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (viewMode !== 'list') {
-                  e.target.style.background = '#1e293b';
-                  e.target.style.borderColor = '#475569';
-                }
-              }}
-            >
-              <List size={18} /> {t('gallery.list')}
-            </button>
-          </div>
         </div>
+
 
         {/* Gallery Component */}
         <div style={{

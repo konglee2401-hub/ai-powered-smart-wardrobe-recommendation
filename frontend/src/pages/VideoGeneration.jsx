@@ -506,6 +506,7 @@ export default function VideoGeneration() {
         onClose={() => setShowScenePicker(false)}
         scenes={sceneOptions}
         selectedScene={selectedScene}
+        aspectRatio="16:9"
         onSelect={(value, scene) => {
           setSelectedScene(value);
           setSelectedScenePrompt(scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || '');
@@ -545,6 +546,7 @@ function PipelineStage({ name, description, completed, active }) {
         onClose={() => setShowScenePicker(false)}
         scenes={sceneOptions}
         selectedScene={selectedScene}
+        aspectRatio="16:9"
         onSelect={(value, scene) => {
           setSelectedScene(value);
           setSelectedScenePrompt(scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || '');
