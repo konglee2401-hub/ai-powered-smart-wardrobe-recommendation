@@ -21,7 +21,8 @@
     "videoProduction": "Sản xuất Video",
     "settings": "Cài đặt",
     "customization": "Tùy chỉnh",
-    "aiProviders": "Nhà cung cấp AI"
+    "aiProviders": "Nhà cung cấp AI",
+    "options": "Tùy chọn"
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -181,92 +182,6 @@
     "title": "Kiểm tra Provider"
   },
   "promptBuilder": {
-    "title": "Tạo Prompt"
-  },
-  "promptTemplates": {
-    "title": "Mẫu Prompt"
-  },
-  "videoScript": {
-    "title": "Tạo kịch bản Video"
-  },
-  "videoProduction": {
-    "title": "Sản xuất Video"
-  },
-  "customization": {
-    "title": "Tùy chỉnh nâng cao"
-  },
-  "performance": {
-    "title": "Tối ưu hiệu suất"
-  },
-  "aiProviders": {
-    "title": "Quản lý nhà cung cấp AI"
-  },
-  "common": {
-    "loading": "Đang tải...",
-    "error": "Lỗi",
-    "save": "Lưu",
-    "cancel": "Hủy",
-    "delete": "Xóa",
-    "edit": "Chỉnh sửa",
-    "close": "Đóng",
-    "back": "Quay lại",
-    "next": "Tiếp theo",
-    "submit": "Gửi",
-    "reset": "Đặt lại",
-    "search": "Tìm kiếm",
-    "filter": "Lọc",
-    "sort": "Sắp xếp",
-    "download": "Tải xuống",
-    "upload": "Tải lên",
-    "copy": "Sao chép",
-    "refresh": "Làm mới",
-    "apply": "Áp dụng",
-    "confirm": "Xác nhận",
-    "yes": "Có",
-    "no": "Không",
-    "all": "Tất cả",
-    "none": "Không có",
-    "select": "Chọn",
-    "noData": "Không có dữ liệu",
-    "success": "Thành công",
-    "failed": "Thất bại",
-    "pending": "Đang xử lý"
-  },
-  "language": {
-    "vi": "Tiếng Việt",
-    "en": "English",
-    "switchLanguage": "Chuyển đổi ngôn ngữ"
-  },
-  "scenarioUpload": {
-    "characterInOutfit": "Nhân vật mặc quần áo",
-    "personWearingOutfit": "Người mặc trang phục",
-    "characterHoldingProduct": "Nhân vật cầm sản phẩm",
-    "productReference": "Tham chiếu sản phẩm",
-    "imageUploadFor": "Tải lên ảnh cho",
-    "needsOneImage": "Kịch bản này cần 1 ảnh",
-    "needsImagesCount": "Kịch bản này cần {{required}} ảnh bắt buộc + {{optional}} ảnh tùy chọn",
-    "uploadedCount": "{{current}}/{{total}} đã tải lên",
-    "onlyImagesAllowed": "Chỉ cho phép tệp ảnh",
-    "fileSizeTooLarge": "Kích thước tệp phải nhỏ hơn 10MB",
-    "clickToUpload": "Nhấp để tải lên",
-    "clickToUploadOptional": "Nhấp để tải lên (tùy chọn)",
-    "helpsUnderstandProduct": "Giúp ChatGPT hiểu cách xử lý sản phẩm",
-    "closeUpProductDetails": "Ảnh chi tiết sản phẩm",
-    "missingImages": "⚠️ Thiếu {{count}} ảnh bắt buộc",
-    "allImagesUploaded": "✅ Tất cả ảnh bắt buộc đã tải lên"
-  },
-  "videoProduction": {
-    "title": "Hệ thống Sản xuất Video",
-    "subtitle": "Quản lý tạo video tự động và phân phối",
-    "overview": "Tổng quan",
-    "createMashup": "Tạo Video Mashup",
-    "processing": "Đang xử lý",
-    "queueScanner": "Quét Hàng đợi",
-    "queue": "Hàng đợi",
-    "accounts": "Tài khoản",
-    "mediaLibrary": "Thư viện Media"
-  },
-  "promptBuilder": {
     "title": "🎨 Trợ lý Tạo Prompt Thời trang Thông minh",
     "subtitle": "Tạo các prompt chụp ảnh thời trang chuyên nghiệp trong vài giây",
     "fashionParameters": "📋 Tham số Thời trang",
@@ -298,6 +213,40 @@
     "copyEnhanced": "📋 Sao chép Nâng cao",
     "exportAsJSON": "💾 Xuất dưới dạng JSON"
   },
+  "promptTemplates": {
+    "title": "Mẫu Prompt"
+  },
+  "videoScript": {
+    "title": "Tạo kịch bản Video"
+  },
+  "videoProduction": {
+    "overview": "Tổng quan",
+    "createMashup": "Tạo Mashup",
+    "processing": "Xử lý",
+    "queueScanner": "Quét hàng đợi",
+    "queue": "Hàng đợi",
+    "accounts": "Tài khoản",
+    "mediaLibrary": "Thư viện",
+    "addAccount": "Thêm tài khoản",
+    "platform": "Nền tảng",
+    "username": "Tên đăng nhập",
+    "password": "Mật khẩu",
+    "displayName": "Tên hiển thị",
+    "email": "Email",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "accountAdded": "Thêm tài khoản thành công!",
+    "error": "Lỗi"
+  },
+  "customization": {
+    "title": "Tùy chỉnh nâng cao"
+  },
+  "performance": {
+    "title": "Tối ưu hiệu suất"
+  },
+  "aiProviders": {
+    "title": "Quản lý nhà cung cấp AI"
+  },
   "common": {
     "required": "Bắt buộc",
     "optional": "Tùy chọn",
@@ -306,6 +255,29 @@
     "show": "Hiển thị",
     "error": "Lỗi",
     "success": "Thành công"
+  },
+  "language": {
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "switchLanguage": "Chuyển đổi ngôn ngữ"
+  },
+  "scenarioUpload": {
+    "characterInOutfit": "Nhân vật mặc quần áo",
+    "personWearingOutfit": "Người mặc trang phục",
+    "characterHoldingProduct": "Nhân vật cầm sản phẩm",
+    "productReference": "Tham chiếu sản phẩm",
+    "imageUploadFor": "Tải lên ảnh cho",
+    "needsOneImage": "Kịch bản này cần 1 ảnh",
+    "needsImagesCount": "Kịch bản này cần {{required}} ảnh bắt buộc + {{optional}} ảnh tùy chọn",
+    "uploadedCount": "{{current}}/{{total}} đã tải lên",
+    "onlyImagesAllowed": "Chỉ cho phép tệp ảnh",
+    "fileSizeTooLarge": "Kích thước tệp phải nhỏ hơn 10MB",
+    "clickToUpload": "Nhấp để tải lên",
+    "clickToUploadOptional": "Nhấp để tải lên (tùy chọn)",
+    "helpsUnderstandProduct": "Giúp ChatGPT hiểu cách xử lý sản phẩm",
+    "closeUpProductDetails": "Ảnh chi tiết sản phẩm",
+    "missingImages": "⚠️ Thiếu {{count}} ảnh bắt buộc",
+    "allImagesUploaded": "✅ Tất cả ảnh bắt buộc đã tải lên"
   },
   "analyticsDashboard": {
     "overview": "Tổng quan",
@@ -476,25 +448,6 @@
     "accessories": "Phụ kiện",
     "photographySetting": "Cài đặt chụp",
     "environment": "Môi trường"
-  },
-  "videoProduction": {
-    "overview": "Tổng quan",
-    "createMashup": "Tạo Mashup",
-    "processing": "Xử lý",
-    "queueScanner": "Quét hàng đợi",
-    "queue": "Hàng đợi",
-    "accounts": "Tài khoản",
-    "mediaLibrary": "Thư viện",
-    "addAccount": "Thêm tài khoản",
-    "platform": "Nền tảng",
-    "username": "Tên đăng nhập",
-    "password": "Mật khẩu",
-    "displayName": "Tên hiển thị",
-    "email": "Email",
-    "save": "Lưu",
-    "cancel": "Hủy",
-    "accountAdded": "Thêm tài khoản thành công!",
-    "error": "Lỗi"
   },
   "optionsManagement": {
     "title": "Quản lý Scene Lock",
