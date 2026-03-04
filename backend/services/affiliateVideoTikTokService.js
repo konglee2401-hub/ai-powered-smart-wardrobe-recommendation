@@ -11,10 +11,110 @@
  */
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
-import { buildDetailedPrompt } from './smartPromptBuilder.js';
+import { buildDetailedPrompt, buildFluxPrompt, getSceneReferenceInfo } from './smartPromptBuilder.js';
+import GrokServiceV2 from './browser/grokServiceV2.js';
+import BFLPlaygroundService from './browser/bflPlaygroundService.js';
 import GoogleFlowAutomationService from './googleFlowAutomationService.js';
 import ChatGPTService from './browser/chatgptService.js';
 import GoogleDriveOAuthService from './googleDriveOAuth.js';
+
+// ============================================================
+// PROVIDER SELECTION HELPER
+// ============================================================
+
+/**
+ * Get browser service for image generation based on provider
+ * @param {string} provider - Provider ID: 'bfl', 'grok', 'google-flow'
+ * @param {object} options - Service options (outputDir, headless, debugMode)
+ * @returns {object} Browser service instance
+ */
+function getImageGenerationService(provider, options = {}) {
+  const { outputDir, headless = false, debugMode = false } = options;
+  
+  console.log(`🔌 Selecting image generation provider: ${provider}`);
+  
+  switch (provider) {
+    case 'bfl':
+    case 'bfl-playground':
+      return new BFLPlaygroundService({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'grok':
+    case 'grok.com':
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'google-flow':
+    case 'google':
+      return new GoogleFlowAutomationService({
+        type: 'image',
+        aspectRatio: '9:16',
+        imageCount: 1,
+        model: 'Nano Banana Pro',
+        headless,
+        ...options
+      });
+    default:
+      console.warn(`⚠️ Unknown provider '${provider}', defaulting to Grok`);
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+  }
+}
+
+/**
+ * Get browser service for video generation based on provider
+ * @param {string} provider - Provider ID: 'grok', 'google-flow'
+ * @param {object} options - Service options (outputDir, headless, debugMode)
+ * @returns {object} Browser service instance
+ */
+function getVideoGenerationService(provider, options = {}) {
+  const { outputDir, headless = false, debugMode = false } = options;
+  
+  console.log(`🔌 Selecting video generation provider: ${provider}`);
+  
+  switch (provider) {
+    case 'grok':
+    case 'grok.com':
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+    case 'google-flow':
+    case 'google':
+      return new GoogleFlowAutomationService({
+        type: 'video',
+        aspectRatio: '9:16',
+        headless,
+        ...options
+      });
+    default:
+      console.warn(`⚠️ Unknown video provider '${provider}', defaulting to Grok`);
+      return new GrokServiceV2({
+        outputDir,
+        headless,
+        debugMode
+      });
+  }
+}
+
+/**
+ * Get fixed clip duration per video provider.
+ * - Google Flow: 8s/clip
+ * - Grok Imagine: 10s/clip
+ */
+function getProviderClipDuration(provider = 'grok') {
+  const normalized = String(provider || '').toLowerCase();
+  if (normalized.includes('google')) return 8;
+  return 10;
+}
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
@@ -103,7 +203,7 @@ function extractJsonFromResponse(rawResponse) {
  * Get current flow preview data (for Step 2 image display)
  */
 export function getFlowPreview(flowId) {
-  return flowPreviewStore.get(flowId) || { status: 'not-found', step2Images: null };
+  return flowPreviewStore.get(flowId) || { status: 'not-found' };
 }
 
 /**
@@ -127,7 +227,14 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
   await logger.init();
   
   // Initialize preview store for this flow
-  updateFlowPreview(flowId, { status: 'started', step2Images: null });
+  updateFlowPreview(flowId, {
+    status: 'started',
+    step1: null,
+    step2: null,
+    step3: null,
+    step4: null,
+    step5: null
+  });
 
   // 💫 NEW: Track when STEP 1 ChatGPT browser completely closes
   // Prevents STEP 3 from opening ChatGPT while STEP 1 browser still exists
@@ -182,9 +289,21 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       voicePace = 'fast',
       productFocus = 'full-outfit',
       language = 'en',  // 💫 Support language selection: 'en' or 'vi'
+      imageProvider = 'bfl',  // 💫 Default to BFL Playground
+      videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {},
       imageSource = { character: 'upload', product: 'upload' }  // 🎯 Track image source from frontend
     } = req.body;
+
+    // Extract providers from options if not in body directly
+    const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
+    const finalVideoProvider = options.videoProvider || videoProvider || 'grok';
+    const providerClipDuration = getProviderClipDuration(finalVideoProvider);
+    
+    console.log(`\n🔌 PROVIDER CONFIGURATION:`);
+    console.log(`  Image Provider: ${finalImageProvider}`);
+    console.log(`  Video Provider: ${finalVideoProvider}`);
+    console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
 
     // ============================================================
     // STEP 1: CHATGPT BROWSER AUTOMATION ANALYSIS (Non-blocking)
@@ -938,6 +1057,16 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       
       console.log(`📝 Prompt validation passed (both prompts ready)`);
       
+      // 💫 SAVE STEP 1 ANALYSIS TO PREVIEW STORE (for frontend polling)
+      updateFlowPreview(flowId, {
+        status: 'step1-complete',
+        step1: {
+          wearingPrompt: prompt1,
+          holdingPrompt: prompt2
+        }
+      });
+      console.log(`📝 Step 1 analysis saved to preview store`);
+      
       // Generate 2 images in single browser session using generateMultiple
       let multiGenResult;
       try {
@@ -1246,6 +1375,17 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Voiceover script: ${deepAnalysis.data.voiceoverScript?.split('\n').length || 0} lines / ${deepAnalysis.data.voiceoverScript?.length || 0} chars`);
     console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
 
+    // 💫 SAVE STEP 3 ANALYSIS TO PREVIEW STORE (for frontend polling)
+    updateFlowPreview(flowId, {
+      status: 'step3-complete',
+      step3: {
+        videoScripts: deepAnalysis.data.videoScripts || [],
+        hashtags: deepAnalysis.data.hashtags || [],
+        voiceoverScript: deepAnalysis.data.voiceoverScript || ''
+      }
+    });
+    console.log(`📊 Step 3 analysis saved to preview store`);
+
     // ============================================================
     // STEP 4: VIDEO GENERATION (Using GoogleFlowAutomationService)
     // 💫 OPTIMIZED: Single browser session for multiple segments (if needed)
@@ -1414,6 +1554,15 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     });
     console.log(`\n✅ STEP 4 COMPLETE: Generated ${allGeneratedVideos.length} video(s) in ${step4Duration}s`);
 
+    updateFlowPreview(flowId, {
+      status: videoGenerationResult?.success ? 'step4-complete' : 'step4-failed',
+      step4: {
+        videos: videoGenerationResult?.videos || [],
+        totalCount: videoGenerationResult?.totalCount || 0,
+        error: videoGenerationResult?.error || null
+      }
+    });
+
     // ============================================================
     // STEP 5: 💫 AUTO-SAVE GENERATED ASSETS TO DATABASE
     // ============================================================
@@ -1546,6 +1695,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     // 5.3: Save generated videos
+    const allGeneratedVideos = videoGenerationResult?.videos || [];
     for (const videoData of allGeneratedVideos) {
       try {
         console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);
@@ -1621,7 +1771,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: 'completed',
             duration: `${step3Duration}s`,
             analysis: {
-              videoScripts: deepAnalysis?.data?.videoScripts?.length || 0,
+              videoScripts: deepAnalysis?.data?.videoScripts || [],
+              voiceoverScript: deepAnalysis?.data?.voiceoverScript || '',
               voiceoverLength: deepAnalysis?.data?.voiceoverScript?.length || 0,
               hashtags: deepAnalysis?.data?.hashtags || []
             }
@@ -1630,7 +1781,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: videoGenerationResult?.error && videoGenerationResult?.totalCount === 0 ? 'failed' : 'completed',
             duration: `${step4Duration}s`,
             totalVideos: videoGenerationResult?.totalCount || 0,
+            videos: (videoGenerationResult?.videos || []).map(v => ({
+              path: v.path,
+              url: v.url,
+              duration: v.duration,
+              resolution: v.resolution
+            })),
             error: videoGenerationResult?.error || null
+          },
+          step5: {
+            status: 'completed',
+            ttsText: deepAnalysis?.data?.voiceoverScript || '',
+            savedAssets: {
+              images: savedAssets.images.length,
+              videos: savedAssets.videos.length
+            }
           }
         },
         metadata: {
@@ -1647,6 +1812,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           }
         }
       };
+
+      updateFlowPreview(flowId, {
+        status: 'completed',
+        step5: {
+          ttsText: deepAnalysis?.data?.voiceoverScript || '',
+          hashtags: deepAnalysis?.data?.hashtags || []
+        },
+        final: {
+          totalDuration: `${totalDuration}s`,
+          videos: (videoGenerationResult?.videos || []).map(v => v.path || v.url).filter(Boolean)
+        }
+      });
 
       // Mark session as completed and store final artifacts
       const generatedImagePaths = [];
@@ -1719,7 +1896,8 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     console.log('\n🧠 STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
     console.log(`   Character images: 2 (wearing + holding)`);
     console.log(`   Voice: ${voiceGender} (${voicePace} pace)`);
-    console.log(`   Duration: ${videoDuration}s`);
+    console.log(`   Duration target: ${videoDuration}s`);
+    console.log(`   Provider clip: ${clipDuration || getProviderClipDuration(videoProvider)}s (${videoProvider})`);
 
     // Build detailed prompt for ChatGPT video analysis
     // 💫 Use Vietnamese prompts if language='vi'
@@ -1729,7 +1907,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     if (normalizedLanguage === 'vi') {
       deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
         productFocus,
-        { videoDuration, voiceGender, voicePace }
+        { videoDuration, voiceGender, voicePace, clipDuration: clipDuration || getProviderClipDuration(videoProvider), videoProvider }
       );
     } else {
       deepAnalysisPrompt = buildDeepAnalysisPrompt(
@@ -1737,7 +1915,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
         {
           images: characterImages  // ✅ Pass 2 character images (wearing + holding)
         },
-        { videoDuration, voiceGender, voicePace, productFocus }
+        { videoDuration, voiceGender, voicePace, productFocus, videoProvider, clipDuration }
       );
     }
 
@@ -2188,11 +2366,14 @@ function parseVideoSegments(text) {
   
   // Try to find segment markers like [INTRO], [WEARING], [HOLDING], [CTA] with optional [IMAGES: ...]
   // Pattern: [SEGMENT_NAME] (duration) [IMAGES: image1, image2] : script\n- Reason: reason text
-  const segmentPattern = /\[(\w+)\]\s*\((\d+)s?\)\s*(?:\[IMAGES?:\s*([^\]]+)\])?\s*:?\s*([\s\S]*?)(?=\[(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
+  const segmentPattern = /\[(\w+)\]\s*(?:\((\d+)s?\)|\[(\d{1,2})-(\d{1,2})s?\])\s*(?:\[IMAGES?:\s*([^\]]+)\])?\s*:?\s*([\s\S]*?)(?=\[(?:INTRO|WEARING|HOLDING|CTA|OUTRO)|$)/gi;
   
   let match;
   while ((match = segmentPattern.exec(text)) !== null) {
-    const [, segmentName, duration, imagesStr, script] = match;
+    const [, segmentName, durationRaw, startSecond, endSecond, imagesStr, script] = match;
+    const computedDuration = durationRaw
+      ? parseInt(durationRaw, 10)
+      : Math.max(1, (parseInt(endSecond || '0', 10) - parseInt(startSecond || '0', 10)));
     
     // Parse image composition from [IMAGES: wearing, product, ...]
     let imageComposition = [];
@@ -2214,7 +2395,7 @@ function parseVideoSegments(text) {
       
       segments.push({
         segment: segmentName.toLowerCase(),
-        duration: parseInt(duration) || 5,
+        duration: computedDuration || 5,
         script: scriptOnly.trim(),
         imageComposition: imageComposition  // NEW: Store array of images
       });
