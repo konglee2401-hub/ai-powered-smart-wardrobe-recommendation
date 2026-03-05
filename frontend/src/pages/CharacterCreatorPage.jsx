@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { characterAPI } from '../services/api';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, ArrowLeft } from 'lucide-react';
 
 const defaultOptions = {
   identity: { gender: '', ageRange: '', ethnicity: '', height: '', bust: '', waist: '', bodyType: '', bodyProportions: '', skinTone: '', distinctiveMarks: '', tattoos: '' },
@@ -12,6 +13,8 @@ const defaultOptions = {
 };
 
 export default function CharacterCreatorPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [alias, setAlias] = useState('');
   const [portrait, setPortrait] = useState(null);
@@ -21,10 +24,36 @@ export default function CharacterCreatorPage() {
   const [loading, setLoading] = useState(false);
   const [generationSeed, setGenerationSeed] = useState(null);
   const [fullSizeImage, setFullSizeImage] = useState(null);
+  const [editingId, setEditingId] = useState(id || null);
+  const [editingData, setEditingData] = useState(null);
 
   const imageCount = useMemo(() => Number(options.capturePlan.imageCount || 6), [options.capturePlan.imageCount]);
 
   const setNested = (group, key, value) => setOptions(prev => ({ ...prev, [group]: { ...prev[group], [key]: value } }));
+
+  // Load character data if editing
+  useEffect(() => {
+    if (editingId) {
+      loadCharacterData();
+    }
+  }, [editingId]);
+
+  const loadCharacterData = async () => {
+    try {
+      const response = await characterAPI.getById(editingId);
+      const character = response?.data;
+      if (character) {
+        setName(character.name);
+        setAlias(character.alias);
+        setPortraitTempPath(character.portraitPath);
+        setOptions(character.options || defaultOptions);
+        setPreview(character.referenceImages || []);
+        setEditingData(character);
+      }
+    } catch (err) {
+      console.error('Error loading character:', err);
+    }
+  };
 
   const generate = async () => {
     if (!portrait || !name) return;
@@ -46,6 +75,7 @@ export default function CharacterCreatorPage() {
 
   const saveCharacter = async () => {
     const payload = {
+      ...(editingId && { _id: editingId }),
       name,
       alias: alias || name,
       portraitTempPath,
@@ -57,16 +87,37 @@ export default function CharacterCreatorPage() {
         lockRules: 'same face, same body, same hairline'
       }
     };
-    await characterAPI.save(payload);
-    alert('Character saved');
+    try {
+      await characterAPI.save(payload);
+      alert(`Character ${editingId ? 'updated' : 'saved'} successfully`);
+      navigate('/characters');
+    } catch (err) {
+      alert(`Error ${editingId ? 'updating' : 'saving'} character: ` + (err.message || 'Unknown error'));
+    }
   };
 
   return (
     <div className="flex flex-col h-screen bg-[#050609] text-white">
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-700 bg-[#0a0e18]">
-        <h1 className="text-3xl font-bold mb-2">Character Creator</h1>
-        <p className="text-slate-400 text-sm">Upload portrait + fill detailed options, generate 4-8 reference images via Google Flow, preview, regenerate, then save.</p>
+        <div className="flex items-center gap-3 mb-2">
+          {editingId && (
+            <button
+              onClick={() => navigate('/characters')}
+              className="p-1 hover:bg-slate-700 rounded transition"
+              title="Back to character list"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <h1 className="text-3xl font-bold">{editingId ? 'Edit Character' : 'Create Character'}</h1>
+        </div>
+        <p className="text-slate-400 text-sm">
+          {editingId 
+            ? 'Update character details, reference images, and options. Regenerate any images as needed.'
+            : 'Upload portrait + fill detailed options, generate 4-8 reference images via Google Flow, preview, regenerate, then save.'
+          }
+        </p>
         {generationSeed !== null && <div className="text-xs text-emerald-400 mt-2">Seed lock: {generationSeed}</div>}
       </div>
 
@@ -82,6 +133,12 @@ export default function CharacterCreatorPage() {
             
             <div>
               <label className="text-xs text-slate-400 block mb-2">Portrait image</label>
+              {portraitTempPath && editingId && (
+                <div className="mb-3">
+                  <img src={portraitTempPath} alt="Current portrait" className="w-full h-40 object-cover rounded border border-slate-600" />
+                  <p className="text-xs text-slate-500 mt-1">Current portrait. Upload a new file to replace.</p>
+                </div>
+              )}
               <input type="file" accept="image/*" onChange={e=>setPortrait(e.target.files?.[0] || null)} className="text-xs w-full" />
             </div>
 
@@ -152,7 +209,7 @@ export default function CharacterCreatorPage() {
             <div className="flex gap-2 sticky bottom-0 bg-[#0a0e18] p-4 -mx-6 mb-0">
               <button onClick={generate} disabled={loading} className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-slate-700 rounded px-4 py-2 text-sm font-medium">{loading ? 'Generating...' : 'Create Preview'}</button>
               <button onClick={generate} disabled={loading || !preview.length} className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 rounded px-4 py-2 text-sm font-medium inline-flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4"/> Regenerate</button>
-              <button onClick={saveCharacter} disabled={!preview.length || !portraitTempPath} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded px-4 py-2 text-sm font-medium">Save Character</button>
+              <button onClick={saveCharacter} disabled={editingId ? false : (!preview.length || !portraitTempPath)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded px-4 py-2 text-sm font-medium">{editingId ? 'Update Character' : 'Save Character'}</button>
             </div>
           </div>
         </div>
