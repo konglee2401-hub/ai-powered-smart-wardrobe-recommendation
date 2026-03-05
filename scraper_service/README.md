@@ -9,6 +9,16 @@ FastAPI service quản lý discover/scan/download/upload YouTube Shorts + Facebo
 - Smart queue management với worker pool
 - Downloaded videos lưu tại `backend/downloads/`
 
+
+### Douyin manual ingest (captcha workaround)
+- Douyin scraper đã được tắt do captcha (`discover_douyin` không còn chạy trong lịch discover).
+- Tạo sẵn folder manual drop: `scraper_service/downloads/douyin/manual_inbox/`.
+- Khi service chạy, cronjob `manual_douyin_watcher` quét folder này mỗi 30 giây.
+- Nếu phát hiện video (`.mp4`, `.mov`, `.mkv`, `.webm`), service sẽ:
+  1. Move file vào luồng download chuẩn (`downloads/douyin/manual/<date>/...`).
+  2. Mark `downloadStatus=done` trong DB.
+  3. Trigger bước upload Google Drive giống luồng hiện tại.
+
 ### 🌐 Upload to Google Drive
 - Async upload downloaded videos đến Google Drive
 - Auto-create folder structure: `Videos/Downloaded/youtube/`

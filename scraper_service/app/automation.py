@@ -3,9 +3,11 @@ import json
 import os
 import random
 import re
+import shutil
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 from urllib.parse import parse_qs, urlparse, urljoin, quote
 from urllib.request import Request, urlopen
@@ -58,6 +60,7 @@ DOUYIN_TOPIC_KEYWORDS = {
     "sexy dance": "热舞",
     "cooking": "美食",
 }
+DISABLE_DOUYIN_SCRAPER = True
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -1384,7 +1387,7 @@ async def discover_all():
         use_playboard = discover_sources.get('playboard', True)
         use_youtube = discover_sources.get('youtube', True)
         use_dailyhaha = discover_sources.get('dailyhaha', True)
-        use_douyin = discover_sources.get('douyin', False)
+        use_douyin = False if DISABLE_DOUYIN_SCRAPER else discover_sources.get('douyin', False)
 
         # Get active configs sorted by priority
         configs = setting.get('playboardConfigs', [])
@@ -1424,7 +1427,10 @@ async def discover_all():
             except Exception as e:
                 print(f"[DEBUG] discover_dailyhaha failed: {e}")
             try:
-                found += await discover_douyin(topic)
+                if use_douyin:
+                    found += await discover_douyin(topic)
+                elif topic == TOPICS[0]:
+                    print('[douyin] scraper disabled due to captcha issue; using manual drop-folder ingestion only')
             except Exception as e:
                 print(f"[DEBUG] discover_douyin failed: {e}")
 
@@ -1755,6 +1761,94 @@ async def process_download(video_id, attempts):
 
 def queue_stats():
     return {'queued': queue.qsize(), 'running': running_jobs, 'started': worker_task is not None, 'engine': SCRAPER_ENGINE}
+
+
+async def scan_manual_douyin_folder() -> dict:
+    """Ingest manually downloaded Douyin videos from drop folder and continue existing post-download flow."""
+    drop_dir = Path(DOWNLOAD_ROOT) / 'douyin' / 'manual_inbox'
+    drop_dir.mkdir(parents=True, exist_ok=True)
+
+    files = sorted(
+        [p for p in drop_dir.iterdir() if p.is_file() and p.suffix.lower() in {'.mp4', '.mov', '.mkv', '.webm'}],
+        key=lambda p: p.stat().st_mtime,
+    )
+
+    if not files:
+        return {'processed': 0}
+
+    processed = 0
+    failed = 0
+
+    for src in files:
+        started = time.time()
+        stem = re.sub(r'[^a-zA-Z0-9_-]+', '-', src.stem).strip('-').lower() or f'manual-{int(time.time())}'
+        video_id = f'manual-{stem}'[:80]
+        channel = upsert_channel('douyin', 'manual-upload', 'Douyin Manual Upload', 'manual')
+
+        try:
+            doc = upsert_video(
+                {
+                    'platform': 'douyin',
+                    'videoId': video_id,
+                    'title': src.stem,
+                    'views': 0,
+                    'url': f'manual://douyin/{video_id}',
+                    'topic': 'manual',
+                    'thumbnail': '',
+                    'channelId': channel['_id'],
+                }
+            )
+
+            out = build_download_path(doc)
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            if os.path.exists(out):
+                base, ext = os.path.splitext(out)
+                out = f"{base}-{int(time.time())}{ext}"
+
+            shutil.move(str(src), out)
+
+            videos.update_one(
+                {'_id': ObjectId(doc['_id'])},
+                {
+                    '$set': {
+                        'downloadStatus': 'done',
+                        'localPath': out,
+                        'downloadedAt': datetime.utcnow(),
+                        'failReason': '',
+                        'updatedAt': datetime.utcnow(),
+                    }
+                },
+            )
+
+            try:
+                await upload_video_after_download(doc['_id'], out, 'douyin')
+            except Exception as upload_err:
+                print(f"⚠️  Google Drive upload error for manual douyin video {src.name}: {upload_err}")
+
+            log_job(
+                'manual-douyin-ingest',
+                'success',
+                platform='douyin',
+                topic='manual',
+                itemsDownloaded=1,
+                duration=int((time.time() - started) * 1000),
+                sourceFile=src.name,
+            )
+            processed += 1
+        except Exception as ex:
+            failed += 1
+            log_job(
+                'manual-douyin-ingest',
+                'failed',
+                platform='douyin',
+                topic='manual',
+                duration=int((time.time() - started) * 1000),
+                error=str(ex),
+                sourceFile=src.name,
+            )
+            print(f'[manual-douyin] failed to process {src.name}: {ex}')
+
+    return {'processed': processed, 'failed': failed}
 
 
 async def process_playboard_cards(cards: List[Dict], topic: str):

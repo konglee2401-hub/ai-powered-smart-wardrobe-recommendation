@@ -10,7 +10,7 @@ from bson import ObjectId
 from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize, log_job
-from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records
+from .automation import discover_all, discover_playboard, discover_dailyhaha, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records, scan_manual_douyin_folder
 
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
@@ -43,8 +43,7 @@ async def startup_event():
     except Exception as e:
         print(f"[startup] cleanup invalid youtube records failed: {e}")
 
-    if ENABLE_SCHEDULER:
-        await reload_scheduler()
+    await reload_scheduler()
 
 
 
@@ -52,8 +51,10 @@ async def startup_event():
 async def reload_scheduler():
     scheduler.remove_all_jobs()
     s = get_or_create_settings()
-    scheduler.add_job(discover_all, 'cron', **cron_to_args(s.get('cronTimes', {}).get('discover', '0 7 * * *')), id='discover')
-    scheduler.add_job(scan_all_channels, 'cron', **cron_to_args(s.get('cronTimes', {}).get('scan', '30 8 * * *')), id='scan')
+    if ENABLE_SCHEDULER:
+        scheduler.add_job(discover_all, 'cron', **cron_to_args(s.get('cronTimes', {}).get('discover', '0 7 * * *')), id='discover')
+        scheduler.add_job(scan_all_channels, 'cron', **cron_to_args(s.get('cronTimes', {}).get('scan', '30 8 * * *')), id='scan')
+    scheduler.add_job(scan_manual_douyin_folder, 'interval', seconds=30, id='manual_douyin_watcher', max_instances=1)
     if not scheduler.running:
         scheduler.start()
 
@@ -588,4 +589,3 @@ async def upload_single_video_to_drive(video_id: str):
     except Exception as e:
         print(f"❌ Single video upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
