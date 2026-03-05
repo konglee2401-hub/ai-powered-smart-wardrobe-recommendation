@@ -94,26 +94,54 @@ async function getFileBuffer(asset) {
   try {
     // Try local path first
     if (asset.storage?.localPath) {
-      const fullPath = path.join(__dirname, '../../', asset.storage.localPath);
+      // Try absolute path first (Windows paths)
+      let fullPath = asset.storage.localPath;
+      
+      // If it's a relative path, join with project root
+      if (!path.isAbsolute(fullPath)) {
+        fullPath = path.join(__dirname, '../../', fullPath);
+      }
+      
+      console.log(`  📂 Checking local: ${asset.storage.localPath}`);
       if (fs.existsSync(fullPath)) {
-        console.log(`  📂 Reading from local: ${asset.storage.localPath}`);
+        console.log(`     ✅ File exists`);
         return {
           buffer: fs.readFileSync(fullPath),
           mimeType: asset.mimeType,
           filename: asset.filename
         };
+      } else {
+        console.log(`     ❌ File not found at path`);
       }
     }
 
     // Try storage.url
     if (asset.storage?.url) {
-      console.log(`  🌐 Downloading from URL: ${asset.storage.url.substring(0, 60)}...`);
-      const response = await axios.get(asset.storage.url, { responseType: 'arraybuffer' });
-      return {
-        buffer: response.data,
-        mimeType: asset.mimeType || response.headers['content-type'],
-        filename: asset.filename
-      };
+      // Skip localhost URLs - they won't work
+      if (asset.storage.url.includes('localhost')) {
+        console.log(`  ⏭️  URL is localhost (skipped)`);
+        return null;
+      }
+      
+      // Skip relative paths that start with /
+      if (asset.storage.url.startsWith('/')) {
+        console.log(`  ⏭️  URL is relative path (skipped)`);
+        return null;
+      }
+      
+      console.log(`  🌐 Downloading from: ${asset.storage.url.substring(0, 60)}...`);
+      try {
+        const response = await axios.get(asset.storage.url, { responseType: 'arraybuffer', timeout: 10000 });
+        console.log(`     ✅ Downloaded`);
+        return {
+          buffer: response.data,
+          mimeType: asset.mimeType || response.headers['content-type'],
+          filename: asset.filename
+        };
+      } catch (urlError) {
+        console.log(`     ❌ Download failed: ${urlError.message}`);
+        return null;
+      }
     }
 
     return null;
@@ -308,6 +336,40 @@ async function main() {
 
     if (stats.total === 0) {
       console.log('✅ No assets need processing');
+      process.exit(0);
+    }
+
+    // Analyze which assets can be recovered
+    console.log('📊 ANALYZING ASSETS:');
+    console.log('─'.repeat(70));
+    let canRecover = 0;
+    let cannotRecover = 0;
+
+    for (const asset of assetsToProcess) {
+      const hasLocalPath = asset.storage?.localPath && fs.existsSync(
+        asset.storage.localPath.startsWith('/') || /^[a-zA-Z]:/.test(asset.storage.localPath) 
+          ? asset.storage.localPath 
+          : path.join(__dirname, '../../', asset.storage.localPath)
+      );
+      const hasValidUrl = asset.storage?.url && 
+                         !asset.storage.url.includes('localhost') && 
+                         !asset.storage.url.startsWith('/');
+      
+      if (hasLocalPath || hasValidUrl) {
+        canRecover++;
+      } else {
+        cannotRecover++;
+      }
+    }
+    console.log(`Recoverable: ${canRecover} (has local file or valid URL)`);
+    console.log(`Lost: ${cannotRecover} (no accessible file)\n`);
+
+    if (canRecover === 0) {
+      console.log('⚠️  WARNING: No recoverable files found!');
+      console.log('   Most assets have:');
+      console.log('   - Local files in temp/ that were deleted');
+      console.log('   - URLs pointing to localhost (unavailable)');
+      console.log('   - Relative API paths (cannot be accessed)\n');
       process.exit(0);
     }
 
