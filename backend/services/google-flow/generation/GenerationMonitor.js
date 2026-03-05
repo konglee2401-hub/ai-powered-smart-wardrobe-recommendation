@@ -292,24 +292,12 @@ class GenerationMonitor {
                 console.log(`⏳ Waiting 3 seconds for input processing...`);
                 await this.page.waitForTimeout(3000);
                 
-                // Submit
-                console.log(`📤 Submitting...`);
-                const submitted = await this.page.evaluate(() => {
-                  const submitBtn = document.querySelector('button[aria-label*="Submit"], button[type="submit"]');
-                  if (submitBtn) {
-                    submitBtn.click();
-                    return true;
-                  }
-                  return false;
-                });
-                
-                if (submitted) {
-                  console.log(`✅ Submitted after 'Use Again' (${useAgainAttempt}/${maxUseAgainRetries})`);
-                  await this.page.waitForTimeout(3000);
-                  continue;
-                } else {
-                  console.log(`⚠️  Submit button not found after 'Use Again'`);
-                }
+                // 💫 FIX: Submit by pressing Enter key (not looking for submit button)
+                console.log(`📤 Submitting with Enter key...`);
+                await this.page.keyboard.press('Enter');
+                console.log(`✅ Submitted after 'Use Again' (${useAgainAttempt}/${maxUseAgainRetries})`);
+                await this.page.waitForTimeout(3000);
+                continue;
               } else {
                 console.log(`⚠️  'Use Again' button not found`);
               }
