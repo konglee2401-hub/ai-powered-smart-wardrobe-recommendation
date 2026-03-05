@@ -10,7 +10,7 @@
  */
 
 import mongoose from 'mongoose';
-import Asset from '../models/Asset.js';
+import Asset from '../../models/Asset.js';
 import fs from 'fs';
 import path from 'path';
 
