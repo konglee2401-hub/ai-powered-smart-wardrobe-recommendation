@@ -126,7 +126,8 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       mood = 'confident',
       style = 'minimalist',
       colorPalette = 'neutral',
-      cameraAngle = 'eye-level'
+      cameraAngle = 'eye-level',
+      useShortPrompt = false
     } = req.body;
 
     // Validate parameters
@@ -160,7 +161,8 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       colorPalette,
       cameraAngle,
       imageProvider,
-      videoProvider
+      videoProvider,
+      useShortPrompt: typeof useShortPrompt === 'string' ? useShortPrompt.toLowerCase() === 'true' : Boolean(useShortPrompt)
     };
 
     // 💫 Pass buffers and names to the flow service

@@ -21,7 +21,7 @@ class VietnamesePromptBuilder {
    * OPTIMIZED: Uses new bilingual template format
    * Vietnamese version for debug/maintenance only
    */
-  static buildImageGenerationWearingProductPrompt(garmentData = {}) {
+  static buildImageGenerationWearingProductPrompt(garmentData = {}, options = {}) {
     const {
       garment_type = 'trang phục',
       primary_color = 'màu chính',
@@ -35,6 +35,27 @@ class VietnamesePromptBuilder {
       mood = 'chuyên nghiệp',
       style = 'hiện đại'
     } = garmentData;
+
+    const isShortPrompt = Boolean(options?.short);
+    const poseSuggestion = (options?.pose || '').toString().trim();
+
+    if (isShortPrompt) {
+      return [
+        '[ÁNH XẠ HÌNH ẢNH]',
+        'Hình 1 = NHÂN VẬT (khóa danh tính).',
+        'Hình 2 = TRANG PHỤC (nguồn sản phẩm).',
+        '',
+        '[KHÓA NHÂN DẠNG — NGHIÊM NGẶT]',
+        'Giữ nguyên khuôn mặt, cơ thể, tóc, tư thế, ánh nhìn từ Hình 1.',
+        '',
+        '[CHẾ ĐỘ — wearing]',
+        'Nhân vật MẶC trang phục từ Hình 2. Nếu Hình 2 có người mẫu, chỉ lấy trang phục.',
+        '',
+        `[TRANG PHỤC] ${garment_type}; màu: ${primary_color}${secondary_color ? ` + ${secondary_color}` : ''}; chất liệu: ${fabric_type}`,
+        ...(poseSuggestion ? [`[POSE] ${poseSuggestion}`] : []),
+        '[RÀNG BUỘC CỨNG] Không méo hình, không lỗi giải phẫu, không tay/chân thừa, không chữ/logo/watermark.'
+      ].join('\n');
+    }
 
     // Build prompt using new template format (Vietnamese for debug)
     let prompt = `[ÁNH XẠ HÌNH ẢNH]\n`;
@@ -62,6 +83,12 @@ class VietnamesePromptBuilder {
     }
     prompt += `\n`;
 
+    if (poseSuggestion) {
+      prompt += `[POSE TRONG SCENE]\n`;
+      prompt += `Pose gợi ý để khớp phối cảnh scene: ${poseSuggestion}\n`;
+      prompt += `Điều chỉnh tự nhiên, tránh giữ pose cứng từ ảnh gốc.\n\n`;
+    }
+
     prompt += `[HÀNH VI VẢI]\n`;
     prompt += `Độ rũ và nếp gấp đúng chất liệu.\n`;
     prompt += `Không thay đổi cơ thể để vừa đồ.\n\n`;
@@ -79,7 +106,7 @@ class VietnamesePromptBuilder {
    * OPTIMIZED: Uses new bilingual template format
    * Vietnamese version for debug/maintenance only
    */
-  static buildHoldingProductPrompt(garmentData = {}) {
+  static buildHoldingProductPrompt(garmentData = {}, options = {}) {
     const {
       garment_type = 'trang phục',
       primary_color = 'màu chính',
@@ -187,7 +214,7 @@ class VietnamesePromptBuilder {
    * Build image generation prompt for holding product (Character Holding Product)
    * Character prominently holds/presents product in hand
    */
-  static buildHoldingProductPrompt(garmentData = {}) {
+  static buildHoldingProductPrompt(garmentData = {}, options = {}) {
     const {
       garment_type = 'trang phục',
       primary_color = 'màu chính',
@@ -203,9 +230,36 @@ class VietnamesePromptBuilder {
       color_palette = 'ấm áp'
     } = garmentData;
 
+    const isShortPrompt = Boolean(options?.short);
+    const poseSuggestion = (options?.pose || '').toString().trim();
+
+    if (isShortPrompt) {
+      return [
+        '[ÁNH XẠ HÌNH ẢNH]',
+        'Hình 1 = NHÂN VẬT (khóa danh tính).',
+        'Hình 2 = TRANG PHỤC (nguồn sản phẩm).',
+        '',
+        '[KHÓA NHÂN DẠNG — NGHIÊM NGẶT]',
+        'Giữ nguyên khuôn mặt, cơ thể, tóc, tư thế, ánh nhìn từ Hình 1.',
+        '',
+        '[CHẾ ĐỘ — holding]',
+        'Nhân vật KHÔNG mặc trang phục. Nhân vật CẦM và trình bày trang phục từ Hình 2 rõ trước camera.',
+        '',
+        `[TRANG PHỤC] ${garment_type}; màu: ${primary_color}${secondary_color ? ` + ${secondary_color}` : ''}; chất liệu: ${fabric_type}`,
+        ...(poseSuggestion ? [`[POSE] ${poseSuggestion}`] : []),
+        '[RÀNG BUỘC CỨNG] Không méo hình, không lỗi giải phẫu, không tay/chân thừa, không chữ/logo/watermark.'
+      ].join('\n');
+    }
+
     let prompt = `[NHÂN VẬT CẦM SẢN PHẨM - IMAGE MAPPING]\n`;
     prompt += `Mục đích: Nhân vật cầm/trưng bày sản phẩm cho nội dung affiliate/marketing\n`;
     prompt += `Tỷ lệ: Nhân vật (60%) + Sản phẩm trên tay (40%)\n\n`;
+
+    if (poseSuggestion) {
+      prompt += `[POSE TRONG SCENE]\n`;
+      prompt += `Pose gợi ý để khớp phối cảnh scene: ${poseSuggestion}\n`;
+      prompt += `Giữ sản phẩm rõ ràng trong khi pose tự nhiên theo scene.\n\n`;
+    }
 
     prompt += `[THAM CHIẾU ẢNH]\n`;
     prompt += `Ảnh 1 (upload đầu tiên) = THAM CHIẾU NHÂN VẬT - Người cần xuất hiện\n`;
