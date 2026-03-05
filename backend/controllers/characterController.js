@@ -116,7 +116,46 @@ export async function generateCharacterPreview(req, res) {
 
 export async function saveCharacterProfile(req, res) {
   try {
-    const { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    
+    // 💫 FIX: Handle stringified fields (they might come as strings from frontend)
+    if (typeof generatedImages === 'string') {
+      try {
+        generatedImages = JSON.parse(generatedImages);
+      } catch (e) {
+        console.error('Failed to parse generatedImages:', e.message);
+        generatedImages = [];
+      }
+    }
+    
+    if (typeof options === 'string') {
+      try {
+        options = JSON.parse(options);
+      } catch (e) {
+        console.warn('Failed to parse options:', e.message);
+        options = {};
+      }
+    }
+    
+    if (typeof analysisProfile === 'string') {
+      try {
+        analysisProfile = JSON.parse(analysisProfile);
+      } catch (e) {
+        console.warn('Failed to parse analysisProfile:', e.message);
+        analysisProfile = {};
+      }
+    }
+    
+    // Ensure generatedImages is an array
+    if (!Array.isArray(generatedImages)) {
+      generatedImages = [];
+    }
+    
+    console.log(`[CHAR] Saving character: ${name} | Images count: ${generatedImages.length}`);
+    if (generatedImages.length > 0) {
+      console.log(`[CHAR] First image structure:`, JSON.stringify(generatedImages[0]).substring(0, 200));
+    }
+    
     if (!name || !alias || !portraitTempPath) {
       return res.status(400).json({ success: false, error: 'name, alias, portraitTempPath are required' });
     }
@@ -162,6 +201,8 @@ export async function saveCharacterProfile(req, res) {
 
     return res.json({ success: true, data: character });
   } catch (error) {
+    console.error(`[CHAR] Save error:`, error.message);
+    console.error(error.stack);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
