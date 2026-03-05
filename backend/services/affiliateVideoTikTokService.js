@@ -11,7 +11,7 @@
  */
 
 import { analyzeUnified } from './unifiedAnalysisService.js';
-import { buildDetailedPrompt, buildFluxPrompt, getSceneReferenceInfo } from './smartPromptBuilder.js';
+import { buildDetailedPrompt, buildFluxPrompt } from './smartPromptBuilder.js';
 import GrokServiceV2 from './browser/grokServiceV2.js';
 import BFLPlaygroundService from './browser/bflPlaygroundService.js';
 import GoogleFlowAutomationService from './googleFlowAutomationService.js';
@@ -120,7 +120,6 @@ import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
 import SessionLogService from './sessionLogService.js';
 import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
-import axios from 'axios';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -767,114 +766,126 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     };
 
     try {
-      // GoogleDriveOAuthService is a singleton instance, not a class constructor
-      driveService = GoogleDriveOAuthService;
-      
-      // Authenticate with Google Drive using OAuth
-      console.log(`🔐 Authenticating with Google Drive (OAuth)...`);
-      const authResult = await driveService.authenticate();
-      
-      if (!authResult.authenticated && !authResult.configured) {
-        console.log(`⚠️  Google Drive OAuth not configured, skipping upload`);
-        console.log(`   To enable: Add OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to .env`);
+      if (skipCharacterDriveUpload && skipProductDriveUpload) {
+        console.log('↩️  Skipping Step 1.5 Google Drive upload for original images (both selected from gallery)');
       } else {
-        console.log(`✅ Google Drive authenticated`);
-        
-        // 💫 CHECK: Character image - skip if already exists
-        let characterAssetExists = null;
-        if (fs.existsSync(characterFilePath)) {
-          characterAssetExists = await checkExistingAsset(characterFile.originalname, 'character-image');
-          if (characterAssetExists) {
-            console.log(`\n⏭️  Character image already exists (skipping upload & asset creation)`);
-            console.log(`   Existing Asset ID: ${characterAssetExists.assetId}`);
-            if (characterAssetExists.storage?.googleDriveId) {
-              characterDriveUrl = characterAssetExists.storage.googleDriveId;
-            }
-          }
-        }
-        
-        // Upload character image only if it doesn't exist
-        if (!characterAssetExists && fs.existsSync(characterFilePath)) {
-          try {
-            console.log(`\n📤 Uploading character image...`);
-            console.log(`   Path: ${characterFilePath}`);
-            
-            const charBuffer = fs.readFileSync(characterFilePath);
-            const charUploadResult = await driveService.uploadCharacterImage(
-              charBuffer,
-              `Character-${flowId}.jpg`,
-              { 
-                flowId, 
-                timestamp: new Date().toISOString()
+        // GoogleDriveOAuthService is a singleton instance, not a class constructor
+        driveService = GoogleDriveOAuthService;
+
+        // Authenticate with Google Drive using OAuth
+        console.log(`🔐 Authenticating with Google Drive (OAuth)...`);
+        const authResult = await driveService.authenticate();
+
+        if (!authResult.authenticated && !authResult.configured) {
+          console.log(`⚠️  Google Drive OAuth not configured, skipping upload`);
+          console.log(`   To enable: Add OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to .env`);
+        } else {
+          console.log(`✅ Google Drive authenticated`);
+
+          // 💫 CHECK: Character image - skip if already exists
+          let characterAssetExists = null;
+          if (fs.existsSync(characterFilePath)) {
+            characterAssetExists = await checkExistingAsset(characterFile.originalname, 'character-image');
+            if (characterAssetExists) {
+              console.log(`\n⏭️  Character image already exists (skipping upload & asset creation)`);
+              console.log(`   Existing Asset ID: ${characterAssetExists.assetId}`);
+              if (characterAssetExists.storage?.googleDriveId) {
+                characterDriveUrl = characterAssetExists.storage.googleDriveId;
               }
-            );
-            
-            // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
-            if (charUploadResult?.webViewLink) {
-              characterDriveUrl = charUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
-              console.log(`  ✅ Character image uploaded to Drive`);
-              console.log(`     File ID: ${charUploadResult.id}`);
-              console.log(`     Drive Link: ${charUploadResult.webViewLink}`);
-            } else if (charUploadResult?.source === 'local-storage') {
-              console.warn(`  ⚠️ Character image fallback to local (not on Drive)`);
-              console.warn(`     Error: ${charUploadResult.error}`);
+            }
+          }
+
+          // Upload character image only if it doesn't exist
+          if (!characterAssetExists && fs.existsSync(characterFilePath)) {
+            if (skipCharacterDriveUpload) {
+              console.log(`\n↩️  Skipping character original upload (gallery source)`);
             } else {
-              console.warn(`  ⚠️ Character upload returned unexpected result: ${JSON.stringify(charUploadResult)}`);
-            }
-          } catch (charUploadError) {
-            console.warn(`  ❌ Character upload failed: ${charUploadError.message}`);
-          }
-        }
+              try {
+                console.log(`\n📤 Uploading character image...`);
+                console.log(`   Path: ${characterFilePath}`);
 
-        // 💫 CHECK: Product image - skip if already exists
-        let productAssetExists = null;
-        if (fs.existsSync(productFilePath)) {
-          productAssetExists = await checkExistingAsset(productFile.originalname, 'product-image');
-          if (productAssetExists) {
-            console.log(`\n⏭️  Product image already exists (skipping upload & asset creation)`);
-            console.log(`   Existing Asset ID: ${productAssetExists.assetId}`);
-            if (productAssetExists.storage?.googleDriveId) {
-              productDriveUrl = productAssetExists.storage.googleDriveId;
-            }
-          }
-        }
+                const charBuffer = fs.readFileSync(characterFilePath);
+                const charUploadResult = await driveService.uploadCharacterImage(
+                  charBuffer,
+                  `Character-${flowId}.jpg`,
+                  {
+                    flowId,
+                    timestamp: new Date().toISOString()
+                  }
+                );
 
-        // Upload product image only if it doesn't exist
-        if (!productAssetExists && fs.existsSync(productFilePath)) {
-          try {
-            console.log(`\n📤 Uploading product image...`);
-            console.log(`   Path: ${productFilePath}`);
-            
-            const prodBuffer = fs.readFileSync(productFilePath);
-            const prodUploadResult = await driveService.uploadProductImage(
-              prodBuffer,
-              `Product-${flowId}.jpg`,
-              { 
-                flowId, 
-                timestamp: new Date().toISOString()
+                // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
+                if (charUploadResult?.webViewLink) {
+                  characterDriveUrl = charUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
+                  console.log(`  ✅ Character image uploaded to Drive`);
+                  console.log(`     File ID: ${charUploadResult.id}`);
+                  console.log(`     Drive Link: ${charUploadResult.webViewLink}`);
+                } else if (charUploadResult?.source === 'local-storage') {
+                  console.warn(`  ⚠️ Character image fallback to local (not on Drive)`);
+                  console.warn(`     Error: ${charUploadResult.error}`);
+                } else {
+                  console.warn(`  ⚠️ Character upload returned unexpected result: ${JSON.stringify(charUploadResult)}`);
+                }
+              } catch (charUploadError) {
+                console.warn(`  ❌ Character upload failed: ${charUploadError.message}`);
               }
-            );
-            
-            // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
-            if (prodUploadResult?.webViewLink) {
-              productDriveUrl = prodUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
-              console.log(`  ✅ Product image uploaded to Drive`);
-              console.log(`     File ID: ${prodUploadResult.id}`);
-              console.log(`     Drive Link: ${prodUploadResult.webViewLink}`);
-            } else if (prodUploadResult?.source === 'local-storage') {
-              console.warn(`  ⚠️ Product image fallback to local (not on Drive)`);
-              console.warn(`     Error: ${prodUploadResult.error}`);
-            } else {
-              console.warn(`  ⚠️ Product upload returned unexpected result: ${JSON.stringify(prodUploadResult)}`);
             }
-          } catch (prodUploadError) {
-            console.warn(`  ❌ Product upload failed: ${prodUploadError.message}`);
           }
-        }
 
-        console.log(`\n📊 Original images upload status:`);
-        console.log(`   Character: ${characterDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive'}`);
-        console.log(`   Product: ${productDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive'}`);
+          // 💫 CHECK: Product image - skip if already exists
+          let productAssetExists = null;
+          if (fs.existsSync(productFilePath)) {
+            productAssetExists = await checkExistingAsset(productFile.originalname, 'product-image');
+            if (productAssetExists) {
+              console.log(`\n⏭️  Product image already exists (skipping upload & asset creation)`);
+              console.log(`   Existing Asset ID: ${productAssetExists.assetId}`);
+              if (productAssetExists.storage?.googleDriveId) {
+                productDriveUrl = productAssetExists.storage.googleDriveId;
+              }
+            }
+          }
+
+          // Upload product image only if it doesn't exist
+          if (!productAssetExists && fs.existsSync(productFilePath)) {
+            if (skipProductDriveUpload) {
+              console.log(`\n↩️  Skipping product original upload (gallery source)`);
+            } else {
+              try {
+                console.log(`\n📤 Uploading product image...`);
+                console.log(`   Path: ${productFilePath}`);
+
+                const prodBuffer = fs.readFileSync(productFilePath);
+                const prodUploadResult = await driveService.uploadProductImage(
+                  prodBuffer,
+                  `Product-${flowId}.jpg`,
+                  {
+                    flowId,
+                    timestamp: new Date().toISOString()
+                  }
+                );
+
+                // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
+                if (prodUploadResult?.webViewLink) {
+                  productDriveUrl = prodUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
+                  console.log(`  ✅ Product image uploaded to Drive`);
+                  console.log(`     File ID: ${prodUploadResult.id}`);
+                  console.log(`     Drive Link: ${prodUploadResult.webViewLink}`);
+                } else if (prodUploadResult?.source === 'local-storage') {
+                  console.warn(`  ⚠️ Product image fallback to local (not on Drive)`);
+                  console.warn(`     Error: ${prodUploadResult.error}`);
+                } else {
+                  console.warn(`  ⚠️ Product upload returned unexpected result: ${JSON.stringify(prodUploadResult)}`);
+                }
+              } catch (prodUploadError) {
+                console.warn(`  ❌ Product upload failed: ${prodUploadError.message}`);
+              }
+            }
+          }
+
+          console.log(`\n📊 Original images upload status:`);
+          console.log(`   Character: ${skipCharacterDriveUpload ? '↩️  Skipped (gallery source)' : (characterDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive')}`);
+          console.log(`   Product: ${skipProductDriveUpload ? '↩️  Skipped (gallery source)' : (productDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive')}`);
+        }
       }
     } catch (driveError) {
       console.warn(`⚠️ Google Drive upload error: ${driveError.message}`);
@@ -2944,4 +2955,3 @@ Return as JSON with:
     `;
   }
 };
-
