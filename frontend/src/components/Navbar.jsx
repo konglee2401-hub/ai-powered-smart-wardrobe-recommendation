@@ -22,6 +22,7 @@ import {
   Globe,
   ChevronLeft,
   ChevronRight,
+  UserRound,
 } from 'lucide-react';
 
 const baseLinkClass =
@@ -48,6 +49,7 @@ export default function Navbar() {
           { path: '/video-generation', label: t('navbar.video'), icon: Video },
           { path: '/voice-over', label: t('navbar.voiceover'), icon: Volume2 },
           { path: '/generate/one-click', label: t('navbar.oneClick'), icon: Sparkles },
+          { path: '/characters', label: 'Characters', icon: UserRound },
           { path: '/video-production', label: t('navbar.videoProduction'), icon: Film },
         ],
       },
