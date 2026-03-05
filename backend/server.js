@@ -49,7 +49,7 @@ import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
 import trendAutomationRoutes from './routes/trendAutomationRoutes.js';
 import authSetupRoutes from './routes/authSetupRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
-import { seedProviders } from './scripts/seedProviders.js';
+import { seedProviders } from './scripts/seed/seedProviders.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
 import * as modelSyncService from './services/modelSyncService.js';
@@ -228,10 +228,12 @@ try {
   if (result.authenticated) {
     console.log('✅ Google Drive authenticated (token cached)');
   } else {
-    console.warn('⚠️ Google Drive authentication skipped:', result.message || 'Token not available');
+    console.warn('⚠️ Google Drive not authenticated:', result.message || 'Token not available');
+    console.warn('⚠️ Please authenticate via: POST /api/drive/auth');
   }
 } catch (error) {
-  console.warn('⚠️ Google Drive authentication failed:', error.message);
+  console.warn('⚠️ Google Drive pre-authentication failed:', error.message);
+  console.warn('⚠️ Please authenticate via: POST /api/drive/auth-callback');
   // Continue anyway - will authenticate on first upload
 }
 
