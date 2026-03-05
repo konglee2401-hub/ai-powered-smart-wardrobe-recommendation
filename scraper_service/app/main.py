@@ -385,12 +385,21 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
 async def manual_discover_dailyhaha(payload: dict | None = None):
     started = time.time()
 
+    from .utils import TOPICS
+    topics = (payload or {}).get('topics') if isinstance(payload, dict) else None
+    target_topics = topics if topics else TOPICS
+
     found = 0
     failed = 0
 
     try:
-        await asyncio.sleep(1 + random.random())
-        found += await discover_dailyhaha('hai')
+        for topic in target_topics:
+            try:
+                await asyncio.sleep(1 + random.random())
+                found += await discover_dailyhaha(topic)
+            except Exception as e:
+                print(f"[ManualDailyHaha] Failed for topic {topic}: {e}")
+                failed += 1
 
         duration = int((time.time() - started) * 1000)
         log_job('discover', 'success', isManual=True, platform='dailyhaha', itemsFound=found, failedTopics=failed, duration=duration)
@@ -400,8 +409,7 @@ async def manual_discover_dailyhaha(payload: dict | None = None):
             'itemsFound': found,
             'failedTopics': failed,
             'duration': duration,
-            'topicsProcessed': 1,
-            'mode': 'all-videos-no-topic-filter'
+            'topicsProcessed': len(target_topics)
         }
     except Exception as ex:
         duration = int((time.time() - started) * 1000)
@@ -445,6 +453,31 @@ async def manual_discover_douyin(payload: dict | None = None):
         duration = int((time.time() - started) * 1000)
         log_job('discover', 'failed', isManual=True, platform='douyin', itemsFound=found, error=str(ex), duration=duration)
         raise HTTPException(status_code=500, detail=f'Manual Douyin discovery failed: {str(ex)}')
+
+
+@app.get('/api/shorts-reels/captcha/jobs')
+async def get_captcha_jobs(limit: int = Query(default=50, ge=1, le=500)):
+    query = {'jobType': 'captcha', 'status': 'paused_captcha', 'extra.resolved': {'$ne': True}}
+    items = [normalize(x) for x in logs.find(query).sort([('ranAt', -1)]).limit(limit)]
+    return {'items': items, 'total': len(items)}
+
+
+@app.post('/api/shorts-reels/captcha/jobs/{job_id}/resolve')
+async def resolve_captcha_job(job_id: str):
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid job id')
+
+    result = logs.update_one(
+        {'_id': oid, 'jobType': 'captcha', 'status': 'paused_captcha'},
+        {'$set': {'extra.resolved': True, 'extra.resolvedAt': datetime.utcnow(), 'updatedAt': datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='CAPTCHA job not found')
+
+    updated = logs.find_one({'_id': oid})
+    return {'success': True, 'item': normalize(updated)}
 
 
 @app.get('/healthz')

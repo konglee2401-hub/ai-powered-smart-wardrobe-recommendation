@@ -10,6 +10,8 @@ export const trendAutomationApi = {
   redownloadVideo: (id) => apiClient.post(`${BASE}/videos/${id}/re-download`).then((r) => r.data),
   triggerPendingDownloads: (limit = 200) => apiClient.post(`${BASE}/videos/trigger-pending-downloads`, null, { params: { limit } }).then((r) => r.data),
   getLogs: (params = {}) => apiClient.get(`${BASE}/logs`, { params }).then((r) => r.data),
+  getCaptchaJobs: (params = {}) => apiClient.get(`${BASE}/captcha/jobs`, { params }).then((r) => r.data),
+  resolveCaptchaJob: (jobId) => apiClient.post(`${BASE}/captcha/jobs/${jobId}/resolve`).then((r) => r.data),
   getSettings: () => apiClient.get(`${BASE}/settings`).then((r) => r.data),
   updateSettings: (payload) => apiClient.post(`${BASE}/settings`, payload).then((r) => r.data),
   manualDiscoverPlayboard: (config) => apiClient.post(`${BASE}/playboard/manual-discover`, config).then((r) => r.data),

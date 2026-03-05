@@ -10,6 +10,8 @@ import { fileURLToPath } from 'url';
 import GoogleDriveIntegration from './googleDriveIntegration.js';
 import videoMashupGenerator from './videoMashupGenerator.js';
 import VideoQueueService from './videoQueueService.js';
+import AutoUploadService from './autoUploadService.js';
+import MultiAccountService from './multiAccountService.js';
 import QueueScannerSettings from '../models/QueueScannerSettings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +24,7 @@ class QueueScannerCronJob {
     this.mediaDir = path.join(__dirname, '../media');
     this.isRunning = false;
     this.scheduleIntervalRef = null;
-    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [], platform: 'youtube', enabled: false };
+    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [], platform: 'youtube', youtubePublishType: 'shorts', enabled: false };
     this.settingsLoaded = false;
     this.ensureDirectories();
   }
@@ -129,6 +131,47 @@ class QueueScannerCronJob {
           }
           console.log(`✓ Queue item created: ${queueResult.queueId}`);
 
+          let autoPublishResults = [];
+          if (options.autoPublish && queueResult.success && Array.isArray(options.accountIds) && options.accountIds.length) {
+            for (const accountId of options.accountIds) {
+              const account = MultiAccountService.getRawAccount(accountId);
+              if (!account) {
+                autoPublishResults.push({ accountId, success: false, error: 'Account not found' });
+                continue;
+              }
+
+              const uploadConfig = account.platform === 'youtube'
+                ? { youtubePublishType: String(options.youtubePublishType || 'shorts').toLowerCase() }
+                : {};
+
+              const upload = AutoUploadService.registerUpload({
+                queueId: queueResult.queueId,
+                videoPath: moveResult.filePath,
+                platform: account.platform,
+                accountId,
+                uploadConfig
+              });
+
+              if (!upload.success) {
+                autoPublishResults.push({ accountId, success: false, error: upload.error || 'Register upload failed' });
+                continue;
+              }
+
+              const executed = await AutoUploadService.executeUpload(upload.uploadId, account);
+              if (executed.success) {
+                MultiAccountService.recordPost(accountId);
+              } else {
+                MultiAccountService.recordError(accountId, executed.error || 'Upload failed');
+              }
+
+              autoPublishResults.push({ accountId, ...executed });
+            }
+
+            if (autoPublishResults.some(r => r.success)) {
+              VideoQueueService.updateQueueStatus(queueResult.queueId, 'uploaded');
+            }
+          }
+
           // 5. Mark queue video as processed
           const processedPath = path.join(this.processedDir, queueVideo.name);
           fs.copyFileSync(queueVideo.path, processedPath);
@@ -140,7 +183,9 @@ class QueueScannerCronJob {
             subVideo: subVideo.name,
             mashupId,
             status: 'success',
-            outputPath: moveResult.filePath
+            outputPath: moveResult.filePath,
+            autoPublished: !!options.autoPublish,
+            autoPublishResults
           });
 
         } catch (error) {
@@ -185,6 +230,7 @@ class QueueScannerCronJob {
           autoPublish: !!settings.autoPublish,
           accountIds: settings.accountIds || [],
           platform: settings.platform || 'youtube',
+          youtubePublishType: settings.youtubePublishType || 'shorts',
           enabled: !!settings.enabled
         };
 
@@ -209,7 +255,8 @@ class QueueScannerCronJob {
         intervalMinutes: config.intervalMinutes || 60,
         autoPublish: !!config.autoPublish,
         accountIds: config.accountIds || [],
-        platform: config.platform || 'youtube'
+        platform: config.platform || 'youtube',
+        youtubePublishType: config.youtubePublishType || 'shorts'
       },
       { upsert: true, new: true }
     );
@@ -229,6 +276,7 @@ class QueueScannerCronJob {
       autoPublish: !!options.autoPublish,
       accountIds: options.accountIds || [],
       platform: options.platform || 'youtube',
+      youtubePublishType: options.youtubePublishType || 'shorts',
       enabled: true
     };
 

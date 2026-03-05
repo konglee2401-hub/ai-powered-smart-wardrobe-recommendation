@@ -17,8 +17,8 @@ export class QueueScannerController {
     try {
       await queueScannerCronJob.loadScheduleSettings();
       const persisted = queueScannerCronJob.scheduleConfig || {};
-      const { autoPublish = persisted.autoPublish || false, accountIds = persisted.accountIds || [], platform = persisted.platform || 'youtube' } = req.body || {};
-      const result = await queueScannerCronJob.scanAndProcess({ autoPublish, accountIds, platform });
+      const { autoPublish = persisted.autoPublish || false, accountIds = persisted.accountIds || [], platform = persisted.platform || 'youtube', youtubePublishType = persisted.youtubePublishType || 'shorts' } = req.body || {};
+      const result = await queueScannerCronJob.scanAndProcess({ autoPublish, accountIds, platform, youtubePublishType });
       res.json(result);
     } catch (error) {
       res.status(500).json({
@@ -63,11 +63,11 @@ export class QueueScannerController {
    */
   static async initialize(req, res) {
     try {
-      const { intervalMinutes = 60, autoPublish = false, accountIds = [], platform = 'youtube', enabled = true } = req.body;
+      const { intervalMinutes = 60, autoPublish = false, accountIds = [], platform = 'youtube', youtubePublishType = 'shorts', enabled = true } = req.body;
       let scheduleConfig;
 
       if (enabled) {
-        scheduleConfig = queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform }, { persist: true });
+        scheduleConfig = queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform, youtubePublishType }, { persist: true });
       } else {
         scheduleConfig = queueScannerCronJob.disableSchedule({ persist: true });
       }
@@ -112,11 +112,12 @@ export class QueueScannerController {
         autoPublish = false,
         accountIds = [],
         platform = 'youtube',
+        youtubePublishType = 'shorts',
         enabled = true
       } = req.body || {};
 
       const schedule = enabled
-        ? queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform }, { persist: true })
+        ? queueScannerCronJob.initializeSchedule(intervalMinutes, { autoPublish, accountIds, platform, youtubePublishType }, { persist: true })
         : queueScannerCronJob.disableSchedule({ persist: true });
 
       if (!enabled) {
@@ -126,6 +127,7 @@ export class QueueScannerController {
           autoPublish,
           accountIds,
           platform,
+          youtubePublishType,
           enabled: false
         });
       }

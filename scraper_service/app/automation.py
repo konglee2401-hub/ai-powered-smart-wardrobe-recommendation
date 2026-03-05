@@ -1016,7 +1016,10 @@ async def _collect_dailyhaha_cards() -> List[Dict]:
     return cards
 
 
-async def discover_dailyhaha(topic: str = 'hai'):
+async def discover_dailyhaha(topic: str):
+    setting = get_or_create_settings()
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    min_views = min(int(setting.get('minViewsFilter', 100000) or 100000), 10000)
     cards = await _collect_dailyhaha_cards()
     found = 0
 
@@ -1025,7 +1028,9 @@ async def discover_dailyhaha(topic: str = 'hai'):
         views = int(card.get('views', 0) or 0)
         page_url = card.get('url', '')
 
-        if not page_url:
+        if views < min_views or not page_url:
+            continue
+        if not match_topic(title, topic, keywords):
             continue
 
         video_slug = page_url.rstrip('/').split('/')[-1].replace('.htm', '').strip()
@@ -1044,7 +1049,7 @@ async def discover_dailyhaha(topic: str = 'hai'):
         if not youtube_id or not YOUTUBE_VIDEO_ID_RE.match(youtube_id):
             continue
 
-        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', 'hai')
+        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', topic)
         v = upsert_video(
             {
                 'platform': 'dailyhaha',
@@ -1052,7 +1057,7 @@ async def discover_dailyhaha(topic: str = 'hai'):
                 'title': title,
                 'views': views,
                 'url': youtube_url,
-                'topic': 'hai',
+                'topic': topic,
                 'thumbnail': card.get('thumbnail') or f'https://img.youtube.com/vi/{youtube_id}/maxresdefault.jpg',
                 'channelId': channel['_id'],
             }
@@ -1060,10 +1065,45 @@ async def discover_dailyhaha(topic: str = 'hai'):
         await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
         found += 1
 
-    print(f'[DailyHaha all] -> queued {found} videos')
+    print(f'[DailyHaha {topic}] -> queued {found} videos')
     return found
 
 
+async def _douyin_has_captcha(page) -> bool:
+    try:
+        detected = await page.evaluate(
+            """() => {
+                const selectors = [
+                    '.captcha-verify',
+                    '.secsdk-captcha',
+                    '[class*="captcha"]',
+                    '[id*="captcha"]',
+                ];
+                for (const sel of selectors) {
+                    if (document.querySelector(sel)) return true;
+                }
+
+                const text = (document.body?.innerText || '').toLowerCase();
+                return text.includes('captcha') || text.includes('验证') || text.includes('安全验证') || text.includes('请完成验证');
+            }"""
+        )
+        return bool(detected)
+    except Exception:
+        return False
+
+
+def _log_douyin_captcha_event(topic: str, url: str, reason: str = '') -> None:
+    log_job(
+        'captcha',
+        'paused_captcha',
+        platform='douyin',
+        topic=topic,
+        error=reason or 'douyin captcha detected',
+        source='douyin-search',
+        targetUrl=url,
+        resolved=False,
+        resolvedAt=None,
+    )
 
 
 async def _collect_douyin_cards(topic: str) -> List[Dict]:
@@ -1098,37 +1138,24 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                     viewport={'width': 1366, 'height': 920},
                 )
                 page = await context.new_page()
-                await page.add_init_script(
-                    """
-                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                    Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh', 'vi-VN', 'vi', 'en-US', 'en'] });
-                    """
-                )
 
                 try:
                     await page.goto(search_url, wait_until='domcontentloaded', timeout=timeout_ms)
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(3)
+
+                    if await _douyin_has_captcha(page):
+                        _log_douyin_captcha_event(topic, search_url, 'captcha detected at page load')
+                        print('[douyin] captcha detected at page load; waiting for manual resolve')
+                        return []
+
                     await human_scroll(page, 8)
 
-                    diagnostics = await page.evaluate(
-                        """() => {
-                            const bodyText = (document.body?.innerText || '').slice(0, 4000);
-                            const challengeWords = ['验证', '验证码', '风控', 'captcha', 'robot'];
-                            const hasChallenge = challengeWords.some(w => bodyText.toLowerCase().includes(w.toLowerCase()));
-                            return {
-                                page_title: document.title || '',
-                                href_total: document.querySelectorAll('a[href]').length,
-                                video_links: document.querySelectorAll('a[href*="/video/"]').length,
-                                note_links: document.querySelectorAll('a[href*="/note/"]').length,
-                                user_links: document.querySelectorAll('a[href*="/user/"]').length,
-                                has_challenge: hasChallenge,
-                            };
-                        }"""
-                    )
-                    print(f"[douyin][debug] diagnostics={diagnostics}")
+                    if await _douyin_has_captcha(page):
+                        _log_douyin_captcha_event(topic, search_url, 'captcha detected after scroll')
+                        print('[douyin] captcha detected after scroll; waiting for manual resolve')
+                        return []
 
                     raw_cards = await page.evaluate(
-
                         """() => {
                             const normalize = (href) => {
                                 if (!href) return '';
@@ -1137,8 +1164,7 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                                 return `https://www.douyin.com${href}`;
                             };
 
-                            const links = Array.from(document.querySelectorAll('a[href*="/video/"], a[href*="/note/"], a[href*="/share/video/"]'));
-
+                            const links = Array.from(document.querySelectorAll('a[href*="/video/"]'));
                             const out = [];
                             const seen = new Set();
 
@@ -1165,39 +1191,16 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                                 if (out.length >= 80) break;
                             }
 
-                            if (out.length === 0) {
-                                const html = document.documentElement?.innerHTML || '';
-                                const regex = new RegExp('(?:\\\\/|/)(?:video|note)(?:\\\\/|/)(\\d{8,22})', 'g');
-
-                                const ids = new Set();
-                                let match;
-                                while ((match = regex.exec(html)) !== null) {
-                                    const id = match[1];
-                                    if (!id || ids.has(id)) continue;
-                                    ids.add(id);
-                                    out.push({
-                                        url: `https://www.douyin.com/video/${id}`,
-                                        title: `Douyin video ${id}`,
-                                        channel_url: '',
-                                        channel_name: '',
-                                    });
-                                    if (out.length >= 80) break;
-                                }
-                            }
-
                             return out;
 
                         }"""
                     )
 
-                    invalid_count = 0
                     for item in raw_cards or []:
                         url = str(item.get('url') or '').strip()
                         video_id = extract_douyin_id(url)
                         if not url or not video_id.isdigit():
-                            invalid_count += 1
                             continue
-
 
                         channel_url = str(item.get('channel_url') or '').strip()
                         channel_match = re.search(r'/user/([^/?]+)', channel_url)
@@ -1214,8 +1217,7 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
                             'thumbnail': '',
                         })
 
-                    print(f'[douyin] collected {len(cards)} cards for topic={topic} (invalid_id_or_url={invalid_count})')
-
+                    print(f'[douyin] collected {len(cards)} cards for topic={topic}')
                 finally:
                     await context.close()
                     await browser.close()
@@ -1403,31 +1405,27 @@ async def discover_all():
         )
 
         for topic in TOPICS:
-            if use_playboard:
-                for cfg in active_configs:
-                    await asyncio.sleep(12 + random.random() * 5)
-                    try:
-                        print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
-                        result = await discover_playboard(cfg, topic)
-                        found += int(result.get('itemsFound', 0))
-                    except Exception as e:
-                        print(f"[DEBUG] discover_playboard failed: {e}")
+            for cfg in active_configs:
+                await asyncio.sleep(12 + random.random() * 5)
+                try:
+                    print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
+                    result = await discover_playboard(cfg, topic)
+                    found += int(result.get('itemsFound', 0))
+                except Exception as e:
+                    print(f"[DEBUG] discover_playboard failed: {e}")
             try:
                 if use_youtube:
                     found += await discover_youtube(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_youtube failed: {e}")
             try:
-                if use_douyin:
-                    found += await discover_douyin(topic)
+                found += await discover_dailyhaha(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_dailyhaha failed: {e}")
+            try:
+                found += await discover_douyin(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_douyin failed: {e}")
-
-        try:
-            if use_dailyhaha:
-                found += await discover_dailyhaha('hai')
-        except Exception as e:
-            print(f"[DEBUG] discover_dailyhaha failed: {e}")
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
         return {'success': True, 'itemsFound': found}
