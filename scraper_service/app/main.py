@@ -455,6 +455,33 @@ async def manual_discover_douyin(payload: dict | None = None):
         raise HTTPException(status_code=500, detail=f'Manual Douyin discovery failed: {str(ex)}')
 
 
+
+
+@app.get('/api/shorts-reels/captcha/jobs')
+async def get_captcha_jobs(limit: int = Query(default=50, ge=1, le=500)):
+    query = {'jobType': 'captcha', 'status': 'paused_captcha', 'extra.resolved': {'$ne': True}}
+    items = [normalize(x) for x in logs.find(query).sort([('ranAt', -1)]).limit(limit)]
+    return {'items': items, 'total': len(items)}
+
+
+@app.post('/api/shorts-reels/captcha/jobs/{job_id}/resolve')
+async def resolve_captcha_job(job_id: str):
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid job id')
+
+    result = logs.update_one(
+        {'_id': oid, 'jobType': 'captcha', 'status': 'paused_captcha'},
+        {'$set': {'extra.resolved': True, 'extra.resolvedAt': datetime.utcnow(), 'updatedAt': datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='CAPTCHA job not found')
+
+    updated = logs.find_one({'_id': oid})
+    return {'success': True, 'item': normalize(updated)}
+
+
 @app.get('/healthz')
 async def healthz():
     return {'ok': True, 'time': time.time()}

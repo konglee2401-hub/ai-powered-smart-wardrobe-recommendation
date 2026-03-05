@@ -69,6 +69,8 @@ export default function ShortsReelsDashboard() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [data, setData] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [captchaJobs, setCaptchaJobs] = useState([]);
+  const [resolvingCaptchaId, setResolvingCaptchaId] = useState(null);
   const [selected, setSelected] = useState({
     category: 'All',
     dimension: 'Most Viewed',
@@ -95,12 +97,37 @@ export default function ShortsReelsDashboard() {
     }
   };
 
+
+  const fetchCaptchaJobs = async () => {
+    try {
+      const result = await trendAutomationApi.getCaptchaJobs({ limit: 20 });
+      setCaptchaJobs(result?.items || []);
+    } catch (err) {
+      console.error('Failed to load captcha jobs:', err);
+    }
+  };
+
+  const resolveCaptcha = async (jobId) => {
+    setResolvingCaptchaId(jobId);
+    try {
+      await trendAutomationApi.resolveCaptchaJob(jobId);
+      await fetchCaptchaJobs();
+    } catch (err) {
+      alert(`Resolve CAPTCHA failed: ${err.message}`);
+    } finally {
+      setResolvingCaptchaId(null);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchUploadStatus();
+    fetchCaptchaJobs();
     const timer = setInterval(() => {
       fetchData();
       fetchUploadStatus();
+      fetchCaptchaJobs();
+    fetchCaptchaJobs();
     }, 15000);
     return () => clearInterval(timer);
   }, []);
@@ -154,6 +181,8 @@ export default function ShortsReelsDashboard() {
       alert(`Upload started: ${result.processed} videos queued`);
       setTimeout(() => {
         fetchUploadStatus();
+      fetchCaptchaJobs();
+    fetchCaptchaJobs();
         fetchData();
       }, 1000);
     } catch (err) {
@@ -211,6 +240,32 @@ export default function ShortsReelsDashboard() {
               <p className="text-indigo-300 text-sm font-medium">With Assets</p>
               <p className="text-3xl font-bold text-indigo-200 mt-1">{uploadStatus.withAssets}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {captchaJobs.length > 0 && (
+        <div className="bg-orange-900/40 border border-orange-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-lg font-semibold text-orange-200">CAPTCHA Required ({captchaJobs.length})</h3>
+          <p className="text-sm text-orange-300">Douyin scraper detected CAPTCHA. Please resolve manually in browser profile/proxy, then mark resolved.</p>
+          <div className="space-y-2">
+            {captchaJobs.slice(0, 5).map((job) => (
+              <div key={job._id} className="bg-orange-950/40 border border-orange-800 rounded p-3 flex items-start justify-between gap-3">
+                <div className="text-sm">
+                  <p className="text-orange-200 font-medium">{job.extra?.targetUrl || 'Douyin task'}</p>
+                  <p className="text-orange-400 text-xs">{job.error || 'captcha detected'} · {job.topic || '-'} · {new Date(job.ranAt).toLocaleString()}</p>
+                </div>
+                <button
+                  onClick={() => resolveCaptcha(job._id)}
+                  disabled={resolvingCaptchaId === job._id}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 rounded text-xs font-medium"
+                >
+                  {resolvingCaptchaId === job._id ? 'Resolving...' : 'Mark Resolved'}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

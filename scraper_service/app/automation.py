@@ -1072,6 +1072,43 @@ async def discover_dailyhaha(topic: str):
 
 
 
+async def _douyin_has_captcha(page) -> bool:
+    try:
+        detected = await page.evaluate(
+            """() => {
+                const selectors = [
+                    '.captcha-verify',
+                    '.secsdk-captcha',
+                    '[class*="captcha"]',
+                    '[id*="captcha"]',
+                ];
+                for (const sel of selectors) {
+                    if (document.querySelector(sel)) return true;
+                }
+
+                const text = (document.body?.innerText || '').toLowerCase();
+                return text.includes('captcha') || text.includes('验证') || text.includes('安全验证') || text.includes('请完成验证');
+            }"""
+        )
+        return bool(detected)
+    except Exception:
+        return False
+
+
+def _log_douyin_captcha_event(topic: str, url: str, reason: str = '') -> None:
+    log_job(
+        'captcha',
+        'paused_captcha',
+        platform='douyin',
+        topic=topic,
+        error=reason or 'douyin captcha detected',
+        source='douyin-search',
+        targetUrl=url,
+        resolved=False,
+        resolvedAt=None,
+    )
+
+
 async def _collect_douyin_cards(topic: str) -> List[Dict]:
     keyword = DOUYIN_TOPIC_KEYWORDS.get(topic, topic)
     search_url = DOUYIN_SEARCH_BASE.format(keyword=quote(keyword))
@@ -1107,8 +1144,19 @@ async def _collect_douyin_cards(topic: str) -> List[Dict]:
 
                 try:
                     await page.goto(search_url, wait_until='domcontentloaded', timeout=timeout_ms)
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(3)
+
+                    if await _douyin_has_captcha(page):
+                        _log_douyin_captcha_event(topic, search_url, 'captcha detected at page load')
+                        print('[douyin] captcha detected at page load; waiting for manual resolve')
+                        return []
+
                     await human_scroll(page, 8)
+
+                    if await _douyin_has_captcha(page):
+                        _log_douyin_captcha_event(topic, search_url, 'captcha detected after scroll')
+                        print('[douyin] captcha detected after scroll; waiting for manual resolve')
+                        return []
 
                     raw_cards = await page.evaluate(
                         """() => {
