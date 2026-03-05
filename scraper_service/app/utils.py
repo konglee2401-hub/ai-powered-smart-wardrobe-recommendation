@@ -87,4 +87,3 @@ def extract_douyin_id(url: str) -> str:
             return m.group(1)
 
     return raw if raw.isdigit() else ''
-

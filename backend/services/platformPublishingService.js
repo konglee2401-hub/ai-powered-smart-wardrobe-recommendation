@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+const YOUTUBE_UPLOAD_TYPES = ['shorts', 'video'];
+
 class PlatformPublishingService {
   constructor() {
     this.defaultTimeout = 45000;
@@ -39,6 +41,25 @@ class PlatformPublishingService {
     if (!videoPath || !fs.existsSync(videoPath)) {
       throw new Error(`Video file not found at path: ${videoPath}`);
     }
+  }
+
+
+  normalizeYouTubeUploadConfig(uploadConfig = {}) {
+    const normalizedType = String(
+      uploadConfig.youtubePublishType ||
+      uploadConfig.youtubeUploadType ||
+      uploadConfig.youtubeContentType ||
+      'shorts'
+    ).toLowerCase();
+
+    if (!YOUTUBE_UPLOAD_TYPES.includes(normalizedType)) {
+      throw new Error(`youtubePublishType is required and must be one of: ${YOUTUBE_UPLOAD_TYPES.join(', ')}`);
+    }
+
+    return {
+      ...uploadConfig,
+      youtubePublishType: normalizedType
+    };
   }
 
   getCredentials(account) {
@@ -122,15 +143,23 @@ class PlatformPublishingService {
     const creds = this.getCredentials(account);
     if (!creds.accessToken) throw new Error('YouTube access token is required');
 
+    const normalizedUploadConfig = this.normalizeYouTubeUploadConfig(uploadConfig);
+    const isShorts = normalizedUploadConfig.youtubePublishType === 'shorts';
+
+    const existingTags = Array.isArray(normalizedUploadConfig.tags) ? normalizedUploadConfig.tags : [];
+    const tags = isShorts && !existingTags.map(t => String(t).toLowerCase()).includes('shorts')
+      ? [...existingTags, 'shorts']
+      : existingTags;
+
     const snippet = {
-      title: uploadConfig.title || 'Auto published mashup video',
-      description: uploadConfig.description || 'Published by scheduler',
-      tags: uploadConfig.tags || [],
-      categoryId: uploadConfig.categoryId || '22'
+      title: normalizedUploadConfig.title || 'Auto published mashup video',
+      description: normalizedUploadConfig.description || 'Published by scheduler',
+      tags,
+      categoryId: normalizedUploadConfig.categoryId || '22'
     };
 
     const status = {
-      privacyStatus: uploadConfig.privacy || 'private'
+      privacyStatus: normalizedUploadConfig.privacy || 'private'
     };
 
     const data = await this.request('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
@@ -146,8 +175,9 @@ class PlatformPublishingService {
     return {
       platform: 'youtube',
       platformPostId: data?.id || null,
-      uploadUrl: data?.id ? `https://youtube.com/watch?v=${data.id}` : null,
-      rawResponse: data
+      uploadUrl: data?.id ? (isShorts ? `https://www.youtube.com/shorts/${data.id}` : `https://youtube.com/watch?v=${data.id}`) : null,
+      rawResponse: data,
+      youtubePublishType: normalizedUploadConfig.youtubePublishType
     };
   }
 
