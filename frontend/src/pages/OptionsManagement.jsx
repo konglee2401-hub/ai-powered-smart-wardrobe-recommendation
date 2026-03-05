@@ -44,11 +44,17 @@ const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
 
 function normalizeSceneLockedImageUrls(scene = {}) {
   const fromScene = scene?.sceneLockedImageUrls || {};
+  const history = Array.isArray(scene?.sceneLockedImageHistory) ? scene.sceneLockedImageHistory : [];
+
+  const first16 = history.find((item) => item && item.aspectRatio === '16:9');
+  const first9 = history.find((item) => item && item.aspectRatio === '9:16');
+
   return {
-    '16:9': fromScene['16:9'] || null,
-    '9:16': fromScene['9:16'] || scene.sceneLockedImageUrl || null
+    '16:9': fromScene['16:9'] || first16?.url || null,
+    '9:16': fromScene['9:16'] || scene.sceneLockedImageUrl || first9?.url || null
   };
 }
+
 
 
 function normalizeSceneLockedImageHistory(scene = {}) {

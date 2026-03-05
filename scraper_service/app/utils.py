@@ -49,15 +49,17 @@ def match_topic(text: str, topic: str, keywords: list[str]) -> bool:
     t = (text or '').lower()
     normalized_topic = (topic or '').strip().lower()
 
+    # Ưu tiên keyword list cấu hình trong settings
     if any((k or '').lower() in t for k in (keywords or [])):
         return True
 
+    # Bổ sung thêm nhiều keyword phổ biến: viral, shorts, comedy, laugh, vlog, v.v.
     topic_patterns = {
-        'funny': r'funny|comedy|hài|meme|joke|lol',
-        'hai': r'funny|comedy|hài|meme|joke|lol',
-        'dance': r'dance|nhảy|vũ đạo|choreo|choreography',
-        'sexy dance': r'sexy\s*dance|hot\s*dance|tiktok\s*dance|dance|nhảy|vũ đạo',
-        'cooking': r'cook|cooking|recipe|nấu|món|bếp|food',
+        'funny': r'funny|comedy|hài|meme|joke|lol|laugh|laughs|lmao|rofl|viral|viral\s*video|shorts|skit|prank',
+        'hai': r'funny|comedy|hài|meme|joke|lol|cười|hài hước|viral|shorts|truyện cười',
+        'dance': r'dance|nhảy|vũ đạo|choreo|choreography|kpop|tiktok\s*dance|viral\s*dance',
+        'sexy dance': r'sexy\s*dance|hot\s*dance|tiktok\s*dance|dance|nhảy|vũ đạo|sexy|gợi cảm',
+        'cooking': r'cook|cooking|recipe|nấu|món|bếp|food|chef|kitchen|ăn ngon',
     }
 
     pattern = topic_patterns.get(normalized_topic)
@@ -65,6 +67,7 @@ def match_topic(text: str, topic: str, keywords: list[str]) -> bool:
         return bool(re.search(pattern, t))
 
     return False
+
 
 
 

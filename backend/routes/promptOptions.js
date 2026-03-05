@@ -59,15 +59,57 @@ function normalizeSceneLockedImageUrls(input = null) {
   return normalized;
 }
 
+/**
+ * 💫 NEW: Convert absolute file paths to proxy URLs
+ * If URL is a file path, extract filename and return proxy URL
+ * If URL is already an HTTP URL, return as-is
+ */
+function convertFilePathToProxyUrl(filePath = '') {
+  if (!filePath || typeof filePath !== 'string') {
+    return null;
+  }
+
+  filePath = filePath.trim();
+  if (!filePath) return null;
+
+  // Already an HTTP URL, return as-is
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    return filePath;
+  }
+
+  // Extract filename from absolute or relative path
+  const fileName = path.basename(filePath);
+  if (!fileName) return filePath; // Not a valid path
+
+  // Convert to proxy URL
+  return `/api/prompt-options/scene-locks/${fileName}`;
+}
+
+/**
+ * 💫 NEW: Convert all image URLs in the object to proxy URLs
+ */
+function convertSceneLockedImageUrlsToProxy(imageUrls = {}) {
+  if (!imageUrls || typeof imageUrls !== 'object') {
+    return normalizeSceneLockedImageUrls(null);
+  }
+
+  const result = {
+    '16:9': convertFilePathToProxyUrl(imageUrls['16:9']),
+    '9:16': convertFilePathToProxyUrl(imageUrls['9:16'])
+  };
+
+  return result;
+}
+
 function getSceneLockedImageUrlByAspect(scene = {}, aspectRatio = null) {
   const normalized = normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls);
   const aspect = typeof aspectRatio === 'string' ? aspectRatio.trim() : '';
 
   if (SCENE_LOCK_ASPECTS.includes(aspect) && normalized[aspect]) {
-    return normalized[aspect];
+    return convertFilePathToProxyUrl(normalized[aspect]);
   }
 
-  return scene.sceneLockedImageUrl || normalized['9:16'] || normalized['16:9'] || null;
+  return convertFilePathToProxyUrl(scene.sceneLockedImageUrl) || convertFilePathToProxyUrl(normalized['9:16']) || convertFilePathToProxyUrl(normalized['16:9']) || null;
 }
 
 function resolveMimeTypeFromPath(filePath = '') {
@@ -186,7 +228,7 @@ router.get('/scenes/lock-manager', async (req, res) => {
 
     const normalizedScenes = scenes.map((scene) => ({
       ...scene,
-      sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+      sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(scene.sceneLockedImageUrls),
       sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
     }));
 
@@ -322,7 +364,7 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
         value,
         aspectRatio: normalizedAspect,
         samples,
-        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(scene.sceneLockedImageUrls),
         sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
       }
     });
@@ -390,8 +432,8 @@ router.post('/scenes/:value/select-lock-image', async (req, res) => {
       success: true,
       data: {
         value,
-        sceneLockedImageUrl: scene.sceneLockedImageUrl || null,
-        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageUrl: convertFilePathToProxyUrl(scene.sceneLockedImageUrl),
+        sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(scene.sceneLockedImageUrls),
         sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
       }
     });
@@ -445,8 +487,8 @@ router.delete('/scenes/:value/locked-images', async (req, res) => {
       success: true,
       data: {
         value,
-        sceneLockedImageUrl: scene.sceneLockedImageUrl || null,
-        sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
+        sceneLockedImageUrl: convertFilePathToProxyUrl(scene.sceneLockedImageUrl),
+        sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(scene.sceneLockedImageUrls),
         sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
       }
     });
@@ -549,7 +591,7 @@ router.get('/', async (req, res) => {
       sceneNegativePrompt: option.sceneNegativePrompt || null,
       sceneNegativePromptVi: option.sceneNegativePromptVi || null,
       sceneLockedImageUrl: getSceneLockedImageUrlByAspect(option),
-      sceneLockedImageUrls: normalizeSceneLockedImageUrls(option.sceneLockedImageUrls),
+      sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(option.sceneLockedImageUrls),
       sceneLockSamples: option.sceneLockSamples || [],
       sceneLockedImageHistory: normalizeSceneLockedImageHistory(option.sceneLockedImageHistory),
       useSceneLock: typeof option.useSceneLock === 'boolean' ? option.useSceneLock : true,
@@ -696,6 +738,54 @@ router.post('/ai-extract', async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 💫 NEW: GET /api/prompt-options/scene-locks/:fileId
+ * Serve scene lock sample images from the backend temp directory
+ */
+router.get('/scene-locks/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    // Security: ensure fileId doesn't contain path traversal
+    if (fileId.includes('..') || fileId.includes('/') || fileId.includes('\\')) {
+      return res.status(400).json({ success: false, message: 'Invalid file ID' });
+    }
+
+    const sceneLockDir = path.join(process.cwd(), 'backend', 'temp', 'scene-locks');
+    const filePath = path.join(sceneLockDir, fileId);
+
+    // Ensure the file is within the scene-locks directory
+    const resolvedPath = path.resolve(filePath);
+    const resolvedDir = path.resolve(sceneLockDir);
+    if (!resolvedPath.startsWith(resolvedDir)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Scene lock image not found' });
+    }
+
+    const fileExt = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp'
+    };
+
+    const mimeType = mimeTypes[fileExt] || 'image/jpeg';
+    res.set('Content-Type', mimeType);
+    res.set('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('❌ Scene lock image serving failed:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to serve image' });
   }
 });
 

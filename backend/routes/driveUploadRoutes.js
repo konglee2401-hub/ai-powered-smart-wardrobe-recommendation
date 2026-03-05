@@ -78,8 +78,55 @@ router.post('/auth/refresh', async (req, res) => {
 });
 
 /**
+ * GET /api/drive/auth-callback
+ * Handle OAuth callback from Google (receives code as query parameter)
+ */
+router.get('/auth-callback', async (req, res) => {
+  try {
+    const { code, error } = req.query;
+    
+    // Check for OAuth errors
+    if (error) {
+      console.error('❌ OAuth error:', error);
+      return res.status(400).json({
+        success: false,
+        message: 'OAuth authentication failed',
+        error: error,
+      });
+    }
+    
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: 'Authorization code required',
+      });
+    }
+
+    console.log('✅ Received OAuth authorization code, processing...');
+    const result = await driveService.handleAuthCallback(code);
+    
+    // Initialize folder structure after authentication
+    await driveService.initializeFolderStructure();
+
+    res.json({
+      success: true,
+      authenticated: true,
+      message: 'Authenticated successfully',
+      notice: '✅ Google Drive authenticated! You can now upload files.',
+    });
+  } catch (error) {
+    console.error('❌ OAuth callback error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Authentication callback failed',
+      error: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/drive/auth-callback
- * Handle OAuth callback
+ * Handle OAuth callback (alternate POST method)
  */
 router.post('/auth-callback', async (req, res) => {
   try {
