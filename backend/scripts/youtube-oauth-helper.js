@@ -13,10 +13,16 @@ const backendRoot = path.resolve(__dirname, '..');
 // Load .env
 dotenv.config({ path: path.join(backendRoot, '../.env') });
 
-const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID || process.env.OAUTH_CLIENT_ID;
-const clientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET || process.env.OAUTH_CLIENT_SECRET;
-const redirectUri = process.env.YOUTUBE_OAUTH_REDIRECT_URI || 'http://localhost:5000/api/shorts-reels/youtube/oauth/callback';
-const tokenPath = path.join(backendRoot, 'config/youtube-token.json');
+const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID;
+const clientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
+const redirectUri = process.env.YOUTUBE_OAUTH_REDIRECT_URI;
+const tokenPath = path.join(backendRoot, process.env.YOUTUBE_OAUTH_TOKEN_PATH || 'config/youtube-token.json');
+
+// Debug logging
+console.log('\n📋 OAuth Configuration:');
+console.log(`   CLIENT_ID: ${clientId ? clientId.substring(0, 20) + '...' : '❌ NOT SET'}`);
+console.log(`   CLIENT_SECRET: ${clientSecret ? '✓' : '❌ NOT SET'}`);
+console.log(`   REDIRECT_URI: ${redirectUri}\n`);
 
 async function main() {
   const cmd = process.argv[2];

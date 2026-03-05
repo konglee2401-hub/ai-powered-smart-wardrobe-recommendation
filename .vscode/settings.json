@@ -25,5 +25,25 @@
             "approve": true,
             "matchCommandLine": true
         }
+    },
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/temp": true,
+        "**/.env": true,
+        "**/.env.local": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/uploads": true,
+        "**/downloads": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/*.log": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/temp": true,
+        "**/uploads": true,
+        "**/downloads": true,
+        "**/media": true
     }
 }

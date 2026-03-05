@@ -415,22 +415,40 @@ class SettingsManager {
 
   /**
    * Select Radix UI tab by CSS selector
+   * IMPORTANT: Only searches within settings popup container to avoid clicking dashboard header tabs
    */
   async selectRadixTab(selector, displayName) {
     console.log(`   > Selecting ${displayName}...`);
     
     try {
       const buttonInfo = await this.page.evaluate((sel) => {
-        const btn = document.querySelector(sel);
+        // 🔒 CRITICAL FIX: Only search within settings popup menu, NOT entire document
+        // This prevents clicking dashboard header tabs which cause full-page navigation
+        
+        // First, find the settings popup container
+        const settingsPopup = document.querySelector(
+          '[data-radix-menu-content], [role="menu"][data-state="open"], .DropdownMenuContent'
+        );
+        
+        if (!settingsPopup) {
+          console.warn('⚠️  Settings popup container not found');
+          return { found: false, error: 'no-popup' };
+        }
+        
+        // Only search within the settings popup, never in document root
+        const btn = settingsPopup.querySelector(sel);
         
         if (!btn) {
-          return { found: false };
+          // Debug: show what's in the popup
+          const allTabs = Array.from(settingsPopup.querySelectorAll('button[role="tab"]'));
+          console.warn(`⚠️  Tab not found in settings popup. Available tabs: ${allTabs.map(t => t.textContent.trim()).join(', ')}`);
+          return { found: false, error: 'tab-not-in-popup' };
         }
         
         const rect = btn.getBoundingClientRect();
         
         if (rect.width === 0 || rect.height === 0) {
-          return { found: false };
+          return { found: false, error: 'hidden' };
         }
         
         return {
@@ -442,10 +460,11 @@ class SettingsManager {
       }, selector);
 
       if (!buttonInfo.found) {
-        console.warn(`   ⚠️  Not found`);
+        console.warn(`   ⚠️  Tab not found (${buttonInfo.error || 'unknown'})`);
         return false;
       }
 
+      console.log(`   ✓ Found "${buttonInfo.text}" in settings popup`);
       await this.page.mouse.move(buttonInfo.x, buttonInfo.y);
       await this.page.waitForTimeout(100);
       await this.page.mouse.down();

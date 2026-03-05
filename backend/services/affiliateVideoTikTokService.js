@@ -244,14 +244,15 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     await logger.info(`Starting affiliate video TikTok flow`, 'flow-init', {flowId});
     console.log(`\n🎬 Affiliate TikTok Flow [${flowId}]`);
 
-    // Validate files
-    if (!req.files || !req.files.characterImage || !req.files.productImage) {
-      return res.status(400).json({
-        success: false,
-        error: 'Both character and product images are required',
-        stage: 'file-validation'
-      });
-    }
+    // 💫 LOG: Detailed req.files structure
+    console.log(`📊 req.files structure:`, {
+      hasCharacterImage: !!req.files?.characterImage,
+      characterImageLength: req.files?.characterImage?.length,
+      characterImageKeys: req.files?.characterImage?.[0] ? Object.keys(req.files.characterImage[0]) : 'N/A',
+      hasProductImage: !!req.files?.productImage,
+      productImageLength: req.files?.productImage?.length,
+      productImageKeys: req.files?.productImage?.[0] ? Object.keys(req.files.productImage[0]) : 'N/A'
+    });
 
     // Create temp directory
     if (!fs.existsSync(tempDir)) {
@@ -259,40 +260,35 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       console.log(`📁 Created temp directory: ${tempDir}`);
     }
 
-    const characterFile = req.files.characterImage[0];
-    const productFile = req.files.productImage[0];
-    const sceneFile = req.files.sceneImage?.[0] || null;
+    // 💫 Process images: file upload OR base64 from JSON
+    let characterFilePath, productFilePath, sceneImagePath = null;
     
-    // 💫 NEW: Save buffer to temp file if needed
-    let characterFilePath = characterFile.path;
-    let productFilePath = productFile.path;
-    let sceneImagePath = sceneFile?.path || null;
-    
-    if (!characterFilePath && characterFile.buffer) {
-      characterFilePath = path.join(tempDir, `character-${Date.now()}.jpg`);
-      fs.writeFileSync(characterFilePath, characterFile.buffer);
-      console.log(`💾 Saved character image to: ${characterFilePath}`);
-    }
-    
-    if (!productFilePath && productFile.buffer) {
-      productFilePath = path.join(tempDir, `product-${Date.now()}.jpg`);
-      fs.writeFileSync(productFilePath, productFile.buffer);
-      console.log(`💾 Saved product image to: ${productFilePath}`);
+    if (req.files?.characterImage && req.files?.productImage) {
+      // ✅ Traditional file upload - use Multer uploaded files
+      console.log(`📁 Using file uploads from Multer`);
+      const characterFile = req.files.characterImage[0];
+      const productFile = req.files.productImage[0];
+      const sceneFile = req.files.sceneImage?.[0] || null;
+      
+      characterFilePath = characterFile.path;
+      productFilePath = productFile.path;
+      sceneImagePath = sceneFile?.path || null;
+      
+      console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size} bytes)`);
+      console.log(`📦 Product: ${productFile.originalname} (${productFile.size} bytes)`);
+      if (sceneFile) {
+        console.log(`🎭 Scene: ${sceneFile.originalname} (${sceneFile.size} bytes)`);
+      }
+    } else {
+      // 💫 NEW: Accept base64-encoded images from JSON payload
+      console.log(`📄 Using base64 images from JSON payload`);
     }
 
-    if (sceneFile && !sceneImagePath && sceneFile.buffer) {
-      sceneImagePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
-      fs.writeFileSync(sceneImagePath, sceneFile.buffer);
-      console.log(`💾 Saved scene image to: ${sceneImagePath}`);
-    }
-
-    console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size || characterFile.buffer?.length} bytes)`);
-    console.log(`📦 Product: ${productFile.originalname} (${productFile.size || productFile.buffer?.length} bytes)`);
-    if (sceneFile) {
-      console.log(`🎭 Scene (uploaded): ${sceneFile.originalname} (${sceneFile.size || sceneFile.buffer?.length} bytes)`);
-    }
-
+    // Extract parameters from request body
     const {
+      characterImage: characterImageBase64 = null,  // 💫 NEW: Base64 from JSON payload
+      productImage: productImageBase64 = null,      // 💫 NEW: Base64 from JSON payload
+      sceneImage: sceneImageBase64 = null,         // 💫 NEW: Optional base64 scene image
       videoDuration = 20,
       videoDurationUnit = 'seconds',
       voiceGender = 'female',
@@ -302,10 +298,75 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       imageProvider = 'bfl',  // 💫 Default to BFL Playground
       videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {},
-      sceneImage: sceneImageBase64 = null,
-      disableSceneReferenceTransfer = true,  // 💫 NEW: Control scene reference network transfer
+      disableSceneReferenceTransfer = false,  // default false: allow auto scene locked image fallback
       imageSource = { character: 'upload', product: 'upload' }  // 🎯 Track image source from frontend
     } = req.body;
+    
+    // 💫 FIX: Convert base64 images to files if not already provided by Multer
+    if (!characterFilePath && characterImageBase64) {
+      console.log(`🔄 Converting base64 character image to file...`);
+      try {
+        const cleanB64 = characterImageBase64.includes(',') 
+          ? characterImageBase64.split(',')[1] 
+          : characterImageBase64;
+        const charBuffer = Buffer.from(cleanB64, 'base64');
+        characterFilePath = path.join(tempDir, `character-${Date.now()}.jpg`);
+        fs.writeFileSync(characterFilePath, charBuffer);
+        console.log(`✅ Saved character image from base64: ${characterFilePath} (${charBuffer.length} bytes)`);
+      } catch (charError) {
+        console.error(`❌ Failed to process character image:`, charError.message);
+        throw new Error(`Failed to process character image: ${charError.message}`);
+      }
+    }
+    
+    if (!productFilePath && productImageBase64) {
+      console.log(`🔄 Converting base64 product image to file...`);
+      try {
+        const cleanB64 = productImageBase64.includes(',')
+          ? productImageBase64.split(',')[1]
+          : productImageBase64;
+        const prodBuffer = Buffer.from(cleanB64, 'base64');
+        productFilePath = path.join(tempDir, `product-${Date.now()}.jpg`);
+        fs.writeFileSync(productFilePath, prodBuffer);
+        console.log(`✅ Saved product image from base64: ${productFilePath} (${prodBuffer.length} bytes)`);
+      } catch (prodError) {
+        console.error(`❌ Failed to process product image:`, prodError.message);
+        throw new Error(`Failed to process product image: ${prodError.message}`);
+      }
+    }
+    
+    // 🚨 VALIDATE: Ensure both paths exist
+    if (!characterFilePath) {
+      throw new Error(`❌ Character image not provided (no file upload or base64)`);
+    }
+    if (!productFilePath) {
+      throw new Error(`❌ Product image not provided (no file upload or base64)`);
+    }
+    
+    console.log(`✅ Both images ready: character=${characterFilePath}, product=${productFilePath}`);
+    
+    // Process scene image if provided
+    if (sceneImageBase64 && !sceneImagePath) {
+      console.log(`🔄 Converting base64 scene image to file...`);
+      try {
+        const cleanB64 = sceneImageBase64.includes(',')
+          ? sceneImageBase64.split(',')[1]
+          : sceneImageBase64;
+        const sceneBuffer = Buffer.from(cleanB64, 'base64');
+        sceneImagePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
+        fs.writeFileSync(sceneImagePath, sceneBuffer);
+        console.log(`✅ Saved scene image from base64: ${sceneImagePath} (${sceneBuffer.length} bytes)`);
+      } catch (sceneError) {
+        console.warn(`⚠️ Failed to process scene image:`, sceneError.message);
+      }
+    }
+
+    // 💫 NEW: Normalize image source and determine skip policies
+    if (!productFilePath) {
+      throw new Error(`❌ Product image not provided (no file upload or base64)`);
+    }
+    
+    console.log(`✅ Both images ready: character=${characterFilePath}, product=${productFilePath}`);
 
     // 💫 NEW: Normalize image source and determine skip policies
     const normalizedImageSource = {
@@ -314,7 +375,10 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     };
     const skipCharacterDriveUpload = normalizedImageSource.character === 'gallery';
     const skipProductDriveUpload = normalizedImageSource.product === 'gallery';
-    const skipSceneReferenceNetworkTransfer = disableSceneReferenceTransfer !== false;
+    const disableSceneTransfer = typeof disableSceneReferenceTransfer === 'string'
+      ? disableSceneReferenceTransfer.toLowerCase() === 'true'
+      : Boolean(disableSceneReferenceTransfer);
+    const skipSceneReferenceNetworkTransfer = disableSceneTransfer;
 
     // Extract providers from options if not in body directly
     const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
@@ -359,12 +423,46 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       } else {
         try {
           const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: '9:16' }, language);
-          if (sceneInfo?.imageUrl) {
-            const sceneResponse = await axios.get(sceneInfo.imageUrl, { responseType: 'arraybuffer', timeout: 20000 });
-            const sceneExt = path.extname(new URL(sceneInfo.imageUrl).pathname) || '.jpg';
-            finalSceneImagePath = path.join(tempDir, `scene-locked-${Date.now()}${sceneExt}`);
-            fs.writeFileSync(finalSceneImagePath, Buffer.from(sceneResponse.data));
-            console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+          const sceneImageUrl = sceneInfo?.imageUrl ? String(sceneInfo.imageUrl).trim() : '';
+
+          if (sceneImageUrl) {
+            const isHttpUrl = /^https?:\/\//i.test(sceneImageUrl);
+            const sceneExtFromUrl = (() => {
+              try {
+                return path.extname(new URL(sceneImageUrl).pathname) || '.jpg';
+              } catch {
+                return path.extname(sceneImageUrl) || '.jpg';
+              }
+            })();
+            const targetScenePath = path.join(tempDir, `scene-locked-${Date.now()}${sceneExtFromUrl}`);
+
+            if (isHttpUrl) {
+              const sceneResponse = await axios.get(sceneImageUrl, { responseType: 'arraybuffer', timeout: 20000 });
+              fs.writeFileSync(targetScenePath, Buffer.from(sceneResponse.data));
+              finalSceneImagePath = targetScenePath;
+            } else {
+              const normalizedRelative = sceneImageUrl.replace(/^\/+/, '');
+              const candidatePaths = [
+                path.resolve(process.cwd(), normalizedRelative),
+                path.resolve(process.cwd(), '..', normalizedRelative)
+              ];
+
+              const localScenePath = candidatePaths.find(p => fs.existsSync(p));
+              if (localScenePath) {
+                fs.copyFileSync(localScenePath, targetScenePath);
+                finalSceneImagePath = targetScenePath;
+              } else {
+                const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:5000';
+                const absoluteSceneUrl = `${appBaseUrl.replace(/\/$/, '')}/${normalizedRelative}`;
+                const sceneResponse = await axios.get(absoluteSceneUrl, { responseType: 'arraybuffer', timeout: 20000 });
+                fs.writeFileSync(targetScenePath, Buffer.from(sceneResponse.data));
+                finalSceneImagePath = targetScenePath;
+              }
+            }
+
+            if (finalSceneImagePath) {
+              console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+            }
           }
         } catch (sceneLockedError) {
           console.warn(`⚠️ Could not load scene locked image: ${sceneLockedError.message}`);
@@ -544,6 +642,49 @@ Based on character × product compatibility, recommend:
    - Why: Specific reasons for this score
    - Styling tips: How to maximize product appearance on this character
 
+===== CHARACTER IDENTITY LOCK (CRITICAL FOR VIDEO) =====
+For video generation, character MUST remain IDENTICAL across all segments:
+- Face geometry, skin tone, facial features: EXACT same in all frames
+- Body shape, height, proportions: NEVER change regardless of angle
+- Hair: SAME color, style, length throughout
+- Distinctive features: Moles, scars, tattoos - ALL visible features must remain consistent
+- Posture and build: Same lean/curvy/athletic profile in every segment
+
+===== MOTION DESCRIPTIONS (FOR VIDEO SEGMENTS) =====
+Provide detailed second-by-second motion for each segment type:
+
+INTRO segment (0-5 seconds):
+- Second 0-2: [Describes initial pose, gaze, hand position]
+- Second 2-4: [Describes first movement - head turn, hand gesture, or body shift]
+- Second 4-5: [Describes transition to next action]
+
+WEARING segment (5-11 seconds):
+- Second 0-2: [Body language showing off product - turning, gesturing]
+- Second 2-4: [Hand movement - pointing to garment details, adjusting fit]
+- Second 4-6: [Full body movement - walking, posing, arms movement]
+- Second 6-8: [Facial expression - smile, confident gaze toward camera]
+- Second 8-11: [Final pose - standing confidently, hands positioned naturally]
+
+HOLDING segment (11-16 seconds):
+- Second 0-2: [How character holds product - hand position, grip type]
+- Second 2-4: [Arm height and angle - showing product clearly]
+- Second 4-6: [Facial expression - pride/confidence in showing product]
+- Second 6-11: [Slight movements while holding - rotating product, slight pose changes]
+- Second 11-16: [Direct eye contact with camera, inviting expression]
+
+CTA segment (16-20 seconds):
+- Second 0-2: [Final outfit pose - standing tall, confident]
+- Second 2-4: [Gesture toward camera - inviting/engaging motion]
+- Second 4-6: [Hand to product - touching/tapping product area]
+- Second 6-20: [Hold strong pose - steady frame, confident expression, eye contact]
+
+===== LIP SYNC GUIDANCE (IF VOICEOVER EXISTS) =====
+If Vietnamese voiceover is present, sync character mouth movements with audio:
+- Mouth naturally open during vowels (ả, ơ, ư sounds)
+- Lips together during consonants (m, b, p, d, t)
+- Keep mouth movements subtle and natural - no exaggerated lip-popping
+- Maintain consistent speaking style throughout all segments
+
 ===== OUTPUT FORMAT =====
 Return ONLY valid JSON, no other text. Structure:
 
@@ -560,7 +701,13 @@ Return ONLY valid JSON, no other text. Structure:
     "facialFeatures": "brief description",
     "bodyType": "body type description",
     "currentPose": "detailed pose description",
-    "currentAccessories": "what they're wearing/accessories"
+    "currentAccessories": "what they're wearing/accessories",
+    "identityLock": {
+      "faceGeometry": "exact description of face shape and key features",
+      "distinctiveFeatures": "any moles, scars, tattoos, marks to preserve",
+      "buildType": "lean/athletic/curvy/petite - must remain consistent",
+      "skinToneConsistency": "must be exact same tone in all frames"
+    }
   },
   "product": {
     "garment_type": "what is it",
@@ -620,7 +767,14 @@ Return ONLY valid JSON, no other text. Structure:
       "reason": "why this score"
     }
   },
-  "characterDescription": "2-3 sentence vivid description of character for image generation"
+  "characterDescription": "2-3 sentence vivid description of character for image generation",
+  "motionDescriptions": {
+    "intro": "second-by-second detailed motion for intro segment",
+    "wearing": "second-by-second detailed motion for wearing segment",
+    "holding": "second-by-second detailed motion for holding segment",
+    "cta": "second-by-second detailed motion for CTA segment"
+  },
+  "lipSyncGuidance": "lip sync timing and mouth movement guidance if voiceover present"
 }
 
 Focus: ${productFocus}
@@ -1479,6 +1633,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         voicePace,
         productFocus,
         language,  // 💫 Add language to config
+        videoProvider: finalVideoProvider,  // 🔧 FIX: Pass video provider
+        clipDuration: providerClipDuration,  // 🔧 FIX: Pass clip duration
         flowId     // 🔴 CRITICAL: Pass flowId for ChatGPT browser session isolation
       }
     );
@@ -1581,25 +1737,69 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
           let segmentPrompt;
           
+          // 🔴 CRITICAL CHARACTER IDENTITY LOCK INFO from STEP 1 analysis
+          const characterIdentity = analysis?.character || {};
+          const characterDescription = `${characterIdentity.age || ''} ${characterIdentity.gender || ''} with ${characterIdentity.hair?.color || ''} ${characterIdentity.hair?.style || ''} hair, ${characterIdentity.facialFeatures || ''}, ${characterIdentity.bodyType || ''}`;
+          
           if (normalizedLanguage === 'vi') {
             // Vietnamese prompt builder
-            segmentPrompt = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+            let baseTemplate = VietnamesePromptBuilder.buildVideoGenerationPrompt(
               segment.segment,
               productFocus,
               { name: analysis.product?.garment_type, details: analysis.product?.key_details }
             );
+            
+            // 🔴 INJECT CHARACTER IDENTITY LOCK into Vietnamese prompt
+            const identityLock = `\n\n🔒 KHÓA NHÂN VẬT: ${characterDescription}\n`;
+            const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')] 
+              ? `\nCHỈ CHUYỂN ĐỘNG: ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
+              : '';
+            
+            segmentPrompt = baseTemplate + identityLock + motionGuide;
           } else {
-            // English prompt from segment script
-            segmentPrompt = segment.script;
+            // English: Use segment script but ADD character lock info
+            const identityLock = `\n\n[CHARACTER IDENTITY LOCK - CRITICAL]\nMaintain exactly this character: ${characterDescription}\n`;
+            const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')] 
+              ? `[MOTION DIRECTION] ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
+              : '';
+            
+            segmentPrompt = segment.script + identityLock + motionGuide;
           }
 
           console.log(`   📝 Prompt length: ${segmentPrompt.length} chars`);
+          console.log(`   🔒 Character identity locked: ${characterDescription}`);
+        
 
-          // Call generateVideo() with character image variations
+          // 🔧 FIX: Select segment-specific images based on segment type
+          // - INTRO: use wearing image (character first appearance)
+          // - WEARING: use wearing image (showing the product)
+          // - HOLDING: use holding image (character holding product)
+          // - CTA: use wearing image (final call-to-action)
+          let primaryImage, secondaryImage;
+          const segmentType = segment.segment.toLowerCase();
+          
+          if (segmentType.includes('holding')) {
+            // HOLDING segment: use holding image as primary, wearing as secondary
+            primaryImage = imageResults[1].screenshotPath;  // Holding
+            secondaryImage = imageResults[0].screenshotPath;  // Wearing
+            console.log(`   📸 Selected images: PRIMARY=holding, SECONDARY=wearing`);
+          } else if (segmentType.includes('cta') || segmentType.includes('call')) {
+            // CTA segment: use wearing image as primary, product as secondary
+            primaryImage = imageResults[0].screenshotPath;  // Wearing
+            secondaryImage = imageResults[0].screenshotPath;  // Wearing (or product if available)
+            console.log(`   📸 Selected images: PRIMARY=wearing, SECONDARY=wearing`);
+          } else {
+            // INTRO and WEARING: use wearing image as primary, holding as secondary
+            primaryImage = imageResults[0].screenshotPath;  // Wearing
+            secondaryImage = imageResults[1].screenshotPath;  // Holding
+            console.log(`   📸 Selected images: PRIMARY=wearing, SECONDARY=holding`);
+          }
+
+          // Call generateVideo() with segment-specific images
           const videoResult = await videoGen.generateVideo(
             segmentPrompt,
-            imageResults[0].screenshotPath,  // Primary image (variation 1)
-            imageResults[1].screenshotPath,  // Secondary image (variation 2)
+            primaryImage,      // Segment-specific primary image
+            secondaryImage,    // Segment-specific secondary image
             {
               download: true,
               outputPath: tempDir,
@@ -2017,7 +2217,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
   
   try {
     const { characterImages, productImage } = images;  // ✅ Updated: 2 character images (wearing + holding)
-    const { videoDuration, voiceGender, voicePace, productFocus, language = 'en', flowId } = config;
+    const { videoDuration, voiceGender, voicePace, productFocus, language = 'en', videoProvider = 'grok', clipDuration = 10, flowId } = config;
 
     console.log('\n🧠 STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
     console.log(`   Character images: 2 (wearing + holding)`);
@@ -2041,7 +2241,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
         {
           images: characterImages  // ✅ Pass 2 character images (wearing + holding)
         },
-        { videoDuration, voiceGender, voicePace, productFocus, videoProvider, clipDuration }
+        { videoDuration, voiceGender, voicePace, productFocus, videoProvider, clipDuration: clipDuration || getProviderClipDuration(videoProvider) }
       );
     }
 

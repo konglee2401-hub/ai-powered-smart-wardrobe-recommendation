@@ -606,6 +606,94 @@ export default function OneClickCreatorPage() {
     }
   }, [useCase]);
 
+  // 💫 NEW: Auto-fetch scene lock image based on selectedScene + aspectRatio
+  useEffect(() => {
+    const autoFetchSceneImage = async () => {
+      if (!selectedScene || sceneOptions.length === 0) {
+        console.log('⏭️  Skipping scene image fetch: no scene selected or scenes not loaded yet');
+        return;
+      }
+
+      try {
+        const selectedSceneObj = sceneOptions.find(s => s.value === selectedScene);
+        if (!selectedSceneObj) {
+          console.warn(`⚠️  Scene not found: ${selectedScene}`);
+          return;
+        }
+
+        console.log(`🎬 Auto-fetching scene lock image for: ${selectedScene} (aspect: ${aspectRatio})`);
+
+        // Priority 1: Get aspect-specific image from sceneLockedImageUrls
+        let sceneImageUrl = null;
+        if (selectedSceneObj.sceneLockedImageUrls && typeof selectedSceneObj.sceneLockedImageUrls === 'object') {
+          sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[aspectRatio];
+          if (sceneImageUrl) {
+            console.log(`✅ Found aspect-specific image for ${aspectRatio}`);
+          } else {
+            // Fallback: Try other aspect ratio
+            const otherAspect = aspectRatio === '16:9' ? '9:16' : '16:9';
+            sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[otherAspect];
+            if (sceneImageUrl) {
+              console.log(`✅ Using fallback aspect-specific image: ${otherAspect}`);
+            }
+          }
+        }
+
+        // Priority 2: Use generic sceneLockedImageUrl
+        if (!sceneImageUrl && selectedSceneObj.sceneLockedImageUrl) {
+          sceneImageUrl = selectedSceneObj.sceneLockedImageUrl;
+          console.log(`✅ Using generic scene locked image URL`);
+        }
+
+        // Priority 3: Use previewImage
+        if (!sceneImageUrl && selectedSceneObj.previewImage) {
+          sceneImageUrl = selectedSceneObj.previewImage;
+          console.log(`✅ Using preview image as fallback`);
+        }
+
+        if (!sceneImageUrl) {
+          console.warn('⚠️  No scene image URL found for:', selectedScene);
+          return;
+        }
+
+        // Resolve absolute URL
+        let absoluteUrl = sceneImageUrl;
+        if (!sceneImageUrl.startsWith('http://') && !sceneImageUrl.startsWith('https://')) {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+          const baseUrl = apiBase.replace('/api', '');
+          absoluteUrl = `${baseUrl}${sceneImageUrl.startsWith('/') ? '' : '/'}${sceneImageUrl}`;
+        }
+
+        console.log(`🔗 Fetching scene image from: ${absoluteUrl}`);
+
+        // Fetch and convert to base64
+        const response = await fetch(absoluteUrl);
+        if (!response.ok) {
+          console.warn(`⚠️  Failed to fetch scene image: ${response.status}`);
+          return;
+        }
+
+        const blob = await response.blob();
+        if (!blob || blob.size === 0) {
+          console.warn('⚠️  Received empty blob for scene image');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const dataUrl = evt.target?.result;
+          setSceneImage(dataUrl);
+          console.log(`✅ Scene lock image auto-loaded: ${blob.type} (${blob.size} bytes)`);
+        };
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.warn(`⚠️  Failed to auto-fetch scene image: ${error.message}`);
+      }
+    };
+
+    autoFetchSceneImage();
+  }, [selectedScene, aspectRatio, sceneOptions]);
+
   // Add log to session
   const addLog = (sessionId, message) => {
     setSessions(prev => prev.map(s => {
@@ -846,11 +934,11 @@ export default function OneClickCreatorPage() {
       // Extract voice settings
       const [voiceGender, voicePace] = voiceOption.split('-');
       
-      // Construct payload from parameters
+      // Construct payload from parameters - send base64 strings as JSON
       const payload = {
-        characterImage: characterImageBase64,
-        productImage: productImageBase64,
-        sceneImage: sceneImageBase64,  // 💫 NEW: Optional scene image
+        characterImage: characterImageBase64,  // 💫 Keep as base64 string (not Blob)
+        productImage: productImageBase64,      // 💫 Keep as base64 string (not Blob)
+        sceneImage: sceneImageBase64,          // 💫 Keep as base64 string if available
         videoDuration: tiktokVideoDuration,
         voiceGender,
         voicePace,
@@ -862,10 +950,16 @@ export default function OneClickCreatorPage() {
         flowId,  // 💫 Pass flowId in payload to maintain session
         language: language || 'en',  // 💫 Pass language for prompt generation (STEP 1, 3, 4)
         options: recommendedOptions || {},
+        disableSceneReferenceTransfer: false,
         imageSource: imageSource  // 🎯 Pass image source tracking to skip Drive upload for gallery images
       };
       
-      console.log(`📤 Sending request to /api/ai/affiliate-video-tiktok`);
+      console.log(`📤 Sending JSON request to /api/ai/affiliate-video-tiktok`);
+      console.log(`   Character base64: ${characterImageBase64.substring(0, 50)}...${characterImageBase64.length}B`);
+      console.log(`   Product base64: ${productImageBase64.substring(0, 50)}...${productImageBase64.length}B`);
+      if (sceneImageBase64) {
+        console.log(`   Scene base64: ${sceneImageBase64.substring(0, 50)}...${sceneImageBase64.length}B (auto-fetched)`);
+      }
 
       const stopRef = { stop: false };
       const stopPolling = startPreviewPolling(flowId, sessionId, stopRef);
@@ -873,11 +967,17 @@ export default function OneClickCreatorPage() {
       const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       stopRef.stop = true;
       if (typeof stopPolling === 'function') stopPolling();
+
+      // 💫 LOG: Confirm scene image was sent
+      console.log(`📤 FormData sent with:`);
+      console.log(`  Character image: ✅ (${characterImageBase64.length} bytes)`);
+      console.log(`  Product image: ✅ (${productImageBase64.length} bytes)`);
+      console.log(`  Scene image: ${sceneImageBase64 ? '✅ (auto-fetched, ' + sceneImageBase64.length + ' bytes) ' : '❌ (not available)'}`);
 
       if (!mainFlowResponse.ok) {
         const errorData = await mainFlowResponse.json().catch(() => ({}));
@@ -951,7 +1051,9 @@ export default function OneClickCreatorPage() {
     console.log(`Character image length: ${characterImage.length}B`);
     console.log(`Product image length: ${productImage.length}B`);
     if (sceneImage) {
-      console.log(`Scene image length: ${sceneImage.length}B`);
+      console.log(`Scene image length: ${sceneImage.length}B (auto-fetched from scene lock DB)`);
+    } else {
+      console.log(`⚠️  No scene image: user didn't upload and auto-fetch failed`);
     }
     
     const charBase64 = characterImage.split(',')[1];
@@ -963,7 +1065,7 @@ export default function OneClickCreatorPage() {
     console.log(`  Character: ${charBase64?.substring(0, 50)}...${charBase64?.length}B`);
     console.log(`  Product: ${prodBase64?.substring(0, 50)}...${prodBase64?.length}B`);
     if (sceneBase64) {
-      console.log(`  Scene: ${sceneBase64?.substring(0, 50)}...${sceneBase64?.length}B`);
+      console.log(`  Scene: ${sceneBase64?.substring(0, 50)}...${sceneBase64?.length}B (from auto-fetch or manual upload)`);
     }
 
     // Create sessions for each quantity
