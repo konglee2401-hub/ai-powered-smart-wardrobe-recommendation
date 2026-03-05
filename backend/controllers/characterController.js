@@ -240,3 +240,42 @@ export async function getCharacter(req, res) {
   if (!data) return res.status(404).json({ success: false, error: 'Character not found' });
   res.json({ success: true, data });
 }
+
+export async function deleteCharacter(req, res) {
+  try {
+    const { id } = req.params;
+    const character = await CharacterProfile.findById(id);
+    if (!character) {
+      return res.status(404).json({ success: false, error: 'Character not found' });
+    }
+
+    // Delete portrait and reference images from file system
+    const charDir = path.join(process.cwd(), 'uploads', 'characters');
+    if (character.portraitPath && fs.existsSync(character.portraitPath)) {
+      try {
+        fs.unlinkSync(character.portraitPath);
+      } catch (e) {
+        console.warn(`Failed to delete portrait file: ${e.message}`);
+      }
+    }
+
+    if (character.referenceImages && Array.isArray(character.referenceImages)) {
+      character.referenceImages.forEach((ref) => {
+        if (ref.path && fs.existsSync(ref.path)) {
+          try {
+            fs.unlinkSync(ref.path);
+          } catch (e) {
+            console.warn(`Failed to delete reference image: ${e.message}`);
+          }
+        }
+      });
+    }
+
+    // Delete from database
+    await CharacterProfile.findByIdAndDelete(id);
+    res.json({ success: true, message: 'Character deleted successfully' });
+  } catch (error) {
+    console.error('[CHAR] Delete error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
