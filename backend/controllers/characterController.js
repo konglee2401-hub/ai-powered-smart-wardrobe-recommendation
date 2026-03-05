@@ -324,6 +324,78 @@ export async function saveCharacterProfile(req, res) {
   }
 }
 
+export async function regenerateCharacterImage(req, res) {
+  let portraitPath = null;
+  try {
+    const { id } = req.params;
+    const { imageIndex = 0 } = req.body;
+    const portrait = req.file;
+
+    if (!id || !portrait) {
+      return res.status(400).json({ success: false, error: 'Character ID and portrait image are required' });
+    }
+
+    const character = await CharacterProfile.findById(id);
+    if (!character) {
+      return res.status(404).json({ success: false, error: 'Character not found' });
+    }
+
+    const idx = Number(imageIndex);
+    const targetImage = character.referenceImages[idx];
+    if (!targetImage) {
+      return res.status(400).json({ success: false, error: 'Image index out of range' });
+    }
+
+    portraitPath = path.join(tempDir, `character-portrait-${Date.now()}-${portrait.originalname}`);
+    fs.writeFileSync(portraitPath, portrait.buffer);
+
+    const prompts = buildCharacterPrompts(character.name, character.alias, character.options || {}, 1);
+    const targetPrompt = prompts[idx] || prompts[0];
+
+    const flow = new GoogleFlowAutomationService({
+      type: 'image',
+      aspectRatio: '9:16',
+      imageCount: 1,
+      model: 'Nano Banana Pro',
+      headless: false,
+      outputDir: path.join(tempDir, 'character-regenerates')
+    });
+
+    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts: [targetPrompt], outputCount: 1 });
+    
+    if (!result.results || !result.results[0] || !result.results[0].success) {
+      return res.status(500).json({ success: false, error: 'Failed to generate image' });
+    }
+
+    const r = result.results[0];
+    const filename = path.basename(r.downloadedFile);
+    global.generatedImagePaths = global.generatedImagePaths || {};
+    global.generatedImagePaths[filename] = r.downloadedFile;
+
+    const generatedImage = {
+      url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
+      path: r.downloadedFile,
+      filename,
+      angle: getShotDescription(idx),
+      description: getShotDescription(idx),
+      prompt: r.prompt,
+      seed: r.seed || result.seed
+    };
+
+    return res.json({
+      success: true,
+      data: generatedImage
+    });
+  } catch (error) {
+    console.error(`[CHAR] Regenerate error:`, error.message);
+    return res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (portraitPath && fs.existsSync(portraitPath)) {
+      fs.unlinkSync(portraitPath);
+    }
+  }
+}
+
 export async function listCharacters(req, res) {
   const data = await CharacterProfile.find({ status: 'active' }).sort({ updatedAt: -1 }).lean();
   res.json({ success: true, data });
