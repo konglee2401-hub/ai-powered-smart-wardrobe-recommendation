@@ -527,20 +527,3 @@ const GalleryPage = () => {
 };
 
 export default GalleryPage;
-            >
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>{card.icon}</div>
-              <h3 style={{ margin: '0 0 0.5rem 0', color: '#f1f5f9', fontSize: '1.1rem', fontWeight: '600' }}>
-                {card.title}
-              </h3>
-              <p style={{ margin: '0', color: '#cbd5e1', fontSize: '0.95rem' }}>
-                {card.desc}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default GalleryPage;

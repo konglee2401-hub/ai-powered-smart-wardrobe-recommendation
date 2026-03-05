@@ -1533,43 +1533,19 @@ export async function generateWithBrowser(req, res) {
     }
 
     // ====================================
-    // STEP 7: 💫 AUTO-SAVE ASSET TO DATABASE
+    // STEP 7: Asset already saved in STEP 5
     // ====================================
-    try {
-      console.log(`\n💾 Auto-saving asset to database...`);
-      const assetResult = await AssetManager.saveAsset({
-        filename: generatedImage.filename,
-        mimeType: 'image/jpeg',
-        fileSize: generatedImage.size,
-        assetType: 'image',
-        assetCategory: 'generated-image',
-        userId: req.body.userId || 'anonymous',
-        sessionId: req.body.sessionId,
-        storage: {
-          location: storageResult.storageType === 'cloud' ? 'google-drive' : 'local',
-          localPath: storageResult.localPath,
-          url: generatedImage.url,
-          ...storageResult.cloudMetadata && { cloudMetadata: storageResult.cloudMetadata }
-        },
-        metadata: {
-          format: 'jpeg',
-          provider: imageGenProvider,
-          grokConversationId: grokConversationId
-        },
-        tags: ['generated', 'browser-automation', imageGenProvider, scene, mood]
-      }, { verbose: true });
-
-      if (assetResult.success) {
-        generatedImage.assetId = assetResult.asset.assetId;
-        generatedImage.savedToDb = true;
-        generatedImage.assetAction = assetResult.action; // 'created' or 'updated'
-        console.log(`   ✅ Asset saved with ID: ${assetResult.asset.assetId}`);
-      } else {
-        console.warn(`   ⚠️  Asset save failed: ${assetResult.error}`);
-        generatedImage.savedToDb = false;
-      }
-    } catch (assetError) {
-      console.error(`   ❌ Error saving asset: ${assetError.message}`);
+    // ✅ The asset was already created and saved in STEP 5 with proper hybrid storage
+    // No need to call AssetManager.saveAsset() again - it would create a duplicate with incomplete storage info
+    
+    // Update the generated image response with the asset info
+    if (storageResult && storageResult.assetId) {
+      generatedImage.assetId = storageResult.assetId;
+      generatedImage.savedToDb = true;
+      generatedImage.assetAction = 'created';
+      console.log(`   ✅ Asset already saved in STEP 5 with ID: ${storageResult.assetId}`);
+    } else {
+      console.warn(`   ⚠️  Storage result missing assetId`);
       generatedImage.savedToDb = false;
     }
 
