@@ -77,7 +77,7 @@ export default function ShortsReelsDashboard() {
     country: 'Worldwide',
     period: 'Weekly',
     date: new Date().toISOString().slice(0, 10),
-    source: 'playboard'
+    source: 'playboard',
   });
 
   const fetchData = async () => {
@@ -198,8 +198,8 @@ export default function ShortsReelsDashboard() {
       subtitle="Theo dõi tổng quan, trigger scan thủ công theo bộ lọc giống Playboard category UI."
     >
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Scanning...' : 'Run DailyHaha Test'}</button>
-        <button onClick={() => trendAutomationApi.triggerJob('scan')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition">Run Channel Scan</button>
+        <button onClick={() => trendAutomationApi.triggerJob('discover')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition">Run Discover</button>
+        <button onClick={triggerManualScan} disabled={triggering} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{triggering ? 'Scanning...' : 'Scan Channels From Filters'}</button>
         <button onClick={triggerUploadAll} disabled={uploadLoading || uploadStatus?.pendingUpload === 0} className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm font-medium transition">{uploadLoading ? 'Uploading...' : `Upload All (${uploadStatus?.pendingUpload || 0})`}</button>
         <button onClick={() => { fetchData(); fetchUploadStatus(); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium transition">Refresh</button>
       </div>

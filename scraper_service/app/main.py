@@ -455,6 +455,8 @@ async def manual_discover_douyin(payload: dict | None = None):
         raise HTTPException(status_code=500, detail=f'Manual Douyin discovery failed: {str(ex)}')
 
 
+
+
 @app.get('/api/shorts-reels/captcha/jobs')
 async def get_captcha_jobs(limit: int = Query(default=50, ge=1, le=500)):
     query = {'jobType': 'captcha', 'status': 'paused_captcha', 'extra.resolved': {'$ne': True}}
