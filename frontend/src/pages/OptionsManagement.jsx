@@ -1083,9 +1083,10 @@ export default function OptionsManagement() {
               background: 'rgba(30, 41, 59, 0.5)',
               borderRadius: '12px',
               border: '1px solid #334155',
-              maxHeight: 'calc(100vh - 280px)',
+              height: 'calc(100vh - 180px)',
               overflowY: 'auto'
             }}>
+
               <div style={{
                 display: 'flex',
                 alignItems: 'center',

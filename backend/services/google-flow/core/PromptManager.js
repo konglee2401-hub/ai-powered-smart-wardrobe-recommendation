@@ -74,7 +74,25 @@ class PromptManager {
       // Copy to clipboard and paste via Ctrl+V (proper way to interact with Slate)
       await ClipboardHelper.copyAndPaste(this.page, prompt, textboxSelector);
 
-      console.log('   ✓ Prompt entered');
+      console.log('   ✓ Prompt pasted');
+
+      // 💫 FIX: After paste, focus + type spaces to trigger Slate editor recognition
+      console.log('   📍 Focusing textbox for Slate editor...');
+      await this.page.focus(textboxSelector);
+      await this.page.waitForTimeout(300);
+
+      // Type spaces to trigger validation
+      console.log('   ✍️  Adding spaces to trigger Slate editor...');
+      for (let i = 0; i < 5; i++) {
+        await this.page.keyboard.press('Space');
+        await this.page.waitForTimeout(100);
+      }
+
+      // Wait for editor to process
+      console.log('   ⏳ Waiting 5s for Slate editor to process...');
+      await this.page.waitForTimeout(5000);
+
+      console.log('   ✓ Prompt entered with spaces for editor recognition');
 
       // Wait for send button to become enabled
       console.log('   ⏳ Waiting for send button to be enabled...');

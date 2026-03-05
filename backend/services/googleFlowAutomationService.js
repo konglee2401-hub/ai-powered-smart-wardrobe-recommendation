@@ -51,9 +51,15 @@ class GoogleFlowAutomationService {
     this.lastPromptSubmitted = null; // Store original prompt for retry
     this.imageUrls = {}; // Store generated image URLs for segment mapping
     
+    // 🔐 Support flowId for flow-specific Chrome profile isolation
+    // This prevents "profile locked by another process" errors when flows run in parallel
+    const flowId = options.flowId || `flow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     this.options = {
       headless: false,
-      sessionFilePath: path.join(__dirname, '../.sessions/google-flow-session-complete.json'),
+      flowId: flowId,  // ✅ Pass flowId for per-flow Chrome profile
+      // 💫 FIX: Don't override sessionFilePath - use SessionManager's shared profile default
+      // sessionFilePath will default to: data/google-flow-profiles/default/session.json
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
       projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
       aspectRatio: options.aspectRatio || '9:16',
@@ -253,8 +259,12 @@ class GoogleFlowAutomationService {
       console.error('Error closing managers:', error.message);
     }
 
-    // Close browser session
-    if (this.browser) {
+    // ✅ Close browser session with auto-save via SessionManager
+    // SessionManager.close() will capture and save session before closing browser
+    if (this.sessionManager) {
+      await this.sessionManager.close();
+    } else if (this.browser) {
+      // Fallback: close browser directly if SessionManager not available
       await this.browser.close();
     }
   }
@@ -595,10 +605,11 @@ class GoogleFlowAutomationService {
       outputDir = this.options.outputDir,
       timeoutSeconds = 120,
       isVideoMode = false,
-      storagePrefix = 'gen'
+      storagePrefix = 'gen',
+      expectedNewHrefs = this.options.imageCount || 1  // 💫 FIX: Get expected count from options
     } = config;
 
-    console.log(`\n[SHARED-FLOW] 🎨 Starting generation (${isVideoMode ? 'video' : 'image'} mode)`);
+    console.log(`\n[SHARED-FLOW] 🎨 Starting generation (${isVideoMode ? 'video' : 'image'} mode) - expecting ${expectedNewHrefs} image(s)`);
 
     try {
       // ═══ PHASE A: PROMPT ENTRY AND SUBMISSION ═══
@@ -645,14 +656,69 @@ class GoogleFlowAutomationService {
       let generationResult;
       if (this.generationMonitor) {
         console.log('[SHARED-FLOW] ✓ Using GenerationMonitor');
-        generationResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Expect 1 new image (sequential upload)
+        console.log(`[SHARED-FLOW] 📊 Expecting ${expectedNewHrefs} new image(s)...`);
+        generationResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), expectedNewHrefs, promptText);  // 💫 Pass expectedNewHrefs
       } else {
         console.log('[SHARED-FLOW] ✓ Using inline monitoring logic (fallback)');
         const href = await this.monitorGeneration(timeoutSeconds);
         generationResult = { success: !!href, href };
       }
 
-      if (!generationResult?.success || !generationResult?.href) {
+      // 💫 Handle partial success (some images generated, others failed)
+      if (generationResult?.partial && generationResult?.href) {
+        console.log(`[SHARED-FLOW] ✅ PARTIAL SUCCESS: ${generationResult.found}/${generationResult.expected} image(s) detected`);
+        console.log(`[SHARED-FLOW] � Attempting to retry for remaining ${generationResult.expected - generationResult.found} image(s)...`);
+        
+        // 💫 NEW: Auto-retry for missing images (up to 3 attempts)
+        let retryCount = 0;
+        const maxPartialRetries = 3;
+        let partialRetryResult = null;
+        
+        while (retryCount < maxPartialRetries && generationResult.found < generationResult.expected) {
+          retryCount++;
+          console.log(`\n[SHARED-FLOW] 🔄 Retry ${retryCount}/${maxPartialRetries} for missing images...`);
+          
+          // Wait before retry
+          await this.page.waitForTimeout(3000);
+          
+          // Re-monitor for missing images
+          console.log(`[SHARED-FLOW] 📊 Checking for ${generationResult.expected - generationResult.found} more image(s)...`);
+          partialRetryResult = await this.generationMonitor.monitorGeneration(
+            Math.ceil(timeoutSeconds / 2),  // Shorter timeout for retry
+            generationResult.expected - generationResult.found,  // Check for remaining count
+            promptText
+          );
+          
+          if (partialRetryResult?.success && partialRetryResult?.href) {
+            // Successfully got more images, update count
+            const newCount = (partialRetryResult.newCount || 1) + generationResult.found;
+            console.log(`[SHARED-FLOW] ✅ Got more image(s)! Total: ${newCount}/${generationResult.expected}`);
+            generationResult.found = newCount;
+            
+            if (newCount >= generationResult.expected) {
+              console.log(`[SHARED-FLOW] ✅ All ${generationResult.expected} images now available!`);
+              break;  // Got all images, exit retry loop
+            }
+          } else if (partialRetryResult?.partial && partialRetryResult?.newCount > 0) {
+            // Got some more but still partial
+            const newCount = (partialRetryResult.newCount || 1) + generationResult.found;
+            console.log(`[SHARED-FLOW] 📈 Got ${partialRetryResult.newCount} more image(s), total: ${newCount}/${generationResult.expected}`);
+            generationResult.found = newCount;
+          } else {
+            console.log(`[SHARED-FLOW] ⚠️  Retry ${retryCount} did not produce new images`);
+            if (retryCount < maxPartialRetries) {
+              console.log(`[SHARED-FLOW] 🔄 Continuing to next retry attempt...`);
+            }
+          }
+        }
+        
+        if (generationResult.found < generationResult.expected) {
+          console.log(`[SHARED-FLOW] ⚠️  Could only get ${generationResult.found}/${generationResult.expected} after ${retryCount} retry attempt(s)`);
+        }
+        
+        console.log(`[SHARED-FLOW] 💾 Proceeding to download ${generationResult.found} available image(s)`);
+        // Continue to download phase with what we have
+      } else if (!generationResult?.success || !generationResult?.href) {
         console.log('[SHARED-FLOW] ⚠️  Generation monitoring failed or timed out');
         console.log(`[SHARED-FLOW] 📋 Result: success=${generationResult?.success}, href=${generationResult?.href ? 'found' : 'null'}`);
         if (generationResult?.error) {
@@ -678,7 +744,8 @@ class GoogleFlowAutomationService {
             // Wait for potential new generation after retry
             await this.page.waitForTimeout(5000);
             // Try monitoring again
-            const retryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);  // Still expect 1
+            console.log(`[SHARED-FLOW] 📊 Re-checking for ${expectedNewHrefs} image(s)...`);
+            const retryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), expectedNewHrefs, promptText);  // 💫 Pass expectedNewHrefs
             if (retryMonitorResult?.success && retryMonitorResult?.href) {
               generationResult = retryMonitorResult;
               // Continue to download phase
@@ -719,7 +786,8 @@ class GoogleFlowAutomationService {
             
             // Wait for recovery generation
             await this.page.waitForTimeout(5000);
-            const recoveryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), 1);
+            console.log(`[SHARED-FLOW] 📊 Checking for ${expectedNewHrefs} image(s) after rehash...`);
+            const recoveryMonitorResult = await this.generationMonitor.monitorGeneration(Math.ceil(timeoutSeconds), expectedNewHrefs, promptText);  // 💫 Pass expectedNewHrefs
             
             if (recoveryMonitorResult?.success && recoveryMonitorResult?.href) {
               generationResult = recoveryMonitorResult;
@@ -740,6 +808,7 @@ class GoogleFlowAutomationService {
         }
       }
       
+      // 💫 Allow download proceeding even for partial success
       if (!generationResult?.success || !generationResult?.href) {
         console.log('[SHARED-FLOW] ❌ All recovery attempts exhausted');
         return { success: false, href: null, error: 'Generation failed after all retries' };
@@ -781,12 +850,24 @@ class GoogleFlowAutomationService {
 
       console.log(`[SHARED-FLOW] ✅ PHASE C complete (file: ${path.basename(downloadedFile)})\n`);
       console.log('[SHARED-FLOW] ✅ SHARED GENERATION FLOW COMPLETE\n');
-      return {
+      
+      // 💫 Return result with partial success info if applicable
+      const result = {
         success: true,
         href: generationResult.href,
         downloadedFile,
         method: this.generationDownloader ? 'manager' : 'fallback'
       };
+      
+      // Add partial success info if available
+      if (generationResult.partial) {
+        result.partial = true;
+        result.found = generationResult.found;
+        result.expected = generationResult.expected;
+        console.log(`[SHARED-FLOW] 📊 NOTE: Partial success - downloaded ${result.found}/${result.expected} image(s)`);
+      }
+      
+      return result;
 
     } catch (error) {
       console.error(`[SHARED-FLOW] ❌ Error in generation flow: ${error.message}`);
@@ -982,22 +1063,63 @@ class GoogleFlowAutomationService {
   // ═══════════════════════════════════════════════════════════════════════
 
 
-  async generateMultiple(characterImagePath, productImagePath, prompts, options = {}) {
-    /**
-     * REFACTORED Phase 5b: Now uses _sharedGenerationFlow() for core generation
-     * Significant code reduction: 1100 lines → ~250 lines (-77%)
-     * 
-     * Key Changes:
-     * - Keeps steps 1-7 (init, navigate, settings, upload unchanged)
-     * - Main loop uses _sharedGenerationFlow() for prompt→submit→monitor→download
-     * - Error recovery simplified (tile detection moved to internal flow)
-     * - Maintains all external service compatibility via fallback logic
-     */
+  /**
+   * UNIFIED IMAGE GENERATION METHOD - Supports 3 generation modes
+   * 
+   * Mode 1: Single prompt, multiple outputs
+   *   generateImages(null, { prompts: ['prompt'], outputCount: 2 })
+   * 
+   * Mode 2: Reference image(s) + single prompt
+   *   generateImages({ characterImagePath: '...' }, { prompts: ['prompt'] })
+   * 
+   * Mode 3: Reference images + multiple prompts (batch generation)
+   *   generateImages({ 
+   *     characterImagePath: '...', 
+   *     productImagePath: '...' 
+   *   }, { 
+   *     prompts: ['prompt1', 'prompt2', ...] 
+   *   })
+   * 
+   * All modes use shared flow:
+   * - Init → Navigate → Page ready
+   * - Upload reference images (if provided)
+   * - Capture baseline
+   * - For each prompt: submit → monitor (with error recovery) → download
+   * - Cleanup & close
+   * 
+   * @param {Object} images - Reference images (optional)
+   *   - characterImagePath: Path to main reference image
+   *   - productImagePath: Path to secondary reference (optional)
+   *   - sceneImagePath: Path to scene reference (optional)
+   * @param {Object} config - Generation configuration
+   *   - prompts: Array of prompts to generate (required)
+   *   - outputCount: Number of images per prompt (default: 1)
+   *   - sceneImagePath: Scene reference image
+   *   - sceneLockedPrompt: Scene locked prompt text
+   *   - sceneName: Scene name for logging
+   */
+  async generateImages(images = null, config = {}) {
+    const {
+      prompts = [],
+      outputCount = 1,
+      sceneImagePath = null,
+      sceneLockedPrompt = null,
+      sceneName = null
+    } = config;
+
+    // Validate inputs
+    if (!Array.isArray(prompts) || prompts.length === 0) {
+      throw new Error('Configuration must include prompts array with at least one prompt');
+    }
+
+    const characterImagePath = images?.characterImagePath || null;
+    const productImagePath = images?.productImagePath || null;
+    const hasReferenceImages = !!characterImagePath || !!productImagePath;
+
     if (this.debugMode) {
-      console.log('\n🔧 [DEBUG] generateMultiple() is disabled (debug mode)');
+      console.log('\n🔧 [DEBUG] generateImages() is disabled (debug mode)');
       console.log('   - init() allowed');
-      console.log('   - navigateToFlow() allowed');
-      console.log('   - All other steps skipped\n');
+      console.log('   - navigateToFlow() allowed\n');
       
       await this.init();
       await this.navigateToFlow();
@@ -1008,28 +1130,25 @@ class GoogleFlowAutomationService {
       return {
         success: true,
         debugMode: true,
-        message: 'Debug mode: only opened project'
+        message: 'Debug mode: only opened project',
+        results: []
       };
     }
 
     console.log(`\n${'═'.repeat(80)}`);
-    console.log(`📊 MULTI-IMAGE GENERATION: ${prompts.length} images`);
+    if (hasReferenceImages) {
+      console.log(`📸 IMAGE GENERATION: ${prompts.length} prompt(s) × ${outputCount} output(s)`);
+      console.log(`📎 Reference images: ${characterImagePath ? 'character' : ''}${characterImagePath && productImagePath ? ' + ' : ''}${productImagePath ? 'product' : ''}`);
+    } else {
+      console.log(`🎨 IMAGE GENERATION: ${prompts.length} prompt(s) × ${outputCount} output(s) - No reference images`);
+    }
     console.log(`${'═'.repeat(80)}\n`);
-    console.log(`📸 Character image: ${path.basename(characterImagePath)}`);
-    console.log(`📦 Product image: ${productImagePath ? path.basename(productImagePath) : '(using character as placeholder)'}`);
-    if (options.sceneImagePath) {
-      console.log(`🎬 Scene image: ${path.basename(options.sceneImagePath)} (reference)`);
-    }
-    if (options.sceneLockedPrompt) {
-      console.log(`📝 Scene locked prompt: "${options.sceneLockedPrompt.substring(0, 60)}..." (from scene: ${options.sceneName})`);
-    }
-    console.log();
 
     const results = [];
 
     try {
-      // STEP 1-3: Init, navigate, wait (unchanged)
-      console.log('\n[INIT] 🚀 Initializing browser...');
+      // STEP 1-3: Init, navigate, wait
+      console.log('[INIT] 🚀 Initializing browser...');
       await this.init();
       
       console.log('[NAV] 🔗 Navigating to Google Flow...');
@@ -1041,262 +1160,105 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(5000);
       console.log('[PAGE] ✅ Ready\n');
 
-      // STEP 4: Configure settings once at start
-      console.log('[CONFIG] ⚙️  Configuring settings (ONE TIME)...');
+      // STEP 4: Configure settings
+      console.log('[CONFIG] ⚙️  Configuring settings (imageCount=${outputCount})...');
+      this.options.imageCount = outputCount;  // Set output count for this batch
       await this._delegateConfigureSettings();
       await this.page.waitForTimeout(2000);
 
-      // STEP 5-7: Upload images SEQUENTIALLY (one at a time, check each)
-      console.log('[UPLOAD] 📤 Uploading reference images (SEQUENTIAL)...');
-      console.log(`[UPLOAD] 📎 Pasting character image: ${path.basename(characterImagePath)}`);
-      await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-      await this.page.waitForTimeout(300);
-
-      // Helper to paste image via clipboard
-      const pasteImage = async (imagePath, label) => {
-        const imageData = fs.readFileSync(imagePath);
-        const base64 = Buffer.from(imageData).toString('base64');
-        await this.page.evaluate((b64) => {
-          return fetch(`data:image/png;base64,${b64}`)
-            .then(res => res.blob())
-            .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
-            .catch(() => false);
-        }, base64);
-        await this.page.waitForTimeout(500);
+      // STEP 5-7: Upload reference images (if provided)
+      if (hasReferenceImages) {
+        console.log('[UPLOAD] 📤 Uploading reference images...');
+        
         await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        await this.page.waitForTimeout(120);
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('v');
-        await this.page.keyboard.up('Control');
-        await this.page.waitForTimeout(5000);
-      };
-
-      // 💫 NEW: Upload image 1, check it, then upload image 2, check it
-      let charRef = null;
-      try {
-        await pasteImage(characterImagePath, 'character');
-        console.log('[UPLOAD] 📤 Character image pasted, checking upload...');
-        charRef = await this.checkSingleImageUpload('character', 45);
-        if (!charRef) {
-          throw new Error('Character image upload check failed');
-        }
-        console.log(`[UPLOAD] ✅ Character confirmed: ${charRef.substring(0, 80)}\n`);
-      } catch (e) {
-        console.error(`[UPLOAD] ❌ Character image failed: ${e.message}`);
-        throw e;
-      }
-
-      let productRef = null;
-      try {
-        console.log(`[UPLOAD] 📎 Pasting product image: ${productImagePath ? path.basename(productImagePath) : '(character placeholder)'}`);
-        await pasteImage(productImagePath, 'product');
-        console.log('[UPLOAD] 📤 Product image pasted, checking upload...');
-        productRef = await this.checkSingleImageUpload('product', 45);
-        if (!productRef) {
-          throw new Error('Product image upload check failed');
-        }
-        console.log(`[UPLOAD] ✅ Product confirmed: ${productRef.substring(0, 80)}\n`);
-      } catch (e) {
-        console.error(`[UPLOAD] ❌ Product image failed: ${e.message}`);
-        throw e;
-      }
-
-      // Optional scene image
-      let sceneRef = null;
-      if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
-        try {
-          console.log(`[UPLOAD] 📎 Pasting scene image: ${path.basename(options.sceneImagePath)}`);
-          await pasteImage(options.sceneImagePath, 'scene');
-          sceneRef = await this.checkSingleImageUpload('scene', 45);
-          if (sceneRef) {
-            console.log(`[UPLOAD] ✅ Scene confirmed: ${sceneRef.substring(0, 80)}\n`);
-          } else {
-            console.warn('[UPLOAD] ⚠️  Scene image check failed, continuing without it');
-          }
-        } catch (e) {
-          console.warn(`[UPLOAD] ⚠️  Scene image error: ${e.message}, continuing`);
-        }
-      }
-
-      // Store confirmed refs
-      this.uploadedImageRefs = {
-        wearing: { href: charRef, text: 'wearing', validated: true },
-        product: { href: productRef, text: 'product', validated: true },
-        ...(sceneRef ? { scene: { href: sceneRef, text: 'scene', validated: true } } : {})
-      };
-      
-      console.log(`[UPLOAD] 📦 Uploaded references confirmed and stored`);
-      console.log(`   [0] wearing: ${charRef.substring(0, 80)}`);
-      console.log(`   [1] product: ${productRef.substring(0, 80)}\n`);
-      if (sceneRef) {
-        console.log(`   [2] scene: ${sceneRef.substring(0, 80)}\n`);
-      }
-      
-      // Update managers with uploaded refs so they can identify generated images
-      if (this.generationMonitor) {
-        this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
-      }
-      if (this.errorRecoveryManager) {
-        this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
-      }
-
-      // CAPTURE BASELINE: After upload completes, capture current state as baseline
-      // This baseline includes the 2 uploaded images
-      // When generation completes, we'll find hrefs NOT in this baseline = generated image
-      console.log('[UPLOAD] 📸 Capturing baseline hrefs for generation detection...');
-      if (this.preGenerationMonitor) {
-        await this.preGenerationMonitor.captureBaselineHrefs();
-      }
-
-      console.log('[UPLOAD] ✅ Ready to generate\n');
-
-      const clickSubmitButton = async () => {
-        const submitResult = await this.page.evaluate(() => {
-          const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
-          if (!textbox) return { found: false, clicked: false };
-
-          let container = textbox;
-          for (let i = 0; i < 6; i++) {
-            if (!container) break;
-            const hasButton = container.querySelector('button');
-            if (hasButton) break;
-            container = container.parentElement;
-          }
-
-          const buttons = container?.querySelectorAll('button') || [];
-          for (const btn of buttons) {
-            const icon = btn.querySelector('i.google-symbols');
-            if (icon && icon.textContent.includes('arrow_forward') && !btn.disabled) {
-              try {
-                btn.click();
-                return { found: true, clicked: true };
-              } catch (e) {
-                console.error(`Failed to click arrow forward: ${e.message}`);
-              }
-            }
-          }
-          return { found: buttons.length > 0, clicked: false };
-        });
-
-        return !!submitResult.clicked;
-      };
-
-      const detectLatestErrorTile = async () => {
-        return this.page.evaluate(() => {
-          const tiles = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]'));
-          for (let i = 0; i < Math.min(6, tiles.length); i++) {
-            const tile = tiles[i];
-            const tileText = (tile.textContent || '').toLowerCase();
-            const hasAnchor = !!tile.querySelector('a[href]');
-            const hasErrorText = tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi') || tileText.includes('lỗi');
-            const buttons = Array.from(tile.querySelectorAll('button')).map(btn => ({
-              text: (btn.textContent || '').trim().toLowerCase(),
-              rect: btn.getBoundingClientRect()
-            }));
-
-            const retryBtn = buttons.find(btn => btn.text.includes('thử lại') || btn.text.includes('retry'));
-            const reuseBtn = buttons.find(btn => btn.text.includes('sử dụng lại') || btn.text.includes('reuse') || btn.text.includes('dùng lại'));
-            const hasErrorState = hasErrorText;
-
-
-            if (hasErrorState) {
-              const tileRect = tile.getBoundingClientRect();
-              return {
-                found: true,
-                tileId: tile.getAttribute('data-tile-id') || null,
-                message: (tile.textContent || '').trim().substring(0, 180),
-                hasAnchor,
-                tileCenter: {
-                  x: Math.round(tileRect.left + tileRect.width / 2),
-                  y: Math.round(tileRect.top + tileRect.height / 2)
-                },
-                retryButton: retryBtn ? {
-                  x: Math.round(retryBtn.rect.left + retryBtn.rect.width / 2),
-                  y: Math.round(retryBtn.rect.top + retryBtn.rect.height / 2)
-                } : null,
-                reuseButton: reuseBtn ? {
-                  x: Math.round(reuseBtn.rect.left + reuseBtn.rect.width / 2),
-                  y: Math.round(reuseBtn.rect.top + reuseBtn.rect.height / 2)
-                } : null
-              };
-            }
-          }
-
-          return { found: false };
-        });
-      };
-
-      const waitForErrorTileCleared = async (targetTileId, timeoutMs = 18000) => {
-        const maxChecks = Math.ceil(timeoutMs / 1000);
-        for (let attempt = 1; attempt <= maxChecks; attempt++) {
-          const state = await this.page.evaluate((tileId) => {
-            if (!tileId) return { cleared: false };
-            const tile = document.querySelector(`[data-testid="virtuoso-item-list"] [data-tile-id="${tileId}"]`);
-            if (!tile) return { cleared: true };
-
-            const text = (tile.textContent || '').toLowerCase();
-            const stillError = text.includes('không thành công') || text.includes('đã xảy ra lỗi') || text.includes('failed') || text.includes('error');
-            return { cleared: !stillError };
-          }, targetTileId);
-
-          if (state.cleared) return true;
-          await this.page.waitForTimeout(1000);
-        }
-
-        return false;
-      };
-
-      const fallbackReAddUploadedImagesAndSubmit = async (promptText) => {
-        console.log('[FALLBACK] 📌 Re-add 2 uploaded images -> paste prompt -> wait 3s -> submit');
-
-        const refs = [
-          this.uploadedImageRefs?.wearing?.href,
-          this.uploadedImageRefs?.product?.href,
-          this.uploadedImageRefs?.scene?.href
-        ].filter(Boolean);
-
-        if (refs.length < 2) {
-          console.log('[FALLBACK] ⚠️  Missing uploaded href refs, cannot re-add reference images');
-          return false;
-        }
-
-        for (const href of refs) {
-          const added = await this.addImageToCommand(href);
-          if (!added) {
-            console.log(`[FALLBACK] ⚠️  Failed to add href: ${href.substring(0, 60)}...`);
-            return false;
-          }
-          await this.page.waitForTimeout(500);
-        }
-
-        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        await this.page.waitForTimeout(150);
-
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('a');
-        await this.page.keyboard.up('Control');
-        await this.page.waitForTimeout(100);
-        await this.page.keyboard.press('Backspace');
         await this.page.waitForTimeout(300);
 
-        await this.page.evaluate((text) => {
-          navigator.clipboard.writeText(text).catch(() => {});
-        }, promptText);
+        // Helper to paste image via clipboard
+        const pasteImage = async (imagePath, label) => {
+          const imageData = fs.readFileSync(imagePath);
+          const base64 = Buffer.from(imageData).toString('base64');
+          await this.page.evaluate((b64) => {
+            return fetch(`data:image/png;base64,${b64}`)
+              .then(res => res.blob())
+              .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+              .catch(() => false);
+          }, base64);
+          await this.page.waitForTimeout(500);
+          await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
+          await this.page.waitForTimeout(120);
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('v');
+          await this.page.keyboard.up('Control');
+          await this.page.waitForTimeout(5000);
+        };
 
-        await this.page.waitForTimeout(200);
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('v');
-        await this.page.keyboard.up('Control');
+        // Upload character image (required if any images provided)
+        if (characterImagePath && fs.existsSync(characterImagePath)) {
+          try {
+            console.log(`[UPLOAD] 📎 ${path.basename(characterImagePath)}`);
+            await pasteImage(characterImagePath, 'character');
+            const charRef = await this.checkSingleImageUpload('character', 45);
+            if (!charRef) throw new Error('Character image upload check failed');
+            
+            this.uploadedImageRefs.wearing = { href: charRef, text: 'wearing', validated: true };
+            console.log(`[UPLOAD] ✅ Character: ${charRef.substring(0, 60)}...`);
+          } catch (e) {
+            console.error(`[UPLOAD] ❌ Character image failed: ${e.message}`);
+            throw e;
+          }
+        }
 
-        console.log('[FALLBACK] ⏳ Wait 3s for Slate editor stable...');
-        await this.page.waitForTimeout(3000);
+        // Upload product image (optional)
+        if (productImagePath && fs.existsSync(productImagePath)) {
+          try {
+            console.log(`[UPLOAD] 📎 ${path.basename(productImagePath)}`);
+            await pasteImage(productImagePath, 'product');
+            const productRef = await this.checkSingleImageUpload('product', 45);
+            if (!productRef) throw new Error('Product image upload check failed');
+            
+            this.uploadedImageRefs.product = { href: productRef, text: 'product', validated: true };
+            console.log(`[UPLOAD] ✅ Product: ${productRef.substring(0, 60)}...`);
+          } catch (e) {
+            console.error(`[UPLOAD] ❌ Product image failed: ${e.message}`);
+            throw e;
+          }
+        }
 
-        return clickSubmitButton();
-      };
+        // Upload scene image (optional)
+        if (sceneImagePath && fs.existsSync(sceneImagePath)) {
+          try {
+            console.log(`[UPLOAD] 📎 ${path.basename(sceneImagePath)}`);
+            await pasteImage(sceneImagePath, 'scene');
+            const sceneRef = await this.checkSingleImageUpload('scene', 45);
+            if (sceneRef) {
+              this.uploadedImageRefs.scene = { href: sceneRef, text: 'scene', validated: true };
+              console.log(`[UPLOAD] ✅ Scene: ${sceneRef.substring(0, 60)}...`);
+            }
+          } catch (e) {
+            console.warn(`[UPLOAD] ⚠️  Scene image: ${e.message}`);
+          }
+        }
+
+        // Update managers with uploaded refs
+        if (this.generationMonitor) {
+          this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
+        }
+        if (this.errorRecoveryManager) {
+          this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
+        }
+
+        // Capture baseline after uploads
+        console.log('[UPLOAD] 📸 Capturing baseline for generation detection...');
+        if (this.preGenerationMonitor) {
+          await this.preGenerationMonitor.captureBaselineHrefs();
+        }
+        
+        console.log('[UPLOAD] ✅ Complete\n');
+      }
 
       let lastGeneratedHref = null;
 
-      // MAIN LOOP: For each prompt, use _sharedGenerationFlow()
+      // MAIN LOOP: For each prompt
       for (let i = 0; i < prompts.length; i++) {
         console.log(`\n${'═'.repeat(80)}`);
         console.log(`🎨 PROMPT ${i + 1}/${prompts.length}`);
@@ -1304,126 +1266,81 @@ class GoogleFlowAutomationService {
 
         const prompt = prompts[i];
         
-        // 💫 NEW: Before each iteration (except first), refresh settings and ensure image mode
-        if (i > 0) {
-          console.log(`\n[CHAIN] 🔧 Preparing for iteration ${i + 1}...`);
-          console.log('[CHAIN] 🔧 Re-configuring image settings...');
-          await this._delegateConfigureSettings();
-          await this.page.waitForTimeout(1500);
-          
-          console.log('[CHAIN] 📸 Ensuring we are in Image mode...');
-          const navigationManager = this.navigationManager || 
-            (this.contextManagers?.navigationManager);
-          if (navigationManager && navigationManager.selectTab) {
-            const imageTabSelected = await navigationManager.selectTab('Image');
-            if (imageTabSelected) {
-              console.log('[CHAIN] ✅ Image tab confirmed active');
-            } else {
-              console.log('[CHAIN] ⚠️  Could not explicitly select Image tab, continuing...');
-            }
-          }
-          await this.page.waitForTimeout(1000);
-          console.log('[CHAIN] ✅ Settings and mode ready\n');
-        }
-        
         // Validate prompt
         if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
           console.error(`❌ PROMPT ${i + 1} INVALID: Expected non-empty string`);
           results.push({
             success: false,
-            imageNumber: i + 1,
+            promptNumber: i + 1,
             error: 'Invalid prompt'
           });
           throw new Error(`Invalid prompt at index ${i}`);
         }
 
         try {
-          // STEP A: For subsequent prompts, reuse previous command
-          if (i > 0 && lastGeneratedHref) {
-            console.log(`[CHAIN] 🔄 Reusing command from previous generation (iteration ${i + 1})...`);
-            console.log(`[CHAIN] 📌 Using href: ${lastGeneratedHref.substring(0, 80)}...`);
+          // For subsequent prompts with reference images, reuse command
+          if (i > 0 && hasReferenceImages && lastGeneratedHref) {
+            console.log(`[CHAIN] 🔄 Reusing command from previous prompt...\n`);
             
-            // Right-click the image to open context menu and select "Sử dụng lại câu lệnh"
             const reuseSuccess = await this.page.evaluate((href) => {
-              // Find item by href
               const link = document.querySelector(`a[href="${href}"]`);
-              if (!link) {
-                console.log('[CHAIN] ❌ Item not found for reuse');
-                return false;
-              }
+              if (!link) return false;
 
-              // Get position and right-click
               const rect = link.getBoundingClientRect();
-              const x = Math.round(rect.left + rect.width / 2);
-              const y = Math.round(rect.top + rect.height / 2);
-
-              // Simulate right-click via event (can't do actual right-click in evaluate)
               const event = new MouseEvent('contextmenu', {
                 bubbles: true,
                 cancelable: true,
-                clientX: x,
-                clientY: y
+                clientX: Math.round(rect.left + rect.width / 2),
+                clientY: Math.round(rect.top + rect.height / 2)
               });
               link.dispatchEvent(event);
               return true;
             }, lastGeneratedHref);
 
-            if (!reuseSuccess) {
-              console.error(`[CHAIN] ❌ Failed to trigger context menu for reuse`);
-              throw new Error('Failed to reuse command: could not find item');
-            }
-
-            // Wait for context menu to appear
-            console.log('[CHAIN] ⏳ Waiting for context menu...');
-            await this.page.waitForTimeout(1000);
-
-            // Click "Sử dụng lại câu lệnh" in context menu
-            const clickedReuse = await this.page.evaluate(() => {
-              const menuItems = document.querySelectorAll('[role="menuitem"]');
-              for (const item of menuItems) {
-                const text = item.textContent.toLowerCase();
-                if (text.includes('sử dụng lại') || text.includes('use') && text.includes('command')) {
-                  try {
-                    item.click();
-                    return true;
-                  } catch (e) {
-                    return false;
+            if (reuseSuccess) {
+              await this.page.waitForTimeout(1000);
+              
+              const clickedReuse = await this.page.evaluate(() => {
+                const items = document.querySelectorAll('[role="menuitem"]');
+                for (const item of items) {
+                  const text = item.textContent.toLowerCase();
+                  if (text.includes('sử dụng lại') || (text.includes('use') && text.includes('command'))) {
+                    try {
+                      item.click();
+                      return true;
+                    } catch (e) {
+                      return false;
+                    }
                   }
                 }
+                return false;
+              });
+
+              if (clickedReuse) {
+                await this.page.waitForTimeout(1500);
+
+                // Clear textbox
+                const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+                await this.page.focus(containerSelector);
+                await this.page.waitForTimeout(200);
+                await this.page.click(containerSelector);
+                await this.page.waitForTimeout(300);
+                await this.page.keyboard.down('Control');
+                await this.page.keyboard.press('a');
+                await this.page.keyboard.up('Control');
+                await this.page.waitForTimeout(100);
+                await this.page.keyboard.press('Backspace');
+                await this.page.waitForTimeout(400);
+                console.log('[CHAIN] ✅ Ready for new prompt\n');
               }
-              return false;
-            });
-
-            if (!clickedReuse) {
-              console.warn('[CHAIN] ⚠️  Could not find/click "Sử dụng lại" option');
-              throw new Error('Failed to click reuse command option');
             }
-
-            console.log('[CHAIN] ✓ Clicked "Sử dụng lại câu lệnh"');
+          } else if (i > 0) {
+            console.log('[CHAIN] 🔧 Reconfiguring settings for next prompt...\n');
+            await this._delegateConfigureSettings();
             await this.page.waitForTimeout(1500);
-
-            console.log('[CHAIN] 🧹 Clearing textbox for new prompt...');
-            const containerSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
-            await this.page.focus(containerSelector);
-            await this.page.waitForTimeout(200);
-            await this.page.click(containerSelector);
-            await this.page.waitForTimeout(300);
-
-            // Clear all text
-            await this.page.keyboard.down('Control');
-            await this.page.keyboard.press('a');
-            await this.page.keyboard.up('Control');
-            await this.page.waitForTimeout(100);
-            await this.page.keyboard.press('Backspace');
-            await this.page.waitForTimeout(400);
-            console.log('[CHAIN] ✅ Ready for new prompt\n');
-          } else if (i > 0 && !lastGeneratedHref) {
-            console.warn(`[CHAIN] ⚠️  No lastGeneratedHref available for iteration ${i + 1}, cannot reuse command`);
-            throw new Error('Cannot reuse command: no previous href');
           }
 
-          // STEP B-G: Use shared generation flow
-          // This encapsulates: prompt entry → submit → monitor → download
+          // GENERATION FLOW: prompt → submit → monitor → download (with error recovery)
           const genResult = await this._sharedGenerationFlow(prompt, {
             timeoutSeconds: 300,
             isImageMode: true
@@ -1433,105 +1350,97 @@ class GoogleFlowAutomationService {
             throw new Error(`Generation failed: ${genResult.error || 'unknown error'}`);
           }
 
-          // Rename file with image number
+          // Rename with prompt number
           const fileExt = path.extname(genResult.downloadedFile);
           const fileName = path.basename(genResult.downloadedFile, fileExt);
-          const imageNum = String(i + 1).padStart(2, '0');
-          const renamedName = `${fileName}-img${imageNum}${fileExt}`;
-          let finalFilePath = path.join(path.dirname(genResult.downloadedFile), renamedName);  // Use let instead of const
+          const promptNum = String(i + 1).padStart(2, '0');
+          const renamedName = `${fileName}-prompt${promptNum}${fileExt}`;
+          let finalFilePath = path.join(path.dirname(genResult.downloadedFile), renamedName);
 
           try {
             fs.renameSync(genResult.downloadedFile, finalFilePath);
             console.log(`[FILE] 📂 Renamed to: ${path.basename(finalFilePath)}`);
           } catch (e) {
             console.warn(`[FILE] ⚠️  Rename failed: ${e.message}`);
-            finalFilePath = genResult.downloadedFile;  // Safe to reassign since it's let
+            finalFilePath = genResult.downloadedFile;
           }
 
-          results.push({
+          // 💫 Handle partial success result
+          const resultObj = {
             success: true,
-            imageNumber: i + 1,
+            promptNumber: i + 1,
             href: genResult.href,
             downloadedFile: finalFilePath
-          });
+          };
+
+          // Mark if this was partial success (some images generated, others failed)
+          if (genResult.partial) {
+            resultObj.partial = true;
+            resultObj.found = genResult.found;
+            resultObj.expected = genResult.expected;
+            console.log(`[PARTIAL] ⚠️  Downloaded ${genResult.found}/${genResult.expected} image(s)`);
+            console.log(`[PARTIAL] 💡 Remaining ${genResult.expected - genResult.found} image(s) can be retried in next generation`);
+          }
+
+          results.push(resultObj);
 
           lastGeneratedHref = genResult.href;
-          console.log(`[CHAIN] 📎 Stored href for next prompt\n`);
 
         } catch (promptError) {
           console.error(`\n❌ PROMPT ${i + 1} FAILED: ${promptError.message}\n`);
           results.push({
             success: false,
-            imageNumber: i + 1,
+            promptNumber: i + 1,
             error: promptError.message
           });
           throw promptError;
         }
       }
 
-      // Cleanup and return results
+      // Summary
       console.log(`\n${'═'.repeat(70)}`);
-      console.log(`✅ All prompts processed`);
+      console.log(`✅ Generation Complete`);
       console.log(`${'═'.repeat(70)}\n`);
 
       const downloadedFiles = results
         .filter(r => r.success && r.downloadedFile)
         .map(r => r.downloadedFile);
 
-      console.log(`[DOWNLOAD] Files downloaded: ${downloadedFiles.length}`);
+      // 💫 Count partial successes
+      const partialSuccesses = results.filter(r => r.partial);
+      
+      console.log(`[RESULTS] Generated: ${downloadedFiles.length} image(s)`);
+      if (partialSuccesses.length > 0) {
+        console.log(`[RESULTS] Partial successes: ${partialSuccesses.length} (some images failed to generate)`);
+        partialSuccesses.forEach(r => {
+          console.log(`  Prompt ${r.promptNumber}: ${r.found}/${r.expected} images`);
+        });
+      }
+      
       downloadedFiles.forEach((file, idx) => {
         console.log(`  [${idx + 1}] ${path.basename(file)}`);
       });
 
-      // 🔍 DEBUG: Show detailed results structure
-      console.log(`\n🔥 DEBUG: Detailed results array from generateMultiple():`);
-      results.forEach((result, idx) => {
-        console.log(`\n  [${idx}] Success: ${result.success}`);
-        if (result.success) {
-          console.log(`      imageNumber: ${result.imageNumber}`);
-          console.log(`      downloadedFile: ${result.downloadedFile}`);
-          console.log(`      href: ${result.href?.substring(0, 80) || 'N/A'}...`);
-          if (result.downloadedFile && fs.existsSync(result.downloadedFile)) {
-            const fileSize = fs.statSync(result.downloadedFile).size;
-            console.log(`      fileSize: ${(fileSize / 1024).toFixed(2)}KB`);
-          }
-        } else {
-          console.log(`      error: ${result.error}`);
-        }
-      });
+      return {
+        success: true,
+        results,
+        downloadedFiles,
+        partialSuccesses: partialSuccesses.length > 0 ? partialSuccesses : undefined
+      };
 
-      console.log('\n⏳ Waiting 3 seconds before closing browser...');
-      await this.page.waitForTimeout(3000);
+    } finally {
+      console.log('\n[CLOSE] 🚪 Closing browser...');
       await this.close();
-      console.log('✅ Browser closed\n');
-
-      const successCount = results.filter(r => r.success).length;
-      console.log(`${'═'.repeat(70)}`);
-      console.log(`📊 RESULTS: ${successCount}/${results.length} successful`);
-      console.log(`${'═'.repeat(70)}\n`);
-
-      return {
-        success: successCount === results.length,
-        results: results,
-        totalGenerated: successCount,
-        totalRequested: results.length,
-        downloadedFiles: downloadedFiles
-      };
-
-    } catch (error) {
-      console.error(`\n❌ Multi-generation failed: ${error.message}\n`);
-      if (this.browser) {
-        await this.close();
-      }
-
-      return {
-        success: false,
-        error: error.message,
-        results: results,
-        totalGenerated: results.filter(r => r.success).length,
-        totalRequested: prompts.length
-      };
+      console.log('[CLOSE] ✅ Complete\n');
     }
+  }
+
+  // Backward compatibility: Keep generateMultiple as wrapper for generateImages
+  async generateMultiple(characterImagePath, productImagePath, prompts, options = {}) {
+    return this.generateImages(
+      { characterImagePath, productImagePath, ...options },
+      { prompts, outputCount: options.outputCount || 1, ...options }
+    );
   }
 
   async generateVideo(videoPrompt, primaryImagePath, secondaryImagePath, options = {}) {

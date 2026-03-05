@@ -3,12 +3,18 @@
 /**
  * Session Refresh - Get Fresh Cookies + Tokens
  * 
- * When session cookies expire (NextAuth, GA, etc), use this to:
+ * Applied ChatGPT Shared Profile Pattern for Google Flow:\n * - Uses a SHARED session file across all flows: google-flow-profiles/default/session.json
+ * - Each flow gets its own Chrome user data directory (per-flow profile)
+ * - Session data from this script is loaded by all flows automatically
+ * - Cookies/localStorage are captured on close() and reused on next init()\n * When session cookies expire (NextAuth, GA, etc), use this to:
  * 1. Open Google Flow in browser
  * 2. Capture ALL fresh cookies
  * 3. Capture fresh reCAPTCHA tokens
- * 4. Save to session file with current timestamp
- * 5. Updates expires in 5 minutes for reCAPTCHA safety
+ * 4. Save to SHARED session file for use by all flows
+ * 5. Next GoogleFlowAutomationService.init() will auto-restore this session\n * BENEFITS:\n * ✅ No repeated logins when running multiple flows
+ * ✅ Each flow has isolated Chrome profile (no conflicts)
+ * ✅ All flows share latest auth data automatically
+ * ✅ Cookies persist in Chrome profile + session file
  */
 
 import puppeteer from 'puppeteer-extra';
@@ -19,6 +25,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
+
+// 🔐 Define shared profile paths (same as SessionManager)
+// File location: backend/scripts/auth/google-flow/refresh-session.js
+// Target: backend/data/google-flow-profiles/default/session.json
+// Go up 3 levels from google-flow → backend, then into data/
+const GOOGLE_FLOW_PROFILE_BASE = path.join(__dirname, '../../../data/google-flow-profiles');
+const GOOGLE_FLOW_DEFAULT_SESSION = path.join(GOOGLE_FLOW_PROFILE_BASE, 'default', 'session.json');
 
 async function refreshSession() {
   console.log('======================================================================');
@@ -36,7 +49,7 @@ async function refreshSession() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
 
-    const sessionPath = path.join(__dirname, '../.sessions/google-flow-session-complete.json');
+    const sessionPath = GOOGLE_FLOW_DEFAULT_SESSION;  // 💫 Use SHARED profile path
 
     console.log('📝 INSTRUCTIONS:\n');
     console.log('   The browser will open Google Flow.');
@@ -144,19 +157,11 @@ async function refreshSession() {
       };
     });
 
-    // Get httpOnly cookies from Puppeteer (FILTER: only same-domain, avoid third-party cookies)
+    // Get httpOnly cookies from Puppeteer (KEEP ALL - like SessionManager does)
     const allCookies = await page.cookies();
-    
-    // Filter to only keep cookies from labs.google domain
-    // This avoids third-party cookie issues from SameSite=None cookies
-    const sameDomainCookies = allCookies.filter(cookie => {
-      if (!cookie.domain) return true; // No domain = safe
-      return cookie.domain === 'labs.google' || cookie.domain === '.labs.google';
-    });
     
     console.log('📋 CAPTURED DATA:\n');
     console.log(`   • Cookies found: ${allCookies.length} total`);
-    console.log(`   • Same-domain cookies: ${sameDomainCookies.length} (third-party excluded)`);
     console.log(`   • localStorage items: ${Object.keys(sessionData.localStorage).length}`);
 
     const recaptchaCount = Object.values(sessionData.recaptchaTokens).filter(v => v).length;
@@ -190,7 +195,7 @@ async function refreshSession() {
       url: 'https://labs.google/fx/vi/tools/flow',
       localStorage: sessionData.localStorage,
       sessionStorage: {}, // Can't capture from page.evaluate
-      cookies: sameDomainCookies,  // ✅ Use filtered same-domain cookies only
+      cookies: allCookies,  // ✅ Save ALL cookies (like SessionManager)
       tokens: {
         recaptcha: sessionData.recaptchaTokens,
         capturedAt: new Date().toISOString()
@@ -209,11 +214,18 @@ async function refreshSession() {
       diagnostics: {
         recaptchaAvailable: true,
         recaptchaConfigured: false,
-        authTokensPresent: sameDomainCookies.some(c => c.name.includes('auth')),  // ✅ Updated
+        authTokensPresent: allCookies.some(c => c.name.includes('auth')),  // ✅ Updated
         recaptchaTokensPresent: recaptchaCount === 3,
         capturedRequests: 0
       }
     };
+
+    // 💾 Ensure session directory exists before saving
+    const sessionDir = path.dirname(sessionPath);
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
+      console.log(`📁 Created session directory: ${sessionDir}\n`);
+    }
 
     // Save to file
     fs.writeFileSync(sessionPath, JSON.stringify(newSession, null, 2));

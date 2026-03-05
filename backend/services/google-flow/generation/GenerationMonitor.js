@@ -39,9 +39,16 @@ class GenerationMonitor {
    * Monitor generation progress
    * Polls page for generation status up to timeout
    * Returns {success, href} object when generation completes
+   * 
+   * @param {number} timeoutSeconds - Timeout in seconds
+   * @param {number} expectedNewHrefs - Expected number of new hrefs
+   * @param {string} promptText - Original prompt text (for recovery Strategy 3)
    */
-  async monitorGeneration(timeoutSeconds = 300, expectedNewHrefs = 1) {
+  async monitorGeneration(timeoutSeconds = 300, expectedNewHrefs = 1, promptText = null) {
     console.log(`⏳ [MONITOR] Starting generation monitoring (max ${timeoutSeconds}s, expecting ${expectedNewHrefs} new image${expectedNewHrefs > 1 ? 's' : ''})...`);
+    
+    // 💾 IMPORTANT: Save prompt for Strategy 3 recovery
+    const originalPrompt = promptText || 'unknown prompt';
     
     // 🔥 DEBUG: Check if PreGenerationMonitor baseline is available
     if (this.preGenerationMonitor) {
@@ -57,6 +64,10 @@ class GenerationMonitor {
     let lastStatus = '';
     let statusCheckCount = 0;
     let lastHrefCount = 0;  // Track href count to detect completion
+    let errorRetryCount = 0;  // 💫 NEW: Track how many times we've retried on error
+    let lastNewHrefTime = Date.now();  // 💫 Track last time we found a new href
+    const MAX_SIMPLE_RETRIES = 3;  // Max direct retry button clicks
+    const PARTIAL_TIMEOUT_MS = 30000;  // 30s - if no new hrefs in 30s, assume partial failure
 
     try {
       while (Date.now() - startTime < timeoutMs) {
@@ -132,7 +143,12 @@ class GenerationMonitor {
               console.log(`      ✅ DETECTED: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} via PreGenerationMonitor`);
             } else if (newHrefCount > lastHrefCount) {
               lastHrefCount = newHrefCount;
+              lastNewHrefTime = Date.now();  // 💫 Update time when new href found
               console.log(`      📈 Progress: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found so far`);
+            } else if (newHrefCount > 0 && Date.now() - lastNewHrefTime > PARTIAL_TIMEOUT_MS) {
+              // 💫 NEW: Partial success - no new hrefs for 30s but we have some
+              console.log(`      ⚠️  PARTIAL: No new hrefs for ${PARTIAL_TIMEOUT_MS/1000}s, assuming ${newHrefCount}/${expectedNewHrefs} are all that will generate`);
+              preGenStatus = 'partial-ready';
             }
           } catch (e) {
             console.warn(`      ⚠️  PreGenerationMonitor check error: ${e.message}`);
@@ -143,6 +159,8 @@ class GenerationMonitor {
         let effectiveStatus = status;
         if (preGenStatus === 'ready-by-hrefs') {
           effectiveStatus = 'ready';
+        } else if (preGenStatus === 'partial-ready') {
+          effectiveStatus = 'partial-ready';  // 💫 Handle partial success
         }
 
         // 💫 NEW: Log every check iteration with href status
@@ -193,43 +211,125 @@ class GenerationMonitor {
         // Handle error status
         if (effectiveStatus === 'error') {
           console.warn('⚠️  Generation error detected on page');
+          errorRetryCount++;
           
-          // 💫 FIX: Try to get the failed tile's href for retry
-          // Only consider it a TRUE error if:
-          // 1. First tile contains error indicators (%, loading state, etc)
-          // 2. href is NOT a navigation link (/tools/flow/faq, etc)
-          let failedTileHref = null;
-          let tileStatus = null;  // Track what we found
+          // 💫 ESCALATION STRATEGY:
+          // 1. Retries 1-3: Click retry button (simple recovery)
+          // 2. Retry 4: Click "Use Again" button + Submit 2x (medium recovery)
+          // 3. Retry 5+: Re-enter prompt + Submit (full recovery)
+          
+          console.log(`   [RETRY ${errorRetryCount}/${MAX_SIMPLE_RETRIES + 2}] Escalating error recovery...`);
+          
           try {
-            failedTileHref = await this.page.evaluate(() => {
-              const firstTile = document.querySelector('[data-testid="virtuoso-item-list"] [data-tile-id]');
-              if (!firstTile) return null;
+            // 💫 COMMENTED OUT: Strategy 1 (retry button) - not effective
+            // if (errorRetryCount <= MAX_SIMPLE_RETRIES) {
+            //   console.log(`🔄 [Strategy 1] Clicking retry button...`);
+            //   // ... retry button click code ...
+            // }
+            
+            // 💫 NEW: Strategy 2 replaces Strategy 1 - Click "Use Again" 3x with focus+spaces+wait+submit
+            if (errorRetryCount >= 1 && errorRetryCount <= MAX_SIMPLE_RETRIES + 1) {
+              const maxUseAgainRetries = 3;
+              const useAgainAttempt = Math.min(errorRetryCount, maxUseAgainRetries);
               
-              const link = firstTile.querySelector('a[href]');
-              if (!link) return null;
+              console.log(`🔄 [Strategy 2] Using 'Use Again' button attempt ${useAgainAttempt}/${maxUseAgainRetries}...`);
               
-              const href = link.getAttribute('href');
-              // 🔧 FIX: Exclude navigation links that aren't actual generation results
-              // Real generation hrefs have /edit/ in them, FAQ links have /faq, /tools/flow/, etc
-              if (href && href.includes('/edit/')) {
-                return href;
+              const useAgainResult = await this.page.evaluate(() => {
+                const firstTile = document.querySelector('[data-testid="virtuoso-item-list"] [data-tile-id]');
+                if (!firstTile) return { found: false };
+                
+                // 💫 FIX: Find "Sử dụng lại câu lệnh" button (undo icon)
+                // It's at same level as retry button
+                const buttons = Array.from(firstTile.querySelectorAll('button'));
+                const useAgainBtn = buttons.find(btn => {
+                  const icons = btn.querySelectorAll('i.google-symbols');
+                  const spans = btn.querySelectorAll('span');
+                  
+                  // Check for undo icon (this is "Sử dụng lại câu lệnh" button)
+                  for (const icon of icons) {
+                    const iconText = icon.textContent.trim();
+                    if (iconText === 'undo') {
+                      return true;
+                    }
+                  }
+                  
+                  // Check text content in span
+                  for (const span of spans) {
+                    const spanText = span.textContent.toLowerCase();
+                    if (spanText.includes('sử dụng lại câu lệnh') || spanText.includes('use command')) {
+                      return true;
+                    }
+                  }
+                  
+                  return false;
+                });
+                
+                if (useAgainBtn) {
+                  useAgainBtn.click();
+                  return { found: true };
+                }
+                
+                return { found: false };
+              });
+              
+              if (useAgainResult.found) {
+                console.log(`✅ Clicked 'Use Again' button (${useAgainAttempt}/${maxUseAgainRetries})`);
+                await this.page.waitForTimeout(2000);
+                
+                // 💫 NEW: Focus and add spaces
+                console.log(`📝 Focusing textbox and adding spaces...`);
+                const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+                await this.page.focus(textboxSelector);
+                await this.page.waitForTimeout(300);
+                
+                // Add spaces
+                for (let i = 0; i < 3; i++) {
+                  await this.page.keyboard.press('Space');
+                  await this.page.waitForTimeout(100);
+                }
+                
+                // Wait 3 seconds
+                console.log(`⏳ Waiting 3 seconds for input processing...`);
+                await this.page.waitForTimeout(3000);
+                
+                // Submit
+                console.log(`📤 Submitting...`);
+                const submitted = await this.page.evaluate(() => {
+                  const submitBtn = document.querySelector('button[aria-label*="Submit"], button[type="submit"]');
+                  if (submitBtn) {
+                    submitBtn.click();
+                    return true;
+                  }
+                  return false;
+                });
+                
+                if (submitted) {
+                  console.log(`✅ Submitted after 'Use Again' (${useAgainAttempt}/${maxUseAgainRetries})`);
+                  await this.page.waitForTimeout(3000);
+                  continue;
+                } else {
+                  console.log(`⚠️  Submit button not found after 'Use Again'`);
+                }
+              } else {
+                console.log(`⚠️  'Use Again' button not found`);
               }
-              return null;  // Not a real generation tile
-            });
-            tileStatus = failedTileHref ? 'found' : 'not_generation_tile';
+            }
+            
+            // 💫 NEW: Strategy 3 after all "Use Again" attempts fail - Full rehash
+            if (errorRetryCount > MAX_SIMPLE_RETRIES + 1) {
+              console.log(`🔄 [Strategy 3] All 'Use Again' attempts failed, need full rehash regeneration...`);
+              // Return error so main flow triggers handleGenerationFailureRetry (full recovery)
+              return { success: false, error: 'Use Again recovery failed, triggering full rehash' };
+            }
+            
           } catch (e) {
-            tileStatus = 'query_error';
+            console.log(`❌ Error during recovery strategy: ${e.message}`);
           }
           
-          console.log(`[ERROR] Failed tile href: ${failedTileHref ? failedTileHref.substring(0, 60) + '...' : 'not found'} (${tileStatus})`);
-          
-          // Only return error if we found a true generation tile
-          // If we didn't find one (found FAQ or other nav link instead), skip error handling
-          if (!failedTileHref || tileStatus !== 'found') {
-            console.log(`ℹ️  Skipping error - not a generation result tile (${tileStatus}), continuing to wait...`);
-            // Don't return error, continue monitoring
-          } else {
-            return { success: false, href: failedTileHref, error: 'Generation error detected on tile' };
+          // If all Use Again attempts exhausted, need full rehash
+          if (errorRetryCount > MAX_SIMPLE_RETRIES + 1) {
+            console.log(`❌ ERROR: 'Use Again' recovery exhausted (attempt ${errorRetryCount}), need full rehash`);
+            return { success: false, error: 'Use Again recovery exhausted, triggering full rehash' };
           }
         }
 
@@ -257,6 +357,29 @@ class GenerationMonitor {
           
           console.warn('⚠️  Could not find generated image href');
           return { success: false, href: null };
+        }
+
+        // 💫 Handle partial success (some images generated, others failed)
+        if (effectiveStatus === 'partial-ready') {
+          console.log(`⚠️  Partial success: Some images generated, others may have failed`);
+          
+          if (this.preGenerationMonitor) {
+            const partialResult = await this.preGenerationMonitor.findNewHref();
+            if (partialResult && partialResult.href) {
+              console.log(`   📊 Returning partial success: ${partialResult.newCount}/${expectedNewHrefs} image(s)`);
+              console.log(`      Will download ${partialResult.newCount} images, can retry for remaining ${expectedNewHrefs - partialResult.newCount}`);
+              return { 
+                success: true,  // 💫 Consider it success since we have some images
+                href: partialResult.href, 
+                partial: true,
+                found: partialResult.newCount,
+                expected: expectedNewHrefs
+              };
+            }
+          }
+          
+          console.warn('⚠️  Could not retrieve partial images');
+          return { success: false, href: null, partial: true, found: 0 };
         }
         
         // Log periodically with more info

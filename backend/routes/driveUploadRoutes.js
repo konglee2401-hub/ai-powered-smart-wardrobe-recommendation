@@ -105,6 +105,32 @@ router.get('/auth-callback', async (req, res) => {
     console.log('✅ Received OAuth authorization code, processing...');
     const result = await driveService.handleAuthCallback(code);
     
+    // 💫 CRITICAL: Verify token was actually saved to disk before reporting success
+    const fs = require('fs');
+    const tokenPath = path.join(__dirname, '../config/drive-token.json');
+    if (!fs.existsSync(tokenPath)) {
+      console.error('❌ Token callback succeeded but token file not found');
+      return res.status(500).json({
+        success: false,
+        authenticated: false,
+        message: 'Token save failed - file not created',
+        error: 'Token was not persisted to disk',
+      });
+    }
+
+    // Verify token can be loaded
+    const savedToken = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+    if (!savedToken.access_token) {
+      console.error('❌ Saved token missing access_token');
+      return res.status(500).json({
+        success: false,
+        authenticated: false,
+        message: 'Token invalid - missing access_token',
+      });
+    }
+
+    console.log(`✅ Token saved and verified: ${savedToken.access_token.substring(0, 20)}...`);
+    
     // Initialize folder structure after authentication
     await driveService.initializeFolderStructure();
 

@@ -35,8 +35,8 @@ export default function SetupAuthentication() {
   const loadStatuses = async () => {
     try {
       const [gf, cg] = await Promise.all([
-        axiosInstance.get('/api/auth-setup/status/google-flow-session'),
-        axiosInstance.get('/api/auth-setup/status/chatgpt-session'),
+        axiosInstance.get('/auth-setup/status/google-flow-session'),
+        axiosInstance.get('/auth-setup/status/chatgpt-session'),
       ]);
       setGfStatus(gf.data);
       setCgptStatus(cg.data);
@@ -46,8 +46,8 @@ export default function SetupAuthentication() {
   const loadStoredCreds = async () => {
     try {
       const [gd, yt] = await Promise.all([
-        axiosInstance.get('/api/auth-setup/credentials/google-drive').catch(() => ({ data: null })),
-        axiosInstance.get('/api/auth-setup/credentials/youtube').catch(() => ({ data: null })),
+        axiosInstance.get('/auth-setup/credentials/google-drive').catch(() => ({ data: null })),
+        axiosInstance.get('/auth-setup/credentials/youtube').catch(() => ({ data: null })),
       ]);
       if (gd.data?.success) {
         setGdCreds(c => ({ ...c, redirectUri: gd.data.redirectUri || '' }));
@@ -61,7 +61,7 @@ export default function SetupAuthentication() {
   const loadDriveConfig = async () => {
     setLoadingDriveConfig(true);
     try {
-      const { data } = await axiosInstance.get('/api/auth-setup/drive-config-check');
+      const { data } = await axiosInstance.get('/auth-setup/drive-config-check');
       setDriveConfig(data);
     } catch (e) {
       setMessage('Failed to load drive configuration: ' + (e.response?.data?.error || e.message));
@@ -72,7 +72,7 @@ export default function SetupAuthentication() {
 
   const loadScraperConfig = async () => {
     try {
-      const { data } = await axiosInstance.get('/api/auth-setup/scraper-videos-config');
+      const { data } = await axiosInstance.get('/auth-setup/scraper-videos-config');
       if (data.success) {
         setScraperConfig(data.config);
       }
@@ -110,7 +110,7 @@ export default function SetupAuthentication() {
 
   const runGoogleFlowRefresh = async () => {
     setMessage('');
-    await axiosInstance.post('/api/auth-setup/run/refresh-google-flow');
+    await axiosInstance.post('/auth-setup/run/refresh-google-flow');
     setMessage(t('authSetup.messages.startedGoogleFlow'));
     setTimeout(loadStatuses, 4000);
   };
@@ -127,7 +127,7 @@ export default function SetupAuthentication() {
     setMessage('');
     try {
       const payload = { provider, clientId: creds.clientId, clientSecret: creds.clientSecret, redirectUri: creds.redirectUri };
-      await axiosInstance.post('/api/auth-setup/credentials/save', payload);
+      await axiosInstance.post('/auth-setup/credentials/save', payload);
       setMessage(t('authSetup.messages.savedCredentials'));
     } catch (e) {
       setMessage(t('authSetup.messages.saveErrorPrefix') + (e.response?.data?.error || e.message));
@@ -138,7 +138,7 @@ export default function SetupAuthentication() {
 
   const openDriveAuth = async () => {
     try {
-      const { data } = await axiosInstance.post('/api/auth-setup/google-drive/oauth-url');
+      const { data } = await axiosInstance.post('/auth-setup/google-drive/oauth-url');
       if (data?.authUrl) window.open(data.authUrl, '_blank');
     } catch {}
   };
@@ -154,14 +154,14 @@ export default function SetupAuthentication() {
 
   const openYouTubeAuth = async () => {
     try {
-      const { data } = await axiosInstance.post('/api/auth-setup/youtube/oauth-url');
+      const { data } = await axiosInstance.post('/auth-setup/youtube/oauth-url');
       if (data?.authUrl) window.open(data.authUrl, '_blank');
     } catch {}
   };
 
   const exchangeYouTubeCode = async (code) => {
     try {
-      await axiosInstance.post('/api/auth-setup/youtube/exchange-code', { code });
+      await axiosInstance.post('/auth-setup/youtube/exchange-code', { code });
       setMessage(t('authSetup.messages.savedYouTubeToken'));
     } catch (e) {
       setMessage(t('authSetup.messages.exchangeErrorPrefix') + (e.response?.data?.error || e.message));

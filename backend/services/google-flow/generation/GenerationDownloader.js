@@ -82,12 +82,16 @@ class GenerationDownloader {
             };
           }
           
-          // Check for ERROR messages (cannot upgrade)
+          // 💫 Check for ERROR messages (cannot upgrade to higher resolution)
+          // Including "Không tăng độ phân giải được" (Cannot increase resolution)
           if (lowerText.includes('không thể nâng cấp') ||
+              lowerText.includes('không tăng độ phân giải') ||
               lowerText.includes('cannot') && lowerText.includes('resolution') ||
               lowerText.includes('upgrade') && lowerText.includes('fail') ||
               lowerText.includes('cannot upgrade') ||
-              lowerText.includes('quality not available')) {
+              lowerText.includes('quality not available') ||
+              lowerText.includes('cannot upscale') ||
+              lowerText.includes('resolution limit')) {
             return {
               type: 'error',
               message: text.trim().substring(0, 200),
