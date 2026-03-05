@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { characterAPI } from '../services/api';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 
 const defaultOptions = {
   identity: { gender: '', ageRange: '', ethnicity: '', height: '', bust: '', waist: '', bodyType: '', bodyProportions: '', skinTone: '', distinctiveMarks: '', tattoos: '' },
@@ -20,6 +20,7 @@ export default function CharacterCreatorPage() {
   const [portraitTempPath, setPortraitTempPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [generationSeed, setGenerationSeed] = useState(null);
+  const [fullSizeImage, setFullSizeImage] = useState(null);
 
   const imageCount = useMemo(() => Number(options.capturePlan.imageCount || 6), [options.capturePlan.imageCount]);
 
@@ -61,50 +62,148 @@ export default function CharacterCreatorPage() {
   };
 
   return (
-    <div className="p-6 space-y-4 text-white">
-      <h1 className="text-2xl font-bold">Character Creator</h1>
-      <p className="text-slate-400 text-sm">Upload portrait + fill detailed options, generate 4-8 reference images via Google Flow, preview, regenerate, then save.</p>
-      {generationSeed !== null && <div className="text-xs text-emerald-400">Seed lock: {generationSeed}</div>}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="space-y-3 lg:col-span-2 bg-[#111522] border border-slate-700 rounded-xl p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Character name" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2"/>
-            <input value={alias} onChange={e=>setAlias(e.target.value)} placeholder="Alias (ex: LinhPhap)" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2"/>
-          </div>
-          <input type="file" accept="image/*" onChange={e=>setPortrait(e.target.files?.[0] || null)} className="text-sm" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-            <input placeholder="Gender" value={options.identity.gender} onChange={e=>setNested('identity','gender',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Age range" value={options.identity.ageRange} onChange={e=>setNested('identity','ageRange',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Height" value={options.identity.height} onChange={e=>setNested('identity','height',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Bust" value={options.identity.bust} onChange={e=>setNested('identity','bust',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Waist" value={options.identity.waist} onChange={e=>setNested('identity','waist',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Body type" value={options.identity.bodyType} onChange={e=>setNested('identity','bodyType',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Skin tone" value={options.identity.skinTone} onChange={e=>setNested('identity','skinTone',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Face shape" value={options.face.faceShape} onChange={e=>setNested('face','faceShape',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Eye shape/color" value={options.face.eyeShape} onChange={e=>setNested('face','eyeShape',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Hair color" value={options.hair.color} onChange={e=>setNested('hair','color',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Hair style" value={options.hair.style} onChange={e=>setNested('hair','style',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Makeup" value={options.styling.makeupStyle} onChange={e=>setNested('styling','makeupStyle',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Accessories" value={options.styling.accessories} onChange={e=>setNested('styling','accessories',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Jewelry" value={options.styling.jewelry} onChange={e=>setNested('styling','jewelry',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Tattoos" value={options.identity.tattoos} onChange={e=>setNested('identity','tattoos',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input type="number" min="4" max="8" value={options.capturePlan.imageCount} onChange={e=>setNested('capturePlan','imageCount',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input placeholder="Aspect 9:16" value={options.capturePlan.aspectRatio} onChange={e=>setNested('capturePlan','aspectRatio',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-          </div>
-          <textarea placeholder="Extra prompt notes" value={options.extraPromptNotes} onChange={e=>setOptions(prev=>({ ...prev, extraPromptNotes: e.target.value }))} className="w-full bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2" rows={3}/>
-          <div className="flex gap-2">
-            <button onClick={generate} disabled={loading} className="bg-fuchsia-600 rounded px-4 py-2">{loading ? 'Generating...' : 'Create Preview'}</button>
-            <button onClick={generate} disabled={loading || !preview.length} className="bg-slate-700 rounded px-4 py-2 inline-flex items-center gap-2"><RefreshCw className="w-4 h-4"/> Regenerate</button>
-            <button onClick={saveCharacter} disabled={!preview.length || !portraitTempPath} className="bg-emerald-600 rounded px-4 py-2">Save Character</button>
+    <div className="flex flex-col h-screen bg-[#050609] text-white">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-700 bg-[#0a0e18]">
+        <h1 className="text-3xl font-bold mb-2">Character Creator</h1>
+        <p className="text-slate-400 text-sm">Upload portrait + fill detailed options, generate 4-8 reference images via Google Flow, preview, regenerate, then save.</p>
+        {generationSeed !== null && <div className="text-xs text-emerald-400 mt-2">Seed lock: {generationSeed}</div>}
+      </div>
+
+      {/* Main layout: 50-50 split */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: Options Panel */}
+        <div className="w-1/2 overflow-y-auto border-r border-slate-700 bg-[#0a0e18] p-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <input value={name} onChange={e=>setName(e.target.value)} placeholder="Character name" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2 text-sm"/>
+              <input value={alias} onChange={e=>setAlias(e.target.value)} placeholder="Alias (ex: LinhPhap)" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2 text-sm"/>
+            </div>
+            
+            <div>
+              <label className="text-xs text-slate-400 block mb-2">Portrait image</label>
+              <input type="file" accept="image/*" onChange={e=>setPortrait(e.target.files?.[0] || null)} className="text-xs w-full" />
+            </div>
+
+            {/* Identity section */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-2">Identity</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Gender" value={options.identity.gender} onChange={e=>setNested('identity','gender',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Age range" value={options.identity.ageRange} onChange={e=>setNested('identity','ageRange',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Height" value={options.identity.height} onChange={e=>setNested('identity','height',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Bust" value={options.identity.bust} onChange={e=>setNested('identity','bust',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Waist" value={options.identity.waist} onChange={e=>setNested('identity','waist',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Body type" value={options.identity.bodyType} onChange={e=>setNested('identity','bodyType',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Skin tone" value={options.identity.skinTone} onChange={e=>setNested('identity','skinTone',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Tattoos" value={options.identity.tattoos} onChange={e=>setNested('identity','tattoos',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+              </div>
+            </div>
+
+            {/* Face section */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-2">Face</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Face shape" value={options.face.faceShape} onChange={e=>setNested('face','faceShape',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Eye shape/color" value={options.face.eyeShape} onChange={e=>setNested('face','eyeShape',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Eye color" value={options.face.eyeColor} onChange={e=>setNested('face','eyeColor',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Eyebrow style" value={options.face.eyebrowStyle} onChange={e=>setNested('face','eyebrowStyle',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Nose type" value={options.face.noseType} onChange={e=>setNested('face','noseType',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Lip shape" value={options.face.lipShape} onChange={e=>setNested('face','lipShape',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+              </div>
+            </div>
+
+            {/* Hair section */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-2">Hair</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Hair color" value={options.hair.color} onChange={e=>setNested('hair','color',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Hair length" value={options.hair.length} onChange={e=>setNested('hair','length',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Hair texture" value={options.hair.texture} onChange={e=>setNested('hair','texture',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Hair style" value={options.hair.style} onChange={e=>setNested('hair','style',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+              </div>
+            </div>
+
+            {/* Styling section */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-2">Styling</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <input placeholder="Makeup" value={options.styling.makeupStyle} onChange={e=>setNested('styling','makeupStyle',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Accessories" value={options.styling.accessories} onChange={e=>setNested('styling','accessories',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Jewelry" value={options.styling.jewelry} onChange={e=>setNested('styling','jewelry',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Outfit vibe" value={options.styling.outfitVibe} onChange={e=>setNested('styling','outfitVibe',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+              </div>
+            </div>
+
+            {/* Capture plan section */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-2">Capture Plan</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <input type="number" min="4" max="8" value={options.capturePlan.imageCount} onChange={e=>setNested('capturePlan','imageCount',e.target.value)} placeholder="Count" className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Aspect" value={options.capturePlan.aspectRatio} onChange={e=>setNested('capturePlan','aspectRatio',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+                <input placeholder="Lighting" value={options.capturePlan.lightingStyle} onChange={e=>setNested('capturePlan','lightingStyle',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1 text-xs"/>
+              </div>
+            </div>
+
+            {/* Extra notes */}
+            <textarea placeholder="Extra prompt notes" value={options.extraPromptNotes} onChange={e=>setOptions(prev=>({ ...prev, extraPromptNotes: e.target.value }))} className="w-full bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2 text-xs" rows={3}/>
+
+            {/* Buttons */}
+            <div className="flex gap-2 sticky bottom-0 bg-[#0a0e18] p-4 -mx-6 mb-0">
+              <button onClick={generate} disabled={loading} className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-slate-700 rounded px-4 py-2 text-sm font-medium">{loading ? 'Generating...' : 'Create Preview'}</button>
+              <button onClick={generate} disabled={loading || !preview.length} className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 rounded px-4 py-2 text-sm font-medium inline-flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4"/> Regenerate</button>
+              <button onClick={saveCharacter} disabled={!preview.length || !portraitTempPath} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded px-4 py-2 text-sm font-medium">Save Character</button>
+            </div>
           </div>
         </div>
-        <div className="bg-[#111522] border border-slate-700 rounded-xl p-4">
-          <h3 className="font-semibold mb-3">Preview ({preview.length})</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {preview.map((img) => <img key={img.url} src={img.url} alt={img.filename} className="w-full h-28 object-cover rounded border border-slate-700" />)}
+
+        {/* Right: Preview Panel */}
+        <div className="w-1/2 overflow-y-auto bg-[#050609] p-6 flex flex-col">
+          <h3 className="text-lg font-semibold mb-4">Preview ({preview.length})</h3>
+          <div className="grid grid-cols-2 gap-4 auto-rows-max">
+            {preview.map((img, idx) => (
+              <div 
+                key={idx} 
+                className="cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-emerald-500 transition-all group"
+                onClick={() => setFullSizeImage(img.url)}
+              >
+                <div className="relative h-64 overflow-hidden bg-slate-900">
+                  <img 
+                    src={img.url} 
+                    alt={`Preview ${idx + 1}`} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">Click for full size</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Full-size image modal */}
+      {fullSizeImage && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setFullSizeImage(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setFullSizeImage(null)}
+              className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 rounded-full p-2 z-10"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img 
+              src={fullSizeImage} 
+              alt="Full size preview" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
