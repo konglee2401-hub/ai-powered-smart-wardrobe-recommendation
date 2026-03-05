@@ -26,6 +26,8 @@ export default function CharacterCreatorPage() {
   const [fullSizeImage, setFullSizeImage] = useState(null);
   const [editingId, setEditingId] = useState(id || null);
   const [editingData, setEditingData] = useState(null);
+  const [regeneratingIdx, setRegeneratingIdx] = useState(null);
+  const [regeneratingLoading, setRegeneratingLoading] = useState(false);
 
   const imageCount = useMemo(() => Number(options.capturePlan.imageCount || 6), [options.capturePlan.imageCount]);
 
@@ -57,6 +59,38 @@ export default function CharacterCreatorPage() {
 
   const deleteImage = (idx) => {
     setPreview(preview.filter((_, i) => i !== idx));
+  };
+
+  const regenerateImage = async (idx) => {
+    if (!editingId || !preview[idx] || !portrait) return;
+    try {
+      setRegeneratingIdx(idx);
+      setRegeneratingLoading(true);
+      const fd = new FormData();
+      fd.append('portraitImage', portrait);
+      fd.append('name', name);
+      fd.append('alias', alias || name);
+      fd.append('imageIndex', idx);
+
+      const response = await fetch(`/api/v1/characters/${editingId}/regenerate-image`, {
+        method: 'POST',
+        body: fd
+      });
+      const data = await response.json();
+      if (data.success && data.data) {
+        const newImages = [...preview];
+        newImages[idx] = data.data;
+        setPreview(newImages);
+      } else {
+        alert('Failed to regenerate image: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error regenerating image:', err);
+      alert('Error regenerating image: ' + err.message);
+    } finally {
+      setRegeneratingIdx(null);
+      setRegeneratingLoading(false);
+    }
   };
 
   const generate = async () => {
@@ -126,10 +160,10 @@ export default function CharacterCreatorPage() {
         {generationSeed !== null && <div className="text-xs text-emerald-400 mt-2">Seed lock: {generationSeed}</div>}
       </div>
 
-      {/* Main layout: 50-50 split */}
+      {/* Main layout: 1/3-2/3 split */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left: Options Panel */}
-        <div className="w-1/2 overflow-y-auto border-r border-slate-700 bg-[#0a0e18] p-6">
+        {/* Left: Options Panel (1/3) */}
+        <div className="w-1/3 overflow-y-auto border-r border-slate-700 bg-[#0a0e18] p-6">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <input value={name} onChange={e=>setName(e.target.value)} placeholder="Character name" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2 text-sm"/>
@@ -249,10 +283,10 @@ export default function CharacterCreatorPage() {
           </div>
         </div>
 
-        {/* Right: Preview Panel */}
-        <div className="w-1/2 overflow-y-auto bg-[#050609] p-6 flex flex-col">
+        {/* Right: Preview Panel (2/3) */}
+        <div className="w-2/3 overflow-y-auto bg-[#050609] p-6 flex flex-col">
           <h3 className="text-lg font-semibold mb-4">Preview ({preview.length})</h3>
-          <div className="grid grid-cols-2 gap-4 auto-rows-max">
+          <div className="grid grid-cols-3 gap-4 auto-rows-max">
             {preview.map((img, idx) => (
               <div 
                 key={idx} 
@@ -280,16 +314,31 @@ export default function CharacterCreatorPage() {
                   {img.prompt && (
                     <p className="text-xs text-slate-400 line-clamp-2 mb-2">{img.prompt.substring(0, 80)}...</p>
                   )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteImage(idx);
-                    }}
-                    className="w-full flex items-center justify-center gap-1 text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded px-2 py-1 transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Remove
-                  </button>
+                  <div className="flex gap-1">
+                    {editingId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          regenerateImage(idx);
+                        }}
+                        disabled={regeneratingLoading && regeneratingIdx === idx}
+                        className="flex-1 flex items-center justify-center gap-1 text-xs bg-blue-600/20 hover:bg-blue-600/30 disabled:bg-slate-700 border border-blue-600/50 disabled:border-slate-600 text-blue-400 disabled:text-slate-500 rounded px-2 py-1 transition-colors"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Regen
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteImage(idx);
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1 text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded px-2 py-1 transition-colors ${editingId ? '' : 'w-full'}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
