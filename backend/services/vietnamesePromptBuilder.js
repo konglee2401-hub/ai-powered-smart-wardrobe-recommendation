@@ -38,12 +38,14 @@ class VietnamesePromptBuilder {
 
     const isShortPrompt = Boolean(options?.short);
     const poseSuggestion = (options?.pose || '').toString().trim();
+    const sceneDirective = (options?.sceneDirective || '').toString().trim();
 
     if (isShortPrompt) {
       return [
         '[ÁNH XẠ HÌNH ẢNH]',
         'Hình 1 = NHÂN VẬT (khóa danh tính).',
         'Hình 2 = TRANG PHỤC (nguồn sản phẩm).',
+        'Hình 3 = SCENE REFERENCE (nguồn background, bắt buộc nếu có).',
         '',
         '[KHÓA NHÂN DẠNG — NGHIÊM NGẶT]',
         'Giữ nguyên khuôn mặt, cơ thể, tóc, tư thế, ánh nhìn từ Hình 1.',
@@ -52,6 +54,8 @@ class VietnamesePromptBuilder {
         'Nhân vật MẶC trang phục từ Hình 2. Nếu Hình 2 có người mẫu, chỉ lấy trang phục.',
         '',
         `[TRANG PHỤC] ${garment_type}; màu: ${primary_color}${secondary_color ? ` + ${secondary_color}` : ''}; chất liệu: ${fabric_type}`,
+        ...(sceneDirective ? [`[SCENE LOCK] ${sceneDirective}`] : []),
+        '[SCENE RULE] Dựng lại môi trường theo Hình 3, giữ phối cảnh/background nhất quán.',
         ...(poseSuggestion ? [`[POSE] ${poseSuggestion}`] : []),
         '[RÀNG BUỘC CỨNG] Không méo hình, không lỗi giải phẫu, không tay/chân thừa, không chữ/logo/watermark.'
       ].join('\n');
@@ -232,12 +236,14 @@ class VietnamesePromptBuilder {
 
     const isShortPrompt = Boolean(options?.short);
     const poseSuggestion = (options?.pose || '').toString().trim();
+    const sceneDirective = (options?.sceneDirective || '').toString().trim();
 
     if (isShortPrompt) {
       return [
         '[ÁNH XẠ HÌNH ẢNH]',
         'Hình 1 = NHÂN VẬT (khóa danh tính).',
         'Hình 2 = TRANG PHỤC (nguồn sản phẩm).',
+        'Hình 3 = SCENE REFERENCE (nguồn background, bắt buộc nếu có).',
         '',
         '[KHÓA NHÂN DẠNG — NGHIÊM NGẶT]',
         'Giữ nguyên khuôn mặt, cơ thể, tóc, tư thế, ánh nhìn từ Hình 1.',
@@ -246,6 +252,8 @@ class VietnamesePromptBuilder {
         'Nhân vật KHÔNG mặc trang phục. Nhân vật CẦM và trình bày trang phục từ Hình 2 rõ trước camera.',
         '',
         `[TRANG PHỤC] ${garment_type}; màu: ${primary_color}${secondary_color ? ` + ${secondary_color}` : ''}; chất liệu: ${fabric_type}`,
+        ...(sceneDirective ? [`[SCENE LOCK] ${sceneDirective}`] : []),
+        '[SCENE RULE] Dựng lại môi trường theo Hình 3, giữ phối cảnh/background nhất quán.',
         ...(poseSuggestion ? [`[POSE] ${poseSuggestion}`] : []),
         '[RÀNG BUỘC CỨNG] Không méo hình, không lỗi giải phẫu, không tay/chân thừa, không chữ/logo/watermark.'
       ].join('\n');
