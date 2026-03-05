@@ -111,12 +111,12 @@ export default function CharacterListPage() {
                 className="bg-[#0a0e18] border border-slate-700 rounded-xl overflow-hidden hover:border-emerald-500/50 transition-all group"
               >
                 {/* Character Portrait */}
-                <div className="relative h-48 overflow-hidden bg-slate-900">
+                <div className="relative h-64 overflow-hidden bg-slate-900 flex items-center justify-center">
                   {character.portraitUrl ? (
                     <img
                       src={character.portraitUrl}
                       alt={character.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-slate-800">
@@ -136,14 +136,14 @@ export default function CharacterListPage() {
                       <p className="text-xs text-slate-500 mb-2">
                         {character.referenceImages.length} reference images
                       </p>
-                      <div className="grid grid-cols-4 gap-1.5">
+                      <div className="grid grid-cols-4 gap-2">
                         {character.referenceImages.slice(0, 4).map((img, idx) => (
-                          <div key={idx} className="h-12 rounded overflow-hidden bg-slate-800">
+                          <div key={idx} className="h-20 rounded overflow-hidden bg-slate-800 flex items-center justify-center">
                             {img.url ? (
                               <img
                                 src={img.url}
                                 alt={`Ref ${idx + 1}`}
-                                className="w-full h-full object-cover hover:scale-110 transition-transform cursor-pointer"
+                                className="w-full h-full object-contain hover:scale-110 transition-transform cursor-pointer"
                               />
                             ) : (
                               <div className="w-full h-full bg-slate-700" />

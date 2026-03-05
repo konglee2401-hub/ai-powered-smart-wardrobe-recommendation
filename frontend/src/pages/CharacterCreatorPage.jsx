@@ -135,7 +135,7 @@ export default function CharacterCreatorPage() {
               <label className="text-xs text-slate-400 block mb-2">Portrait image</label>
               {portraitTempPath && editingId && (
                 <div className="mb-3">
-                  <img src={portraitTempPath} alt="Current portrait" className="w-full h-40 object-cover rounded border border-slate-600" />
+                  <img src={portraitTempPath} alt="Current portrait" className="w-full h-40 object-contain rounded border border-slate-600 bg-slate-900 flex items-center justify-center" />
                   <p className="text-xs text-slate-500 mt-1">Current portrait. Upload a new file to replace.</p>
                 </div>
               )}
@@ -224,11 +224,11 @@ export default function CharacterCreatorPage() {
                 className="cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-emerald-500 transition-all group"
                 onClick={() => setFullSizeImage(img.url)}
               >
-                <div className="relative h-64 overflow-hidden bg-slate-900">
+                <div className="relative h-64 overflow-hidden bg-slate-900 flex items-center justify-center">
                   <img 
                     src={img.url} 
                     alt={`Preview ${idx + 1}`} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <span className="text-white text-sm font-medium">Click for full size</span>
