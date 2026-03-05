@@ -134,50 +134,42 @@ export default function CharacterCreatorPage() {
             
             <div>
               <label className="text-xs text-slate-400 block mb-2 font-semibold">Portrait image</label>
-              <div className="relative">
-                {/* Portrait Preview */}
-                <div className="mb-3 border-2 border-dashed border-slate-600 rounded-lg p-4 bg-slate-900/40 hover:border-emerald-500/50 transition-colors min-h-48 flex items-center justify-center overflow-hidden">
-                  {portraitTempPath ? (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <img 
-                        src={portraitTempPath} 
-                        alt="Portrait preview" 
-                        className="h-48 object-contain rounded"
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-slate-400 text-sm font-medium mb-2">
-                        {editingId ? 'Update portrait' : 'Upload portrait'}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Left: Upload Area */}
+                <div>
+                  <input 
+                    id="portrait-input"
+                    type="file" 
+                    accept="image/*" 
+                    onChange={e=>setPortrait(e.target.files?.[0] || null)} 
+                    className="hidden"
+                  />
+                  
+                  <label 
+                    htmlFor="portrait-input"
+                    className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-600 rounded-lg bg-slate-900/40 hover:border-emerald-500/50 hover:bg-slate-900/60 transition-all cursor-pointer"
+                  >
+                    <div className="text-center">
+                      <p className="text-slate-400 text-xs font-medium mb-1">
+                        {portraitTempPath ? 'Change' : 'Upload'}
                       </p>
-                      <p className="text-slate-500 text-xs">PNG, JPG or GIF (max 5MB)</p>
+                      <p className="text-slate-500 text-xs">PNG, JPG</p>
                     </div>
-                  )}
+                  </label>
                 </div>
                 
-                {/* Hidden file input with label */}
-                <input 
-                  id="portrait-input"
-                  type="file" 
-                  accept="image/*" 
-                  onChange={e=>setPortrait(e.target.files?.[0] || null)} 
-                  className="hidden"
-                />
-                
-                {/* File upload button */}
-                <label 
-                  htmlFor="portrait-input"
-                  className="block w-full bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2.5 text-center text-sm font-medium cursor-pointer transition-colors border border-slate-600"
-                >
-                  {portraitTempPath ? 'Change Portrait' : 'Select Portrait'}
-                </label>
-                
-                {/* Info text */}
-                {portraitTempPath && editingId && (
-                  <p className="text-xs text-slate-500 mt-2 text-center">
-                    Current portrait displayed above. Click "Change Portrait" to replace.
-                  </p>
-                )}
+                {/* Right: Preview */}
+                <div className="h-32 border border-slate-600 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden">
+                  {portraitTempPath ? (
+                    <img 
+                      src={portraitTempPath} 
+                      alt="Portrait preview" 
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-500 text-xs">No image</span>
+                  )}
+                </div>
               </div>
             </div>
 
