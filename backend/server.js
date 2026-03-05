@@ -43,6 +43,7 @@ import driveFolderManagementRoutes from './routes/driveFolderManagementRoutes.js
 import queueScannerRoutes from './routes/queueScannerRoutes.js';
 import videoScriptGenerationRoutes from './routes/videoScriptGenerationRoutes.js';
 import assetRoutes from './routes/assetRoutes.js';
+import adminToolsRoutes from './routes/adminToolsRoutes.js';
 import ttsRoutes from './routes/ttsRoutes.js';
 import sessionLogRoutes from './routes/sessionLogRoutes.js';
 import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
@@ -159,6 +160,7 @@ app.use('/api/drive', driveFolderManagementRoutes);
 app.use('/api/queue-scanner', queueScannerRoutes);
 app.use('/api/video', videoScriptGenerationRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api/admin', adminToolsRoutes);
 app.use('/api/debug-sessions', sessionLogRoutes);
 app.use('/api/ai/affiliate-video-tiktok', affiliateVideoTikTokRoutes);
 app.use('/api/shorts-reels', trendAutomationRoutes);
