@@ -312,6 +312,36 @@ class GenerationDownloader {
         
         console.log(`   📍 ATTEMPT ${attemptNum}: Trying ${quality}${isFallback ? ' (fallback)' : ''}...`);
         
+        // 💫 FIX: If fallback attempt and submenu is closed, reopen it
+        if (isFallback) {
+          const submenuVisible = await this.page.evaluate(() => {
+            const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+            return submenu && submenu.offsetHeight > 0;
+          });
+          
+          if (!submenuVisible) {
+            console.log(`   🔄 Submenu closed, reopening download menu...`);
+            const reopened = await this.page.evaluate(() => {
+              const downloadBtn = Array.from(document.querySelectorAll('button')).find(b =>
+                b.ariaLabel?.includes('Download') || b.textContent.includes('Tải xuống')
+              );
+              if (downloadBtn) {
+                downloadBtn.click();
+                return true;
+              }
+              return false;
+            });
+            
+            if (reopened) {
+              console.log(`   ✓ Download menu reopened`);
+              await this.page.waitForTimeout(1500);
+            } else {
+              console.log(`   ⚠️  Could not reopen download menu`);
+              continue;
+            }
+          }
+        }
+        
         // Find and click quality option in submenu
         const qualityInfo = await this.page.evaluate((targetQuality) => {
           // Re-check submenu exists (might be closed from previous click)
@@ -420,9 +450,12 @@ class GenerationDownloader {
           timeoutSeconds = 30;
         }
 
-        // Add extra buffer time for quality upgrade process
-        const extraBufferTime = 30;
-        const totalTimeoutSeconds = timeoutSeconds + extraBufferTime;
+        // 💫 FIX: Reduce timeout for faster fallback
+        // Use only 15s base + 20s buffer = 35s total (was 30+30=60s)
+        // Faster timeout prevents long waits when file isn't completing
+        const baseTimeout = 15;  // Reduced from 30s
+        const extraBufferTime = 20;  // Reduced from 30s
+        const totalTimeoutSeconds = baseTimeout + extraBufferTime;
 
         console.log(`   ⏳ Monitoring download (${totalTimeoutSeconds}s timeout)...`);
         console.log(`   📋 Watching for: file completion OR error dialog\n`);
@@ -460,16 +493,14 @@ class GenerationDownloader {
             
             if (dialogInfo.type === 'success') {
               console.log(`\n   ✓ SUCCESS dialog detected: "${dialogInfo.message.substring(0, 80)}..."`);
-              console.log(`   ✓ Quality upgrade completed - dismissing notification...`);
+              console.log(`   ✅ Quality upgrade completed - closing notification...`);
               
-              // Dismiss the success dialog and continue waiting for actual file
+              // 💫 CRITICAL FIX: Close success modal IMMEDIATELY
+              // Don't wait for file - close the modal and exit timeout loop
+              // This allows error detection for next attempt
               await this.closeUpgradeDialog();
-              console.log(`   ✓ Dialog dismissed - continuing to wait for file download...`);
-              await this.page.waitForTimeout(2000);  // Wait 2s for file to start downloading after dismissal
-              
-              // 💫 FIX: Don't return yet - let downloadPromise find the actual file
-              // Just stop checking for dialogs now
-              return 'DIALOG_DISMISSED';
+              console.log(`   ✓ Success modal closed`);
+              return 'SUCCESS_HANDLED';
             } else if (dialogInfo.type === 'error') {
               console.log(`\n   ⚠️  ERROR dialog detected: "${dialogInfo.message}"`);
               console.log(`   ⚠️  Cannot upgrade to this quality - will try fallback...`);
@@ -518,12 +549,12 @@ class GenerationDownloader {
           console.log(`✅ Download confirmed (${quality})\n`);
           return downloadedFile;
         } else if (timeoutOccurred) {
-          console.log(`\n   ❌ Download timeout (${totalTimeoutSeconds}s) with ${quality}`);
+          console.log(`\n   ⏱️  Download timeout (${totalTimeoutSeconds}s) with ${quality}`);
           
-          // 💫 FIX: If timeout occurred in 2K/4K and error modal wasn't caught,
-          // this might be a failure. Close any dialogs and try fallback.
+          // 💫 FIX: Timeout means file didn't appear in time
+          // Close any dialogs and try fallback quality
           if (quality !== '1K' && quality !== 'original' && attemptIdx < qualityAttempts.length - 1) {
-            console.log(`   ℹ️  Likely quality not available (timeout without error detection)`);
+            console.log(`   ℹ️  File didn't complete in ${totalTimeoutSeconds}s`);
             console.log(`   🔄 Trying fallback quality...\n`);
             // Close any hanging dialogs
             try {
@@ -531,6 +562,10 @@ class GenerationDownloader {
             } catch (e) {
               // Ignore close errors
             }
+          } else if (quality === '2k' || quality === '4k') {
+            // If we're at 2K/4K and NO fallback available, force 1K despite it not being in menu
+            console.log(`   ℹ️  File didn't complete in ${totalTimeoutSeconds}s`);
+            console.log(`   💡 No fallback in menu, will attempt 1K original...\n`);
           }
           continue;  // Try next quality
         } else if (dialogDetected) {
