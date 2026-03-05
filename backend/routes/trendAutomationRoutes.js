@@ -118,6 +118,8 @@ router.post('/playboard/configs/add', protect, async (req, res) => {
 
 // Manual discover Playboard with filters
 router.post('/playboard/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/playboard/manual-discover'));
+router.post('/dailyhaha/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/dailyhaha/manual-discover'));
+router.post('/douyin/manual-discover', (req, res) => proxy(req, res, '/api/shorts-reels/douyin/manual-discover'));
 
 // Delete playboard config
 router.delete('/playboard/configs/:index', protect, async (req, res) => {
@@ -159,6 +161,8 @@ router.get('/videos/upload-status', (req, res) => proxy(req, res, '/api/shorts-r
 router.post('/videos/upload-to-drive', (req, res) => proxy(req, res, '/api/shorts-reels/videos/upload-to-drive'));
 router.post('/videos/:id/upload-to-drive', (req, res) => proxy(req, res, `/api/shorts-reels/videos/${req.params.id}/upload-to-drive`));
 router.get('/logs', (req, res) => proxy(req, res, '/api/shorts-reels/logs'));
+router.get('/captcha/jobs', (req, res) => proxy(req, res, '/api/shorts-reels/captcha/jobs'));
+router.post('/captcha/jobs/:id/resolve', (req, res) => proxy(req, res, `/api/shorts-reels/captcha/jobs/${req.params.id}/resolve`));
 router.get('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/settings', (req, res) => proxy(req, res, '/api/shorts-reels/settings'));
 router.post('/jobs/trigger', (req, res) => proxy(req, res, '/api/shorts-reels/jobs/trigger'));

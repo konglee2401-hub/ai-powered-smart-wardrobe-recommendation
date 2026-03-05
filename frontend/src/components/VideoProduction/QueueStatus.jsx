@@ -13,6 +13,7 @@ export function QueueStatus() {
   const [filter, setFilter] = useState('all');
   const [selectedAccounts, setSelectedAccounts] = useState({});
   const [publishingQueueId, setPublishingQueueId] = useState(null);
+  const [youtubePublishTypeByQueue, setYoutubePublishTypeByQueue] = useState({});
 
   useEffect(() => {
     getQueueStats();
@@ -46,7 +47,7 @@ export function QueueStatus() {
 
     try {
       setPublishingQueueId(queueId);
-      const result = await publishQueueItem(queueId, accountIds, { title: 'Auto publish from queue' });
+      const result = await publishQueueItem(queueId, accountIds, { title: 'Auto publish from queue', youtubePublishType: youtubePublishTypeByQueue[queueId] || 'shorts' });
       toast.success(`Published thành công ${result.successful}/${accountIds.length} account`);
       await getQueueStats();
     } catch (error) {
@@ -113,6 +114,18 @@ export function QueueStatus() {
                             {acc.platform}:{acc.displayName}
                           </button>
                         ))}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-400">YouTube type</label>
+                        <select
+                          value={youtubePublishTypeByQueue[item.queueId] || 'shorts'}
+                          onChange={(e) => setYoutubePublishTypeByQueue(prev => ({ ...prev, [item.queueId]: e.target.value }))}
+                          className="text-xs bg-gray-800 border border-gray-600 rounded px-2 py-1"
+                        >
+                          <option value="shorts">Shorts</option>
+                          <option value="video">Video</option>
+                        </select>
                       </div>
 
                       <button
