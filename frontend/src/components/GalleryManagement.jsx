@@ -5,7 +5,9 @@ const GalleryManagement = ({
   onImageSelect, 
   onBatchSelect,
   selectedImages = [],
-  viewMode = 'grid' 
+  viewMode = 'grid',
+  currentCategory = 'all',
+  searchQuery = ''
 }) => {
 
   const [images, setImages] = useState([]);
@@ -14,7 +16,7 @@ const GalleryManagement = ({
     contentType: 'all',      // all, uploaded, drive
     dateRange: 'all',
     provider: 'all',
-    search: ''
+    search: searchQuery || ''
   });
 
   const [sortBy, setSortBy] = useState('newest');
@@ -61,6 +63,23 @@ const GalleryManagement = ({
   useEffect(() => {
     loadGallery();
   }, [filters, sortBy, currentPage]);
+
+  // Update search query when prop changes
+  useEffect(() => {
+    if (searchQuery !== filters.search) {
+      setFilters(prev => ({
+        ...prev,
+        search: searchQuery
+      }));
+      setCurrentPage(1); // Reset to first page
+    }
+  }, [searchQuery]);
+
+  // Reload gallery when category changes
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when category changes
+    loadGallery();
+  }, [currentCategory]);
 
   const buildSources = (asset) => {
     const proxyUrl = asset.assetId ? `${API_BASE}/assets/proxy/${asset.assetId}` : null;
@@ -139,10 +158,43 @@ const GalleryManagement = ({
 
   const filterImages = (images, filters) => {
     return images.filter(image => {
+      // Category filter (from sidebar selection)
+      if (currentCategory && currentCategory !== 'all') {
+        // Map currentCategory value to asset category
+        const categoryMap = {
+          'character': 'Character',
+          'product': 'Product',
+          'generated': 'Generated',
+          'source': 'Source',
+          'reference': 'Reference'
+        };
+        
+        const targetCategory = categoryMap[currentCategory];
+        if (targetCategory && image.category !== targetCategory) return false;
+      }
+      
+      // Handle special filter categories from sidebar
+      if (currentCategory === 'recent') {
+        const now = new Date();
+        const imageDate = new Date(image.createdAt);
+        const hoursAgo = Math.floor((now - imageDate) / (1000 * 60 * 60));
+        return hoursAgo <= 24; // Recent = last 24 hours
+      }
+      
+      if (currentCategory === 'favorites' && !image.isFavorite) {
+        return false;
+      }
+      
+      // Content type filter
       if (filters.contentType !== 'all' && image.contentType !== filters.contentType) return false;
+      
+      // Provider filter
       if (filters.provider !== 'all' && image.provider !== filters.provider) return false;
+      
+      // Search filter (from search input)
       if (filters.search && !image.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
       
+      // Date range filter
       if (filters.dateRange !== 'all') {
         const imageDate = new Date(image.createdAt);
         const now = new Date();
