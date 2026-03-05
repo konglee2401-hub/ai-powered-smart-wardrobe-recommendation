@@ -163,9 +163,12 @@ class GoogleFlowAutomationService {
     this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
     this.generationMonitor.setPreGenerationMonitor(this.preGenerationMonitor); // NEW: Pass baseline monitor
     
-    this.generationDownloader = new GenerationDownloader();
-    this.generationDownloader.page = this.page;
-    this.generationDownloader.options = this.options;
+    // IMPORTANT: Pass options to GenerationDownloader constructor, don't overwrite them
+    // This ensures downloadTimeoutSeconds is properly set and validated
+    this.generationDownloader = new GenerationDownloader(this.page, {
+      ...this.options,
+      downloadTimeoutSeconds: 45  // Increase to 45s - upgrades can take time
+    });
     
     this.errorRecoveryManager = new ErrorRecoveryManager();
     this.errorRecoveryManager.page = this.page;

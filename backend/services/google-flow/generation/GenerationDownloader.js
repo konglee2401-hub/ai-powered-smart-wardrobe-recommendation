@@ -53,51 +53,65 @@ class GenerationDownloader {
   }
 
   /**
-   * Detect if a resolution upgrade error dialog has appeared
-   * Looks for dialog/modal with text like "cannot upgrade to" or similar
+   * Detect if a resolution upgrade success OR error dialog has appeared
    * 
-   * @returns {object} - { detected: boolean, message: string|null }
+   * SUCCESS: "Quá trình nâng cấp chất lượng đã hoàn tất và hình ảnh của bạn đã được tải xuống!"
+   * ERROR: "Không nâng cấp được" or similar error messages
+   * 
+   * @returns {object} - { type: 'success'|'error'|null, message: string|null }
    */
-  async detectResolutionErrorDialog() {
+  async detectUpgradeDialog() {
     try {
       const dialogInfo = await this.page.evaluate(() => {
         // Check for various dialog/modal selectors
-        const dialogs = document.querySelectorAll('dialog, [role="dialog"], [role="alertdialog"], .modal, [class*="modal"], [class*="dialog"]');
+        const dialogs = document.querySelectorAll('dialog, [role="dialog"], [role="alertdialog"], .modal, [class*="modal"], [class*="dialog"], [data-sonner-toast]');
         
         for (const dialog of dialogs) {
           const text = dialog.textContent || '';
           const lowerText = text.toLowerCase();
           
-          // Check for resolution-related error messages
-          if (lowerText.includes('cannot') && lowerText.includes('resolution') ||
+          // Check for SUCCESS messages (upgrade completed and downloaded)
+          if (lowerText.includes('hoàn tất') && lowerText.includes('tải xuống') ||
+              lowerText.includes('được tải xuống') ||
+              lowerText.includes('download completed') ||
+              lowerText.includes('upgrade completed')) {
+            return {
+              type: 'success',
+              message: text.trim().substring(0, 200),
+              visible: dialog.offsetHeight > 0 && dialog.offsetWidth > 0
+            };
+          }
+          
+          // Check for ERROR messages (cannot upgrade)
+          if (lowerText.includes('không thể nâng cấp') ||
+              lowerText.includes('cannot') && lowerText.includes('resolution') ||
               lowerText.includes('upgrade') && lowerText.includes('fail') ||
               lowerText.includes('cannot upgrade') ||
-              lowerText.includes('quality not available') ||
-              lowerText.includes('không thể nâng cấp')) {
+              lowerText.includes('quality not available')) {
             return {
-              detected: true,
+              type: 'error',
               message: text.trim().substring(0, 200),
               visible: dialog.offsetHeight > 0 && dialog.offsetWidth > 0
             };
           }
         }
         
-        return { detected: false, message: null };
+        return { type: null, message: null };
       });
       
       return dialogInfo;
     } catch (error) {
       console.log(`   ⚠️  Error detecting dialog: ${error.message}`);
-      return { detected: false };
+      return { type: null };
     }
   }
 
   /**
-   * Close any visible error dialog/modal
+   * Close any visible upgrade dialog/modal (success or error)
    * 
    * @returns {boolean} - true if dialog was closed
    */
-  async closeErrorDialog() {
+  async closeUpgradeDialog() {
     try {
       const closed = await this.page.evaluate(() => {
         // Try various close methods
@@ -370,14 +384,34 @@ class GenerationDownloader {
         }
 
         console.log(`   ✅ ${quality} selected (${isFallback ? 'fallback' : 'preferred'}). Waiting for download...\n`);
-        console.log(`   ⏳ Monitoring download (${this.options.downloadTimeoutSeconds}s timeout)...`);
-        console.log(`   📋 Watching for: file completion OR error dialog\n`);
+
+        // 💫 FIX: Wait minimum 10 seconds after clicking button for process to start
+        // Google Flow needs time to initiate the download/upgrade process
+        console.log(`   ⏳ Giving server 10s to start download process...`);
+        await this.page.waitForTimeout(10000);
+        console.log(`   ✅ Checking for download/upgrade dialog...\n`);
 
         // ═══════════════════════════════════════════════════════════════════
         // TIMEOUT + DIALOG DETECTION DURING DOWNLOAD
         // Race condition: download completion vs timeout+dialog check
+        // Handles both SUCCESS (dismiss and continue) and ERROR dialogs
         // ═══════════════════════════════════════════════════════════════════
-        const timeoutMs = this.options.downloadTimeoutSeconds * 1000;  // 30s default
+
+        // Validate timeout value
+        let timeoutSeconds = this.options.downloadTimeoutSeconds;
+        if (typeof timeoutSeconds !== 'number' || timeoutSeconds <= 0 || isNaN(timeoutSeconds)) {
+          console.log(`   ⚠️  Invalid timeout value: ${timeoutSeconds}, using default 30s`);
+          timeoutSeconds = 30;
+        }
+
+        // Add extra buffer time for quality upgrade process
+        const extraBufferTime = 30;
+        const totalTimeoutSeconds = timeoutSeconds + extraBufferTime;
+
+        console.log(`   ⏳ Monitoring download (${totalTimeoutSeconds}s timeout)...`);
+        console.log(`   📋 Watching for: file completion OR error dialog\n`);
+        
+        const timeoutMs = totalTimeoutSeconds * 1000;
         const dialogCheckInterval = 2000;  // Check every 2s
         
         let downloadCompleated = false;
@@ -396,26 +430,40 @@ class GenerationDownloader {
         const dialogCheckPromise = (async () => {
           const startTime = Date.now();
           while (!downloadCompleated && !dialogDetected && !timeoutOccurred) {
-            // Check for error dialog
-            const dialogInfo = await this.detectResolutionErrorDialog();
-            if (dialogInfo.detected) {
-              console.log(`\n   ⚠️  Resolution error dialog detected: ${dialogInfo.message}`);
+            // Check for upgrade dialog (SUCCESS or ERROR)
+            const dialogInfo = await this.detectUpgradeDialog();
+            if (dialogInfo.type === 'success') {
+              console.log(`\n   ✓ SUCCESS dialog detected: "${dialogInfo.message.substring(0, 80)}..."`);
+              console.log(`   ✓ Quality upgrade completed - dismissing notification...`);
+              
+              // Dismiss the success dialog and continue waiting for actual file
+              await this.closeUpgradeDialog();
+              console.log(`   ✓ Dialog dismissed - continuing to wait for file download...`);
+              await this.page.waitForTimeout(2000);  // Wait 2s for file to start downloading after dismissal
+              
+              // 💫 FIX: Don't return yet - let downloadPromise find the actual file
+              // Just stop checking for dialogs now
+              return 'DIALOG_DISMISSED';
+            } else if (dialogInfo.type === 'error') {
+              console.log(`\n   ⚠️  ERROR dialog detected: "${dialogInfo.message}"`);
+              console.log(`   ⚠️  Cannot upgrade to this quality - will try fallback...`);
               dialogDetected = true;
               
-              // Try to close the dialog
-              await this.closeErrorDialog();
-              return 'DIALOG_DETECTED';
+              // Try to close the error dialog
+              await this.closeUpgradeDialog();
+              return 'ERROR_DIALOG';
             }
             
             // Check periodically (less spam)
             const elapsed = Math.round((Date.now() - startTime) / 1000);
             if (elapsed % 15 === 0 && elapsed > 0) {
-              console.log(`   ⏳ Still waiting... (${elapsed}s/${this.options.downloadTimeoutSeconds}s)`);
+              console.log(`   ⏳ Still waiting... (${elapsed}s/${timeoutSeconds}s)`);
             }
             
             await this.page.waitForTimeout(dialogCheckInterval);
           }
-          return 'DOWNLOAD_OK';
+          // 💫 FIX: Let downloadPromise take over once initial dialog check is done
+          return null;
         })();
         
         // Start download completion check
@@ -426,33 +474,135 @@ class GenerationDownloader {
         })();
         
         // Race: download vs timeout vs dialog
-        const downloadedFile = await Promise.race([
+        const result = await Promise.race([
           downloadPromise,
           timeoutPromise,
           dialogCheckPromise
         ]);
 
+        // 💫 FIX: If downloadPromise wins and has a valid file path, use it
+        // (even if dialogCheckPromise was still running)
+        const downloadedFile = result;
+        
         // Check what happened
         if (downloadedFile && typeof downloadedFile === 'string' && downloadedFile.includes(path.sep)) {
-          // SUCCESS! File downloaded
+          // SUCCESS! File downloaded (valid file path)
           const fileSize = fs.statSync(downloadedFile).size;
           console.log(`\n   ✓ Downloaded: ${path.basename(downloadedFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
           console.log(`✅ Download confirmed (${quality})\n`);
           return downloadedFile;
         } else if (timeoutOccurred) {
-          console.log(`\n   ❌ Download timeout (${this.options.downloadTimeoutSeconds}s) with ${quality}`);
+          console.log(`\n   ❌ Download timeout (${totalTimeoutSeconds}s) with ${quality}`);
           if (attemptIdx < qualityAttempts.length - 1) {
             console.log(`   🔄 Trying fallback quality...\n`);
           }
           continue;  // Try next quality
         } else if (dialogDetected) {
-          console.log(`\n   ❌ Resolution upgrade error dialog with ${quality}`);
+          console.log(`\n   ❌ Cannot upgrade to ${quality} quality`);
           console.log(`   ℹ️  This quality may not be available for your current settings`);
-          if (attemptIdx < qualityAttempts.length - 1) {
+          
+          // 💫 FIX: If 2K/4K upgrade failed, automatically try 1K original size
+          if (quality !== '1K' && quality !== 'original' && attemptIdx < qualityAttempts.length - 1) {
             console.log(`   🔄 Trying fallback quality...\n`);
+            continue;  // Try next quality in list
+          } else if ((quality === '2k' || quality === '4k') && attemptIdx >= qualityAttempts.length - 1) {
+            // If we're at last quality (was trying 2k/4k), force try 1K original
+            console.log(`   💡 Attempting 1K original size as final fallback...\n`);
+            
+            // Close the submenu first
+            await this.page.evaluate(() => {
+              const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+              if (submenu) {
+                document.body.click();  // Click outside to close
+              }
+            });
+            
+            await this.page.waitForTimeout(1000);
+            
+            // Reopen quality submenu and select 1K
+            const openedAgain = await this.page.evaluate(() => {
+              const downloadBtn = document.querySelector('button[aria-label*="Download"]') || 
+                                  document.querySelector('button[aria-label*="download"]') ||
+                                  Array.from(document.querySelectorAll('button')).find(b => 
+                                    b.textContent.includes('Download') || 
+                                    b.ariaLabel?.includes('Download')
+                                  );
+              if (downloadBtn) {
+                downloadBtn.click();
+                return true;
+              }
+              return false;
+            });
+            
+            if (openedAgain) {
+              await this.page.waitForTimeout(1500);
+              
+              // Try to click 1K original
+              const oneKSuccess = await this.page.evaluate(() => {
+                const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
+                if (!submenu) return false;
+                
+                const buttons = submenu.querySelectorAll('button[role="menuitem"]');
+                for (const btn of buttons) {
+                  const isDisabled = btn.getAttribute('aria-disabled') === 'true';
+                  let matchesQuality = false;
+                  
+                  for (const span of btn.querySelectorAll('span')) {
+                    const text = span.textContent.trim().toUpperCase();
+                    if (text === '1K' || text === 'ORIGINAL') {
+                      matchesQuality = true;
+                      break;
+                    }
+                  }
+                  
+                  if (matchesQuality && !isDisabled) {
+                    try {
+                      btn.click();
+                      return true;
+                    } catch (e) {
+                      return false;
+                    }
+                  }
+                }
+                return false;
+              });
+              
+              if (oneKSuccess) {
+                console.log(`   ✅ 1K original selected. Waiting for download...\n`);
+                console.log(`   ⏳ Giving server 10s to start download process...`);
+                await this.page.waitForTimeout(10000);
+                
+                // Now wait for 1K download
+                const oneKFile = await this.waitForDownloadCompletion();
+                if (oneKFile) {
+                  const fileSize = fs.statSync(oneKFile).size;
+                  console.log(`\n   ✓ Downloaded: ${path.basename(oneKFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
+                  console.log(`✅ Download confirmed (1K original)\n`);
+                  return oneKFile;
+                }
+              }
+            }
+            
+            continue;
+          } else {
+            if (attemptIdx < qualityAttempts.length - 1) {
+              console.log(`   🔄 Trying fallback quality...\n`);
+            }
+            continue;
           }
-          continue;  // Try next quality
         } else {
+          // 💫 FIX: If race returned a string but not a file path (like 'DIALOG_DISMISSED'),
+          // this means dialog was dismissed but file hasn't downloaded yet. 
+          // Wait a bit longer for the file.
+          console.log(`   ℹ️  Dialog processed, waiting additional time for file download...`);
+          const extraWaitFile = await this.waitForDownloadCompletion();
+          if (extraWaitFile) {
+            const fileSize = fs.statSync(extraWaitFile).size;
+            console.log(`\n   ✓ Downloaded: ${path.basename(extraWaitFile)} (${(fileSize / 1024 / 1024).toFixed(2)}MB)`);
+            console.log(`✅ Download confirmed (${quality})\n`);
+            return extraWaitFile;
+          }
+          
           console.log(`\n   ⚠️  Unexpected download result with ${quality}`);
           if (attemptIdx < qualityAttempts.length - 1) {
             console.log(`   🔄 Trying fallback quality...\n`);

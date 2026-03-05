@@ -194,26 +194,43 @@ class GenerationMonitor {
         if (effectiveStatus === 'error') {
           console.warn('⚠️  Generation error detected on page');
           
-          // 💫 NEW: Try to get the failed tile's href for retry
+          // 💫 FIX: Try to get the failed tile's href for retry
+          // Only consider it a TRUE error if:
+          // 1. First tile contains error indicators (%, loading state, etc)
+          // 2. href is NOT a navigation link (/tools/flow/faq, etc)
           let failedTileHref = null;
           let tileStatus = null;  // Track what we found
           try {
             failedTileHref = await this.page.evaluate(() => {
               const firstTile = document.querySelector('[data-testid="virtuoso-item-list"] [data-tile-id]');
-              if (firstTile) {
-                const link = firstTile.querySelector('a[href]');
-                return link ? link.getAttribute('href') : null;
+              if (!firstTile) return null;
+              
+              const link = firstTile.querySelector('a[href]');
+              if (!link) return null;
+              
+              const href = link.getAttribute('href');
+              // 🔧 FIX: Exclude navigation links that aren't actual generation results
+              // Real generation hrefs have /edit/ in them, FAQ links have /faq, /tools/flow/, etc
+              if (href && href.includes('/edit/')) {
+                return href;
               }
-              return null;
+              return null;  // Not a real generation tile
             });
-            tileStatus = failedTileHref ? 'found' : 'no_href';
+            tileStatus = failedTileHref ? 'found' : 'not_generation_tile';
           } catch (e) {
-            // Silently skip if we can't get href
             tileStatus = 'query_error';
           }
           
           console.log(`[ERROR] Failed tile href: ${failedTileHref ? failedTileHref.substring(0, 60) + '...' : 'not found'} (${tileStatus})`);
-          return { success: false, href: failedTileHref, error: 'Generation error detected on tile' };
+          
+          // Only return error if we found a true generation tile
+          // If we didn't find one (found FAQ or other nav link instead), skip error handling
+          if (!failedTileHref || tileStatus !== 'found') {
+            console.log(`ℹ️  Skipping error - not a generation result tile (${tileStatus}), continuing to wait...`);
+            // Don't return error, continue monitoring
+          } else {
+            return { success: false, href: failedTileHref, error: 'Generation error detected on tile' };
+          }
         }
 
         if (effectiveStatus === 'ready') {

@@ -316,37 +316,101 @@ TRỌNG TÂM: Chi tiết giày
   // ============================================================
 
   videoGeneration: {
-    'full-outfit-Hook': `Video TikTok 9:16 là bắt đầu hấp dẫn với trang phục hoàn chỉnh. 
-- Cảm ứng bắt đầu: Nhân vật quay ngoặt, nhìn vào camera, mỉm cười tự tin
-- Cảm ứng ngoạn mục: {garmentDetails} làm cho nhân vật trông tuyệt vời
-- Hiệu ứng: Nhẹ nhàng zoom in, chuyển đổi mượt mà
-- Cảm giác: Năng động, thú vị, người xem phải tiếp tục xem
-- Nét mặt: Tự tin, vui vẻ, lan tỏa sự quyến rũ
-- Tạo dáng: Tương tác với camera, tay chỉ đến chi tiết đặc biệt`,
+    'full-outfit-Hook': `Video TikTok 9:16 bắt đầu hấp dẫn với trang phục hoàn chỉnh.
 
-    'full-outfit-Introduction': `Video TikTok 9:16 giới thiệu trang phục với chi tiết.
-- Cảm ứng: Xoay quanh để hiển thị bộ trang phục hoàn chỉnh
-- Tiêu điểm: Cổ, tay áo, chiều dài, màu sắc, hoa văn
-- Tương tác: Chạm vào các chi tiết, kéo áo, tôn dáng với cử chỉ
-- Cảm giác: Chuyên nghiệp, phong cách, muốn sở hữu
-- Nét mặt: Tự hào, tự tin về sự lựa chọn trang phục
-- Chuyển đổi: Mượt mà giữa các chi tiết`,
+=== KHÓA NHÂN VẬT TUYỆT ĐỐI - LÀM VIỆC NGAY ===
+CHỈ SỬ DỤNG NHÂN VẬT TỪ HÌNH ẢNH THAM CHIẾU - KHÔNG THAY ĐỔI:
+- Khuôn mặt: Giữ nguyên hoàn toàn - cùng hình dáng, đường nét, biểu cảm
+- Cơ thể: Giữ nguyên thể hình, dáng người, tỷ lệ - không bao giờ thay đổi
+- Tóc: Cùng màu, kiểu, độ dài - GIỮ NGUYÊN hoàn toàn
+- Da: Cùng tông da, sắc tố - GIỮ NGUYÊN chính xác
 
-    'full-outfit-Features': `Video TikTok 9:16 làm nổi bật tính năng chính.
-- Cảm ứng: Làm nổi bật cách sánh trang phục với cơ thể
-- Vấn đề: Vừa vặn tuyệt vời, tôn dáng, thoải mái
-- Chi tiết: Chất vải không nhăn, khí bay lượn, giãn, bền
-- Tương tác: Kéo, uốn, chuyển động để hiển thị cách hoạt động
-- Cảm giác: Kỹ thuật, thuyết phục, khiến người xem muốn mua
-- Examples: Mặc cùng với khác nhau shoe styles, phụ kiện`,
+=== CHUYỂN ĐỘNG CHI TIẾT (SECOND-BY-SECOND) ===
+Giây 0-2: Nhân vật quay ngoặt từ cạnh, bước từ từ vào khung hình, nhìn vào camera
+Giây 2-4: Tay trái chỉ đến chi tiết áo (cổ, tay áo), nét mặt: mỉm cười tự tin
+Giây 4-6: Xoay người hoàn toàn, show toàn bộ trang phục, tay vuốt quần, khoe dáng
+Giây 6-8: Bước lại phía trước, đứng tự tin, mắt nhìn thẳng camera, nít cười tươi
+Giây 8-10: Tay phải kéo thoáng áo, cử chỉ tự nhiên, gật đầu nhẹ nhàng
 
-    'full-outfit-CTA': `Video TikTok 9:16 kết luận hấp dẫn và hành động được gọi.
-- Cảm ứng: Nhân vật tạo dáng cuối cùng, nhìn trực tiếp camera
-- Thông điệp: "Cảm thấy tuyệt vời", "Kiểu dáng hoàn hảo", "Mặc ngay"
-- CTA: Rõ ràng và hóa hiểu - "Đặt hàng", "Link trong bio", "Mua ngay"
-- Cảm giác: Khuyến khích, FOMO (sợ bỏ lỡ), năng động
-- Hiệu ứng: Nhẹ nhàng zoom out, fade hoặc cut để CTA
-- Nét mặt: Tươi cười, hài lòng, khuyến khích người xem tham gia`,
+=== HIỆU ỨNG & TẤU CẢ ===
+- Cảm ứng: Quay ngoặt mượt mà, bước chảy chứng, chuyển đổi nhẹ nhàng
+- Zoom: Bắt đầu từ xa, pháp nhân từ từ khi tiếp cận
+- Cảm giác: Năng động, thú vị, hấp dẫn, khiến người xem muốn tiếp tục
+- Biểu cảm: Tự tin, hạnh phúc, lan tỏa sự quyến rũ và tự tại
+- Tương tác: Nhìn camera, cử chỉ tay tự nhiên, mãn nguyện với trang phục`,
+
+    'full-outfit-Introduction': `Video TikTok 9:16 giới thiệu trang phục với chi tiết chuyên sâu.
+
+=== KHÓA NHÂN VẬT TUYỆT ĐỐI ===
+NHÂN VẬT PHẢI GIỐNG HẾT trong mọi giây - không thay đổi khuôn mặt, cơ thể, tóc:
+- Giữ nguyên hoàn toàn hình dáng mặt, nếp nhăn, làn da
+- Giữ nguyên thể hình, dáng người, tỷ lệ vai/eo/hông
+- Giữ nguyên kiểu tóc, màu, độ dài - từ đầu đến cuối video
+
+=== CHUYỂN ĐỘNG CHI TIẾT (SECOND-BY-SECOND) ===
+Giây 0-2: Đứng đối diện camera, quay chậm sang bên trái 90 độ để show hông
+Giây 2-4: Tay chỉ vào cổ, khéo léo kéo áo để hiện đường cổ, nét mặt tự hảo
+Giây 4-6: Xoay lại phía trước, tay chỉ vào tay áo, kéo nhẹ để show chất vải
+Giây 6-8: Bước hai bước về phía trước, tay với quần, show chiều dài & rũi vải
+Giây 8-10: Quay nhìn camera, mỉm cười, tay kéo mẫu tôn dáng vùng eo
+Giây 10-12: Đứng yên, tay hạ xuống, nhìn thẳng camera, biểu cảm tự tin
+
+=== HIỆU ỨNG & TẤU CẢ ===
+- Cảm ứng: Quay tròn mượt mà, zoom nhẹ vào chi tiết
+- Chuyển cảnh: Mượt mà giữa các chi tiết, không giật
+- Cảm giác: Chuyên nghiệp, phong cách, muốn sở hữu trang phục
+- Biểu cảm: Tự hào, tự tin về sự lựa chọn trang phục`,
+
+    'full-outfit-Features': `Video TikTok 9:16 làm nổi bật tính năng và chất lượng trang phục.
+
+=== KHÓA NHÂN VẬT NGHIÊM NGẶT ===
+GIỮ NGUYÊN NHÂN VẬT 100% - Cùng khuôn mặt, cơ thể, tóc, da trong mọi frame:
+- Mặt: không thay đổi hình dáng, đường nét, biểu cảm
+- Cơ thể: không thay đổi thể hình hay tỷ lệ chiều cao
+- Tóc: cùng kiểu, màu, độ dài xuyên suốt
+- Skin: cùng tông da và sắc tố - KHÔNG THAY ĐỔI
+
+=== CHUYỂN ĐỘNG CHI TIẾT (SECOND-BY-SECOND) ===
+Giây 0-2: Đứng đối diện, tay nâng áo nhẹ để show vải không nhăn, mỉm cười
+Giây 2-4: Uốn, kéo vải tôn dáng vùng eo, rồi lại bình thường - show tính rủ
+Giây 4-6: Tay chỉ vào cổ tay, kéo áo để show độ giãn, biểu cảm: rất thoải mái
+Giây 6-8: Xoay quanh 180 độ từ từ, show toàn bộ trang phục, tay cạnh thân
+Giây 8-10: Đẩy vai về sau, kéo ngực ra, tay cạnh, show fit tôn dáng hoàn hảo
+Giây 10-12: Bước 2-3 bước, nhìn xuống rồi nhìn camera, nói không lời: "hoàn hảo"
+Giây 12-15: Đứng yên, tay dạo hạ thấp, nhìn thẳng camera tự tin, khoảng lặng
+
+=== HIỆU ỨNG & TẤU CẢ ===
+- Cảm ứng: Từng chuyển động mục đích, giáng lực
+- Chi tiết: Close-up vào vải, cổ, tay áo để show chất lượng
+- Cảm giác: Kỹ thuật, thuyết phục, tạo FOMO - muốn sở hữu ngay
+- Biểu cảm: Chân thành, tin tưởng, gật đầu thỏa thuận với các tính năng`,
+
+    'full-outfit-CTA': `Video TikTok 9:16 kết luận hấp dẫn với hành động được gọi rõ ràng.
+
+=== KHÓA NHÂN VẬT HÀNH ===
+GIỮ NGUYÊN NHÂN VẬT HOÀN TOÀN - Chuẩn như hình tham chiếu từ đầu đến cuối:
+- Giữ khuôn mặt: cùng hình dáng, nếp, biểu cảm tự tin
+- Giữ bộ chân: cùng thể hình, dáng người, tỷ lệ cơ thể
+- Giữ tóc: cùng màu, kiểu, độ dài - từ mở video đến hết
+- Giữ da: cùng tông, sắc tố - CHÍNH XÁC 100%
+
+=== CHUYỂN ĐỘNG CHI TIẾT (SECOND-BY-SECOND) ===
+Giây 0-2: Đứng thẳng, tạo dáng cuối cùng với trang phục, tay cạnh thân tự nhiên
+Giây 2-4: Nâng tay, chỉ vào nhân vật, biểu cảm: "Đây là tôi với trang phục này"
+Giây 4-6: Tay để cạnh, quay ngoại về bên phải 45 độ, nhìn về hướng khác
+Giây 6-8: Quay lại, nhìn thẳng camera, cười rạng rỡ, nâng canh lông mày nhẹ
+Giây 8-10: Bước lại gần camera, biểu cảm: thân mật, mời gọi, tay ra phía trước
+Giây 10-13: Đứng yên ngay, nhìn thẳng camera với mắt hiềm thị, nở nụ cười tự tin
+Giây 13-15: Lật tay, chỉ xuống (hứng chỉ), gật gừng 2 cái, biểu cảm: "Quyết định đi"
+Giây 15-18: Bước ra khỏi khung từ từ, nhìn lại camera lần cuối, cười tươi sáng
+Giây 18-20: Full body frame cuối cùng, đứng tự tin, tay nâng áo nhẹ, fade to black
+
+=== HIỆU ỨNG & TẤU CẢ ===
+- Cảm ứng: Quyết đoán, tự tin, mạnh mẽ
+- Zoom: Zoom in từ từ vào gương mặt khi nhìn camera trực tiếp
+- Cảm giác: Khuyến khích, FOMO mạnh, năng động, hố lôi
+- Biểu cảm: Tươi cười, hài lòng, khuyến khích, quyết đoán - "Mua ngay!"
+- CTA: Vang vọng - "Đặt hàng", "Link trong bio", "Mua ngay", "Không chần chừ"`,
   },
 
   // ============================================================
