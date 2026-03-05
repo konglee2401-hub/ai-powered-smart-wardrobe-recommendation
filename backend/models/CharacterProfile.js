@@ -57,6 +57,7 @@ const referenceImageSchema = new mongoose.Schema({
   url: { type: String, required: true },
   path: { type: String, default: '' },
   angle: { type: String, default: '' },
+  description: { type: String, default: '' },
   type: { type: String, default: 'portrait' },
   prompt: { type: String, default: '' },
   seed: { type: Number, default: null }
