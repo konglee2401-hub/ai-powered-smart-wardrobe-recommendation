@@ -72,7 +72,7 @@ async function authenticateDrive() {
   try {
     console.log('\n🔐 Authenticating with Google Drive...');
     
-    const tokenPath = path.join(__dirname, '../config/drive-token.json');
+    const tokenPath = path.join(__dirname, '../../config/drive-token.json');
     const credentialsPath = path.join(__dirname, '../config/client_secret_445819590351-s0oqsu0bu9t7lsmttfd16q8rohqlohkc.apps.googleusercontent.com.json');
     
     const clientId = process.env.OAUTH_CLIENT_ID;

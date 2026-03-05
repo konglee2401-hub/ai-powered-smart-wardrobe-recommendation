@@ -15,8 +15,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env from backend folder
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// Load .env from backend folder (2 levels up)
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const CONFIG_FILE = path.join(__dirname, '../config/drive-folder-structure.json');
 
@@ -27,7 +27,7 @@ async function authenticate() {
   try {
     const clientId = process.env.OAUTH_CLIENT_ID;
     const clientSecret = process.env.OAUTH_CLIENT_SECRET;
-    const tokenPath = path.join(__dirname, '../config/drive-token.json');
+    const tokenPath = path.join(__dirname, '../../config/drive-token.json');
 
     if (!clientId || !clientSecret) {
       throw new Error('Missing OAUTH_CLIENT_ID or OAUTH_CLIENT_SECRET in .env');

@@ -1,112 +1,167 @@
-# Documentation Index - February 25, 2026
+# 📚 Smart Wardrobe Documentation
 
-This folder contains all project documentation organized by date. Each date folder contains all relevant documentation created on that date.
+Complete documentation for the Smart Wardrobe AI Fashion Video Generator.
 
-## 📚 Folder Organization
+## 🗂️ Directory Structure
 
 ```
 docs/
-└── 2026-02-25/     # Documentation from February 25, 2026
-    ├── Architecture & Design
-    ├── Guides & Tutorials
-    ├── Bug Fixes & Improvements
-    ├── Implementation Details
-    └── Quick Reference
+├── setup/                   # Setup & Configuration
+│   ├── api-keys.md          # API keys setup for all providers
+│   ├── multi-key-setup.md   # Multi-key rotation setup
+│   └── browser-session.md   # Browser session management
+│
+├── providers/               # AI Provider Documentation
+│   ├── google/              # Google Gemini / Imagen
+│   ├── grok/                # Grok / X.AI
+│   ├── chatgpt/             # ChatGPT / OpenAI
+│   ├── openrouter/          # OpenRouter API
+│   └── image-providers.md   # All image providers overview
+│
+├── features/                # Feature Documentation
+│   ├── image-generation/    # Image generation features
+│   ├── video-generation/    # Video generation features
+│   ├── voiceover/           # Voice-over TTS features
+│   └── scene-lock/          # Scene lock workflow
+│
+├── integrations/            # External Integrations
+│   ├── google-drive/        # Google Drive integration
+│   ├── tiktok/              # TikTok workflow
+│   ├── youtube/             # YouTube automation
+│   └── browser-automation/  # Browser automation (Z.AI, Grok)
+│
+├── guides/                  # User Guides
+│   ├── quick-reference.md   # Quick reference guide
+│   ├── options-management.md
+│   ├── customize-options.md
+│   ├── testing.md
+│   └── use-cases-reference.md
+│
+├── architecture/            # System Architecture
+│   ├── plans/               # Design plans
+│   └── technical/           # Technical details
+│
+└── archive/                 # Completed/Outdated Docs
 ```
 
-## 📄 Documentation Types
+---
 
-### Architecture & Technical Design
-- Design decisions and system architecture
-- Data flow diagrams
-- Storage architecture
-- API design
+## 🚀 Quick Start
 
-### Implementation Guides
-- Step-by-step implementation instructions
-- Integration guides
-- Setup guides
-- Configuration guides
+### 1. Setup API Keys
+```bash
+# Read the API keys setup guide
+docs/setup/api-keys.md
+```
 
-### Bug Fixes & Improvements
-- Root cause analysis
-- Fix implementations
-- Validation procedures
-- Performance improvements
+### 2. Configure Environment
+```bash
+# Copy .env.example to .env and fill in your keys
+cp backend/.env.example backend/.env
+```
 
-### Quick Reference
-- Feature summaries
-- Use case guides
-- API quick reference
-- Configuration reference
+### 3. Run Setup Scripts
+```bash
+npm run setup:drive    # Google Drive setup
+npm run seed:all       # Seed database
+```
 
-### Troubleshooting & Issues
-- Issue tracking
-- Solution guides
-- Diagnostic procedures
-- Maintenance tasks
+---
 
-## 🗂 How to Navigate
+## 📖 Documentation by Topic
 
-1. Check the date folder for when documentation was created
-2. Look for your topic in the file name
-3. Files are named descriptively, e.g., `FEATURE_IMPLEMENTATION_GUIDE.md`
+### Setup & Configuration
+| Document | Description |
+|----------|-------------|
+| [API Keys Setup](setup/api-keys.md) | Get API keys for all providers |
+| [Multi-Key Setup](setup/multi-key-setup.md) | Key rotation for high volume |
+| [Browser Session](setup/browser-session.md) | Browser automation sessions |
 
-## 📝 Adding New Documentation
+### AI Providers
+| Document | Description |
+|----------|-------------|
+| [Image Providers](providers/image-providers.md) | All 26 image generation models |
+| [Grok Automation](providers/grok/automation-guide.md) | Grok full automation guide |
+| [ChatGPT Integration](providers/chatgpt/script-integration-guide.md) | ChatGPT script generation |
 
-When creating new documentation:
-1. Add `.md` file to the current date folder
-2. Use descriptive file names with CAPS_AND_UNDERSCORES
-3. Include a header with the date and purpose
-4. Add to the table below
+### Features
+| Document | Description |
+|----------|-------------|
+| [VoiceOver Implementation](features/voiceover/implementation-guide.md) | TTS integration guide |
+| [Character Holding Product](features/image-generation/character-holding-product-guide.md) | Product showcase feature |
+| [Video Generation](features/video-generation/flow-fixes.md) | Video generation workflow |
 
-## 📖 Quick Reference
+### Integrations
+| Document | Description |
+|----------|-------------|
+| [Google Drive Setup](integrations/google-drive/setup.md) | Drive OAuth setup |
+| [TikTok Affiliate](integrations/tiktok/affiliate-video-guide.md) | TikTok workflow |
+| [Browser Automation](integrations/browser-automation/guide.md) | Z.AI & Grok automation |
 
-### TikTok Affiliate Video Workflow
-See: `AFFILIATE_VIDEO_TIKTOK_GUIDE.md`
+### User Guides
+| Document | Description |
+|----------|-------------|
+| [Quick Reference](guides/quick-reference.md) | Complete quick reference |
+| [Options Management](guides/options-management.md) | Manage prompt options |
+| [Use Cases](guides/use-cases-reference.md) | 5 use cases guide |
 
-### Google Drive Integration
-See: `GOOGLE_DRIVE_*` files
+---
 
-### Virtual Try-On
-See: `VIRTUAL_TRYON_*` files
+## 🔧 Backend Scripts Documentation
 
-### Voice-Over Generation
-See: `VOICEOVER_*` files
+See: [backend/scripts/README.md](../backend/scripts/README.md)
 
-### Image Generation & Optimization
-See: `IMAGE_*` files
+### Quick Commands
+```bash
+# Authentication
+npm run auth:grok          # Grok login
+npm run auth:google-flow   # Google Flow session
 
-### Video Generation
-See: `VIDEO_GENERATION_*` files
+# Maintenance
+npm run maintenance:clean  # Clean corrupted data
+npm run debug:check        # Validate API keys
 
-## 🔄 Latest Updates (2026-02-25)
+# Setup
+npm run setup:drive        # Setup Google Drive
+npm run seed:all           # Seed database
+```
 
-- ✅ Bug fixes consolidated (4 critical issues fixed)
-- ✅ Gallery UI updated (4-column grid with infinite scroll)
-- ✅ Image synchronization (86 total assets synced)
-- ✅ Storage optimization (hybrid local+cloud system)
-- ✅ Scripts reorganization (organized by type and purpose)
+---
 
-## 📋 Document Summary
+## 🧪 Testing Documentation
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| AFFILIATE_VIDEO_TIKTOK_GUIDE | TikTok workflow documentation | Updated |
-| GOOGLE_DRIVE_* | Drive integration documentation | Current |
-| VIRTUAL_TRYON_* | VTO feature documentation | Current |
-| VOICEOVER_* | Voice-over guides | Current |
-| IMAGE_* | Image generation workflows | Updated |
-| VIDEO_GENERATION_* | Video generation workflow | Updated |
+See: [backend/tests/README.md](../backend/tests/README.md)
 
-## 🚀 Getting Started
+```bash
+npm test                   # Run all tests
+npm run test:coverage      # Run with coverage
+```
 
-1. Read the use cases guide: `5_USE_CASES_QUICK_REFERENCE.md`
-2. Follow the relevant feature guide for your task
-3. Refer to quick reference guides for specific features
+---
 
-## ⚙️ Maintenance
+## 📁 Other Documentation
 
-- Documentation is reviewed and updated on a rolling basis
-- Date-based organization helps track version history
-- Related documents are grouped by topic
+| Location | Description |
+|----------|-------------|
+| [frontend/README.md](../frontend/README.md) | Frontend documentation |
+| [scraper_service/README.md](../scraper_service/README.md) | Scraper service docs |
+| [n8n/README.md](../n8n/README.md) | n8n workflow docs |
+
+---
+
+## 🔄 Recent Updates
+
+- ✅ Reorganized documentation by topic (March 2026)
+- ✅ Consolidated scripts and tests (March 2026)
+- ✅ Added voiceover documentation (February 2026)
+- ✅ Added TikTok affiliate workflow (February 2026)
+
+---
+
+## 📝 Contributing
+
+When adding new documentation:
+1. Place in the appropriate category folder
+2. Use lowercase-with-dashes.md naming
+3. Update this README index
+4. Include a clear title and purpose

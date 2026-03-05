@@ -12,7 +12,7 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 console.log(`
 ╔════════════════════════════════════════════════════════════════╗
@@ -43,7 +43,7 @@ if (driveApiKey) {
 
 // Check 2: Token file
 console.log('\n2️⃣  Google Drive Token:');
-const tokenPath = path.join(__dirname, 'config/drive-token.json');
+const tokenPath = path.join(__dirname, '../../config/drive-token.json');
 const tokenExists = fs.existsSync(tokenPath);
 
 if (tokenExists) {

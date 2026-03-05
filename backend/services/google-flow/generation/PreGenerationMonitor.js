@@ -204,7 +204,8 @@ class PreGenerationMonitor {
             totalItems: result.totalItems,
             newCount: result.strictNewCount,      // 💫 STRICT: Only count items with both href + media tag
             existingCount,
-            newCountLoose: result.looseNewCount  // For debugging
+            newCountLoose: result.looseNewCount,  // For debugging
+            newHrefs: result.allItems.filter(i => i.isNew && i.hasMediaTag).map(i => i.href)
           };
         } else {
           console.log(`   ⏳ No new media found yet (checking for href + media tag both present)`);
@@ -217,7 +218,8 @@ class PreGenerationMonitor {
             newCount: result.strictNewCount,  // 💫 STRICT COUNT
             existingCount,
             totalItems: result.totalItems,
-            newCountLoose: result.looseNewCount
+            newCountLoose: result.looseNewCount,
+            newHrefs: result.allItems.filter(i => i.isNew && i.hasMediaTag).map(i => i.href)
           };
         }
       }

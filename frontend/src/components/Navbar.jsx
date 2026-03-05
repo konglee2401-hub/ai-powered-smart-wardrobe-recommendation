@@ -71,6 +71,7 @@ export default function Navbar() {
   const settingsItems = [
      { path: '/options', label: t('navbar.options'), icon: Settings },
     { path: '/customization', label: t('navbar.customization'), icon: Settings },
+    { path: '/setup-authentication', label: t('navbar.setupAuthentication'), icon: Settings },
     { href: '/admin/providers', label: t('navbar.aiProviders'), icon: Sparkles, external: true },
   ];
 

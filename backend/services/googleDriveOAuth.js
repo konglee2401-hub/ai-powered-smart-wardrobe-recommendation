@@ -48,6 +48,10 @@ class GoogleDriveOAuthService {
       videosQueue: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Queue'] || null,
       videosTiktok: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Tiktok'] || null,
       videosReels: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Reels'] || null,
+      videosYoutube: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Youtube'] || null,
+      videosPlayboard: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Playboard'] || null,
+      videosDailyhaha: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Dailyhaha'] || null,
+      videosDouyin: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Douyin'] || null,
     };
 
     this.drive = null;
@@ -687,6 +691,95 @@ class GoogleDriveOAuthService {
   }
 
   /**
+   * 💫 NEW: Upload TikTok scraped video
+   * Auto-saves to: Videos/Downloaded/Tiktok
+   */
+  async uploadTikTokScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosTiktok || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'TikTok video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'tiktok',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 NEW: Upload Instagram Reels scraped video
+   * Auto-saves to: Videos/Downloaded/Reels
+   */
+  async uploadReelsScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosReels || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'Instagram Reels video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'reels',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 NEW: Upload YouTube scraped video
+   * Auto-saves to: Videos/Downloaded/Youtube
+   */
+  async uploadYoutubeScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosYoutube || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'YouTube video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'youtube',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 NEW: Upload general source video (YouTube, Web, etc.)
+   * Auto-saves to: Videos/Downloaded
+   */
+  async uploadSourceScrapedVideo(buffer, fileName, source = 'web', options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || `Source video from ${source || 'web'} downloaded for processing`,
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: source || 'web',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 NEW: Upload video to queue for processing
+   * Auto-saves to: Videos/Queue
+   */
+  async uploadVideoToQueue(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosQueue || this.folderIds.videos,
+      description: options.description || 'Video queued for processing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'queued',
+        category: 'queue-video',
+      }
+    });
+  }
+
+  /**
    * 💫 NEW: Upload directly via REST API using API Key
    */
   async uploadBufferViaRestAPI(buffer, fileName, options = {}) {
@@ -992,6 +1085,78 @@ class GoogleDriveOAuthService {
     };
     return mimeTypes[ext] || 'application/octet-stream';
   }
+  /**
+   * 💫 Upload playboard scraped video
+   * Auto-saves to: Videos/Downloaded/Playboard
+   */
+  async uploadPlayboardScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosPlayboard || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'playboard video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'playboard',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 Upload youtube scraped video
+   * Auto-saves to: Videos/Downloaded/Youtube
+   */
+  async uploadYoutubeScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosYoutube || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'youtube video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'youtube',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 Upload dailyhaha scraped video
+   * Auto-saves to: Videos/Downloaded/Dailyhaha
+   */
+  async uploadDailyhahaScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosDailyhaha || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'dailyhaha video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'dailyhaha',
+        category: 'scraped-video',
+      }
+    });
+  }
+
+  /**
+   * 💫 Upload douyin scraped video
+   * Auto-saves to: Videos/Downloaded/Douyin
+   */
+  async uploadDouyinScrapedVideo(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.videosDouyin || this.folderIds.videosDownloaded || this.folderIds.videos,
+      description: options.description || 'douyin video downloaded for repurposing',
+      properties: {
+        ...(options.properties || {}),
+        videoType: 'scraped',
+        source: 'douyin',
+        category: 'scraped-video',
+      }
+    });
+  }
+
 }
 
 // Export singleton instance

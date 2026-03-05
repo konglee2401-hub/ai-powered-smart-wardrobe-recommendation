@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-03-05T05:33:11.120Z",
+  "rootFolder": "Affiliate AI",
+  "rootFolderId": "1m9evYnMp6EV1H4aysk6NMTWgC8p-HAlu",
+  "description": "Folder structure for Smart Wardrobe app",
+  "folders": {
+    "Affiliate AI": "1m9evYnMp6EV1H4aysk6NMTWgC8p-HAlu",
+    "Affiliate AI/Images": "1ilDT6BLhParYL39ukfht-LYFzVLNtg_W",
+    "Affiliate AI/Images/Completed": "1ym8dGpmGZYksk40aIfktHk_c_Hj7MZ4K",
+    "Affiliate AI/Images/Downloaded": "1Wbze_yn0SAL-krp1oFcpxDDxEvgBf625",
+    "Affiliate AI/Images/Uploaded": "1kTua_KiArbeVvSl_iikug8_i3VQ4J2BZ",
+    "Affiliate AI/Images/Uploaded/App": "1ayZjev8zPy-k0NT5e4-yiP7gggRD6CVV",
+    "Affiliate AI/Images/Uploaded/App/Product": "1VomJ7aA58DDewwzGWhxCPyXKY0fz_UJL",
+    "Affiliate AI/Images/Uploaded/App/Character": "1c09kpuBM6O4arU521LlM3k3PyVQIn8YJ",
+    "Affiliate AI/Videos": "1cw7x1VSXPZPv-QyY2T6uYM55AtedPRiQ",
+    "Affiliate AI/Videos/Completed": "1vRmPySHkxHHCZdQzuqCctLST19S0EPWT",
+    "Affiliate AI/Videos/Queue": "1eNhp3EF_R_FH74BPsdQlvclQJq4RHs2Y",
+    "Affiliate AI/Videos/Downloaded": "1OZTHADwa8XMsm7xJ5Gy4R0Y6I1br7Jww",
+    "Affiliate AI/Videos/Downloaded/Youtube": "15hLUtWlhs282yAEzUs8CKnijd8z6Fu2q",
+    "Affiliate AI/Videos/Downloaded/Tiktok": "16WmOuKTyj9MFHack9lIyzgUAO60C0BVR",
+    "Affiliate AI/Videos/Downloaded/Reels": "1wltktUBXLaFbEevt-Xlh-yGsnwL3Q0w9",
+    "Affiliate AI/Videos/Uploaded": "1EhSRZD03UWYDc1JiMyAiPDAEI76g5Vlc",
+    "Affiliate AI/Videos/Uploaded/App": "165YZF6z-xSzrSCrPcuXnp_qvBJc4nWFW"
+  },
+  "tree": {
+    "name": "Affiliate AI",
+    "id": "1m9evYnMp6EV1H4aysk6NMTWgC8p-HAlu",
+    "children": [
+      {
+        "name": "Images",
+        "id": "1ilDT6BLhParYL39ukfht-LYFzVLNtg_W",
+        "children": [
+          {
+            "name": "Completed",
+            "id": "1ym8dGpmGZYksk40aIfktHk_c_Hj7MZ4K",
+            "children": []
+          },
+          {
+            "name": "Downloaded",
+            "id": "1Wbze_yn0SAL-krp1oFcpxDDxEvgBf625",
+            "children": []
+          },
+          {
+            "name": "Uploaded",
+            "id": "1kTua_KiArbeVvSl_iikug8_i3VQ4J2BZ",
+            "children": [
+              {
+                "name": "App",
+                "id": "1ayZjev8zPy-k0NT5e4-yiP7gggRD6CVV",
+                "children": [
+                  {
+                    "name": "Product",
+                    "id": "1VomJ7aA58DDewwzGWhxCPyXKY0fz_UJL",
+                    "children": []
+                  },
+                  {
+                    "name": "Character",
+                    "id": "1c09kpuBM6O4arU521LlM3k3PyVQIn8YJ",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Videos",
+        "id": "1cw7x1VSXPZPv-QyY2T6uYM55AtedPRiQ",
+        "children": [
+          {
+            "name": "Completed",
+            "id": "1vRmPySHkxHHCZdQzuqCctLST19S0EPWT",
+            "children": []
+          },
+          {
+            "name": "Queue",
+            "id": "1eNhp3EF_R_FH74BPsdQlvclQJq4RHs2Y",
+            "children": []
+          },
+          {
+            "name": "Downloaded",
+            "id": "1OZTHADwa8XMsm7xJ5Gy4R0Y6I1br7Jww",
+            "children": [
+              {
+                "name": "Youtube",
+                "id": "15hLUtWlhs282yAEzUs8CKnijd8z6Fu2q",
+                "children": []
+              },
+              {
+                "name": "Tiktok",
+                "id": "16WmOuKTyj9MFHack9lIyzgUAO60C0BVR",
+                "children": []
+              },
+              {
+                "name": "Reels",
+                "id": "1wltktUBXLaFbEevt-Xlh-yGsnwL3Q0w9",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "Uploaded",
+            "id": "1EhSRZD03UWYDc1JiMyAiPDAEI76g5Vlc",
+            "children": [
+              {
+                "name": "App",
+                "id": "165YZF6z-xSzrSCrPcuXnp_qvBJc4nWFW",
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

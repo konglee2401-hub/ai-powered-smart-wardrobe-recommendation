@@ -64,6 +64,8 @@ const ASPECT_RATIOS = [
 
 // 📊 Image Generation Configuration
 const DESIRED_OUTPUT_COUNT = 1;  // 💫 Default: Generate 1 session per click (user can increase in UI)
+const DEFAULT_SCENE_VALUE = 'linhphap-tryon-room';
+
 
 // Workflow steps - will be set dynamically in component using translations
 let WORKFLOW_STEPS = [
@@ -569,9 +571,11 @@ export default function OneClickCreatorPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [sceneOptions, setSceneOptions] = useState([]);
-  const [selectedScene, setSelectedScene] = useState('');
+  const [selectedScene, setSelectedScene] = useState(DEFAULT_SCENE_VALUE);
   const [selectedScenePrompt, setSelectedScenePrompt] = useState('');
+  const [sceneImageMode, setSceneImageMode] = useState('auto'); // auto | custom
   const [showScenePicker, setShowScenePicker] = useState(false);
+
 
 
 
@@ -584,11 +588,12 @@ export default function OneClickCreatorPage() {
           const scenes = data.data || [];
           setSceneOptions(scenes);
           if (scenes.length > 0) {
-            const fallback = scenes[0];
-            setSelectedScene(prev => prev || fallback.value);
-            setSelectedScenePrompt(prev => prev || fallback.sceneLockedPrompt || fallback.sceneLockedPromptVi || fallback.promptSuggestion || '');
+            const preferredScene = scenes.find(s => s.value === DEFAULT_SCENE_VALUE) || scenes[0];
+            setSelectedScene(prev => prev || preferredScene?.value || DEFAULT_SCENE_VALUE);
+            setSelectedScenePrompt(prev => prev || preferredScene?.sceneLockedPrompt || preferredScene?.sceneLockedPromptVi || preferredScene?.promptSuggestion || '');
           }
         }
+
       } catch (error) {
         console.warn('Failed to load scene options:', error.message);
       }
@@ -606,93 +611,74 @@ export default function OneClickCreatorPage() {
     }
   }, [useCase]);
 
+  const resolveSceneImageDataUrl = async (sceneValue = selectedScene, ratio = aspectRatio) => {
+    if (!sceneValue || sceneOptions.length === 0) {
+      return null;
+    }
+
+    const selectedSceneObj = sceneOptions.find(s => s.value === sceneValue);
+    if (!selectedSceneObj) {
+      return null;
+    }
+
+    let sceneImageUrl = null;
+    if (selectedSceneObj.sceneLockedImageUrls && typeof selectedSceneObj.sceneLockedImageUrls === 'object') {
+      sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[ratio];
+      if (!sceneImageUrl) {
+        const otherAspect = ratio === '16:9' ? '9:16' : '16:9';
+        sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[otherAspect];
+      }
+    }
+
+    if (!sceneImageUrl) sceneImageUrl = selectedSceneObj.sceneLockedImageUrl || null;
+    if (!sceneImageUrl) sceneImageUrl = selectedSceneObj.previewImage || null;
+    if (!sceneImageUrl) return null;
+
+    let absoluteUrl = sceneImageUrl;
+    if (!sceneImageUrl.startsWith('http://') && !sceneImageUrl.startsWith('https://')) {
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const baseUrl = apiBase.replace('/api', '');
+      absoluteUrl = `${baseUrl}${sceneImageUrl.startsWith('/') ? '' : '/'}${sceneImageUrl}`;
+    }
+
+    const response = await fetch(absoluteUrl);
+    if (!response.ok) return null;
+
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) return null;
+
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => resolve(evt.target?.result || null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // 💫 NEW: Auto-fetch scene lock image based on selectedScene + aspectRatio
   useEffect(() => {
     const autoFetchSceneImage = async () => {
-      if (!selectedScene || sceneOptions.length === 0) {
-        console.log('⏭️  Skipping scene image fetch: no scene selected or scenes not loaded yet');
+      if (sceneImageMode === 'custom') {
         return;
       }
 
       try {
-        const selectedSceneObj = sceneOptions.find(s => s.value === selectedScene);
-        if (!selectedSceneObj) {
-          console.warn(`⚠️  Scene not found: ${selectedScene}`);
-          return;
-        }
-
-        console.log(`🎬 Auto-fetching scene lock image for: ${selectedScene} (aspect: ${aspectRatio})`);
-
-        // Priority 1: Get aspect-specific image from sceneLockedImageUrls
-        let sceneImageUrl = null;
-        if (selectedSceneObj.sceneLockedImageUrls && typeof selectedSceneObj.sceneLockedImageUrls === 'object') {
-          sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[aspectRatio];
-          if (sceneImageUrl) {
-            console.log(`✅ Found aspect-specific image for ${aspectRatio}`);
-          } else {
-            // Fallback: Try other aspect ratio
-            const otherAspect = aspectRatio === '16:9' ? '9:16' : '16:9';
-            sceneImageUrl = selectedSceneObj.sceneLockedImageUrls[otherAspect];
-            if (sceneImageUrl) {
-              console.log(`✅ Using fallback aspect-specific image: ${otherAspect}`);
-            }
-          }
-        }
-
-        // Priority 2: Use generic sceneLockedImageUrl
-        if (!sceneImageUrl && selectedSceneObj.sceneLockedImageUrl) {
-          sceneImageUrl = selectedSceneObj.sceneLockedImageUrl;
-          console.log(`✅ Using generic scene locked image URL`);
-        }
-
-        // Priority 3: Use previewImage
-        if (!sceneImageUrl && selectedSceneObj.previewImage) {
-          sceneImageUrl = selectedSceneObj.previewImage;
-          console.log(`✅ Using preview image as fallback`);
-        }
-
-        if (!sceneImageUrl) {
-          console.warn('⚠️  No scene image URL found for:', selectedScene);
-          return;
-        }
-
-        // Resolve absolute URL
-        let absoluteUrl = sceneImageUrl;
-        if (!sceneImageUrl.startsWith('http://') && !sceneImageUrl.startsWith('https://')) {
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-          const baseUrl = apiBase.replace('/api', '');
-          absoluteUrl = `${baseUrl}${sceneImageUrl.startsWith('/') ? '' : '/'}${sceneImageUrl}`;
-        }
-
-        console.log(`🔗 Fetching scene image from: ${absoluteUrl}`);
-
-        // Fetch and convert to base64
-        const response = await fetch(absoluteUrl);
-        if (!response.ok) {
-          console.warn(`⚠️  Failed to fetch scene image: ${response.status}`);
-          return;
-        }
-
-        const blob = await response.blob();
-        if (!blob || blob.size === 0) {
-          console.warn('⚠️  Received empty blob for scene image');
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const dataUrl = evt.target?.result;
+        const dataUrl = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+        if (dataUrl) {
           setSceneImage(dataUrl);
-          console.log(`✅ Scene lock image auto-loaded: ${blob.type} (${blob.size} bytes)`);
-        };
-        reader.readAsDataURL(blob);
+          setSceneImageMode('auto');
+          console.log(`✅ Scene lock image auto-loaded for ${selectedScene} (${aspectRatio})`);
+        } else {
+          console.warn(`⚠️  No scene image found for ${selectedScene} (${aspectRatio})`);
+        }
       } catch (error) {
         console.warn(`⚠️  Failed to auto-fetch scene image: ${error.message}`);
       }
     };
 
     autoFetchSceneImage();
-  }, [selectedScene, aspectRatio, sceneOptions]);
+  }, [selectedScene, aspectRatio, sceneOptions, sceneImageMode]);
+
 
   // Add log to session
   const addLog = (sessionId, message) => {
@@ -1050,15 +1036,27 @@ export default function OneClickCreatorPage() {
     console.log('📸 Converting images to base64...');
     console.log(`Character image length: ${characterImage.length}B`);
     console.log(`Product image length: ${productImage.length}B`);
-    if (sceneImage) {
-      console.log(`Scene image length: ${sceneImage.length}B (auto-fetched from scene lock DB)`);
-    } else {
-      console.log(`⚠️  No scene image: user didn't upload and auto-fetch failed`);
+
+    let finalSceneImageData = sceneImage;
+    if (!finalSceneImageData) {
+      console.log('🔄 Scene image missing in UI state, trying default scene locked image fallback...');
+      finalSceneImageData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+      if (finalSceneImageData) {
+        setSceneImage(finalSceneImageData);
+        setSceneImageMode('auto');
+      }
     }
-    
+
+    if (!finalSceneImageData) {
+      throw new Error('Scene reference image is required but could not be loaded from scene locked defaults.');
+    }
+
+    console.log(`Scene image length: ${finalSceneImageData.length}B (${sceneImageMode === 'custom' ? 'custom upload' : 'scene lock default'})`);
+
     const charBase64 = characterImage.split(',')[1];
     const prodBase64 = productImage.split(',')[1];
-    const sceneBase64 = sceneImage ? sceneImage.split(',')[1] : null;  // 💫 NEW: Extract scene image base64
+    const sceneBase64 = finalSceneImageData.split(',')[1];
+
     
     // 💫 LOG: Verify base64 was extracted
     console.log(`✅ Extracted base64 strings:`);
@@ -1139,7 +1137,9 @@ export default function OneClickCreatorPage() {
           }
           recommendedOptions = { ...categoryDefaults };
           recommendedOptions.scene = selectedScene || categoryDefaults.scene || 'linhphap-tryon-room';
+          recommendedOptions.aspectRatio = aspectRatio || '9:16';
           const pickedScene = sceneOptions.find(s => s.value === recommendedOptions.scene);
+
           recommendedOptions.sceneLockedPrompt = (i18n.language || 'en').startsWith('vi')
             ? (pickedScene?.sceneLockedPromptVi || pickedScene?.sceneLockedPrompt || pickedScene?.promptSuggestionVi || pickedScene?.promptSuggestion || '')
             : (pickedScene?.sceneLockedPrompt || pickedScene?.sceneLockedPromptVi || pickedScene?.promptSuggestion || pickedScene?.promptSuggestionVi || '');
@@ -1863,13 +1863,19 @@ export default function OneClickCreatorPage() {
                   
                   {sceneImage && (
                     <button
-                      onClick={() => setSceneImage(null)}
+                      onClick={async () => {
+                        if (isGenerating) return;
+                        setSceneImageMode('auto');
+                        const autoSceneData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+                        setSceneImage(autoSceneData || null);
+                      }}
                       disabled={isGenerating}
                       className="px-2 py-2 text-xs rounded bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 transition-colors flex items-center gap-1"
                     >
                       ✕ Remove
                     </button>
                   )}
+
                 </div>
                 
                 <input
@@ -1882,10 +1888,14 @@ export default function OneClickCreatorPage() {
                     const file = e.target.files?.[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onload = (evt) => setSceneImage(evt.target?.result);
+                      reader.onload = (evt) => {
+                        setSceneImage(evt.target?.result);
+                        setSceneImageMode('custom');
+                      };
                       reader.readAsDataURL(file);
                     }
                   }}
+
                 />
               </div>
             </div>

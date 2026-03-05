@@ -1585,52 +1585,11 @@ class GoogleFlowAutomationService {
       await this.page.waitForTimeout(5000);
       console.log('[PAGE] ✅ Ready\n');
 
-      // STEP 4: Video-specific setup
-      console.log('[VIDEO] 📹 Switching to video generation mode...');
-      await this._switchToVideoTab();
-      
-      // 🔥 DEBUG: Check DOM after switching to video tab
-      let domStateAfterTabSwitch = await this.page.evaluate(() => {
-        return {
-          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
-          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-          textEditor: !!document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]'),
-          allTextAreas: document.querySelectorAll('[role="textbox"]').length,
-          componentButtons: document.querySelectorAll('button').length,
-          videoButtonExists: !!Array.from(document.querySelectorAll('button')).find(b => b.textContent.toLowerCase().includes('video'))
-        };
-      });
-      console.log('[VIDEO] 🔍 DOM state after tab switch:');
-      console.log(`   Virtuoso list: ${domStateAfterTabSwitch.virtuosoList ? '✓' : '✗'}`);
-      console.log(`   Virtuoso items visible: ${domStateAfterTabSwitch.virtuosoItems}`);
-      console.log(`   Text editor: ${domStateAfterTabSwitch.textEditor ? '✓' : '✗'}`);
-      console.log(`   All textboxes: ${domStateAfterTabSwitch.allTextAreas}`);
-      console.log(`   Buttons on page: ${domStateAfterTabSwitch.componentButtons}`);
-      console.log(`   Video button found: ${domStateAfterTabSwitch.videoButtonExists ? '✓' : '✗'}\n`);
-      
-      await this._selectVideoFromComponents();
-      
-      // 🔥 DEBUG: Check DOM after selecting video
-      const domStateAfterVideoSelect = await this.page.evaluate(() => {
-        return {
-          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
-          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-          textEditor: !!document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]'),
-          visibleTextEditors: document.querySelectorAll('[role="textbox"]:not([style*="display: none"])').length,
-          imageElements: document.querySelectorAll('img').length
-        };
-      });
-      console.log('[VIDEO] 🔍 DOM state after video selection:');
-      console.log(`   Virtuoso list: ${domStateAfterVideoSelect.virtuosoList ? '✓' : '✗'}`);
-      console.log(`   Virtuoso items visible: ${domStateAfterVideoSelect.virtuosoItems}`);
-      console.log(`   Expected text editor: ${domStateAfterVideoSelect.textEditor ? '✓' : '✗'}`);
-      console.log(`   All visible textboxes: ${domStateAfterVideoSelect.visibleTextEditors}`);
-      console.log(`   Image elements on page: ${domStateAfterVideoSelect.imageElements}\n`);
-      
-      await this.page.waitForTimeout(1000);
-      console.log('[VIDEO] ✅ Video mode ready\n');
+      // STEP 4: Video setup is now handled inside settings popup only
+      console.log('[VIDEO] ⚙️  Video mode will be selected via settings dialog');
 
       // STEP 5: Configure video settings
+
       console.log('[CONFIG] ⚙️  Configuring video settings...');
       await this._delegateConfigureSettings();
       await this.page.waitForTimeout(2000);

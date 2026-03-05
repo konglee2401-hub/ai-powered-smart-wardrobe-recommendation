@@ -29,8 +29,6 @@
     "files.exclude": {
         "**/node_modules": true,
         "**/temp": true,
-        "**/.env": true,
-        "**/.env.local": true,
         "**/dist": true,
         "**/build": true,
         "**/uploads": true,

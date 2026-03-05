@@ -19,6 +19,7 @@ import AIProviderManager from './pages/AIProviderManager';
 import { VideoProduction } from './pages/VideoProduction';
 import VideoScriptGenerator from './pages/VideoScriptGenerator';
 import PromptTemplateManager from './pages/PromptTemplateManager';
+import SetupAuthentication from './pages/SetupAuthentication';
 
 // Import components
 import Navbar from './components/Navbar';
@@ -43,6 +44,14 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-hidden">
               <ImageGenerationPage />
+            </div>
+          </div>
+        } />
+        <Route path="/setup-authentication" element={
+          <div className="h-screen flex flex-col bg-gray-900">
+            <Navbar />
+            <div className="flex-1 overflow-y-auto">
+              <SetupAuthentication />
             </div>
           </div>
         } />
