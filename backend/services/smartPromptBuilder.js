@@ -244,7 +244,10 @@ function getFallbackTechnicalDetails(category, optionValue) {
  * @param {string} useCase - 'change-clothes', 'styling', 'complete-look', etc.
  * @param {string} productFocus - 'full-outfit', 'top', 'bottom', 'accessory'
  */
-export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en') {
+export async function buildDetailedPrompt(analysis, selectedOptions, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en', promptConfig = {}) {
+  const useShortPrompt = typeof promptConfig === 'boolean'
+    ? promptConfig
+    : Boolean(promptConfig?.useShortPrompt);
   // 💫 NEW: Support Vietnamese language for image generation
   // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
   const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
@@ -285,11 +288,11 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
       
       if (useCase === 'change-clothes') {
         // Use Vietnamese image generation prompt for wearing product (virtual try-on)
-        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData);
+        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt });
         console.log(`✅ Using Vietnamese WEARING product prompt`);
       } else if (useCase === 'character-holding-product') {
         // Use Vietnamese image generation prompt for holding product
-        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData);
+        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt });
         console.log(`✅ Using Vietnamese HOLDING product prompt`);
       } else {
         // Fallback to character analysis for other use cases
@@ -325,10 +328,10 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   // Route to appropriate prompt builder based on use case
   switch (useCase) {
     case 'change-clothes':
-      promptStr = await buildChangeClothesPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+      promptStr = await buildChangeClothesPrompt(analysis, selectedOptions, productFocus, normalizedLanguage, useShortPrompt);
       break;
     case 'character-holding-product':
-      promptStr = await buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+      promptStr = await buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, normalizedLanguage, useShortPrompt);
       break;
     case 'ecommerce-product':
       promptStr = await buildEcommerceProductPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
@@ -382,10 +385,39 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
  * Most important: Emphasize keeping face, body, pose identical
  * OPTIMIZED: Uses new bilingual template format - English for model, Vietnamese for debug
  */
-async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus, language = 'en') {
+async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus, language = 'en', useShortPrompt = false) {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
+
+  if (useShortPrompt) {
+    const garmentType = product.garment_type || product.type || 'garment';
+    const garmentColor = product.primary_color
+      ? (product.secondary_color ? `${product.primary_color} + ${product.secondary_color}` : product.primary_color)
+      : 'as in Image 2';
+    const garmentMaterial = product.fabric_type || product.material || 'as in Image 2';
+    const scene = selectedOptions.scene || 'clean studio';
+    const lighting = selectedOptions.lighting || 'soft diffused';
+    const mood = selectedOptions.mood || 'confident';
+
+    return [
+      '[IMAGE MAPPING]',
+      'Image 1 = CHARACTER (identity source).',
+      'Image 2 = GARMENT (product source).',
+      '',
+      '[IDENTITY LOCK — STRICT]',
+      'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
+      '',
+      '[MODE — wearing]',
+      'Character WEARS garment from Image 2. Ignore any model in Image 2, extract garment only.',
+      '',
+      `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
+      `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      '',
+      '[HARD RULES]',
+      'No anatomy errors, no deformation, no blur, no extra limbs, no text/logo/watermark.'
+    ].join('\n');
+  }
 
   // ==========================================
   // IMAGE MAPPING
@@ -626,10 +658,39 @@ function getSceneTechnicalDetails(scene) {
  * - Natural pose of holding/presenting product
  * - Character's expression shows the product or engagement with it
  */
-async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, language = 'en') {
+async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, productFocus, language = 'en', useShortPrompt = false) {
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
+
+  if (useShortPrompt) {
+    const garmentType = product.garment_type || product.type || 'garment';
+    const garmentColor = product.primary_color
+      ? (product.secondary_color ? `${product.primary_color} + ${product.secondary_color}` : product.primary_color)
+      : 'as in Image 2';
+    const garmentMaterial = product.fabric_type || product.material || 'as in Image 2';
+    const scene = selectedOptions.scene || 'clean studio';
+    const lighting = selectedOptions.lighting || 'soft diffused';
+    const mood = selectedOptions.mood || 'professional';
+
+    return [
+      '[IMAGE MAPPING]',
+      'Image 1 = CHARACTER (identity source).',
+      'Image 2 = GARMENT (product source).',
+      '',
+      '[IDENTITY LOCK — STRICT]',
+      'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
+      '',
+      '[MODE — holding]',
+      'Character does NOT wear garment. Character HOLDS and presents garment from Image 2 clearly to camera.',
+      '',
+      `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
+      `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      '',
+      '[HARD RULES]',
+      'No anatomy errors, no deformation, no blur, no extra limbs, no text/logo/watermark.'
+    ].join('\n');
+  }
 
   // ==========================================
   // IMAGE MAPPING
