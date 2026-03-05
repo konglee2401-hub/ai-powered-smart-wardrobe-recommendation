@@ -126,10 +126,10 @@ class GenerationMonitor {
             console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
             console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
             
-            // If we found expected number of new hrefs, generation is complete
-            if (newHrefCount === expectedNewHrefs) {
+            // If we found expected number of new hrefs (or more), generation is complete
+            if (newHrefCount >= expectedNewHrefs) {
               preGenStatus = 'ready-by-hrefs';
-              console.log(`      ✅ DETECTED: ${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found via PreGenerationMonitor`);
+              console.log(`      ✅ DETECTED: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} via PreGenerationMonitor`);
             } else if (newHrefCount > lastHrefCount) {
               lastHrefCount = newHrefCount;
               console.log(`      📈 Progress: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found so far`);
@@ -174,7 +174,7 @@ class GenerationMonitor {
         // Show href count if available (from already-captured analysis)
         if (hrefAnalysis && (status === 'generating' || effectiveStatus === 'generating')) {
           const totalNew = hrefAnalysis.newCount || 0;
-          console.log(`      📊 New hrefs found: ${totalNew}/2`);
+          console.log(`      📊 New hrefs found: ${totalNew}/${expectedNewHrefs}`);
           if (totalNew > 0 && hrefAnalysis.href) {
             console.log(`         ↳ ${hrefAnalysis.href.substring(0, 60)}`);
           }
@@ -278,8 +278,8 @@ class GenerationMonitor {
         try {
           console.log('⏰ Timeout reached - checking if images were generated via PreGenerationMonitor...');
           const finalCheck = await this.preGenerationMonitor.findNewHref();
-          if (finalCheck && finalCheck.newCount === expectedNewHrefs) {
-            console.log(`✅ SUCCESS: ${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found, generation completed (despite timeout/status detection failure)`);
+          if (finalCheck && finalCheck.newCount >= expectedNewHrefs) {
+            console.log(`✅ SUCCESS: ${finalCheck.newCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found, generation completed (despite timeout/status detection failure)`);
             return { success: true, href: finalCheck.href };
           } else if (finalCheck && finalCheck.newCount > 0) {
             console.log(`⚠️  Partial: Only ${finalCheck.newCount}/${expectedNewHrefs} href${expectedNewHrefs > 1 ? 's' : ''} found`);

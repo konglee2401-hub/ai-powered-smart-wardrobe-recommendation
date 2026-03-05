@@ -2228,6 +2228,24 @@ export async function serveGeneratedImage(req, res) {
         path.join(process.cwd(), 'generated-images', id),
         path.join(process.cwd(), 'backend', 'generated-images', id)
       ];
+
+      // Extra fallback: scene-lock outputs are stored under temp/scene-locks/<sceneValue>/
+      const sceneLockRoots = [
+        path.join(tempDir, 'scene-locks'),
+        path.join(process.cwd(), 'backend', 'temp', 'scene-locks'),
+        path.join(process.cwd(), 'temp', 'scene-locks')
+      ];
+      for (const root of sceneLockRoots) {
+        if (!fs.existsSync(root)) continue;
+        try {
+          const subDirs = fs.readdirSync(root, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => path.join(root, entry.name, id));
+          searchPaths.push(...subDirs);
+        } catch (scanErr) {
+          console.warn(`⚠️ Failed scanning scene-lock folder ${root}: ${scanErr.message}`);
+        }
+      }
       
       console.log(`🔍 Global mapping miss. Searching in ${searchPaths.length} locations...`);
 

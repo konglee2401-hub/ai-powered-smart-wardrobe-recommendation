@@ -22,7 +22,8 @@
     "settings": "Cài đặt",
     "customization": "Tùy chỉnh",
     "aiProviders": "Nhà cung cấp AI",
-    "options": "Tùy chọn"
+    "options": "Tùy chọn",
+    "setupAuthentication": "Thiết lập Xác thực"
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -582,6 +583,89 @@
       "maleSlow": "Nam - Chậm",
       "maleNormal": "Nam - Bình thường",
       "maleFast": "Nam - Nhanh"
+    }
+  },
+  "authSetup": {
+    "title": "Thiết lập Xác thực",
+    "sections": {
+      "googleFlow": { "title": "Google Flow", "desc": "Tự động refresh session + reCAPTCHA" },
+      "chatgpt": { "title": "ChatGPT Service", "desc": "Tự động đăng nhập và lưu session" },
+      "drive": { "title": "Google Drive API", "desc": "OAuth 2.0, lưu Client ID/Secret" },
+      "youtube": { "title": "YouTube Data API", "desc": "OAuth 2.0, chẩn đoán & kiểm thử" }
+    },
+    "status": { "label": "Trạng thái:", "sessionPresent": "Đã có session", "sessionMissing": "Chưa có session" },
+    "buttons": {
+      "refreshSession": "Refresh session",
+      "autoLogin": "Auto login",
+      "refresh": "Refresh",
+      "validate": "Validate",
+      "saveEncrypted": "Lưu vào DB (mã hoá)",
+      "openAuthUrl": "Mở Auth URL",
+      "exchangeSaveToken": "Exchange & Lưu token",
+      "runDiagnostic": "Chạy diagnostic"
+    },
+    "labels": {
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "redirectUri": "Redirect URI"
+    },
+    "placeholders": {
+      "googleCode": "code từ Google"
+    },
+    "messages": {
+      "startedGoogleFlow": "Đã khởi chạy refresh Google Flow. Làm theo hướng dẫn trên cửa sổ trình duyệt.",
+      "startedChatGPTLogin": "Đã khởi chạy đăng nhập ChatGPT. Hoàn tất thao tác trong trình duyệt.",
+      "savedCredentials": "Đã lưu credentials (mã hoá) thành công.",
+      "saveErrorPrefix": "Lỗi lưu credentials: ",
+      "savedDriveToken": "Đã lưu token Google Drive.",
+      "savedYouTubeToken": "Đã lưu token YouTube.",
+      "exchangeErrorPrefix": "Lỗi exchange token: "
+    },
+    "googleFlow": {
+      "instructions": "Script: refresh-google-flow. Mở Flow, đăng nhập nếu cần, tự động lấy cookies/localStorage/token reCAPTCHA và lưu session.",
+      "verifyNote": "Sau khi chạy, kiểm tra file:"
+    },
+    "chatgpt": {
+      "instructions": "Script: chatgpt-auto-login. Mở chatgpt.com, áp dụng session đã lưu; nếu hết hạn hướng dẫn đăng nhập thủ công, rồi lưu cookies/local/sessionStorage.",
+      "verifyNote": "File session:"
+    },
+    "drive": {
+      "instructions": "Nhập Client ID, Client Secret và lưu mã hoá vào DB. Tạo app trong Google Cloud Console, cấu hình consent screen, thêm test user và Redirect URI.",
+      "exchangeHint": "Sau khi approve, lấy code trên URL/response và dán vào đây để exchange token:",
+      "detailedGuideTitle": "Hướng dẫn thiết lập chi tiết",
+      "steps": [
+        "Mở Google Cloud Console → APIs & Services → Credentials.",
+        "Tạo OAuth 2.0 Client ID (Application type: Web Application).",
+        "Thêm Authorized redirect URI: http://localhost:5000/api/drive/auth-callback.",
+        "Copy Client ID và Client Secret, dán vào form và bấm Lưu vào DB (mã hoá).",
+        "Bấm Mở Auth URL để tạo link duyệt và approve trên consent screen.",
+        "Sau khi approve, copy code từ URL (?code=...) và dán vào ô exchange.",
+        "Bấm Exchange & Lưu token để lưu token Drive (drive-token.json).",
+        "Kiểm tra Diagnostic để xác nhận; chức năng upload sẽ tự dùng OAuth."
+      ]
+    },
+    "youtube": {
+      "instructions": "Tạo OAuth Client trên Google Cloud, thêm scope YouTube, cấu hình Redirect URI, lưu Client ID/Secret mã hoá, mở Auth URL, approve và exchange token để lưu.",
+      "exchangeHint": "Sau khi approve, lấy code và dán vào đây để exchange token:",
+      "detailedGuideTitle": "Hướng dẫn thiết lập chi tiết",
+      "steps": [
+        "Mở Google Cloud Console → APIs & Services → Library → Enable YouTube Data API v3.",
+        "Vào Credentials → Tạo OAuth 2.0 Client ID (Web Application).",
+        "Thêm Authorized redirect URI: http://localhost:5000/api/trend-automation/youtube/oauth/callback.",
+        "Copy Client ID/Secret, dán vào form và bấm Lưu vào DB (mã hoá).",
+        "Bấm Mở Auth URL để tạo link duyệt và approve.",
+        "Copy code từ URL (?code=...) và dán vào ô exchange.",
+        "Bấm Exchange & Lưu token để lưu token YouTube (youtube-token.json).",
+        "Kiểm tra Diagnostic để xác nhận; upload YouTube và API sẽ dùng OAuth."
+      ]
+    },
+    "diagnostic": {
+      "labelDrive": "Chẩn đoán: kiểm tra token đã lưu",
+      "labelYouTube": "Chẩn đoán & kiểm thử",
+      "driveTokenExists": "Token Drive đã tồn tại.",
+      "driveTokenMissing": "Chưa có token Drive.",
+      "youtubeTokenExists": "Token YouTube đã tồn tại.",
+      "youtubeTokenMissing": "Chưa có token YouTube."
     }
   }
 }

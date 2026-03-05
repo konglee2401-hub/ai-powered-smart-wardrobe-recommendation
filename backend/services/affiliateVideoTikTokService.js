@@ -422,8 +422,10 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
         console.log('↩️  Skipping scene locked image download (network transfer disabled for affiliate flow)');
       } else {
         try {
-          const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: '9:16' }, language);
+          const selectedAspectRatio = String(options?.aspectRatio || '9:16');
+          const sceneInfo = await getSceneReferenceInfo(options.scene, { aspectRatio: selectedAspectRatio }, language);
           const sceneImageUrl = sceneInfo?.imageUrl ? String(sceneInfo.imageUrl).trim() : '';
+
 
           if (sceneImageUrl) {
             const isHttpUrl = /^https?:\/\//i.test(sceneImageUrl);
@@ -1496,28 +1498,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     // 🛑 BARRIER CHECKPOINT: Ensure STEP 2.5 completes before STEP 3
     try {
-      // ⚠️ SKIP UPLOAD if images from gallery (user explicitly doesn't want Drive upload)
-      const skipCharacterUpload = imageSource.character === 'gallery';
-      const skipProductUpload = imageSource.product === 'gallery';
-      
-      if (skipCharacterUpload || skipProductUpload) {
-        console.log(`↩️  Skipping Google Drive upload for gallery images:`);
-        if (skipCharacterUpload) console.log(`   - Character image from gallery (skipped)`);
-        if (skipProductUpload) console.log(`   - Product image from gallery (skipped)`);
-      }
-      
-      // Upload both images in parallel
+      // Upload generated images in parallel (always upload Step 2 outputs)
       if (driveService) {
-        const uploadPromises = imageResults
-          .map((img, idx, arr) => {
-            // 🎯 Skip upload if image source is gallery
-            if (idx === 0 && skipCharacterUpload) return null;  // Don't upload character from gallery
-            if (idx === 1 && skipProductUpload) return null;    // Don't upload product from gallery
-            
-            return { img, idx };
-          })
-          .filter(item => item !== null)  // Filter out skipped uploads
-          .map(({ img, idx }) => {
+        const uploadPromises = imageResults.map((img, idx) => {
+
           const imgType = img.type || (idx === 0 ? 'wearing' : 'holding');
           const uploadFileName = `Generated-${imgType}-${flowId}.jpg`;
           
@@ -1696,153 +1680,102 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         console.log(`   📹 MODE: Generating single video`);
       }
 
-      // ========== USE GOOGLE FLOW AUTOMATION FOR VIDEO GENERATION ==========
-      // IMPORTANT: Create fresh instance for EACH segment because generateVideo()
-      // calls init() and close() - each video needs its own browser session
-
+      // ========== USE GOOGLE FLOW AUTOMATION MULTI-VIDEO METHOD ==========
       console.log(`\n📝 VIDEO GENERATION:`);
       console.log(`  Duration: ${videoDuration}s`);
       console.log(`  Aspect ratio: 9:16 (TikTok)`);
-      console.log(`  Images: wearing, holding, product`);
+      console.log(`  Images: wearing, holding`);
       console.log(`  Segments: ${videoSegments.length}\n`);
 
-      // Generate video for each segment
-      for (let segIdx = 0; segIdx < videoSegments.length; segIdx++) {
-        const segment = videoSegments[segIdx];
-        const segmentNumber = segIdx + 1;
-        
-        // 🔴 CRITICAL: Create fresh instance for THIS segment
-        // Because generateVideo() will call init() and close()
-        const videoGen = new GoogleFlowAutomationService({
-          type: 'video',  // 🔴 CRITICAL: Set to VIDEO, not image
-          projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
-          videoCount: 1,  // Generate 1 video per segment (default)
-          headless: false,
-          outputDir: tempDir,
-          debugMode: false,
-          timeouts: {
-            pageLoad: 30000,
-            generation: Math.max(300000, (videoDuration + 60) * 1000)
-          }
-        });
-        
+      const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+      const characterIdentity = analysis?.character || {};
+      const characterDescription = `${characterIdentity.age || ''} ${characterIdentity.gender || ''} with ${characterIdentity.hair?.color || ''} ${characterIdentity.hair?.style || ''} hair, ${characterIdentity.facialFeatures || ''}, ${characterIdentity.bodyType || ''}`;
+
+      const segmentPrompts = videoSegments.map((segment, segIdx) => {
+        let segmentPrompt;
+
+        if (normalizedLanguage === 'vi') {
+          const baseTemplate = VietnamesePromptBuilder.buildVideoGenerationPrompt(
+            segment.segment,
+            productFocus,
+            { name: analysis.product?.garment_type, details: analysis.product?.key_details }
+          );
+          const identityLock = `\n\n🔒 KHÓA NHÂN VẬT: ${characterDescription}\n`;
+          const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')]
+            ? `\nCHỈ CHUYỂN ĐỘNG: ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
+            : '';
+          segmentPrompt = baseTemplate + identityLock + motionGuide;
+        } else {
+          const identityLock = `\n\n[CHARACTER IDENTITY LOCK - CRITICAL]\nMaintain exactly this character: ${characterDescription}\n`;
+          const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')]
+            ? `[MOTION DIRECTION] ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
+            : '';
+          segmentPrompt = segment.script + identityLock + motionGuide;
+        }
+
         console.log(`\n${'─'.repeat(80)}`);
-        console.log(`📍 SEGMENT ${segmentNumber}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
+        console.log(`📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
         console.log(`${'─'.repeat(80)}`);
         console.log(`   Duration: ${segment.duration}s`);
-        console.log(`   Script: ${segment.script.substring(0, 80)}...`);
+        console.log(`   Prompt length: ${segmentPrompt.length} chars`);
 
-        try {
-          // Build segment-specific prompt
-          const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
-          let segmentPrompt;
-          
-          // 🔴 CRITICAL CHARACTER IDENTITY LOCK INFO from STEP 1 analysis
-          const characterIdentity = analysis?.character || {};
-          const characterDescription = `${characterIdentity.age || ''} ${characterIdentity.gender || ''} with ${characterIdentity.hair?.color || ''} ${characterIdentity.hair?.style || ''} hair, ${characterIdentity.facialFeatures || ''}, ${characterIdentity.bodyType || ''}`;
-          
-          if (normalizedLanguage === 'vi') {
-            // Vietnamese prompt builder
-            let baseTemplate = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-              segment.segment,
-              productFocus,
-              { name: analysis.product?.garment_type, details: analysis.product?.key_details }
-            );
-            
-            // 🔴 INJECT CHARACTER IDENTITY LOCK into Vietnamese prompt
-            const identityLock = `\n\n🔒 KHÓA NHÂN VẬT: ${characterDescription}\n`;
-            const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')] 
-              ? `\nCHỈ CHUYỂN ĐỘNG: ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
-              : '';
-            
-            segmentPrompt = baseTemplate + identityLock + motionGuide;
-          } else {
-            // English: Use segment script but ADD character lock info
-            const identityLock = `\n\n[CHARACTER IDENTITY LOCK - CRITICAL]\nMaintain exactly this character: ${characterDescription}\n`;
-            const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')] 
-              ? `[MOTION DIRECTION] ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
-              : '';
-            
-            segmentPrompt = segment.script + identityLock + motionGuide;
-          }
+        return segmentPrompt;
+      });
 
-          console.log(`   📝 Prompt length: ${segmentPrompt.length} chars`);
-          console.log(`   🔒 Character identity locked: ${characterDescription}`);
-        
-
-          // 🔧 FIX: Select segment-specific images based on segment type
-          // - INTRO: use wearing image (character first appearance)
-          // - WEARING: use wearing image (showing the product)
-          // - HOLDING: use holding image (character holding product)
-          // - CTA: use wearing image (final call-to-action)
-          let primaryImage, secondaryImage;
-          const segmentType = segment.segment.toLowerCase();
-          
-          if (segmentType.includes('holding')) {
-            // HOLDING segment: use holding image as primary, wearing as secondary
-            primaryImage = imageResults[1].screenshotPath;  // Holding
-            secondaryImage = imageResults[0].screenshotPath;  // Wearing
-            console.log(`   📸 Selected images: PRIMARY=holding, SECONDARY=wearing`);
-          } else if (segmentType.includes('cta') || segmentType.includes('call')) {
-            // CTA segment: use wearing image as primary, product as secondary
-            primaryImage = imageResults[0].screenshotPath;  // Wearing
-            secondaryImage = imageResults[0].screenshotPath;  // Wearing (or product if available)
-            console.log(`   📸 Selected images: PRIMARY=wearing, SECONDARY=wearing`);
-          } else {
-            // INTRO and WEARING: use wearing image as primary, holding as secondary
-            primaryImage = imageResults[0].screenshotPath;  // Wearing
-            secondaryImage = imageResults[1].screenshotPath;  // Holding
-            console.log(`   📸 Selected images: PRIMARY=wearing, SECONDARY=holding`);
-          }
-
-          // Call generateVideo() with segment-specific images
-          const videoResult = await videoGen.generateVideo(
-            segmentPrompt,
-            primaryImage,      // Segment-specific primary image
-            secondaryImage,    // Segment-specific secondary image
-            {
-              download: true,
-              outputPath: tempDir,
-              reloadAfter: false  // Don't reload because we'll close browser anyway in generateVideo()
-            }
-          );
-
-          if (videoResult.success && videoResult.path) {
-            const videoSize = fs.statSync(videoResult.path).size;
-            const videoInfo = {
-              segment: segment.segment,
-              duration: segment.duration,
-              path: videoResult.path,
-              size: videoSize,
-              href: videoResult.href,
-              sequenceNum: segIdx
-            };
-            allGeneratedVideos.push(videoInfo);
-            
-            console.log(`   ✅ VIDEO GENERATED`);
-            console.log(`      Path: ${path.basename(videoResult.path)}`);
-            console.log(`      Size: ${(videoSize / 1024 / 1024).toFixed(2)}MB`);
-            console.log(`      Href: ${videoResult.href.substring(0, 60)}...`);
-          } else {
-            console.warn(`   ⚠️  VIDEO GENERATION FAILED: ${videoResult.error || 'unknown error'}`);
-            if (segmentNumber === 1) {
-              // Fail early if first segment fails
-              throw new Error(`First segment generation failed: ${videoResult.error}`);
-            }
-            // Continue to next segment if not first
-          }
-
-        } catch (segmentError) {
-          console.error(`   ❌ SEGMENT ${segmentNumber} ERROR: ${segmentError.message}`);
-          if (segmentNumber === 1) {
-            throw segmentError;  // Fail early if first segment fails
-          }
-          // Continue to next segment
+      const videoGen = new GoogleFlowAutomationService({
+        type: 'video',
+        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
+        videoCount: 1,
+        headless: false,
+        outputDir: tempDir,
+        debugMode: false,
+        timeouts: {
+          pageLoad: 30000,
+          generation: Math.max(300000, (videoDuration + 60) * 1000)
         }
+      });
+
+      const multiVideoResult = await videoGen.generateMultiple(
+        imageResults[0].screenshotPath,
+        imageResults[1].screenshotPath,
+        segmentPrompts,
+        {
+          ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
+        }
+      );
+
+      if (!multiVideoResult?.success && !(multiVideoResult?.results || []).some(r => r?.success)) {
+        throw new Error(`Video multi-generation failed: ${multiVideoResult?.error || 'unknown error'}`);
       }
+
+      allGeneratedVideos = (multiVideoResult?.results || [])
+        .map((result, idx) => {
+          if (!result?.success || !result.downloadedFile) {
+            console.warn(`   ⚠️  SEGMENT ${idx + 1} failed: ${result?.error || 'unknown error'}`);
+            return null;
+          }
+
+          const videoPath = result.downloadedFile;
+          const videoSize = fs.existsSync(videoPath) ? fs.statSync(videoPath).size : 0;
+          return {
+            segment: videoSegments[idx]?.segment || `segment-${idx + 1}`,
+            duration: videoSegments[idx]?.duration || providerClipDuration,
+            path: videoPath,
+            size: videoSize,
+            href: result.href,
+            sequenceNum: idx
+          };
+        })
+        .filter(Boolean);
+
+      if (allGeneratedVideos.length === 0) {
+        throw new Error('No videos generated from multi-video workflow');
+      }
+
 
       // Store result
       videoGenerationResult = {
+        success: allGeneratedVideos.length > 0,
         videos: allGeneratedVideos,
         totalCount: allGeneratedVideos.length,
         status: allGeneratedVideos.length > 0 ? 'success' : 'no-videos'
@@ -1855,6 +1788,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     } catch (error) {
       console.error(`❌ VIDEO GENERATION ERROR: ${error.message}`);
       videoGenerationResult = {
+        success: false,
         videos: [],
         totalCount: 0,
         status: 'failed',
@@ -1903,118 +1837,52 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       videos: []
     };
 
-    // 5.1: Save image variations
-    try {
-      // 💫 CHECK: Image variations - save first variation
-      const wearingFilename = path.basename(imageResults[0].screenshotPath);
-      let wearingAssetExists = await checkExistingAsset(wearingFilename, 'generated-image');
-      
-      if (wearingAssetExists) {
-        console.log(`\n⏭️  Image variation 1 already exists in DB (skipping asset creation)`);
-        console.log(`   Existing Asset ID: ${wearingAssetExists.assetId}`);
-        if (wearingAssetExists.assetId) {
-          // Add to saved assets list even if skipped
-          savedAssets.images.push(wearingAssetExists);
-        }
-      } else {
-        console.log('\n📸 Saving image variation 1 to database...');
-        const wearingAssetResult = await AssetManager.saveAsset({
-          filename: wearingFilename,
-          mimeType: 'image/jpeg',
-          fileSize: fs.existsSync(imageResults[0].screenshotPath) ? fs.statSync(imageResults[0].screenshotPath).size : 0,
+    // 5.1 + 5.2: Save image variations (always create new assets per flowId)
+    for (let varIdx = 0; varIdx < imageResults.length; varIdx++) {
+      try {
+        const variationNumber = varIdx + 1;
+        const fileExt = path.extname(imageResults[varIdx].screenshotPath || '').toLowerCase() || '.jpg';
+        const normalizedExt = fileExt === '.jpeg' ? '.jpg' : fileExt;
+        const mimeType = normalizedExt === '.png' ? 'image/png' : 'image/jpeg';
+        const uniqueFilename = `Generated-${flowId}-variation-${String(variationNumber).padStart(2, '0')}${normalizedExt}`;
+
+        console.log(`\n📸 Saving image variation ${variationNumber} to database...`);
+        const imgAssetResult = await AssetManager.saveAsset({
+          filename: uniqueFilename,
+          mimeType,
+          fileSize: fs.existsSync(imageResults[varIdx].screenshotPath) ? fs.statSync(imageResults[varIdx].screenshotPath).size : 0,
           assetType: 'image',
           assetCategory: 'generated-image',
           userId: req.body.userId || 'system',
           sessionId: flowId,
           storage: {
-            location: imageResults[0].googleDriveId ? 'hybrid' : 'local',  // 💫 hybrid = has both
-            path: imageResults[0].screenshotPath,
-            url: imageResults[0].href || imageResults[0].screenshotPath,
-            // 💫 FIX: Include Drive metadata captured in Step 2.5
-            googleDriveId: imageResults[0].googleDriveId || null,
-            webViewLink: imageResults[0].googleDriveWebViewLink || null
+            location: imageResults[varIdx].googleDriveId ? 'hybrid' : 'local',
+            path: imageResults[varIdx].screenshotPath,
+            url: imageResults[varIdx].href || imageResults[varIdx].screenshotPath,
+            googleDriveId: imageResults[varIdx].googleDriveId || null,
+            webViewLink: imageResults[varIdx].googleDriveWebViewLink || null
           },
           cloudStorage: {
             location: 'google-drive',
-            localPath: imageResults[0].screenshotPath,
-            googleDriveId: imageResults[0].googleDriveId || null,
-            webViewLink: imageResults[0].googleDriveWebViewLink || null,
-            status: imageResults[0].googleDriveId ? 'synced' : 'pending',
+            localPath: imageResults[varIdx].screenshotPath,
+            googleDriveId: imageResults[varIdx].googleDriveId || null,
+            webViewLink: imageResults[varIdx].googleDriveWebViewLink || null,
+            status: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
             googleDrivePath: 'Affiliate AI/Images/Completed'
           },
-          // 💫 FIX: Add sync status
-          syncStatus: imageResults[0].googleDriveId ? 'synced' : 'pending',
+          syncStatus: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
           metadata: {
-            format: 'jpeg',
-            type: 'character-variation-1',
+            format: normalizedExt.replace('.', ''),
+            type: `character-variation-${variationNumber}`,
             flowId,
-            // 💫 Include drive metadata for reference
-            driveId: imageResults[0].googleDriveId || null
+            driveId: imageResults[varIdx].googleDriveId || null
           },
-          tags: ['generated', 'affiliate-video', 'character-variation']
+          tags: ['generated', 'affiliate-video', 'character-variation', `variation-${variationNumber}`]
         }, { verbose: true });
 
-        if (wearingAssetResult.success) {
-          savedAssets.images.push(wearingAssetResult.asset);
-        }
-      }
-    } catch (assetError) {
-      console.warn(`   ⚠️  Failed to save image variation 1: ${assetError.message}`);
-    }
-
-    // 5.2: Save other image variations (2 and 3)
-    for (let varIdx = 1; varIdx < imageResults.length; varIdx++) {
-      try {
-        const imgFilename = path.basename(imageResults[varIdx].screenshotPath);
-        let imgAssetExists = await checkExistingAsset(imgFilename, 'generated-image');
-        
-        if (imgAssetExists) {
-          console.log(`\n⏭️  Image variation ${varIdx + 1} already exists in DB (skipping asset creation)`);
-          if (imgAssetExists.assetId) {
-            savedAssets.images.push(imgAssetExists);
-          }
-        } else {
-          console.log(`\n📸 Saving image variation ${varIdx + 1} to database...`);
-          const imgAssetResult = await AssetManager.saveAsset({
-            filename: imgFilename,
-            mimeType: 'image/jpeg',
-            fileSize: fs.existsSync(imageResults[varIdx].screenshotPath) ? fs.statSync(imageResults[varIdx].screenshotPath).size : 0,
-            assetType: 'image',
-            assetCategory: 'generated-image',
-            userId: req.body.userId || 'system',
-            sessionId: flowId,
-            storage: {
-              location: imageResults[varIdx].googleDriveId ? 'hybrid' : 'local',  // 💫 hybrid = has both
-              path: imageResults[varIdx].screenshotPath,
-              url: imageResults[varIdx].href || imageResults[varIdx].screenshotPath,
-              // 💫 FIX: Include Drive metadata captured in Step 2.5
-              googleDriveId: imageResults[varIdx].googleDriveId || null,
-              webViewLink: imageResults[varIdx].googleDriveWebViewLink || null
-            },
-            cloudStorage: {
-              location: 'google-drive',
-              localPath: imageResults[varIdx].screenshotPath,
-              googleDriveId: imageResults[varIdx].googleDriveId || null,
-              webViewLink: imageResults[varIdx].googleDriveWebViewLink || null,
-              status: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
-              googleDrivePath: 'Affiliate AI/Images/Completed'
-            },
-            // 💫 FIX: Add sync status
-            syncStatus: imageResults[varIdx].googleDriveId ? 'synced' : 'pending',
-            metadata: {
-              format: 'jpeg',
-              type: `character-variation-${varIdx + 1}`,
-              flowId,
-              // 💫 Include drive metadata for reference
-              driveId: imageResults[varIdx].googleDriveId || null
-            },
-            tags: ['generated', 'affiliate-video', 'character-variation']
-          }, { verbose: true });
-
-          if (imgAssetResult.success) {
-            console.log(`   ✅ Image variation ${varIdx + 1} saved`);
-            savedAssets.images.push(imgAssetResult.asset);
-          }
+        if (imgAssetResult.success) {
+          console.log(`   ✅ Image variation ${variationNumber} saved`);
+          savedAssets.images.push(imgAssetResult.asset);
         }
       } catch (assetError) {
         console.warn(`   ⚠️  Failed to save image variation ${varIdx + 1}: ${assetError.message}`);
@@ -2022,6 +1890,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
     // 5.3: Save generated videos
+
     for (const videoData of allGeneratedVideos) {
       try {
         console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);

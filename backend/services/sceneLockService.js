@@ -196,10 +196,12 @@ export async function generateSceneLockImagesWithGoogleFlow({
   const outputDir = path.join(process.cwd(), 'temp', 'scene-locks', sceneValue);
   fs.mkdirSync(outputDir, { recursive: true });
 
+  const targetCount = Math.max(1, Math.min(4, Number(imageCount) || 1));
+
   const flow = new GoogleFlowAutomationService({
     type: 'image',
     aspectRatio,
-    imageCount: 1,
+    imageCount: targetCount,
     model: 'Nano Banana Pro',
     headless,
     outputDir
@@ -218,30 +220,76 @@ export async function generateSceneLockImagesWithGoogleFlow({
     await flow.waitForPageReady();
     await flow.page.waitForTimeout(3000);
 
-    console.log('[CONFIG] ⚙️  Configuring settings...');
+    console.log('[CONFIG] ⚙️  Configuring settings (single run, batch count)...');
     await flow._delegateConfigureSettings();
 
-    for (let i = 0; i < imageCount; i++) {
-      console.log(`\n${'═'.repeat(80)}`);
-      console.log(`🎨 GENERATING IMAGE ${i + 1}/${imageCount} (single flow)`);
-      console.log(`${'═'.repeat(80)}\n`);
+    if (flow.preGenerationMonitor) {
+      await flow.preGenerationMonitor.refreshBaseline();
+    }
 
-      const generation = await flow._sharedGenerationFlow(prompt, {
-        outputDir,
-        timeoutSeconds: 120,
-        isVideoMode: false,
-        storagePrefix: `scene-lock-${sceneValue}`
-      });
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`🎨 GENERATING ${targetCount} IMAGE(S) IN ONE SUBMIT`);
+    console.log(`${'═'.repeat(80)}\n`);
 
-      if (!generation.success || !generation.downloadedFile) {
-        throw new Error(generation.error || `Failed to generate image ${i + 1}`);
+    if (flow.promptManager) {
+      await flow.promptManager.enterPrompt(prompt);
+      await flow.page.waitForTimeout(5000);
+      const submitted = await flow.promptManager.submit();
+      if (!submitted) {
+        await flow.submit();
+      }
+    } else {
+      await flow.enterPrompt(prompt);
+      await flow.page.waitForTimeout(5000);
+      await flow.submit();
+    }
+
+    await flow.page.waitForTimeout(2000);
+
+    const timeoutSeconds = Math.max(120, targetCount * 90);
+    const timeoutMs = timeoutSeconds * 1000;
+    const startTime = Date.now();
+    let generatedHrefs = [];
+
+    while (Date.now() - startTime < timeoutMs) {
+      let analysis = null;
+
+      if (flow.preGenerationMonitor) {
+        analysis = await flow.preGenerationMonitor.findNewHref();
+      } else if (flow.generationMonitor) {
+        analysis = await flow.generationMonitor.monitorGeneration(20, targetCount);
       }
 
-      const downloadedFile = generation.downloadedFile;
-      const fileExt = path.extname(downloadedFile);
-      const fileName = path.basename(downloadedFile, fileExt);
-      const imageNum = String(i + 1).padStart(2, '0');
-      const renamedFileName = `${fileName}-scene-${imageNum}${fileExt}`;
+      const newHrefs = Array.isArray(analysis?.newHrefs)
+        ? analysis.newHrefs
+        : (analysis?.href ? [analysis.href] : []);
+
+      generatedHrefs = Array.from(new Set(newHrefs));
+
+      if (generatedHrefs.length >= targetCount) {
+        break;
+      }
+
+      await flow.page.waitForTimeout(2000);
+    }
+
+    if (generatedHrefs.length === 0) {
+      throw new Error(`No generated outputs found after ${timeoutSeconds}s`);
+    }
+
+    const hrefsToDownload = generatedHrefs.slice(0, targetCount);
+    console.log(`[DOWNLOAD] 📥 Found ${generatedHrefs.length} new href(s), downloading ${hrefsToDownload.length} item(s)...`);
+
+    for (let i = 0; i < hrefsToDownload.length; i++) {
+      const href = hrefsToDownload[i];
+      const downloadedFile = await flow._delegateDownloadItem(href);
+
+      if (!downloadedFile) {
+        throw new Error(`Failed to download generated image ${i + 1}`);
+      }
+
+      const fileExt = path.extname(downloadedFile) || '.png';
+      const renamedFileName = `scene-lock-${sceneValue}-${Date.now()}-${String(i + 1).padStart(2, '0')}${fileExt}`;
       const renamedFilePath = path.join(outputDir, renamedFileName);
 
       try {

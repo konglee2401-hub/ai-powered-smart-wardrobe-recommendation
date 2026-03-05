@@ -68,7 +68,13 @@ function normalizeSceneLockedImageHistory(scene = {}) {
 function SceneSidebarCard({ scene, isSelected, onClick }) {
   const { t, i18n } = useTranslation();
   const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
-  const lockedImageUrl = getImageUrl(lockedImageUrls['9:16'] || lockedImageUrls['16:9']);
+  const latestHistoryUrl = Array.isArray(scene?.sceneLockedImageHistory)
+    ? (scene.sceneLockedImageHistory[0]?.url || null)
+    : null;
+  const lockedImageUrl = getImageUrl(lockedImageUrls['9:16'] || lockedImageUrls['16:9'] || latestHistoryUrl);
+  const lockedThumbUrl = lockedImageUrl
+    ? `${lockedImageUrl}${lockedImageUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(scene.updatedAt || '')}`
+    : null;
   const hasPrompt = scene.sceneLockedPrompt || scene.promptSuggestion;
   const sampleCount = (scene.sceneLockSamples || []).length;
 
@@ -100,9 +106,9 @@ function SceneSidebarCard({ scene, isSelected, onClick }) {
           alignItems: 'center',
           justifyContent: 'center'
         }}>
-          {lockedImageUrl ? (
+          {lockedThumbUrl ? (
             <img 
-              src={lockedImageUrl} 
+              src={lockedThumbUrl} 
               alt={scene.label}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={(e) => { e.target.style.display = 'none'; }}
@@ -197,12 +203,13 @@ function SceneDetailEditor({ scene, onRefresh }) {
   const [styleDirection, setStyleDirection] = useState('');
   const [improvementNotes, setImprovementNotes] = useState('');
   const [imageCount, setImageCount] = useState(2);
-  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [aspectRatio, setAspectRatio] = useState('9:16');
   const [technicalDetails, setTechnicalDetails] = useState(JSON.stringify(scene.technicalDetails || {}, null, 2));
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [previewIndexByAspect, setPreviewIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
   const [lockedHistoryIndexByAspect, setLockedHistoryIndexByAspect] = useState({ '16:9': 0, '9:16': 0 });
+  const [previewRenderKey, setPreviewRenderKey] = useState(0);
   const [modalImageUrl, setModalImageUrl] = useState(null);
 
   const aspectGridStyle = {
@@ -220,6 +227,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     setTechnicalDetails(JSON.stringify(scene.technicalDetails || {}, null, 2));
     setPreviewIndexByAspect({ '16:9': 0, '9:16': 0 });
     setLockedHistoryIndexByAspect({ '16:9': 0, '9:16': 0 });
+    setPreviewRenderKey((prev) => prev + 1);
     setModalImageUrl(null);
   }, [scene._id || scene.value]);
 
@@ -278,7 +286,9 @@ function SceneDetailEditor({ scene, onRefresh }) {
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Failed to generate images');
       showSuccess(t('optionsManagement.imagesGenerated', 'Images generated successfully'));
+      setPreviewIndexByAspect((prev) => ({ ...prev, [aspectRatio]: 0 }));
       await onRefresh();
+      setPreviewRenderKey((prev) => prev + 1);
     } catch (err) {
       showError(err.message);
     } finally {
@@ -373,6 +383,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     '16:9': lockedHistory.filter((item) => item.aspectRatio === '16:9'),
     '9:16': lockedHistory.filter((item) => item.aspectRatio === '9:16')
   };
+  const activeAspect = SCENE_LOCK_ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16';
 
   return (
     <div style={{
@@ -715,10 +726,9 @@ function SceneDetailEditor({ scene, onRefresh }) {
                 fontSize: '0.85rem'
               }}
             >
-              <option value="1:1">1:1</option>
-              <option value="9:16">9:16</option>
-              <option value="16:9">16:9</option>
-              <option value="3:4">3:4</option>
+              {SCENE_LOCK_ASPECTS.map((ratio) => (
+                <option key={ratio} value={ratio}>{ratio}</option>
+              ))}
             </select>
             
             <button 
@@ -845,66 +855,64 @@ function SceneDetailEditor({ scene, onRefresh }) {
         </div>
 
         {/* Preview Candidates Slider */}
-        {samples.length > 0 && (
-          <div>
-            <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
-              {t('optionsManagement.previewCandidates', 'Preview Candidates')}
-            </p>
-            <div style={aspectGridStyle}>
+        <div>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
+            {t('optionsManagement.previewCandidates', 'Preview Candidates')}
+          </p>
+          <div key={`preview-${activeAspect}-${previewRenderKey}`} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
+            {(() => {
+              const ratio = activeAspect;
+              const ratioSamples = sampleGroups[ratio] || [];
+              const idx = Math.min(previewIndexByAspect[ratio] || 0, Math.max(ratioSamples.length - 1, 0));
+              const sample = ratioSamples[idx];
+              const sampleUrl = sample ? getImageUrl(sample.url) : null;
+              const isAspectLocked = sample ? lockedImageUrls[ratio] === sample.url : false;
 
-              {SCENE_LOCK_ASPECTS.map((ratio) => {
-                const ratioSamples = sampleGroups[ratio] || [];
-                const idx = Math.min(previewIndexByAspect[ratio] || 0, Math.max(ratioSamples.length - 1, 0));
-                const sample = ratioSamples[idx];
-                const sampleUrl = sample ? getImageUrl(sample.url) : null;
-                const isAspectLocked = sample ? lockedImageUrls[ratio] === sample.url : false;
-
-                return (
-                  <div key={ratio} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
-                    <p style={{ margin: '0 0 0.6rem 0', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
-                      {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
-                    </p>
-                    {!sampleUrl ? (
-                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noSamplesForAspect', 'No preview samples for this aspect yet')}</p>
-                    ) : (
-                      <div>
-                        <img
-                          src={sampleUrl}
-                          alt={`Scene sample ${ratio}`}
-                          onClick={() => setModalImageUrl(sampleUrl)}
-                          style={{ width: '100%', height: ratio === '16:9' ? '160px' : '260px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
-                        />
-                        <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <button
-                            onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, -1)}
-                            disabled={ratioSamples.length <= 1}
-                            style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
-                          >
-                            <ChevronLeft size={14} />
-                          </button>
-                          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{idx + 1}/{ratioSamples.length}</span>
-                          <button
-                            onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, 1)}
-                            disabled={ratioSamples.length <= 1}
-                            style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
-                          >
-                            <ChevronRight size={14} />
-                          </button>
-                          <button
-                            onClick={() => chooseDefaultImage(sample.url, ratio)}
-                            style={{ marginLeft: 'auto', padding: '0.4rem 0.7rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
-                          >
-                            {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
-                          </button>
-                        </div>
+              return (
+                <>
+                  <p style={{ margin: '0 0 0.6rem 0', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
+                    {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
+                  </p>
+                  {!sampleUrl ? (
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noSamplesForAspect', 'No preview samples for this aspect yet')}</p>
+                  ) : (
+                    <div>
+                      <img
+                        src={sampleUrl}
+                        alt={`Scene sample ${ratio}`}
+                        onClick={() => setModalImageUrl(sampleUrl)}
+                        style={{ width: '100%', height: ratio === '16:9' ? '160px' : '260px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
+                      />
+                      <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, -1)}
+                          disabled={ratioSamples.length <= 1}
+                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{idx + 1}/{ratioSamples.length}</span>
+                        <button
+                          onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, 1)}
+                          disabled={ratioSamples.length <= 1}
+                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                        <button
+                          onClick={() => chooseDefaultImage(sample.url, ratio)}
+                          style={{ marginLeft: 'auto', padding: '0.4rem 0.7rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
+                        >
+                          {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
-        )}
+        </div>
 
         {modalImageUrl && (
           <div

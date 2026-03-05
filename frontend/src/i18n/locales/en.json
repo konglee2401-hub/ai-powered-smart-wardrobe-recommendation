@@ -22,7 +22,8 @@
     "settings": "Settings",
     "customization": "Customization",
     "aiProviders": "AI Providers",
-    "options": "Options"
+    "options": "Options",
+    "setupAuthentication": "Setup Authentication"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -630,6 +631,89 @@
       "maleSlow": "Male - Slow",
       "maleNormal": "Male - Normal",
       "maleFast": "Male - Fast"
+    }
+  },
+  "authSetup": {
+    "title": "Setup Authentication",
+    "sections": {
+      "googleFlow": { "title": "Google Flow", "desc": "Auto refresh session + reCAPTCHA" },
+      "chatgpt": { "title": "ChatGPT Service", "desc": "Auto login and save session" },
+      "drive": { "title": "Google Drive API", "desc": "OAuth 2.0, store Client ID/Secret" },
+      "youtube": { "title": "YouTube Data API", "desc": "OAuth 2.0, diagnostics & tests" }
+    },
+    "status": { "label": "Status:", "sessionPresent": "Session available", "sessionMissing": "No session" },
+    "buttons": {
+      "refreshSession": "Refresh session",
+      "autoLogin": "Auto login",
+      "refresh": "Refresh",
+      "validate": "Validate",
+      "saveEncrypted": "Save to DB (encrypted)",
+      "openAuthUrl": "Open Auth URL",
+      "exchangeSaveToken": "Exchange & Save token",
+      "runDiagnostic": "Run diagnostic"
+    },
+    "labels": {
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "redirectUri": "Redirect URI"
+    },
+    "placeholders": {
+      "googleCode": "code from Google"
+    },
+    "messages": {
+      "startedGoogleFlow": "Started Google Flow refresh. Follow the browser instructions.",
+      "startedChatGPTLogin": "Started ChatGPT login. Complete actions in the browser.",
+      "savedCredentials": "Credentials saved (encrypted).",
+      "saveErrorPrefix": "Save credentials error: ",
+      "savedDriveToken": "Google Drive token saved.",
+      "savedYouTubeToken": "YouTube token saved.",
+      "exchangeErrorPrefix": "Token exchange error: "
+    },
+    "googleFlow": {
+      "instructions": "Script: refresh-google-flow. Opens Flow, lets you login if needed, captures cookies/localStorage/reCAPTCHA tokens, then saves session file.",
+      "verifyNote": "After running, check file:"
+    },
+    "chatgpt": {
+      "instructions": "Script: chatgpt-auto-login. Opens chatgpt.com, applies saved session if available; if expired, guides manual login, then saves cookies/local/sessionStorage.",
+      "verifyNote": "Session file:"
+    },
+    "drive": {
+      "instructions": "Enter Client ID and Client Secret, save encrypted to DB. Set up app in Google Cloud Console, configure consent screen, add test users, and set Redirect URI.",
+      "exchangeHint": "After approve, copy the code from URL/response and paste here to exchange token:",
+      "detailedGuideTitle": "Detailed Setup Guide",
+      "steps": [
+        "Open Google Cloud Console → APIs & Services → Credentials.",
+        "Create OAuth 2.0 Client ID (Application type: Web Application).",
+        "Add Authorized redirect URI: http://localhost:5000/api/drive/auth-callback.",
+        "Save Client ID and Client Secret, paste them into the form and click Save to DB (encrypted).",
+        "Click Open Auth URL to generate the authorization URL and approve the consent screen.",
+        "After approval, copy the code from the URL (?code=...) and paste into the exchange field.",
+        "Click Exchange & Save token to store the Drive token (drive-token.json).",
+        "Verify token with Diagnostic; upload features will now use OAuth automatically."
+      ]
+    },
+    "youtube": {
+      "instructions": "Create OAuth Client in Google Cloud, add YouTube scopes, configure Redirect URI, save Client ID/Secret encrypted, open Auth URL, approve and exchange token to save.",
+      "exchangeHint": "After approve, copy the code and paste here to exchange token:",
+      "detailedGuideTitle": "Detailed Setup Guide",
+      "steps": [
+        "Open Google Cloud Console → APIs & Services → Library → Enable YouTube Data API v3.",
+        "Go to Credentials → Create OAuth 2.0 Client ID (Web Application).",
+        "Add Authorized redirect URI: http://localhost:5000/api/trend-automation/youtube/oauth/callback.",
+        "Save Client ID and Client Secret, paste into the form and click Save to DB (encrypted).",
+        "Click Open Auth URL to generate the authorization URL and approve.",
+        "Copy the code from the URL (?code=...) and paste into the exchange field.",
+        "Click Exchange & Save token to store the YouTube token (youtube-token.json).",
+        "Verify token with Diagnostic; YouTube upload and APIs will use OAuth automatically."
+      ]
+    },
+    "diagnostic": {
+      "labelDrive": "Diagnostic: check saved token",
+      "labelYouTube": "Diagnostic & tests",
+      "driveTokenExists": "Drive token exists.",
+      "driveTokenMissing": "No Drive token.",
+      "youtubeTokenExists": "YouTube token exists.",
+      "youtubeTokenMissing": "No YouTube token."
     }
   }
 }

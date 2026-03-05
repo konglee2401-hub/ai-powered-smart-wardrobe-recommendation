@@ -20,12 +20,22 @@ function cleanupOldFiles() {
 
     files.forEach(file => {
       const filePath = path.join(TEMP_DIR, file);
-      const stats = fs.statSync(filePath);
-      
-      if (now - stats.mtimeMs > MAX_AGE) {
-        fs.unlinkSync(filePath);
-        cleanedCount++;
-        console.log(`🗑️  Cleaned up old temp file: ${file}`);
+      try {
+        const stats = fs.statSync(filePath);
+        
+        if (now - stats.mtimeMs > MAX_AGE) {
+          // Handle both files and directories
+          if (stats.isDirectory()) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(filePath);
+          }
+          cleanedCount++;
+          console.log(`🗑️  Cleaned up old temp file: ${file}`);
+        }
+      } catch (error) {
+        // Skip files/folders that can't be deleted (in use, permission denied, etc.)
+        console.debug(`⚠️  Could not delete ${file}: ${error.message}`);
       }
     });
 

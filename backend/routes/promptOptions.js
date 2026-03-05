@@ -1,6 +1,9 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import PromptOption from '../models/PromptOption.js';
+import Asset from '../models/Asset.js';
+import GoogleDriveService from '../services/googleDriveService.js';
 import {
   generateSceneLockPromptWithChatGPT,
   generateSceneLockImagesWithGoogleFlow
@@ -65,6 +68,112 @@ function getSceneLockedImageUrlByAspect(scene = {}, aspectRatio = null) {
   }
 
   return scene.sceneLockedImageUrl || normalized['9:16'] || normalized['16:9'] || null;
+}
+
+function resolveMimeTypeFromPath(filePath = '') {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  return 'image/png';
+}
+
+async function uploadSceneLockAsset({
+  localPath,
+  sceneValue,
+  aspectRatio,
+  prompt,
+  index,
+  req
+}) {
+  const filename = path.basename(localPath);
+  const fileSize = fs.existsSync(localPath) ? fs.statSync(localPath).size : 0;
+  const mimeType = resolveMimeTypeFromPath(localPath);
+  const aspectTag = (aspectRatio || '9:16').replace(':', 'x');
+  const assetId = `scene_lock_${sceneValue}_${aspectTag}_${Date.now()}_${index + 1}`;
+
+  const assetPayload = {
+    assetId,
+    userId: 'system',
+    assetType: 'image',
+    assetCategory: 'generated-image',
+    filename,
+    mimeType,
+    fileSize,
+    storage: {
+      location: 'local',
+      localPath
+    },
+    localStorage: {
+      location: 'local',
+      path: localPath,
+      fileSize,
+      savedAt: new Date(),
+      verified: true
+    },
+    cloudStorage: {
+      location: 'google-drive',
+      status: 'pending'
+    },
+    syncStatus: 'pending',
+    metadata: {
+      source: 'scene-lock-manager',
+      sceneValue,
+      aspectRatio,
+      prompt,
+      index
+    },
+    tags: ['scene-lock', `scene:${sceneValue}`, `aspect:${aspectRatio || '9:16'}`],
+    status: 'active'
+  };
+
+  if (process.env.DRIVE_API_KEY) {
+    try {
+      const drive = new GoogleDriveService();
+      await drive.initialize();
+      const targetFolder = drive.folderStructure?.outputs_processed_images || drive.folderStructure?.media_images || drive.folderStructure?.outputs;
+      const driveResult = await drive.uploadFile(localPath, filename, targetFolder, {
+        sceneValue,
+        aspectRatio,
+        source: 'scene-lock-manager'
+      });
+
+      if (driveResult?.id) {
+        assetPayload.storage = {
+          location: 'google-drive',
+          localPath,
+          googleDriveId: driveResult.id,
+          url: driveResult.webViewLink || null
+        };
+        assetPayload.cloudStorage = {
+          location: 'google-drive',
+          googleDriveId: driveResult.id,
+          webViewLink: driveResult.webViewLink || null,
+          thumbnailLink: driveResult.thumbnailLink || null,
+          status: 'synced',
+          syncedAt: new Date(),
+          attempted: 1
+        };
+        assetPayload.syncStatus = 'synced';
+      }
+    } catch (driveError) {
+      console.warn(`[scene-lock] Drive upload failed for ${filename}: ${driveError.message}`);
+      assetPayload.cloudStorage = {
+        location: 'google-drive',
+        status: 'failed',
+        attempted: 1
+      };
+      assetPayload.syncStatus = 'failed';
+    }
+  }
+
+  await Asset.findOneAndUpdate({ assetId }, assetPayload, { upsert: true, new: true, setDefaultsOnInsert: true });
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  return {
+    assetId,
+    url: `${baseUrl}/api/assets/proxy/${assetId}`
+  };
 }
 
 // ==================== SCENE LOCK MANAGER ====================
@@ -144,7 +253,9 @@ router.post('/scenes/:value/generate-lock-prompt', async (req, res) => {
 router.post('/scenes/:value/generate-lock-images', async (req, res) => {
   try {
     const { value } = req.params;
-    const { imageCount = 2, aspectRatio = '1:1', prompt, language = 'en' } = req.body;
+    const { imageCount = 2, aspectRatio = '9:16', prompt, language = 'en' } = req.body;
+
+    const normalizedAspect = SCENE_LOCK_ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16';
 
     const scene = await PromptOption.findOne({ category: 'scene', value });
     if (!scene) {
@@ -160,36 +271,46 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
     const generated = await generateSceneLockImagesWithGoogleFlow({
       prompt: finalPrompt,
       imageCount: Math.max(1, Math.min(4, Number(imageCount) || 1)),
-      aspectRatio,
+      aspectRatio: normalizedAspect,
       sceneValue: value
     });
 
-    global.generatedImagePaths = global.generatedImagePaths || {};
+    const samples = await Promise.all(generated.map(async (item, idx) => {
+      const sourcePath = item.path || item.url;
+      let stableUrl = item.url || null;
 
-    const samples = generated.map((item) => {
-      const filename = path.basename(item.path || item.url || `scene-${Date.now()}.png`);
-      if (item.path) {
-        global.generatedImagePaths[filename] = item.path;
-        setTimeout(() => delete global.generatedImagePaths[filename], 60 * 60 * 1000);
+      if (sourcePath && fs.existsSync(sourcePath)) {
+        try {
+          const asset = await uploadSceneLockAsset({
+            localPath: sourcePath,
+            sceneValue: value,
+            aspectRatio: normalizedAspect,
+            prompt: finalPrompt,
+            index: idx,
+            req
+          });
+          stableUrl = asset.url;
+        } catch (assetError) {
+          console.warn(`[scene-lock] Asset creation failed for ${sourcePath}: ${assetError.message}`);
+          stableUrl = sourcePath;
+        }
       }
 
       return {
-        url: item.path
-          ? `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`
-          : item.url,
+        url: stableUrl,
         prompt: finalPrompt,
-        aspectRatio,
+        aspectRatio: normalizedAspect,
         provider: 'google-flow',
         createdAt: new Date(),
         isDefault: false
       };
-    });
+    }));
 
     const existingSamples = (scene.sceneLockSamples || []).map((sample) => (
       typeof sample.toObject === 'function' ? sample.toObject() : sample
     ));
 
-    const preservedSamples = existingSamples.filter((sample) => (sample.aspectRatio || '1:1') !== aspectRatio);
+    const preservedSamples = existingSamples.filter((sample) => (sample.aspectRatio || '1:1') !== normalizedAspect);
     scene.sceneLockSamples = [...preservedSamples, ...samples];
 
     // IMPORTANT: generating previews must NOT override current locked images.
@@ -199,7 +320,7 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
       success: true,
       data: {
         value,
-        aspectRatio,
+        aspectRatio: normalizedAspect,
         samples,
         sceneLockedImageUrls: normalizeSceneLockedImageUrls(scene.sceneLockedImageUrls),
         sceneLockedImageHistory: normalizeSceneLockedImageHistory(scene.sceneLockedImageHistory)
@@ -228,8 +349,19 @@ router.post('/scenes/:value/select-lock-image', async (req, res) => {
       ? aspectRatio
       : '9:16';
 
-    scene.sceneLockSamples = (scene.sceneLockSamples || []).map((sample) => {
-      const sampleObj = typeof sample.toObject === 'function' ? sample.toObject() : sample;
+    const sampleList = (scene.sceneLockSamples || []).map((sample) => (
+      typeof sample.toObject === 'function' ? sample.toObject() : sample
+    ));
+    const selectedSample = sampleList.find((sample) => sample.url === imageUrl);
+
+    if (selectedSample && (selectedSample.aspectRatio || '9:16') !== targetAspect) {
+      return res.status(400).json({
+        success: false,
+        message: `Selected image does not belong to aspect ${targetAspect}`
+      });
+    }
+
+    scene.sceneLockSamples = sampleList.map((sampleObj) => {
       const sameAspect = (sampleObj.aspectRatio || '1:1') === targetAspect;
 
       return {
