@@ -188,16 +188,39 @@ export async function saveCharacterProfile(req, res) {
       }
     });
 
-    const character = await CharacterProfile.create({
+    console.log(`[CHAR] savedRefs type: ${typeof savedRefs}, is array: ${Array.isArray(savedRefs)}, length: ${savedRefs.length}`);
+    if (savedRefs.length > 0) {
+      console.log(`[CHAR] First savedRef:`, JSON.stringify(savedRefs[0]));
+    }
+
+    // 💫 Extra safety: Ensure referenceImages is a proper array
+    const finalReferenceImages = Array.isArray(savedRefs) ? savedRefs : [];
+    const finalOptions = typeof options === 'object' && !Array.isArray(options) ? options : {};
+    const finalProfile = typeof analysisProfile === 'object' && !Array.isArray(analysisProfile) ? analysisProfile : {};
+
+    console.log(`[CHAR] Final payload - referenceImages type: ${typeof finalReferenceImages}, is array: ${Array.isArray(finalReferenceImages)}, options type: ${typeof finalOptions}`);
+
+    // 💫 Use manual instantiation instead of create() to avoid Mongoose casting issues
+    const characterData = {
       name,
       alias: normalizedAlias,
       portraitUrl: `http://localhost:5000/uploads/characters/${portraitFilename}`,
       portraitPath: portraitDest,
-      referenceImages: savedRefs,
-      options,
-      analysisProfile,
+      referenceImages: finalReferenceImages,
+      options: finalOptions,
+      analysisProfile: finalProfile,
       status: 'active'
+    };
+    
+    console.log(`[CHAR] Creating character with data:`, {
+      name: characterData.name,
+      alias: characterData.alias,
+      referenceImagesLength: characterData.referenceImages.length,
+      referenceImagesType: Array.isArray(characterData.referenceImages) ? 'array' : typeof characterData.referenceImages
     });
+
+    const character = new CharacterProfile(characterData);
+    await character.save();
 
     return res.json({ success: true, data: character });
   } catch (error) {
