@@ -7,3 +7,42 @@
   padding: 0;
   box-sizing: border-box;
 }
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: #0f1118;
+  color: #e2e8f0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Flat dark design tokens used globally */
+.flat-panel {
+  background: #1c202b;
+  border: 1px solid #2f3442;
+  border-radius: 14px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #141823;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30384c;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #455070;
+}
