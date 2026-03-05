@@ -27,6 +27,7 @@ import ImageGenerationPage from './pages/ImageGenerationPage';
 import VideoGenerationPage from './pages/VideoGenerationPage';
 import OneClickCreatorPage from './pages/OneClickCreatorPage';
 import VoiceOverPage from './pages/VoiceOverPage';
+import AssetManagementAdmin from './pages/AssetManagementAdmin';
 
 import ShortsReelsDashboard from './pages/trend-automation/ShortsReelsDashboard';
 import ShortsReelsChannels from './pages/trend-automation/ShortsReelsChannels';
@@ -172,6 +173,14 @@ function App() {
             <Navbar />
             <div className="flex-1 overflow-y-auto">
               <GalleryPage />
+            </div>
+          </div>
+        } />
+        <Route path="/asset-management" element={
+          <div className="min-h-screen bg-slate-900">
+            <Navbar />
+            <div className="mt-20">
+              <AssetManagementAdmin />
             </div>
           </div>
         } />

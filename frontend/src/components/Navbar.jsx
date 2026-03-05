@@ -53,6 +53,7 @@ export default function Navbar() {
   // Dashboard & Analytics
   const analyticsNavItems = [
     { path: '/dashboard', label: t('navbar.dashboard'), icon: LayoutDashboard, category: 'main' },
+    { path: '/asset-management', label: '🔧 Asset Manager', icon: BarChart3 },
     { path: '/stats', label: t('navbar.statistics'), icon: BarChart3 },
     { path: '/analytics', label: t('navbar.analytics'), icon: TrendingUp },
   ];
