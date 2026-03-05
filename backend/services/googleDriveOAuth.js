@@ -118,10 +118,24 @@ class GoogleDriveOAuthService {
         // Refresh token if expired
         if (token.expiry_date && token.expiry_date < Date.now()) {
           console.log('🔄 Refreshing expired token...');
-          const { credentials: newCredentials } = await auth.refreshAccessToken();
-          fs.writeFileSync(this.tokenPath, JSON.stringify(newCredentials));
-          auth.setCredentials(newCredentials);
-          console.log('✅ Token refreshed');
+          try {
+            const { credentials: newCredentials } = await auth.refreshAccessToken();
+            fs.writeFileSync(this.tokenPath, JSON.stringify(newCredentials));
+            auth.setCredentials(newCredentials);
+            console.log('✅ Token refreshed');
+          } catch (refreshError) {
+            // If refresh fails (e.g., deleted_client), return as not authenticated
+            // User can re-authenticate via UI
+            console.warn('⚠️ Token refresh failed:', refreshError.message);
+            console.warn('⚠️ Please re-authenticate Google Drive via the UI to proceed with uploads');
+            return {
+              success: false,
+              authenticated: false,
+              configured: false,
+              reason: 'Invalid or expired credentials',
+              message: 'Google Drive credentials need to be refreshed. Please re-authenticate.'
+            };
+          }
         }
       } else {
         console.warn('⚠️ No stored token found. Generating authorization URL...');
