@@ -110,6 +110,9 @@ def upsert_video(payload):
 
 
 def log_job(job_type, status, **kwargs):
+    base_keys = {'topic', 'platform', 'itemsFound', 'itemsDownloaded', 'duration', 'error'}
+    extra = {k: v for k, v in kwargs.items() if k not in base_keys}
+
     logs.insert_one({
         'jobType': job_type,
         'status': status,
@@ -119,6 +122,7 @@ def log_job(job_type, status, **kwargs):
         'itemsDownloaded': kwargs.get('itemsDownloaded', 0),
         'duration': kwargs.get('duration', 0),
         'error': kwargs.get('error', ''),
+        'extra': extra,
         'ranAt': now_utc(),
         'createdAt': now_utc(),
         'updatedAt': now_utc(),
