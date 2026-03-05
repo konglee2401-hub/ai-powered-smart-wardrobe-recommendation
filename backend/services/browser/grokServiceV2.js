@@ -4,7 +4,7 @@ import ProgressEmitter from '../ProgressEmitter.js';
 import VideoGenerationMetrics from '../VideoGenerationMetrics.js';
 import PromptSuggestor from '../PromptSuggestor.js';
 import VideoSessionManager from '../VideoSessionManager.js';
-import { restoreGrokSession, verifyGrokLogin } from '../../scripts/grok-auto-login-v2-cloudflare-fix.js';
+import { restoreGrokSession, verifyGrokLogin } from '../../scripts/auth/grok/login.js';
 import { grokConfig, getProjectUrl, setProjectUrl, getSessionPath } from '../../config/grokConfig.js';
 import fs from 'fs';
 import path from 'path';

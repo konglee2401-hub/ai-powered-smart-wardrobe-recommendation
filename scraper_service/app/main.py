@@ -495,27 +495,24 @@ async def healthz():
 async def upload_downloaded_videos_to_drive():
     """
     Upload all downloaded videos to Google Drive
-    This triggers the Google Drive upload pipeline
+    Note: Actual uploads are handled by backend API during download process
     """
     try:
-        from .drive_upload_service import process_pending_uploads
-        
         started = time.time()
         
-        # Get all videos that are downloaded but not uploaded
-        pending = list(videos.find({'downloadStatus': 'done', 'uploadStatus': {'$ne': 'done'}}))
+        # Get all videos that are downloaded but not uploaded  
+        pending = list(videos.find({'downloadStatus': 'done', 'driveUploadStatus': {'$ne': 'done'}}))
         
         if not pending:
             return {'success': True, 'message': 'No pending uploads', 'processed': 0}
         
-        print(f"\n📤 Starting upload of {len(pending)} videos to Google Drive...")
+        print(f"\n📤 Found {len(pending)} videos with pending uploads")
+        print(f"   Note: Uploads should be handled automatically via backend API during download")
         
-        # Process uploads
-        await process_pending_uploads()
-        
-        # Count results
-        uploaded = videos.count_documents({'uploadStatus': 'done'})
-        upload_failed = videos.count_documents({'uploadStatus': 'failed'})
+        # Check upload status
+        uploaded = videos.count_documents({'driveUploadStatus': 'done'})
+        upload_failed = videos.count_documents({'driveUploadStatus': 'failed'})
+        upload_skipped = videos.count_documents({'driveUploadStatus': 'skipped'})
         
         duration = int((time.time() - started) * 1000)
         
@@ -524,10 +521,11 @@ async def upload_downloaded_videos_to_drive():
             'processed': len(pending),
             'uploaded': uploaded,
             'failed': upload_failed,
+            'skipped': upload_skipped,
             'duration': duration
         }
     except Exception as e:
-        print(f"❌ Upload error: {e}")
+        print(f"❌ Upload status check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -545,9 +543,9 @@ async def get_upload_status():
 
 @app.post('/api/shorts-reels/videos/{video_id}/upload-to-drive')
 async def upload_single_video_to_drive(video_id: str):
-    """Upload a specific video to Google Drive"""
+    """Upload a specific video to Google Drive via backend API"""
     try:
-        from .drive_upload_service import get_drive_service
+        from .simple_upload import upload_video_to_backend_api
         
         video = videos.find_one({'_id': ObjectId(video_id)})
         if not video:
@@ -556,10 +554,28 @@ async def upload_single_video_to_drive(video_id: str):
         if video.get('downloadStatus') != 'done':
             raise HTTPException(status_code=400, detail='Video not downloaded yet')
         
-        service = await get_drive_service()
-        success = await service.process_video_download(video_id)
+        local_path = video.get('localPath')
+        if not local_path:
+            raise HTTPException(status_code=400, detail='Video has no local path')
         
-        if success:
+        # Upload via backend API
+        platform = video.get('platform', 'unknown').lower()
+        upload_result = await upload_video_to_backend_api(local_path, platform, video_id)
+        
+        if upload_result:
+            # Update video record
+            videos.update_one(
+                {'_id': ObjectId(video_id)},
+                {
+                    '$set': {
+                        'driveUploadStatus': 'done',
+                        'driveFileId': upload_result.get('fileId') or upload_result.get('id'),
+                        'driveWebLink': upload_result.get('webViewLink') or upload_result.get('weblink'),
+                        'driveUploadedAt': datetime.utcnow()
+                    }
+                }
+            )
+            
             # Fetch updated video to return current state
             updated = videos.find_one({'_id': ObjectId(video_id)})
             return {

@@ -33,7 +33,7 @@ from .config import (
 )
 from .db import channels, videos
 from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
-from .drive_upload_service import upload_video_after_download
+from .simple_upload import upload_video_after_download
 from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, extract_douyin_id, match_topic
 
 UA = [

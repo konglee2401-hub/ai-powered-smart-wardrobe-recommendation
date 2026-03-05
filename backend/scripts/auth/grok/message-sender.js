@@ -16,7 +16,7 @@
 
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { restoreGrokSession } from './grok-auto-login-v2-cloudflare-fix.js';
+import { restoreGrokSession } from './login.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
