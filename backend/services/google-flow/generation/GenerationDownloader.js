@@ -70,6 +70,18 @@ class GenerationDownloader {
           const text = dialog.textContent || '';
           const lowerText = text.toLowerCase();
           
+          // Check for UPGRADING modal first (intermediate state)
+          // "Đang nâng cấp" modal appears and blocks other actions
+          if (lowerText.includes('đang nâng cấp') ||
+              lowerText.includes('upgrading') ||
+              lowerText.includes('upgrading your image')) {
+            return {
+              type: 'upgrading',
+              message: text.trim().substring(0, 200),
+              visible: dialog.offsetHeight > 0 && dialog.offsetWidth > 0
+            };
+          }
+          
           // Check for SUCCESS messages (upgrade completed and downloaded)
           if (lowerText.includes('hoàn tất') && lowerText.includes('tải xuống') ||
               lowerText.includes('được tải xuống') ||
@@ -434,8 +446,18 @@ class GenerationDownloader {
         const dialogCheckPromise = (async () => {
           const startTime = Date.now();
           while (!downloadCompleated && !dialogDetected && !timeoutOccurred) {
-            // Check for upgrade dialog (SUCCESS or ERROR)
+            // Check for upgrade dialog (SUCCESS, UPGRADING, or ERROR)
             const dialogInfo = await this.detectUpgradeDialog();
+            
+            // 💫 Handle UPGRADING modal - just close it and wait
+            if (dialogInfo.type === 'upgrading') {
+              console.log(`\n   ⏳ "Đang nâng cấp" modal detected...`);
+              await this.closeUpgradeDialog();
+              console.log(`   ✓ Upgrading modal closed - continuing to monitor...`);
+              await this.page.waitForTimeout(2000);
+              continue;
+            }
+            
             if (dialogInfo.type === 'success') {
               console.log(`\n   ✓ SUCCESS dialog detected: "${dialogInfo.message.substring(0, 80)}..."`);
               console.log(`   ✓ Quality upgrade completed - dismissing notification...`);
@@ -497,8 +519,18 @@ class GenerationDownloader {
           return downloadedFile;
         } else if (timeoutOccurred) {
           console.log(`\n   ❌ Download timeout (${totalTimeoutSeconds}s) with ${quality}`);
-          if (attemptIdx < qualityAttempts.length - 1) {
+          
+          // 💫 FIX: If timeout occurred in 2K/4K and error modal wasn't caught,
+          // this might be a failure. Close any dialogs and try fallback.
+          if (quality !== '1K' && quality !== 'original' && attemptIdx < qualityAttempts.length - 1) {
+            console.log(`   ℹ️  Likely quality not available (timeout without error detection)`);
             console.log(`   🔄 Trying fallback quality...\n`);
+            // Close any hanging dialogs
+            try {
+              await this.closeUpgradeDialog();
+            } catch (e) {
+              // Ignore close errors
+            }
           }
           continue;  // Try next quality
         } else if (dialogDetected) {
