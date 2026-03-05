@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { characterAPI } from '../services/api';
-import { RefreshCw, X, ArrowLeft } from 'lucide-react';
+import { RefreshCw, X, ArrowLeft, Trash2 } from 'lucide-react';
 
 const defaultOptions = {
   identity: { gender: '', ageRange: '', ethnicity: '', height: '', bust: '', waist: '', bodyType: '', bodyProportions: '', skinTone: '', distinctiveMarks: '', tattoos: '' },
@@ -53,6 +53,10 @@ export default function CharacterCreatorPage() {
     } catch (err) {
       console.error('Error loading character:', err);
     }
+  };
+
+  const deleteImage = (idx) => {
+    setPreview(preview.filter((_, i) => i !== idx));
   };
 
   const generate = async () => {
@@ -270,12 +274,22 @@ export default function CharacterCreatorPage() {
                 
                 {/* Image description and angle */}
                 <div className="bg-[#0a0e18] p-2 border-t border-slate-700">
-                  <p className="text-xs font-medium text-emerald-400 mb-1">
+                  <p className="text-xs font-medium text-emerald-400 mb-2">
                     {img.description || img.angle || `Image ${idx + 1}`}
                   </p>
                   {img.prompt && (
-                    <p className="text-xs text-slate-400 line-clamp-2">{img.prompt.substring(0, 80)}...</p>
+                    <p className="text-xs text-slate-400 line-clamp-2 mb-2">{img.prompt.substring(0, 80)}...</p>
                   )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteImage(idx);
+                    }}
+                    className="w-full flex items-center justify-center gap-1 text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 rounded px-2 py-1 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}
