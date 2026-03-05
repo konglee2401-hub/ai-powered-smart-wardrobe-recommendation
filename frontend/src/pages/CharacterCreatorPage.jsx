@@ -132,14 +132,52 @@ export default function CharacterCreatorPage() {
             </div>
             
             <div>
-              <label className="text-xs text-slate-400 block mb-2">Portrait image</label>
-              {portraitTempPath && editingId && (
-                <div className="mb-3">
-                  <img src={portraitTempPath} alt="Current portrait" className="w-full h-40 object-contain rounded border border-slate-600 bg-slate-900 flex items-center justify-center" />
-                  <p className="text-xs text-slate-500 mt-1">Current portrait. Upload a new file to replace.</p>
+              <label className="text-xs text-slate-400 block mb-2 font-semibold">Portrait image</label>
+              <div className="relative">
+                {/* Portrait Preview */}
+                <div className="mb-3 border-2 border-dashed border-slate-600 rounded-lg p-4 bg-slate-900/40 hover:border-emerald-500/50 transition-colors min-h-48 flex items-center justify-center overflow-hidden">
+                  {portraitTempPath ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <img 
+                        src={portraitTempPath} 
+                        alt="Portrait preview" 
+                        className="h-48 object-contain rounded"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-slate-400 text-sm font-medium mb-2">
+                        {editingId ? 'Update portrait' : 'Upload portrait'}
+                      </p>
+                      <p className="text-slate-500 text-xs">PNG, JPG or GIF (max 5MB)</p>
+                    </div>
+                  )}
                 </div>
-              )}
-              <input type="file" accept="image/*" onChange={e=>setPortrait(e.target.files?.[0] || null)} className="text-xs w-full" />
+                
+                {/* Hidden file input with label */}
+                <input 
+                  id="portrait-input"
+                  type="file" 
+                  accept="image/*" 
+                  onChange={e=>setPortrait(e.target.files?.[0] || null)} 
+                  className="hidden"
+                />
+                
+                {/* File upload button */}
+                <label 
+                  htmlFor="portrait-input"
+                  className="block w-full bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2.5 text-center text-sm font-medium cursor-pointer transition-colors border border-slate-600"
+                >
+                  {portraitTempPath ? 'Change Portrait' : 'Select Portrait'}
+                </label>
+                
+                {/* Info text */}
+                {portraitTempPath && editingId && (
+                  <p className="text-xs text-slate-500 mt-2 text-center">
+                    Current portrait displayed above. Click "Change Portrait" to replace.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Identity section */}
