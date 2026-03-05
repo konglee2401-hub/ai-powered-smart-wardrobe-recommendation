@@ -299,7 +299,8 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       videoProvider = 'grok',  // 💫 Default to Grok for video
       options = {},
       disableSceneReferenceTransfer = false,  // default false: allow auto scene locked image fallback
-      imageSource = { character: 'upload', product: 'upload' }  // 🎯 Track image source from frontend
+      imageSource = { character: 'upload', product: 'upload' },  // 🎯 Track image source from frontend
+      useShortPrompt = false
     } = req.body;
     
     // 💫 FIX: Convert base64 images to files if not already provided by Multer
@@ -384,12 +385,16 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
     const finalVideoProvider = options.videoProvider || videoProvider || 'grok';
     const providerClipDuration = getProviderClipDuration(finalVideoProvider);
+    const shouldUseShortPrompt = typeof (options?.useShortPrompt ?? useShortPrompt) === 'string'
+      ? String(options?.useShortPrompt ?? useShortPrompt).toLowerCase() === 'true'
+      : Boolean(options?.useShortPrompt ?? useShortPrompt);
     
     console.log(`\n🔌 PROVIDER CONFIGURATION:`);
     console.log(`  Image Provider: ${finalImageProvider}`);
     console.log(`  Video Provider: ${finalVideoProvider}`);
     console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
     console.log(`  Image source: character=${normalizedImageSource.character}, product=${normalizedImageSource.product}`);
+    console.log(`  Prompt style: ${shouldUseShortPrompt ? 'short' : 'full'}`);
     if (skipCharacterDriveUpload || skipProductDriveUpload) {
       console.log('  Drive upload policy: skip original image upload for gallery-selected inputs');
     }
@@ -1258,7 +1263,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       baseOptions,
       'change-clothes',  // Image 1: Character wearing the product
       productFocus,
-      language
+      language,
+      { useShortPrompt: shouldUseShortPrompt }
     ).then(promptData => ({
       useCase: 'wearing',
       prompts: promptData
@@ -1269,7 +1275,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       baseOptions,
       'character-holding-product',  // Image 2: Character holding the product
       productFocus,
-      language
+      language,
+      { useShortPrompt: shouldUseShortPrompt }
     ).then(promptData => ({
       useCase: 'holding',
       prompts: promptData

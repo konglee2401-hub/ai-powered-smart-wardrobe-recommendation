@@ -550,6 +550,10 @@
     "uploadBothImagesFirst": "Vui lòng tải lên cả hai hình ảnh trước",
     "imageMissingUrl": "Lỗi: Hình ảnh được chọn không có URL",
     "failedToLoadImage": "Tải hình ảnh thất bại",
+    "useShortPrompt": "Dùng prompt ngắn",
+    "shortPromptHint": "Bật để dùng template prompt rút gọn cho Google Flow (cả mặc và cầm).",
+    "enabled": "Bật",
+    "disabled": "Tắt",
     "scenarios": {
       "changeClothes": "Thay quần áo",
       "characterHoldingProduct": "Nhân vật cầm sản phẩm",
