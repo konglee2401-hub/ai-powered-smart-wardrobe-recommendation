@@ -89,6 +89,15 @@ class AutoUploadService {
 
       const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+      const effectiveUploadConfig = {
+        ...(uploadConfig || {}),
+        ...(platform === 'youtube'
+          ? {
+              youtubePublishType: String(uploadConfig?.youtubePublishType || uploadConfig?.youtubeUploadType || uploadConfig?.youtubeContentType || 'shorts').toLowerCase()
+            }
+          : {})
+      };
+
       const upload = {
         uploadId,
         queueId,
@@ -106,7 +115,7 @@ class AutoUploadService {
         retries: 0,
         maxRetries: 3,
         errorLog: [],
-        uploadConfig,
+        uploadConfig: effectiveUploadConfig,
         metadata: {}
       };
 
@@ -362,7 +371,10 @@ class AutoUploadService {
 
       // Mock successful upload
       const videoId = Math.random().toString(36).substring(7);
-      const uploadUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const youtubePublishType = String(uploadConfig.youtubePublishType || 'shorts').toLowerCase();
+      const uploadUrl = youtubePublishType === 'shorts'
+        ? `https://www.youtube.com/shorts/${videoId}`
+        : `https://www.youtube.com/watch?v=${videoId}`;
 
       this.updateUploadStatus(uploadId, 'success', {
         uploadUrl,
@@ -374,7 +386,8 @@ class AutoUploadService {
           title: uploadConfig.title || '',
           description: uploadConfig.description || '',
           tags: uploadConfig.tags || [],
-          privacy: uploadConfig.privacy || 'public'
+          privacy: uploadConfig.privacy || 'public',
+          youtubePublishType: String(uploadConfig.youtubePublishType || 'shorts').toLowerCase()
         }
       });
 

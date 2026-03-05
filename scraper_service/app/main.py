@@ -9,8 +9,8 @@ from bson import ObjectId
 
 from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
 from .db import ensure_indexes, channels, videos, logs
-from .store import get_or_create_settings, update_settings, normalize
-from .automation import discover_all, discover_playboard, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records
+from .store import get_or_create_settings, update_settings, normalize, log_job
+from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records
 
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
@@ -357,8 +357,8 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
             try:
                 await asyncio.sleep(3 + random.random() * 2)
                 print(f"[ManualDiscover] Discovering {topic} with config: {config.get('category')} / {config.get('country')}")
-                item_count = await discover_playboard(config, topic)
-                found += item_count
+                result = await discover_playboard(config, topic)
+                found += int(result.get('itemsFound', 0))
             except Exception as e:
                 print(f"[ManualDiscover] Failed for topic {topic}: {e}")
                 failed += 1
@@ -377,6 +377,82 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
         duration = int((time.time() - started) * 1000)
         log_job('discover', 'failed', isManual=True, itemsFound=found, error=str(ex), duration=duration)
         raise HTTPException(status_code=500, detail=f'Manual discovery failed: {str(ex)}')
+
+
+
+
+@app.post('/api/shorts-reels/dailyhaha/manual-discover')
+async def manual_discover_dailyhaha(payload: dict | None = None):
+    started = time.time()
+
+    from .utils import TOPICS
+    topics = (payload or {}).get('topics') if isinstance(payload, dict) else None
+    target_topics = topics if topics else TOPICS
+
+    found = 0
+    failed = 0
+
+    try:
+        for topic in target_topics:
+            try:
+                await asyncio.sleep(1 + random.random())
+                found += await discover_dailyhaha(topic)
+            except Exception as e:
+                print(f"[ManualDailyHaha] Failed for topic {topic}: {e}")
+                failed += 1
+
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'success', isManual=True, platform='dailyhaha', itemsFound=found, failedTopics=failed, duration=duration)
+
+        return {
+            'success': True,
+            'itemsFound': found,
+            'failedTopics': failed,
+            'duration': duration,
+            'topicsProcessed': len(target_topics)
+        }
+    except Exception as ex:
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'failed', isManual=True, platform='dailyhaha', itemsFound=found, error=str(ex), duration=duration)
+        raise HTTPException(status_code=500, detail=f'Manual DailyHaha discovery failed: {str(ex)}')
+
+
+
+
+@app.post('/api/shorts-reels/douyin/manual-discover')
+async def manual_discover_douyin(payload: dict | None = None):
+    started = time.time()
+
+    from .utils import TOPICS
+    topics = (payload or {}).get('topics') if isinstance(payload, dict) else None
+    target_topics = topics if topics else TOPICS
+
+    found = 0
+    failed = 0
+
+    try:
+        for topic in target_topics:
+            try:
+                await asyncio.sleep(1 + random.random())
+                found += await discover_douyin(topic)
+            except Exception as e:
+                print(f"[ManualDouyin] Failed for topic {topic}: {e}")
+                failed += 1
+
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'success', isManual=True, platform='douyin', itemsFound=found, failedTopics=failed, duration=duration)
+
+        return {
+            'success': True,
+            'itemsFound': found,
+            'failedTopics': failed,
+            'duration': duration,
+            'topicsProcessed': len(target_topics)
+        }
+    except Exception as ex:
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'failed', isManual=True, platform='douyin', itemsFound=found, error=str(ex), duration=duration)
+        raise HTTPException(status_code=500, detail=f'Manual Douyin discovery failed: {str(ex)}')
 
 
 @app.get('/healthz')

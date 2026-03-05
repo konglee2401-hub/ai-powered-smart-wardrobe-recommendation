@@ -75,6 +75,7 @@ export default function ShortsReelsDashboard() {
     country: 'Worldwide',
     period: 'Weekly',
     date: new Date().toISOString().slice(0, 10),
+    source: 'playboard',
   });
 
   const fetchData = async () => {
@@ -131,7 +132,14 @@ export default function ShortsReelsDashboard() {
         priority: 10,
       };
 
-      const result = await trendAutomationApi.manualDiscoverPlayboard(config);
+      let result;
+      if (selected.source === 'dailyhaha') {
+        result = await trendAutomationApi.manualDiscoverDailyhaha();
+      } else if (selected.source === 'douyin') {
+        result = await trendAutomationApi.manualDiscoverDouyin();
+      } else {
+        result = await trendAutomationApi.manualDiscoverPlayboard(config);
+      }
       console.log('Manual discover result', result);
       await fetchData();
     } finally {
@@ -217,8 +225,18 @@ export default function ShortsReelsDashboard() {
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col gap-3">
             <h3 className="font-semibold">Date</h3>
             <input type="date" value={selected.date} onChange={(e) => setSelected((prev) => ({ ...prev, date: e.target.value }))} className="bg-gray-950 border border-gray-700 rounded px-3 py-2" />
+            <label className="text-xs text-gray-400">Source</label>
+            <select
+              value={selected.source}
+              onChange={(e) => setSelected((prev) => ({ ...prev, source: e.target.value }))}
+              className="bg-gray-950 border border-gray-700 rounded px-3 py-2"
+            >
+              <option value="playboard">Playboard</option>
+              <option value="dailyhaha">DailyHaha</option>
+              <option value="douyin">Douyin</option>
+            </select>
             <div className="text-xs text-gray-400 leading-relaxed">
-              {selected.category} / {selected.dimension} / {selected.country} / {selected.period}
+              {selected.source} / {selected.category} / {selected.dimension} / {selected.country} / {selected.period}
             </div>
           </div>
         </div>

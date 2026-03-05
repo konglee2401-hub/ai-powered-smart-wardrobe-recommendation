@@ -7,7 +7,8 @@ import sys
 import time
 from datetime import datetime
 from typing import Dict, List
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urljoin, quote
+from urllib.request import Request, urlopen
 
 from bson import ObjectId
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -32,7 +33,7 @@ from .config import (
 )
 from .db import channels, videos
 from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
-from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, match_topic
+from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, extract_douyin_id, match_topic
 
 UA = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
@@ -46,6 +47,16 @@ _proxy_index = 0
 FAIL_FAST_TIMEOUTS_MS = [18000, 30000, 50000]
 YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
 YTDLP_TIMEOUT_SEC = 180
+DAILYHAHA_HOME = "https://www.dailyhaha.com/videos/"
+DAILYHAHA_CHANNEL_ID = "dailyhaha-videos"
+DOUYIN_SEARCH_BASE = "https://www.douyin.com/jingxuan/search/{keyword}?type=general"
+DOUYIN_TOPIC_KEYWORDS = {
+    "funny": "幽默",
+    "hai": "搞笑",
+    "dance": "舞蹈",
+    "sexy dance": "热舞",
+    "cooking": "美食",
+}
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -928,6 +939,296 @@ async def _collect_youtube_cards(topic: str, keywords: List[str]) -> List[Dict]:
     return []
 
 
+async def _fetch_html(url: str, timeout_sec: int = 25) -> str:
+    def _do_fetch() -> str:
+        req = Request(url, headers={'User-Agent': random.choice(UA)})
+        with urlopen(req, timeout=timeout_sec) as resp:
+            return resp.read().decode('utf-8', errors='ignore')
+
+    return await asyncio.to_thread(_do_fetch)
+
+
+async def _resolve_dailyhaha_youtube_url(video_page_url: str) -> str:
+    try:
+        html = await _fetch_html(video_page_url, timeout_sec=20)
+    except Exception as ex:
+        print(f'[dailyhaha] fetch detail failed: {video_page_url} -> {ex}')
+        return ''
+
+    patterns = [
+        r'"src"\s*:\s*"(https://www\.youtube\.com/watch\?v=[^"&]+)',
+        r'"src"\s*:\s*"(https://www\.youtube\.com/embed/[^"?&]+)',
+        r'src=\"(https://www\.youtube\.com/embed/[^"?&]+)',
+        r'(https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11})',
+        r'(https://youtu\.be/[A-Za-z0-9_-]{11})',
+    ]
+
+    for pattern in patterns:
+        m = re.search(pattern, html, flags=re.IGNORECASE)
+        if not m:
+            continue
+        url = m.group(1).replace('\\/', '/').replace('&amp;', '&')
+        video_id = extract_youtube_id(url)
+        if video_id and YOUTUBE_VIDEO_ID_RE.match(video_id):
+            return f'https://www.youtube.com/watch?v={video_id}'
+
+    return ''
+
+
+async def _collect_dailyhaha_cards() -> List[Dict]:
+    try:
+        html = await _fetch_html(DAILYHAHA_HOME, timeout_sec=25)
+    except Exception as ex:
+        print(f'[dailyhaha] fetch home failed: {ex}')
+        return []
+
+    cards: List[Dict] = []
+    seen = set()
+
+    anchor_pattern = re.compile(
+        r'<a\s+href=\"(?P<href>/[^\"]+)\"\s+class=\"item\s+video\"[^>]*>\s*'
+        r'<div\s+class=\"info\">(?P<title>.*?)<div\s+class=\"views\">(?P<views>[0-9,]+)</div>.*?'
+        r'<img\s+src=\"(?P<thumb>/[^\"]+)\"',
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for match in anchor_pattern.finditer(html):
+        href = (match.group('href') or '').strip()
+        title = re.sub(r'<[^>]+>', '', (match.group('title') or '')).strip()
+        views_text = (match.group('views') or '').strip()
+        thumb = (match.group('thumb') or '').strip()
+
+        if not href or href in seen:
+            continue
+        seen.add(href)
+
+        page_url = urljoin('https://www.dailyhaha.com', href)
+        cards.append(
+            {
+                'title': title[:180],
+                'views': parse_views(views_text),
+                'url': page_url,
+                'thumbnail': urljoin('https://www.dailyhaha.com', thumb) if thumb else '',
+            }
+        )
+
+    print(f'[dailyhaha] collected {len(cards)} cards')
+    return cards
+
+
+async def discover_dailyhaha(topic: str):
+    setting = get_or_create_settings()
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    min_views = min(int(setting.get('minViewsFilter', 100000) or 100000), 10000)
+
+    cards = await _collect_dailyhaha_cards()
+    found = 0
+
+    for card in cards:
+        title = card.get('title', '')
+        views = int(card.get('views', 0) or 0)
+        page_url = card.get('url', '')
+
+        if views < min_views or not page_url:
+            continue
+        if not match_topic(title, topic, keywords):
+            continue
+
+        video_slug = page_url.rstrip('/').split('/')[-1].replace('.htm', '').strip()
+        if not video_slug:
+            continue
+
+        existing = videos.find_one({'platform': 'dailyhaha', 'videoId': video_slug})
+        if existing:
+            continue
+
+        youtube_url = await _resolve_dailyhaha_youtube_url(page_url)
+        if not youtube_url:
+            continue
+
+        youtube_id = extract_youtube_id(youtube_url)
+        if not youtube_id or not YOUTUBE_VIDEO_ID_RE.match(youtube_id):
+            continue
+
+        channel = upsert_channel('dailyhaha', DAILYHAHA_CHANNEL_ID, 'DailyHaha', topic)
+        v = upsert_video(
+            {
+                'platform': 'dailyhaha',
+                'videoId': video_slug,
+                'title': title,
+                'views': views,
+                'url': youtube_url,
+                'topic': topic,
+                'thumbnail': card.get('thumbnail') or f'https://img.youtube.com/vi/{youtube_id}/maxresdefault.jpg',
+                'channelId': channel['_id'],
+            }
+        )
+        await enqueue(v['_id'], 1 if views > 1_000_000 else 5)
+        found += 1
+
+    print(f'[DailyHaha {topic}] -> queued {found} videos')
+    return found
+
+
+
+
+async def _collect_douyin_cards(topic: str) -> List[Dict]:
+    keyword = DOUYIN_TOPIC_KEYWORDS.get(topic, topic)
+    search_url = DOUYIN_SEARCH_BASE.format(keyword=quote(keyword))
+    print(f'[douyin] search topic={topic} keyword={keyword} url={search_url}')
+
+    cards: List[Dict] = []
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[douyin] no healthy proxy available')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy) if proxy else None
+
+        try:
+            async with async_playwright() as p:
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context = await browser.new_context(
+                    user_agent=random.choice(UA),
+                    locale=SCRAPER_LOCALE,
+                    timezone_id=SCRAPER_TIMEZONE,
+                    viewport={'width': 1366, 'height': 920},
+                )
+                page = await context.new_page()
+
+                try:
+                    await page.goto(search_url, wait_until='domcontentloaded', timeout=timeout_ms)
+                    await asyncio.sleep(5)
+                    await human_scroll(page, 8)
+
+                    raw_cards = await page.evaluate(
+                        """() => {
+                            const normalize = (href) => {
+                                if (!href) return '';
+                                if (href.startsWith('http')) return href;
+                                if (href.startsWith('//')) return `https:${href}`;
+                                return `https://www.douyin.com${href}`;
+                            };
+
+                            const links = Array.from(document.querySelectorAll('a[href*="/video/"]'));
+                            const out = [];
+                            const seen = new Set();
+
+                            for (const link of links) {
+                                const videoUrl = normalize(link.getAttribute('href'));
+                                if (!videoUrl || seen.has(videoUrl)) continue;
+                                seen.add(videoUrl);
+
+                                const card = link.closest('li, article, div');
+                                const titleNode = card?.querySelector('h3, h4, [data-e2e*="desc"], [data-e2e*="title"]');
+                                const title = (titleNode?.textContent || link.textContent || '').trim();
+
+                                const channelLink = card?.querySelector('a[href*="/user/"]');
+                                const channelUrl = normalize(channelLink?.getAttribute('href') || '');
+                                const channelName = (channelLink?.textContent || '').trim();
+
+                                out.push({
+                                    url: videoUrl,
+                                    title,
+                                    channel_url: channelUrl,
+                                    channel_name: channelName,
+                                });
+
+                                if (out.length >= 80) break;
+                            }
+
+                            return out;
+                        }"""
+                    )
+
+                    for item in raw_cards or []:
+                        url = str(item.get('url') or '').strip()
+                        video_id = extract_douyin_id(url)
+                        if not url or not video_id.isdigit():
+                            continue
+
+                        channel_url = str(item.get('channel_url') or '').strip()
+                        channel_match = re.search(r'/user/([^/?]+)', channel_url)
+                        channel_id = channel_match.group(1) if channel_match else f'dy-{video_id[:8]}'
+
+                        title = str(item.get('title') or '').strip()
+                        cards.append({
+                            'video_id': video_id,
+                            'url': f'https://www.douyin.com/video/{video_id}',
+                            'title': title[:180] if title else f'Douyin video {video_id}',
+                            'views': 100001,
+                            'channel_id': channel_id,
+                            'channel_name': str(item.get('channel_name') or '').strip() or f'douyin-{channel_id[:12]}',
+                            'thumbnail': '',
+                        })
+
+                    print(f'[douyin] collected {len(cards)} cards for topic={topic}')
+                finally:
+                    await context.close()
+                    await browser.close()
+
+                if cards:
+                    break
+
+        except PlaywrightTimeoutError:
+            print(f'[douyin] timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)}')
+            continue
+        except Exception as ex:
+            print(f'[douyin] collect failed with proxy {_mask_proxy(proxy)}: {ex}')
+            continue
+
+    return cards
+
+
+async def discover_douyin(topic: str):
+    setting = get_or_create_settings()
+    keywords = setting.get('keywords', {}).get(topic, [topic])
+    cards = await _collect_douyin_cards(topic)
+    found = 0
+
+    for card in cards:
+        title = card.get('title', '')
+        if not match_topic(title, topic, keywords) and topic != 'funny':
+            # Topic Chinese keyword đã lọc theo query; vẫn giữ check title cho đồng nhất
+            continue
+
+        video_id = card.get('video_id', '')
+        if not video_id:
+            continue
+
+        existing = videos.find_one({'platform': 'douyin', 'videoId': video_id})
+        if existing:
+            continue
+
+        channel = upsert_channel('douyin', card.get('channel_id') or f'dy-{video_id[:8]}', card.get('channel_name') or 'douyin-channel', topic)
+        v = upsert_video(
+            {
+                'platform': 'douyin',
+                'videoId': video_id,
+                'title': title,
+                'views': int(card.get('views', 100001) or 100001),
+                'url': card.get('url') or f'https://www.douyin.com/video/{video_id}',
+                'topic': topic,
+                'thumbnail': card.get('thumbnail', ''),
+                'channelId': channel['_id'],
+            }
+        )
+        await enqueue(v['_id'], 5)
+        found += 1
+
+    print(f'[Douyin {topic}] -> queued {found} videos')
+    return found
+
+
 async def discover_playboard(config: Dict, topic: str):
     setting = get_or_create_settings()
     min_views = setting.get('minViewsFilter', 300000)
@@ -1052,13 +1353,22 @@ async def discover_all():
                 await asyncio.sleep(12 + random.random() * 5)
                 try:
                     print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
-                    found += await discover_playboard(cfg, topic)
+                    result = await discover_playboard(cfg, topic)
+                    found += int(result.get('itemsFound', 0))
                 except Exception as e:
                     print(f"[DEBUG] discover_playboard failed: {e}")
             try:
                 found += await discover_youtube(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_youtube failed: {e}")
+            try:
+                found += await discover_dailyhaha(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_dailyhaha failed: {e}")
+            try:
+                found += await discover_douyin(topic)
+            except Exception as e:
+                print(f"[DEBUG] discover_douyin failed: {e}")
 
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
@@ -1086,6 +1396,9 @@ async def scan_single_channel(channel, use_proxy: bool = True, headless_override
             # Fallback: treat as handle without @
             target_url = f'https://www.youtube.com/@{channel_id}/shorts'
         link_selector = 'a[href*="/shorts/"]'
+    elif platform == 'douyin':
+        target_url = f'https://www.douyin.com/user/{channel_id}'
+        link_selector = 'a[href*="/video/"]'
     else:
         target_url = f'https://www.facebook.com/{channel_id}/reels'
         link_selector = 'a[href*="/reel/"]'
@@ -1139,9 +1452,16 @@ async def scan_single_channel(channel, use_proxy: bool = True, headless_override
                             if not href:
                                 continue
                             full = href if href.startswith('http') else (
-                                f'https://www.youtube.com{href}' if platform == 'youtube' else f'https://www.facebook.com{href}'
+                                f'https://www.youtube.com{href}' if platform == 'youtube' else (
+                                    f'https://www.douyin.com{href}' if platform == 'douyin' else f'https://www.facebook.com{href}'
+                                )
                             )
-                            video_id = extract_youtube_id(full) if platform == 'youtube' else extract_reel_id(full)
+                            if platform == 'youtube':
+                                video_id = extract_youtube_id(full)
+                            elif platform == 'douyin':
+                                video_id = extract_douyin_id(full)
+                            else:
+                                video_id = extract_reel_id(full)
                             if not video_id or video_id in seen:
                                 continue
                             seen.add(video_id)

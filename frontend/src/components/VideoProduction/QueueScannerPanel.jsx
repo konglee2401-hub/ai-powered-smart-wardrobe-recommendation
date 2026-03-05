@@ -16,6 +16,7 @@ export function QueueScannerPanel() {
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [autoPublish, setAutoPublish] = useState(false);
   const [selectedAccounts, setSelectedAccounts] = useState([]);
+  const [youtubePublishType, setYoutubePublishType] = useState('shorts');
 
   useEffect(() => {
     checkStatus();
@@ -32,6 +33,7 @@ export function QueueScannerPanel() {
         setIntervalMinutes(result.data.intervalMinutes || 60);
         setAutoPublish(!!result.data.autoPublish);
         setSelectedAccounts(result.data.accountIds || []);
+        setYoutubePublishType(result.data.youtubePublishType || 'shorts');
       }
     } catch (error) {
       console.error('Failed to load scanner settings:', error);
@@ -56,7 +58,7 @@ export function QueueScannerPanel() {
       const response = await fetch('/api/queue-scanner/scan-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoPublish, accountIds: selectedAccounts })
+        body: JSON.stringify({ autoPublish, accountIds: selectedAccounts, youtubePublishType })
       });
 
       const result = await response.json();
@@ -79,7 +81,7 @@ export function QueueScannerPanel() {
       const response = await fetch('/api/queue-scanner/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: true, intervalMinutes, autoPublish, accountIds: selectedAccounts })
+        body: JSON.stringify({ enabled: true, intervalMinutes, autoPublish, accountIds: selectedAccounts, youtubePublishType })
       });
 
       const result = await response.json();
@@ -97,7 +99,7 @@ export function QueueScannerPanel() {
       const response = await fetch('/api/queue-scanner/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: false, intervalMinutes, autoPublish, accountIds: selectedAccounts })
+        body: JSON.stringify({ enabled: false, intervalMinutes, autoPublish, accountIds: selectedAccounts, youtubePublishType })
       });
       const result = await response.json();
       if (result.success) {
@@ -140,6 +142,12 @@ export function QueueScannerPanel() {
             <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} />
             Auto publish after processing
           </label>
+          <label className="text-sm">YouTube publish type
+            <select value={youtubePublishType} onChange={(e) => setYoutubePublishType(e.target.value)} className="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2">
+              <option value="shorts">YouTube Shorts (default)</option>
+              <option value="video">YouTube Video</option>
+            </select>
+          </label>
         </div>
 
         <div>
@@ -154,7 +162,7 @@ export function QueueScannerPanel() {
         </div>
       </div>
 
-      {status && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Eye className="w-5 h-5 text-blue-400" />Status</h4><p className="text-sm text-gray-300">Queue count: {status.queueCount || 0}</p><p className="text-sm text-gray-300">Running: {status.isRunning ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Scheduler enabled: {status.scheduleConfig?.enabled ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Configured interval: {status.scheduleConfig?.intervalMinutes || '-'} minutes</p><p className="text-sm text-gray-300">Auto publish: {status.scheduleConfig?.autoPublish ? 'Yes' : 'No'}</p></div>}
+      {status && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Eye className="w-5 h-5 text-blue-400" />Status</h4><p className="text-sm text-gray-300">Queue count: {status.queueCount || 0}</p><p className="text-sm text-gray-300">Running: {status.isRunning ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Scheduler enabled: {status.scheduleConfig?.enabled ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">Configured interval: {status.scheduleConfig?.intervalMinutes || '-'} minutes</p><p className="text-sm text-gray-300">Auto publish: {status.scheduleConfig?.autoPublish ? 'Yes' : 'No'}</p><p className="text-sm text-gray-300">YouTube publish type: {status.scheduleConfig?.youtubePublishType || 'shorts'}</p></div>}
 
       {results.length > 0 && <div className="bg-gray-800 rounded-lg p-6 border border-gray-700"><h4 className="font-semibold mb-4 flex items-center gap-2"><Check className="w-5 h-5 text-green-400" />Last Scan Results ({results.length})</h4><div className="space-y-2">{results.map((result, idx) => <div key={idx} className="bg-gray-700/40 rounded p-2 text-sm">{result.queueVideo} - {result.status}</div>)}</div></div>}
 

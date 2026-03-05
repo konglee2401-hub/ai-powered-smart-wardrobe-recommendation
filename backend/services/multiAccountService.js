@@ -731,6 +731,8 @@ class MultiAccountService {
 
   validateAccountConfig(platform, config = {}) {
     const missing = [];
+    const warnings = [];
+
     if (!config.accountHandle) missing.push('accountHandle');
     if (!config.accessToken) missing.push('accessToken');
     if (!config.apiKey && platform !== 'facebook') missing.push('apiKey');
@@ -738,11 +740,34 @@ class MultiAccountService {
     if (platform === 'youtube' && !config.channelId) missing.push('channelId');
     if (platform === 'tiktok' && !config.businessId) missing.push('businessId');
 
+    if (platform === 'youtube') {
+      const rawScopes = config.oauthScopes;
+      const scopes = Array.isArray(rawScopes)
+        ? rawScopes
+        : String(rawScopes || '')
+            .split(/[\n,\s]+/)
+            .map(s => s.trim())
+            .filter(Boolean);
+
+      if (!scopes.length) {
+        warnings.push('oauthScopes not provided; ensure token includes https://www.googleapis.com/auth/youtube.upload');
+      } else {
+        const normalizedScopes = scopes.map(scope => scope.toLowerCase());
+        const hasUploadScope = normalizedScopes.some(scope =>
+          scope === 'https://www.googleapis.com/auth/youtube.upload' || scope.endsWith('/youtube.upload')
+        );
+        if (!hasUploadScope) {
+          missing.push('oauthScopes(youtube.upload)');
+        }
+      }
+    }
+
     return {
       success: true,
       valid: missing.length === 0,
       checkedWith: 'service-validation',
-      missing
+      missing,
+      warnings
     };
   }
 
