@@ -45,7 +45,7 @@ export default function CharacterCreatorPage() {
       if (character) {
         setName(character.name);
         setAlias(character.alias);
-        setPortraitTempPath(character.portraitPath);
+        setPortraitTempPath(character.portraitUrl);
         setOptions(character.options || defaultOptions);
         setPreview(character.referenceImages || []);
         setEditingData(character);
@@ -74,11 +74,12 @@ export default function CharacterCreatorPage() {
   };
 
   const saveCharacter = async () => {
+    const isPortraitUrl = portraitTempPath?.startsWith('http');
     const payload = {
       ...(editingId && { _id: editingId }),
       name,
       alias: alias || name,
-      portraitTempPath,
+      ...(portraitTempPath && !isPortraitUrl && { portraitTempPath }),
       options,
       generatedImages: preview,
       analysisProfile: {
