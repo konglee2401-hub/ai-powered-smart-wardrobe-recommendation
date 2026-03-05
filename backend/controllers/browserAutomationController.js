@@ -202,7 +202,8 @@ function buildGenerationPrompt(analysisText, options = {}) {
     aspectRatio = '1:1',
     imageCount = 1,
     negativePrompt = '',
-    characterDescription = ''
+    characterDescription = '',
+    selectedCharacter = null
   } = options;
 
   // 💫 NEW: Refined mappings for better AI understanding
@@ -239,9 +240,10 @@ function buildGenerationPrompt(analysisText, options = {}) {
 
   // 💫 CRITICAL: Use /imagine command structure for clarity
   // Structure: Context + Character + Clothing + Environment + Quality + Avoid
+  const characterAlias = selectedCharacter?.alias || '';
   const characterPart = characterDescription 
-    ? `Character: ${characterDescription}, same body proportions, exact pose`
-    : `Character: same face and features, same body type, same skin tone, same hair color and style, exact pose`;
+    ? `Character: ${characterDescription}, same body proportions, exact pose${characterAlias ? `. Identity anchor token: ${characterAlias}` : ''}`
+    : `Character: same face and features, same body type, same skin tone, same hair color and style, exact pose${characterAlias ? `. Identity anchor token: ${characterAlias}` : ''}`;
 
   const clothingPart = `Clothing: exact outfit from reference image with matching color, pattern, material, and fit`;
 
@@ -1006,7 +1008,8 @@ export async function generateWithBrowser(req, res) {
       productImageBase64,
       characterImagePath,
       productImagePath,
-      language = 'en'  // 💫 Accept language parameter for Vietnamese support
+      language = 'en',  // 💫 Accept language parameter for Vietnamese support
+      selectedCharacter = null
     } = req.body;
 
     // Get image paths - either from temp files or convert base64
@@ -1050,7 +1053,8 @@ export async function generateWithBrowser(req, res) {
       aspectRatio,
       imageCount,
       negativePrompt,
-      characterDescription
+      characterDescription,
+      selectedCharacter
     };
 
     // 🔍 LOG: Show all options before sending to Google Flow

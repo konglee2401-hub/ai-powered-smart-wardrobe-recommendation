@@ -28,6 +28,7 @@ import ShortsReelsChannels from './pages/trend-automation/ShortsReelsChannels';
 import ShortsReelsVideos from './pages/trend-automation/ShortsReelsVideos';
 import ShortsReelsLogs from './pages/trend-automation/ShortsReelsLogs';
 import ShortsReelsSettings from './pages/trend-automation/ShortsReelsSettings';
+import CharacterCreatorPage from './pages/CharacterCreatorPage';
 
 
 function PageTitle() {
@@ -59,6 +60,7 @@ function App() {
         <Route path="/video-generation" element={<PageLayout contentClassName="overflow-hidden"><VideoGenerationPage /></PageLayout>} />
         <Route path="/voice-over" element={<PageLayout contentClassName="overflow-hidden"><VoiceOverPage /></PageLayout>} />
         <Route path="/generate/one-click" element={<PageLayout contentClassName="overflow-hidden"><OneClickCreatorPage /></PageLayout>} />
+        <Route path="/characters" element={<PageLayout><CharacterCreatorPage /></PageLayout>} />
         <Route path="/history" element={<PageLayout><GenerationHistory /></PageLayout>} />
         <Route path="/stats" element={<PageLayout><ModelStats /></PageLayout>} />
         <Route path="/tester" element={<PageLayout><ModelTester /></PageLayout>} />

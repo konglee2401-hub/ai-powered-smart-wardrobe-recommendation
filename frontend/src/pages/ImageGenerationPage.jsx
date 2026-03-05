@@ -38,6 +38,7 @@ import ImagePromptWithTemplates from '../components/ImagePromptWithTemplates';
 import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
 import ScenePickerModal from '../components/ScenePickerModal';
+import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 
 // Steps - Style and Prompt merged into single step
@@ -81,6 +82,12 @@ const fileToBase64 = (file) => {
     reader.onload = () => resolve(reader.result.split(',')[1]);
     reader.onerror = error => reject(error);
   });
+};
+
+const urlToFile = async (url, filename = 'character-reference.jpg') => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type || 'image/jpeg' });
 };
 
 // Tooltip component
@@ -168,6 +175,8 @@ export default function ImageGenerationPage() {
   // Data
   const [characterImage, setCharacterImage] = useState(null);
   const [productImage, setProductImage] = useState(null);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
   const [selectedOptions, setSelectedOptions] = useState({});
@@ -440,13 +449,14 @@ export default function ImageGenerationPage() {
   // ============================================================
 
   const handleStartAnalysis = async () => {
-    if (!characterImage?.file || !productImage?.file) return;
+    const effectiveCharacterFile = selectedCharacter?.portraitUrl ? await urlToFile(selectedCharacter.portraitUrl, `${selectedCharacter.alias || 'character'}.jpg`) : characterImage?.file;
+    if (!effectiveCharacterFile || !productImage?.file) return;
 
     setIsAnalyzing(true);
     const startTime = Date.now();
     
     try {
-      const charBase64 = await fileToBase64(characterImage.file);
+      const charBase64 = await fileToBase64(effectiveCharacterFile);
       const prodBase64 = await fileToBase64(productImage.file);
 
       let analysisResponse;
@@ -456,7 +466,7 @@ export default function ImageGenerationPage() {
         console.log('🎬 Using affiliate TikTok service flow (Step 1 + Step 2):', flowId);
 
         const step1Response = await affiliateVideoTiktokAPI.step1Analyze(
-          characterImage.file,
+          effectiveCharacterFile,
           productImage.file,
           flowId
         );
@@ -622,7 +632,7 @@ export default function ImageGenerationPage() {
           
           // Save character image
           const charAsset = await assetService.saveUploadedFileAsAsset(
-            characterImage.file,
+            effectiveCharacterFile,
             'character-image',
             sessionId,
             {
@@ -1002,6 +1012,7 @@ export default function ImageGenerationPage() {
           grokUrl: null, // Will be set based on conversation ID
           // 💫 NEW: Pass character description for better generation
           characterDescription,
+          selectedCharacter,
           // Storage configuration
           storageType,
           localFolder,
@@ -1250,7 +1261,7 @@ export default function ImageGenerationPage() {
   // RENDER
   // ============================================================
 
-  const isReadyForAnalysis = characterImage && productImage;
+  const isReadyForAnalysis = (selectedCharacter || characterImage) && productImage;
   const isReadyForPrompt = analysis && Object.keys(selectedOptions).length > 0;
   const isReadyForGeneration = generatedPrompt?.positive;
 
@@ -1660,7 +1671,7 @@ export default function ImageGenerationPage() {
                   {currentStep === 1 && (
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                        {characterImage?.preview ? (
+                        {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
                           <>
                             <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
                             <button onClick={() => setCharacterImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
@@ -2032,7 +2043,7 @@ export default function ImageGenerationPage() {
                         <div>
                           <p className="text-xs text-gray-500 mb-1 font-medium">👤 Character</p>
                           <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
-                            {characterImage?.preview ? (
+                            {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
                               <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
@@ -2190,7 +2201,7 @@ export default function ImageGenerationPage() {
                           <div>
                             <p className="text-xs text-gray-500 mb-1 font-medium">👤 Character</p>
                             <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
-                              {characterImage?.preview ? (
+                              {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
                                 <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
@@ -2304,6 +2315,16 @@ export default function ImageGenerationPage() {
         title={galleryPickerFor === 'character' ? 'Select Character Image' : 'Select Product Image'}
       />
 
+
+      <CharacterSelectorModal
+        open={showCharacterSelector}
+        onClose={() => setShowCharacterSelector(false)}
+        onSelect={(c) => {
+          setSelectedCharacter(c);
+          setSelectedOptions(prev => ({ ...prev, characterAlias: c.alias, characterDisplayName: c.name }));
+          setShowCharacterSelector(false);
+        }}
+      />
 
       <ScenePickerModal
         isOpen={showScenePicker}

@@ -752,4 +752,16 @@ export const providersAPI = {
   syncModels: (force = false) => api.post('/providers/sync', { force })
 };
 
+
+// ============================================
+// CHARACTER APIs
+// ============================================
+
+export const characterAPI = {
+  list: () => api.get('/characters'),
+  getById: (id) => api.get(`/characters/${id}`),
+  generatePreview: (formData) => api.postFormData('/characters/generate-preview', formData),
+  save: (payload) => api.post('/characters', payload),
+};
+
 export default api;
