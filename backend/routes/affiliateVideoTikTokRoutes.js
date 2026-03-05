@@ -360,8 +360,13 @@ router.post('/step-2-generate-images', async (req, res) => {
     const {
       videoDuration = 20,
       aspectRatio = '9:16',
-      negativePrompt = ''
+      negativePrompt = '',
+      useShortPrompt = false
     } = req.body;
+
+    const shouldUseShortPrompt = typeof useShortPrompt === 'string'
+      ? useShortPrompt.toLowerCase() === 'true'
+      : Boolean(useShortPrompt);
 
     // 💡 REUSE: Use GoogleFlowAutomationService for image generation
     const imageGenService = new GoogleFlowAutomationService({
@@ -393,7 +398,8 @@ router.post('/step-2-generate-images', async (req, res) => {
       baseOptions,
       'change-clothes',
       productFocus,
-      'vi'  // Vietnamese
+      'vi',  // Vietnamese
+      { useShortPrompt: shouldUseShortPrompt }
     );
     const wearingPrompt = wearingPromptData.prompt;
     
@@ -403,7 +409,8 @@ router.post('/step-2-generate-images', async (req, res) => {
       baseOptions,
       'character-holding-product',
       productFocus,
-      'vi'  // Vietnamese
+      'vi',  // Vietnamese
+      { useShortPrompt: shouldUseShortPrompt }
     );
     const holdingPrompt = holdingPromptData.prompt;
 

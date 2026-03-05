@@ -557,6 +557,7 @@ export default function OneClickCreatorPage() {
   const [quantity, setQuantity] = useState(DESIRED_OUTPUT_COUNT);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isHeadless, setIsHeadless] = useState(true);
+  const [useShortPrompt, setUseShortPrompt] = useState(false);
   
   // TikTok Affiliate Specific State (MUST come before useEffect that uses them!)
   const [tiktokVideoDuration, setTiktokVideoDuration] = useState(20);
@@ -935,9 +936,13 @@ export default function OneClickCreatorPage() {
         generateVoiceover: true,
         flowId,  // 💫 Pass flowId in payload to maintain session
         language: language || 'en',  // 💫 Pass language for prompt generation (STEP 1, 3, 4)
-        options: recommendedOptions || {},
+        options: {
+          ...(recommendedOptions || {}),
+          useShortPrompt
+        },
         disableSceneReferenceTransfer: false,
-        imageSource: imageSource  // 🎯 Pass image source tracking to skip Drive upload for gallery images
+        imageSource: imageSource,  // 🎯 Pass image source tracking to skip Drive upload for gallery images
+        useShortPrompt
       };
       
       console.log(`📤 Sending JSON request to /api/ai/affiliate-video-tiktok`);
@@ -1544,6 +1549,25 @@ export default function OneClickCreatorPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+
+            {/* Prompt Mode */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.useShortPrompt')}</h3>
+              <button
+                type="button"
+                onClick={() => setUseShortPrompt(prev => !prev)}
+                disabled={isGenerating}
+                className={`w-full px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 ${
+                  useShortPrompt
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                }`}
+              >
+                {useShortPrompt ? t('oneClickCreator.enabled') : t('oneClickCreator.disabled')}
+              </button>
+              <p className="text-xs text-gray-400 mt-2">{t('oneClickCreator.shortPromptHint')}</p>
             </div>
 
             {/* Video Provider */}
