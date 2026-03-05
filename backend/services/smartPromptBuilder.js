@@ -204,6 +204,14 @@ async function buildLockedSceneDirective(sceneValue, selectedOptions = {}, langu
   return `Scene Locked Prompt: ${baseSuggestion}. Consistency rules: ${consistencyRules}.`;
 }
 
+
+function resolvePoseSuggestion(selectedOptions = {}, mode = 'wearing') {
+  const poseForScene = selectedOptions?.poseForScene || {};
+  const modePose = mode === 'holding' ? poseForScene?.holding : poseForScene?.wearing;
+  const fallback = selectedOptions?.poseGuidance || selectedOptions?.bodyPose || '';
+  return (modePose || fallback || '').toString().trim();
+}
+
 function getFallbackTechnicalDetails(category, optionValue) {
   const fallbacks = {
     scene: {
@@ -288,11 +296,11 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
       
       if (useCase === 'change-clothes') {
         // Use Vietnamese image generation prompt for wearing product (virtual try-on)
-        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt });
+        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'wearing') });
         console.log(`✅ Using Vietnamese WEARING product prompt`);
       } else if (useCase === 'character-holding-product') {
         // Use Vietnamese image generation prompt for holding product
-        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt });
+        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'holding') });
         console.log(`✅ Using Vietnamese HOLDING product prompt`);
       } else {
         // Fallback to character analysis for other use cases
@@ -413,6 +421,7 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
       '',
       `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
       `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      ...(resolvePoseSuggestion(selectedOptions, 'wearing') ? [`[POSE] ${resolvePoseSuggestion(selectedOptions, 'wearing')}`] : []),
       '',
       '[HARD RULES]',
       'No anatomy errors, no deformation, no blur, no extra limbs, no text/logo/watermark.'
@@ -519,6 +528,13 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   parts.push('Create realistic folds, gravity, and tension.');
   parts.push('Do NOT resize or alter the body to fit the garment.');
   parts.push('Align neckline, armholes, waist, and ankles correctly.\n');
+
+  const wearingPoseSuggestion = resolvePoseSuggestion(selectedOptions, 'wearing');
+  if (wearingPoseSuggestion) {
+    parts.push('[POSE IN SCENE]');
+    parts.push(`Use this pose guidance to fit scene perspective naturally: ${wearingPoseSuggestion}`);
+    parts.push('Allow natural adaptation from original pose; avoid rigid pasted full-body stance.\n');
+  }
 
   // ==========================================
   // HAIR & MAKEUP
@@ -686,6 +702,7 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
       '',
       `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
       `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      ...(resolvePoseSuggestion(selectedOptions, 'holding') ? [`[POSE] ${resolvePoseSuggestion(selectedOptions, 'holding')}`] : []),
       '',
       '[HARD RULES]',
       'No anatomy errors, no deformation, no blur, no extra limbs, no text/logo/watermark.'
@@ -805,6 +822,13 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
     parts.push(`- Practical notes: ${selectedOptions.holdingPresentation.notes}`);
   }
   parts.push('');
+
+  const holdingPoseSuggestion = resolvePoseSuggestion(selectedOptions, 'holding');
+  if (holdingPoseSuggestion) {
+    parts.push('[POSE IN SCENE]');
+    parts.push(`Use this pose guidance to fit scene perspective naturally: ${holdingPoseSuggestion}`);
+    parts.push('Keep product visibility while adapting posture naturally to scene perspective.\n');
+  }
 
   // ==========================================
   // HAIR & MAKEUP

@@ -754,6 +754,12 @@ Return ONLY valid JSON, no other text. Structure:
       "horizonAlignment": "eye-level/horizon guidance",
       "reason": "why this lock improves scene consistency"
     },
+    "poseForScene": {
+      "wearing": "detailed pose recommendation for wearing shot to match scene perspective",
+      "holding": "detailed pose recommendation for holding shot to match scene perspective",
+      "reason": "why these poses feel natural in the scene"
+    },
+    "poseGuidance": "global pose constraints to avoid rigid pasted full-body look",
     "holdingPresentation": {
       "method": "hanger | hand-only | arm-drape | mannequin-support",
       "reason": "why this method is realistic for this product",
@@ -791,6 +797,44 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       `;
       }
 
+
+      const hasSceneReference = Boolean(finalSceneImagePath && fs.existsSync(finalSceneImagePath));
+      const selectedSceneForAnalysis = options.scene || 'linhphap-tryon-room';
+      const sceneLockedPromptForAnalysis = options.sceneLockedPrompt || options.sceneLockOverridePrompt || '';
+      const sceneContextLine = sceneLockedPromptForAnalysis
+        ? `Scene lock: ${sceneLockedPromptForAnalysis}`
+        : `Scene key: ${selectedSceneForAnalysis}`;
+
+      if ((language || 'en').split('-')[0].split('_')[0].toLowerCase() === 'vi') {
+        analysisPrompt += `
+
+===== PHÂN TÍCH SCENE REFERENCE (BẮT BUỘC) =====
+`;
+        analysisPrompt += `${sceneContextLine}
+`;
+        analysisPrompt += hasSceneReference
+          ? `Image 3 = SCENE REFERENCE. Bắt buộc dùng scene này để tư vấn pose tự nhiên cho nhân vật.
+`
+          : `Không có Image 3, hãy dựa trên Scene lock/Scene key để tư vấn pose tự nhiên.
+`;
+        analysisPrompt += `Hãy tư vấn pose cụ thể cho cả WEARING và HOLDING để nhân vật hòa hợp với phối cảnh scene (hướng người, vị trí chân tay, trọng tâm cơ thể, khoảng cách camera). Tránh giữ cứng pose từ ảnh nhân vật gốc.
+`;
+      } else {
+        analysisPrompt += `
+
+===== SCENE REFERENCE ANALYSIS (REQUIRED) =====
+`;
+        analysisPrompt += `${sceneContextLine}
+`;
+        analysisPrompt += hasSceneReference
+          ? `Image 3 = SCENE REFERENCE. You MUST use this scene to recommend natural poses for the character.
+`
+          : `Image 3 is unavailable. Use scene lock/scene key context to recommend natural poses.
+`;
+        analysisPrompt += `Provide concrete pose guidance for BOTH wearing and holding shots so the character fits the scene perspective naturally (body orientation, limb placement, weight distribution, camera distance). Do NOT freeze the original full-body pose rigidly.
+`;
+      }
+
       // 🔴 CRITICAL: Use try-finally to GUARANTEE browser cleanup
       let chatGPTService = null;
       let rawResponse = null;  // 🔴 Declare outside try so it's accessible after finally
@@ -799,8 +843,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         chatGPTService = new ChatGPTService({ headless: true, flowId });
         await chatGPTService.initialize();
         
+        const analysisImages = hasSceneReference
+          ? [characterFilePath, productFilePath, finalSceneImagePath]
+          : [characterFilePath, productFilePath];
+
         rawResponse = await chatGPTService.analyzeMultipleImages(
-          [characterFilePath, productFilePath],
+          analysisImages,
           analysisPrompt
         );
         
@@ -1220,6 +1268,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       cameraAngle: options.cameraAngle || analysis?.recommendations?.cameraAngle?.choice || 'eye-level',
       cameraLock: options.cameraLock || analysis?.recommendations?.cameraLock || {},
       holdingPresentation: options.holdingPresentation || analysis?.recommendations?.holdingPresentation || {},
+      poseGuidance: options.poseGuidance || analysis?.recommendations?.poseGuidance || '',
+      poseForScene: options.poseForScene || analysis?.recommendations?.poseForScene || {},
       aspectRatio: '9:16', // TikTok format
       ...options
     };
@@ -1236,6 +1286,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
     if (baseOptions.holdingPresentation?.method) {
       console.log(`  Holding Method: ${baseOptions.holdingPresentation.method}`);
+    }
+    if (baseOptions.poseForScene?.wearing || baseOptions.poseForScene?.holding || baseOptions.poseGuidance) {
+      console.log(`  Pose guidance: wearing=${baseOptions.poseForScene?.wearing || 'n/a'} | holding=${baseOptions.poseForScene?.holding || 'n/a'}`);
     }
     console.log(`  Aspect Ratio: ${baseOptions.aspectRatio} (TikTok)`);
     
