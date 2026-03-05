@@ -1,0 +1,139 @@
+{
+  "timestamp": "2026-03-05T11:40:47.465Z",
+  "expiresAt": "2026-03-06T11:40:47.466Z",
+  "url": "https://labs.google/fx/vi/tools/flow",
+  "localStorage": {
+    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"LANDSCAPE\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772710810}"
+  },
+  "sessionStorage": {},
+  "cookies": [
+    {
+      "name": "__Secure-next-auth.session-token",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..z32bluaMvEHLUmnm.jv-NGt9iUM9j_XW3cN-JswLlqzRYMJOLcmTkpIhH2D7GZjQajl7SpxkhUaNED1r_3zC-83y8y5Fy68MWmjqn54p5X019aQcOGhV4i8mssgx8aercHMtAWpqOA7Q0l229cENqJ934kz-ot4eqeIw_kkUDN4oxrvUnZuysjHf5TaJFCbzNRlHU3u7sxlfzg8JQ9qHEtVg1cxIJLJbMIHyDyMFSrskZfufAC64qEEoFRE4fozhs7WiICYcnmLpUoWc6qdyIbWuxIAbCRoaM6HoPGYMHE3g3zGuSAxsWwxX0nRyUE9pizmC5BWZ_mAZIXuJGyKRaGatY8usjg1FZuRC1dN4l7qh5p5D59jhyRGoOR9AE5AXZojZDSLWlKsXGKt3qbL3m0U6H5xtt74dLNrgf8kY6r-uNrzUhAIbKBK7ffmnYkW6fbo-7hRq439mbmBjk3sJM17giOIWcI-0oxQIYLZZytNCdaNoAe8BpyRlAQcD8mzI5qAdpPWeZupcxdE9Ohw4for8ung6lmNaoAOLPmEDdfKUr9i5dyxndU4Ntm_TkKmSbPxqGPnPMChXIG9OMGy0G_yy2bvfZstW0Kg8lhGDTNBJFT3trEEslrEtkmUK7h2Uwp6_TQF2-VvaFpV29YZN7tSeFI_vfitEI0JMdJQhfG1N0hNja2bAJRmAo7paZ8NfpmlpVQp0INco-mf4oL1P8P8nBb8rHLBC07MnwfKfJgsj8Ly5biRECv_PPRB8KjQE82gNCOS7fIv1rYi44ohKEgOkhXKwf2yhTVoBCAK9Mhw9sKKIhsN-nJepmN2IzCfECWlXN-aJsm_K71IYCc3TtHcAGjbNx6H9deWkJtKX1PR0zYumDqlhyMPsxSd0zyXMAupaXB7pvVD2YgXbz57TKGZ9qnH2HAZ-yI10eD7UwO5X-A5OInM_UhLDNg4cr5E98OOrxSciVkW3Sz0jQLlmX7SBAeSgeExj60DrJKiLFACGO.BWKzhnisVHeyBCzAKpZkKA",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": 1775302842.594583,
+      "size": 1101,
+      "httpOnly": true,
+      "secure": true,
+      "session": false,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "_ga_X2GNH8R5NS",
+      "value": "GS2.1.s1772710780$o1$g1$t1772710805$j35$l0$h384701687",
+      "domain": ".labs.google",
+      "path": "/",
+      "expires": 1807270805.838933,
+      "size": 67,
+      "httpOnly": false,
+      "secure": false,
+      "session": false,
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.1057737888.1772710781",
+      "domain": ".labs.google",
+      "path": "/",
+      "expires": 1807270795.289851,
+      "size": 30,
+      "httpOnly": false,
+      "secure": false,
+      "session": false,
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "EMAIL",
+      "value": "%22leecris241%40gmail.com%22",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": 1775302795,
+      "size": 33,
+      "httpOnly": false,
+      "secure": false,
+      "session": false,
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "email",
+      "value": "leecris241%40gmail.com",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 27,
+      "httpOnly": true,
+      "secure": false,
+      "session": true,
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 81,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "__Host-next-auth.csrf-token",
+      "value": "48e7c29d46d172328986cb0c381007e10533839c9a8b575cfd81fecfe8e6d9c8%7Ca3f4a5a84970e99eadf4754140c4b3318d639bd8dcdf17f7d8e7c4bdbbf1f57d",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 158,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    }
+  ],
+  "tokens": {
+    "recaptcha": {
+      "_grecaptcha": null,
+      "rc::a": null,
+      "rc::f": null
+    },
+    "capturedAt": "2026-03-05T11:40:47.466Z"
+  },
+  "flowConfig": {},
+  "metadata": {
+    "currentUrl": "https://labs.google/fx/vi/tools/flow",
+    "title": "Flow - Affiliate AI",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "timezone": "Asia/Saigon",
+    "language": "en-US",
+    "cookieEnabled": true,
+    "onLine": true
+  },
+  "auth": {},
+  "diagnostics": {
+    "recaptchaAvailable": true,
+    "recaptchaConfigured": false,
+    "authTokensPresent": true,
+    "recaptchaTokensPresent": false,
+    "capturedRequests": 0
+  }
+}

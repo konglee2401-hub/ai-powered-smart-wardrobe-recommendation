@@ -2,8 +2,13 @@ import express from 'express';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import OAuthCredentials from '../models/OAuthCredentials.js';
 import { google } from 'googleapis';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const router = express.Router();
 
@@ -47,7 +52,7 @@ function runNodeScript(scriptPath, args = []) {
 
 router.post('/run/refresh-google-flow', (req, res) => {
   try {
-    const script = path.join(__dirname, '..', 'scripts', 'refresh-googe-flow-session.js');
+    const script = path.join(__dirname, '..', 'scripts', 'auth', 'google-flow', 'refresh-session.js');
     if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
     const child = runNodeScript(script);
     child.on('error', () => {});

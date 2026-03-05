@@ -61,7 +61,7 @@ function normalizeSceneLockedImageUrls(input = null) {
 
 /**
  * 💫 NEW: Convert absolute file paths to proxy URLs
- * If URL is a file path, extract filename and return proxy URL
+ * If URL is a file path, extract relative path from scene-locks and return proxy URL
  * If URL is already an HTTP URL, return as-is
  */
 function convertFilePathToProxyUrl(filePath = '') {
@@ -86,7 +86,24 @@ function convertFilePathToProxyUrl(filePath = '') {
   // Replace all backslashes with forward slashes first to normalize
   let normalizedPath = filePath.replace(/\\/g, '/');
   
-  // Extract filename from the path (get everything after the last /)
+  // Extract relative path from scene-locks directory
+  const sceneLocksIndex = normalizedPath.indexOf('scene-locks/');
+  if (sceneLocksIndex !== -1) {
+    const relativePath = normalizedPath.substring(sceneLocksIndex + 'scene-locks/'.length);
+    const proxyUrl = `/api/prompt-options/scene-locks/${relativePath}`;
+    
+    // Debug logging for scene locks
+    if (filePath.includes('scene-lock') || filePath.includes('tryon')) {
+      console.log(`✅ convertFilePathToProxyUrl - Scene Lock:`);
+      console.log(`   Input:  ${filePath.substring(0, 100)}`);
+      console.log(`   Relative: ${relativePath}`);
+      console.log(`   Output: ${proxyUrl}`);
+    }
+    
+    return proxyUrl;
+  }
+  
+  // Fallback: just extract filename if no scene-locks directory found
   const parts = normalizedPath.split('/');
   const fileName = parts[parts.length - 1];
   
@@ -95,14 +112,15 @@ function convertFilePathToProxyUrl(filePath = '') {
     return null;
   }
 
-  // Convert to proxy URL
+  // Convert to proxy URL (fallback for non-scene-locks paths)
   const proxyUrl = `/api/prompt-options/scene-locks/${fileName}`;
   
-  // 🔍 DEBUG
-  if (filePath.includes('scene') && (filePath.includes('.jpg') || filePath.includes('.png'))) {
-    console.log(`✅ convertFilePathToProxyUrl:`);
-    console.log(`   Input:  ${filePath.substring(0,80)}`);
-    console.log(`   Return: ${proxyUrl}`);
+  // 🔍 DEBUG: Log fallback conversions
+  if (filePath.includes('scene-lock') || filePath.includes('tryon')) {
+    console.log(`✅ convertFilePathToProxyUrl - Scene Lock (fallback):`);
+    console.log(`   Input:  ${filePath.substring(0, 100)}`);
+    console.log(`   Filename: ${fileName}`);
+    console.log(`   Output: ${proxyUrl}`);
   }
   
   return proxyUrl;
@@ -204,27 +222,32 @@ async function uploadSceneLockAsset({
     status: 'active'
   };
 
-  if (process.env.DRIVE_API_KEY) {
-    try {
-      const drive = new GoogleDriveService();
-      await drive.initialize();
-      const targetFolder = drive.folderStructure?.outputs_processed_images || drive.folderStructure?.media_images || drive.folderStructure?.outputs;
-      const driveResult = await drive.uploadFile(localPath, filename, targetFolder, {
+  // 💫 FIXED: Now uses OAuth-authenticated Google Drive Service
+  try {
+    const drive = new GoogleDriveService();
+    await drive.initialize();
+    
+    const driveResult = await drive.uploadFile(localPath, filename, {
+      sceneValue,
+      aspectRatio,
+      source: 'scene-lock-manager',
+      properties: {
         sceneValue,
         aspectRatio,
         source: 'scene-lock-manager'
-      });
+      }
+    });
 
-      if (driveResult?.id) {
-        assetPayload.storage = {
-          location: 'google-drive',
-          localPath,
-          googleDriveId: driveResult.id,
-          url: driveResult.webViewLink || null
-        };
-        assetPayload.cloudStorage = {
-          location: 'google-drive',
-          googleDriveId: driveResult.id,
+    if (driveResult?.id) {
+      assetPayload.storage = {
+        location: 'google-drive',
+        localPath,
+        googleDriveId: driveResult.id,
+        url: driveResult.webViewLink || null
+      };
+      assetPayload.cloudStorage = {
+        location: 'google-drive',
+        googleDriveId: driveResult.id,
           webViewLink: driveResult.webViewLink || null,
           thumbnailLink: driveResult.thumbnailLink || null,
           status: 'synced',
@@ -242,7 +265,6 @@ async function uploadSceneLockAsset({
       };
       assetPayload.syncStatus = 'failed';
     }
-  }
 
   await Asset.findOneAndUpdate({ assetId }, assetPayload, { upsert: true, new: true, setDefaultsOnInsert: true });
 
@@ -388,7 +410,8 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
     ));
 
     const preservedSamples = existingSamples.filter((sample) => (sample.aspectRatio || '1:1') !== normalizedAspect);
-    scene.sceneLockSamples = [...preservedSamples, ...samples];
+    // 💫 FIX: Put newly generated samples FIRST so preview shows latest images (index 0)
+    scene.sceneLockSamples = [...samples, ...preservedSamples];
 
     // IMPORTANT: generating previews must NOT override current locked images.
     await scene.save();
@@ -404,7 +427,25 @@ router.post('/scenes/:value/generate-lock-images', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // 🔴 Enhanced error logging for debugging
+    console.error('[scene-lock] ❌ ERROR:', error.message);
+    console.error('[scene-lock] Stack:', error.stack);
+    
+    // Check if it's an auth-related error
+    const isAuthError = error.message.toLowerCase().includes('authentication') || 
+                       error.message.toLowerCase().includes('auth');
+    
+    const statusCode = isAuthError ? 401 : 500;
+    const errorMessage = isAuthError 
+      ? `Authentication failed. Please run: node scripts/auth/google-flow/refresh-session.js and try again.`
+      : error.message;
+    
+    res.status(statusCode).json({ 
+      success: false, 
+      message: errorMessage,
+      isAuthError,
+      type: error.name
+    });
   }
 });
 
@@ -612,35 +653,62 @@ router.get('/', async (req, res) => {
 
     const options = await PromptOption.find(query).sort({ category: 1, usageCount: -1, label: 1 });
 
-    const formattedOptions = options.map(option => ({
-      id: option._id,
-      category: option.category,
-      value: option.value,
-      label: option.label,
-      description: option.description,
-      technicalDetails: option.technicalDetails || {},
-      promptSuggestion: option.promptSuggestion || null,
-      promptSuggestionVi: option.promptSuggestionVi || null,
-      sceneLockedPrompt: option.sceneLockedPrompt || null,
-      sceneLockedPromptVi: option.sceneLockedPromptVi || null,
-      sceneNegativePrompt: option.sceneNegativePrompt || null,
-      sceneNegativePromptVi: option.sceneNegativePromptVi || null,
-      sceneLockedImageUrl: getSceneLockedImageUrlByAspect(option),
-      sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(option.sceneLockedImageUrls),
-      sceneLockSamples: convertSceneLockSamples(option.sceneLockSamples),
-      sceneLockedImageHistory: normalizeSceneLockedImageHistory(option.sceneLockedImageHistory),
-      useSceneLock: typeof option.useSceneLock === 'boolean' ? option.useSceneLock : true,
-      isAiGenerated: option.isAiGenerated || false,
-      usageCount: option.usageCount || 0
-    }));
+    const formattedOptions = options.map(option => {
+      // For scenes with potential issues, log what we're converting
+      if (option.value && option.value.includes('tryon')) {
+        console.log(`\n🔍 MAPPING SCENE: ${option.value}`);
+        console.log(`   Raw sceneLockedImageUrl: ${option.sceneLockedImageUrl}`);
+        console.log(`   Raw sceneLockedImageUrls: ${JSON.stringify(option.sceneLockedImageUrls)}`);
+      }
+
+      const convertedImageUrl = getSceneLockedImageUrlByAspect(option);
+      
+      if (option.value && option.value.includes('tryon')) {
+        console.log(`   After conversion: ${convertedImageUrl}`);
+      }
+
+      return {
+        id: option._id,
+        category: option.category,
+        value: option.value,
+        label: option.label,
+        description: option.description,
+        technicalDetails: option.technicalDetails || {},
+        promptSuggestion: option.promptSuggestion || null,
+        promptSuggestionVi: option.promptSuggestionVi || null,
+        sceneLockedPrompt: option.sceneLockedPrompt || null,
+        sceneLockedPromptVi: option.sceneLockedPromptVi || null,
+        sceneNegativePrompt: option.sceneNegativePrompt || null,
+        sceneNegativePromptVi: option.sceneNegativePromptVi || null,
+        sceneLockedImageUrl: convertedImageUrl,
+        sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(option.sceneLockedImageUrls),
+        sceneLockSamples: convertSceneLockSamples(option.sceneLockSamples),
+        sceneLockedImageHistory: normalizeSceneLockedImageHistory(option.sceneLockedImageHistory),
+        useSceneLock: typeof option.useSceneLock === 'boolean' ? option.useSceneLock : true,
+        isAiGenerated: option.isAiGenerated || false,
+        usageCount: option.usageCount || 0
+      };
+    });
 
     // 🔍 DEBUG: Log scene image URLs
     const sceneOptions = formattedOptions.filter(o => o.category === 'scene');
     if (sceneOptions.length > 0) {
-      console.log(`🔍 DEBUG GET /api/prompt-options: Found ${sceneOptions.length} scenes`);
+      console.log(`\n🔍 DEBUG GET /api/prompt-options: Found ${sceneOptions.length} scenes`);
       sceneOptions.slice(0, 2).forEach(s => {
         console.log(`   Scene: ${s.value}`);
         console.log(`   → sceneLockedImageUrl: ${s.sceneLockedImageUrl}`);
+        console.log(`   → Type: ${typeof s.sceneLockedImageUrl}`);
+      });
+    }
+    
+    // DEBUG: Check source data before conversion
+    const dbScenes = options.filter(o => o.category === 'scene');
+    if (dbScenes.length > 0) {
+      console.log(`\n🔍 DEBUG SOURCE DATA: ${dbScenes.length} scene(s) in DB`);
+      dbScenes.slice(0, 2).forEach(s => {
+        console.log(`   DB Scene: ${s.value}`);
+        console.log(`   → DB sceneLockedImageUrl: ${s.sceneLockedImageUrl}`);
+        console.log(`   → DB sceneLockedImageUrls: ${JSON.stringify(s.sceneLockedImageUrls)}`);
       });
     }
 
@@ -790,19 +858,19 @@ router.post('/ai-extract', async (req, res) => {
  * 💫 NEW: GET /api/prompt-options/scene-locks/:fileId
  * Serve scene lock sample images from the backend temp directory
  */
-router.get('/scene-locks/:fileId', async (req, res) => {
+router.get('/scene-locks/:fileId(*)', async (req, res) => {
   try {
     const { fileId } = req.params;
     
-    // Security: ensure fileId doesn't contain path traversal
-    if (fileId.includes('..') || fileId.includes('/') || fileId.includes('\\')) {
+    // Security: ensure fileId doesn't contain path traversal attempts
+    if (fileId.includes('..')) {
       return res.status(400).json({ success: false, message: 'Invalid file ID' });
     }
 
     const sceneLockDir = path.join(process.cwd(), 'backend', 'temp', 'scene-locks');
     const filePath = path.join(sceneLockDir, fileId);
 
-    // Ensure the file is within the scene-locks directory
+    // Ensure the file is within the scene-locks directory (security check)
     const resolvedPath = path.resolve(filePath);
     const resolvedDir = path.resolve(sceneLockDir);
     if (!resolvedPath.startsWith(resolvedDir)) {
@@ -810,6 +878,7 @@ router.get('/scene-locks/:fileId', async (req, res) => {
     }
 
     if (!fs.existsSync(filePath)) {
+      console.warn(`⚠️  Scene lock file not found: ${filePath}`);
       return res.status(404).json({ success: false, message: 'Scene lock image not found' });
     }
 
@@ -826,12 +895,24 @@ router.get('/scene-locks/:fileId', async (req, res) => {
     res.set('Content-Type', mimeType);
     res.set('Cache-Control', 'public, max-age=31536000'); // 1 year cache
 
+    console.log(`📁 Serving scene lock: ${fileId}`);
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   } catch (error) {
     console.error('❌ Scene lock image serving failed:', error.message);
     res.status(500).json({ success: false, message: 'Failed to serve image' });
   }
+});
+
+// TEST ENDPOINT: Verify path conversion function
+router.get('/test/convert-path', (req, res) => {
+  const testPath = req.query.path || 'C:\\Work\\Affiliate-AI\\smart-wardrobe\\backend\\temp\\scene-locks\\linhphap-tryon-room\\Womens_fashion_tryon_room_7f571c1d9f-scene-01.jpeg';
+  const result = convertFilePathToProxyUrl(testPath);
+  res.json({
+    input: testPath,
+    output: result,
+    success: result ? result.startsWith('/api/') : false
+  });
 });
 
 export default router;

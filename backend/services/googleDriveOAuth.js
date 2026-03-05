@@ -107,6 +107,68 @@ class GoogleDriveOAuthService {
   }
 
   /**
+   * 💫 NEW: Attempt to recover authentication from backup token file
+   * This handles the case where the primary token was deleted after a refresh failure
+   * Uses the stored refresh_token to get a new access_token
+   */
+  async recoverFromBackupToken(auth) {
+    try {
+      const backupPath = this.tokenPath.replace('.json', '.backup.json');
+      
+      if (!fs.existsSync(backupPath)) {
+        console.warn(`📭 No backup token found at: ${backupPath}`);
+        return false;
+      }
+
+      console.log(`🔍 Found backup token, attempting recovery...`);
+      const backupToken = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+      
+      // Validate backup has refresh_token
+      if (!backupToken.refresh_token) {
+        console.warn('⚠️ Backup token missing refresh_token, cannot recover');
+        return false;
+      }
+
+      // Set up auth with refresh_token from backup
+      auth.setCredentials(backupToken);
+      
+      try {
+        console.log('🔄 Attempting to refresh access token from refresh_token...');
+        const { credentials: newCredentials } = await auth.refreshAccessToken();
+        
+        // Save recovered token to primary location
+        const tokenDir = path.dirname(this.tokenPath);
+        if (!fs.existsSync(tokenDir)) {
+          fs.mkdirSync(tokenDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(this.tokenPath, JSON.stringify(newCredentials, null, 2));
+        console.log(`✅ Token recovered and saved to: ${this.tokenPath}`);
+        
+        // Optional: Delete backup since we've recovered
+        try {
+          fs.unlinkSync(backupPath);
+          console.log(`🗑️ Deleted backup token (no longer needed)`);
+        } catch (deleteError) {
+          console.warn(`⚠️  Could not delete backup: ${deleteError.message}`);
+        }
+        
+        // Apply credentials to auth object
+        auth.setCredentials(newCredentials);
+        return true;
+        
+      } catch (refreshError) {
+        console.warn(`❌ Failed to refresh from backup: ${refreshError.message}`);
+        return false;
+      }
+      
+    } catch (error) {
+      console.error(`❌ Backup recovery failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Authenticate with OAuth from environment variables
    */
   async authenticateWithOAuth() {
@@ -167,7 +229,24 @@ class GoogleDriveOAuthService {
           }
         }
       } else {
-        console.warn('⚠️ No stored token found. Generating authorization URL...');
+        console.warn('⚠️ No stored token found. Checking for backup...');
+        
+        // 💫 NEW: Try to recover from backup token if it exists
+        const recovered = await this.recoverFromBackupToken(auth);
+        if (recovered) {
+          console.log('✅ Recovered from backup token');
+          this.auth = auth;
+          this.drive = google.drive({ version: 'v3', auth });
+          this.initialized = true;
+          return { 
+            success: true, 
+            authenticated: true,
+            configured: true,
+            method: 'OAuth 2.0 (recovered from backup)'
+          };
+        }
+        
+        console.warn('📝 No backup found. Generating authorization URL...');
         return this.getAuthorizationUrl(auth);
       }
 
@@ -351,6 +430,8 @@ class GoogleDriveOAuthService {
         console.log('✅ Using OAuth credentials from environment (.env)');
         clientId = this.oauthClientId;
         clientSecret = this.oauthClientSecret;
+        console.log(`🔐 CLIENT_ID: ${clientId}`);
+        console.log(`🔐 CLIENT_SECRET: ${clientSecret.substring(0, 10)}...${clientSecret.substring(clientSecret.length - 5)}`);
       } else if (fs.existsSync(this.credentialsPath)) {
         // Fallback to credentials file
         console.log('✅ Using OAuth credentials from file');
@@ -360,6 +441,8 @@ class GoogleDriveOAuthService {
         const { client_id, client_secret } = credentials.web;
         clientId = client_id;
         clientSecret = client_secret;
+        console.log(`🔐 CLIENT_ID (from file): ${clientId}`);
+        console.log(`🔐 CLIENT_SECRET (from file): ${clientSecret?.substring(0, 10)}...`);
       } else {
         throw new Error('Google OAuth credentials not configured. Add OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to .env');
       }
@@ -371,11 +454,33 @@ class GoogleDriveOAuthService {
       );
 
       console.log(`🔍 Exchanging authorization code for access token...`);
+      console.log(`🔐 Redirect URI: ${redirectUri}`);
       const { tokens } = await auth.getToken(code);
       
-      // Store token for future use
-      fs.writeFileSync(this.tokenPath, JSON.stringify(tokens));
-      console.log(`💾 Saved token to: ${this.tokenPath}`);
+      // 💫 CRITICAL FIX: Ensure config directory exists before writing token
+      const tokenDir = path.dirname(this.tokenPath);
+      if (!fs.existsSync(tokenDir)) {
+        console.log(`📁 Creating config directory: ${tokenDir}`);
+        fs.mkdirSync(tokenDir, { recursive: true });
+      }
+      
+      // Store token for future use with error handling
+      try {
+        fs.writeFileSync(this.tokenPath, JSON.stringify(tokens, null, 2));
+        console.log(`💾 Saved token to: ${this.tokenPath}`);
+        
+        // Verify token was written
+        if (fs.existsSync(this.tokenPath)) {
+          const saved = JSON.parse(fs.readFileSync(this.tokenPath, 'utf8'));
+          console.log(`✅ Token verified: access_token=${saved.access_token?.substring(0, 20)}...`);
+        } else {
+          throw new Error('Token file not found after write');
+        }
+      } catch (writeError) {
+        console.error(`❌ Failed to save token: ${writeError.message}`);
+        // Don't fail - still authenticated in memory even if persistent storage failed
+        console.warn(`⚠️  Token not saved to disk but authentication succeeded`);
+      }
 
       this.auth = auth;
       auth.setCredentials(tokens);
@@ -386,6 +491,14 @@ class GoogleDriveOAuthService {
       return { success: true, authenticated: true };
     } catch (error) {
       console.error('❌ OAuth callback failed:', error.message);
+      if (error.message?.includes('invalid_client')) {
+        console.error('⚠️  ERROR: invalid_client - Check that:');
+        console.error('   1. Client ID matches Google Cloud Console');
+        console.error('   2. Client Secret matches Google Cloud Console');
+        console.error('   3. Redirect URI is registered in Google Cloud Console');
+        console.error(`   4. Expected redirect URI: http://localhost:5000/api/drive/auth-callback`);
+        console.error(`   5. Used client_id: ${clientId?.substring(0, 40)}...`);
+      }
       throw error;
     }
   }

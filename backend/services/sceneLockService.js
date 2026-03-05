@@ -201,113 +201,66 @@ export async function generateSceneLockImagesWithGoogleFlow({
   const flow = new GoogleFlowAutomationService({
     type: 'image',
     aspectRatio,
-    imageCount: targetCount,
-    model: 'Nano Banana Pro',
-    headless,
     outputDir
   });
 
-  const results = [];
-
   try {
-    console.log('\n[INIT] 🚀 Initializing Google Flow Automation Service...');
-    await flow.init();
+    console.log('\n[SCENE-LOCK] 🚀 Using unified generateImages() with built-in error recovery');
+    
+    // Use unified generateImages() method which supports:
+    // - Optional reference images (none in this case for scene locks)
+    // - Single or multiple prompts
+    // - Output count parameter
+    // - Full error recovery + retry mechanism (light + heavy retry)
+    const result = await flow.generateImages(
+      null,  // No reference images for scene lock generation
+      {
+        prompts: [prompt],
+        outputCount: targetCount
+      }
+    );
 
-    console.log('[NAV] 🔗 Navigating to Google Flow...');
-    await flow.navigateToFlow();
-
-    console.log('[PAGE] ⏳ Waiting for page to load...');
-    await flow.waitForPageReady();
-    await flow.page.waitForTimeout(3000);
-
-    console.log('[CONFIG] ⚙️  Configuring settings (single run, batch count)...');
-    await flow._delegateConfigureSettings();
-
-    if (flow.preGenerationMonitor) {
-      await flow.preGenerationMonitor.refreshBaseline();
+    if (!result.success || !result.downloadedFiles || result.downloadedFiles.length === 0) {
+      throw new Error(`Scene lock generation failed: ${result.error || 'No images generated'}`);
     }
 
-    console.log(`\n${'═'.repeat(80)}`);
-    console.log(`🎨 GENERATING ${targetCount} IMAGE(S) IN ONE SUBMIT`);
-    console.log(`${'═'.repeat(80)}\n`);
-
-    if (flow.promptManager) {
-      await flow.promptManager.enterPrompt(prompt);
-      await flow.page.waitForTimeout(5000);
-      const submitted = await flow.promptManager.submit();
-      if (!submitted) {
-        await flow.submit();
-      }
-    } else {
-      await flow.enterPrompt(prompt);
-      await flow.page.waitForTimeout(5000);
-      await flow.submit();
+    // 💫 Log if partial success
+    if (result.partialSuccesses && result.partialSuccesses.length > 0) {
+      console.log(`\n[SCENE-LOCK] ⚠️  PARTIAL SUCCESS: ${result.downloadedFiles.length}/${targetCount} images generated`);
+      result.partialSuccesses.forEach(p => {
+        console.log(`   - Prompt ${p.promptNumber}: ${p.found}/${p.expected} images`);
+      });
+      console.log(`[SCENE-LOCK] 💡 Can retry to get remaining images or proceed with ${result.downloadedFiles.length}/${targetCount}\n`);
     }
 
-    await flow.page.waitForTimeout(2000);
-
-    const timeoutSeconds = Math.max(120, targetCount * 90);
-    const timeoutMs = timeoutSeconds * 1000;
-    const startTime = Date.now();
-    let generatedHrefs = [];
-
-    while (Date.now() - startTime < timeoutMs) {
-      let analysis = null;
-
-      if (flow.preGenerationMonitor) {
-        analysis = await flow.preGenerationMonitor.findNewHref();
-      } else if (flow.generationMonitor) {
-        analysis = await flow.generationMonitor.monitorGeneration(20, targetCount);
-      }
-
-      const newHrefs = Array.isArray(analysis?.newHrefs)
-        ? analysis.newHrefs
-        : (analysis?.href ? [analysis.href] : []);
-
-      generatedHrefs = Array.from(new Set(newHrefs));
-
-      if (generatedHrefs.length >= targetCount) {
-        break;
-      }
-
-      await flow.page.waitForTimeout(2000);
-    }
-
-    if (generatedHrefs.length === 0) {
-      throw new Error(`No generated outputs found after ${timeoutSeconds}s`);
-    }
-
-    const hrefsToDownload = generatedHrefs.slice(0, targetCount);
-    console.log(`[DOWNLOAD] 📥 Found ${generatedHrefs.length} new href(s), downloading ${hrefsToDownload.length} item(s)...`);
-
-    for (let i = 0; i < hrefsToDownload.length; i++) {
-      const href = hrefsToDownload[i];
-      const downloadedFile = await flow._delegateDownloadItem(href);
-
-      if (!downloadedFile) {
-        throw new Error(`Failed to download generated image ${i + 1}`);
-      }
-
-      const fileExt = path.extname(downloadedFile) || '.png';
-      const renamedFileName = `scene-lock-${sceneValue}-${Date.now()}-${String(i + 1).padStart(2, '0')}${fileExt}`;
+    // Convert downloaded files to result format with proper naming
+    const results = result.downloadedFiles.map((filePath, idx) => {
+      const fileExt = path.extname(filePath) || '.png';
+      const fileName = path.basename(filePath, fileExt);
+      
+      // Rename with scene lock format
+      const renamedFileName = `scene-lock-${sceneValue}-${Date.now()}-${String(idx + 1).padStart(2, '0')}${fileExt}`;
       const renamedFilePath = path.join(outputDir, renamedFileName);
-
+      
       try {
-        if (downloadedFile !== renamedFilePath) {
-          fs.renameSync(downloadedFile, renamedFilePath);
+        if (filePath !== renamedFilePath) {
+          fs.renameSync(filePath, renamedFilePath);
         }
-        console.log(`[DOWNLOAD] ✅ Downloaded: ${renamedFileName}`);
-        results.push({ path: renamedFilePath, url: renamedFilePath });
+        return { path: renamedFilePath, url: renamedFilePath };
       } catch (renameErr) {
-        console.log(`[DOWNLOAD] ⚠️  Could not rename: ${renameErr.message}`);
-        results.push({ path: downloadedFile, url: downloadedFile });
+        console.warn(`[SCENE-LOCK] ⚠️  Could not rename: ${renameErr.message}`);
+        return { path: filePath, url: filePath };
       }
-    }
+    });
 
+    console.log(`\n[SCENE-LOCK] ✅ Successfully generated ${results.length}/${targetCount} images with error recovery\n`);
     return results;
+  } catch (error) {
+    console.error('[SCENE-LOCK] ❌ Generation error:', error.message);
+    throw error;
   } finally {
-    console.log('[CLOSE] 🚪 Closing browser...');
-    await flow.close();
-    console.log('[CLOSE] ✅ Browser closed\n');
+    // No need to manually close - generateImages() handles cleanup
+    console.log('[SCENE-LOCK] ✅ Complete\n');
   }
 }
+

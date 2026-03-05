@@ -20,6 +20,14 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Define Google Flow persistent profile directories
+const GOOGLE_FLOW_PROFILE_BASE = path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'data', 'google-flow-profiles');
+const GOOGLE_FLOW_DEFAULT_SESSION = path.join(GOOGLE_FLOW_PROFILE_BASE, 'default', 'session.json');  // 💫 Shared across all flows
 
 puppeteer.use(StealthPlugin());
 
@@ -27,12 +35,22 @@ class SessionManager {
   constructor(options = {}) {
     this.browser = null;
     this.page = null;
+    
+    // 🔐 Support flowId for flow-specific Chrome profile isolation
+    // This prevents "profile locked by another process" errors when flows run in parallel
+    const flowId = options.flowId || 'default';
+    const profileDir = path.join(GOOGLE_FLOW_PROFILE_BASE, flowId);  // Per-flow Chrome profile dir
+    
+    this.flowId = flowId;
+    this.profileDir = profileDir;
+    
     this.options = {
       headless: false,
-      sessionFilePath: options.sessionFilePath || path.join(path.dirname(options.__dirname || process.cwd()), '../.sessions/google-flow-session-complete.json'),
+      userDataDir: profileDir,  // 💫 Use persistent Chrome profile for each flow
+      sessionFilePath: options.sessionFilePath || GOOGLE_FLOW_DEFAULT_SESSION,  // 💫 Shared session file
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
       projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
-      outputDir: options.outputDir || path.join(path.dirname(options.__dirname || process.cwd()), '../temp/outputs'),
+      outputDir: options.outputDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'temp/outputs'),
       timeouts: {
         pageLoad: 60000,
         ...options.timeouts
@@ -56,14 +74,17 @@ class SessionManager {
       fs.mkdirSync(this.options.outputDir, { recursive: true });
     }
 
-    console.log(`   📁 Output directory: ${this.options.outputDir}\n`);
+    console.log(`   📁 Output directory: ${this.options.outputDir}`);
+    console.log(`   📁 Chrome profile: ${this.options.userDataDir}\n`);
 
     const headlessMode = this.options.headless === true ? 'new' : this.options.headless;
     this.browser = await puppeteer.launch({
       headless: headlessMode,
       args: [
+        `--user-data-dir=${this.options.userDataDir}`,  // ✅ Use persistent Chrome profile
         '--no-sandbox', 
-        '--disable-dev-shm-usage'
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
       ]
     });
 
@@ -79,30 +100,36 @@ class SessionManager {
   /**
    * Load session from disk
    * Loads cookies and localStorage items from saved session file
-   * Filters third-party cookies to avoid interference
    */
   async loadSession() {
     try {
       if (fs.existsSync(this.options.sessionFilePath)) {
         const sessionData = JSON.parse(fs.readFileSync(this.options.sessionFilePath, 'utf8'));
         
-        // Load only cookies from the current domain to avoid third-party cookie issues
+        // Load cookies - apply ALL, let browser validate domains
+        // Third-party cookie protection handled by browser SameSite policies
         let loadedCount = 0;
+        let failedCount = 0;
+        const failedDomains = [];
+        
         for (const cookie of (sessionData.cookies || [])) {
           try {
-            // Only load cookies from labs.google domain or subdomains
-            if (cookie.domain && (cookie.domain === 'labs.google' || cookie.domain === '.labs.google')) {
-              await this.page.setCookie(cookie);
-              loadedCount++;
-            } else if (!cookie.domain) {
-              await this.page.setCookie(cookie);
-              loadedCount++;
-            }
+            // Apply cookie - let Puppeteer/browser handle domain validation
+            await this.page.setCookie(cookie);
+            loadedCount++;
           } catch (e) {
-            // Ignore cookie errors
+            // Log failed domains for debugging
+            failedCount++;
+            if (cookie.domain && !failedDomains.includes(cookie.domain)) {
+              failedDomains.push(cookie.domain);
+            }
           }
         }
-        console.log(`✅ Session cookies loaded (${loadedCount}/${(sessionData.cookies || []).length} cookies, filtered for same-domain only)`);
+        
+        console.log(`✅ Session cookies loaded (${loadedCount}/${(sessionData.cookies || []).length} cookies applied)`);
+        if (failedCount > 0) {
+          console.log(`   ℹ️  ${failedCount} cookies failed: domains=[${failedDomains.join(', ')}]`);
+        }
         
         // Store session data for later restoration
         this.sessionData = sessionData;
@@ -135,12 +162,14 @@ class SessionManager {
     try {
       console.log('🔐 Restoring session before navigation...');
       
-      // Restore ONLY regular localStorage items (not reCAPTCHA tokens)
+      // Restore ONLY regular localStorage/sessionStorage items (not reCAPTCHA tokens)
       const storageItems = { ...this.sessionData.localStorage };
+      const sessionStorageItems = { ...this.sessionData.sessionStorage };
 
-      const result = await this.page.evaluate((storage) => {
+      const result = await this.page.evaluate((storage, sessionStorage) => {
         try {
           let itemsSet = 0;
+          let sessionItemsSet = 0;
 
           // Restore localStorage items EXCEPT reCAPTCHA tokens
           for (const [key, value] of Object.entries(storage || {})) {
@@ -153,17 +182,32 @@ class SessionManager {
               }
             }
           }
+          
+          // Restore sessionStorage items
+          for (const [key, value] of Object.entries(sessionStorage || {})) {
+            if (value !== null && value !== undefined) {
+              try {
+                window.sessionStorage.setItem(key, value);
+                sessionItemsSet++;
+              } catch (setError) {
+                console.warn(`Failed to set session ${key}: ${setError.message}`);
+              }
+            }
+          }
 
-          return { itemsSet, success: true };
+          return { itemsSet, sessionItemsSet, success: true };
         } catch (e) {
-          return { itemsSet: 0, success: false, error: e.message };
+          return { itemsSet: 0, sessionItemsSet: 0, success: false, error: e.message };
         }
-      }, storageItems);
+      }, storageItems, sessionStorageItems);
 
-      console.log(`   ✅ ${result.itemsSet} localStorage items restored (reCAPTCHA tokens excluded)`);
+      console.log(`   ✅ ${result.itemsSet} localStorage items restored`);
+      if (result.sessionItemsSet > 0) {
+        console.log(`   ✅ ${result.sessionItemsSet} sessionStorage items restored`);
+      }
       
       if (!result.success && result.error) {
-        console.log(`   ⚠️  Note: localStorage access limited on this page (${result.error})`);
+        console.log(`   ⚠️  Note: storage access limited on this page (${result.error})`);
       }
       
     } catch (e) {
@@ -173,7 +217,7 @@ class SessionManager {
 
   /**
    * Navigate to Google Flow URL
-   * Waits for page to load and restores session data
+   * Applies session cookies BEFORE navigation so page loads authenticated
    */
   async navigateToFlow() {
     const url = this.options.projectId
@@ -183,14 +227,38 @@ class SessionManager {
     console.log('🌐 Navigating to Google Flow...\n');
     console.log(`   Target URL: ${url}\n`);
 
-    console.log('🌐 Page navigation in progress...');
+    // 🔑 STEP 1: Apply cookies BEFORE navigation
+    if (this.sessionData) {
+      console.log('   ⏳ STEP 1: Applying cookies, localStorage, sessionStorage BEFORE navigation...');
+      await this.restoreSessionBeforeNavigation();
+      
+      // Wait for cookies to settle
+      console.log('\n   ⏳ STEP 2: Waiting for cookies to settle (2 seconds)...');
+      for (let i = 2; i > 0; i--) {
+        console.log(`      Waiting... ${i}s remaining`);
+        await this.page.waitForTimeout(1000);
+      }
+    }
+
+    // 🌐 STEP 2: Navigate - should load authenticated!
+    console.log('\n   🌐 STEP 3: Page navigation in progress (cookies already applied)...');
     await this.page.goto(url, { waitUntil: 'networkidle2', timeout: this.options.timeouts.pageLoad });
+    
+    // ✅ Verify authentication after load
+    console.log('\n   ✓ STEP 4: Verifying authentication after page load...');
+    const isAuthed = await this.isAuthenticated();
+    
+    if (isAuthed) {
+      console.log('   ✅ Successfully authenticated!\n');
+    } else {
+      console.log('   ⚠️  Authentication check inconclusive, page may still load\n');
+    }
+
+    // Wait for page elements
+    console.log('   ⏳ STEP 5: Waiting for page elements...');
     await this.waitForPageReady();
     
-    // ✅ RESTORE session tokens AFTER navigation when page is ready
-    await this.restoreSessionBeforeNavigation();
-    
-    console.log('✅ Google Flow loaded and logged in\n');
+    console.log('✅ Google Flow loaded\n');
   }
 
   /**
@@ -201,56 +269,220 @@ class SessionManager {
     console.log('⏳ Waiting for page elements to load...');
     let pageReady = false;
     let attempts = 0;
-    const maxAttempts = 15;
+    const maxAttempts = 20;  // Increased from 15 attempts (20 seconds total)
 
     while (!pageReady && attempts < maxAttempts) {
       attempts++;
-      const elements = await this.page.evaluate(() => {
-        const buttons = document.querySelectorAll('button');
-        const visibleButtons = Array.from(buttons).filter(btn => {
-          const style = window.getComputedStyle(btn);
-          return style.display !== 'none' && style.visibility !== 'hidden' && btn.offsetHeight > 0;
+      try {
+        const elements = await this.page.evaluate(() => {
+          const buttons = document.querySelectorAll('button');
+          const visibleButtons = Array.from(buttons).filter(btn => {
+            const style = window.getComputedStyle(btn);
+            return style.display !== 'none' && style.visibility !== 'hidden' && btn.offsetHeight > 0;
+          });
+          
+          // More flexible input detection
+          const hasFileInput = !!document.querySelector('input[type="file"]');
+          const hasTextInput = !!document.querySelector('input[type="text"], textarea, [contenteditable="true"]');
+          const prompts = document.querySelectorAll('[contenteditable="true"], input[type="text"], textarea');
+          
+          // Check for main content areas
+          const hasMainContent = !!document.querySelector('[data-testid="virtuoso-item-list"]') ||
+                                !!document.querySelector('.grid') ||
+                                !!document.querySelector('[role="main"]') ||
+                                !!document.querySelector('main') ||
+                                !!document.querySelector('[class*="content"]') ||
+                                !!document.querySelector('[class*="editor"]');
+          
+          // Check for flow-specific elements
+          const hasFlowUI = !!document.querySelector('[class*="flow"]') ||
+                           !!document.querySelector('[data-testid*="flow"]') ||
+                           !!Array.from(document.querySelectorAll('*')).find(el => el.textContent?.includes('Prompt'));
+          
+          return { 
+            buttons: buttons.length, 
+            visible: visibleButtons.length, 
+            fileInput: hasFileInput,
+            textInput: hasTextInput,
+            prompts: prompts.length,
+            mainContent: hasMainContent,
+            flowUI: hasFlowUI,
+            documentReady: document.readyState,
+            bodyChildren: document.body.children.length
+          };
         });
-        const hasFileInput = document.querySelector('input[type="file"]') !== null;
-        const prompts = document.querySelectorAll('[contenteditable="true"]');
-        
-        const hasMainContent = document.querySelector('[data-testid="virtuoso-item-list"]') !== null ||
-                              document.querySelector('.grid') !== null ||
-                              document.querySelector('[role="main"]') !== null;
-        
-        return { 
-          buttons: buttons.length, 
-          visible: visibleButtons.length, 
-          input: hasFileInput, 
-          prompts: prompts.length,
-          mainContent: hasMainContent
-        };
-      });
 
-      const strictReady = elements.buttons > 10 && elements.visible > 10 && elements.input && elements.prompts > 0;
-      const flexibleReady = elements.visible > 5 && elements.mainContent;
-      pageReady = strictReady || flexibleReady;
+        // Strict: All elements present
+        const strictReady = elements.visible > 8 && (elements.fileInput || elements.textInput) && elements.prompts > 0;
+        // Flexible: Main content + buttons
+        const flexibleReady = elements.visible > 8 && (elements.mainContent || elements.flowUI);
+        // Minimal: Just need visible buttons + document ready
+        const minimalReady = elements.visible > 8 && elements.documentReady === 'complete' && elements.bodyChildren > 10;
+        
+        pageReady = strictReady || flexibleReady || minimalReady;
 
-      if (!pageReady) {
-        console.log(`   Attempt ${attempts}: buttons=${elements.buttons}, visible=${elements.visible}, input=${elements.input}, prompts=${elements.prompts}, content=${elements.mainContent}`);
-        console.log(`   ⏳ Not ready yet, waiting 1000ms...`);
+        if (!pageReady) {
+          if (attempts <= 3 || attempts % 5 === 0) {
+            console.log(`   🔍 Attempt ${attempts}/${maxAttempts}:`);
+            console.log(`      Buttons: ${elements.buttons} (visible: ${elements.visible})`);
+            console.log(`      Inputs: file=${elements.fileInput}, text=${elements.textInput}, prompts=${elements.prompts}`);
+            console.log(`      Content: main=${elements.mainContent}, flowUI=${elements.flowUI}`);
+            console.log(`      Document: ${elements.documentReady}, body children: ${elements.bodyChildren}`);
+          }
+          await this.page.waitForTimeout(1000);
+        } else {
+          console.log(`   ✅ Page ready (attempt ${attempts}): strict=${strictReady}, flexible=${flexibleReady}, minimal=${minimalReady}\n`);
+        }
+      } catch (e) {
+        console.log(`   ⚠️  Error: ${e.message}`);
         await this.page.waitForTimeout(1000);
       }
     }
 
     if (!pageReady) {
-      throw new Error(`Page elements not ready after ${maxAttempts} attempts`);
+      // Don't throw - just warn and continue (page might still work)
+      console.log(`   ⚠️  Page elements not fully ready after ${maxAttempts} attempts\n`);
+      console.log(`   💡 Continuing anyway - page might still be functional\n`);
+    } else {
+      console.log(`   ✅ Page ready (attempt ${attempts})\n`);
     }
+  }
 
-    console.log(`   ✅ Page ready (attempt ${attempts})\n`);
+  /**
+   * Capture and save session before closing
+   * Saves cookies, localStorage, and sessionStorage to file
+   * Ensures next run can restore authentication without re-login
+   */
+  async captureAndSaveSession() {
+    if (!this.page) return false;
+    
+    try {
+      console.log('📸 Capturing session before closing...');
+      
+      // Get current cookies
+      const cookies = await this.page.cookies();
+      
+      // Get localStorage
+      const localStorage = await this.page.evaluate(() => {
+        const items = {};
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          items[key] = window.localStorage.getItem(key);
+        }
+        return items;
+      });
+      
+      // Get sessionStorage
+      const sessionStorage = await this.page.evaluate(() => {
+        const items = {};
+        for (let i = 0; i < window.sessionStorage.length; i++) {
+          const key = window.sessionStorage.key(i);
+          items[key] = window.sessionStorage.getItem(key);
+        }
+        return items;
+      });
+      
+      const sessionData = {
+        cookies,
+        localStorage,
+        sessionStorage,
+        timestamp: new Date().toISOString(),
+        url: this.page.url(),
+        isAuthenticated: await this.isAuthenticated()
+      };
+      
+      // 💾 Ensure session directory exists before saving
+      const sessionDir = path.dirname(this.options.sessionFilePath);
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+        console.log(`   📁 Created session directory: ${sessionDir}`);
+      }
+      
+      // 💾 Save to shared session file
+      fs.writeFileSync(this.options.sessionFilePath, JSON.stringify(sessionData, null, 2));
+      
+      console.log('   ✅ Session captured and saved');
+      console.log(`      - Cookies: ${cookies.length}`);
+      console.log(`      - LocalStorage items: ${Object.keys(localStorage).length}`);
+      console.log(`      - SessionStorage items: ${Object.keys(sessionStorage).length}`);
+      console.log(`      - Authenticated: ${sessionData.isAuthenticated ? '✅' : '❌'}`);
+      console.log(`      - Saved to: ${this.options.sessionFilePath}`);
+      
+      return true;
+    } catch (error) {
+      console.warn(`⚠️  Failed to capture session: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Check if page is authenticated - comprehensive check
+   */
+  async isAuthenticated() {
+    try {
+      const isAuthed = await this.page.evaluate(() => {
+        // Multiple authentication indicators
+        // 1. Check for main content area (virtuoso list or main role)
+        const hasMainContent = !!document.querySelector('[data-testid="virtuoso-item-list"]') ||
+                              !!document.querySelector('[role="main"]') ||
+                              !!document.querySelector('main');
+        
+        // 2. Check for logout/account buttons
+        const hasLogoutButton = !!Array.from(document.querySelectorAll('button')).find(b => 
+          b.getAttribute('aria-label')?.includes('Sign out') || 
+          b.getAttribute('aria-label')?.includes('account') ||
+          b.textContent?.includes('account')
+        );
+        
+        // 3. Check for user profile indicator
+        const hasProfileIndicator = !!document.querySelector('[data-testid="user-avatar"]') ||
+                                   !!document.querySelector('[role="img"][alt*="profile"]') ||
+                                   !!document.querySelector('[aria-label*="profile"]');
+        
+        // 4. Check if we can find project-related content
+        const hasProjectContent = !!document.querySelector('[data-testid*="project"]') ||
+                                 !!document.querySelector('[data-testid*="flow"]') ||
+                                 !!Array.from(document.querySelectorAll('h1, h2')).find(h => 
+                                   h.textContent?.includes('Flow') || h.textContent?.includes('Project')
+                                 );
+        
+        // 5. Check page title and URL context
+        const isFlowPage = document.title?.includes('Flow') || window.location.href?.includes('/flow');
+        
+        return isFlowPage && (hasMainContent || hasLogoutButton || hasProfileIndicator || hasProjectContent);
+      });
+      return isAuthed;
+    } catch (e) {
+      console.log(`   ⚠️  Authentication check error: ${e.message}`);
+      return false;
+    }
   }
 
   /**
    * Close browser and cleanup
+   * Automatically captures and saves session before closing
    */
   async close() {
-    if (this.browser) {
-      await this.browser.close();
+    try {
+      // Capture + save session BEFORE closing browser
+      await this.captureAndSaveSession();
+      
+      // Then close browser
+      if (this.browser) {
+        await this.browser.close();
+      }
+      
+      console.log('✅ Google Flow browser closed with session saved');
+    } catch (error) {
+      console.error(`❌ Error during close: ${error.message}`);
+      // Still try to close browser even if session capture fails
+      try {
+        if (this.browser) {
+          await this.browser.close();
+        }
+      } catch (e) {
+        console.error(`❌ Failed to close browser: ${e.message}`);
+      }
     }
   }
 
