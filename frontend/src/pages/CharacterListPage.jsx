@@ -1,0 +1,223 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { characterAPI } from '../services/api';
+import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
+
+export default function CharacterListPage() {
+  const navigate = useNavigate();
+  const [characters, setCharacters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    loadCharacters();
+  }, []);
+
+  const loadCharacters = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await characterAPI.list();
+      setCharacters(response?.data || []);
+    } catch (err) {
+      console.error('Error loading characters:', err);
+      setError(err.message || 'Failed to load characters');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      setDeleting(true);
+      await characterAPI.delete(id);
+      setDeleteConfirm(null);
+      await loadCharacters();
+    } catch (err) {
+      console.error('Error deleting character:', err);
+      setError(err.message || 'Failed to delete character');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#050609] text-white">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-[#0a0e18] border-b border-slate-700 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Characters</h1>
+              <p className="text-slate-400 text-sm mt-1">Manage your character profiles and reference images</p>
+            </div>
+            <button
+              onClick={() => navigate('/characters/create')}
+              className="bg-emerald-600 hover:bg-emerald-700 rounded-lg px-6 py-3 font-medium inline-flex items-center gap-2 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Create Character
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-4 mb-6 flex items-gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-400 font-medium">Error</p>
+              <p className="text-red-300/80 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
+              <span className="text-slate-400">Loading characters...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && characters.length === 0 && (
+          <div className="text-center py-16">
+            <div className="bg-slate-900/30 border border-slate-700/50 rounded-lg p-8 inline-block">
+              <p className="text-slate-400 text-lg mb-4">No characters yet</p>
+              <button
+                onClick={() => navigate('/characters/create')}
+                className="bg-emerald-600 hover:bg-emerald-700 rounded px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Create your first character
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Characters Grid */}
+        {!loading && characters.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {characters.map((character) => (
+              <div
+                key={character._id}
+                className="bg-[#0a0e18] border border-slate-700 rounded-xl overflow-hidden hover:border-emerald-500/50 transition-all group"
+              >
+                {/* Character Portrait */}
+                <div className="relative h-48 overflow-hidden bg-slate-900">
+                  {character.portraitUrl ? (
+                    <img
+                      src={character.portraitUrl}
+                      alt={character.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                      <span className="text-slate-500">No image</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Character Info */}
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold mb-1">{character.name}</h3>
+                  <p className="text-sm text-slate-400 mb-2">@{character.alias}</p>
+
+                  {/* Reference Images Count */}
+                  {character.referenceImages && character.referenceImages.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-slate-500 mb-2">
+                        {character.referenceImages.length} reference images
+                      </p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {character.referenceImages.slice(0, 4).map((img, idx) => (
+                          <div key={idx} className="h-12 rounded overflow-hidden bg-slate-800">
+                            {img.url ? (
+                              <img
+                                src={img.url}
+                                alt={`Ref ${idx + 1}`}
+                                className="w-full h-full object-cover hover:scale-110 transition-transform cursor-pointer"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-slate-700" />
+                            )}
+                          </div>
+                        ))}
+                        {character.referenceImages.length > 4 && (
+                          <div className="h-12 rounded bg-slate-700 flex items-center justify-center text-xs text-slate-400">
+                            +{character.referenceImages.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Meta Info */}
+                  <div className="text-xs text-slate-500 mb-4 space-y-1">
+                    <p>Created: {new Date(character.createdAt).toLocaleDateString()}</p>
+                    {character.updatedAt && (
+                      <p>Updated: {new Date(character.updatedAt).toLocaleDateString()}</p>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/characters/${character._id}`)}
+                      className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 text-blue-400 hover:text-blue-300 rounded px-3 py-2 text-sm font-medium transition-colors inline-flex items-center justify-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(character._id)}
+                      className="flex-1 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 hover:text-red-300 rounded px-3 py-2 text-sm font-medium transition-colors inline-flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#0a0e18] border border-red-600/50 rounded-lg p-6 max-w-sm">
+            <h3 className="text-lg font-semibold mb-2">Delete Character?</h3>
+            <p className="text-slate-400 text-sm mb-6">
+              This action cannot be undone. All associated data will be permanently deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 rounded px-4 py-2 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-800 rounded px-4 py-2 font-medium transition-colors"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
