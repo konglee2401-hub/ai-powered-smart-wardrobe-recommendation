@@ -53,6 +53,20 @@ function buildCharacterPrompts(name, alias, options = {}, imageCount = 6) {
   });
 }
 
+function getShotDescription(idx) {
+  const shots = [
+    'Portrait Close-up',
+    '3/4 Angle',
+    'Waist-up',
+    'Full Body Front',
+    'Full Body Side',
+    'Full Body Back',
+    'Profile Shot',
+    'Walking Candid'
+  ];
+  return shots[idx % shots.length];
+}
+
 export async function generateCharacterPreview(req, res) {
   let portraitPath = null;
   try {
@@ -91,7 +105,8 @@ export async function generateCharacterPreview(req, res) {
           url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
           path: r.downloadedFile,
           filename,
-          angle: `shot-${idx + 1}`,
+          angle: getShotDescription(idx),
+          description: getShotDescription(idx),
           prompt: r.prompt,
           seed: r.seed || generationSeed
         };
@@ -208,11 +223,16 @@ export async function saveCharacterProfile(req, res) {
             const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
             const outPath = path.join(characterDir, outName);
             fs.copyFileSync(srcPath, outPath);
+            
+            const description = img.description || img.angle || `shot-${idx + 1}`;
+            const type = description.toLowerCase().includes('full') ? 'full-body' : 'portrait';
+            
             savedRefs.push({
               url: `http://localhost:5000/uploads/characters/${outName}`,
               path: outPath,
-              angle: img.angle || `shot-${idx + 1}`,
-              type: idx < 2 ? 'portrait' : 'full-body',
+              angle: description,
+              description: description,
+              type: type,
               prompt: img.prompt || '',
               seed: img.seed
             });
@@ -246,11 +266,16 @@ export async function saveCharacterProfile(req, res) {
         const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
         const outPath = path.join(characterDir, outName);
         fs.copyFileSync(srcPath, outPath);
+        
+        const description = img.description || img.angle || `shot-${idx + 1}`;
+        const type = description.toLowerCase().includes('full') ? 'full-body' : 'portrait';
+        
         savedRefs.push({
           url: `http://localhost:5000/uploads/characters/${outName}`,
           path: outPath,
-          angle: img.angle || `shot-${idx + 1}`,
-          type: idx < 2 ? 'portrait' : 'full-body',
+          angle: description,
+          description: description,
+          type: type,
           prompt: img.prompt || '',
           seed: img.seed
         });

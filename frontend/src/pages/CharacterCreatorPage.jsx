@@ -253,9 +253,11 @@ export default function CharacterCreatorPage() {
               <div 
                 key={idx} 
                 className="cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-emerald-500 transition-all group"
-                onClick={() => setFullSizeImage(img.url)}
               >
-                <div className="relative h-64 overflow-hidden bg-slate-900 flex items-center justify-center">
+                <div 
+                  className="relative h-64 overflow-hidden bg-slate-900 flex items-center justify-center"
+                  onClick={() => setFullSizeImage(img.url)}
+                >
                   <img 
                     src={img.url} 
                     alt={`Preview ${idx + 1}`} 
@@ -264,6 +266,16 @@ export default function CharacterCreatorPage() {
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <span className="text-white text-sm font-medium">Click for full size</span>
                   </div>
+                </div>
+                
+                {/* Image description and angle */}
+                <div className="bg-[#0a0e18] p-2 border-t border-slate-700">
+                  <p className="text-xs font-medium text-emerald-400 mb-1">
+                    {img.description || img.angle || `Image ${idx + 1}`}
+                  </p>
+                  {img.prompt && (
+                    <p className="text-xs text-slate-400 line-clamp-2">{img.prompt.substring(0, 80)}...</p>
+                  )}
                 </div>
               </div>
             ))}

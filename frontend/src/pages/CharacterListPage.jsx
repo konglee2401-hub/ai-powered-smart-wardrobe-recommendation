@@ -138,20 +138,28 @@ export default function CharacterListPage() {
                       </p>
                       <div className="grid grid-cols-4 gap-2">
                         {character.referenceImages.slice(0, 4).map((img, idx) => (
-                          <div key={idx} className="h-20 rounded overflow-hidden bg-slate-800 flex items-center justify-center">
-                            {img.url ? (
-                              <img
-                                src={img.url}
-                                alt={`Ref ${idx + 1}`}
-                                className="w-full h-full object-contain hover:scale-110 transition-transform cursor-pointer"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-slate-700" />
+                          <div key={idx} className="group relative">
+                            <div className="h-20 rounded overflow-hidden bg-slate-800 flex items-center justify-center border border-slate-700 group-hover:border-emerald-500/50 transition-colors">
+                              {img.url ? (
+                                <img
+                                  src={img.url}
+                                  alt={`Ref ${idx + 1}`}
+                                  className="w-full h-full object-contain hover:scale-110 transition-transform cursor-pointer"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-slate-700" />
+                              )}
+                            </div>
+                            {/* Tooltip showing angle/description */}
+                            {img.angle || img.description && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-slate-600 z-10">
+                                {img.description || img.angle}
+                              </div>
                             )}
                           </div>
                         ))}
                         {character.referenceImages.length > 4 && (
-                          <div className="h-12 rounded bg-slate-700 flex items-center justify-center text-xs text-slate-400">
+                          <div className="h-20 rounded bg-slate-700 flex items-center justify-center text-xs text-slate-400 border border-slate-700">
                             +{character.referenceImages.length - 4}
                           </div>
                         )}
