@@ -124,16 +124,28 @@ class GoogleDriveOAuthService {
             auth.setCredentials(newCredentials);
             console.log('✅ Token refreshed');
           } catch (refreshError) {
-            // If refresh fails (e.g., deleted_client), return as not authenticated
-            // User can re-authenticate via UI
+            // If refresh fails (e.g., deleted_client), remove the invalid token
             console.warn('⚠️ Token refresh failed:', refreshError.message);
+            
+            // Backup the invalid token
+            const backupPath = this.tokenPath.replace('.json', '.backup.json');
+            try {
+              fs.copyFileSync(this.tokenPath, backupPath);
+              fs.unlinkSync(this.tokenPath);
+              console.warn(`💾 Backed up invalid token to: ${backupPath}`);
+              console.warn(`🗑️  Removed invalid token: ${this.tokenPath}`);
+            } catch (backupError) {
+              console.warn(`⚠️  Could not backup token: ${backupError.message}`);
+            }
+            
             console.warn('⚠️ Please re-authenticate Google Drive via the UI to proceed with uploads');
             return {
               success: false,
               authenticated: false,
               configured: false,
               reason: 'Invalid or expired credentials',
-              message: 'Google Drive credentials need to be refreshed. Please re-authenticate.'
+              message: 'Google Drive credentials need to be refreshed. Please re-authenticate.',
+              authUrl: '/api/drive/auth'
             };
           }
         }
@@ -238,6 +250,37 @@ class GoogleDriveOAuthService {
       };
     } catch (error) {
       console.error('❌ OAuth file authentication failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a fresh authorization URL (clears any existing invalid token)
+   */
+  getNewAuthUrl() {
+    try {
+      // Clear any existing token to force fresh auth
+      if (fs.existsSync(this.tokenPath)) {
+        const backupPath = this.tokenPath.replace('.json', '.backup.json');
+        try {
+          fs.copyFileSync(this.tokenPath, backupPath);
+          fs.unlinkSync(this.tokenPath);
+          console.log(`🗑️  Cleared invalid token for fresh authentication`);
+        } catch (error) {
+          console.warn(`⚠️  Could not clear token: ${error.message}`);
+        }
+      }
+
+      const redirectUri = 'http://localhost:5000/api/drive/auth-callback';
+      const auth = new google.auth.OAuth2(
+        this.oauthClientId,
+        this.oauthClientSecret,
+        redirectUri
+      );
+
+      return this.getAuthorizationUrl(auth);
+    } catch (error) {
+      console.error('❌ Failed to generate new auth URL:', error.message);
       throw error;
     }
   }

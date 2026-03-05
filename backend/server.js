@@ -230,12 +230,18 @@ try {
   if (result.authenticated) {
     console.log('✅ Google Drive authenticated (token cached)');
   } else {
-    console.warn('⚠️ Google Drive not authenticated:', result.message || 'Token not available');
-    console.warn('⚠️ Please authenticate via: POST /api/drive/auth');
+    if (result.authUrl && result.authUrl !== '#') {
+      console.warn('⚠️ Google Drive needs authentication');
+      console.warn(`   📍 Visit: ${result.authUrl}`);
+    } else {
+      console.warn('⚠️ Google Drive not authenticated:', result.message || 'Token not available');
+    }
+    console.warn(`   📍 Or authenticate via: POST /api/drive/auth in the UI`);
   }
 } catch (error) {
   console.warn('⚠️ Google Drive pre-authentication failed:', error.message);
-  console.warn('⚠️ Please authenticate via: POST /api/drive/auth-callback');
+  console.warn('⚠️ Drive uploads will be unavailable until re-authenticated');
+  console.warn('⚠️ Visit the UI to authenticate: POST /api/drive/auth');
   // Continue anyway - will authenticate on first upload
 }
 

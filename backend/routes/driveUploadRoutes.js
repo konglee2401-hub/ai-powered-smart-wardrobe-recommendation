@@ -47,7 +47,31 @@ router.get('/auth', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Authentication failed',
+      message: 'Authentication check failed',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/drive/auth/refresh
+ * Force refresh authentication (clear old token and generate new auth URL)
+ */
+router.post('/auth/refresh', async (req, res) => {
+  try {
+    console.log('🔄 Forcing Google Drive re-authentication...');
+    const result = await driveService.getNewAuthUrl();
+    
+    res.json({
+      success: true,
+      message: 'New authentication URL generated',
+      authUrl: result.authUrl,
+      notice: 'Please visit the URL above to re-authenticate Google Drive'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate auth URL',
       error: error.message,
     });
   }
