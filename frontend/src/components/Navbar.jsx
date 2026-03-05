@@ -1,408 +1,191 @@
-/**
- * Navigation Bar Component - Responsive with Mobile Menu + Language Switcher
- */
-
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Sparkles, Clock, BarChart3, Zap, FileText, LayoutDashboard, Layers, Image, TrendingUp, Settings, Gauge,
-  Menu, X, ChevronDown, Video, Film, BookOpen, Volume2, Globe
+  Sparkles,
+  Clock,
+  BarChart3,
+  Zap,
+  FileText,
+  LayoutDashboard,
+  Layers,
+  Image,
+  TrendingUp,
+  Settings,
+  Gauge,
+  Menu,
+  X,
+  Video,
+  Film,
+  BookOpen,
+  Volume2,
+  Globe,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
+
+const baseLinkClass =
+  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors border border-transparent';
 
 export default function Navbar() {
   const location = useLocation();
   const { t, i18n } = useTranslation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [expandedMenu, setExpandedMenu] = useState(null);
-  const [activeDesktopMenu, setActiveDesktopMenu] = useState(null);
-
-  const handleDesktopMenuEnter = (menuKey) => setActiveDesktopMenu(menuKey);
-  const handleDesktopMenuLeave = () => setActiveDesktopMenu(null);
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
 
   const toggleLanguage = () => {
-    const newLang = currentLang === 'vi' ? 'en' : 'vi';
-    i18n.changeLanguage(newLang);
+    i18n.changeLanguage(currentLang === 'vi' ? 'en' : 'vi');
   };
 
-  // Primary navigation items (always visible)
-  const primaryNavItems = [
-    { 
-      label: t('navbar.generate'), 
-      icon: Sparkles, 
-      category: 'main',
-      submenu: [
-        { path: '/', label: t('navbar.image'), icon: Image },
-        { path: '/video-generation', label: t('navbar.video'), icon: Video },
-        { path: '/voice-over', label: t('navbar.voiceover'), icon: Volume2 },
-        { path: '/generate/one-click', label: t('navbar.oneClick'), icon: Sparkles },
-      ]
-    },
-    { path: '/video-production', label: t('navbar.videoProduction'), icon: Film, category: 'main' },
-  ];
+  const navGroups = useMemo(
+    () => [
+      {
+        title: t('navbar.generate'),
+        items: [
+          { path: '/', label: t('navbar.image'), icon: Image },
+          { path: '/video-generation', label: t('navbar.video'), icon: Video },
+          { path: '/voice-over', label: t('navbar.voiceover'), icon: Volume2 },
+          { path: '/generate/one-click', label: t('navbar.oneClick'), icon: Sparkles },
+          { path: '/video-production', label: t('navbar.videoProduction'), icon: Film },
+        ],
+      },
+      {
+        title: t('navbar.media'),
+        items: [
+          { path: '/gallery', label: t('navbar.gallery'), icon: Image },
+          { path: '/history', label: t('navbar.history'), icon: Clock },
+          { path: '/batch', label: t('navbar.batchProcessing'), icon: Layers },
+        ],
+      },
+      {
+        title: t('navbar.analytics'),
+        items: [
+          { path: '/dashboard', label: t('navbar.dashboard'), icon: LayoutDashboard },
+          { path: '/stats', label: t('navbar.statistics'), icon: BarChart3 },
+          { path: '/analytics', label: t('navbar.analytics'), icon: TrendingUp },
+        ],
+      },
+      {
+        title: t('navbar.tools'),
+        items: [
+          { path: '/prompt-builder', label: t('navbar.promptBuilder'), icon: FileText },
+          { path: '/prompt-templates', label: t('navbar.promptTemplates'), icon: BookOpen },
+          { path: '/video-script-generator', label: t('navbar.videoScriptGenerator'), icon: Film },
+          { path: '/tester', label: t('navbar.providerTester'), icon: Zap },
+          { path: '/performance', label: t('navbar.performance'), icon: Gauge },
+          { path: '/shorts-reels/dashboard', label: 'Shorts/Reels', icon: TrendingUp },
+        ],
+      },
+      {
+        title: t('navbar.settings'),
+        items: [
+          { path: '/options', label: t('navbar.options'), icon: Settings },
+          { path: '/customization', label: t('navbar.customization'), icon: Settings },
+          { path: '/setup-authentication', label: t('navbar.setupAuthentication'), icon: Settings },
+          { path: '/admin/providers', label: t('navbar.aiProviders'), icon: Sparkles },
+        ],
+      },
+    ],
+    [t],
+  );
 
-  // Media Management
-  const mediaNavItems = [
-    { path: '/gallery', label: t('navbar.gallery'), icon: Image, category: 'main' },
-    { path: '/history', label: t('navbar.history'), icon: Clock, category: 'main' },
-    { path: '/batch', label: t('navbar.batchProcessing'), icon: Layers },
-  ];
-
-  // Dashboard & Analytics
-  const analyticsNavItems = [
-    { path: '/dashboard', label: t('navbar.dashboard'), icon: LayoutDashboard, category: 'main' },
-    { path: '/asset-management', label: '🔧 Asset Manager', icon: BarChart3 },
-    { path: '/stats', label: t('navbar.statistics'), icon: BarChart3 },
-    { path: '/analytics', label: t('navbar.analytics'), icon: TrendingUp },
-  ];
-
-  // Advanced Tools
-  const advancedToolsNavItems = [
-    { path: '/prompt-builder', label: t('navbar.promptBuilder'), icon: FileText },
-    { path: '/prompt-templates', label: t('navbar.promptTemplates'), icon: BookOpen },
-    { path: '/video-script-generator', label: t('navbar.videoScriptGenerator'), icon: Film },
-    { path: '/tester', label: t('navbar.providerTester'), icon: Zap },
-    { path: '/performance', label: t('navbar.performance'), icon: Gauge },
-    { path: '/shorts-reels/dashboard', label: 'Shorts/Reels', icon: TrendingUp },
-  ];
-
-  // Settings items
-  const settingsItems = [
-     { path: '/options', label: t('navbar.options'), icon: Settings },
-    { path: '/customization', label: t('navbar.customization'), icon: Settings },
-    { path: '/setup-authentication', label: t('navbar.setupAuthentication'), icon: Settings },
-    { href: '/admin/providers', label: t('navbar.aiProviders'), icon: Sparkles, external: true },
-  ];
-
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-    setExpandedMenu(null);
-  };
-
-  const toggleExpandedMenu = (menu) => {
-    setExpandedMenu(expandedMenu === menu ? null : menu);
-  };
-
-  const NavLink = ({ item, onClick = null }) => {
+  const renderLink = (item) => {
     const Icon = item.icon;
-    const isActive = location.pathname === item.path || location.pathname === item.href;
-    
-    if (item.external) {
-      return (
-        <a
-          href={item.href}
-          className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm whitespace-nowrap ${
-            isActive
-              ? 'bg-purple-600/30 text-purple-300 font-semibold border border-purple-500/50'
-              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-          }`}
-          onClick={onClick}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Icon className="w-4 h-4" />
-          <span>{item.label}</span>
-        </a>
-      );
-    }
+    const isActive = location.pathname === item.path;
 
     return (
       <Link
+        key={item.path}
         to={item.path}
-        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm whitespace-nowrap ${
+        onClick={() => setIsMobileOpen(false)}
+        className={`${baseLinkClass} ${
           isActive
-            ? 'bg-purple-600/30 text-purple-300 font-semibold border border-purple-500/50'
-            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-        }`}
-        onClick={onClick}
+            ? 'bg-gradient-to-r from-fuchsia-600/70 to-purple-600/60 text-white border-fuchsia-400/40 shadow-[0_0_0_1px_rgba(192,132,252,0.15)]'
+            : 'text-slate-300 hover:text-white hover:bg-[#242734]'
+        } ${isCollapsed ? 'justify-center px-2.5' : ''}`}
+        title={isCollapsed ? item.label : ''}
       >
-        <Icon className="w-4 h-4" />
-        <span>{item.label}</span>
+        <Icon className="h-4 w-4 shrink-0" />
+        {!isCollapsed && <span className="truncate">{item.label}</span>}
       </Link>
     );
   };
 
   return (
-    <nav className="bg-gray-800 border-b border-gray-700 shadow-lg">
-      <div className="w-full px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent hidden sm:inline">
-              Smart Wardrobe
-            </span>
-          </Link>
+    <>
+      <button
+        className="lg:hidden fixed left-4 top-4 z-50 rounded-lg border border-[#313542] bg-[#1b1e27] p-2 text-slate-200"
+        onClick={() => setIsMobileOpen((prev) => !prev)}
+        aria-label="Toggle navigation"
+      >
+        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </button>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-1">
-            {/* Primary Items - Generate */}
-            {primaryNavItems.map((item) => 
-              item.submenu ? (
-                <div
-                  key="generate"
-                  className="relative pb-1"
-                  onMouseEnter={() => handleDesktopMenuEnter('generate')}
-                  onMouseLeave={handleDesktopMenuLeave}
-                >
-                  <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
-                    <item.icon className="w-4 h-4" />
-                    <span>{item.label}</span>
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-                  <div className={`absolute left-0 top-full pt-1 w-40 transition-all z-50 ${activeDesktopMenu === 'generate' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
-                    {item.submenu.map((sub) => (
-                      <NavLink key={sub.path} item={sub} onClick={() => setMobileMenuOpen(false)} />
-                    ))}
-                  </div></div>
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed z-40 h-screen border-r border-[#2c303c] bg-[#14161d] transition-all duration-300 lg:static ${
+          isCollapsed ? 'w-[88px]' : 'w-[300px]'
+        } ${isMobileOpen ? 'left-0' : '-left-full lg:left-0'}`}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-between border-b border-[#2c303c] px-4 py-4">
+            <Link to="/" className="flex items-center gap-3 overflow-hidden" onClick={() => setIsMobileOpen(false)}>
+              <div className="rounded-xl bg-gradient-to-br from-fuchsia-600 to-violet-500 p-2">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+              {!isCollapsed && (
+                <div>
+                  <p className="text-sm font-semibold text-white">Smart Wardrobe</p>
+                  <p className="text-xs text-slate-400">AI Creative Studio</p>
                 </div>
-              ) : (
-                <NavLink key={item.path} item={item} />
-              )
-            )}
-
-            {/* Media Management Dropdown */}
-            <div
-              className="relative pb-1"
-              onMouseEnter={() => handleDesktopMenuEnter('media')}
-              onMouseLeave={handleDesktopMenuLeave}
+              )}
+            </Link>
+            <button
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              className="hidden rounded-lg border border-[#313542] bg-[#1c1f29] p-1.5 text-slate-300 transition hover:bg-[#252938] lg:block"
+              aria-label="Collapse sidebar"
             >
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
-                <Image className="w-4 h-4" />
-                <span>{t('navbar.media')}</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'media' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
-                {mediaNavItems.map((item) => (
-                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                ))}
-              </div></div>
-            </div>
-
-            {/* Dashboard & Analytics Dropdown */}
-            <div
-              className="relative pb-1"
-              onMouseEnter={() => handleDesktopMenuEnter('analytics')}
-              onMouseLeave={handleDesktopMenuLeave}
-            >
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
-                <LayoutDashboard className="w-4 h-4" />
-                <span>{t('navbar.analytics')}</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'analytics' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
-                {analyticsNavItems.map((item) => (
-                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                ))}
-              </div></div>
-            </div>
-
-            {/* Advanced Tools Dropdown */}
-            <div
-              className="relative pb-1"
-              onMouseEnter={() => handleDesktopMenuEnter('tools')}
-              onMouseLeave={handleDesktopMenuLeave}
-            >
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
-                <Zap className="w-4 h-4" />
-                <span>{t('navbar.tools')}</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              <div className={`absolute left-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'tools' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
-                {advancedToolsNavItems.map((item) => (
-                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                ))}
-              </div></div>
-            </div>
-
-            {/* Settings Dropdown */}
-            <div
-              className="relative pb-1"
-              onMouseEnter={() => handleDesktopMenuEnter('settings')}
-              onMouseLeave={handleDesktopMenuLeave}
-            >
-              <button className="px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm text-gray-300 hover:bg-gray-700">
-                <Settings className="w-4 h-4" />
-                <span>{t('navbar.settings')}</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              <div className={`absolute right-0 top-full pt-1 w-48 transition-all z-50 ${activeDesktopMenu === 'settings' ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}><div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1">
-                {settingsItems.map((item) => (
-                  <NavLink key={item.path || item.href} item={item} onClick={() => setMobileMenuOpen(false)} />
-                ))}
-              </div></div>
-            </div>
+              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
           </div>
 
-          {/* Right: Language Switcher + Mobile Menu Button */}
-          <div className="flex items-center gap-2">
-            {/* Language Switcher Button */}
+          <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+            {navGroups.map((group) => (
+              <div key={group.title}>
+                {!isCollapsed && (
+                  <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    {group.title}
+                  </p>
+                )}
+                <div className="space-y-1">{group.items.map(renderLink)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-[#2c303c] p-3">
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white border border-gray-600 hover:border-purple-500"
-              title={t('language.switchLanguage')}
+              className={`w-full rounded-xl border border-[#313542] bg-[#1f2330] px-3 py-2 text-sm text-slate-200 transition hover:bg-[#2a3040] ${
+                isCollapsed ? 'flex justify-center' : 'flex items-center justify-between'
+              }`}
             >
-              <Globe className="w-4 h-4" />
-              <span className="hidden sm:inline">{currentLang === 'vi' ? 'VI' : 'EN'}</span>
-            </button>
-
-            {/* Mobile Menu Button */}
-            <button
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-700 transition-all"
-              onClick={toggleMobileMenu}
-            >
-              {mobileMenuOpen ? (
-                <X className="w-6 h-6 text-gray-300" />
-              ) : (
-                <Menu className="w-6 h-6 text-gray-300" />
-              )}
+              <span className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                {!isCollapsed && <span>{t('language.switchLanguage')}</span>}
+              </span>
+              {!isCollapsed && <span className="font-semibold">{currentLang === 'vi' ? 'VI' : 'EN'}</span>}
             </button>
           </div>
         </div>
-
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden mt-3 pb-3 border-t border-gray-700">
-            <div className="space-y-1 mt-3">
-              {/* Primary Items - Generate */}
-              {primaryNavItems.map((item) =>
-                item.submenu ? (
-                  <div key="generate-mobile">
-                    <button
-                      className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
-                      onClick={() => toggleExpandedMenu('generate')}
-                    >
-                      <span className="flex items-center gap-2">
-                        <item.icon className="w-4 h-4" />
-                        {item.label}
-                      </span>
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform ${expandedMenu === 'generate' ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-                    {expandedMenu === 'generate' && (
-                      <div className="pl-4 space-y-1 mt-1">
-                        {item.submenu.map((sub) => (
-                          <NavLink key={sub.path} item={sub} onClick={() => setMobileMenuOpen(false)} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                )
-              )}
-
-              {/* Media Section */}
-              <div>
-                <button
-                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
-                  onClick={() => toggleExpandedMenu('media')}
-                >
-                  <span className="flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    {t('navbar.media')}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${expandedMenu === 'media' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedMenu === 'media' && (
-                  <div className="pl-4 space-y-1 mt-1">
-                    {mediaNavItems.map((item) => (
-                      <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Analytics Section */}
-              <div>
-                <button
-                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
-                  onClick={() => toggleExpandedMenu('analytics')}
-                >
-                  <span className="flex items-center gap-2">
-                    <LayoutDashboard className="w-4 h-4" />
-                    {t('navbar.analytics')}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${expandedMenu === 'analytics' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedMenu === 'analytics' && (
-                  <div className="pl-4 space-y-1 mt-1">
-                    {analyticsNavItems.map((item) => (
-                      <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Advanced Tools Section */}
-              <div>
-                <button
-                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
-                  onClick={() => toggleExpandedMenu('tools')}
-                >
-                  <span className="flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    {t('navbar.tools')}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${expandedMenu === 'tools' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedMenu === 'tools' && (
-                  <div className="pl-4 space-y-1 mt-1">
-                    {advancedToolsNavItems.map((item) => (
-                      <NavLink key={item.path} item={item} onClick={() => setMobileMenuOpen(false)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Settings Section */}
-              <div>
-                <button
-                  className="w-full px-3 py-2 rounded-lg flex items-center justify-between text-sm font-medium text-gray-300 hover:bg-gray-700"
-                  onClick={() => toggleExpandedMenu('settings')}
-                >
-                  <span className="flex items-center gap-2">
-                    <Settings className="w-4 h-4" />
-                    {t('navbar.settings')}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${expandedMenu === 'settings' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedMenu === 'settings' && (
-                  <div className="pl-4 space-y-1 mt-1">
-                    {settingsItems.map((item) => (
-                      <NavLink key={item.path || item.href} item={item} onClick={() => setMobileMenuOpen(false)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Language Toggle in mobile */}
-              <div className="pt-2 border-t border-gray-700">
-                <button
-                  onClick={toggleLanguage}
-                  className="w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm text-gray-300 hover:bg-gray-700"
-                >
-                  <Globe className="w-4 h-4" />
-                  <span>{currentLang === 'vi' ? t('language.en') : t('language.vi')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </nav>
+      </aside>
+    </>
   );
 }
