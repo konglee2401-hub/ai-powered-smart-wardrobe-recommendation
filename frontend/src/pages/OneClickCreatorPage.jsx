@@ -1968,58 +1968,98 @@ export default function OneClickCreatorPage() {
           
           if (galleryPickerFor === 'character') {
             console.log(`⏳ Loading character image from gallery...`);
-            fetch(imageData.url, {
-              method: 'GET',
-              headers: { 'Accept': 'image/*' }
-            })
-              .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                return res.blob();
+            
+            // Helper function to fetch with retry for pending assets
+            const fetchWithRetry = (url, attempt = 1, maxAttempts = 3) => {
+              fetch(url, {
+                method: 'GET',
+                headers: { 'Accept': 'image/*' }
               })
-              .then(blob => {
-                if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                // Convert blob to data URL for consistent storage
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                  const dataUrl = evt.target?.result;
-                  setCharacterImage(dataUrl);
-                  setImageSource(prev => ({ ...prev, character: 'gallery' })); // 🎯 Mark as from gallery
-                  console.log(`✨ Character image updated as data URL (${dataUrl?.length}B)`);
-                };
-                reader.readAsDataURL(blob);
-              })
-              .catch(err => {
-                console.error('❌ Failed to load gallery image:', err);
-                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-              });
+                .then(res => {
+                  // Handle 503 (asset still processing) with retry
+                  if (res.status === 503) {
+                    const retryAfter = res.headers?.get('Retry-After') || '5';
+                    const waitTime = parseInt(retryAfter) * 1000;
+                    
+                    if (attempt < maxAttempts) {
+                      console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
+                      setTimeout(() => fetchWithRetry(url, attempt + 1, maxAttempts), waitTime);
+                      return;
+                    } else {
+                      throw new Error('Asset is still being prepared after multiple retries');
+                    }
+                  }
+                  
+                  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                  return res.blob();
+                })
+                .then(blob => {
+                  if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                  console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                  // Convert blob to data URL for consistent storage
+                  const reader = new FileReader();
+                  reader.onload = (evt) => {
+                    const dataUrl = evt.target?.result;
+                    setCharacterImage(dataUrl);
+                    setImageSource(prev => ({ ...prev, character: 'gallery' })); // 🎯 Mark as from gallery
+                    console.log(`✨ Character image updated as data URL (${dataUrl?.length}B)`);
+                  };
+                  reader.readAsDataURL(blob);
+                })
+                .catch(err => {
+                  console.error('❌ Failed to load gallery image:', err);
+                  alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+                });
+            };
+            
+            fetchWithRetry(imageData.url);
           } else if (galleryPickerFor === 'product') {
             console.log(`⏳ Loading product image from gallery...`);
-            fetch(imageData.url, {
-              method: 'GET',
-              headers: { 'Accept': 'image/*' }
-            })
-              .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                return res.blob();
+            
+            // Helper function to fetch with retry for pending assets
+            const fetchWithRetry = (url, attempt = 1, maxAttempts = 3) => {
+              fetch(url, {
+                method: 'GET',
+                headers: { 'Accept': 'image/*' }
               })
-              .then(blob => {
-                if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                // Convert blob to data URL for consistent storage
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                  const dataUrl = evt.target?.result;
-                  setProductImage(dataUrl);
-                  setImageSource(prev => ({ ...prev, product: 'gallery' })); // 🎯 Mark as from gallery
-                  console.log(`✨ Product image updated as data URL (${dataUrl?.length}B)`);
-                };
-                reader.readAsDataURL(blob);
-              })
-              .catch(err => {
-                console.error('❌ Failed to load gallery image:', err);
-                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-              });
+                .then(res => {
+                  // Handle 503 (asset still processing) with retry
+                  if (res.status === 503) {
+                    const retryAfter = res.headers?.get('Retry-After') || '5';
+                    const waitTime = parseInt(retryAfter) * 1000;
+                    
+                    if (attempt < maxAttempts) {
+                      console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
+                      setTimeout(() => fetchWithRetry(url, attempt + 1, maxAttempts), waitTime);
+                      return;
+                    } else {
+                      throw new Error('Asset is still being prepared after multiple retries');
+                    }
+                  }
+                  
+                  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                  return res.blob();
+                })
+                .then(blob => {
+                  if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                  console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                  // Convert blob to data URL for consistent storage
+                  const reader = new FileReader();
+                  reader.onload = (evt) => {
+                    const dataUrl = evt.target?.result;
+                    setProductImage(dataUrl);
+                    setImageSource(prev => ({ ...prev, product: 'gallery' })); // 🎯 Mark as from gallery
+                    console.log(`✨ Product image updated as data URL (${dataUrl?.length}B)`);
+                  };
+                  reader.readAsDataURL(blob);
+                })
+                .catch(err => {
+                  console.error('❌ Failed to load gallery image:', err);
+                  alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+                });
+            };
+            
+            fetchWithRetry(imageData.url);
           }
           setShowGalleryPicker(false);
           setGalleryPickerFor(null);
