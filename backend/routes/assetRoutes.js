@@ -220,16 +220,45 @@ router.get('/proxy/:assetId', async (req, res) => {
       }
     }
 
-    // STEP 5: No valid storage location found
-    console.log(`❌ No valid storage location found for asset ${assetId}`);
-    console.log(`   Asset structure: ${JSON.stringify({localStorage: asset.localStorage, cloudStorage: asset.cloudStorage, storage: asset.storage})}`);
-    res.status(400).json({ success: false, error: 'No valid storage location found', assetId, storageStatus: {
+    // STEP 5: No valid storage location found - return 503 Service Unavailable for pending/syncing assets
+    const storageStatus = {
       hasLocalPath: !!asset.localStorage?.path,
       hasStorageLocalPath: !!asset.storage?.localPath,
       hasCloudId: !!asset.cloudStorage?.googleDriveId,
       hasStorageUrl: !!asset.storage?.url,
-      hasStorageDriveId: !!asset.storage?.googleDriveId
-    }});
+      hasStorageDriveId: !!asset.storage?.googleDriveId,
+      cloudStorageStatus: asset.cloudStorage?.status,
+      syncStatus: asset.syncStatus
+    };
+    
+    console.log(`❌ No valid storage location found for asset ${assetId}`);
+    console.log(`   Asset storage status: ${JSON.stringify(storageStatus)}`);
+    console.log(`   Full asset structure: ${JSON.stringify({
+      localStorage: asset.localStorage,
+      cloudStorage: asset.cloudStorage,
+      storage: asset.storage
+    }, null, 2)}`);
+
+    // If storage is pending/syncing, return 503 to indicate it's still processing
+    if (asset.cloudStorage?.status === 'pending' || asset.cloudStorage?.status === 'syncing' || asset.syncStatus === 'pending') {
+      console.log(`   ⏳ Asset is still processing (status: ${asset.cloudStorage?.status || asset.syncStatus})`);
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Asset storage is being prepared, please try again in a moment',
+        assetId,
+        status: asset.cloudStorage?.status || asset.syncStatus,
+        retryAfter: 5  // Suggest retry after 5 seconds
+      });
+    }
+
+    // Otherwise return 400 for missing/invalid storage
+    res.status(400).json({ 
+      success: false, 
+      error: 'No valid storage location found for asset', 
+      assetId, 
+      storageStatus,
+      suggestion: 'Asset may not have been properly saved. Try uploading/regenerating the asset.'
+    });
     
   } catch (error) {
     console.error(`❌ Proxy error: ${error.message}`);
