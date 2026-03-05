@@ -598,6 +598,10 @@
     "uploadBothImagesFirst": "Please upload both images first",
     "imageMissingUrl": "Error: Selected image is missing URL",
     "failedToLoadImage": "Failed to load image",
+    "useShortPrompt": "Use short prompt",
+    "shortPromptHint": "Enable to use a shorter prompt template for Google Flow (wearing + holding).",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
     "scenarios": {
       "changeClothes": "Change Clothes",
       "characterHoldingProduct": "Character Holding Product",
