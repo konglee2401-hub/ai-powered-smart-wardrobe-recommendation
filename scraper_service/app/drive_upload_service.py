@@ -7,90 +7,107 @@ import os
 import json
 import asyncio
 import aiohttp
+import requests
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 from .config import DOWNLOAD_ROOT
 from .db import videos
 
-# Pre-configured folder IDs from backend config
-DRIVE_FOLDER_STRUCTURE = {
-    "root": "1m9evYnMp6EV1H4aysk6NMTWgC8p-HAlu",
-    "videos": "1cw7x1VSXPZPv-QyY2T6uYM55AtedPRiQ",
-    "videos_downloaded": "1OZTHADwa8XMsm7xJ5Gy4R0Y6I1br7Jww",
-    # YouTube folder will be created dynamically
-    "youtube": None
-}
+# Import Google Drive helper
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from google_drive_helper import get_folder_id_for_platform, PLATFORM_FOLDER_MAP
+
 
 class DriveUploadService:
     """Service to upload downloaded videos to Google Drive"""
     
     def __init__(self, backend_api_url: str = "http://localhost:3000"):
         self.backend_api_url = backend_api_url
-        self.session = None
-        self.youtube_folder_id = None
+        self.folder_cache = {}
+        self._load_folder_structure()
         
-    async def ensure_youtube_folder(self) -> str:
-        """Ensure YouTube folder exists in Videos -> Downloaded, create if needed"""
-        if self.youtube_folder_id:
-            return self.youtube_folder_id
-            
-        # For now, we'll use a hardcoded ID or create it via backend
-        # The YouTube folder ID should be stored in the config
+    def _load_folder_structure(self):
+        """Load folder structure from backend config"""
         try:
-            async with aiohttp.ClientSession() as session:
-                # Call backend endpoint to get or create YouTube folder
-                url = f"{self.backend_api_url}/api/drive/folders/ensure-youtube-folder"
-                async with session.post(url, json={
-                    "parentFolderId": DRIVE_FOLDER_STRUCTURE["videos_downloaded"],
-                    "folderName": "youtube"
-                }) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        self.youtube_folder_id = data.get('folderId')
-                        print(f"✅ YouTube folder ensured: {self.youtube_folder_id}")
-                        return self.youtube_folder_id
+            config_path = Path(__file__).parent.parent.parent / 'backend' / 'config' / 'drive-folder-structure.json'
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    self.folder_cache = config.get('folders', {})
+                    print(f"✅ Loaded {len(self.folder_cache)} folder mappings")
+            else:
+                print(f"⚠️  Folder structure config not found at {config_path}")
         except Exception as e:
-            print(f"⚠️  Failed to get YouTube folder from backend: {e}")
-            # Fallback: return a default ID (would need to be created manually)
-            self.youtube_folder_id = None
-            
-        return self.youtube_folder_id
+            print(f"⚠️  Error loading folder structure: {e}")
 
-    async def upload_video_file(self, file_path: str, drive_folder_id: str) -> Optional[Dict[str, Any]]:
+    async def upload_video_to_drive(self, file_path: str, platform: str, video_metadata: Dict = None) -> Optional[Dict[str, Any]]:
         """
-        Upload video file to Google Drive
-        Returns: {fileId, webViewLink, thumbnailLink, name, mimeType, size}
+        Upload video file to Google Drive in platform-specific folder
+        
+        Args:
+            file_path: Local path to video file
+            platform: Platform/source (youtube, playboard, dailyhaha, douyin)
+            video_metadata: Optional metadata about the video
+        
+        Returns:
+            Upload result with file info or None if failed
         """
         if not os.path.exists(file_path):
             print(f"❌ File not found: {file_path}")
             return None
-            
+        
+        # Get folder ID for platform
+        folder_id = get_folder_id_for_platform(platform)
+        if not folder_id:
+            print(f"❌ Cannot upload: no folder configured for platform '{platform}'")
+            return None
+        
         try:
             file_size = os.path.getsize(file_path)
             file_name = os.path.basename(file_path)
             
-            # Call backend API to upload file
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.backend_api_url}/api/drive/files/upload"
+            print(f"\n📤 Uploading {file_name} to {platform} folder...")
+            print(f"   Folder ID: {folder_id}")
+            print(f"   Size: {file_size / 1024 / 1024:.1f} MB")
+            
+            # Use sync requests since we're in an async context
+            # This will be called from process_download which is async
+            with open(file_path, 'rb') as f:
+                files = {
+                    'file': (file_name, f, 'video/mp4')
+                }
+                data = {
+                    'parentFolderId': folder_id,
+                    'platform': platform,
+                    'source': platform,
+                    'description': f'{platform} video downloaded for repurposing'
+                }
                 
-                # Read file as binary
-                with open(file_path, 'rb') as f:
-                    file_data = f.read()
-                
-                form = aiohttp.FormData()
-                form.add_field('file', file_data, filename=file_name)
-                form.add_field('parentFolderId', drive_folder_id)
-                form.add_field('mimeType', 'video/mp4')
-                
-                async with session.post(url, data=form) as resp:
-                    if resp.status == 200:
-                        result = await resp.json()
-                        print(f"✅ Video uploaded to Drive: {file_name}")
+                try:
+                    response = requests.post(
+                        f"{self.backend_api_url}/api/drive/files/upload-with-metadata",
+                        files=files,
+                        data=data,
+                        timeout=300  # 5 minute timeout for large files
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        print(f"✅ Video uploaded successfully!")
+                        print(f"   File ID: {result.get('fileId')}")
                         return result.get('data', {})
                     else:
-                        print(f"❌ Upload failed: {resp.status}")
+                        error_msg = response.text or f"HTTP {response.status_code}"
+                        print(f"❌ Upload failed: {error_msg}")
                         return None
+                        
+                except requests.exceptions.RequestException as e:
+                    # If backend is not available, log but don't fail
+                    print(f"⚠️  Backend API unavailable, skipping Drive upload: {str(e)[:100]}")
+                    return None
+                    
         except Exception as e:
             print(f"❌ Upload error: {e}")
             return None
@@ -102,19 +119,31 @@ class DriveUploadService:
         platform: str,
         topics: str,
         file_size: int,
-        drive_web_link: str,
+        drive_web_link: str = None,
         metadata: Dict = None
     ) -> Optional[str]:
         """
         Create asset record in backend for uploaded video
-        Returns: assetId if successful
+        
+        Args:
+            filename: Video filename
+            drive_file_id: Google Drive file ID
+            platform: Source platform
+            topics: Video topics/categories
+            file_size: File size in bytes
+            drive_web_link: Optional web view link
+            metadata: Optional additional metadata
+        
+        Returns:
+            assetId if successful, None otherwise
         """
         try:
             storage_info = {
                 "location": "google-drive",
                 "googleDriveId": drive_file_id,
-                "webViewLink": drive_web_link
             }
+            if drive_web_link:
+                storage_info["webViewLink"] = drive_web_link
             
             asset_data = {
                 "filename": filename,
@@ -128,25 +157,105 @@ class DriveUploadService:
                 "metadata": metadata or {
                     "source": platform,
                     "topic": topics,
-                    "uploadedAt": datetime.utcnow().isoformat()
+                    "uploadedAt": datetime.utcnow().isoformat(),
+                    "platform": platform
                 }
             }
             
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.backend_api_url}/api/assets/create"
-                async with session.post(url, json=asset_data) as resp:
-                    if resp.status == 200:
-                        result = await resp.json()
-                        asset_id = result.get('asset', {}).get('assetId')
-                        print(f"✅ Asset created: {asset_id}")
-                        return asset_id
-                    else:
-                        error = await resp.text()
-                        print(f"❌ Asset creation failed: {resp.status} - {error}")
-                        return None
+            try:
+                response = requests.post(
+                    f"{self.backend_api_url}/api/assets/create",
+                    json=asset_data,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    asset_id = result.get('asset', {}).get('_id') or result.get('assetId')
+                    print(f"✅ Asset created: {asset_id}")
+                    return asset_id
+                else:
+                    error = response.text
+                    print(f"⚠️  Asset creation response: {response.status_code}")
+                    return None
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"⚠️  Could not create asset record: {str(e)[:100]}")
+                return None
+                
         except Exception as e:
-            print(f"❌ Asset creation error: {e}")
+            print(f"⚠️  Asset creation error: {e}")
             return None
+
+
+async def upload_video_after_download(video_id: str, file_path: str, platform: str):
+    """
+    Upload video to Google Drive after successful download
+    
+    Args:
+        video_id: MongoDB video document ID
+        file_path: Local path to downloaded video
+        platform: Platform/source (youtube, playboard, etc.)
+    """
+    service = DriveUploadService()
+    
+    try:
+        # Upload file
+        upload_result = await service.upload_video_to_drive(
+            file_path=file_path,
+            platform=platform,
+            video_metadata={'videoId': str(video_id), 'platform': platform}
+        )
+        
+        if upload_result:
+            drive_file_id = upload_result.get('id')
+            drive_web_link = upload_result.get('webViewLink')
+            
+            # Update video record with Drive info
+            try:
+                videos.update_one(
+                    {'_id': video_id},
+                    {
+                        '$set': {
+                            'driveUploadStatus': 'done',
+                            'driveFileId': drive_file_id,
+                            'driveWebLink': drive_web_link,
+                            'driveUploadedAt': datetime.utcnow()
+                        }
+                    }
+                )
+                print(f"✅ Updated video record with Drive file ID: {drive_file_id}")
+            except Exception as e:
+                print(f"⚠️  Could not update video record: {e}")
+        else:
+            # Mark as skipped if backend unavailable
+            try:
+                videos.update_one(
+                    {'_id': video_id},
+                    {
+                        '$set': {
+                            'driveUploadStatus': 'skipped',
+                            'driveUploadSkipReason': 'Backend API unavailable'
+                        }
+                    }
+                )
+            except Exception as e:
+                print(f"⚠️  Error updating skip status: {e}")
+                
+    except Exception as e:
+        print(f"❌ Error in upload_video_after_download: {e}")
+        try:
+            videos.update_one(
+                {'_id': video_id},
+                {
+                    '$set': {
+                        'driveUploadStatus': 'failed',
+                        'driveUploadError': str(e)[:500]
+                    }
+                }
+            )
+        except:
+            pass
 
     async def process_video_download(self, video_id: str, attempts: int = 0) -> bool:
         """
