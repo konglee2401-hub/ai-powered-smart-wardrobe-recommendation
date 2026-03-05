@@ -82,11 +82,12 @@ export default function Navbar() {
         title: t('navbar.settings'),
         items: [
           { path: '/options', label: t('navbar.options'), icon: Settings },
-          { path: '/customization', label: t('navbar.customization'), icon: Settings },
-          { path: '/setup-authentication', label: t('navbar.setupAuthentication'), icon: Settings },
-          { path: '/admin/providers', label: t('navbar.aiProviders'), icon: Sparkles },
+          { path: '/customization', label: t('navbar.customization'), icon: Sparkles },
+          { path: '/setup-authentication', label: t('navbar.setupAuthentication'), icon: Gauge },
+          { path: '/admin/providers', label: t('navbar.aiProviders'), icon: Zap },
         ],
       },
+
     ],
     [t],
   );

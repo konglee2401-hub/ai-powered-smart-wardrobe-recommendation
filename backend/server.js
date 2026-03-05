@@ -168,7 +168,7 @@ app.use('/api/auth-setup', authSetupRoutes);
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000; // Back to default port
 
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
