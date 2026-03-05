@@ -33,6 +33,7 @@ import PreGenerationMonitor from './google-flow/generation/PreGenerationMonitor.
 import GenerationMonitor from './google-flow/generation/GenerationMonitor.js';
 import GenerationDownloader from './google-flow/generation/GenerationDownloader.js';
 import ErrorRecoveryManager from './google-flow/error-handling/ErrorRecoveryManager.js';
+import SeedInterceptor from './google-flow/network/SeedInterceptor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
@@ -93,6 +94,7 @@ class GoogleFlowAutomationService {
     this.generationMonitor = null;
     this.generationDownloader = null;
     this.errorRecoveryManager = null;
+    this.seedInterceptor = null; // ✨ NEW: For seed parameter injection
   }
 
   async init() {
@@ -119,6 +121,10 @@ class GoogleFlowAutomationService {
 
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 720 });
+
+    // ✨ Setup seed interception for API requests
+    this.seedInterceptor = new SeedInterceptor();
+    await this.seedInterceptor.setupInterception(this.page);
 
     // Store absolute path for later use
     this.options.outputDir = outputDirAbsolute;
@@ -247,6 +253,11 @@ class GoogleFlowAutomationService {
 
   async close() {
     try {
+      // ✨ Cleanup seed interceptor
+      if (this.seedInterceptor) {
+        await this.seedInterceptor.cleanup();
+      }
+
       // Close all managers (they don't own browser/page, so no cleanup needed)
       // Just a placeholder for future manager cleanup
       if (this.tokenManager) {
@@ -479,6 +490,12 @@ class GoogleFlowAutomationService {
   async _internalEnterPromptViaManager(promptText) {
     try {
       this.lastPromptSubmitted = promptText; // Store for potential retry
+      
+      // ✨ Extract and set seed from prompt if present
+      if (this.seedInterceptor) {
+        this.seedInterceptor.setSeedFromPrompt(promptText);
+      }
+      
       if (this.promptManager) {
         await this.promptManager.enterPrompt(promptText);
         return true;
