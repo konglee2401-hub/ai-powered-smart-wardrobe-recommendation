@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..Qrh5sqjahJMoQWmL.K8DS2Hi7jXFGGuSQKRXF8xDvT0kqIFyW5IVn2ONFxMJby2t6XFv_NQY2ui6mOOI0rEXwd1cMlC-hEGgs-svCKwFOeYwb2b2ETlNXsFpsRJ2O0uIJpj0Km3y1DPJW0Ars4QB9e8B-94dpr9hAnhJR5qJPbzRDtCsPH0TGz-2HeWZuUCyyx_Tk6SpD9dVz_flYrj40d0RVmV2NlBH0LBtwzz017yRriYB0xkGrZ3dAM42PiMaLHTqHpVc-29Np41zMc9j8tUFwGqbSvgZnoLS1uz1nt5uLW_KuNipmDtLsvo0KBsAXejl0TT5CMVbtdygLcbMut1LooR3yY-QRXakzpuJekcaJUzBrieSIRKQq0TJE2K7M_Oy2qsAaelFcdz9R2scuQvqb6VRzBVR3cFZqTJE0XjreqYbVCjKCoIh7q2DL7GRK9ZyHVbGnckahs5wVB3bhp5trKkXA0Bb2yfUdioP_XKA9faucH7MuKHOoxmU-JJK8wC_e-zFyd5NjQdL1rDv_UbZ2ahqXnnPD2N5eaEc4HY0NgMf_QIj3Trzs7Nw0QYaQnTwovZLVhCyXT3wWXNrYNX_bkec0idMFRwQ0BxEDuTxO-ZivQ8Pj5-PAAIHpVOBvgczPHGvzSw8dNRliIWY7EjvUNFxgSYc4avIR9-9YVUtN2EKLNAF0l89fF_6azUkOBRHIBq4K8H6ieCqr5qkSN44LVcRlkuNXiYJU0DZhJ0RHyxIf4zIx7-4QL0DnHg4V0ib3n8QBFehKBhQrcTMACX0dK-pb-Hce6kiIqaQgKuoD8jSlOYtmrIw7NwoIDIq8_Xs96KV-_b0RXFt3bXAmjdMlsTA9oCXAMp6S_trz6SIG1ewI0lGo1U4CTFPj62WkXn_xX3kAjswCQ3xSf_hMPnMhfkZbzbmUXkCCHv9A7wuZYbBxEl3D0REcwQUX4Wnf0x86cCYxL7wgykTcxkl8G6WB5KWsNzOQCbRuhjUXpFyLSw.kpHjiakxa3-SLz4lfFhZSQ",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..R12P6ELGFvnDuWQr.wnSYLaP7h-XpxlEzjcc23pmFMmOqn5TTO4-pENNeF7tDtIChSYkoFWGAt77Xkl-yuKBBCWGd2H-qB5nW-Z61u5MNnG7zshzoz5B7ENS9vujbZV-B75IpbEpy4V5SoZT-hEKscRnSTEUoG611J5eGcfF1F-YGWUwEtkypim0hdmZuhVmo5hdVMMLwCit1y6_FZyu4ri59OcZsrnp2rnltxzG9SpmJEqystpTIYJD-C0UAKQmgAhkmMAEqToaz4M17md7rBB2uJ1CmkQjMo9pj7W5IGS93hMKFsHwyfNc9HYfGAdOTxxd5Hh4FCXwDhIZ6xfcN6y8Y5UTeabdx3Wx9MsSzmR8hPzZD8rhtPXJe569j_nZwkNAtmwyTZFBHZZVCO2Rr5B1hpr4CsFT-94sJrkkzJRMQK6BVqyCu_6XwpSIZM59p0kKiBlx4CDHseaEsmgnYvKw5PVhwyKAbgtVONZMl9MbkKDXNOvyv9rk6Hl4cUkBsGAuhAO8RTBg1E4AEhAYRlotFa7mt1ufvjuDnZsNUxZy2MbjEitddxgpbQZgy1iXtu15ZXop8hKCGoCjsIGNR2voTbERrJ4jOGsqbFh11tVox8Zf1MZg3s9JpRnPsFyO3qHyCLvamelK4rZvWa0Ldtyhre3jObfuHeDHu2afN90z-2iscSzsTaAcD_wCuas_0oc4m0yxbUwtYyRyDT__u0zr3aqtHpSBAKVSq5B3Uo-5t8miyLetbNQXTV40VOUJ-Dh0tyU8AR2UZayOItRXkJ787F4yJXiDsE1nFp9U4g1fY-YIBV7uKIrRolZhD51cIJC5_PVYnrFARZXlApefcR1PWtM8dFCE8eD1xfio4gG7Aklk9QcJKO7z3Ee8omNT_ux1M2bqpZSpkFV9LM9QrTNZK4WZBmcrdkNFtqqGBhs2YrrAC_Ez6MqnE1-tpxVMYMpBGYxU8KYVUFNXgrYnX4q1IyGKTeA2dnX7LgmQ6hD3Npg.nSFtweTn7VrJQJ29MchgmA",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775318522.376972,
+      "expires": 1775339482.304551,
       "size": 1103,
       "httpOnly": true,
       "secure": true,
@@ -17,10 +17,10 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1772726506$o4$g0$t1772726507$j59$l0$h289386367",
+      "value": "GS2.1.s1772747468$o5$g0$t1772747468$j60$l0$h859917056",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807286507.077114,
+      "expires": 1807307468.95976,
       "size": 67,
       "httpOnly": false,
       "secure": false,
@@ -30,25 +30,11 @@
       "sourcePort": 443
     },
     {
-      "name": "email",
-      "value": "leecris241%40gmail.com",
-      "domain": "labs.google",
-      "path": "/",
-      "expires": -1,
-      "size": 27,
-      "httpOnly": true,
-      "secure": false,
-      "session": true,
-      "sameParty": false,
-      "sourceScheme": "Secure",
-      "sourcePort": 443
-    },
-    {
       "name": "_ga",
       "value": "GA1.1.1406218656.1772713598",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807286506.949321,
+      "expires": 1807307468.897954,
       "size": 30,
       "httpOnly": false,
       "secure": false,
@@ -72,6 +58,21 @@
       "sourcePort": 443
     },
     {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 81,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
       "name": "__Host-next-auth.csrf-token",
       "value": "490c78f068e6a1b35a0600e19550eebb8cf981a3f7ca039103f379bcfe615621%7Cde7bb32e2bf4b2f6b7763021cb30599cd6bcc1c579ae63086a058b985b8f36e6",
       "domain": "labs.google",
@@ -87,28 +88,27 @@
       "sourcePort": 443
     },
     {
-      "name": "__Secure-next-auth.callback-url",
-      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow",
+      "name": "email",
+      "value": "leecris241%40gmail.com",
       "domain": "labs.google",
       "path": "/",
       "expires": -1,
-      "size": 81,
+      "size": 27,
       "httpOnly": true,
-      "secure": true,
+      "secure": false,
       "session": true,
-      "sameSite": "Lax",
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
     }
   ],
   "localStorage": {
-    "_grecaptcha": "09AKhCRwjce4uCToMm3iToIKhCt8nQ127f6xJadpBrXKEKO--QxvcxZyl1GpnuanFSJxZhHvhHG3-CzAvpQRB2FM3z8Qvrw7gzlpxMdIBMbZQc5Y3qr0o1KjPPDBiY75T4",
+    "_grecaptcha": "09AKhCRwh_4jcP80BAyMW4zSLTYVn0q4RRvGB_x4LloptJ8aJrmq-NJMhsogYwGdy4p8-tg2bblAIEIFx6l3sCDYL06lsRsVOP6hvf9U9BDf9GmOf_FBS-MFe5-cDZf7G7",
     "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"PORTRAIT\",\"selectedImageModelFamily\":\"nano_banana_pro\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":1}",
-    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772726514}"
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772747474}"
   },
   "sessionStorage": {},
-  "timestamp": "2026-03-05T16:05:48.949Z",
+  "timestamp": "2026-03-05T21:59:43.779Z",
   "url": "https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0",
   "isAuthenticated": true
 }
