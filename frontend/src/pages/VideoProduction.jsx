@@ -28,7 +28,8 @@ const emptyAccountForm = {
   accessToken: '',
   refreshToken: '',
   clientId: '',
-  clientSecret: ''
+  clientSecret: '',
+  oauthScopes: ''
 };
 
 export function VideoProduction() {
@@ -60,7 +61,7 @@ export function VideoProduction() {
   const platformRequirements = {
     youtube: {
       title: 'YouTube Data API v3 / YouTube Upload',
-      doc: 'OAuth2 scopes: youtube.upload, youtube, youtubepartner-channel-audit',
+      doc: 'OAuth2 scopes: https://www.googleapis.com/auth/youtube.upload (required), youtube.readonly (optional)',
       idLabel: 'Channel ID',
       idField: 'channelId'
     },
@@ -102,6 +103,10 @@ export function VideoProduction() {
         refreshToken: formData.refreshToken,
         clientId: formData.clientId,
         clientSecret: formData.clientSecret,
+        oauthScopes: formData.oauthScopes
+          .split(/[\n,\s]+/)
+          .map((scope) => scope.trim())
+          .filter(Boolean),
         postingReadiness: {
           supportsVideoUpload: true,
           supportsScheduledPosts: true,
@@ -400,6 +405,17 @@ export function VideoProduction() {
                     value={formData.clientSecret}
                     onChange={(e) => setFormData({ ...formData, clientSecret: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                  />
+                </div>
+
+
+                <div className="md:col-span-2">
+                  <label className="text-sm text-gray-400 mb-2 block">OAuth Scopes (comma/newline separated)</label>
+                  <textarea
+                    value={formData.oauthScopes}
+                    onChange={(e) => setFormData({ ...formData, oauthScopes: e.target.value })}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm min-h-[72px]"
+                    placeholder="https://www.googleapis.com/auth/youtube.upload"
                   />
                 </div>
 

@@ -28,6 +28,11 @@ const queueScannerSettingsSchema = new mongoose.Schema({
   platform: {
     type: String,
     default: 'youtube'
+  },
+  youtubePublishType: {
+    type: String,
+    enum: ['shorts', 'video'],
+    default: 'shorts'
   }
 }, { timestamps: true });
 

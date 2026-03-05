@@ -18,6 +18,27 @@ const asyncHandler = fn => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
+
+const normalizeUploadConfigForPlatform = (platform, uploadConfig = {}) => {
+  if (platform !== 'youtube') return uploadConfig || {};
+
+  const youtubePublishType = String(
+    uploadConfig?.youtubePublishType ||
+    uploadConfig?.youtubeUploadType ||
+    uploadConfig?.youtubeContentType ||
+    'shorts'
+  ).toLowerCase();
+
+  if (!['shorts', 'video'].includes(youtubePublishType)) {
+    throw new Error('youtubePublishType must be either "shorts" or "video"');
+  }
+
+  return {
+    ...(uploadConfig || {}),
+    youtubePublishType
+  };
+};
+
 class VideoProductionController {
   // ============ QUEUE ENDPOINTS ============
 
@@ -321,12 +342,20 @@ class VideoProductionController {
         continue;
       }
 
+      let normalizedUploadConfig;
+      try {
+        normalizedUploadConfig = normalizeUploadConfigForPlatform(account.platform, uploadConfig);
+      } catch (configError) {
+        results.push({ accountId, success: false, error: configError.message });
+        continue;
+      }
+
       const upload = AutoUploadService.registerUpload({
         queueId,
         videoPath,
         platform: account.platform,
         accountId,
-        uploadConfig
+        uploadConfig: normalizedUploadConfig
       });
 
       if (!upload.success) {
@@ -484,12 +513,19 @@ class VideoProductionController {
       });
     }
 
+    let normalizedUploadConfig;
+    try {
+      normalizedUploadConfig = normalizeUploadConfigForPlatform(platform, uploadConfig || {});
+    } catch (configError) {
+      return res.status(400).json({ success: false, error: configError.message });
+    }
+
     const result = AutoUploadService.registerUpload({
       queueId,
       videoPath,
       platform,
       accountId,
-      uploadConfig
+      uploadConfig: normalizedUploadConfig
     });
 
     res.json(result);
