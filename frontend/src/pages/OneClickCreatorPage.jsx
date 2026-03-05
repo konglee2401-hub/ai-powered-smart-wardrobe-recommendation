@@ -1470,7 +1470,8 @@ export default function OneClickCreatorPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 h-[calc(100vh-120px)]">
+      <div className="max-w-7xl mx-auto px-6 py-6 h-[calc(100vh-80px)]">
+
         <div className="grid grid-cols-12 gap-6 h-full">
           {/* LEFT SIDEBAR - Settings */}
           <div className="col-span-3 space-y-4 overflow-y-auto pr-2">

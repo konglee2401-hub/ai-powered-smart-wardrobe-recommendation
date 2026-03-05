@@ -77,12 +77,35 @@ function convertFilePathToProxyUrl(filePath = '') {
     return filePath;
   }
 
-  // Extract filename from absolute or relative path
-  const fileName = path.basename(filePath);
-  if (!fileName) return filePath; // Not a valid path
+  // Already a proxy URL, return as-is
+  if (filePath.startsWith('/api/')) {
+    return filePath;
+  }
+
+  // 💫 FIX: Handle both Windows paths (with backslashes) and Unix paths
+  // Replace all backslashes with forward slashes first to normalize
+  let normalizedPath = filePath.replace(/\\/g, '/');
+  
+  // Extract filename from the path (get everything after the last /)
+  const parts = normalizedPath.split('/');
+  const fileName = parts[parts.length - 1];
+  
+  if (!fileName) {
+    console.warn(`⚠️  convertFilePathToProxyUrl: No filename extracted from: ${filePath.substring(0, 50)}`);
+    return null;
+  }
 
   // Convert to proxy URL
-  return `/api/prompt-options/scene-locks/${fileName}`;
+  const proxyUrl = `/api/prompt-options/scene-locks/${fileName}`;
+  
+  // 🔍 DEBUG
+  if (filePath.includes('scene') && (filePath.includes('.jpg') || filePath.includes('.png'))) {
+    console.log(`✅ convertFilePathToProxyUrl:`);
+    console.log(`   Input:  ${filePath.substring(0,80)}`);
+    console.log(`   Return: ${proxyUrl}`);
+  }
+  
+  return proxyUrl;
 }
 
 /**
@@ -99,6 +122,18 @@ function convertSceneLockedImageUrlsToProxy(imageUrls = {}) {
   };
 
   return result;
+}
+
+/**
+ * 💫 NEW: Convert scene lock sample URLs to proxy URLs
+ */
+function convertSceneLockSamples(samples = []) {
+  if (!Array.isArray(samples)) return [];
+  
+  return samples.map(sample => ({
+    ...sample,
+    url: convertFilePathToProxyUrl(sample.url)
+  }));
 }
 
 function getSceneLockedImageUrlByAspect(scene = {}, aspectRatio = null) {
@@ -592,12 +627,22 @@ router.get('/', async (req, res) => {
       sceneNegativePromptVi: option.sceneNegativePromptVi || null,
       sceneLockedImageUrl: getSceneLockedImageUrlByAspect(option),
       sceneLockedImageUrls: convertSceneLockedImageUrlsToProxy(option.sceneLockedImageUrls),
-      sceneLockSamples: option.sceneLockSamples || [],
+      sceneLockSamples: convertSceneLockSamples(option.sceneLockSamples),
       sceneLockedImageHistory: normalizeSceneLockedImageHistory(option.sceneLockedImageHistory),
       useSceneLock: typeof option.useSceneLock === 'boolean' ? option.useSceneLock : true,
       isAiGenerated: option.isAiGenerated || false,
       usageCount: option.usageCount || 0
     }));
+
+    // 🔍 DEBUG: Log scene image URLs
+    const sceneOptions = formattedOptions.filter(o => o.category === 'scene');
+    if (sceneOptions.length > 0) {
+      console.log(`🔍 DEBUG GET /api/prompt-options: Found ${sceneOptions.length} scenes`);
+      sceneOptions.slice(0, 2).forEach(s => {
+        console.log(`   Scene: ${s.value}`);
+        console.log(`   → sceneLockedImageUrl: ${s.sceneLockedImageUrl}`);
+      });
+    }
 
     res.json({
       success: true,
