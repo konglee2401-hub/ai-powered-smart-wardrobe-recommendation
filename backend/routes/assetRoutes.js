@@ -145,37 +145,26 @@ router.get('/proxy/:assetId', async (req, res) => {
       }
     };
     
-    // ✅ Smarter storage priority with better fallbacks
-
-    // STEP 0: Try Google Drive FIRST if we have the ID
-    if (asset.cloudStorage?.googleDriveId) {
-      console.log(`\n☁️ PRIORITY: Attempting Google Drive (ID: ${asset.cloudStorage.googleDriveId})`);
-      const driveStream = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'cloudStorage.googleDriveId');
-      if (driveStream) return;
-      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
-    }
+    // ✅ Optimized storage priority: Local FIRST (faster), then Drive fallback
     
-    // Also check legacy storage.googleDriveId
-    if (asset.storage?.googleDriveId && !asset.cloudStorage?.googleDriveId) {
-      console.log(`\n☁️ Attempting Google Drive from storage (ID: ${asset.storage.googleDriveId})`);
-      const driveStream = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'storage.googleDriveId');
-      if (driveStream) return;
-      console.log(`   ⚠️ Google Drive failed, falling back to local...`);
-    }
+    // STEP 1: Try LOCAL storage FIRST (fastest, no API calls)
+    let localPathToTry = asset.localStorage?.path || asset.storage?.localPath;
     
-    // STEP 1: Try hybrid local storage (new format)
-    if (asset.localStorage?.path) {
-      const filePath = asset.localStorage.path;
-      console.log(`   🔍 Checking local storage: ${filePath}`);
+    if (localPathToTry) {
+      // If it's a relative path, make it absolute
+      if (!path.isAbsolute(localPathToTry)) {
+        localPathToTry = path.join(process.cwd(), localPathToTry);
+      }
+      
+      console.log(`   🔍 Checking local storage: ${localPathToTry}`);
       
       try {
-        if (fs.existsSync(filePath)) {
-          console.log(`   ✅ Found local file: ${filePath}`);
-          const fileSize = fs.statSync(filePath).size;
+        if (fs.existsSync(localPathToTry)) {
+          const fileSize = fs.statSync(localPathToTry).size;
           res.setHeader('Content-Length', fileSize);
-          console.log(`   💾 Serving hybrid local file (${fileSize} bytes)`);
+          console.log(`   ✅ Found local file (${fileSize} bytes), serving from local storage`);
           
-          const fileStream = fs.createReadStream(filePath);
+          const fileStream = fs.createReadStream(localPathToTry);
           fileStream.on('error', (err) => {
             console.error(`   ❌ Error streaming local file: ${err.message}`);
             if (!res.headersSent) {
@@ -185,62 +174,50 @@ router.get('/proxy/:assetId', async (req, res) => {
           fileStream.pipe(res);
           return;
         } else {
-          console.log(`   ⚠️  Local file not found: ${filePath}`);
+          console.log(`   ⚠️  Local file not found: ${localPathToTry}`);
+          console.log(`       Will attempt fallback to Google Drive...`);
         }
       } catch (err) {
         console.error(`   ❌ Error checking local file: ${err.message}`);
+        console.log(`       Will attempt fallback to Google Drive...`);
       }
+    } else {
+      console.log(`   ℹ️  No local path configured, will use Google Drive`);
     }
 
-    // STEP 1b: Try legacy/local path stored under storage.localPath
-    if (asset.storage?.localPath) {
-      const filePath = asset.storage.localPath;
-      console.log(`   🔍 Checking storage.localPath: ${filePath}`);
-      try {
-        if (fs.existsSync(filePath)) {
-          const fileSize = fs.statSync(filePath).size;
-          res.setHeader('Content-Length', fileSize);
-          fs.createReadStream(filePath).pipe(res);
-          console.log('   ✅ Served storage.localPath file');
-          return;
-        }
-      } catch (err) {
-        console.error(`   ❌ Error streaming storage.localPath: ${err.message}`);
-      }
+    // STEP 2: FALLBACK to Google Drive if local unavailable
+    if (asset.cloudStorage?.googleDriveId) {
+      console.log(`   ☁️  Fallback: Using Google Drive ID from cloudStorage`);
+      const driveStream = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'cloudStorage.googleDriveId');
+      if (driveStream) return;
     }
     
-    // STEP 2: Try legacy storage.url field (absolute or relative)
+    if (asset.storage?.googleDriveId) {
+      console.log(`   ☁️  Fallback: Using Google Drive ID from storage (legacy)`);
+      const driveStream = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'storage.googleDriveId');
+      if (driveStream) return;
+    }
+
+    // STEP 3: Try remote URL as last resort
     if (asset.storage?.url && typeof asset.storage.url === 'string') {
       const url = asset.storage.url;
-      if (url.startsWith('/')) {
-        console.log(`   🔍 Checking legacy local storage: ${url}`);
+      if (url.startsWith('http')) {
+        console.log(`   🌐 Last resort: Redirecting to remote URL`);
+        return res.redirect(url);
+      } else if (url.startsWith('/')) {
+        // Try to serve as local path
         try {
           if (fs.existsSync(url)) {
             const fileSize = fs.statSync(url).size;
             res.setHeader('Content-Length', fileSize);
             fs.createReadStream(url).pipe(res);
-            console.log('   ✅ Served legacy local file');
+            console.log('   ✅ Served from URL path');
             return;
           }
         } catch (err) {
-          console.error(`   ❌ Error checking legacy local file: ${err.message}`);
+          console.error(`   ❌ Error with URL path: ${err.message}`);
         }
-      } else if (url.startsWith('http')) {
-        console.log(`   🌐 Redirecting to remote URL: ${url}`);
-        return res.redirect(url);
       }
-    }
-    
-    // STEP 3: Try hybrid cloud storage (new format) via OAuth API
-    if (asset.cloudStorage?.googleDriveId) {
-      const streamed = await streamFromGoogleDriveApi(asset.cloudStorage.googleDriveId, 'hybrid');
-      if (streamed) return;
-    }
-
-    // STEP 4: Try legacy cloud storage fallback via OAuth API (no legacy public URL fetch)
-    if (asset.storage?.googleDriveId) {
-      const streamed = await streamFromGoogleDriveApi(asset.storage.googleDriveId, 'legacy');
-      if (streamed) return;
     }
 
     // STEP 5: No valid storage location found
