@@ -4,6 +4,30 @@ import PromptOption from '../../models/PromptOption.js';
 
 const DEFAULT_FOCUS_SCENES = [
   {
+    value: 'studio',
+    label: 'Studio (Linh Pháp Soft Pink)',
+    labelVi: 'Studio (Linh Pháp Hồng Nhẹ)',
+    description: 'Minimal fashion studio boutique with blush pink wall, central white island and Linh Pháp signage',
+    descriptionVi: 'Studio thời trang tối giản với tường hồng nhạt, đảo trưng bày trắng ở giữa và bảng hiệu Linh Pháp',
+    keywords: ['studio', 'soft pink boutique', 'linh phap sign', 'minimal retail', 'fashion showroom'],
+    technicalDetails: {
+      environment: 'minimal boutique studio interior with blush pink wall',
+      lighting: 'soft warm track lights and clean ambient fill, low contrast shadows',
+      elements: 'single clothing rack, right-side floating shelves, handbags and heels, central white display island',
+      branding: 'backlit script sign reading Linh Pháp on rear wall',
+      camera: 'eye-level, symmetrical frontal composition, medium-wide lens',
+      usage: 'scene lock for fashion try-on and product overlay'
+    },
+    promptSuggestion: 'Minimal feminine fashion studio with soft pink wall, glowing "Linh Pháp" script sign, one rack of neutral-pink garments, white display island in center, and right-side shelves with handbags and shoes.',
+    promptSuggestionVi: 'Studio thời trang nữ tính tối giản với tường hồng phấn nhẹ, bảng chữ "Linh Pháp" phát sáng, một rack đồ tông nude-hồng, đảo trưng bày trắng ở giữa và kệ phải trưng bày túi/giày.',
+    sceneLockedPrompt: `A minimal fashion boutique studio interior, soft blush-pink back wall with smooth matte texture, a warm white backlit script sign reading "Linh Pháp" centered on the wall, clean white floor tiles with subtle reflections, one long horizontal clothing rack positioned under the sign, rack filled with women's garments in dusty pink, nude, beige, cream, and taupe tones, realistic mix of dresses, blouses, knitwear, and sets on wooden hangers, natural fabric drape and wrinkles, a large rectangular matte-white display island centered in foreground, right side built-in arched niche with floating white shelves, shelves displaying small handbags, heels, sandals, and ankle boots in neutral tones, a few handbags resting above the rack line, minimalist luxury-retail styling, tidy but not sterile, realistic depth and soft shadows, ceiling track lights visible and switched on, eye-level frontal camera, symmetrical composition, empty store scene, no people, no mannequin, no mirrors showing humans, background only, ultra realistic high detail photography`,
+    sceneLockedPromptVi: `Không gian studio boutique thời trang tối giản, tường sau màu hồng phấn nhạt bề mặt mịn, bảng chữ viết tay "Linh Pháp" phát sáng trắng ấm đặt chính giữa tường, sàn gạch trắng sạch có phản xạ nhẹ, một thanh treo đồ ngang dài đặt dưới bảng hiệu, quần áo nữ tông dusty pink, nude, beige, cream và taupe, gồm váy, áo, đồ len và set bộ trên móc gỗ, nếp rũ vải tự nhiên và chân thật, khối đảo trưng bày chữ nhật màu trắng mờ đặt giữa tiền cảnh, bên phải có hốc vòm âm tường với các kệ trắng nổi, trên kệ bày túi xách nhỏ, giày cao gót, sandal và ankle boots tông trung tính, một vài túi đặt phía trên đường rack, phong cách retail tối giản cao cấp, gọn gàng nhưng không vô hồn, chiều sâu và bóng đổ mềm thực tế, đèn ray trần nhìn thấy rõ và đang bật, góc máy ngang tầm mắt, bố cục chính diện cân đối, cảnh cửa hàng trống, không người, không mannequin, không gương phản chiếu người, chỉ background, ảnh siêu thực chi tiết cao`,
+    sceneNegativePrompt: 'people, human, model, mannequin, face, body parts, reflection of person, crowded store, colorful neon signs, dark moody nightclub lighting, messy clutter, street scene, outdoor environment, CGI render, cartoon, anime, fisheye distortion, tilted camera, extreme close-up',
+    sceneNegativePromptVi: 'người, mẫu, mannequin, khuôn mặt, bộ phận cơ thể, phản chiếu người, cửa hàng đông đúc, biển neon nhiều màu, ánh sáng nightclub tối, bừa bộn quá mức, cảnh đường phố, môi trường ngoài trời, CGI, hoạt hình, anime, méo fisheye, góc máy nghiêng, cận cảnh quá mức',
+    previewImage: '/images/options/scene-studio-linhphap-pink.jpg',
+    sortOrder: 0
+  },
+  {
     value: 'linhphap-tryon-room',
     label: 'Try-On Room (Linh Pháp)',
     labelVi: 'Phòng Thử Đồ (Linh Pháp)',
