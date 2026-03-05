@@ -50,6 +50,15 @@ class GoogleFlowAutomationService {
     this.uploadedImageRefs = {}; // Store refs of uploaded images (href + img src + text)
     this.lastPromptSubmitted = null; // Store original prompt for retry
     this.imageUrls = {}; // Store generated image URLs for segment mapping
+
+    // Seed interception/monitoring for Flow API requests
+    const requestedSeed = Number.isInteger(options.seed) ? options.seed : null;
+    this.seedControl = {
+      enabled: options.enableSeedInterceptor !== false,
+      fixedSeed: requestedSeed ?? Math.floor(Math.random() * 1000000),
+      observedRequests: []
+    };
+    this._requestInterceptorReady = false;
     
     // 🔐 Support flowId for flow-specific Chrome profile isolation
     // This prevents "profile locked by another process" errors when flows run in parallel
@@ -120,6 +129,10 @@ class GoogleFlowAutomationService {
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 720 });
 
+    if (this.seedControl.enabled) {
+      await this.setupFlowSeedInterceptor();
+    }
+
     // Store absolute path for later use
     this.options.outputDir = outputDirAbsolute;
     
@@ -183,6 +196,59 @@ class GoogleFlowAutomationService {
     console.log('   ✅ Managers initialized\n');
     
     console.log('✅ Initialized\n');
+  }
+
+
+
+  async setupFlowSeedInterceptor() {
+    if (this._requestInterceptorReady || !this.page) return;
+
+    await this.page.setRequestInterception(true);
+    this.page.on('request', (request) => {
+      const url = request.url();
+      if (!url.includes('flowMedia:batchGenerateImages') || request.method() !== 'POST') {
+        return request.continue();
+      }
+
+      try {
+        const rawBody = request.postData() || '{}';
+        const parsed = JSON.parse(rawBody);
+        const incomingSeeds = [];
+
+        if (Array.isArray(parsed?.requests)) {
+          parsed.requests.forEach((req) => {
+            if (typeof req?.seed !== 'undefined') incomingSeeds.push(req.seed);
+            req.seed = this.seedControl.fixedSeed;
+          });
+        }
+
+        if (typeof parsed?.seed !== 'undefined') {
+          incomingSeeds.push(parsed.seed);
+          parsed.seed = this.seedControl.fixedSeed;
+        }
+
+        this.seedControl.observedRequests.push({
+          timestamp: new Date().toISOString(),
+          endpoint: 'flowMedia:batchGenerateImages',
+          incomingSeeds,
+          outgoingSeed: this.seedControl.fixedSeed
+        });
+
+        return request.continue({
+          headers: {
+            ...request.headers(),
+            'content-type': 'text/plain;charset=UTF-8'
+          },
+          postData: JSON.stringify(parsed)
+        });
+      } catch (error) {
+        console.warn(`[SEED] Could not parse/override Flow request body: ${error.message}`);
+        return request.continue();
+      }
+    });
+
+    this._requestInterceptorReady = true;
+    console.log(`[SEED] Interceptor active. Fixed seed: ${this.seedControl.fixedSeed}`);
   }
 
   async navigateToFlow() {
@@ -1370,7 +1436,8 @@ class GoogleFlowAutomationService {
             success: true,
             promptNumber: i + 1,
             href: genResult.href,
-            downloadedFile: finalFilePath
+            downloadedFile: finalFilePath,
+            seed: this.seedControl.fixedSeed
           };
 
           // Mark if this was partial success (some images generated, others failed)
@@ -1425,6 +1492,8 @@ class GoogleFlowAutomationService {
         success: true,
         results,
         downloadedFiles,
+        seed: this.seedControl.fixedSeed,
+        observedSeedRequests: this.seedControl.observedRequests,
         partialSuccesses: partialSuccesses.length > 0 ? partialSuccesses : undefined
       };
 
