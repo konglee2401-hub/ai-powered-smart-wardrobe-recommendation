@@ -116,7 +116,7 @@ export async function generateCharacterPreview(req, res) {
 
 export async function saveCharacterProfile(req, res) {
   try {
-    let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    let { _id, name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
     
     // 💫 FIX: Handle stringified fields (they might come as strings from frontend)
     if (typeof generatedImages === 'string') {
@@ -151,16 +151,85 @@ export async function saveCharacterProfile(req, res) {
       generatedImages = [];
     }
     
-    console.log(`[CHAR] Saving character: ${name} | Images count: ${generatedImages.length}`);
+    console.log(`[CHAR] Saving character: ${name} | Mode: ${_id ? 'UPDATE' : 'CREATE'} | Images count: ${generatedImages.length}`);
     if (generatedImages.length > 0) {
       console.log(`[CHAR] First image structure:`, JSON.stringify(generatedImages[0]).substring(0, 200));
     }
     
-    if (!name || !alias || !portraitTempPath) {
-      return res.status(400).json({ success: false, error: 'name, alias, portraitTempPath are required' });
+    if (!name || !alias) {
+      return res.status(400).json({ success: false, error: 'name and alias are required' });
     }
 
     const normalizedAlias = safeAlias(alias || name);
+
+    // Handle UPDATE mode
+    if (_id) {
+      console.log(`[CHAR] Updating character: ${_id}`);
+      const character = await CharacterProfile.findById(_id);
+      if (!character) {
+        return res.status(404).json({ success: false, error: 'Character not found' });
+      }
+
+      // Update basic fields
+      character.name = name;
+      character.alias = normalizedAlias;
+      character.options = typeof options === 'object' && !Array.isArray(options) ? options : {};
+      character.analysisProfile = typeof analysisProfile === 'object' && !Array.isArray(analysisProfile) ? analysisProfile : {};
+
+      // Only update portrait if a new one is provided
+      if (portraitTempPath && portraitTempPath !== character.portraitPath) {
+        // Delete old portrait if it exists
+        if (character.portraitPath && fs.existsSync(character.portraitPath)) {
+          fs.unlinkSync(character.portraitPath);
+        }
+
+        const portraitFilename = `${normalizedAlias}-${Date.now()}-portrait.png`;
+        const portraitDest = path.join(characterDir, portraitFilename);
+        if (fs.existsSync(portraitTempPath)) {
+          fs.copyFileSync(portraitTempPath, portraitDest);
+        }
+        character.portraitUrl = `http://localhost:5000/uploads/characters/${portraitFilename}`;
+        character.portraitPath = portraitDest;
+      }
+
+      // Only update reference images if new ones are provided
+      if (generatedImages.length > 0) {
+        // Delete old reference images
+        character.referenceImages.forEach(ref => {
+          if (ref.path && fs.existsSync(ref.path)) {
+            fs.unlinkSync(ref.path);
+          }
+        });
+
+        const savedRefs = [];
+        generatedImages.forEach((img, idx) => {
+          const srcPath = img.path || (img.filename && global.generatedImagePaths?.[img.filename]);
+          if (srcPath && fs.existsSync(srcPath)) {
+            const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
+            const outPath = path.join(characterDir, outName);
+            fs.copyFileSync(srcPath, outPath);
+            savedRefs.push({
+              url: `http://localhost:5000/uploads/characters/${outName}`,
+              path: outPath,
+              angle: img.angle || `shot-${idx + 1}`,
+              type: idx < 2 ? 'portrait' : 'full-body',
+              prompt: img.prompt || '',
+              seed: img.seed
+            });
+          }
+        });
+        character.referenceImages = savedRefs;
+      }
+
+      await character.save();
+      return res.json({ success: true, data: character });
+    }
+
+    // Handle CREATE mode
+    if (!portraitTempPath) {
+      return res.status(400).json({ success: false, error: 'portraitTempPath is required for new character' });
+    }
+
     const existing = await CharacterProfile.findOne({ alias: normalizedAlias });
     if (existing) return res.status(400).json({ success: false, error: 'Character alias already exists' });
 
