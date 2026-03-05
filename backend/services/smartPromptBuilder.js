@@ -212,6 +212,27 @@ function resolvePoseSuggestion(selectedOptions = {}, mode = 'wearing') {
   return (modePose || fallback || '').toString().trim();
 }
 
+/**
+ * Resolve character alias token so prompt can pin identity by a stable short name.
+ * Example: "Linh Pháp" -> "LinhPhap"
+ */
+function resolveCharacterAlias(selectedOptions = {}) {
+  const explicitAlias = selectedOptions?.characterAlias || selectedOptions?.characterToken || selectedOptions?.characterName;
+  if (typeof explicitAlias === 'string' && explicitAlias.trim()) {
+    return explicitAlias.trim();
+  }
+
+  const sourceName = selectedOptions?.characterDisplayName || selectedOptions?.characterLabel;
+  if (typeof sourceName !== 'string' || !sourceName.trim()) return '';
+
+  const normalized = sourceName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '');
+
+  return normalized.trim();
+}
+
 function getFallbackTechnicalDetails(category, optionValue) {
   const fallbacks = {
     scene: {
@@ -399,6 +420,7 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
+  const characterAlias = resolveCharacterAlias(selectedOptions);
 
   if (useShortPrompt) {
     const garmentType = product.garment_type || product.type || 'garment';
@@ -419,6 +441,7 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
       '',
       '[IDENTITY LOCK — STRICT]',
       'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
+      ...(characterAlias ? [`Identity anchor token: ${characterAlias}. Always keep this exact person identity.`] : []),
       '',
       '[MODE — wearing]',
       'Character WEARS garment from Image 2. Ignore any model in Image 2, extract garment only.',
@@ -454,6 +477,10 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   parts.push('- Gaze and emotion');
   parts.push('- Hair (style, color, length, placement)');
   parts.push('Strict identity lock. Zero tolerance for any variation.\n');
+  if (characterAlias) {
+    parts.push(`Identity anchor token: ${characterAlias}`);
+    parts.push(`Always treat "${characterAlias}" as this exact same person from Image 1 only.\n`);
+  }
 
   // ==========================================
   // MODE SWITCH — WEARING
@@ -684,6 +711,7 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   const parts = [];
   const character = analysis.character || {};
   const product = analysis.product || {};
+  const characterAlias = resolveCharacterAlias(selectedOptions);
 
   if (useShortPrompt) {
     const garmentType = product.garment_type || product.type || 'garment';
@@ -704,6 +732,7 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
       '',
       '[IDENTITY LOCK — STRICT]',
       'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
+      ...(characterAlias ? [`Identity anchor token: ${characterAlias}. Always keep this exact person identity.`] : []),
       '',
       '[MODE — holding]',
       'Character does NOT wear garment. Character HOLDS and presents garment from Image 2 clearly to camera.',
@@ -739,6 +768,10 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   parts.push('- Gaze and emotion');
   parts.push('- Hair (style, color, length, placement)');
   parts.push('Strict identity lock. Zero tolerance for any variation.\n');
+  if (characterAlias) {
+    parts.push(`Identity anchor token: ${characterAlias}`);
+    parts.push(`Always treat "${characterAlias}" as this exact same person from Image 1 only.\n`);
+  }
 
   // ==========================================
   // MODE SWITCH — HOLDING
