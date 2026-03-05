@@ -296,11 +296,13 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
       
       if (useCase === 'change-clothes') {
         // Use Vietnamese image generation prompt for wearing product (virtual try-on)
-        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'wearing') });
+        const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, normalizedLanguage);
+        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'wearing'), sceneDirective });
         console.log(`✅ Using Vietnamese WEARING product prompt`);
       } else if (useCase === 'character-holding-product') {
         // Use Vietnamese image generation prompt for holding product
-        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'holding') });
+        const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, normalizedLanguage);
+        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'holding'), sceneDirective });
         console.log(`✅ Using Vietnamese HOLDING product prompt`);
       } else {
         // Fallback to character analysis for other use cases
@@ -407,11 +409,13 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
     const scene = selectedOptions.scene || 'clean studio';
     const lighting = selectedOptions.lighting || 'soft diffused';
     const mood = selectedOptions.mood || 'confident';
+    const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
 
     return [
       '[IMAGE MAPPING]',
       'Image 1 = CHARACTER (identity source).',
       'Image 2 = GARMENT (product source).',
+      'Image 3 = SCENE REFERENCE (background source, mandatory if provided).',
       '',
       '[IDENTITY LOCK — STRICT]',
       'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
@@ -421,6 +425,8 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
       '',
       `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
       `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      ...(sceneDirective ? [`[SCENE LOCK] ${sceneDirective}`] : []),
+      '[SCENE RULE] Rebuild environment from Image 3 and keep background perspective/layout coherent with it.',
       ...(resolvePoseSuggestion(selectedOptions, 'wearing') ? [`[POSE] ${resolvePoseSuggestion(selectedOptions, 'wearing')}`] : []),
       '',
       '[HARD RULES]',
@@ -688,11 +694,13 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
     const scene = selectedOptions.scene || 'clean studio';
     const lighting = selectedOptions.lighting || 'soft diffused';
     const mood = selectedOptions.mood || 'professional';
+    const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
 
     return [
       '[IMAGE MAPPING]',
       'Image 1 = CHARACTER (identity source).',
       'Image 2 = GARMENT (product source).',
+      'Image 3 = SCENE REFERENCE (background source, mandatory if provided).',
       '',
       '[IDENTITY LOCK — STRICT]',
       'Keep EXACT same face, body, pose, hair, gaze from Image 1. No identity change.',
@@ -702,6 +710,8 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
       '',
       `[GARMENT] ${garmentType}; color: ${garmentColor}; material: ${garmentMaterial}`,
       `[SCENE] ${scene}; [LIGHTING] ${lighting}; [MOOD] ${mood}`,
+      ...(sceneDirective ? [`[SCENE LOCK] ${sceneDirective}`] : []),
+      '[SCENE RULE] Rebuild environment from Image 3 and keep background perspective/layout coherent with it.',
       ...(resolvePoseSuggestion(selectedOptions, 'holding') ? [`[POSE] ${resolvePoseSuggestion(selectedOptions, 'holding')}`] : []),
       '',
       '[HARD RULES]',

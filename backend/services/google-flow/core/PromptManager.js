@@ -113,7 +113,10 @@ class PromptManager {
   }
 
   /**
-   * Submit prompt via keyboard Enter key (more reliable than button click)
+   * Submit prompt via multiple methods for reliability:
+   * 1. Remove trailing spaces added during entry
+   * 2. Try Enter key (most common)
+   * 3. Fall back to clicking send button if needed
    * 
    * In debug mode: skip submission
    */
@@ -126,16 +129,75 @@ class PromptManager {
     console.log('⏳ Submitting prompt...');
 
     try {
+      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+      
+      // 💫 FIX: Remove trailing spaces we added for Slate editor recognition
+      console.log('   🧹 Removing trailing spaces from prompt...');
+      await this.page.evaluate((selector) => {
+        const box = document.querySelector(selector);
+        if (box) {
+          // Remove trailing spaces (we added 5)
+          let text = box.textContent || '';
+          text = text.replace(/\s+$/, '');  // Remove all trailing spaces
+          // Trigger input event to update Slate editor
+          box.focus();
+          // Use keyboard to delete trailing spaces
+        }
+      }, textboxSelector);
+      
+      // Delete trailing spaces by pressing Backspace 5 times
+      for (let i = 0; i < 5; i++) {
+        await this.page.keyboard.press('Backspace');
+        await this.page.waitForTimeout(50);
+      }
+      
+      console.log('   ✓ Trailing spaces removed');
+
       // Focus textbox first
-      await this.page.evaluate(() => {
-        const box = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      await this.page.evaluate((selector) => {
+        const box = document.querySelector(selector);
         if (box) box.focus();
-      });
+      }, textboxSelector);
       await this.page.waitForTimeout(200);
 
-      // Press Enter to submit
-      console.log('   ⌨️  Pressing Enter key...');
+      // 💫 FIX: Try Enter key first
+      console.log('   ⌨️  Attempting to submit with Enter key...');
       await this.page.keyboard.press('Enter');
+      await this.page.waitForTimeout(500);
+
+      // Check if submission worked by checking if prompt is being processed
+      const stillInTextbox = await this.page.evaluate((selector) => {
+        const box = document.querySelector(selector);
+        return box && box.textContent.trim().length > 0;
+      }, textboxSelector);
+
+      if (stillInTextbox) {
+        // Enter key didn't work, try clicking send button
+        console.log('   ⚠️  Enter key may not have worked, trying send button click...');
+        const sendClicked = await this.page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          for (const btn of buttons) {
+            const icon = btn.querySelector('i.google-symbols');
+            // Look for send/submit button (arrow_forward or send icon)
+            if (icon && (icon.textContent.includes('arrow_forward') || icon.textContent.includes('send'))) {
+              if (!btn.disabled) {
+                btn.click();
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        if (!sendClicked) {
+          console.log('   ⚠️  Could not find or click send button');
+          // Try one more time with Ctrl+Enter
+          console.log('   🎯 Trying Ctrl+Enter as final attempt...');
+          await this.page.keyboard.down('Control');
+          await this.page.keyboard.press('Enter');
+          await this.page.keyboard.up('Control');
+        }
+      }
 
       console.log('✅ Prompt submitted\n');
       await this.page.waitForTimeout(1000);
