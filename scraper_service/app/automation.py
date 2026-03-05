@@ -33,6 +33,7 @@ from .config import (
 )
 from .db import channels, videos
 from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
+from .drive_upload_service import upload_video_after_download
 from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, extract_douyin_id, match_topic
 
 UA = [
@@ -1721,6 +1722,14 @@ async def process_download(video_id, attempts):
             {'_id': doc['_id']},
             {'$set': {'downloadStatus': 'done', 'localPath': out, 'downloadedAt': datetime.utcnow(), 'failReason': ''}},
         )
+        
+        # 💾 Upload to Google Drive
+        try:
+            platform = (doc.get('platform') or 'unknown').lower()
+            await upload_video_after_download(doc['_id'], out, platform)
+        except Exception as upload_err:
+            print(f"⚠️  Google Drive upload error (non-fatal): {upload_err}")
+        
         log_job(
             'download',
             'success',

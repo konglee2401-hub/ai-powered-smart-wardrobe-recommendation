@@ -284,4 +284,149 @@ router.get('/download-url/:fileId', (req, res) => {
   }
 });
 
+/**
+ * POST /api/drive/files/upload-with-metadata
+ * Upload file to platform-specific folder on Google Drive
+ * Used by scraper service for automatic video uploads
+ * 
+ * Request body:
+ * - file: multipart form file
+ * - platform: 'youtube' | 'playboard' | 'dailyhaha' | 'douyin' | 'tiktok' | 'instagram'
+ * - parentFolderId: (optional) specific folder ID to upload to
+ * - metadata: (optional) JSON string with video metadata
+ */
+router.post('/files/upload-with-metadata', upload.single('file'), async (req, res) => {
+  try {
+    console.log('📁 Platform-specific upload endpoint called');
+    
+    // Validate file
+    if (!req.file) {
+      console.warn('⚠️ No file provided in request');
+      return res.status(400).json({
+        success: false,
+        message: 'No file provided',
+      });
+    }
+
+    const fileName = req.file.originalname;
+    const fileBuffer = req.file.buffer;
+    console.log(`📦 File received: ${fileName} (${fileBuffer?.length || 0} bytes)`);
+
+    // Get platform from request
+    let platform = (req.body.platform || '').toLowerCase().trim();
+    const parentFolderId = req.body.parentFolderId;
+    
+    if (!platform && !parentFolderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Either platform or parentFolderId must be provided',
+      });
+    }
+
+    console.log(`🎯 Upload target - Platform: ${platform}, FolderId: ${parentFolderId}`);
+
+    // Parse metadata if provided
+    let metadata = {};
+    if (req.body.metadata) {
+      try {
+        metadata = JSON.parse(req.body.metadata);
+      } catch (parseErr) {
+        console.warn('⚠️ Could not parse metadata JSON:', parseErr.message);
+        metadata = {};
+      }
+    }
+
+    // Authenticate and check if Drive is configured
+    const authResult = await driveService.authenticate();
+    if (!authResult.configured || !authResult.authenticated) {
+      console.warn('⚠️ Google Drive not configured');
+      return res.status(200).json({
+        success: false,
+        message: 'Google Drive not configured. Upload skipped.',
+        data: {
+          id: null,
+          webViewLink: null,
+          source: 'error',
+          reason: 'Google Drive not configured'
+        }
+      });
+    }
+
+    let uploadResult;
+    const uploadOptions = { ...metadata };
+
+    // Call appropriate platform upload method
+    if (parentFolderId) {
+      // Direct folder ID provided - use generic uploadBuffer with parentFolderId
+      console.log(`📤 Uploading to folder: ${parentFolderId}`);
+      uploadResult = await driveService.uploadBuffer(fileBuffer, fileName, {
+        ...uploadOptions,
+        parentFolderId,
+      });
+    } else {
+      // Use platform-specific upload method
+      const uploadMethod = `upload${platform.charAt(0).toUpperCase() + platform.slice(1).replace(/([A-Z])/g, '$1').toLowerCase().replace(/([a-z])([A-Z])/g, '$1$2')}ScrapedVideo`;
+      
+      // Map platform names to actual method names
+      const platformMethodMap = {
+        'youtube': 'uploadYoutubeScrapedVideo',
+        'playboard': 'uploadPlayboardScrapedVideo',
+        'dailyhaha': 'uploadDailyhahaScrapedVideo',
+        'douyin': 'uploadDouyinScrapedVideo',
+        'tiktok': 'uploadTikTokScrapedVideo',
+        'instagram': 'uploadReelsScrapedVideo',
+      };
+
+      const method = platformMethodMap[platform];
+      if (!method || typeof driveService[method] !== 'function') {
+        console.warn(`⚠️ Unknown platform or method not found: ${platform}`);
+        return res.status(400).json({
+          success: false,
+          message: `Unsupported platform: ${platform}`,
+          supportedPlatforms: Object.keys(platformMethodMap),
+        });
+      }
+
+      console.log(`📤 Uploading using method: ${method}`);
+      uploadResult = await driveService[method](fileBuffer, fileName, uploadOptions);
+    }
+
+    if (uploadResult && uploadResult.id) {
+      console.log(`✅ Upload successful - File ID: ${uploadResult.id}`);
+      
+      // Return result in format expected by scraper service
+      return res.json({
+        success: true,
+        message: 'File uploaded successfully',
+        data: {
+          id: uploadResult.id,
+          fileId: uploadResult.id,
+          webViewLink: uploadResult.webViewLink || uploadResult.weblink || `https://drive.google.com/file/d/${uploadResult.id}/view`,
+          name: uploadResult.name || fileName,
+          mimeType: uploadResult.mimeType || req.file.mimetype,
+          size: uploadResult.size || 0,
+          platform: platform,
+          uploadedAt: new Date().toISOString(),
+        }
+      });
+    } else {
+      throw new Error('Upload returned no file ID');
+    }
+  } catch (error) {
+    console.error('❌ Upload error:', error.message);
+    console.error('   Stack:', error.stack);
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Upload failed',
+      error: error.message,
+      data: {
+        id: null,
+        webViewLink: null,
+        source: 'error'
+      }
+    });
+  }
+});
+
 export default router;
