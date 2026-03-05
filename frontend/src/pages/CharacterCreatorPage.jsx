@@ -134,8 +134,8 @@ export default function CharacterCreatorPage() {
             
             <div>
               <label className="text-xs text-slate-400 block mb-2 font-semibold">Portrait image</label>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Left: Upload Area */}
+              <div className="grid grid-cols-3 gap-4">
+                {/* Left: Upload Area (1/3) */}
                 <div>
                   <input 
                     id="portrait-input"
@@ -158,8 +158,8 @@ export default function CharacterCreatorPage() {
                   </label>
                 </div>
                 
-                {/* Right: Preview */}
-                <div className="h-32 border border-slate-600 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden">
+                {/* Right: Preview (2/3) */}
+                <div className="col-span-2 h-32 border border-slate-600 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden">
                   {portraitTempPath ? (
                     <img 
                       src={portraitTempPath} 
