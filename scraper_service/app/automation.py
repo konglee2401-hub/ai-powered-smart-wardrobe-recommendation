@@ -1020,7 +1020,7 @@ async def _collect_dailyhaha_cards() -> List[Dict]:
 async def discover_dailyhaha(topic: str):
     setting = get_or_create_settings()
     keywords = setting.get('keywords', {}).get(topic, [topic])
-    min_views = min(int(setting.get('minViewsFilter', 100000) or 100000), 10000)
+    # Dailyhaha: lấy tất, không filter theo views/topic nữa
     cards = await _collect_dailyhaha_cards()
     found = 0
 
@@ -1029,14 +1029,14 @@ async def discover_dailyhaha(topic: str):
         views = int(card.get('views', 0) or 0)
         page_url = card.get('url', '')
 
-        if views < min_views or not page_url:
-            continue
-        if not match_topic(title, topic, keywords):
+        # Chỉ cần có page_url hợp lệ, bỏ qua min_views và match_topic
+        if not page_url:
             continue
 
         video_slug = page_url.rstrip('/').split('/')[-1].replace('.htm', '').strip()
         if not video_slug:
             continue
+
 
         existing = videos.find_one({'platform': 'dailyhaha', 'videoId': video_slug})
         if existing:
@@ -1278,7 +1278,8 @@ async def discover_douyin(topic: str):
 
 async def discover_playboard(config: Dict, topic: str):
     setting = get_or_create_settings()
-    min_views = setting.get('minViewsFilter', 300000)
+    # Giảm default minViews cho Playboard xuống 200k như yêu cầu
+    min_views = int(setting.get('minViewsFilter', 200000) or 200000)
     topic_keywords = setting.get('keywords', {}).get(topic, [topic])
 
     url = build_playboard_url(config)
@@ -1286,26 +1287,23 @@ async def discover_playboard(config: Dict, topic: str):
     cards = await _collect_playboard_cards(url)
     print(f"[discover_playboard] Collected {len(cards) if cards else 0} cards from Playboard")
 
-    # Filter cards by views and topic match
+    # Filter ONLY by views + valid url (không bắt buộc match topic cho Playboard)
     filtered_cards = []
     for i, card in enumerate(cards or []):
         title = card.get('title', '')
         views = card.get('views', 0)
         video_url = card.get('url', '')
-        
+
         if views < min_views or not video_url:
             print(f"[discover_playboard] Card {i+1}: Filtered (views={views:,}, url={bool(video_url)})")
             continue
 
-        if not match_topic(title, topic, topic_keywords):
-            print(f"[discover_playboard] Card {i+1}: Topic mismatch - {title[:40]}")
-            continue
-        
+        # Không cần check match_topic nữa để flexible hơn
         filtered_cards.append(card)
         print(f"[discover_playboard] Card {i+1}: Passed filter - {title[:40]}")
-    
+
     print(f"[discover_playboard] {len(filtered_cards)} cards passed filters for topic {topic}")
-    
+
     # Process filtered cards (save channels, videos, queue download)
     if filtered_cards:
         result = await process_playboard_cards(filtered_cards, topic)
@@ -1326,6 +1324,7 @@ async def discover_playboard(config: Dict, topic: str):
         'failedTopics': failed,
         'topic': topic
     }
+
 
 
 async def discover_youtube(topic: str):
@@ -1405,28 +1404,38 @@ async def discover_all():
             f'| sources: playboard={use_playboard}, youtube={use_youtube}, dailyhaha={use_dailyhaha}, douyin={use_douyin}'
         )
 
-        for topic in TOPICS:
+        # 1) Playboard: chạy theo từng config (category/country/period), không loop theo từng topic
+        if use_playboard:
             for cfg in active_configs:
                 await asyncio.sleep(12 + random.random() * 5)
                 try:
-                    print(f"[DEBUG] Discovering {topic} with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')}")
-                    result = await discover_playboard(cfg, topic)
+                    topic_label = f"playboard-{cfg.get('category', 'All')}-{cfg.get('country', 'Worldwide')}-{cfg.get('period', 'weekly')}"
+                    print(
+                        f"[DEBUG] Discovering Playboard with config: {cfg.get('category')} / {cfg.get('country')} / {cfg.get('period')} -> topic={topic_label}"
+                    )
+                    result = await discover_playboard(cfg, topic_label)
                     found += int(result.get('itemsFound', 0))
                 except Exception as e:
                     print(f"[DEBUG] discover_playboard failed: {e}")
+
+        # 2) Các nguồn khác vẫn loop theo TOPICS
+        for topic in TOPICS:
             try:
                 if use_youtube:
                     found += await discover_youtube(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_youtube failed: {e}")
             try:
-                found += await discover_dailyhaha(topic)
+                if use_dailyhaha:
+                    found += await discover_dailyhaha(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_dailyhaha failed: {e}")
             try:
-                found += await discover_douyin(topic)
+                if use_douyin:
+                    found += await discover_douyin(topic)
             except Exception as e:
                 print(f"[DEBUG] discover_douyin failed: {e}")
+
 
         log_job('discover', 'success', itemsFound=found, duration=int((time.time() - started) * 1000))
         return {'success': True, 'itemsFound': found}

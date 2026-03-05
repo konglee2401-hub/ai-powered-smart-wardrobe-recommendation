@@ -20,6 +20,14 @@ class GoogleDriveOAuthService {
     this.oauthClientSecret = process.env.OAUTH_CLIENT_SECRET;
     this.apiKey = process.env.DRIVE_API_KEY;
     
+    // DEBUG: Log client ID values
+    if (!this.oauthClientId) {
+      console.warn('❌ OAUTH_CLIENT_ID not found in process.env');
+      console.warn('   Available env keys:', Object.keys(process.env).filter(k => k.includes('CLIENT')));
+    } else {
+      console.log(`✅ Loaded OAUTH_CLIENT_ID: ${this.oauthClientId.substring(0, 30)}...`);
+    }
+    
     // Fallback to file-based credentials if env vars not set
     this.credentialsPath = path.join(
       __dirname,
@@ -67,7 +75,8 @@ class GoogleDriveOAuthService {
     try {
       // 💫 FIXED: First try OAuth from environment variables
       if (this.oauthClientId && this.oauthClientSecret) {
-        console.log('✅ Using OAuth 2.0 credentials from environment (.env)...');
+        console.log(`✅ Using OAuth 2.0 credentials from environment (.env)...`);
+        console.log(`   Client ID: ${this.oauthClientId.substring(0, 30)}...`);
         return await this.authenticateWithOAuth();
       }
 
@@ -103,12 +112,20 @@ class GoogleDriveOAuthService {
   async authenticateWithOAuth() {
     try {
       const redirectUri = 'http://localhost:5000/api/drive/auth-callback';
+      
+      // 🔍 DEBUG: Log the actual client_id being used
+      console.log(`🔍 DEBUG authenticateWithOAuth():`);
+      console.log(`   this.oauthClientId = "${this.oauthClientId}"`);
+      console.log(`   this.oauthClientSecret = "${this.oauthClientSecret?.substring(0, 10)}..."`);
 
       const auth = new google.auth.OAuth2(
         this.oauthClientId,
         this.oauthClientSecret,
         redirectUri
       );
+      
+      // 🔍 DEBUG: After OAuth2 creation, log auth object
+      console.log(`🔍 DEBUG OAuth2 client created with client_id: ${this.oauthClientId.substring(0, 30)}...`);
 
       // Check if we have stored token
       if (fs.existsSync(this.tokenPath)) {
@@ -298,6 +315,16 @@ class GoogleDriveOAuthService {
       access_type: 'offline',
       scope: scopes,
     });
+    
+    // 🔍 DEBUG: Log the generated auth URL to see which client_id is in it
+    console.log(`🔍 DEBUG getAuthorizationUrl():`);
+    console.log(`   Generated URL: ${authUrl.substring(0, 150)}...`);
+    
+    // Extract client_id from URL for visibility
+    const clientIdMatch = authUrl.match(/client_id=([^&]+)/);
+    if (clientIdMatch) {
+      console.log(`   Auth URL client_id: ${clientIdMatch[1].substring(0, 30)}...`);
+    }
 
     return {
       success: true,
@@ -312,22 +339,43 @@ class GoogleDriveOAuthService {
    */
   async handleAuthCallback(code) {
     try {
-      const credentials = JSON.parse(
-        fs.readFileSync(this.credentialsPath)
-      );
-
-      const { client_id, client_secret, redirect_uris } = credentials.web;
+      console.log('🔄 Processing OAuth authorization code...');
+      
+      const redirectUri = 'http://localhost:5000/api/drive/auth-callback';
+      
+      // 💫 FIXED: Use OAuth credentials from environment, not file
+      let clientId, clientSecret;
+      
+      if (this.oauthClientId && this.oauthClientSecret) {
+        // Use environment variables first
+        console.log('✅ Using OAuth credentials from environment (.env)');
+        clientId = this.oauthClientId;
+        clientSecret = this.oauthClientSecret;
+      } else if (fs.existsSync(this.credentialsPath)) {
+        // Fallback to credentials file
+        console.log('✅ Using OAuth credentials from file');
+        const credentials = JSON.parse(
+          fs.readFileSync(this.credentialsPath)
+        );
+        const { client_id, client_secret } = credentials.web;
+        clientId = client_id;
+        clientSecret = client_secret;
+      } else {
+        throw new Error('Google OAuth credentials not configured. Add OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to .env');
+      }
 
       const auth = new google.auth.OAuth2(
-        client_id,
-        client_secret,
-        redirect_uris[0]
+        clientId,
+        clientSecret,
+        redirectUri
       );
 
+      console.log(`🔍 Exchanging authorization code for access token...`);
       const { tokens } = await auth.getToken(code);
       
       // Store token for future use
       fs.writeFileSync(this.tokenPath, JSON.stringify(tokens));
+      console.log(`💾 Saved token to: ${this.tokenPath}`);
 
       this.auth = auth;
       auth.setCredentials(tokens);
@@ -337,7 +385,7 @@ class GoogleDriveOAuthService {
       console.log('✅ Google Drive authenticated and token saved');
       return { success: true, authenticated: true };
     } catch (error) {
-      console.error('❌ OAuth callback failed:', error);
+      console.error('❌ OAuth callback failed:', error.message);
       throw error;
     }
   }
