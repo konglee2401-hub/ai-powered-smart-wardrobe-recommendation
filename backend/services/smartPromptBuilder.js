@@ -561,6 +561,10 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
     parts.push('[POSE IN SCENE]');
     parts.push(`Use this pose guidance to fit scene perspective naturally: ${wearingPoseSuggestion}`);
     parts.push('Allow natural adaptation from original pose; avoid rigid pasted full-body stance.\n');
+  } else {
+    parts.push('[POSE IN SCENE]');
+    parts.push('Natural presenter pose in center frame, torso slightly toward camera, product clearly visible, elbows relaxed.');
+    parts.push('Keep movement-friendly posture and realistic balance with scene perspective.\n');
   }
 
   // ==========================================
@@ -861,6 +865,11 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
     parts.push('[POSE IN SCENE]');
     parts.push(`Use this pose guidance to fit scene perspective naturally: ${holdingPoseSuggestion}`);
     parts.push('Keep product visibility while adapting posture naturally to scene perspective.\n');
+  } else {
+    parts.push('[POSE IN SCENE]');
+    parts.push('Natural dynamic standing pose, weight balanced, full body aligned with camera perspective, room for movement in center frame.');
+    parts.push('Natural presenter pose in center frame, torso slightly toward camera, product clearly visible, elbows relaxed.');
+    parts.push('Keep movement-friendly posture and realistic balance with scene perspective.\n');
   }
 
   // ==========================================

@@ -1417,6 +1417,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           productFilePath,  // ✅ Use actual product reference image (for context, not worn)
           [prompt1, prompt2],  // 2 prompts: wearing + holding
           {
+            outputCount: 2, // request x2 from Google Flow for reliability
             ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
           }
         );
@@ -1455,6 +1456,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       });
 
       console.log(`✅ Generated 2 images:`);
+      console.log(`   Google Flow requested outputCount=2 per prompt, downloading best single image per prompt.`);
       imageResults.forEach((img, idx) => {
         console.log(`   Variation ${idx + 1}: ${img.screenshotPath?.substring(0, 60) || img.href}...`);
       });

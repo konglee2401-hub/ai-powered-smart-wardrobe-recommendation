@@ -234,6 +234,8 @@ class GoogleFlowAutomationService {
           outgoingSeed: this.seedControl.fixedSeed
         });
 
+        console.log(`[SEED] Intercepted flowMedia:batchGenerateImages | incoming=${JSON.stringify(incomingSeeds)} | outgoing=${this.seedControl.fixedSeed}`);
+
         return request.continue({
           headers: {
             ...request.headers(),
