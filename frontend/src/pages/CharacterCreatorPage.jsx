@@ -87,20 +87,30 @@ export default function CharacterCreatorPage() {
   };
 
   const saveCharacter = async () => {
-    const payload = {
-      name,
-      alias: alias || name,
-      portraitTempPath,
-      options,
-      generatedImages: preview,
-      analysisProfile: {
-        characterName: name,
-        primaryLook: options.styling.outfitVibe,
-        lockRules: 'same face, same body, same hairline'
-      }
-    };
-    await characterAPI.save(payload);
-    alert('Character saved');
+    try {
+      const payload = {
+        name,
+        alias: alias || name,
+        portraitTempPath,
+        options,
+        generatedImages: preview,
+        analysisProfile: {
+          characterName: name,
+          primaryLook: options.styling.outfitVibe,
+          lockRules: 'same face, same body, same hairline'
+        }
+      };
+      
+      console.log('[Character Save] Payload:', payload);
+      console.log('[Character Save] Options type:', typeof options, 'imageCount:', options.capturePlan?.imageCount);
+      
+      const result = await characterAPI.save(payload);
+      console.log('[Character Save] ✅ Success:', result);
+      alert('Character saved successfully!');
+    } catch (error) {
+      console.error('[Character Save] ❌ Error:', error);
+      alert(`Error saving character: ${error.message || JSON.stringify(error)}`);
+    }
   };
 
   return (
@@ -131,7 +141,7 @@ export default function CharacterCreatorPage() {
             <input placeholder="Accessories" value={options.styling.accessories} onChange={e=>setNested('styling','accessories',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
             <input placeholder="Jewelry" value={options.styling.jewelry} onChange={e=>setNested('styling','jewelry',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
             <input placeholder="Tattoos" value={options.identity.tattoos} onChange={e=>setNested('identity','tattoos',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
-            <input type="number" min="4" max="8" value={options.capturePlan.imageCount} onChange={e=>setNested('capturePlan','imageCount',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
+            <input type="number" min="4" max="8" value={options.capturePlan.imageCount} onChange={e=>setNested('capturePlan','imageCount', parseInt(e.target.value) || 4)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
             <input placeholder="Aspect 9:16" value={options.capturePlan.aspectRatio} onChange={e=>setNested('capturePlan','aspectRatio',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
           </div>
           <textarea placeholder="Extra prompt notes" value={options.extraPromptNotes} onChange={e=>setOptions(prev=>({ ...prev, extraPromptNotes: e.target.value }))} className="w-full bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2" rows={3}/>
