@@ -49,6 +49,7 @@ import sessionLogRoutes from './routes/sessionLogRoutes.js';
 import affiliateVideoTikTokRoutes from './routes/affiliateVideoTikTokRoutes.js';
 import trendAutomationRoutes from './routes/trendAutomationRoutes.js';
 import authSetupRoutes from './routes/authSetupRoutes.js';
+import characterRoutes from './routes/characterRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import { seedProviders } from './scripts/seed/seedProviders.js';
 
@@ -165,6 +166,7 @@ app.use('/api/debug-sessions', sessionLogRoutes);
 app.use('/api/ai/affiliate-video-tiktok', affiliateVideoTikTokRoutes);
 app.use('/api/shorts-reels', trendAutomationRoutes);
 app.use('/api/auth-setup', authSetupRoutes);
+app.use('/api/characters', characterRoutes);
 
 app.use(errorHandler);
 
