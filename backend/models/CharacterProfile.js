@@ -7,7 +7,8 @@ const referenceImageSchema = new mongoose.Schema({
   angle: { type: String, default: '' },
   type: { type: String, default: '' },
   prompt: { type: String, default: '' },
-  seed: { type: mongoose.Schema.Types.Number, default: null }
+  seed: { type: mongoose.Schema.Types.Number, default: null },
+  filename: { type: String, default: '' }
 }, { _id: false, strict: false });
 
 const identitySchema = new mongoose.Schema({

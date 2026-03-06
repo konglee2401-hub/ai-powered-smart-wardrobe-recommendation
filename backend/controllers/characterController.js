@@ -301,6 +301,13 @@ export async function saveCharacterProfile(req, res) {
       console.warn(`[Character Save] ⚠️  Portrait temp path does not exist: ${portraitTempPath}`);
     }
 
+    // 💫 FIX: Create permanent directory for character's generated images
+    const charactersImagesDir = path.join(process.cwd(), 'uploads', 'character-previews', normalizedAlias);
+    if (!fs.existsSync(charactersImagesDir)) {
+      fs.mkdirSync(charactersImagesDir, { recursive: true });
+      console.log(`[Character Save] Created directory: ${charactersImagesDir}`);
+    }
+
     // 💫 FIX: Process generated images - validate each image
     console.log(`[Character Save] 🔄 Processing ${generatedImages.length} generatedImages...`);
     console.log(`[Character Save] generatedImages sample (if available):`, JSON.stringify(generatedImages.slice(0, 1), null, 2));
@@ -328,17 +335,45 @@ export async function saveCharacterProfile(req, res) {
         return true;
       })
       .map((img, idx) => {
+        // Extract filename from the image filename (e.g., Female_portrait_closeup_fashion_71341451bf-prompt01.jpeg)
+        let filename = img.filename || img.url?.split('/').pop() || `image-${idx + 1}.jpeg`;
+        
+        // Ensure we have a valid filename with extension
+        if (!filename.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+          filename = `${filename}.jpeg`;
+        }
+        
+        const permPath = path.join(charactersImagesDir, filename);
+        
+        // Try to copy from temp location if the file exists
+        let finalPath = String(img.path || '');
+        let finalUrl = String(img.url || '');
+        
+        // If we have a source file path, try to copy it
+        if (img.path && fs.existsSync(img.path)) {
+          try {
+            fs.copyFileSync(img.path, permPath);
+            finalPath = permPath;
+            finalUrl = `http://localhost:5000/uploads/character-previews/${normalizedAlias}/${filename}`;
+            console.log(`[Character Save]   ✅ Copied image ${idx} to permanent location: ${filename}`);
+          } catch (copyErr) {
+            console.warn(`[Character Save]   ⚠️  Failed to copy image ${idx}: ${copyErr.message}`);
+            // Keep original paths if copy fails
+          }
+        }
+        
         // Ensure all properties are properly typed
         const ref = {
-          url: String(img.url || ''),
-          path: String(img.path || ''),
+          url: finalUrl,
+          path: finalPath,
           angle: String(img.angle || `shot-${idx + 1}`),
           type: String(img.type || (idx < 2 ? 'portrait' : 'full-body')),
           prompt: String(img.prompt || ''),
-          seed: Number.isInteger(img.seed) ? img.seed : null
+          seed: Number.isInteger(img.seed) ? img.seed : null,
+          filename: String(filename)
         };
         
-        console.log(`[Character Save]   ✅ Image ${idx}: Type=${ref.type}, URL=${ref.url.substring(0, 60)}...`);
+        console.log(`[Character Save]   ✅ Image ${idx}: Type=${ref.type}, File=${filename}`);
         return ref;
       });
 
@@ -352,7 +387,8 @@ export async function saveCharacterProfile(req, res) {
       angle: String(ref.angle || ''),
       type: String(ref.type || ''),
       prompt: String(ref.prompt || ''),
-      seed: Number.isInteger(ref.seed) ? ref.seed : null
+      seed: Number.isInteger(ref.seed) ? ref.seed : null,
+      filename: String(ref.filename || '')
     }));
 
     const characterData = {
@@ -522,6 +558,13 @@ export async function updateCharacter(req, res) {
 
     // Update reference images if provided
     if (generatedImages.length > 0) {
+      // Create permanent directory for character's generated images
+      const normalizedAlias = character.alias;
+      const charactersImagesDir = path.join(process.cwd(), 'uploads', 'character-previews', normalizedAlias);
+      if (!fs.existsSync(charactersImagesDir)) {
+        fs.mkdirSync(charactersImagesDir, { recursive: true });
+      }
+
       const savedRefs = generatedImages
         .filter((img, idx) => {
           if (typeof img !== 'object' || img === null) return false;
@@ -529,14 +572,40 @@ export async function updateCharacter(req, res) {
           if (!img.url) return false;
           return true;
         })
-        .map((img, idx) => ({
-          url: String(img.url || ''),
-          path: String(img.path || ''),
-          angle: String(img.angle || `shot-${idx + 1}`),
-          type: String(img.type || (idx < 2 ? 'portrait' : 'full-body')),
-          prompt: String(img.prompt || ''),
-          seed: Number.isInteger(img.seed) ? img.seed : null
-        }));
+        .map((img, idx) => {
+          // Extract filename
+          let filename = img.filename || img.url?.split('/').pop() || `image-${idx + 1}.jpeg`;
+          if (!filename.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+            filename = `${filename}.jpeg`;
+          }
+          
+          const permPath = path.join(charactersImagesDir, filename);
+          
+          let finalPath = String(img.path || '');
+          let finalUrl = String(img.url || '');
+          
+          // Try to copy from temp if exists
+          if (img.path && fs.existsSync(img.path)) {
+            try {
+              fs.copyFileSync(img.path, permPath);
+              finalPath = permPath;
+              finalUrl = `http://localhost:5000/uploads/character-previews/${normalizedAlias}/${filename}`;
+              console.log(`[Character Update] Copied image ${idx} to permanent location`);
+            } catch (copyErr) {
+              console.warn(`[Character Update] Failed to copy image ${idx}: ${copyErr.message}`);
+            }
+          }
+          
+          return {
+            url: finalUrl,
+            path: finalPath,
+            angle: String(img.angle || `shot-${idx + 1}`),
+            type: String(img.type || (idx < 2 ? 'portrait' : 'full-body')),
+            prompt: String(img.prompt || ''),
+            seed: Number.isInteger(img.seed) ? img.seed : null,
+            filename: String(filename)
+          };
+        });
 
       character.referenceImages = savedRefs;
       console.log(`[Character Update] Updated with ${savedRefs.length} reference images`);
