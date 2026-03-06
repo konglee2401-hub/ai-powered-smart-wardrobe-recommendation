@@ -373,7 +373,7 @@ export async function generateUnifiedEndpoint(req, res) {
             url: filePath,
             path: filePath,
             provider: 'Google Flow',
-            model: 'Nano Banana Pro',
+            model: 'Nano Banana 2',
             isLocal: true
           }));
 

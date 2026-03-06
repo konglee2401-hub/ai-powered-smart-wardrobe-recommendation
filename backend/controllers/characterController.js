@@ -86,7 +86,7 @@ export async function generateCharacterPreview(req, res) {
       type: 'image',
       aspectRatio,
       imageCount: 4,  // Set Google Flow settings to x4 (4 images per prompt)
-      model: 'Nano Banana Pro',
+      model: 'Nano Banana 2',
       headless: false,
       outputDir: path.join(tempDir, 'character-previews'),
       seed: Number.isInteger(Number(seed)) ? Number(seed) : undefined
