@@ -331,7 +331,10 @@ export async function regenerateCharacterImage(req, res) {
     const { imageIndex = 0 } = req.body;
     const portrait = req.file;
 
+    console.log(`[CHAR-REGEN] Starting regeneration for character ${id}, image index ${imageIndex}`);
+
     if (!id || !portrait) {
+      console.error(`[CHAR-REGEN] Missing ID or portrait. id=${id}, portrait=${portrait ? 'yes' : 'no'}`);
       return res.status(400).json({ success: false, error: 'Character ID and portrait image are required' });
     }
 
@@ -343,11 +346,13 @@ export async function regenerateCharacterImage(req, res) {
     const idx = Number(imageIndex);
     const targetImage = character.referenceImages[idx];
     if (!targetImage) {
+      console.error(`[CHAR-REGEN] Image index ${idx} out of range. Total images: ${character.referenceImages.length}`);
       return res.status(400).json({ success: false, error: 'Image index out of range' });
     }
 
     portraitPath = path.join(tempDir, `character-portrait-${Date.now()}-${portrait.originalname}`);
     fs.writeFileSync(portraitPath, portrait.buffer);
+    console.log(`[CHAR-REGEN] Portrait saved. Proceeding with generation...`);
 
     const prompts = buildCharacterPrompts(character.name, character.alias, character.options || {}, 1);
     const targetPrompt = prompts[idx] || prompts[0];
@@ -364,6 +369,7 @@ export async function regenerateCharacterImage(req, res) {
     const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts: [targetPrompt], outputCount: 1 });
     
     if (!result.results || !result.results[0] || !result.results[0].success) {
+      console.error(`[CHAR-REGEN] Generation failed`);
       return res.status(500).json({ success: false, error: 'Failed to generate image' });
     }
 
@@ -382,12 +388,14 @@ export async function regenerateCharacterImage(req, res) {
       seed: r.seed || result.seed
     };
 
+    console.log(`[CHAR-REGEN] Success! Image regenerated`);
     return res.json({
       success: true,
       data: generatedImage
     });
   } catch (error) {
-    console.error(`[CHAR] Regenerate error:`, error.message);
+    console.error(`[CHAR-REGEN] Error:`, error.message);
+    console.error(error.stack);
     return res.status(500).json({ success: false, error: error.message });
   } finally {
     if (portraitPath && fs.existsSync(portraitPath)) {

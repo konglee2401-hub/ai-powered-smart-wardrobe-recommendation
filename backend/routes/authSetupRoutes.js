@@ -64,7 +64,7 @@ router.post('/run/refresh-google-flow', (req, res) => {
 
 router.post('/run/chatgpt-auto-login', (req, res) => {
   try {
-    const script = path.join(__dirname, '..', 'scripts', 'chatgpt-auto-login.js');
+    const script = path.join(__dirname, '..', 'scripts', 'auth', 'chatgpt', 'login.js');
     if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
     const args = [];
     if (req.query?.mode === 'refresh') args.push('--refresh');

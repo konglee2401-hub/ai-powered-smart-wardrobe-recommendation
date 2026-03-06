@@ -547,6 +547,9 @@ export default function OneClickCreatorPage() {
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const [galleryPickerFor, setGalleryPickerFor] = useState(null); // 'character' or 'product'
   
+  // 📸 Image cache - store fetched images locally to avoid re-fetching
+  const imageCacheRef = useRef(new Map());
+  
   // 🎯 Track image source: gallery or file upload (to skip Drive upload for gallery images)
   const [imageSource, setImageSource] = useState({ character: 'upload', product: 'upload' }); // 'upload' or 'gallery'
 
@@ -909,6 +912,17 @@ export default function OneClickCreatorPage() {
     sessionId = null
   ) => {
     try {
+      // 🔍 Validation: ensure all required base64 strings are provided
+      if (!characterImageBase64) {
+        throw new Error('Character image base64 is required but missing');
+      }
+      if (!productImageBase64) {
+        throw new Error('Product image base64 is required but missing');
+      }
+      if (!sceneImageBase64) {
+        throw new Error('Scene image base64 is required but missing');
+      }
+      
       console.log('🎬 Starting Affiliate Video TikTok Flow');
       console.log(`📋 Parameters received:`);
       console.log(`  Character base64: ${characterImageBase64?.substring(0, 50)}...${characterImageBase64?.length}B`);
@@ -949,51 +963,58 @@ export default function OneClickCreatorPage() {
       };
       
       console.log(`📤 Sending JSON request to /api/ai/affiliate-video-tiktok`);
-      console.log(`   Character base64: ${characterImageBase64.substring(0, 50)}...${characterImageBase64.length}B`);
-      console.log(`   Product base64: ${productImageBase64.substring(0, 50)}...${productImageBase64.length}B`);
+      console.log(`   Character base64: ${characterImageBase64?.substring(0, 50)}...${characterImageBase64?.length}B`);
+      console.log(`   Product base64: ${productImageBase64?.substring(0, 50)}...${productImageBase64?.length}B`);
       if (sceneImageBase64) {
-        console.log(`   Scene base64: ${sceneImageBase64.substring(0, 50)}...${sceneImageBase64.length}B (auto-fetched)`);
+        console.log(`   Scene base64: ${sceneImageBase64?.substring(0, 50)}...${sceneImageBase64?.length}B (auto-fetched)`);
       }
 
       const stopRef = { stop: false };
       const stopPolling = startPreviewPolling(flowId, sessionId, stopRef);
 
-      const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // 🕐 Create AbortController for timeout (20 minutes for TikTok generation)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20 * 60 * 1000);
 
-      stopRef.stop = true;
-      if (typeof stopPolling === 'function') stopPolling();
+      try {
+        const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal  // 🕐 Abort after 20 minutes
+        });
 
-      // 💫 LOG: Confirm scene image was sent
-      console.log(`📤 FormData sent with:`);
-      console.log(`  Character image: ✅ (${characterImageBase64.length} bytes)`);
-      console.log(`  Product image: ✅ (${productImageBase64.length} bytes)`);
-      console.log(`  Scene image: ${sceneImageBase64 ? '✅ (auto-fetched, ' + sceneImageBase64.length + ' bytes) ' : '❌ (not available)'}`);
+        // 💫 LOG: Confirm scene image was sent
+        console.log(`📤 FormData sent with:`);
+        console.log(`  Character image: ✅ (${characterImageBase64.length} bytes)`);
+        console.log(`  Product image: ✅ (${productImageBase64.length} bytes)`);
+        console.log(`  Scene image: ${sceneImageBase64 ? '✅ (auto-fetched, ' + sceneImageBase64.length + ' bytes) ' : '❌ (not available)'}`);
 
-      if (!mainFlowResponse.ok) {
-        const errorData = await mainFlowResponse.json().catch(() => ({}));
-        console.error(`❌ Backend error response [${mainFlowResponse.status}]:`, errorData);
-        throw new Error(`Backend error: ${mainFlowResponse.status} - ${errorData.error || mainFlowResponse.statusText}`);
+        if (!mainFlowResponse.ok) {
+          const errorData = await mainFlowResponse.json().catch(() => ({}));
+          console.error(`❌ Backend error response [${mainFlowResponse.status}]:`, errorData);
+          throw new Error(`Backend error: ${mainFlowResponse.status} - ${errorData.error || mainFlowResponse.statusText}`);
+        }
+
+        const mainFlowData = await mainFlowResponse.json();
+        console.log(`✅ Backend response received:`, mainFlowData);
+
+        if (!mainFlowData.success) {
+          throw new Error(mainFlowData.error || mainFlowData.message || 'Main flow failed');
+        }
+
+        setTiktokFlowId(mainFlowData.flowId || mainFlowData.data?.flowId || flowId);
+        setDeepAnalysisResult(mainFlowData.data?.step3?.analysis || null);
+        setSuggestedHashtags(mainFlowData.data?.step3?.analysis?.hashtags || []);
+        setGeneratedVideo(mainFlowData.data?.step4?.videos?.[0] || null);
+        setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || mainFlowData.data?.step3?.analysis?.voiceoverScript || null);
+
+        return mainFlowData;
+      } finally {
+        clearTimeout(timeoutId);
+        stopRef.stop = true;
+        if (typeof stopPolling === 'function') stopPolling();
       }
-
-      const mainFlowData = await mainFlowResponse.json();
-      console.log(`✅ Backend response received:`, mainFlowData);
-
-      if (!mainFlowData.success) {
-        throw new Error(mainFlowData.error || mainFlowData.message || 'Main flow failed');
-      }
-
-      setTiktokFlowId(mainFlowData.flowId || mainFlowData.data?.flowId || flowId);
-      setDeepAnalysisResult(mainFlowData.data?.step3?.analysis || null);
-      setSuggestedHashtags(mainFlowData.data?.step3?.analysis?.hashtags || []);
-      setGeneratedVideo(mainFlowData.data?.step4?.videos?.[0] || null);
-      setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || mainFlowData.data?.step3?.analysis?.voiceoverScript || null);
-
-      return mainFlowData;
-
     } catch (error) {
       console.error('❌ TikTok flow error:', error);
       throw error;
@@ -1029,6 +1050,31 @@ export default function OneClickCreatorPage() {
     }
   };
 
+  // 🔄 Helper: Convert image URL to data URL (base64)
+  const urlToDataUrl = async (imageUrl) => {
+    try {
+      // If already a data URL, return as-is
+      if (imageUrl.startsWith('data:')) {
+        console.log(`✅ Image already a data URL`);
+        return imageUrl;
+      }
+      
+      console.log(`🔄 Converting URL to data URL: ${imageUrl}`);
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error(`❌ Failed to convert URL to data URL:`, error);
+      throw new Error(`Failed to load image from URL: ${error.message}`);
+    }
+  };
+
   // Main generation flow
   const handleOneClickGeneration = async () => {
     if (!characterImage || !productImage) {
@@ -1040,36 +1086,74 @@ export default function OneClickCreatorPage() {
     setSessions([]);
     let sessionCreationFailed = false;
 
-    // Convert images to base64
-    console.log('📸 Converting images to base64...');
-    console.log(`Character image length: ${characterImage.length}B`);
-    console.log(`Product image length: ${productImage.length}B`);
-
-    let finalSceneImageData = sceneImage;
-    if (!finalSceneImageData) {
-      console.log('🔄 Scene image missing in UI state, trying default scene locked image fallback...');
-      finalSceneImageData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
-      if (finalSceneImageData) {
-        setSceneImage(finalSceneImageData);
-        setSceneImageMode('auto');
+    try {
+      // Convert images to base64
+      console.log('📸 Converting images to base64...');
+      
+      // 🔄 Convert URLs to data URLs if needed
+      let charImageData = characterImage;
+      let prodImageData = productImage;
+      let sceneImageData = sceneImage;
+      
+      // Character image
+      if (charImageData && !charImageData.startsWith('data:')) {
+        console.log('🔄 Character image is URL, converting to data URL...');
+        charImageData = await urlToDataUrl(charImageData);
       }
-    }
+      console.log(`Character image length: ${charImageData.length}B`);
+      
+      // Product image
+      if (prodImageData && !prodImageData.startsWith('data:')) {
+        console.log('🔄 Product image is URL, converting to data URL...');
+        prodImageData = await urlToDataUrl(prodImageData);
+      }
+      console.log(`Product image length: ${prodImageData.length}B`);
 
-    if (!finalSceneImageData) {
-      throw new Error('Scene reference image is required but could not be loaded from scene locked defaults.');
-    }
+      let finalSceneImageData = sceneImageData;
+      if (!finalSceneImageData) {
+        console.log('🔄 Scene image missing in UI state, trying default scene locked image fallback...');
+        finalSceneImageData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+        if (finalSceneImageData) {
+          setSceneImage(finalSceneImageData);
+          setSceneImageMode('auto');
+        }
+      }
 
-    console.log(`Scene image length: ${finalSceneImageData.length}B (${sceneImageMode === 'custom' ? 'custom upload' : 'scene lock default'})`);
+      if (!finalSceneImageData) {
+        throw new Error('Scene reference image is required but could not be loaded from scene locked defaults.');
+      }
+      
+      // Scene image
+      if (finalSceneImageData && !finalSceneImageData.startsWith('data:')) {
+        console.log('🔄 Scene image is URL, converting to data URL...');
+        finalSceneImageData = await urlToDataUrl(finalSceneImageData);
+      }
 
-    const charBase64 = characterImage.split(',')[1];
-    const prodBase64 = productImage.split(',')[1];
-    const sceneBase64 = finalSceneImageData.split(',')[1];
+      console.log(`Scene image length: ${finalSceneImageData.length}B (${sceneImageMode === 'custom' ? 'custom upload' : 'scene lock default'})`);
 
-    
-    // 💫 LOG: Verify base64 was extracted
-    console.log(`✅ Extracted base64 strings:`);
-    console.log(`  Character: ${charBase64?.substring(0, 50)}...${charBase64?.length}B`);
-    console.log(`  Product: ${prodBase64?.substring(0, 50)}...${prodBase64?.length}B`);
+      const charBase64 = charImageData.split(',')[1];
+      const prodBase64 = prodImageData.split(',')[1];
+      const sceneBase64 = finalSceneImageData.split(',')[1];
+
+      
+      // 💫 LOG: Verify base64 was extracted
+      console.log(`✅ Extracted base64 strings:`);
+      console.log(`  Character: ${charBase64?.substring(0, 50)}...${charBase64?.length}B`);
+      console.log(`  Product: ${prodBase64?.substring(0, 50)}...${prodBase64?.length}B`);
+      
+      // 🔍 Validation: ensure all base64 strings are properly extracted
+      if (!charBase64) {
+        console.error('❌ Character image base64 extraction failed. Image format:', charImageData?.substring(0, 100));
+        throw new Error('Character image data is invalid. Please upload or select a valid image.');
+      }
+      if (!prodBase64) {
+        console.error('❌ Product image base64 extraction failed. Image format:', prodImageData?.substring(0, 100));
+        throw new Error('Product image data is invalid. Please upload or select a valid image.');
+      }
+      if (!sceneBase64) {
+        console.error('❌ Scene image base64 extraction failed. Image format:', finalSceneImageData?.substring(0, 100));
+        throw new Error('Scene image data is invalid. Please reload the scene.');
+      }
     if (sceneBase64) {
       console.log(`  Scene: ${sceneBase64?.substring(0, 50)}...${sceneBase64?.length}B (from auto-fetch or manual upload)`);
     }
@@ -1456,7 +1540,13 @@ export default function OneClickCreatorPage() {
     }
 
     setIsGenerating(false);
-  };
+  } catch (error) {
+    // Top-level error handling for image conversion/validation issues
+    console.error('❌ Generation failed:', error);
+    alert(`Generation failed: ${error.message}`);
+    setIsGenerating(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
@@ -2010,97 +2100,141 @@ export default function OneClickCreatorPage() {
           if (galleryPickerFor === 'character') {
             console.log(`⏳ Loading character image from gallery...`);
             
-            // Helper function to fetch with retry for pending assets
-            const fetchWithRetry = (url, attempt = 1, maxAttempts = 3) => {
-              fetch(url, {
-                method: 'GET',
-                headers: { 'Accept': 'image/*' }
-              })
-                .then(res => {
-                  // Handle 503 (asset still processing) with retry
-                  if (res.status === 503) {
-                    const retryAfter = res.headers?.get('Retry-After') || '5';
-                    const waitTime = parseInt(retryAfter) * 1000;
-                    
-                    if (attempt < maxAttempts) {
-                      console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
-                      setTimeout(() => fetchWithRetry(url, attempt + 1, maxAttempts), waitTime);
-                      return;
-                    } else {
-                      throw new Error('Asset is still being prepared after multiple retries');
-                    }
-                  }
-                  
-                  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                  return res.blob();
-                })
-                .then(blob => {
-                  if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                  console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                  // Convert blob to data URL for consistent storage
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    const dataUrl = evt.target?.result;
-                    setCharacterImage(dataUrl);
-                    setImageSource(prev => ({ ...prev, character: 'gallery' })); // 🎯 Mark as from gallery
-                    console.log(`✨ Character image updated as data URL (${dataUrl?.length}B)`);
-                  };
-                  reader.readAsDataURL(blob);
-                })
-                .catch(err => {
-                  console.error('❌ Failed to load gallery image:', err);
-                  alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-                });
+            // 💡 Smart image loading: check cache first, only fetch if not cached
+            const loadImageSmart = async (assetId, url) => {
+              try {
+                // 1️⃣ Check if already in cache
+                if (imageCacheRef.current.has(assetId)) {
+                  console.log(`✅ Image found in cache (${assetId})`);
+                  const cachedDataUrl = imageCacheRef.current.get(assetId);
+                  setCharacterImage(cachedDataUrl);
+                  setImageSource(prev => ({ ...prev, character: 'gallery' }));
+                  return;
+                }
+                
+                // 2️⃣ Not cached, fetch with retry
+                const fetchWithRetry = (attempt = 1, maxAttempts = 3) => {
+                  fetch(url, {
+                    method: 'GET',
+                    headers: { 'Accept': 'image/*' }
+                  })
+                    .then(res => {
+                      // Handle 503 (asset still processing) with retry
+                      if (res.status === 503) {
+                        const retryAfter = res.headers?.get('Retry-After') || '5';
+                        const waitTime = parseInt(retryAfter) * 1000;
+                        
+                        if (attempt < maxAttempts) {
+                          console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
+                          setTimeout(() => fetchWithRetry(attempt + 1, maxAttempts), waitTime);
+                          return;
+                        } else {
+                          throw new Error('Asset is still being prepared after multiple retries');
+                        }
+                      }
+                      
+                      if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                      return res.blob();
+                    })
+                    .then(blob => {
+                      if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                      console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                      
+                      // Convert blob to data URL and cache it
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const dataUrl = evt.target?.result;
+                        // Cache for future use
+                        imageCacheRef.current.set(assetId, dataUrl);
+                        setCharacterImage(dataUrl);
+                        setImageSource(prev => ({ ...prev, character: 'gallery' }));
+                        console.log(`✨ Character image cached and updated (${dataUrl?.length}B)`);
+                      };
+                      reader.readAsDataURL(blob);
+                    })
+                    .catch(err => {
+                      console.error('❌ Failed to load gallery image:', err);
+                      alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+                    });
+                };
+                
+                fetchWithRetry();
+              } catch (err) {
+                console.error('❌ Error in smart image loading:', err);
+                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+              }
             };
             
-            fetchWithRetry(imageData.url);
+            loadImageSmart(imageData.assetId, imageData.url);
           } else if (galleryPickerFor === 'product') {
             console.log(`⏳ Loading product image from gallery...`);
             
-            // Helper function to fetch with retry for pending assets
-            const fetchWithRetry = (url, attempt = 1, maxAttempts = 3) => {
-              fetch(url, {
-                method: 'GET',
-                headers: { 'Accept': 'image/*' }
-              })
-                .then(res => {
-                  // Handle 503 (asset still processing) with retry
-                  if (res.status === 503) {
-                    const retryAfter = res.headers?.get('Retry-After') || '5';
-                    const waitTime = parseInt(retryAfter) * 1000;
-                    
-                    if (attempt < maxAttempts) {
-                      console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
-                      setTimeout(() => fetchWithRetry(url, attempt + 1, maxAttempts), waitTime);
-                      return;
-                    } else {
-                      throw new Error('Asset is still being prepared after multiple retries');
-                    }
-                  }
-                  
-                  if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                  return res.blob();
-                })
-                .then(blob => {
-                  if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                  console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                  // Convert blob to data URL for consistent storage
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    const dataUrl = evt.target?.result;
-                    setProductImage(dataUrl);
-                    setImageSource(prev => ({ ...prev, product: 'gallery' })); // 🎯 Mark as from gallery
-                    console.log(`✨ Product image updated as data URL (${dataUrl?.length}B)`);
-                  };
-                  reader.readAsDataURL(blob);
-                })
-                .catch(err => {
-                  console.error('❌ Failed to load gallery image:', err);
-                  alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-                });
+            // 💡 Smart image loading: check cache first, only fetch if not cached
+            const loadImageSmart = async (assetId, url) => {
+              try {
+                // 1️⃣ Check if already in cache
+                if (imageCacheRef.current.has(assetId)) {
+                  console.log(`✅ Image found in cache (${assetId})`);
+                  const cachedDataUrl = imageCacheRef.current.get(assetId);
+                  setProductImage(cachedDataUrl);
+                  setImageSource(prev => ({ ...prev, product: 'gallery' }));
+                  return;
+                }
+                
+                // 2️⃣ Not cached, fetch with retry
+                const fetchWithRetry = (attempt = 1, maxAttempts = 3) => {
+                  fetch(url, {
+                    method: 'GET',
+                    headers: { 'Accept': 'image/*' }
+                  })
+                    .then(res => {
+                      // Handle 503 (asset still processing) with retry
+                      if (res.status === 503) {
+                        const retryAfter = res.headers?.get('Retry-After') || '5';
+                        const waitTime = parseInt(retryAfter) * 1000;
+                        
+                        if (attempt < maxAttempts) {
+                          console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
+                          setTimeout(() => fetchWithRetry(attempt + 1, maxAttempts), waitTime);
+                          return;
+                        } else {
+                          throw new Error('Asset is still being prepared after multiple retries');
+                        }
+                      }
+                      
+                      if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
+                      return res.blob();
+                    })
+                    .then(blob => {
+                      if (!blob || blob.size === 0) throw new Error('Received empty blob');
+                      console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
+                      
+                      // Convert blob to data URL and cache it
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const dataUrl = evt.target?.result;
+                        // Cache for future use
+                        imageCacheRef.current.set(assetId, dataUrl);
+                        setProductImage(dataUrl);
+                        setImageSource(prev => ({ ...prev, product: 'gallery' }));
+                        console.log(`✨ Product image cached and updated (${dataUrl?.length}B)`);
+                      };
+                      reader.readAsDataURL(blob);
+                    })
+                    .catch(err => {
+                      console.error('❌ Failed to load gallery image:', err);
+                      alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+                    });
+                };
+                
+                fetchWithRetry();
+              } catch (err) {
+                console.error('❌ Error in smart image loading:', err);
+                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
+              }
             };
             
-            fetchWithRetry(imageData.url);
+            loadImageSmart(imageData.assetId, imageData.url)
           }
           setShowGalleryPicker(false);
           setGalleryPickerFor(null);

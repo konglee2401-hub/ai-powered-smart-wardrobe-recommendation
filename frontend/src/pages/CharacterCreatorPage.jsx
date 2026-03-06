@@ -62,25 +62,45 @@ export default function CharacterCreatorPage() {
   };
 
   const regenerateImage = async (idx) => {
-    if (!editingId || !preview[idx] || !portrait) return;
+    if (!editingId || !preview[idx]) {
+      alert('Cannot regenerate: not in edit mode or image not found');
+      return;
+    }
+    
     try {
       setRegeneratingIdx(idx);
       setRegeneratingLoading(true);
+      
       const fd = new FormData();
-      fd.append('portraitImage', portrait);
-      fd.append('name', name);
-      fd.append('alias', alias || name);
+      // If new portrait was uploaded, use it. Otherwise use existing portrait
+      if (portrait) {
+        fd.append('portraitImage', portrait);
+      } else if (portraitTempPath && portraitTempPath.startsWith('http')) {
+        // For existing portrait (URL), we'll fetch and send as blob
+        const response = await fetch(portraitTempPath);
+        const blob = await response.blob();
+        fd.append('portraitImage', blob, 'portrait.png');
+      } else {
+        alert('No portrait available for regeneration');
+        return;
+      }
+      
       fd.append('imageIndex', idx);
 
-      const response = await fetch(`/api/v1/characters/${editingId}/regenerate-image`, {
+      // Use the backend URL from environment or fallback to localhost:5000
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${backendUrl}/characters/${editingId}/regenerate-image`, {
         method: 'POST',
         body: fd
       });
-      const data = await response.json();
+      
+      const data = await res.json();
+      
       if (data.success && data.data) {
         const newImages = [...preview];
         newImages[idx] = data.data;
         setPreview(newImages);
+        alert('Image regenerated successfully!');
       } else {
         alert('Failed to regenerate image: ' + (data.error || 'Unknown error'));
       }

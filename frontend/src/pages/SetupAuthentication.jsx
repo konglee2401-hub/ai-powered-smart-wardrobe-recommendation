@@ -117,7 +117,7 @@ export default function SetupAuthentication() {
 
   const runChatGPTLogin = async (mode) => {
     setMessage('');
-    await axiosInstance.post(`/api/auth-setup/run/chatgpt-auto-login?mode=${mode || ''}`);
+    await axiosInstance.post(`/auth-setup/run/chatgpt-auto-login?mode=${mode || ''}`);
     setMessage(t('authSetup.messages.startedChatGPTLogin'));
     setTimeout(loadStatuses, 4000);
   };
