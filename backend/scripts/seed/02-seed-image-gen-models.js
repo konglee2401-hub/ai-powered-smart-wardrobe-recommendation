@@ -1,9 +1,9 @@
 
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import AIModel from './models/AIModel.js';
-import { IMAGE_GEN_PROVIDERS } from './config/imageGenConfig.js';
-import connectDB from './config/db.js';
+import AIModel from '../../models/AIModel.js';
+import { IMAGE_GEN_PROVIDERS } from '../../config/imageGenConfig.js';
+import connectDB from '../../config/db.js';
 
 dotenv.config();
 
