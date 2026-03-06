@@ -1271,7 +1271,7 @@ export default function ImageGenerationPage() {
   const showUseCaseFocusInfo = currentStep >= 2;
 
   const mainBodyStyle = {
-    height: 'calc(100vh - 56px)'
+    minHeight: 'calc(100vh - 56px)'
   };
 
   return (
@@ -1341,9 +1341,9 @@ export default function ImageGenerationPage() {
       </div>
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1">
         {/* ==================== LEFT TOOLBAR: Mode + Provider ==================== */}
-        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
+        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0">
           <button
             onClick={() => setActiveMode('browser')}
             className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
@@ -1384,7 +1384,7 @@ export default function ImageGenerationPage() {
 
         {/* ==================== LEFT SIDEBAR: Options ==================== */}
         <div className={`${currentStep === 1 ? 'w-72' : currentStep === 3 ? 'w-80' : 'w-60'} bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
-          <div className="p-3 space-y-4 overflow-y-auto flex-1">
+          <div className="p-3 space-y-4">
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
               <>
@@ -1625,10 +1625,10 @@ export default function ImageGenerationPage() {
         </div>
 
         {/* ==================== CENTER + RIGHT ==================== */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex">
             {/* ==================== CENTER MAIN CONTENT ==================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 center-main overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 center-main">
               {showUseCaseFocusInfo && (
                 <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
                   <div className="flex items-center gap-4 text-xs">
@@ -1993,7 +1993,7 @@ export default function ImageGenerationPage() {
             </div>
 
             {/* ==================== RIGHT SIDEBAR ==================== */}
-            <div className="w-60 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
+            <div className="w-60 bg-gray-800 border-l border-gray-700 flex-shrink-0">
               <div className="p-4 space-y-4">
                 {/* SIDEBAR-ANALYSIS-SECTION: Character & Product Info in Sidebar */}
                 {currentStep === 2 && analysis && (
