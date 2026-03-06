@@ -74,7 +74,7 @@ class GoogleFlowAutomationService {
       aspectRatio: options.aspectRatio || '9:16',
       imageCount: this.type === 'image' ? (options.imageCount || 1) : undefined,
       videoCount: this.type === 'video' ? (options.videoCount || 1) : undefined,
-      model: options.model || (this.type === 'image' ? 'Nano Banana Pro' : 'Veo 3.1 - Fast'),
+      model: options.model || (this.type === 'image' ? 'Nano Banana 2' : 'Veo 3.1 - Fast'),
       outputDir: options.outputDir || path.join(__dirname, `../uploads/generated-images`),
       timeouts: {
         pageLoad: 60000,
