@@ -174,36 +174,81 @@ export async function generateCharacterPreview(req, res) {
 
 export async function saveCharacterProfile(req, res) {
   try {
+    console.log(`[Character Save] Received request body keys: ${Object.keys(req.body).join(', ')}`);
+    
     let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    
+    console.log(`[Character Save] Name: ${name}, Alias: ${alias}, Portrait path: ${portraitTempPath}`);
+    
     if (!name || !alias || !portraitTempPath) {
-      return res.status(400).json({ success: false, error: 'name, alias, portraitTempPath are required' });
+      const missing = [];
+      if (!name) missing.push('name');
+      if (!alias) missing.push('alias');
+      if (!portraitTempPath) missing.push('portraitTempPath');
+      const error = `Missing required fields: ${missing.join(', ')}`;
+      console.warn(`[Character Save] ⚠️  ${error}`);
+      return res.status(400).json({ success: false, error });
     }
 
     // Parse if generatedImages comes as string
     if (typeof generatedImages === 'string') {
       try {
+        console.log(`[Character Save] Parsing generatedImages from string...`);
         generatedImages = JSON.parse(generatedImages);
+        console.log(`[Character Save] ✅ Parsed ${generatedImages.length} generated images`);
       } catch (e) {
+        console.warn(`[Character Save] ⚠️  Failed to parse generatedImages: ${e.message}`);
         generatedImages = [];
       }
     }
+    
     // Parse if options comes as string
     if (typeof options === 'string') {
       try {
+        console.log(`[Character Save] Parsing options from string...`);
         options = JSON.parse(options);
+        console.log(`[Character Save] ✅ Parsed options`);
       } catch (e) {
+        console.warn(`[Character Save] ⚠️  Failed to parse options: ${e.message}`);
         options = {};
       }
     }
 
+    // 💫 FIX: Convert string imageCount to number
+    if (options.capturePlan && typeof options.capturePlan.imageCount === 'string') {
+      console.log(`[Character Save] Converting imageCount from string: "${options.capturePlan.imageCount}"`);
+      options.capturePlan.imageCount = parseInt(options.capturePlan.imageCount, 10) || 4;
+      console.log(`[Character Save] ✅ Converted to number: ${options.capturePlan.imageCount}`);
+    }
+
     const normalizedAlias = safeAlias(alias || name);
+    console.log(`[Character Save] Normalized alias: ${normalizedAlias}`);
+    
     const existing = await CharacterProfile.findOne({ alias: normalizedAlias });
-    if (existing) return res.status(400).json({ success: false, error: 'Character alias already exists' });
+    if (existing) {
+      const error = `Character alias "${normalizedAlias}" already exists`;
+      console.warn(`[Character Save] ⚠️  ${error}`);
+      return res.status(400).json({ success: false, error });
+    }
+
+    // Ensure uploads/characters directory exists
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'characters');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log(`[Character Save] Created directory: ${uploadsDir}`);
+    }
 
     const portraitFilename = `${normalizedAlias}-${Date.now()}-portrait.png`;
-    const portraitDest = path.join(characterDir, portraitFilename);
+    const portraitDest = path.join(uploadsDir, portraitFilename);
+    
+    console.log(`[Character Save] Portrait temp path: ${portraitTempPath}`);
+    console.log(`[Character Save] Portrait dest: ${portraitDest}`);
+    
     if (fs.existsSync(portraitTempPath)) {
       fs.copyFileSync(portraitTempPath, portraitDest);
+      console.log(`[Character Save] ✅ Copied portrait file`);
+    } else {
+      console.warn(`[Character Save] ⚠️  Portrait temp path does not exist: ${portraitTempPath}`);
     }
 
     // Process generated images - keep URLs from preview, don't try to copy files
@@ -218,6 +263,8 @@ export async function saveCharacterProfile(req, res) {
         seed: (typeof img.seed === 'number') ? img.seed : null
       }));
 
+    console.log(`[Character Save] Processing ${savedRefs.length} reference images`);
+
     const character = await CharacterProfile.create({
       name,
       alias: normalizedAlias,
@@ -229,8 +276,11 @@ export async function saveCharacterProfile(req, res) {
       status: 'active'
     });
 
+    console.log(`[Character Save] ✅ Successfully saved character: ${name} (${normalizedAlias}), ID: ${character._id}`);
     return res.json({ success: true, data: character });
   } catch (error) {
+    console.error(`[Character Save] ❌ Error: ${error.message}`);
+    console.error(`[Character Save] Stack:`, error.stack);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
