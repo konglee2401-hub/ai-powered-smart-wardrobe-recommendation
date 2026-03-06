@@ -139,21 +139,21 @@ export default function Navbar() {
         } ${isMobileOpen ? 'left-0' : '-left-full lg:left-0'}`}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-[#2c303c] px-4 py-4">
-            <Link to="/" className="flex items-center gap-3 overflow-hidden" onClick={() => setIsMobileOpen(false)}>
-              <div className="rounded-xl bg-gradient-to-br from-fuchsia-600 to-violet-500 p-2">
+          <div className="flex items-center justify-between gap-2 border-b border-[#2c303c] px-4 py-4">
+            <Link to="/" className="flex flex-1 items-center gap-3 overflow-hidden min-w-0" onClick={() => setIsMobileOpen(false)}>
+              <div className="flex-shrink-0 rounded-xl bg-gradient-to-br from-fuchsia-600 to-violet-500 p-2">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               {!isCollapsed && (
-                <div>
-                  <p className="text-sm font-semibold text-white">Smart Wardrobe</p>
-                  <p className="text-xs text-slate-400">AI Creative Studio</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white truncate">Smart Wardrobe</p>
+                  <p className="text-xs text-slate-400 truncate">AI Creative Studio</p>
                 </div>
               )}
             </Link>
             <button
               onClick={() => setIsCollapsed((prev) => !prev)}
-              className="hidden rounded-lg border border-[#313542] bg-[#1c1f29] p-1.5 text-slate-300 transition hover:bg-[#252938] lg:block"
+              className="hidden flex-shrink-0 rounded-lg border border-[#313542] bg-[#1c1f29] p-1.5 text-slate-300 transition hover:bg-[#252938] lg:block"
               aria-label="Collapse sidebar"
             >
               {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
