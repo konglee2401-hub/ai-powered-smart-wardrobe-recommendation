@@ -3,12 +3,55 @@ import { characterAPI } from '../services/api';
 import { RefreshCw } from 'lucide-react';
 
 const defaultOptions = {
-  identity: { gender: '', ageRange: '', ethnicity: '', height: '', bust: '', waist: '', bodyType: '', bodyProportions: '', skinTone: '', distinctiveMarks: '', tattoos: '' },
-  face: { faceShape: '', eyeShape: '', eyeColor: '', eyebrowStyle: '', noseType: '', lipShape: '', jawline: '', smileStyle: '' },
-  hair: { color: '', length: '', texture: '', style: '', parting: '', fringe: '' },
-  styling: { makeupStyle: '', accessories: '', jewelry: '', nails: '', footwearPreference: '', outfitVibe: '' },
-  capturePlan: { imageCount: 6, aspectRatio: '9:16', backgroundStyle: 'clean studio', lightingStyle: 'soft beauty light', cameraLens: '85mm portrait', expressionRange: 'neutral to warm smile', poseDirection: 'close-up + 3/4 + full body' },
-  extraPromptNotes: ''
+  identity: { 
+    gender: 'unspecified', 
+    ageRange: 'young adult', 
+    ethnicity: 'mixed', 
+    height: 'average', 
+    bust: 'balanced', 
+    waist: 'balanced', 
+    bodyType: 'balanced', 
+    bodyProportions: 'natural proportions', 
+    skinTone: 'natural tone', 
+    distinctiveMarks: 'none visible', 
+    tattoos: 'none visible' 
+  },
+  face: { 
+    faceShape: 'natural', 
+    eyeShape: 'natural', 
+    eyeColor: 'natural eye color', 
+    eyebrowStyle: 'natural', 
+    noseType: 'natural', 
+    lipShape: 'natural', 
+    jawline: 'defined', 
+    smileStyle: 'natural' 
+  },
+  hair: { 
+    color: 'natural', 
+    length: 'medium', 
+    texture: 'natural', 
+    style: 'clean natural', 
+    parting: 'natural part', 
+    fringe: 'none' 
+  },
+  styling: { 
+    makeupStyle: 'minimal professional', 
+    accessories: 'minimal', 
+    jewelry: 'minimal', 
+    nails: 'natural', 
+    footwearPreference: 'minimal', 
+    outfitVibe: 'minimal neutral fashion' 
+  },
+  capturePlan: { 
+    imageCount: 6, 
+    aspectRatio: '9:16', 
+    backgroundStyle: 'clean neutral', 
+    lightingStyle: 'soft studio', 
+    cameraLens: '85mm portrait', 
+    expressionRange: 'neutral to warm smile', 
+    poseDirection: 'close-up + 3/4 + full body' 
+  },
+  extraPromptNotes: 'STRICT IDENTITY LOCK: Match reference portrait exactly. Same face, same body, same hairline, same age. Zero deviation. Keep all distinctive features identical.'
 };
 
 export default function CharacterCreatorPage() {
