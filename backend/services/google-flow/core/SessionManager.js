@@ -50,7 +50,7 @@ class SessionManager {
       sessionFilePath: options.sessionFilePath || GOOGLE_FLOW_DEFAULT_SESSION,  // 💫 Shared session file
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
       projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
-      outputDir: options.outputDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'temp/outputs'),
+      outputDir: options.outputDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'uploads/generated-images'),
       timeouts: {
         pageLoad: 60000,
         ...options.timeouts
