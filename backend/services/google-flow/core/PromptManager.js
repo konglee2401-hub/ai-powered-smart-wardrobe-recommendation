@@ -90,14 +90,14 @@ class PromptManager {
         await this.page.waitForTimeout(20);  // Small delay between chars
       }
       console.log('   ✓ Part 1 typed');
-      await this.page.waitForTimeout(300);
+      await this.page.waitForTimeout(1000);  // 1s delay after part 1
 
       // Paste Part 2
       if (part2.length > 0) {
         console.log('   📋 Pasting middle part via clipboard...');
         await ClipboardHelper.copyAndPaste(this.page, part2, textboxSelector);
         console.log('   ✓ Part 2 pasted');
-        await this.page.waitForTimeout(300);
+        await this.page.waitForTimeout(1000);  // 1s delay after part 2
       }
 
       // Type Part 3
@@ -108,13 +108,13 @@ class PromptManager {
           await this.page.waitForTimeout(20);  // Small delay between chars
         }
         console.log('   ✓ Part 3 typed');
-        await this.page.waitForTimeout(300);
+        await this.page.waitForTimeout(1000);  // 1s delay after part 3
       }
 
       // 💫 FIX: After entry, focus + type spaces to trigger Slate editor recognition
       console.log('   📍 Focusing textbox for Slate editor...');
       await this.page.focus(textboxSelector);
-      await this.page.waitForTimeout(300);
+      await this.page.waitForTimeout(1000);  // 1s delay after focus
 
       // Type spaces to trigger validation
       console.log('   ✍️  Adding spaces to trigger Slate editor...');
