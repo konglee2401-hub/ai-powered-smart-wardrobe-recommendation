@@ -16,6 +16,7 @@ import { api, unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } f
 import promptTemplateService from '../services/promptTemplateService';
 import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
 import GalleryPicker from '../components/GalleryPicker';
+import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import SessionLogModal from '../components/SessionLogModal';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 import ScenePickerModal from '../components/ScenePickerModal';
@@ -536,6 +537,8 @@ export default function OneClickCreatorPage() {
   // Upload states
   const [characterImage, setCharacterImage] = useState(null);
   const [productImage, setProductImage] = useState(null);
+  const [selectedCharacterProfile, setSelectedCharacterProfile] = useState(null);
+  const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [sceneImage, setSceneImage] = useState(null); // 💫 NEW: Optional scene reference image
   const fileInputRef = useRef(null);
   const sceneFileInputRef = useRef(null); // 💫 NEW: Ref for scene file input
@@ -1296,6 +1299,7 @@ export default function OneClickCreatorPage() {
               imageCount: DESIRED_OUTPUT_COUNT,
               grokConversationId: analysisResult?.grokConversationId,
               characterDescription: analysisResult?.characterDescription,
+              selectedCharacter: selectedCharacterProfile,
             }
           );
 
@@ -1729,7 +1733,8 @@ export default function OneClickCreatorPage() {
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <Upload className="w-4 h-4" />
-                {t('oneClickCreator.uploadImagesStep')}
+{t('oneClickCreator.uploadImagesStep')}
+                <button onClick={() => setShowCharacterSelector(true)} className="ml-3 px-2 py-1 text-xs rounded bg-fuchsia-600">Select Character Profile</button>
               </h3>
 
               <div className="mb-4 p-3 rounded-lg border border-purple-700/60 bg-purple-950/30">
@@ -1976,6 +1981,17 @@ export default function OneClickCreatorPage() {
       </div>
 
       {/* Gallery Picker Modal */}
+      <CharacterSelectorModal
+        open={showCharacterSelector}
+        onClose={() => setShowCharacterSelector(false)}
+        onSelect={(c) => {
+          setSelectedCharacterProfile(c);
+          setCharacterImage(c.portraitUrl);
+          setImageSource(prev => ({ ...prev, character: 'character-profile' }));
+          setShowCharacterSelector(false);
+        }}
+      />
+
       <GalleryPicker
         isOpen={showGalleryPicker}
         onClose={() => {
