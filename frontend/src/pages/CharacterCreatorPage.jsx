@@ -4,43 +4,43 @@ import { RefreshCw } from 'lucide-react';
 
 const defaultOptions = {
   identity: { 
-    gender: 'unspecified', 
-    ageRange: 'young adult', 
-    ethnicity: 'mixed', 
-    height: 'average', 
-    bust: 'balanced', 
-    waist: 'balanced', 
-    bodyType: 'balanced', 
-    bodyProportions: 'natural proportions', 
-    skinTone: 'natural tone', 
-    distinctiveMarks: 'none visible', 
-    tattoos: 'none visible' 
+    gender: 'female', 
+    ageRange: '20-22', 
+    ethnicity: 'match reference', 
+    height: 'match reference', 
+    bust: 'match reference', 
+    waist: 'match reference', 
+    bodyType: 'match reference', 
+    bodyProportions: 'match reference', 
+    skinTone: 'match reference', 
+    distinctiveMarks: 'match reference', 
+    tattoos: '' 
   },
   face: { 
-    faceShape: 'natural', 
-    eyeShape: 'natural', 
-    eyeColor: 'natural eye color', 
-    eyebrowStyle: 'natural', 
-    noseType: 'natural', 
-    lipShape: 'natural', 
-    jawline: 'defined', 
-    smileStyle: 'natural' 
+    faceShape: 'match reference', 
+    eyeShape: 'match reference', 
+    eyeColor: 'match reference', 
+    eyebrowStyle: 'match reference', 
+    noseType: 'match reference', 
+    lipShape: 'match reference', 
+    jawline: 'match reference', 
+    smileStyle: 'match reference' 
   },
   hair: { 
-    color: 'natural', 
-    length: 'medium', 
-    texture: 'natural', 
-    style: 'clean natural', 
-    parting: 'natural part', 
-    fringe: 'none' 
+    color: 'match reference', 
+    length: 'match reference', 
+    texture: 'match reference', 
+    style: 'match reference', 
+    parting: 'match reference', 
+    fringe: 'match reference' 
   },
   styling: { 
-    makeupStyle: 'minimal professional', 
-    accessories: 'minimal', 
-    jewelry: 'minimal', 
-    nails: 'natural', 
-    footwearPreference: 'minimal', 
-    outfitVibe: 'minimal neutral fashion' 
+    makeupStyle: 'match reference', 
+    accessories: 'match reference', 
+    jewelry: 'match reference', 
+    nails: 'match reference', 
+    footwearPreference: 'match reference', 
+    outfitVibe: 'match reference' 
   },
   capturePlan: { 
     imageCount: 6, 
@@ -48,7 +48,7 @@ const defaultOptions = {
     backgroundStyle: 'clean neutral', 
     lightingStyle: 'soft studio', 
     cameraLens: '85mm portrait', 
-    expressionRange: 'neutral to warm smile', 
+    expressionRange: 'match reference', 
     poseDirection: 'close-up + 3/4 + full body' 
   },
   extraPromptNotes: 'STRICT IDENTITY LOCK: Match reference portrait exactly. Same face, same body, same hairline, same age. Zero deviation. Keep all distinctive features identical.'
