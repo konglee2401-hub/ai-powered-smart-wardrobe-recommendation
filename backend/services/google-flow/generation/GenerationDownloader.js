@@ -203,17 +203,17 @@ class GenerationDownloader {
     const mediaType = this.options.mediaType === 'video' ? 'video' : 'image';
     const mediaExt = this.options.mediaType === 'video' ? '.mp4' : '.jpg';
     
-    // Determine quality preferences
+    // Determine quality preferences (DISTINCT qualities only, no duplicates)
     let qualityOptions = [];
     if (this.options.mediaType === 'image' && this.options.modelName === 'Nano Banana Pro') {
-      qualityOptions = ['2k', '2K', '1k', '1K'];
-      console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first)`);
+      qualityOptions = ['2k', '1k'];  // 💫 FIX: Distinct qualities (no '2K', '1K' duplicates)
+      console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first, then 1K fallback)`);
     } else if (this.options.mediaType === 'image') {
-      qualityOptions = ['2k', '2K', '1k', '1K'];  // 💫 Default: Try 2K first, then 1K
-      console.log(`   ℹ️  Image (trying 2K first)`);
+      qualityOptions = ['2k', '1k'];  // 💫 FIX: Distinct qualities
+      console.log(`   ℹ️  Image (trying 2K first, then 1K fallback)`);
     } else {
-      qualityOptions = ['1080p', '1080P', '720p', '720P'];
-      console.log(`   ℹ️  Video (trying 1080P first)`);
+      qualityOptions = ['1080p', '720p'];  // 💫 FIX: Distinct qualities
+      console.log(`   ℹ️  Video (trying 1080P first, then 720P fallback)`);
     }
     
     console.log(`⬇️  DOWNLOADING ${mediaType.toUpperCase()} VIA CONTEXT MENU\n`);
@@ -310,7 +310,7 @@ class GenerationDownloader {
       
       const qualityAttempts = [
         { quality: qualityOptions[0], isFallback: false },  // First: 2K/1080p
-        { quality: qualityOptions[qualityOptions.length > 1 ? 1 : 0], isFallback: true }  // Second: 1K/720p (or first if only one)
+        { quality: qualityOptions[1] || qualityOptions[0], isFallback: true }  // Second: 1K/720p (guaranteed to be different)
       ];
       
       for (let attemptIdx = 0; attemptIdx < qualityAttempts.length; attemptIdx++) {
@@ -477,6 +477,13 @@ class GenerationDownloader {
 
         console.log(`   ✅ ${quality} selected (${isFallback ? 'fallback' : 'preferred'}). Waiting for download...\n`);
 
+        // 💫 FIX: Recapture initialFiles RIGHT BEFORE download starts
+        // This ensures we ignore any partial/incomplete downloads from previous attempts
+        // and handle Chrome's virus scan temporary files
+        // CRITICAL: This must be AFTER quality selection but BEFORE waitForDownloadCompletion
+        const initialFilesForThisAttempt = fs.readdirSync(this.options.outputDir);
+        console.log(`   📋 Baseline files (${initialFilesForThisAttempt.length}): ${initialFilesForThisAttempt.slice(0, 3).map(f => f.substring(0, 40)).join(', ')}${initialFilesForThisAttempt.length > 3 ? '...' : ''}`);
+
         // 💫 FIX: Wait minimum 10 seconds after clicking button for process to start
         // Google Flow needs time to initiate the download/upgrade process
         console.log(`   ⏳ Giving server 10s to start download process...`);
@@ -569,9 +576,10 @@ class GenerationDownloader {
           return null;
         })();
         
+        // 💫 FIX: Pass initialFilesForThisAttempt to waitForDownloadCompletion
         // Start download completion check
         const downloadPromise = (async () => {
-          const downloadFile = await this.waitForDownloadCompletion();
+          const downloadFile = await this.waitForDownloadCompletion(initialFilesForThisAttempt);
           downloadCompleated = true;
           return downloadFile;
         })();
@@ -794,8 +802,10 @@ class GenerationDownloader {
    * Checks output directory and user Downloads folder
    * Returns path to downloaded file
    */
-  async waitForDownloadCompletion() {
-    const initialFiles = fs.readdirSync(this.options.outputDir);
+  async waitForDownloadCompletion(initialFilesFromCaller = null) {
+    // 💫 FIX: Accept initialFiles from caller (captured right before download)
+    // If caller didn't provide, capture now (fallback for old callers)
+    const initialFiles = initialFilesFromCaller || fs.readdirSync(this.options.outputDir);
     const maxWaitAttempts = 300; // 150 seconds
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'];
     const videoExtensions = ['.mp4', '.mkv', '.mov', '.avi'];
@@ -815,9 +825,38 @@ class GenerationDownloader {
       let currentFiles = fs.readdirSync(this.options.outputDir);
       
       let newFiles = currentFiles.filter(f => {
-        if (f.endsWith('.crdownload') || f.endsWith('.tmp') || f.endsWith('.partial')) {
+        // 💫 FIX: Ignore more incomplete/temporary file types (Chrome virus scan, .download, etc)
+        const ignorePatterns = [
+          '.crdownload',    // Chrome in-progress
+          '.tmp',           // Temporary
+          '.partial',       // Partial download
+          '.download',      // Some browsers mark as .download during scan
+          '.quarantine',    // Chrome virus scan quarantine
+          '.incomplete',    // Firefox mark
+          '.checking',      // Custom checking flag
+          '.virus',         // Chrome virus scanning in progress
+          '~',              // Windows temporary
+          '.zip',           // Sometimes created as temp
+        ];
+        
+        for (const pattern of ignorePatterns) {
+          if (f.toLowerCase().endsWith(pattern) || f.toLowerCase().includes(pattern + '.')) {
+            return false;
+          }
+        }
+        
+        // 💫 FIX: Also ignore tiny files (< 10KB) which are likely metadata/virus scan files
+        try {
+          const fullPath = path.join(this.options.outputDir, f);
+          const stats = fs.statSync(fullPath);
+          if (stats.size < 10240) {  // Less than 10KB
+            return false;
+          }
+        } catch (e) {
+          // If we can't stat it, ignore it
           return false;
         }
+        
         const hasAllowedExt = allowedExtensions.some(ext => f.toLowerCase().endsWith(ext));
         return hasAllowedExt && !initialFiles.includes(f);
       });
@@ -839,8 +878,31 @@ class GenerationDownloader {
       if (fs.existsSync(this.options.userDownloadsDir)) {
         const downloadsFiles = fs.readdirSync(this.options.userDownloadsDir);
         const downloadedFiles = downloadsFiles.filter(f => {
+          // 💫 FIX: Use same robust filtering as output directory
+          const ignorePatterns = [
+            '.crdownload', '.tmp', '.partial', '.download', '.quarantine',
+            '.incomplete', '.checking', '.virus', '~', '.zip'
+          ];
+          
+          for (const pattern of ignorePatterns) {
+            if (f.toLowerCase().endsWith(pattern) || f.toLowerCase().includes(pattern + '.')) {
+              return false;
+            }
+          }
+          
+          // Ignore tiny files (< 10KB)
+          try {
+            const fullPath = path.join(this.options.userDownloadsDir, f);
+            const stats = fs.statSync(fullPath);
+            if (stats.size < 10240) {
+              return false;
+            }
+          } catch (e) {
+            return false;
+          }
+          
           const hasAllowedExt = allowedExtensions.some(ext => f.toLowerCase().endsWith(ext));
-          return hasAllowedExt && !f.endsWith('.crdownload') && !f.endsWith('.tmp') && !f.endsWith('.partial');
+          return hasAllowedExt;
         });
         
         if (downloadedFiles.length > 0) {
