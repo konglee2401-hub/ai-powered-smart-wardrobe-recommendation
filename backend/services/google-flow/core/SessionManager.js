@@ -79,45 +79,6 @@ class SessionManager {
 
     const headlessMode = this.options.headless === true ? 'new' : this.options.headless;
     
-    // 💫 Create Chrome preferences file to configure downloads
-    const prefsPath = path.join(this.profileDir, 'Default', 'Preferences');
-    const prefsDir = path.dirname(prefsPath);
-    if (!fs.existsSync(prefsDir)) {
-      fs.mkdirSync(prefsDir, { recursive: true });
-    }
-    
-    let existingPrefs = {};
-    if (fs.existsSync(prefsPath)) {
-      try {
-        existingPrefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
-      } catch (e) {
-        console.log(`   ⚠️  Could not parse existing prefs, will create new`);
-      }
-    }
-    
-    // Configure download preferences
-    const updatedPrefs = {
-      ...existingPrefs,
-      profile: {
-        ...(existingPrefs.profile || {}),
-        managed_default_content_settings: {
-          ...(existingPrefs.profile?.managed_default_content_settings || {}),
-          downloads: 1  // 1 = allow, 0 = block
-        }
-      },
-      download: {
-        default_directory: this.options.outputDir,  // 💫 Download to project folder instead of Windows Downloads
-        prompt_for_download: false,  // Don't show download prompt
-        directory_upgrade: true
-      },
-      safebrowsing: {
-        enabled: false  // Disable Safe Browsing warnings (prevents "virus scan failed" issues)
-      }
-    };
-    
-    fs.writeFileSync(prefsPath, JSON.stringify(updatedPrefs, null, 2), 'utf8');
-    console.log(`   💾 Chrome prefs configured: downloads → ${this.options.outputDir}`);
-    
     this.browser = await puppeteer.launch({
       headless: headlessMode,
       args: [
