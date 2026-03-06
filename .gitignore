@@ -33,8 +33,15 @@ backend/test-results/
 drive-token.json
 lab-flow-auth.json
 backend/.sessions/
+backend/sessions/
 backend/data/chatgpt-session.json
 backend/data/*.json
+backend/scripts/auth/data/**/session.json
+backend/scripts/auth/data/**/*.json
+*-session.json
+*-sessions.json
+session.json
+sessions.json
 
 # Environment and config
 coverage/
