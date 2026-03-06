@@ -381,10 +381,22 @@ export async function saveCharacterProfile(req, res) {
     console.log(`[Character Save] 🔥 CRITICAL: referenceImages array length:`, characterData.referenceImages.length);
     console.log(`[Character Save] 🔥 CRITICAL: referenceImages[0] type check:`, Array.isArray(characterData.referenceImages), characterData.referenceImages[0] ? 'is object' : 'no first item');
 
-    const character = await CharacterProfile.create(characterData);
+    // 💫 FIX: Use new + save() instead of create() to avoid Mongoose serialization issues
+    const character = new CharacterProfile(characterData);
+    console.log(`[Character Save] Created instance, referenceImages in instance:`, character.referenceImages?.length);
+    await character.save();
+    console.log(`[Character Save] ✅ Saved successfully!`);
 
     console.log(`[Character Save] ✅ Successfully saved character: ${name} (${normalizedAlias}), ID: ${character._id}`);
     console.log(`[Character Save] ✅ Saved with ${character.referenceImages.length} reference images`);
+    
+    // Verify what was actually saved
+    const savedChar = await CharacterProfile.findById(character._id);
+    console.log(`[Character Save] ✅ Verification query returned character with ${savedChar.referenceImages.length} refs`);
+    if (savedChar.referenceImages[0]) {
+      console.log(`[Character Save] ✅ First ref in DB:`, JSON.stringify(savedChar.referenceImages[0], null, 2).substring(0, 200));
+    }
+    
     return res.json({ success: true, data: character });
   } catch (error) {
     console.error(`[Character Save] ❌ Error: ${error.message}`);
