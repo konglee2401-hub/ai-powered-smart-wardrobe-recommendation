@@ -130,7 +130,19 @@ class GenerationDownloader {
   async closeUpgradeDialog() {
     try {
       const closed = await this.page.evaluate(() => {
-        // Try various close methods
+        // Try Sonner toast close button first
+        const sonnerToasts = document.querySelectorAll('[data-sonner-toast]');
+        for (const toast of sonnerToasts) {
+          // Sonner toast has a close button inside
+          const closeBtn = toast.querySelector('button');
+          if (closeBtn) {
+            closeBtn.click();
+            console.log('Clicked Sonner toast close button');
+            return true;
+          }
+        }
+        
+        // Try various dialog/modal selectors
         const dialogs = document.querySelectorAll('dialog, [role="dialog"], [role="alertdialog"], .modal, [class*="modal"]');
         
         for (const dialog of dialogs) {
@@ -162,7 +174,7 @@ class GenerationDownloader {
       });
       
       if (closed) {
-        console.log('   ✓ Error dialog closed');
+        console.log('   ✓ Dialog/Toast closed');
         await this.page.waitForTimeout(1000);
       }
       return closed;
