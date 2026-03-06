@@ -131,23 +131,17 @@ export async function saveCharacterProfile(req, res) {
       fs.copyFileSync(portraitTempPath, portraitDest);
     }
 
-    const savedRefs = [];
-    generatedImages.forEach((img, idx) => {
-      const srcPath = img.path || (img.filename && global.generatedImagePaths?.[img.filename]);
-      if (srcPath && fs.existsSync(srcPath)) {
-        const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
-        const outPath = path.join(characterDir, outName);
-        fs.copyFileSync(srcPath, outPath);
-        savedRefs.push({
-          url: `http://localhost:5000/uploads/characters/${outName}`,
-          path: outPath,
-          angle: img.angle || `shot-${idx + 1}`,
-          type: idx < 2 ? 'portrait' : 'full-body',
-          prompt: img.prompt || '',
-          seed: img.seed
-        });
-      }
-    });
+    // Process generated images - keep URLs from preview, don't try to copy files
+    const savedRefs = generatedImages
+      .filter(img => img.url) // Only keep images with URLs
+      .map((img, idx) => ({
+        url: img.url,
+        path: img.path || '',
+        angle: img.angle || `shot-${idx + 1}`,
+        type: idx < 2 ? 'portrait' : 'full-body',
+        prompt: img.prompt || '',
+        seed: typeof img.seed === 'number' ? img.seed : null
+      }));
 
     const character = await CharacterProfile.create({
       name,
