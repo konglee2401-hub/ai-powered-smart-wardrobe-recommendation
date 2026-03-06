@@ -37,7 +37,7 @@ class SettingsManager {
       imageCount: options.imageCount || 1,
       videoCount: options.videoCount || 1,
       aspectRatio: options.aspectRatio || '9:16',
-      model: options.model || 'Nano Banana Pro',
+      model: options.model || 'Nano Banana 2',
       videoReferenceType: options.videoReferenceType || 'ingredients',
       ...options
     };
@@ -112,8 +112,8 @@ class SettingsManager {
       let effectiveTargetModel = targetModel;
 
       if (this.options.type === 'image' && !allowedImageModels.includes(targetModel)) {
-        console.log(`   ⚠️  Unsupported image model "${targetModel}", fallback to "Nano Banana Pro"`);
-        effectiveTargetModel = 'Nano Banana Pro';
+        console.log(`   ⚠️  Unsupported image model "${targetModel}", fallback to "Nano Banana 2"`);
+        effectiveTargetModel = 'Nano Banana 2';
       }
 
       console.log(`   > Target model: "${targetModel}"`);

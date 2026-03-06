@@ -132,6 +132,19 @@ class SessionManager {
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 720 });
 
+    // 💫 FIX: Configure download behavior using Puppeteer's CDP protocol
+    // This is more reliable than Chrome Preferences file for setting download folder
+    try {
+      const client = await this.page.target().createCDPSession();
+      await client.send('Page.setDownloadBehavior', {
+        behavior: 'allow',
+        downloadPath: this.options.outputDir
+      });
+      console.log(`   ✅ Download behavior configured (CDP): ${this.options.outputDir}`);
+    } catch (e) {
+      console.log(`   ⚠️  Could not set download behavior via CDP: ${e.message}`);
+    }
+
     // Load session and check token freshness
     await this.loadSession();
     

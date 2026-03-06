@@ -54,7 +54,7 @@ function getImageGenerationService(provider, options = {}) {
         type: 'image',
         aspectRatio: '9:16',
         imageCount: 1,
-        model: 'Nano Banana Pro',
+        model: 'Nano Banana 2',
         headless,
         ...options
       });

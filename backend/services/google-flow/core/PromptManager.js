@@ -38,7 +38,7 @@ class PromptManager {
    * 
    * This approach is more reliable for long prompts
    */
-  async enterPrompt(prompts, modelName = 'Nano Banana Pro') {
+  async enterPrompt(prompts, modelName = 'Nano Banana 2') {
     console.log('📝 ENTERING PROMPT (3-Part Strategy)\n');
 
     // Support both string and array of prompts (for multi-segment video)

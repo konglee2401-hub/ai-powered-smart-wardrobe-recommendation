@@ -33,7 +33,7 @@ class GenerationDownloader {
     
     this.options = {
       outputDir: baseOptions.outputDir || './downloads',
-      modelName: baseOptions.modelName || 'Nano Banana Pro',
+      modelName: baseOptions.modelName || 'Nano Banana 2',
       mediaType: baseOptions.mediaType || 'image',
       userDownloadsDir: baseOptions.userDownloadsDir || path.join(process.env.USERPROFILE || '', 'Downloads')
     };
@@ -205,7 +205,7 @@ class GenerationDownloader {
     
     // Determine quality preferences (DISTINCT qualities only, no duplicates)
     let qualityOptions = [];
-    if (this.options.mediaType === 'image' && this.options.modelName === 'Nano Banana Pro') {
+    if (this.options.mediaType === 'image' && this.options.modelName === 'Nano Banana 2') {
       qualityOptions = ['2k', '1k'];  // 💫 FIX: Distinct qualities (no '2K', '1K' duplicates)
       console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first, then 1K fallback)`);
     } else if (this.options.mediaType === 'image') {
