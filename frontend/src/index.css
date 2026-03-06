@@ -205,7 +205,6 @@ body {
 .apple-typography select option:disabled {
   color: #64748b;
 }
-
 .apple-typography input:focus,
 .apple-typography select:focus,
 .apple-typography textarea:focus {
