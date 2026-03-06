@@ -28,6 +28,8 @@ backend/media/
 backend/test-images/
 backend/test-videos/
 backend/test-results/
+scraper_service/downloads
+.playwright-cli/
 
 # Authentication and sensitive data
 drive-token.json

@@ -503,6 +503,29 @@ export default function OneClickCreatorPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
+  const sidebarCardClass = 'rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900 via-[#10182d] to-[#0b1326] p-4 shadow-[0_10px_35px_rgba(2,6,23,0.35)]';
+  const accentCardClass = 'rounded-xl border border-violet-700/50 bg-gradient-to-br from-violet-950/55 via-slate-900 to-[#101a34] p-4 shadow-[0_12px_36px_rgba(76,29,149,0.22)]';
+  const optionButtonBaseClass = 'w-full rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const optionButtonIdleClass = 'border-slate-600/70 bg-slate-800/75 text-slate-200 hover:border-slate-400 hover:bg-slate-700/90 hover:text-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.32)]';
+
+  const getOptionButtonClass = (isSelected, selectedClass) =>
+    `${optionButtonBaseClass} ${isSelected ? selectedClass : optionButtonIdleClass}`;
+
+  const getSelectCardClass = (isActive) =>
+    `${sidebarCardClass} transition-all duration-200 ${isActive ? 'border-amber-500/60 shadow-[0_0_0_1px_rgba(251,191,36,0.14),0_14px_32px_rgba(245,158,11,0.12)]' : 'hover:border-slate-500/80'}`;
+
+  const selectInputClass = 'w-full appearance-none rounded-2xl border border-slate-500/80 bg-slate-900/90 px-4 py-3 pr-11 text-sm font-semibold text-white shadow-inner outline-none transition-all duration-200 hover:border-slate-300 hover:bg-slate-800/95 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50';
+
+  const getUseCaseLabel = (value) => {
+    const option = USE_CASES.find((item) => item.value === value);
+    return option ? t(option.labelKey) : value;
+  };
+
+  const getFocusLabel = (value) => {
+    const option = FOCUS_OPTIONS.find((item) => item.value === value);
+    return option ? t(option.labelKey) : value;
+  };
+
   // Get translated workflow steps
   const getWorkflowSteps = () => {
     const workflowMap = {
@@ -1552,7 +1575,7 @@ export default function OneClickCreatorPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
       {/* Header */}
       <div className="bg-gray-900/50 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="w-full px-6 py-4 flex items-center">
           <div className="flex items-center gap-3">
             <Sparkles className="w-6 h-6 text-amber-400" />
             <div>
@@ -1560,71 +1583,71 @@ export default function OneClickCreatorPage() {
               <p className="text-sm text-gray-400">{t('oneClickCreator.subtitle')}</p>
             </div>
           </div>
-          <button
-            onClick={() => navigate('/generate')}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 h-[calc(100vh-80px)]">
+      <div className="w-full px-6 py-6 h-[calc(100vh-80px)]">
 
         <div className="grid grid-cols-12 gap-6 h-full">
           {/* LEFT SIDEBAR - Settings */}
-          <div className="col-span-3 space-y-4 overflow-y-auto pr-2">
+          <div className="col-span-4 grid grid-cols-2 gap-4 content-start overflow-y-auto pr-2">
             {/* Use Case */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <Target className="w-4 h-4" />
-                {t('oneClickCreator.useCase')}
-              </h3>
-              <select
-                value={useCase}
-                onChange={(e) => setUseCase(e.target.value)}
-                disabled={isGenerating}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-gray-200 text-sm border border-gray-600 focus:border-amber-500 outline-none disabled:opacity-50"
-              >
-                {USE_CASES.map(uc => (
-                  <option key={uc.value} value={uc.value}>{t(uc.labelKey)}</option>
-                ))}
-              </select>
+            <div className={getSelectCardClass(Boolean(useCase))}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+                  <Target className="w-4 h-4 text-amber-300" />
+                  {t('oneClickCreator.useCase')}
+                </h3>
+                <span className="rounded-full border border-amber-400/35 bg-amber-500/12 px-2.5 py-1 text-[11px] font-semibold text-amber-200">
+                  {getUseCaseLabel(useCase)}
+                </span>
+              </div>
+              <div className="relative">
+                <select
+                  value={useCase}
+                  onChange={(e) => setUseCase(e.target.value)}
+                  disabled={isGenerating}
+                  className={selectInputClass}
+                >
+                  {USE_CASES.map(uc => (
+                    <option key={uc.value} value={uc.value}>{t(uc.labelKey)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-300" />
+              </div>
             </div>
 
             {/* Product Focus */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                {t('oneClickCreator.productFocus')}
-              </h3>
-              <select
-                value={productFocus}
-                onChange={(e) => setProductFocus(e.target.value)}
-                disabled={isGenerating}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-gray-200 text-sm border border-gray-600 focus:border-amber-500 outline-none disabled:opacity-50"
-              >
-                {FOCUS_OPTIONS.map(fo => (
-                  <option key={fo.value} value={fo.value}>{t(fo.labelKey)}</option>
-                ))}
-              </select>
+            <div className={getSelectCardClass(Boolean(productFocus))}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-cyan-300" />
+                  {t('oneClickCreator.productFocus')}
+                </h3>
+                <span className="rounded-full border border-cyan-400/35 bg-cyan-500/12 px-2.5 py-1 text-[11px] font-semibold text-cyan-200">
+                  {getFocusLabel(productFocus)}
+                </span>
+              </div>
+              <div className="relative">
+                <select
+                  value={productFocus}
+                  onChange={(e) => setProductFocus(e.target.value)}
+                  disabled={isGenerating}
+                  className={selectInputClass}
+                >
+                  {FOCUS_OPTIONS.map(fo => (
+                    <option key={fo.value} value={fo.value}>{t(fo.labelKey)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+              </div>
             </div>
 
-            {/* Analysis Provider Info */}
-            <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-blue-300 mb-2 flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                {t('oneClickCreator.analysisAuto')}
-              </h3>
-              <p className="text-xs text-blue-200">
-                🤖 {t('oneClickCreator.analysisProvider')}
-              </p>
-            </div>
 
             {/* Image Provider */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" />
+            <div className={sidebarCardClass}>
+              <h3 className="text-sm font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-amber-300" />
                 {t('oneClickCreator.imageProvider')}
               </h3>
               <div className="space-y-2">
@@ -1633,11 +1656,10 @@ export default function OneClickCreatorPage() {
                     key={p.id}
                     onClick={() => setImageProvider(p.id)}
                     disabled={isGenerating}
-                    className={`w-full p-2 rounded text-sm transition-all disabled:opacity-50 ${
-                      imageProvider === p.id
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    }`}
+                    className={getOptionButtonClass(
+                      imageProvider === p.id,
+                      'border-amber-400/70 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_26px_rgba(245,158,11,0.35)] hover:from-amber-400 hover:to-orange-400'
+                    )}
                   >
                     {p.icon} {p.label}
                   </button>
@@ -1647,27 +1669,26 @@ export default function OneClickCreatorPage() {
 
 
             {/* Prompt Mode */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.useShortPrompt')}</h3>
+            <div className={sidebarCardClass}>
+              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.useShortPrompt')}</h3>
               <button
                 type="button"
                 onClick={() => setUseShortPrompt(prev => !prev)}
                 disabled={isGenerating}
-                className={`w-full px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 ${
-                  useShortPrompt
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                }`}
+                className={getOptionButtonClass(
+                  useShortPrompt,
+                  'border-amber-400/70 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_26px_rgba(245,158,11,0.35)] hover:from-amber-400 hover:to-orange-400'
+                )}
               >
                 {useShortPrompt ? t('oneClickCreator.enabled') : t('oneClickCreator.disabled')}
               </button>
-              <p className="text-xs text-gray-400 mt-2">{t('oneClickCreator.shortPromptHint')}</p>
+              <p className="text-xs text-gray-400 mt-2 leading-5">{t('oneClickCreator.shortPromptHint')}</p>
             </div>
 
             {/* Video Provider */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <Video className="w-4 h-4" />
+            <div className={sidebarCardClass}>
+              <h3 className="text-sm font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                <Video className="w-4 h-4 text-violet-300" />
                 {t('oneClickCreator.videoProvider')}
               </h3>
               <div className="space-y-2">
@@ -1676,11 +1697,10 @@ export default function OneClickCreatorPage() {
                     key={p.id}
                     onClick={() => setVideoProvider(p.id)}
                     disabled={isGenerating}
-                    className={`w-full p-2 rounded text-sm transition-all disabled:opacity-50 ${
-                      videoProvider === p.id
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    }`}
+                    className={getOptionButtonClass(
+                      videoProvider === p.id,
+                      'border-violet-400/70 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-[0_10px_26px_rgba(139,92,246,0.35)] hover:from-violet-400 hover:to-fuchsia-400'
+                    )}
                   >
                     {p.icon} {p.label}
                   </button>
@@ -1689,19 +1709,18 @@ export default function OneClickCreatorPage() {
             </div>
 
             {/* Quantity */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.quantity')}</h3>
-              <div className="grid grid-cols-5 gap-1">
+            <div className={sidebarCardClass}>
+              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.quantity')}</h3>
+              <div className="grid grid-cols-5 gap-1.5">
                 {[1, 2, 3, 4, 5].map(q => (
                   <button
                     key={q}
                     onClick={() => setQuantity(q)}
                     disabled={isGenerating}
-                    className={`p-2 rounded text-sm font-semibold transition-all disabled:opacity-50 ${
-                      quantity === q
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    }`}
+                    className={getOptionButtonClass(
+                      quantity === q,
+                      'border-emerald-400/70 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_10px_26px_rgba(16,185,129,0.32)] hover:from-emerald-400 hover:to-teal-400'
+                    )}
                   >
                     {q}
                   </button>
@@ -1710,19 +1729,18 @@ export default function OneClickCreatorPage() {
             </div>
 
             {/* Aspect Ratio */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-200 mb-3">{t('oneClickCreator.aspectRatio')}</h3>
+            <div className={sidebarCardClass}>
+              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.aspectRatio')}</h3>
               <div className="space-y-2">
                 {ASPECT_RATIOS.map(ar => (
                   <button
                     key={ar.id}
                     onClick={() => setAspectRatio(ar.id)}
                     disabled={isGenerating}
-                    className={`w-full p-2 rounded text-sm transition-all disabled:opacity-50 ${
-                      aspectRatio === ar.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                    }`}
+                    className={getOptionButtonClass(
+                      aspectRatio === ar.id,
+                      'border-sky-400/70 bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-[0_10px_26px_rgba(59,130,246,0.34)] hover:from-sky-400 hover:to-blue-400'
+                    )}
                   >
                     {ar.label}
                   </button>
@@ -1731,16 +1749,16 @@ export default function OneClickCreatorPage() {
             </div>
 
             {/* Video Settings Info (Collapsed by default) */}
-            <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-purple-300 mb-2 flex items-center gap-2">
+            <div className={accentCardClass}>
+              <h3 className="text-sm font-semibold text-violet-200 mb-2 flex items-center gap-2">
                 <Video className="w-4 h-4" />
                 {t('oneClickCreator.videoGenerationAuto')}
               </h3>
-              <p className="text-xs text-purple-200 mb-2">
-                {videoDuration}s video with scenario: <span className="font-bold">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
+              <p className="text-xs text-violet-100/90 mb-2 leading-5">
+                {videoDuration}s video with scenario: <span className="font-bold text-white">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
               </p>
-              <p className="text-xs text-purple-200">
-                {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
+              <p className="text-xs text-violet-100/90 leading-5">
+                {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold text-white">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
               </p>
             </div>
 
@@ -1748,8 +1766,8 @@ export default function OneClickCreatorPage() {
             {useCase === 'affiliate-video-tiktok' && (
               <>
                 {/* Video Duration Selector */}
-                <div className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-700/50 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-blue-300 mb-3 flex items-center gap-2">
+                <div className={accentCardClass}>
+                  <h3 className="text-sm font-semibold text-sky-200 mb-3 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     {t('oneClickCreator.videoDuration')}
                   </h3>
@@ -1759,11 +1777,10 @@ export default function OneClickCreatorPage() {
                         key={duration}
                         onClick={() => setTiktokVideoDuration(duration)}
                         disabled={isGenerating}
-                        className={`px-3 py-2 rounded text-sm font-semibold transition-all disabled:opacity-50 ${
-                          tiktokVideoDuration === duration
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                        }`}
+                        className={getOptionButtonClass(
+                          tiktokVideoDuration === duration,
+                          'border-sky-400/70 bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-[0_10px_26px_rgba(59,130,246,0.34)] hover:from-sky-400 hover:to-blue-400'
+                        )}
                       >
                         {duration}s
                       </button>
@@ -1772,8 +1789,8 @@ export default function OneClickCreatorPage() {
                 </div>
 
                 {/* Voice Options Selector */}
-                <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-700/50 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-pink-300 mb-3 flex items-center gap-2">
+                <div className={accentCardClass}>
+                  <h3 className="text-sm font-semibold text-pink-200 mb-3 flex items-center gap-2">
                     <Volume2 className="w-4 h-4" />
                     {t('oneClickCreator.narratorVoice')}
                   </h3>
@@ -1783,11 +1800,10 @@ export default function OneClickCreatorPage() {
                         key={option.value}
                         onClick={() => setVoiceOption(option.value)}
                         disabled={isGenerating}
-                        className={`w-full px-3 py-2 rounded text-sm font-medium transition-all disabled:opacity-50 text-left ${
-                          voiceOption === option.value
-                            ? 'bg-pink-600 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                        }`}
+                        className={`${getOptionButtonClass(
+                          voiceOption === option.value,
+                          'border-pink-400/70 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_10px_26px_rgba(236,72,153,0.32)] hover:from-pink-400 hover:to-rose-400'
+                        )} text-left`}
                       >
                         {t(option.labelKey)}
                       </button>
@@ -1797,7 +1813,7 @@ export default function OneClickCreatorPage() {
 
                 {/* TikTok Info */}
                 {suggestedHashtags.length > 0 && (
-                  <div className="bg-green-900/30 border border-green-700/50 rounded-lg p-4">
+                  <div className="col-span-2 bg-green-900/30 border border-green-700/50 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-green-300 mb-2 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       {t('oneClickCreator.suggestedHashtags')}
@@ -1816,16 +1832,18 @@ export default function OneClickCreatorPage() {
           </div>
 
           {/* CENTER - Main Content */}
-          <div className="col-span-9 space-y-0 flex flex-col overflow-hidden">
+          <div className="col-span-8 space-y-0 flex flex-col overflow-hidden">
             {/* Scrollable Content Container */}
             <div className="flex-1 overflow-y-auto pr-2 space-y-4">
               {/* Upload Section */}
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-{t('oneClickCreator.uploadImagesStep')}
-                <button onClick={() => setShowCharacterSelector(true)} className="ml-3 px-2 py-1 text-xs rounded bg-fuchsia-600">Select Character Profile</button>
-              </h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  {t('oneClickCreator.uploadImagesStep')}
+                </h3>
+                <button onClick={() => setShowCharacterSelector(true)} className="px-3 py-2 text-xs rounded bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-medium transition-colors">Select Character Profile</button>
+              </div>
 
               <div className="mb-4 p-3 rounded-lg border border-purple-700/60 bg-purple-950/30">
                 <div className="flex items-center justify-between">
@@ -1847,8 +1865,7 @@ export default function OneClickCreatorPage() {
                 </details>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {/* Character Image */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
@@ -1880,12 +1897,11 @@ export default function OneClickCreatorPage() {
                           const reader = new FileReader();
                           reader.onload = (evt) => setCharacterImage(evt.target?.result);
                           reader.readAsDataURL(file);
-                          setImageSource(prev => ({ ...prev, character: 'upload' })); // 🎯 Mark as uploaded file
+                          setImageSource(prev => ({ ...prev, character: 'upload' }));
                         }
                       }}
                     />
                   </div>
-                  {/* 💫 NEW: Gallery picker button for character image */}
                   <button
                     onClick={() => {
                       if (!isGenerating) {
@@ -1901,7 +1917,6 @@ export default function OneClickCreatorPage() {
                   </button>
                 </div>
 
-                {/* Product Image */}
                 <div className="space-y-2">
                   <div
                     onClick={() => {
@@ -1915,7 +1930,7 @@ export default function OneClickCreatorPage() {
                           const reader = new FileReader();
                           reader.onload = (evt) => setProductImage(evt.target?.result);
                           reader.readAsDataURL(file);
-                          setImageSource(prev => ({ ...prev, product: 'upload' })); // 🎯 Mark as uploaded file
+                          setImageSource(prev => ({ ...prev, product: 'upload' }));
                         }
                       };
                       input.click();
@@ -1937,7 +1952,6 @@ export default function OneClickCreatorPage() {
                       </div>
                     )}
                   </div>
-                  {/* 💫 NEW: Gallery picker button for product image */}
                   <button
                     onClick={() => {
                       if (!isGenerating) {
@@ -1952,73 +1966,69 @@ export default function OneClickCreatorPage() {
                     {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
-              </div>
 
-              {/* 💫 NEW: Scene Reference Image (Optional) */}
-              <div className="border border-dashed border-gray-600 rounded-lg p-3 bg-gray-900/50">
-                <p className="text-xs uppercase text-gray-400 font-semibold mb-2 flex items-center gap-2">
-                  <Wand2 className="w-3 h-3" /> Scene Reference Image (Optional)
-                </p>
-                <p className="text-xs text-gray-500 mb-3">Upload a reference image of your scene to ensure consistent background and lighting across all generations.</p>
-                
-                <div className="flex gap-2">
-                  <div
-                    onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                    className="flex-1 border-2 border-dashed border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors disabled:opacity-50 relative group"
-                  >
-                    {sceneImage ? (
-                      <>
-                        <img src={sceneImage} alt="Scene" className="w-full h-24 object-cover rounded" />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
-                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="py-4">
-                        <ImageIcon className="w-5 h-5 mx-auto text-gray-500 mb-1" />
-                        <p className="text-xs text-gray-400">Click to add scene image</p>
+                <div className="space-y-2">
+                  <div className="border border-dashed border-gray-600 rounded-lg p-3 bg-gray-900/50 h-full">
+                    <p className="text-xs uppercase text-gray-400 font-semibold mb-2 flex items-center gap-2">
+                      <Wand2 className="w-3 h-3" /> Scene Reference Image (Optional)
+                    </p>
+                    <p className="text-xs text-gray-500 mb-3">Upload a reference image of your scene to ensure consistent background and lighting across all generations.</p>
+                    <div className="flex gap-2">
+                      <div
+                        onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
+                        className="flex-1 min-h-[221px] border-2 border-dashed border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors disabled:opacity-50 relative group flex items-center justify-center"
+                      >
+                        {sceneImage ? (
+                          <>
+                            <img src={sceneImage} alt="Scene" className="w-full h-40 object-cover rounded" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                              <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="py-4">
+                            <ImageIcon className="w-5 h-5 mx-auto text-gray-500 mb-1" />
+                            <p className="text-xs text-gray-400">Click to add scene image</p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  
-                  {sceneImage && (
-                    <button
-                      onClick={async () => {
-                        if (isGenerating) return;
-                        setSceneImageMode('auto');
-                        const autoSceneData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
-                        setSceneImage(autoSceneData || null);
-                      }}
+                      {sceneImage && (
+                        <button
+                          onClick={async () => {
+                            if (isGenerating) return;
+                            setSceneImageMode('auto');
+                            const autoSceneData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+                            setSceneImage(autoSceneData || null);
+                          }}
+                          disabled={isGenerating}
+                          className="px-2 py-2 text-xs rounded bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 transition-colors flex items-center gap-1 self-start"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={sceneFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
                       disabled={isGenerating}
-                      className="px-2 py-2 text-xs rounded bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 transition-colors flex items-center gap-1"
-                    >
-                      ✕ Remove
-                    </button>
-                  )}
-
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            setSceneImage(evt.target?.result);
+                            setSceneImageMode('custom');
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
-                
-                <input
-                  ref={sceneFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={isGenerating}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        setSceneImage(evt.target?.result);
-                        setSceneImageMode('custom');
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-
-                />
               </div>
-            </div>
+              </div>
 
             {/* Sessions Display (now inside scrollable container) */}
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">

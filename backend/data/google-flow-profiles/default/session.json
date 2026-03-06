@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..-B47himx82PlSsee.sKEupPLYulUal7bVnyHZs8dGA70OcGsfFF8oLG7fQvbbBTBoFh2BMZRtk0zlMheDfqbP6CZQ827HrfTpPqYMvtyEK9TfARkzHHvTJJlhJMXDD3ErTDms30zYnalwrowCPivTScyXP6hTIgkb6fAERzwHJB4jWtP34RSfnwtNQBFgLnXtuGy0Ulue43zL-z2-wNVMw1lOTcgkb_W6J7g3K9tx7drsLK0t4DG3G-k1lDtnXE063_jZXzm0n__bzO5M0ZJ4kmujaxxBJiWkpqL6uDe3jJhOHMtSpUv_jR6g7TbqdR9hXZJteGEAs4aC_qpCC4fybY8dJYEG9lbvzY5zekoDr2psYlzg8Emgq_cu2J3h0IlM4Q-zTOmfa0g0qjxIz20WQ7-v3GXwftshTCjOo5LkdOEG2B-1wf3csSHPH2dkCYgd2SUF3Qpj0OJLizeUbrnJvU8FKz_fhHF0kOynncSnxKyaHq-3074enIHzhLZehW_jvaYAdNnN5L0X4fI2z4FqAjwKbfNcAihk2BYG5dUx76zlb_nuT2zv5MZUCijqnjhggRlOl96foPg5EOetCQfukCHv0P-obBMi8C4UZi2j4RCKBbc0eKZ5rzIikFZlUSQA8UGleh1GE9358lxdCwgAltG5hY7AAGqrkYZYJ8WZ28EdVgHgN1R_K6aAPdh2J0KWGTVPatFf_RvSrMnsPh7sNFM6BH3c36-FRd3nTpPo4VCF01i66Pn_X_c3vQwvY-0zYN6sMHuZJ8EMV1X-esZD6TEW-pa55C2Sy3Y8bId6m6u5ju14kY3eTJkc49xCS2dGT2A1RHTymYF9OTNWsfhLIghoVvMWWZBdRcJD3-JIuZh7yEYE4qS8EcrcVAJgKMsk7cIJUqtWIBOJYTCT3Td411jqfYF93i8c23oKggL7VK7afP3xnnKe7Jnqr2TqXF69WaT61hbY9-03MOMLThnK8q0fItJzrE8loVFMOLHc7AjSFnY.LwyubM3ILhlKO9MvTOnWKQ",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..jiiqyPBaRxrExlBM.nzz3Ko5WN-1nO6qvJOHTadv_zjnioVWo9pVEFAMY-ZrtFnhs_decAvFUZLczXOmBCjxtxSiHiDXa6nrXTl67nZtVPvY1cmI4wXV2Sa2p93v0bNk4wUOvDD6I25aUvmd4RW0yJUQ4Yj88NkbD6yHMBans_wX4e4BMsBbD0wVhASEq0zqtd4ITucdLIiHwYZafv5-Oz2Ry0Jy0HashDI1_uX7fkG2YAyC0PNWSE2UZ2bKkziq24PR-eblds7UdM6V7ZbXl5Lig_UwvhTTTpEEDouDPVtoRXoEyVtBKx83yF2qlapf3ZbS9ATPq4sQUnap8VCq6CZj2awYyFw3wHW6fVQfvE3vn54YGuiIXfZVoBsE5opdrhtlBLL43fsNfepdu6KKzCSzr5v3utpi_hcALELTnVzyjZmR-7OtPpBcv2wdJ7Pir-Ti6fxGKY-OebVZg13mpcmtWkStodPjq8oyJyzlc892eWm2-BoghmXX2O47j_gf2urSsY7BzNRjyK_2rER8cMahKZ5EuxN3IevTGGS-CBbkM1yqDrz7OMRU8ZLWce6ExX1XzkzBLJ9eH5RBg-Yle39wFyw9jscH8afypfqyqk21n8YfBaeO1jddfZ1hGDg63eFecT3iotyU-ojzzFlfVlfAjXhNOyhFep1D2VZJSTLsIjUbiIaz9VufgmL9ShZIoPTcMueQLgrtHzv1ztY3mhOSeNvLzELsg17j7zt03kMJn-xeaPshOl2QbutmAp0176Zqo-vvuLX3hkc9baE0YdjlmEz3oBV4EyCx7hMc6jFfdTRNhtwVBkW4-K-EfTdXhQD4BJsGmIJMTBBJ4Aox6fDN37MYHCRxnO7BhZKu-KxIUsXyF_QUQSQlxogQN3mYUJ95Zv75fk__7ggR5zwTLT2GIQiazdB59VjqxBGwn_xzkfW0Q47c7Wsut-g2qAfMETFAHxFlrLblBruAS-SgSIvXyJNUcfWIPeiuGYsvyDspanVA.NaKT4_oGlOusPFlIDk1j-w",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775384580.056527,
+      "expires": 1775409199.299123,
       "size": 1104,
       "httpOnly": true,
       "secure": true,
@@ -17,10 +17,10 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1772792230$o14$g1$t1772792569$j59$l0$h298793994",
+      "value": "GS2.1.s1772817188$o16$g0$t1772817188$j60$l0$h246247124",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807352569.289565,
+      "expires": 1807377188.33824,
       "size": 68,
       "httpOnly": false,
       "secure": false,
@@ -34,7 +34,7 @@
       "value": "GA1.1.1406218656.1772713598",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807352568.965052,
+      "expires": 1807377188.24379,
       "size": 30,
       "httpOnly": false,
       "secure": false,
@@ -103,12 +103,12 @@
     }
   ],
   "localStorage": {
-    "_grecaptcha": "09AKhCRwipN5CPKZ2b_crc6ryK3b9qEeWSLMPrgvPaBF6IJcaMYXHDm0-Wi3j-YhCw538atJVojchO4SdfSOxo74jbrrItm63gQuPIY61NHRGMWF-Pzbt-yyiQrhopbQaC",
-    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"LANDSCAPE\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":4}",
-    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772792572}"
+    "_grecaptcha": "09AKhCRwjzLCDC-iDVjwM8T-CVwRfKv2Di95bgRoaUaH0-P2oFgZSYkBBtCg8ILg1rQmi286qnc6v2qUc7EzmkXFwbo5DwxUUxJI-w6rn-PQoO1D9-0DIWP-9ImO8nChKm",
+    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"PORTRAIT\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772817191}"
   },
   "sessionStorage": {},
-  "timestamp": "2026-03-06T10:24:16.081Z",
+  "timestamp": "2026-03-06T17:15:30.082Z",
   "url": "https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0",
   "isAuthenticated": true
 }
