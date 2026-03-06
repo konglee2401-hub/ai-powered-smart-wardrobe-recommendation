@@ -13,21 +13,21 @@
 
 .header-info h2 {
   margin: 0 0 0.25rem 0;
-  color: #2c3e50;
+  color: #f8fafc;
 }
 
 .header-info p {
   margin: 0;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .time-range-selector {
   display: flex;
   gap: 0.5rem;
-  background: white;
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
   padding: 0.25rem;
   border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.3);
 }
 
 .time-range-selector button {
@@ -38,11 +38,11 @@
   cursor: pointer;
   transition: all 0.3s;
   font-weight: 500;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .time-range-selector button:hover {
-  color: #2c3e50;
+  color: #f8fafc;
 }
 
 .time-range-selector button.active {
@@ -59,14 +59,14 @@
 }
 
 .overview-card {
-  background: white;
-  border: 1px solid #ecf0f1;
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
   padding: 1.25rem;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.3);
   transition: all 0.3s;
 }
 
@@ -101,13 +101,13 @@
 .card-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: #f8fafc;
   margin-bottom: 0.25rem;
 }
 
 .card-label {
   font-size: 0.85rem;
-  color: #7f8c8d;
+  color: #94a3b8;
   margin-bottom: 0.25rem;
 }
 
@@ -133,11 +133,11 @@
 }
 
 .chart-card {
-  background: white;
-  border: 1px solid #ecf0f1;
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
+  border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 8px;
   padding: 1.5rem;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.3);
 }
 
 .chart-card.full-width {
@@ -146,7 +146,7 @@
 
 .chart-card h3 {
   margin: 0 0 1rem 0;
-  color: #2c3e50;
+  color: #f8fafc;
   font-size: 1rem;
 }
 
@@ -158,8 +158,8 @@
 
 .chart-tabs button {
   padding: 0.5rem 1rem;
-  border: 1px solid #dee2e6;
-  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -167,7 +167,7 @@
 }
 
 .chart-tabs button:hover {
-  background: #f8f9fa;
+  background: rgba(148, 163, 184, 0.2);
 }
 
 .chart-tabs button.active {
@@ -213,14 +213,14 @@
   left: 50%;
   transform: translateX(-50%);
   font-size: 0.7rem;
-  color: #2c3e50;
+  color: #f8fafc;
   font-weight: 600;
 }
 
 .bar-label {
   margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 /* Provider Chart */
@@ -251,12 +251,12 @@
 
 .provider-name {
   font-size: 0.85rem;
-  color: #2c3e50;
+  color: #f8fafc;
 }
 
 .provider-count {
   font-size: 0.8rem;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .provider-bar {
@@ -275,7 +275,7 @@
 .provider-percentage {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: #f8fafc;
   text-align: right;
 }
 
@@ -307,13 +307,13 @@
 .category-name {
   flex: 1;
   font-size: 0.85rem;
-  color: #2c3e50;
+  color: #f8fafc;
 }
 
 .category-value {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: #f8fafc;
 }
 
 .category-bar {
@@ -342,7 +342,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem;
-  background: #f8f9fa;
+  background: rgba(148, 163, 184, 0.2);
   border-radius: 4px;
 }
 
@@ -365,7 +365,7 @@
 
 .template-name {
   font-size: 0.85rem;
-  color: #2c3e50;
+  color: #f8fafc;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -376,7 +376,7 @@
   display: flex;
   gap: 0.75rem;
   font-size: 0.75rem;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .template-bar {
@@ -404,7 +404,7 @@
 }
 
 .metric-card {
-  background: #f8f9fa;
+  background: rgba(148, 163, 184, 0.2);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -418,7 +418,7 @@
 
 .metric-label {
   font-size: 0.85rem;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .metric-value {
@@ -446,7 +446,7 @@
 .metric-value-large {
   font-size: 2rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: #f8fafc;
   margin-bottom: 1rem;
 }
 
@@ -472,7 +472,7 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  color: #7f8c8d;
+  color: #94a3b8;
 }
 
 .loading-spinner {
