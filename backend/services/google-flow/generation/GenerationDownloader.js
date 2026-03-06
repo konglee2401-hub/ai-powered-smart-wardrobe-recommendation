@@ -206,8 +206,8 @@ class GenerationDownloader {
     // Determine quality preferences (DISTINCT qualities only, no duplicates)
     let qualityOptions = [];
     if (this.options.mediaType === 'image' && this.options.modelName === 'Nano Banana 2') {
-      qualityOptions = ['2k', '1k'];  // 💫 FIX: Distinct qualities (no '2K', '1K' duplicates)
-      console.log(`   ℹ️  Image Model: ${this.options.modelName} (trying 2K first, then 1K fallback)`);
+      qualityOptions = ['1k'];  // 💫 FIX: Only 1K available for Nano Banana 2 (2K not supported)
+      console.log(`   ℹ️  Image Model: ${this.options.modelName} (2K not available, using 1K only)`);
     } else if (this.options.mediaType === 'image') {
       qualityOptions = ['2k', '1k'];  // 💫 FIX: Distinct qualities
       console.log(`   ℹ️  Image (trying 2K first, then 1K fallback)`);
