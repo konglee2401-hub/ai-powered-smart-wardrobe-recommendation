@@ -315,77 +315,111 @@ class VideoProductionController {
     res.json(result);
   });
 
+
+
+  static getPlatformRequirements = asyncHandler((req, res) => {
+    const { platform } = req.query;
+    const requirements = MultiAccountService.getPlatformRequirements(platform || null);
+    if (platform && !requirements) {
+      return res.status(404).json({ success: false, error: `No requirement profile for platform: ${platform}` });
+    }
+    res.json({ success: true, requirements });
+  });
+
+  static getOAuthAppConfig = asyncHandler((req, res) => {
+    const { platform } = req.params;
+    const config = MultiAccountService.getOAuthAppConfig(platform);
+    if (!config) return res.status(404).json({ success: false, error: 'Unsupported platform' });
+    res.json({ success: true, platform, config });
+  });
+
+  static saveOAuthAppConfig = asyncHandler((req, res) => {
+    const { platform } = req.params;
+    const result = MultiAccountService.saveOAuthAppConfig(platform, req.body || {});
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  });
+
+  static createOAuthUrl = asyncHandler((req, res) => {
+    const { platform } = req.params;
+    const { accountLabel = '', stateMeta = {} } = req.body || {};
+    const result = MultiAccountService.createOAuthAuthUrl(platform, { accountLabel, stateMeta });
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  });
+
+  static exchangeYouTubeOAuthCode = asyncHandler(async (req, res) => {
+    const { code, state, accountName } = req.body || {};
+    const result = await MultiAccountService.exchangeYouTubeCode({ code, state, accountName });
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  });
   static publishQueueItem = asyncHandler(async (req, res) => {
     const { queueId } = req.params;
-    const { accountIds = [], uploadConfig = {} } = req.body;
+    const { accountIds = [], uploadConfig = {}, accountTargets = [] } = req.body;
 
     const queueResult = VideoQueueService.getQueueItem(queueId);
     if (!queueResult.success) return res.status(404).json(queueResult);
 
     const queueItem = queueResult.queueItem;
     const videoPath = queueItem.videoConfig?.outputPath || queueItem.videoConfig?.videoPath || queueItem.videoConfig?.filePath;
+    if (!videoPath) return res.status(400).json({ success: false, error: 'Missing output video path in queue item config' });
 
-    if (!videoPath) {
-      return res.status(400).json({ success: false, error: 'Missing output video path in queue item config' });
-    }
-
-    const resolvedIds = accountIds.length ? accountIds : (queueItem.accountIds || []);
-    if (!resolvedIds.length) {
-      return res.status(400).json({ success: false, error: 'At least one accountId is required for publishing' });
+    const resolvedTargets = MultiAccountService.resolveAccountTargets({ accountIds, uploadConfig, accountTargets });
+    if (!resolvedTargets.length) {
+      return res.status(400).json({ success: false, error: 'At least one valid account target is required for publishing' });
     }
 
     const results = [];
-    for (const accountId of resolvedIds) {
-      const account = MultiAccountService.getRawAccount(accountId);
+    for (const target of resolvedTargets) {
+      const account = MultiAccountService.getRawAccount(target.accountId);
       if (!account) {
-        results.push({ accountId, success: false, error: 'Account not found' });
+        results.push({ accountId: target.accountId, platform: target.platform, success: false, error: 'Account not found' });
         continue;
       }
 
       let normalizedUploadConfig;
       try {
-        normalizedUploadConfig = normalizeUploadConfigForPlatform(account.platform, uploadConfig);
+        normalizedUploadConfig = normalizeUploadConfigForPlatform(target.platform || account.platform, target.uploadConfig || uploadConfig);
       } catch (configError) {
-        results.push({ accountId, success: false, error: configError.message });
+        results.push({ accountId: target.accountId, platform: target.platform, success: false, error: configError.message });
         continue;
       }
 
       const upload = AutoUploadService.registerUpload({
         queueId,
         videoPath,
-        platform: account.platform,
-        accountId,
+        platform: target.platform || account.platform,
+        accountId: target.accountId,
         uploadConfig: normalizedUploadConfig
       });
-
       if (!upload.success) {
-        results.push({ accountId, success: false, error: upload.error });
+        results.push({ accountId: target.accountId, platform: target.platform, success: false, error: upload.error });
         continue;
       }
 
       const executed = await AutoUploadService.executeUpload(upload.uploadId, account);
-      if (executed.success) {
-        MultiAccountService.recordPost(accountId);
-      } else {
-        MultiAccountService.recordError(accountId, executed.error);
-      }
+      if (executed.success) MultiAccountService.recordPost(target.accountId);
+      else MultiAccountService.recordError(target.accountId, executed.error);
 
-      results.push({ accountId, ...executed });
+      results.push({ accountId: target.accountId, platform: target.platform || account.platform, ...executed });
     }
 
     const successful = results.filter(r => r.success).length;
-    if (successful > 0) {
-      VideoQueueService.updateQueueStatus(queueId, 'uploaded');
-    }
+    if (successful > 0) VideoQueueService.updateQueueStatus(queueId, 'uploaded');
 
-    res.json({
-      success: successful > 0,
-      queueId,
-      successful,
-      failed: results.length - successful,
-      results
-    });
+    const grouped = results.reduce((acc, item) => {
+      const key = item.platform || 'unknown';
+      acc[key] = acc[key] || { total: 0, success: 0, failed: 0 };
+      acc[key].total += 1;
+      if (item.success) acc[key].success += 1;
+      else acc[key].failed += 1;
+      return acc;
+    }, {});
+
+    res.json({ success: successful > 0, queueId, successful, failed: results.length - successful, byPlatform: grouped, results });
   });
+
 
   // ============ MEDIA LIBRARY ENDPOINTS ============
 

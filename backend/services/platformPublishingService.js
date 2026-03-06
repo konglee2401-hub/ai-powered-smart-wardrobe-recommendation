@@ -194,6 +194,46 @@ class PlatformPublishingService {
     }
   }
 
+
+
+  getPlatformRequirements(platform) {
+    const shared = {
+      videoMetadata: ['title', 'description'],
+      fileRequirement: 'videoPath or public videoUrl (platform dependent)'
+    };
+
+    const requirements = {
+      youtube: {
+        ...shared,
+        oauth: {
+          requiredScopes: ['https://www.googleapis.com/auth/youtube.upload'],
+          oauthClient: ['clientId', 'clientSecret', 'redirectUri'],
+          accountBinding: 'Each YouTube channel account must complete OAuth consent independently'
+        },
+        uploadFields: ['title', 'description', 'privacy', 'categoryId', 'tags', 'youtubePublishType']
+      },
+      facebook: {
+        ...shared,
+        oauth: {
+          requiredScopes: ['pages_manage_posts', 'pages_show_list', 'pages_read_engagement'],
+          oauthClient: ['appId', 'appSecret', 'redirectUri'],
+          accountBinding: 'Each Facebook user must grant access and select page for posting Reels/videos'
+        },
+        uploadFields: ['description', 'caption', 'published', 'pageId']
+      },
+      tiktok: {
+        ...shared,
+        oauth: {
+          requiredScopes: ['video.publish', 'user.info.basic'],
+          oauthClient: ['clientKey', 'clientSecret', 'redirectUri'],
+          accountBinding: 'Each TikTok account needs OAuth token bound to its open_id'
+        },
+        uploadFields: ['title', 'privacyLevel', 'disableComment', 'disableDuet', 'disableStitch']
+      }
+    };
+
+    return platform ? requirements[platform] || null : requirements;
+  }
   async verifyAccountConnection(account) {
     const creds = this.getCredentials(account);
     if (!creds.accessToken) {
@@ -216,7 +256,7 @@ class PlatformPublishingService {
         });
       }
 
-      return { connected: true };
+      return { connected: true, permissionsOk: true };
     } catch (error) {
       return { connected: false, reason: error.message };
     }

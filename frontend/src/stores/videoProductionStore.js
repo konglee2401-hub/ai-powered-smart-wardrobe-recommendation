@@ -206,6 +206,29 @@ const useVideoProductionStore = create((set, get) => ({
     }
   },
 
+
+
+  getPlatformRequirements: async (platform) => {
+    return await videoProductionApi.accounts.getRequirements(platform);
+  },
+
+  getOAuthConfig: async (platform) => {
+    return await videoProductionApi.accounts.getOAuthConfig(platform);
+  },
+
+  saveOAuthConfig: async (platform, config) => {
+    return await videoProductionApi.accounts.saveOAuthConfig(platform, config);
+  },
+
+  createOAuthUrl: async (platform, accountLabel = '', stateMeta = {}) => {
+    return await videoProductionApi.accounts.createOAuthUrl(platform, accountLabel, stateMeta);
+  },
+
+  exchangeYouTubeCode: async (code, state, accountName) => {
+    const result = await videoProductionApi.accounts.exchangeYouTubeCode(code, state, accountName);
+    await get().getAllAccounts();
+    return result;
+  },
   deleteAccount: async (accountId) => {
     set(state => ({ accounts: { ...state.accounts, loading: true } }));
     try {
