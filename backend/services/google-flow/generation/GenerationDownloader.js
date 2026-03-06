@@ -874,7 +874,9 @@ class GenerationDownloader {
         return result;
       }
 
-      // Check user Downloads folder
+      // Check user Downloads folder (fallback only - primary downloads go to outputDir)
+      // ⚠️  Since Chrome now configured to download directly to outputDir,
+      // this fallback is only useful if user manually downloads or Chrome prefs fail
       if (fs.existsSync(this.options.userDownloadsDir)) {
         const downloadsFiles = fs.readdirSync(this.options.userDownloadsDir);
         const downloadedFiles = downloadsFiles.filter(f => {
