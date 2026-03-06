@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..Wg4oto_bLNSPXHDI.r009Ys-F_V_A6FWtUOpxuyrtJD4pndTZFlXUWx_GdR-eaEovd063Y7kzr91jNmklDz137Vr3KWaYKk_wxmtVeCnzVDSiA5YIgDGL0SK2tsj8t7sv3SjBzHLvry9-UuiRxa3YYU8w0rWMVnJiQnL6t3ceiB-UTxQgqMBAmEy951FwAT3Mv6zwPFXEUIO-UgX7Aw14vwfzTQ4Z6rxvnOlfLwIshajkWHYA8sJlbjTU1HxtIpl7mWqHOufTRB-cYoO_Kptf38Ml8zCI4n4NVtsf5K46Rpq3pVX7RoDIIhmdsyYQP0QlJ_tJ86hL4cmkCJMG0mtkqTKIXBeBCCjl4n9s3Nq-rwNjZ1KXti1sFPy4upNQYxSLVNc6SfmYzlBhBJ0sUhtlYXkTfAEcmgplhfYRE_vqD8c2ghVZnpWZLrZEPKreMAiTvFh2k5qF4Axp8PeENJKp7YJgAv3lreQ0hiqZK5sbLZJ0odkLXeIoIOuouY63V5SuyPHEDM3V96OIRc1BOsEbL4qLfQZpc3NfkkrZGSBcs5NIuEVWBlDsbIT3e9RPWFZ3WuhhSkkisstlARoua2MHu7VgjlVYY8JKMO1ZGoJek3SLRLv-ZkS6Ls_lkChvjthadBDCHJGqUKliVIv8_VKhA87jdDXaFVhH9TqKTLTyledpA0R2EZIs1oL-IKGWdGxlGLZzO36JaImQOEifsbzVAw4_iDZW-7F594IIm9s3QUP3aIhieZWGWSZAtsNRUw5W-nAqv-LwVrvrlfg5wA8JDjr_yAuIat3nNHx9a0YV_n9wYKiTrNyvzbNRHpNCG1ZYfqnlZfTzAOcjgX6WGIlP9CcLkUCTAWkYR103jzpSXpErOzLLTksE0Pfy_dT8Fz58cgbQwav8pX2a-3HirWWQMey4cVUJLAEgHg_6hLPk1cK04cOBas0HuK_pqeNsqnsj2n5ngLkHBK-IdZVo-xW06NE5y9-WVBdayCEfmbApBRCYQHA.482sRy0R9AmW-mvqU5y5ow",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..-B47himx82PlSsee.sKEupPLYulUal7bVnyHZs8dGA70OcGsfFF8oLG7fQvbbBTBoFh2BMZRtk0zlMheDfqbP6CZQ827HrfTpPqYMvtyEK9TfARkzHHvTJJlhJMXDD3ErTDms30zYnalwrowCPivTScyXP6hTIgkb6fAERzwHJB4jWtP34RSfnwtNQBFgLnXtuGy0Ulue43zL-z2-wNVMw1lOTcgkb_W6J7g3K9tx7drsLK0t4DG3G-k1lDtnXE063_jZXzm0n__bzO5M0ZJ4kmujaxxBJiWkpqL6uDe3jJhOHMtSpUv_jR6g7TbqdR9hXZJteGEAs4aC_qpCC4fybY8dJYEG9lbvzY5zekoDr2psYlzg8Emgq_cu2J3h0IlM4Q-zTOmfa0g0qjxIz20WQ7-v3GXwftshTCjOo5LkdOEG2B-1wf3csSHPH2dkCYgd2SUF3Qpj0OJLizeUbrnJvU8FKz_fhHF0kOynncSnxKyaHq-3074enIHzhLZehW_jvaYAdNnN5L0X4fI2z4FqAjwKbfNcAihk2BYG5dUx76zlb_nuT2zv5MZUCijqnjhggRlOl96foPg5EOetCQfukCHv0P-obBMi8C4UZi2j4RCKBbc0eKZ5rzIikFZlUSQA8UGleh1GE9358lxdCwgAltG5hY7AAGqrkYZYJ8WZ28EdVgHgN1R_K6aAPdh2J0KWGTVPatFf_RvSrMnsPh7sNFM6BH3c36-FRd3nTpPo4VCF01i66Pn_X_c3vQwvY-0zYN6sMHuZJ8EMV1X-esZD6TEW-pa55C2Sy3Y8bId6m6u5ju14kY3eTJkc49xCS2dGT2A1RHTymYF9OTNWsfhLIghoVvMWWZBdRcJD3-JIuZh7yEYE4qS8EcrcVAJgKMsk7cIJUqtWIBOJYTCT3Td411jqfYF93i8c23oKggL7VK7afP3xnnKe7Jnqr2TqXF69WaT61hbY9-03MOMLThnK8q0fItJzrE8loVFMOLHc7AjSFnY.LwyubM3ILhlKO9MvTOnWKQ",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775382305.172823,
+      "expires": 1775384580.056527,
       "size": 1104,
       "httpOnly": true,
       "secure": true,
@@ -17,28 +17,14 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1772790291$o13$g0$t1772790291$j60$l0$h1305231917",
+      "value": "GS2.1.s1772792230$o14$g1$t1772792569$j59$l0$h298793994",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807350291.703451,
-      "size": 69,
+      "expires": 1807352569.289565,
+      "size": 68,
       "httpOnly": false,
       "secure": false,
       "session": false,
-      "sameParty": false,
-      "sourceScheme": "Secure",
-      "sourcePort": 443
-    },
-    {
-      "name": "email",
-      "value": "leecris241%40gmail.com",
-      "domain": "labs.google",
-      "path": "/",
-      "expires": -1,
-      "size": 27,
-      "httpOnly": true,
-      "secure": false,
-      "session": true,
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
@@ -48,7 +34,7 @@
       "value": "GA1.1.1406218656.1772713598",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807350291.61637,
+      "expires": 1807352568.965052,
       "size": 30,
       "httpOnly": false,
       "secure": false,
@@ -72,6 +58,21 @@
       "sourcePort": 443
     },
     {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow%2Fproject%2F58d791d4-37c9-47a8-ae3b-816733bc3ec0",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 130,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
       "name": "__Host-next-auth.csrf-token",
       "value": "490c78f068e6a1b35a0600e19550eebb8cf981a3f7ca039103f379bcfe615621%7Cde7bb32e2bf4b2f6b7763021cb30599cd6bcc1c579ae63086a058b985b8f36e6",
       "domain": "labs.google",
@@ -87,28 +88,27 @@
       "sourcePort": 443
     },
     {
-      "name": "__Secure-next-auth.callback-url",
-      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow%2Fproject%2F58d791d4-37c9-47a8-ae3b-816733bc3ec0",
+      "name": "email",
+      "value": "leecris241%40gmail.com",
       "domain": "labs.google",
       "path": "/",
       "expires": -1,
-      "size": 130,
+      "size": 27,
       "httpOnly": true,
-      "secure": true,
+      "secure": false,
       "session": true,
-      "sameSite": "Lax",
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
     }
   ],
   "localStorage": {
-    "_grecaptcha": "09AKhCRwiWVTy5Y9nxd9uNBAXPKPFuivxi9tfdeRYAUR8ieEX1yDxdnsVuMXHCjh8Y1t5Os1tfRaRdAO7w72tktEAVP9FrMBEhEvXw3N3MUanOkw2UHhnKfR6IMs6gz3_3",
-    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"PORTRAIT\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
-    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772790297}"
+    "_grecaptcha": "09AKhCRwipN5CPKZ2b_crc6ryK3b9qEeWSLMPrgvPaBF6IJcaMYXHDm0-Wi3j-YhCw538atJVojchO4SdfSOxo74jbrrItm63gQuPIY61NHRGMWF-Pzbt-yyiQrhopbQaC",
+    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"LANDSCAPE\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":4}",
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772792572}"
   },
   "sessionStorage": {},
-  "timestamp": "2026-03-06T09:50:08.654Z",
+  "timestamp": "2026-03-06T10:24:16.081Z",
   "url": "https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0",
   "isAuthenticated": true
 }
