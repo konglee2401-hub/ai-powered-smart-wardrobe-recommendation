@@ -213,6 +213,14 @@ class GenerationMonitor {
           console.warn('⚠️  Generation error detected on page');
           errorRetryCount++;
           
+          // 💫 NEW: Delete all failed items before retrying
+          console.log('   🗑️  Cleaning up failed items before retry...');
+          const deletedCount = await this.deleteFailedItems();
+          if (deletedCount > 0) {
+            console.log(`   ✅ Deleted ${deletedCount} failed item(s)`);
+            await this.page.waitForTimeout(1000);  // Wait after deletion
+          }
+          
           // 💫 ESCALATION STRATEGY:
           // 1. Retries 1-3: Click retry button (simple recovery)
           // 2. Retry 4: Click "Use Again" button + Submit 2x (medium recovery)
@@ -652,6 +660,125 @@ class GenerationMonitor {
     } catch (error) {
       console.error(`Error getting generated items: ${error.message}`);
       return [];
+    }
+  }
+
+  /**
+   * 💫 NEW: Delete all failed/unsuccessful items before retry
+   * Scans for items with error indicators (warning icon + "Không thành công")
+   * Clicks trash/delete button for each failed item
+   * 
+   * @returns {number} Number of items deleted
+   */
+  async deleteFailedItems() {
+    try {
+      console.log('🗑️  Scanning for failed items to delete...');
+      
+      // Repeat deletion until no more failed items found
+      let totalDeleted = 0;
+      let deleteAttempt = 0;
+      const maxDeleteAttempts = 10;  // Safety limit
+      
+      while (deleteAttempt < maxDeleteAttempts) {
+        deleteAttempt++;
+        
+        // Find first failed item with error indicators
+        const failureInfo = await this.page.evaluate(() => {
+          const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+          
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const tileText = item.textContent.toLowerCase();
+            
+            // 💫 Look for error indicators: warning icon + "Không thành công" text
+            const warningIcon = item.querySelector('i.google-symbols');
+            const hasWarningIcon = warningIcon && warningIcon.textContent.trim() === 'warning';
+            const hasErrorText = tileText.includes('không thành công') || 
+                                 tileText.includes('đã xảy ra lỗi') ||
+                                 tileText.includes('failed');
+            
+            if (hasWarningIcon && hasErrorText) {
+              // Found failed item - find delete/trash button
+              const buttons = Array.from(item.querySelectorAll('button'));
+              
+              for (const btn of buttons) {
+                const icon = btn.querySelector('i.google-symbols');
+                if (icon && (icon.textContent.trim() === 'delete' || icon.textContent.trim() === 'close' || icon.textContent.trim() === 'trash')) {
+                  // Found delete button
+                  const rect = btn.getBoundingClientRect();
+                  return {
+                    found: true,
+                    position: i,
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2),
+                    error: item.textContent.substring(0, 80)
+                  };
+                }
+              }
+              
+              // If no delete button found but error exists, try clicking any close/delete icon in item
+              const allButtons = Array.from(item.querySelectorAll('button'));
+              for (const btn of allButtons) {
+                const icon = btn.querySelector('i.google-symbols');
+                if (icon) {
+                  const iconText = icon.textContent.trim();
+                  if (iconText === 'close' || iconText === 'delete' || iconText === 'clear') {
+                    const rect = btn.getBoundingClientRect();
+                    return {
+                      found: true,
+                      position: i,
+                      x: Math.round(rect.left + rect.width / 2),
+                      y: Math.round(rect.top + rect.height / 2),
+                      error: item.textContent.substring(0, 80)
+                    };
+                  }
+                }
+              }
+            }
+          }
+          
+          return { found: false };
+        });
+        
+        if (!failureInfo.found) {
+          console.log(`✅ No more failed items found (deleted ${totalDeleted} total)`);
+          return totalDeleted;
+        }
+        
+        // Click delete button
+        console.log(`   [DELETE ${deleteAttempt}] Found failed item #${failureInfo.position + 1}: \"${failureInfo.error}...\")`);
+        console.log(`   🖱️  Clicking delete button...`);
+        
+        try {
+          // Move to button and click
+          await this.page.mouse.move(failureInfo.x, failureInfo.y);
+          await this.page.waitForTimeout(200);
+          await this.page.mouse.click(failureInfo.x, failureInfo.y);
+          await this.page.waitForTimeout(1000);  // Wait for item to be deleted
+          
+          totalDeleted++;
+          console.log(`   ✅ Deleted failed item #${failureInfo.position + 1}`);
+        } catch (clickError) {
+          console.warn(`   ⚠️  Failed to click delete button: ${clickError.message}`);
+          // Try keyboard delete
+          try {
+            await this.page.keyboard.press('Delete');
+            await this.page.waitForTimeout(500);
+            console.log(`   ✅ Deleted via keyboard Delete key`);
+            totalDeleted++;
+          } catch (keyError) {
+            console.warn(`   ⚠️  Keyboard delete also failed, skipping this item`);
+            break;  // Exit to avoid infinite loop
+          }
+        }
+      }
+      
+      console.log(`🗑️  Deletion complete: ${totalDeleted} failed items removed`);
+      return totalDeleted;
+      
+    } catch (error) {
+      console.error(`❌ Error deleting failed items: ${error.message}`);
+      return 0;
     }
   }
 
