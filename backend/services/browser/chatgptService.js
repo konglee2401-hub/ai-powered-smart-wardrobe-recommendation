@@ -1245,6 +1245,16 @@ class ChatGPTService extends BrowserService {
           // Content hasn't grown - increment stable counter
           stableCount++;
           
+          // 🔥 IMPORTANT: Check for error/incomplete responses
+          // If response is very short + contains "please upload" or similar = not authenticated
+          if (state.length < 500 && state.text.toLowerCase().includes('please upload')) {
+            console.log(`\n⚠️  WARNING: Response looks like an error!`);
+            console.log(`   - ChatGPT may not be logged in`);
+            console.log(`   - Images likely not uploaded successfully`);
+            console.log(`   - Response: "${state.text.substring(0, 100)}..."`);
+            console.log(`   - This flow will likely fail with incomplete analysis\n`);
+          }
+          
           // 🔥 FIX: Remove the "!state.isLoading" requirement
           // Sometimes ChatGPT shows loading indicator even after response is complete
           // If content is stable for 5+ seconds AND no Continue button, it's done
