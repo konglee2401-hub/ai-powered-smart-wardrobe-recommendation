@@ -324,7 +324,7 @@ class GenerationDownloader {
         
         console.log(`   📍 ATTEMPT ${attemptNum}: Trying ${quality}${isFallback ? ' (fallback)' : ''}...`);
         
-        // 💫 FIX: If fallback attempt and submenu is closed, reopen it
+        // 💫 FIX: If fallback attempt and submenu is closed, use context menu retry
         if (isFallback) {
           const submenuVisible = await this.page.evaluate(() => {
             const submenu = document.querySelector('[data-radix-menu-content][aria-labelledby]');
@@ -332,23 +332,57 @@ class GenerationDownloader {
           });
           
           if (!submenuVisible) {
-            console.log(`   🔄 Submenu closed, reopening download menu...`);
-            const reopened = await this.page.evaluate(() => {
-              const downloadBtn = Array.from(document.querySelectorAll('button')).find(b =>
-                b.ariaLabel?.includes('Download') || b.textContent.includes('Tải xuống')
-              );
-              if (downloadBtn) {
-                downloadBtn.click();
-                return true;
+            console.log(`   🔄 Submenu closed - using context menu retry instead...`);
+            // Don't try to find button, instead right-click image again and select quality
+            const contextMenuClicked = await this.page.evaluate((targetHref) => {
+              // Find the item again
+              const allLinks = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]'));
+              for (const link of allLinks) {
+                if (link.getAttribute('href') === targetHref) {
+                  const rect = link.getBoundingClientRect();
+                  const x = Math.round(rect.left + rect.width / 2);
+                  const y = Math.round(rect.top + rect.height / 2);
+                  // Simulate right-click via context menu show
+                  const event = new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: x,
+                    clientY: y
+                  });
+                  link.dispatchEvent(event);
+                  return true;
+                }
               }
               return false;
-            });
+            }, newHref);
             
-            if (reopened) {
-              console.log(`   ✓ Download menu reopened`);
-              await this.page.waitForTimeout(1500);
+            if (contextMenuClicked) {
+              console.log(`   ✓ Context menu triggered`);
+              await this.page.waitForTimeout(2000);
+              // Find and click Download option in context menu
+              const downloadContextClicked = await this.page.evaluate(() => {
+                const items = document.querySelectorAll('[role="menuitem"]');
+                for (const item of items) {
+                  const text = item.textContent.toLowerCase();
+                  const hasDownloadIcon = item.innerHTML.includes('download');
+                  if ((text.includes('tải') || text.includes('download')) && hasDownloadIcon) {
+                    item.click();
+                    return true;
+                  }
+                }
+                return false;
+              });
+              
+              if (downloadContextClicked) {
+                console.log(`   ✓ Download menu opened`);
+                await this.page.waitForTimeout(1500);
+              } else {
+                console.log(`   ⚠️  Could not open download menu from context`);
+                continue;
+              }
             } else {
-              console.log(`   ⚠️  Could not reopen download menu`);
+              console.log(`   ⚠️  Could not trigger context menu for retry`);
               continue;
             }
           }
@@ -462,11 +496,11 @@ class GenerationDownloader {
           timeoutSeconds = 30;
         }
 
-        // 💫 FIX: Reduce timeout for faster fallback
-        // Use only 15s base + 20s buffer = 35s total (was 30+30=60s)
-        // Faster timeout prevents long waits when file isn't completing
-        const baseTimeout = 15;  // Reduced from 30s
-        const extraBufferTime = 20;  // Reduced from 30s
+        // 💫 FIX: Increased timeout to 60s for better download reliability
+        // Use 30s base + 30s buffer = 60s total (was 15+20=35s)
+        // Longer timeout prevents premature fallback when server is slow
+        const baseTimeout = 30;  // Increased from 15s
+        const extraBufferTime = 30;  // Increased from 20s
         const totalTimeoutSeconds = baseTimeout + extraBufferTime;
 
         console.log(`   ⏳ Monitoring download (${totalTimeoutSeconds}s timeout)...`);
