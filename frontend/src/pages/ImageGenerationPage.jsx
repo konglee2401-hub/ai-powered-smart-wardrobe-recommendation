@@ -1383,7 +1383,7 @@ export default function ImageGenerationPage() {
         </div>
 
         {/* ==================== LEFT SIDEBAR: Options ==================== */}
-        <div className={`${currentStep === 3 ? 'w-80' : 'w-56'} bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
+        <div className={`${currentStep === 1 ? 'w-72' : currentStep === 3 ? 'w-80' : 'w-60'} bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
           <div className="p-3 space-y-4 overflow-y-auto flex-1">
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
@@ -1392,12 +1392,12 @@ export default function ImageGenerationPage() {
                   <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                     <Shirt className="w-3 h-3" /> Use Case
                   </h3>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-1 gap-1.5">
                     {USE_CASES.map(uc => (
                       <Tooltip key={uc.value} content={uc.description}>
                         <button
                           onClick={() => setUseCase(uc.value)}
-                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                          className={`w-full min-w-0 whitespace-normal break-words text-left px-3 py-2 rounded-lg text-xs leading-4 transition-all ${
                             useCase === uc.value 
                               ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
                               : 'text-gray-400 hover:bg-gray-700 border border-transparent'
@@ -1414,12 +1414,12 @@ export default function ImageGenerationPage() {
                   <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                     <Target className="w-3 h-3" /> Focus
                   </h3>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {FOCUS_OPTIONS.map(opt => (
                       <Tooltip key={opt.value} content={opt.description}>
                         <button
                           onClick={() => setProductFocus(opt.value)}
-                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
+                          className={`w-full min-w-0 whitespace-normal break-words text-left px-3 py-2 rounded-lg text-xs leading-4 transition-all ${
                             productFocus === opt.value 
                               ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
                               : 'text-gray-400 hover:bg-gray-700 border border-transparent'
