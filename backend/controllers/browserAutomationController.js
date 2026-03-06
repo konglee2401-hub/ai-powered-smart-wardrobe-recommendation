@@ -1224,7 +1224,7 @@ export async function generateWithBrowser(req, res) {
           type: 'image',
           aspectRatio,
           imageCount: 1,
-          model: 'Nano Banana Pro',
+          model: 'Nano Banana 2',
           headless: false,
           outputDir
         });

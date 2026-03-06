@@ -231,8 +231,9 @@ class SettingsManager {
               const firstBtn = firstItem.querySelector('button');
               if (firstBtn && !firstBtn.disabled) {
                 try {
+                  const firstItemText = normalize(firstBtn.textContent || firstItem.textContent || '');
                   firstBtn.click();
-                  return { selected: true, selectedModel: 'nano banana pro' };
+                  return { selected: true, selectedModel: firstItemText };
                 } catch (e) {
                   return { selected: false };
                 }
