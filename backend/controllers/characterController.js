@@ -74,20 +74,23 @@ export async function generateCharacterPreview(req, res) {
     console.log('🎭 CHARACTER GENERATION STARTING');
     console.log(`📋 Character: ${name} (${normalizedAlias})`);
     console.log(`🖼️  Portrait: ${path.basename(portraitPath)}`);
-    console.log(`📸 Prompts: ${prompts.length} images with 3-PART PROMPT ENTRY STRATEGY`);
+    console.log(`📸 Using 1 prompt × 4 outputs with 3-PART PROMPT ENTRY STRATEGY`);
     console.log('═══════════════════════════════════════════════════════════════\n');
+    
+    // Only use first prompt for character preview
+    const previewPrompts = [prompts[0]];
     
     const flow = new GoogleFlowAutomationService({
       type: 'image',
       aspectRatio,
-      imageCount: 4,  // Generate 4 images per prompt (better success rate)
+      imageCount: 4,  // Generate 4 images per execution (better success rate)
       model: 'Nano Banana Pro',
       headless: false,
       outputDir: path.join(tempDir, 'character-previews'),
       seed: Number.isInteger(Number(seed)) ? Number(seed) : undefined
     });
 
-    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts, outputCount: 4 });
+    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts: previewPrompts, outputCount: 4 });
     const generationSeed = result.seed;
     
     // Collect all successful images
@@ -114,7 +117,7 @@ export async function generateCharacterPreview(req, res) {
 
     console.log('\n═══════════════════════════════════════════════════════════════');
     console.log('🎭 CHARACTER GENERATION RESULTS');
-    console.log(`📊 Generated: ${allSuccessImages.length} total images from ${prompts.length} prompts × 4 attempts`);
+    console.log(`📊 Generated: ${allSuccessImages.length} images from 1 prompt × 4 outputs`);
     console.log(`🎲 Selected: ${generatedImages.length > 0 ? '1 random image' : 'NO SUCCESS'}`);
     if (generatedImages.length > 0) {
       console.log(`✅ Preview: ${generatedImages[0].filename}`);
