@@ -53,20 +53,6 @@ function buildCharacterPrompts(name, alias, options = {}, imageCount = 6) {
   });
 }
 
-function getShotDescription(idx) {
-  const shots = [
-    'Portrait Close-up',
-    '3/4 Angle',
-    'Waist-up',
-    'Full Body Front',
-    'Full Body Side',
-    'Full Body Back',
-    'Profile Shot',
-    'Walking Candid'
-  ];
-  return shots[idx % shots.length];
-}
-
 export async function generateCharacterPreview(req, res) {
   let portraitPath = null;
   try {
@@ -105,8 +91,7 @@ export async function generateCharacterPreview(req, res) {
           url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
           path: r.downloadedFile,
           filename,
-          angle: getShotDescription(idx),
-          description: getShotDescription(idx),
+          angle: `shot-${idx + 1}`,
           prompt: r.prompt,
           seed: r.seed || generationSeed
         };
@@ -131,125 +116,12 @@ export async function generateCharacterPreview(req, res) {
 
 export async function saveCharacterProfile(req, res) {
   try {
-    let { _id, name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
-    
-    // 💫 FIX: Handle stringified fields (they might come as strings from frontend)
-    if (typeof generatedImages === 'string') {
-      try {
-        generatedImages = JSON.parse(generatedImages);
-      } catch (e) {
-        console.error('Failed to parse generatedImages:', e.message);
-        generatedImages = [];
-      }
-    }
-    
-    if (typeof options === 'string') {
-      try {
-        options = JSON.parse(options);
-      } catch (e) {
-        console.warn('Failed to parse options:', e.message);
-        options = {};
-      }
-    }
-    
-    if (typeof analysisProfile === 'string') {
-      try {
-        analysisProfile = JSON.parse(analysisProfile);
-      } catch (e) {
-        console.warn('Failed to parse analysisProfile:', e.message);
-        analysisProfile = {};
-      }
-    }
-    
-    // Ensure generatedImages is an array
-    if (!Array.isArray(generatedImages)) {
-      generatedImages = [];
-    }
-    
-    console.log(`[CHAR] Saving character: ${name} | Mode: ${_id ? 'UPDATE' : 'CREATE'} | Images count: ${generatedImages.length}`);
-    if (generatedImages.length > 0) {
-      console.log(`[CHAR] First image structure:`, JSON.stringify(generatedImages[0]).substring(0, 200));
-    }
-    
-    if (!name || !alias) {
-      return res.status(400).json({ success: false, error: 'name and alias are required' });
+    const { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    if (!name || !alias || !portraitTempPath) {
+      return res.status(400).json({ success: false, error: 'name, alias, portraitTempPath are required' });
     }
 
     const normalizedAlias = safeAlias(alias || name);
-
-    // Handle UPDATE mode
-    if (_id) {
-      console.log(`[CHAR] Updating character: ${_id}`);
-      const character = await CharacterProfile.findById(_id);
-      if (!character) {
-        return res.status(404).json({ success: false, error: 'Character not found' });
-      }
-
-      // Update basic fields
-      character.name = name;
-      character.alias = normalizedAlias;
-      character.options = typeof options === 'object' && !Array.isArray(options) ? options : {};
-      character.analysisProfile = typeof analysisProfile === 'object' && !Array.isArray(analysisProfile) ? analysisProfile : {};
-
-      // Only update portrait if a new one is provided
-      if (portraitTempPath && portraitTempPath !== character.portraitPath) {
-        // Delete old portrait if it exists
-        if (character.portraitPath && fs.existsSync(character.portraitPath)) {
-          fs.unlinkSync(character.portraitPath);
-        }
-
-        const portraitFilename = `${normalizedAlias}-${Date.now()}-portrait.png`;
-        const portraitDest = path.join(characterDir, portraitFilename);
-        if (fs.existsSync(portraitTempPath)) {
-          fs.copyFileSync(portraitTempPath, portraitDest);
-        }
-        character.portraitUrl = `http://localhost:5000/uploads/characters/${portraitFilename}`;
-        character.portraitPath = portraitDest;
-      }
-
-      // Only update reference images if new ones are provided
-      if (generatedImages.length > 0) {
-        // Delete old reference images
-        character.referenceImages.forEach(ref => {
-          if (ref.path && fs.existsSync(ref.path)) {
-            fs.unlinkSync(ref.path);
-          }
-        });
-
-        const savedRefs = [];
-        generatedImages.forEach((img, idx) => {
-          const srcPath = img.path || (img.filename && global.generatedImagePaths?.[img.filename]);
-          if (srcPath && fs.existsSync(srcPath)) {
-            const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
-            const outPath = path.join(characterDir, outName);
-            fs.copyFileSync(srcPath, outPath);
-            
-            const description = img.description || img.angle || `shot-${idx + 1}`;
-            const type = description.toLowerCase().includes('full') ? 'full-body' : 'portrait';
-            
-            savedRefs.push({
-              url: `http://localhost:5000/uploads/characters/${outName}`,
-              path: outPath,
-              angle: description,
-              description: description,
-              type: type,
-              prompt: img.prompt || '',
-              seed: img.seed
-            });
-          }
-        });
-        character.referenceImages = savedRefs;
-      }
-
-      await character.save();
-      return res.json({ success: true, data: character });
-    }
-
-    // Handle CREATE mode
-    if (!portraitTempPath) {
-      return res.status(400).json({ success: false, error: 'portraitTempPath is required for new character' });
-    }
-
     const existing = await CharacterProfile.findOne({ alias: normalizedAlias });
     if (existing) return res.status(400).json({ success: false, error: 'Character alias already exists' });
 
@@ -266,141 +138,31 @@ export async function saveCharacterProfile(req, res) {
         const outName = `${normalizedAlias}-${Date.now()}-${idx + 1}.png`;
         const outPath = path.join(characterDir, outName);
         fs.copyFileSync(srcPath, outPath);
-        
-        const description = img.description || img.angle || `shot-${idx + 1}`;
-        const type = description.toLowerCase().includes('full') ? 'full-body' : 'portrait';
-        
         savedRefs.push({
           url: `http://localhost:5000/uploads/characters/${outName}`,
           path: outPath,
-          angle: description,
-          description: description,
-          type: type,
+          angle: img.angle || `shot-${idx + 1}`,
+          type: idx < 2 ? 'portrait' : 'full-body',
           prompt: img.prompt || '',
           seed: img.seed
         });
       }
     });
 
-    console.log(`[CHAR] savedRefs type: ${typeof savedRefs}, is array: ${Array.isArray(savedRefs)}, length: ${savedRefs.length}`);
-    if (savedRefs.length > 0) {
-      console.log(`[CHAR] First savedRef:`, JSON.stringify(savedRefs[0]));
-    }
-
-    // 💫 Extra safety: Ensure referenceImages is a proper array
-    const finalReferenceImages = Array.isArray(savedRefs) ? savedRefs : [];
-    const finalOptions = typeof options === 'object' && !Array.isArray(options) ? options : {};
-    const finalProfile = typeof analysisProfile === 'object' && !Array.isArray(analysisProfile) ? analysisProfile : {};
-
-    console.log(`[CHAR] Final payload - referenceImages type: ${typeof finalReferenceImages}, is array: ${Array.isArray(finalReferenceImages)}, options type: ${typeof finalOptions}`);
-
-    // 💫 Use manual instantiation instead of create() to avoid Mongoose casting issues
-    const characterData = {
+    const character = await CharacterProfile.create({
       name,
       alias: normalizedAlias,
       portraitUrl: `http://localhost:5000/uploads/characters/${portraitFilename}`,
       portraitPath: portraitDest,
-      referenceImages: finalReferenceImages,
-      options: finalOptions,
-      analysisProfile: finalProfile,
+      referenceImages: savedRefs,
+      options,
+      analysisProfile,
       status: 'active'
-    };
-    
-    console.log(`[CHAR] Creating character with data:`, {
-      name: characterData.name,
-      alias: characterData.alias,
-      referenceImagesLength: characterData.referenceImages.length,
-      referenceImagesType: Array.isArray(characterData.referenceImages) ? 'array' : typeof characterData.referenceImages
     });
-
-    const character = new CharacterProfile(characterData);
-    await character.save();
 
     return res.json({ success: true, data: character });
   } catch (error) {
-    console.error(`[CHAR] Save error:`, error.message);
-    console.error(error.stack);
     return res.status(500).json({ success: false, error: error.message });
-  }
-}
-
-export async function regenerateCharacterImage(req, res) {
-  let portraitPath = null;
-  try {
-    const { id } = req.params;
-    const { imageIndex = 0 } = req.body;
-    const portrait = req.file;
-
-    console.log(`[CHAR-REGEN] Starting regeneration for character ${id}, image index ${imageIndex}`);
-
-    if (!id || !portrait) {
-      console.error(`[CHAR-REGEN] Missing ID or portrait. id=${id}, portrait=${portrait ? 'yes' : 'no'}`);
-      return res.status(400).json({ success: false, error: 'Character ID and portrait image are required' });
-    }
-
-    const character = await CharacterProfile.findById(id);
-    if (!character) {
-      return res.status(404).json({ success: false, error: 'Character not found' });
-    }
-
-    const idx = Number(imageIndex);
-    const targetImage = character.referenceImages[idx];
-    if (!targetImage) {
-      console.error(`[CHAR-REGEN] Image index ${idx} out of range. Total images: ${character.referenceImages.length}`);
-      return res.status(400).json({ success: false, error: 'Image index out of range' });
-    }
-
-    portraitPath = path.join(tempDir, `character-portrait-${Date.now()}-${portrait.originalname}`);
-    fs.writeFileSync(portraitPath, portrait.buffer);
-    console.log(`[CHAR-REGEN] Portrait saved. Proceeding with generation...`);
-
-    const prompts = buildCharacterPrompts(character.name, character.alias, character.options || {}, 1);
-    const targetPrompt = prompts[idx] || prompts[0];
-
-    const flow = new GoogleFlowAutomationService({
-      type: 'image',
-      aspectRatio: '9:16',
-      imageCount: 1,
-      model: 'Nano Banana Pro',
-      headless: false,
-      outputDir: path.join(tempDir, 'character-regenerates')
-    });
-
-    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts: [targetPrompt], outputCount: 1 });
-    
-    if (!result.results || !result.results[0] || !result.results[0].success) {
-      console.error(`[CHAR-REGEN] Generation failed`);
-      return res.status(500).json({ success: false, error: 'Failed to generate image' });
-    }
-
-    const r = result.results[0];
-    const filename = path.basename(r.downloadedFile);
-    global.generatedImagePaths = global.generatedImagePaths || {};
-    global.generatedImagePaths[filename] = r.downloadedFile;
-
-    const generatedImage = {
-      url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
-      path: r.downloadedFile,
-      filename,
-      angle: getShotDescription(idx),
-      description: getShotDescription(idx),
-      prompt: r.prompt,
-      seed: r.seed || result.seed
-    };
-
-    console.log(`[CHAR-REGEN] Success! Image regenerated`);
-    return res.json({
-      success: true,
-      data: generatedImage
-    });
-  } catch (error) {
-    console.error(`[CHAR-REGEN] Error:`, error.message);
-    console.error(error.stack);
-    return res.status(500).json({ success: false, error: error.message });
-  } finally {
-    if (portraitPath && fs.existsSync(portraitPath)) {
-      fs.unlinkSync(portraitPath);
-    }
   }
 }
 
@@ -413,43 +175,4 @@ export async function getCharacter(req, res) {
   const data = await CharacterProfile.findById(req.params.id).lean();
   if (!data) return res.status(404).json({ success: false, error: 'Character not found' });
   res.json({ success: true, data });
-}
-
-export async function deleteCharacter(req, res) {
-  try {
-    const { id } = req.params;
-    const character = await CharacterProfile.findById(id);
-    if (!character) {
-      return res.status(404).json({ success: false, error: 'Character not found' });
-    }
-
-    // Delete portrait and reference images from file system
-    const charDir = path.join(process.cwd(), 'uploads', 'characters');
-    if (character.portraitPath && fs.existsSync(character.portraitPath)) {
-      try {
-        fs.unlinkSync(character.portraitPath);
-      } catch (e) {
-        console.warn(`Failed to delete portrait file: ${e.message}`);
-      }
-    }
-
-    if (character.referenceImages && Array.isArray(character.referenceImages)) {
-      character.referenceImages.forEach((ref) => {
-        if (ref.path && fs.existsSync(ref.path)) {
-          try {
-            fs.unlinkSync(ref.path);
-          } catch (e) {
-            console.warn(`Failed to delete reference image: ${e.message}`);
-          }
-        }
-      });
-    }
-
-    // Delete from database
-    await CharacterProfile.findByIdAndDelete(id);
-    res.json({ success: true, message: 'Character deleted successfully' });
-  } catch (error) {
-    console.error('[CHAR] Delete error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
 }

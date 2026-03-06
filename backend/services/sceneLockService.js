@@ -150,7 +150,7 @@ Scene option data:\n${JSON.stringify({
 Style direction (optional): ${styleDirection || '(none)'}\nImprovement notes (optional): ${improvementNotes || '(none)'}\nOutput language: ${outputLanguage}\n
 Return ONLY valid JSON with this exact schema:\n{\n  "sceneLockedPrompt": "string",\n  "promptSuggestion": "string",\n  "technicalDetails": {\n    "background": "string",\n    "layout": "string",\n    "lighting": "string",\n    "camera": "string",\n    "constraints": "string"\n  },\n  "sceneNegativePrompt": "string",
   "guidance": "short operator guidance text"\n}\n
-Rules:\n- sceneLockedPrompt must be detailed, stable, and reusable across generations.\n- Fix geometry, camera perspective, object layout, and lighting behavior.\n- Avoid brand names and copyrighted locations.\n- Keep it production-ready for fashion/product content.`;
+Rules:\n- sceneLockedPrompt must be detailed, stable, and reusable across generations.\n- Lighting must be bright commercial quality (avoid dark/moody/night-club look).\n- Camera should be medium-close fashion framing for subject movement (avoid far wide camera).\n- Define a clear subject stage/empty zone where character stands naturally.\n- Props must support realistic interaction (leaning desk, correctly oriented high stool/chair toward camera, clear walk path).\n- Prefer light wall/prop colors (white/cream/light gray/warm wood), avoid dull pastel-wash or muddy palettes.\n- Include pose compatibility guidance for moving subject in center frame.\n- Fix geometry, camera perspective, object layout, and lighting behavior.\n- Avoid brand names and copyrighted locations.\n- Keep it production-ready for fashion/product content.`;
 }
 
 export async function generateSceneLockPromptWithChatGPT(sceneOption, payload = {}) {
