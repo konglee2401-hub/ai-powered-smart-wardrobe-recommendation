@@ -684,8 +684,18 @@ class GenerationMonitor {
         deleteAttempt++;
         
         // Find first failed item with error indicators
+        // 💫 KEY FIX: Always re-query the root container each iteration (not cached)
         const failureInfo = await this.page.evaluate(() => {
-          const items = document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]');
+          // 💫 Re-query root container each iteration
+          const rootContainer = document.querySelector('[data-testid="virtuoso-item-list"]');
+          if (!rootContainer) {
+            console.log('   ⚠️  Lost virtuoso container reference');
+            return { found: false };
+          }
+          
+          // Now query items within the fresh root reference
+          const items = rootContainer.querySelectorAll('[data-tile-id]');
+          console.log(`   Scanning ${items.length} items in virtuoso list...`);
           
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
@@ -703,8 +713,8 @@ class GenerationMonitor {
             if (hasWarningIcon && hasErrorText) {
               console.log(`   Found failed item at position ${i}`);
               
-              // 💫 FIX: Query button by its icon text directly
-              // Find button that contains i.google-symbols with text 'close', 'delete', 'trash', or 'clear'
+              // 💫 FIX: Query button by its icon text - now includes 'delete_forever'
+              // Find button that contains i.google-symbols with delete-related icon text
               const deleteBtn = Array.from(item.querySelectorAll('button')).find(btn => {
                 const iconElement = btn.querySelector('i.google-symbols');
                 if (!iconElement) return false;
@@ -712,9 +722,10 @@ class GenerationMonitor {
                 const iconText = iconElement.textContent.trim();
                 console.log(`   Checking button with icon: "${iconText}"`);
                 
-                // Match delete-like icons
+                // Match delete-like icons (added 'delete_forever' for Google Flow UI)
                 return iconText === 'close' ||
                        iconText === 'delete' ||
+                       iconText === 'delete_forever' ||
                        iconText === 'trash' ||
                        iconText === 'clear' ||
                        iconText === 'remove' ||
