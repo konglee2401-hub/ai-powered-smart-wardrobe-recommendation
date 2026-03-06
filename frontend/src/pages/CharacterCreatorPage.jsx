@@ -71,8 +71,22 @@ export default function CharacterCreatorPage() {
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(isEditMode);
   const [generationSeed, setGenerationSeed] = useState(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const previewContainerRef = React.useRef(null);
 
   const imageCount = useMemo(() => Number(options.capturePlan.imageCount || 6), [options.capturePlan.imageCount]);
+
+  // Calculate container width on mount and resize
+  useEffect(() => {
+    const updateWidth = () => {
+      if (previewContainerRef.current) {
+        setContainerWidth(previewContainerRef.current.offsetWidth);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   // Load character data if in edit mode
   useEffect(() => {
@@ -271,23 +285,33 @@ export default function CharacterCreatorPage() {
                 <button onClick={saveCharacter} disabled={!preview.length || !portraitTempPath || loading} className="bg-emerald-600 rounded px-4 py-2">{loading ? 'Saving...' : (isEditMode ? 'Update Character' : 'Save Character')}</button>
               </div>
             </div>
-            <div className="bg-[#111522] border border-slate-700 rounded-xl p-4 lg:col-span-2">
-              <h3 className="font-semibold mb-3">Preview ({preview.length})</h3>
+            <div className="bg-[#111522] border border-slate-700 rounded-xl p-4 lg:col-span-2 flex flex-col h-full min-h-0" ref={previewContainerRef}>
+              <h3 className="font-semibold mb-3 flex-shrink-0">Preview ({preview.length})</h3>
+              <style>{`
+                .photo-album-container img {
+                  border-radius: 8px;
+                  border: 1px solid #334155;
+                }
+              `}</style>
               {preview.length > 0 ? (
-                <PhotoAlbum 
-                  layout="rows"
-                  photos={preview.map((img) => ({
-                    src: img.url || img.src,
-                    alt: img.filename || img.alt || 'Character preview',
-                    width: img.width || 1080,
-                    height: img.height || 1440,
-                  }))}
-                  targetRowHeight={200}
-                  spacing={8}
-                  className="[&_img]:rounded [&_img]:border [&_img]:border-slate-700"
-                />
+                <div className="flex-1 overflow-auto w-full photo-album-container">
+                  {containerWidth > 0 && (
+                    <PhotoAlbum 
+                      layout="rows"
+                      photos={preview.map((img) => ({
+                        src: img.url || img.src,
+                        alt: img.filename || img.alt || 'Character preview',
+                        width: img.width || 1080,
+                        height: img.height || 1440,
+                      }))}
+                      targetRowHeight={180}
+                      spacing={8}
+                      containerWidth={containerWidth}
+                    />
+                  )}
+                </div>
               ) : (
-                <div className="text-center py-8 text-slate-400">
+                <div className="text-center py-8 text-slate-400 flex-1 flex items-center justify-center">
                   <p>Generate preview images to see them here</p>
                 </div>
               )}

@@ -143,12 +143,12 @@ export default function Navbar() {
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between gap-2 border-b border-[#2c303c] px-4 py-4">
-            <Link to="/" className="flex items-center gap-3 overflow-hidden" onClick={() => setIsMobileOpen(false)}>
+            <Link to="/" className="flex items-center gap-3" onClick={() => setIsMobileOpen(false)}>
               <div className="flex-shrink-0 rounded-xl bg-gradient-to-br from-fuchsia-600 to-violet-500 p-2">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               {!isCollapsed && (
-                <div className="min-w-0 flex-1">
+                <div className="flex-1">
                   <p className="text-sm font-semibold text-white truncate">Smart Wardrobe</p>
                   <p className="text-xs text-slate-400 truncate">AI Creative Studio</p>
                 </div>
