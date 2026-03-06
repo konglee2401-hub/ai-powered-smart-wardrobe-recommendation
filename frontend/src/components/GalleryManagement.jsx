@@ -1,51 +1,116 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import './GalleryManagement.css';
-import PhotoAlbum from 'react-photo-album';
-import 'react-photo-album/rows.css';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Copy,
+  Download,
+  Grid3X3,
+  Heart,
+  ImagePlus,
+  List,
+  Pencil,
+  RefreshCw,
+  Search,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react';
 
-const GalleryManagement = ({ 
-  onImageSelect, 
+const CONTENT_TYPES = [
+  { value: 'all', label: 'All media' },
+  { value: 'uploaded', label: 'Uploaded' },
+  { value: 'drive', label: 'Cloud drive' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'name', label: 'Name A-Z' },
+  { value: 'size', label: 'Largest size' },
+  { value: 'usage', label: 'Most used' },
+];
+
+const DATE_RANGES = [
+  { value: 'all', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+];
+
+const PROVIDER_OPTIONS = [
+  { value: 'all', label: 'All providers' },
+  { value: 'OpenRouter', label: 'OpenRouter' },
+  { value: 'NVIDIA', label: 'NVIDIA' },
+  { value: 'Replicate', label: 'Replicate' },
+  { value: 'Fal.ai', label: 'Fal.ai' },
+  { value: 'Manual Upload', label: 'Manual Upload' },
+  { value: 'Google Drive', label: 'Google Drive' },
+];
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatRelativeDate(value) {
+  const date = new Date(value);
+  const diffHours = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60));
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function getTypeChipClass(type) {
+  switch (type) {
+    case 'drive':
+      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200';
+    case 'uploaded':
+      return 'border-sky-400/20 bg-sky-400/10 text-sky-200';
+    default:
+      return 'border-violet-400/20 bg-violet-400/10 text-violet-200';
+  }
+}
+
+function getCategoryLabel(category) {
+  if (!category) return 'Unsorted';
+  return category.replace(/-/g, ' ');
+}
+
+export default function GalleryManagement({
+  onImageSelect,
   onBatchSelect,
   selectedImages = [],
   viewMode = 'grid',
   currentCategory = 'all',
-  searchQuery = ''
-}) => {
-
+  searchQuery = '',
+}) {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    contentType: 'all',      // all, uploaded, drive
+    contentType: 'all',
     dateRange: 'all',
     provider: 'all',
-    search: searchQuery || ''
+    search: searchQuery,
   });
-
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedForBatch, setSelectedForBatch] = useState([]);
+  const [selectedForBatch, setSelectedForBatch] = useState(selectedImages);
   const [imageErrors, setImageErrors] = useState({});
-  const fileInputRef = useRef(null);
   const [actionLoading, setActionLoading] = useState(false);
-
-  const contentTypes = [
-    { value: 'all', label: 'All Media', icon: '🎨' },
-    { value: 'uploaded', label: 'Uploaded / Local', icon: '📤', color: 'uploaded' },
-    { value: 'drive', label: 'Cloud Drive', icon: '☁️', color: 'drive' }
-  ];
-
-
-  const sortOptions = [
-    { value: 'newest', label: 'Newest First' },
-    { value: 'oldest', label: 'Oldest First' },
-    { value: 'name', label: 'Name A-Z' },
-    { value: 'size', label: 'Size (Largest)' },
-    { value: 'usage', label: 'Most Used' }
-  ];
-
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const fileInputRef = useRef(null);
 
   const mapSortParam = useCallback((sort) => {
     switch (sort) {
@@ -62,28 +127,7 @@ const GalleryManagement = ({
     }
   }, []);
 
-  useEffect(() => {
-    loadGallery();
-  }, [filters, sortBy, currentPage]);
-
-  // Update search query when prop changes
-  useEffect(() => {
-    if (searchQuery !== filters.search) {
-      setFilters(prev => ({
-        ...prev,
-        search: searchQuery
-      }));
-      setCurrentPage(1); // Reset to first page
-    }
-  }, [searchQuery]);
-
-  // Reload gallery when category changes
-  useEffect(() => {
-    setCurrentPage(1); // Reset to first page when category changes
-    loadGallery();
-  }, [currentCategory]);
-
-  const buildSources = (asset) => {
+  const buildSources = useCallback((asset) => {
     const proxyUrl = asset.assetId ? `${API_BASE}/assets/proxy/${asset.assetId}` : null;
     const candidates = [
       proxyUrl,
@@ -93,130 +137,12 @@ const GalleryManagement = ({
       asset.storage?.localPath,
     ].filter(Boolean);
 
-    // Deduplicate while preserving order
     return [...new Set(candidates)];
-  };
+  }, []);
 
-  const loadGallery = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        assetType: 'image',
-        page: currentPage,
-        limit: 60,
-        sortBy: mapSortParam(sortBy),
-      });
-
-      if (filters.search) {
-        params.append('query', filters.search);
-      }
-
-      const response = await fetch(`${API_BASE}/assets/gallery?${params}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch gallery items');
-      }
-
-      const data = await response.json();
-      const assets = data.assets || [];
-
-      const transformedImages = assets.map(asset => {
-        const sources = buildSources(asset);
-        const firstSource = sources[0];
-        return {
-          id: asset._id || asset.assetId,
-          assetId: asset.assetId,
-          name: asset.filename || asset.name || 'Untitled',
-          url: firstSource,
-          thumbnail: firstSource,
-          sources,
-          sourceIndex: 0,
-          contentType: asset.storage?.location === 'google-drive' ? 'drive' : 'uploaded',
-          provider: asset.storage?.location || asset.provider || 'system',
-          createdAt: asset.createdAt || new Date().toISOString(),
-          size: asset.fileSize || 0,
-          isFavorite: !!asset.isFavorite,
-          usageCount: asset.usageCount || 0,
-          category: asset.assetCategory,
-        };
-      });
-
-      const filteredImages = filterImages(transformedImages, filters);
-      const sortedImages = sortImages(filteredImages, sortBy);
-
-      setImages(sortedImages);
-      setImageErrors({});
-      setTotalPages(data.pagination?.pages || 1);
-    } catch (error) {
-      console.error('Failed to load gallery:', error);
-      setImages([]);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  const filterImages = (images, filters) => {
-    return images.filter(image => {
-      // Category filter (from sidebar selection)
-      if (currentCategory && currentCategory !== 'all') {
-        // Map currentCategory value to asset category
-        const categoryMap = {
-          'character': 'Character',
-          'product': 'Product',
-          'generated': 'Generated',
-          'source': 'Source',
-          'reference': 'Reference'
-        };
-        
-        const targetCategory = categoryMap[currentCategory];
-        if (targetCategory && image.category !== targetCategory) return false;
-      }
-      
-      // Handle special filter categories from sidebar
-      if (currentCategory === 'recent') {
-        const now = new Date();
-        const imageDate = new Date(image.createdAt);
-        const hoursAgo = Math.floor((now - imageDate) / (1000 * 60 * 60));
-        return hoursAgo <= 24; // Recent = last 24 hours
-      }
-      
-      if (currentCategory === 'favorites' && !image.isFavorite) {
-        return false;
-      }
-      
-      // Content type filter
-      if (filters.contentType !== 'all' && image.contentType !== filters.contentType) return false;
-      
-      // Provider filter
-      if (filters.provider !== 'all' && image.provider !== filters.provider) return false;
-      
-      // Search filter (from search input)
-      if (filters.search && !image.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
-      
-      // Date range filter
-      if (filters.dateRange !== 'all') {
-        const imageDate = new Date(image.createdAt);
-        const now = new Date();
-        const daysDiff = Math.floor((now - imageDate) / (1000 * 60 * 60 * 24));
-        
-        switch (filters.dateRange) {
-          case 'today': return daysDiff === 0;
-          case 'week': return daysDiff <= 7;
-          case 'month': return daysDiff <= 30;
-          default: return true;
-        }
-      }
-      
-      return true;
-    });
-  };
-
-  const sortImages = (images, sortBy) => {
-    return [...images].sort((a, b) => {
-      switch (sortBy) {
+  const sortImages = useCallback((items, activeSort) => {
+    return [...items].sort((a, b) => {
+      switch (activeSort) {
         case 'newest':
           return new Date(b.createdAt) - new Date(a.createdAt);
         case 'oldest':
@@ -231,112 +157,243 @@ const GalleryManagement = ({
           return 0;
       }
     });
-  };
+  }, []);
+
+  const filterImages = useCallback((items, activeFilters) => {
+    return items.filter((image) => {
+      if (currentCategory && currentCategory !== 'all') {
+        const categoryMap = {
+          'character-image': 'character-image',
+          'product-image': 'product-image',
+          'generated-image': 'generated-image',
+          'source-video': 'source-video',
+        };
+
+        if (currentCategory === 'recent') {
+          const diffHours = Math.floor((Date.now() - new Date(image.createdAt).getTime()) / (1000 * 60 * 60));
+          return diffHours <= 24;
+        }
+
+        if (currentCategory === 'favorites') {
+          return image.isFavorite;
+        }
+
+        if (categoryMap[currentCategory] && image.category !== categoryMap[currentCategory]) {
+          return false;
+        }
+      }
+
+      if (activeFilters.contentType !== 'all' && image.contentType !== activeFilters.contentType) return false;
+      if (activeFilters.provider !== 'all' && image.provider !== activeFilters.provider) return false;
+      if (activeFilters.search && !image.name.toLowerCase().includes(activeFilters.search.toLowerCase())) return false;
+
+      if (activeFilters.dateRange !== 'all') {
+        const diffDays = Math.floor((Date.now() - new Date(image.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+        if (activeFilters.dateRange === 'today' && diffDays !== 0) return false;
+        if (activeFilters.dateRange === 'week' && diffDays > 7) return false;
+        if (activeFilters.dateRange === 'month' && diffDays > 30) return false;
+      }
+
+      return true;
+    });
+  }, [currentCategory]);
+
+  const loadGallery = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        assetType: 'image',
+        page: currentPage,
+        limit: 60,
+        sortBy: mapSortParam(sortBy),
+      });
+
+      if (filters.search) {
+        params.append('query', filters.search);
+      }
+
+      const response = await fetch(`${API_BASE}/assets/gallery?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch gallery items');
+
+      const data = await response.json();
+      const transformedImages = (data.assets || []).map((asset) => {
+        const sources = buildSources(asset);
+        const primarySource = sources[0];
+        return {
+          id: asset._id || asset.assetId,
+          assetId: asset.assetId,
+          name: asset.filename || asset.name || 'Untitled',
+          url: primarySource,
+          thumbnail: primarySource,
+          sources,
+          sourceIndex: 0,
+          contentType: asset.storage?.location === 'google-drive' ? 'drive' : 'uploaded',
+          provider: asset.storage?.location || asset.provider || 'system',
+          createdAt: asset.createdAt || new Date().toISOString(),
+          size: asset.fileSize || 0,
+          isFavorite: !!asset.isFavorite,
+          usageCount: asset.usageCount || 0,
+          category: asset.assetCategory,
+        };
+      });
+
+      setImages(sortImages(filterImages(transformedImages, filters), sortBy));
+      setImageErrors({});
+      setTotalPages(data.pagination?.pages || 1);
+    } catch (error) {
+      console.error('Failed to load gallery:', error);
+      setImages([]);
+      setTotalPages(1);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildSources, currentPage, filterImages, filters, mapSortParam, sortBy, sortImages]);
+
+  useEffect(() => {
+    loadGallery();
+  }, [loadGallery]);
+
+  useEffect(() => {
+    setFilters((prev) => (prev.search === searchQuery ? prev : { ...prev, search: searchQuery }));
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [currentCategory]);
+
+  useEffect(() => {
+    setSelectedForBatch(selectedImages);
+  }, [selectedImages]);
+
+  const contentTypeCounts = useMemo(
+    () => ({
+      all: images.length,
+      uploaded: images.filter((image) => image.contentType === 'uploaded').length,
+      drive: images.filter((image) => image.contentType === 'drive').length,
+    }),
+    [images],
+  );
+
+  const brokenCount = Object.keys(imageErrors).length;
 
   const handleImageClick = (image) => {
     if (selectMode) {
-      const isSelected = selectedForBatch.some(img => img.id === image.id);
-      if (isSelected) {
-        setSelectedForBatch(prev => prev.filter(img => img.id !== image.id));
-      } else {
-        setSelectedForBatch(prev => [...prev, image]);
-      }
-    } else {
-      onImageSelect?.(image);
+      setSelectedForBatch((prev) => {
+        const exists = prev.some((selected) => selected.id === image.id);
+        const next = exists ? prev.filter((selected) => selected.id !== image.id) : [...prev, image];
+        onBatchSelect?.(next);
+        return next;
+      });
+      return;
     }
+
+    onImageSelect?.(image);
   };
 
   const handleImageError = (imageId) => {
-    setImages(prev => prev.map(img => {
-      if (img.id !== imageId) return img;
-      const nextIndex = (img.sourceIndex || 0) + 1;
-      if (img.sources && nextIndex < img.sources.length) {
-        return { ...img, sourceIndex: nextIndex, url: img.sources[nextIndex], thumbnail: img.sources[nextIndex] };
+    setImages((prev) => prev.map((image) => {
+      if (image.id !== imageId) return image;
+      const nextIndex = (image.sourceIndex || 0) + 1;
+      if (image.sources && nextIndex < image.sources.length) {
+        return { ...image, sourceIndex: nextIndex, url: image.sources[nextIndex], thumbnail: image.sources[nextIndex] };
       }
-      return img;
+      return image;
     }));
 
-    setImageErrors(prev => {
-      const currentCount = prev[imageId]?.count || 0;
-      return { ...prev, [imageId]: { count: currentCount + 1, failed: true } };
-    });
+    setImageErrors((prev) => ({
+      ...prev,
+      [imageId]: {
+        count: (prev[imageId]?.count || 0) + 1,
+        failed: true,
+      },
+    }));
   };
 
-
-  const handleBatchSelect = () => {
-    onBatchSelect?.(selectedForBatch);
-    setSelectedForBatch([]);
-    setSelectMode(false);
+  const clearBrokenImages = () => {
+    const brokenIds = new Set(Object.keys(imageErrors));
+    setImages((prev) => prev.filter((image) => !brokenIds.has(image.id)));
+    setImageErrors({});
   };
 
-  const toggleFavorite = async (imageId, e) => {
-    e.stopPropagation();
+  const toggleFavorite = async (imageId, event) => {
+    event.stopPropagation();
+    setImages((prev) => prev.map((image) => (
+      image.id === imageId ? { ...image, isFavorite: !image.isFavorite } : image
+    )));
+  };
+
+  const copyImageUrl = async (image, event) => {
+    event.stopPropagation();
+    await navigator.clipboard.writeText(image.url || image.sources?.[0] || '');
+  };
+
+  const handleRename = async (image, event) => {
+    event.stopPropagation();
+    const nextName = window.prompt('Enter a new filename', image.name);
+    if (!nextName || nextName === image.name) return;
+
     try {
-      setImages(prev => prev.map(img => 
-        img.id === imageId 
-          ? { ...img, isFavorite: !img.isFavorite }
-          : img
-      ));
+      const assetId = image.assetId || image.id;
+      await fetch(`${API_BASE}/assets/${assetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: nextName }),
+      });
+      setImages((prev) => prev.map((item) => (item.id === image.id ? { ...item, name: nextName } : item)));
     } catch (error) {
-      console.error('Failed to toggle favorite:', error);
+      console.error('Rename failed:', error);
+      window.alert('Rename failed. Please try again.');
     }
   };
 
-  const deleteImage = async (image, e) => {
-    e?.stopPropagation?.();
-    if (!confirm('Are you sure you want to delete this media?')) return;
+  const deleteImage = async (image, event) => {
+    event?.stopPropagation?.();
+    if (!window.confirm('Delete this media asset?')) return;
+
     try {
       const assetId = image.assetId || image.id;
       await fetch(`${API_BASE}/assets/${assetId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deleteFile: true })
+        body: JSON.stringify({ deleteFile: true }),
       });
-      setImages(prev => prev.filter(img => img.id !== image.id));
+      setImages((prev) => prev.filter((item) => item.id !== image.id));
     } catch (error) {
-      console.error('Failed to delete media:', error);
-      alert('Xoá không thành công. Vui lòng thử lại.');
+      console.error('Delete failed:', error);
+      window.alert('Delete failed. Please try again.');
     }
   };
 
   const deleteSelected = async () => {
-    if (selectedForBatch.length === 0) return;
-    if (!confirm(`Xoá ${selectedForBatch.length} ảnh đã chọn?`)) return;
+    if (!selectedForBatch.length || !window.confirm(`Delete ${selectedForBatch.length} selected assets?`)) return;
+
     setActionLoading(true);
     try {
-      await Promise.all(selectedForBatch.map(img => {
-        const assetId = img.assetId || img.id;
+      await Promise.all(selectedForBatch.map((image) => {
+        const assetId = image.assetId || image.id;
         return fetch(`${API_BASE}/assets/${assetId}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deleteFile: true })
+          body: JSON.stringify({ deleteFile: true }),
         });
       }));
-      setImages(prev => prev.filter(img => !selectedForBatch.some(sel => sel.id === img.id)));
+
+      const selectedIds = new Set(selectedForBatch.map((image) => image.id));
+      setImages((prev) => prev.filter((image) => !selectedIds.has(image.id)));
       setSelectedForBatch([]);
+      onBatchSelect?.([]);
       setSelectMode(false);
     } catch (error) {
       console.error('Batch delete failed:', error);
-      alert('Xoá hàng loạt thất bại. Vui lòng thử lại.');
+      window.alert('Batch delete failed. Please try again.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const clearBrokenImages = () => {
-    const brokenIds = Object.keys(imageErrors);
-    if (brokenIds.length === 0) return;
-    setImages(prev => prev.filter(img => !brokenIds.includes(img.id)));
-    setImageErrors({});
-  };
-
-  const copyImageUrl = (image, e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(image.url || image.sources?.[0] || '');
-  };
-
   const exportSelected = () => {
-    selectedForBatch.forEach(image => {
+    selectedForBatch.forEach((image) => {
       const link = document.createElement('a');
       link.href = image.url || image.sources?.[0];
       link.download = image.name;
@@ -344,236 +401,236 @@ const GalleryManagement = ({
     });
   };
 
-  const handleRename = async (image, e) => {
-    e.stopPropagation();
-    const newName = prompt('Nhập tên mới', image.name);
-    if (!newName || newName === image.name) return;
-    try {
-      const assetId = image.assetId || image.id;
-      await fetch(`${API_BASE}/assets/${assetId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: newName })
-      });
-      setImages(prev => prev.map(img => img.id === image.id ? { ...img, name: newName } : img));
-    } catch (error) {
-      console.error('Rename failed:', error);
-      alert('Đổi tên thất bại.');
-    }
+  const handleApplySelected = () => {
+    onBatchSelect?.(selectedForBatch);
+    setSelectMode(false);
   };
 
   const handleUpload = async (file) => {
     if (!file) return;
+
     setActionLoading(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
-      const uploadRes = await fetch(`${API_BASE}/drive/upload`, {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadResponse = await fetch(`${API_BASE}/drive/upload`, {
         method: 'POST',
-        body: form
+        body: formData,
       });
-      const uploadData = await uploadRes.json();
-      const uploaded = uploadData.file;
-      if (!uploaded?.id) {
+      const uploadData = await uploadResponse.json();
+      const uploadedFile = uploadData.file;
+
+      if (!uploadedFile?.id) {
         throw new Error('Upload failed');
       }
-
-      // Register asset record
-      const assetPayload = {
-        filename: uploaded.name || file.name,
-        mimeType: uploaded.mimeType || file.type,
-        fileSize: uploaded.size || file.size,
-        assetType: 'image',
-        assetCategory: 'uploaded-image',
-        storage: {
-          location: uploaded.source === 'local' ? 'local' : 'google-drive',
-          googleDriveId: uploaded.id,
-          url: uploaded.webViewLink || uploaded.thumbnailLink,
-          localPath: uploaded.localPath,
-        },
-        metadata: {}
-      };
 
       await fetch(`${API_BASE}/assets/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(assetPayload)
+        body: JSON.stringify({
+          filename: uploadedFile.name || file.name,
+          mimeType: uploadedFile.mimeType || file.type,
+          fileSize: uploadedFile.size || file.size,
+          assetType: 'image',
+          assetCategory: 'uploaded-image',
+          storage: {
+            location: uploadedFile.source === 'local' ? 'local' : 'google-drive',
+            googleDriveId: uploadedFile.id,
+            url: uploadedFile.webViewLink || uploadedFile.thumbnailLink,
+            localPath: uploadedFile.localPath,
+          },
+          metadata: {},
+        }),
       });
 
       await loadGallery();
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Upload thất bại hoặc Drive chưa cấu hình.');
+      window.alert('Upload failed or Drive is not configured.');
     } finally {
       setActionLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // Calculate content type counts
-
-  const contentTypeCounts = {
-    all: images.length,
-    uploaded: images.filter(img => img.contentType === 'uploaded').length,
-    drive: images.filter(img => img.contentType === 'drive').length
-  };
-
-
   if (loading) {
     return (
-      <div className="gallery-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading gallery...</p>
+      <div className="flex min-h-[420px] items-center justify-center rounded-[1.5rem] border border-white/6 bg-white/[0.03]">
+        <div className="flex items-center gap-3 text-sm text-slate-300">
+          <RefreshCw className="h-4 w-4 animate-spin text-cyan-300" />
+          Loading media workspace
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="gallery-management">
-      {/* Header */}
-      <div className="gallery-header">
-        <div className="header-info">
-          <p className="header-meta">{images.length} media • {selectedForBatch.length} selected</p>
-        </div>
+    <div className="space-y-5">
+      <div className="grid gap-4 xl:grid-cols-[1.35fr,0.95fr]">
+        <div className="rounded-[1.5rem] border border-white/6 bg-white/[0.03] p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Library pulse</p>
+              <h3 className="mt-2 text-xl font-semibold text-white">{images.length} assets in this view</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {selectedForBatch.length} selected, {brokenCount} broken previews, page {currentPage} of {totalPages}
+              </p>
+            </div>
 
-        <div className="header-actions">
-
-          <button 
-            className={`mode-toggle ${selectMode ? 'active' : ''}`}
-            onClick={() => setSelectMode(!selectMode)}
-          >
-            {selectMode ? '✕ Exit Select' : '☑️ Select'}
-          </button>
-
-          <div className="view-toggle">
-            <button 
-              className={`icon-btn ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="Grid"
-            >
-              ⬜
-            </button>
-            <button 
-              className={`icon-btn ${viewMode === 'list' ? 'active' : ''}`}
-              onClick={() => setViewMode('list')}
-              title="List"
-            >
-              ☰
-            </button>
-          </div>
-
-          <button className="mode-toggle" onClick={loadGallery} disabled={loading}>
-            🔄 Refresh
-          </button>
-
-          <button className="mode-toggle" onClick={clearBrokenImages} disabled={Object.keys(imageErrors).length === 0}>
-            🧹 Clear lỗi
-          </button>
-
-          <button className="mode-toggle" onClick={() => fileInputRef.current?.click()} disabled={actionLoading}>
-            ➕ Upload
-          </button>
-
-
-          {selectMode && selectedForBatch.length > 0 && (
-            <>
-              <button onClick={handleBatchSelect} style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-              }}>
-                Use ({selectedForBatch.length})
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectMode((prev) => !prev)}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-medium transition ${
+                  selectMode
+                    ? 'border-cyan-300/25 bg-cyan-400/12 text-cyan-100'
+                    : 'border-white/10 bg-white/[0.04] text-slate-300 hover:text-white'
+                }`}
+              >
+                {selectMode ? <X className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                {selectMode ? 'Exit select' : 'Select assets'}
               </button>
-              <button onClick={exportSelected} style={{
-                background: 'linear-gradient(135deg, #3b82f6, #06b6d4)'
-              }}>
-                Export
-              </button>
-              <button onClick={deleteSelected} style={{
-                background: 'linear-gradient(135deg, #ef4444, #f97316)'
-              }} disabled={actionLoading}>
-                🗑️ Delete selected
-              </button>
-            </>
-          )}
-        </div>
-      </div>
 
+              <button
+                type="button"
+                onClick={loadGallery}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-medium text-slate-300 transition hover:text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </button>
 
-      {/* Filters */}
-      <div className="gallery-filters">
-        {/* Content Type Filter Buttons */}
-        <div className="filter-row">
-          <div className="filter-group">
-            <label>Content Type</label>
-            <div className="filter-buttons">
-              {contentTypes.map(type => (
-                <button
-                  key={type.value}
-                  className={`filter-button ${filters.contentType === type.value ? `active ${type.color}` : ''}`}
-                  onClick={() => setFilters(prev => ({ ...prev, contentType: type.value }))}
-                >
-                  <span>{type.icon}</span> {type.label} ({contentTypeCounts[type.value]})
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={clearBrokenImages}
+                disabled={!brokenCount}
+                className="inline-flex items-center gap-2 rounded-2xl border border-amber-300/12 bg-amber-400/10 px-3.5 py-2 text-sm font-medium text-amber-100 transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <AlertTriangle className="h-4 w-4" />
+                Clear broken
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3.5 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <UploadCloud className="h-4 w-4" />
+                Upload
+              </button>
             </div>
           </div>
+
+          {selectMode && selectedForBatch.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2 rounded-[1.2rem] border border-violet-300/15 bg-violet-400/10 p-3">
+              <button
+                type="button"
+                onClick={handleApplySelected}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Use selected ({selectedForBatch.length})
+              </button>
+              <button
+                type="button"
+                onClick={exportSelected}
+                className="inline-flex items-center gap-2 rounded-2xl border border-sky-300/15 bg-sky-400/10 px-3.5 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={deleteSelected}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-300/15 bg-rose-400/10 px-3.5 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Other Filters */}
-        <div className="filter-row">
-          <div className="filter-group">
-            <label>Date Range</label>
-            <select
-              value={filters.dateRange}
-              onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-            </select>
-          </div>
+        <div className="rounded-[1.5rem] border border-white/6 bg-white/[0.03] p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Search inside current view</span>
+              <div className="flex items-center gap-3 rounded-[1.1rem] border border-white/10 bg-slate-950/55 px-3 py-2.5">
+                <Search className="h-4 w-4 text-slate-500" />
+                <input
+                  type="text"
+                  value={filters.search}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  placeholder="Search by filename"
+                />
+              </div>
+            </label>
 
-          <div className="filter-group">
-            <label>Provider</label>
-            <select
-              value={filters.provider}
-              onChange={(e) => setFilters(prev => ({ ...prev, provider: e.target.value }))}
-            >
-              <option value="all">All Providers</option>
-              <option value="OpenRouter">OpenRouter</option>
-              <option value="NVIDIA">NVIDIA</option>
-              <option value="Replicate">Replicate</option>
-              <option value="Fal.ai">Fal.ai</option>
-              <option value="Manual">Manual Upload</option>
-              <option value="Google Drive">Google Drive</option>
-            </select>
-          </div>
+            <div className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">View mode</span>
+              <div className="inline-flex rounded-[1.1rem] border border-white/10 bg-slate-950/55 p-1">
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm transition ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm transition ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
+                >
+                  <List className="h-4 w-4" />
+                  List
+                </button>
+              </div>
+            </div>
 
-          <div className="filter-group">
-            <label>Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              {sortOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="search-row">
-          <div className="search-group">
-            <input
-              type="text"
-              placeholder="Search media by name..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            <SelectField
+              label="Content source"
+              value={filters.contentType}
+              options={CONTENT_TYPES}
+              onChange={(value) => setFilters((prev) => ({ ...prev, contentType: value }))}
             />
-            <button className="search-btn">🔍</button>
+            <SelectField
+              label="Provider"
+              value={filters.provider}
+              options={PROVIDER_OPTIONS}
+              onChange={(value) => setFilters((prev) => ({ ...prev, provider: value }))}
+            />
+            <SelectField
+              label="Date range"
+              value={filters.dateRange}
+              options={DATE_RANGES}
+              onChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
+            />
+            <SelectField
+              label="Sort by"
+              value={sortBy}
+              options={SORT_OPTIONS}
+              onChange={setSortBy}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {CONTENT_TYPES.map((type) => (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, contentType: type.value }))}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  filters.contentType === type.value
+                    ? 'border-cyan-300/25 bg-cyan-400/12 text-cyan-100'
+                    : 'border-white/8 bg-white/[0.04] text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {type.label} ({contentTypeCounts[type.value] || 0})
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -582,129 +639,203 @@ const GalleryManagement = ({
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        style={{ display: 'none' }}
-        onChange={(e) => handleUpload(e.target.files?.[0])}
+        className="hidden"
+        onChange={(event) => handleUpload(event.target.files?.[0])}
       />
 
-      {/* Gallery Grid */}
-      <div className={`gallery-grid ${viewMode}`}>
-        {images.map(image => (
-          <div 
-            key={image.id} 
-            className={`gallery-item ${selectedForBatch.some(img => img.id === image.id) ? 'selected' : ''}`}
-            onClick={() => handleImageClick(image)}
-          >
-            <div className="item-image">
-              <img 
-                src={image.thumbnail || image.url} 
-                alt={image.name} 
-                loading="lazy"
-                onError={() => handleImageError(image.id)}
-              />
-
-              {imageErrors[image.id]?.failed && (
-                <div className="item-error">
-                  <div>⚠️ Image unavailable</div>
-                </div>
-              )}
-              
-              <div className="item-overlay">
-                <div className="item-actions">
-                  <button 
-                    onClick={(e) => toggleFavorite(image.id, e)}
-                    className={`favorite-btn ${image.isFavorite ? 'active' : ''}`}
-                    title="Toggle favorite"
-                  >
-                    {image.isFavorite ? '❤️' : '♡'}
-                  </button>
-                  <button 
-                    onClick={(e) => copyImageUrl(image, e)}
-                    className="copy-btn"
-                    title="Copy URL"
-                  >
-                    📋
-                  </button>
-                  <button 
-                    onClick={(e) => handleRename(image, e)}
-                    className="copy-btn"
-                    title="Rename"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    onClick={(e) => deleteImage(image, e)}
-                    className="delete-btn"
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
-                </div>
-
-                {selectMode && (
-                  <div className="selection-indicator">
-                    {selectedForBatch.some(img => img.id === image.id) ? '✓ Selected' : 'Click to select'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-
-            <div className="item-info">
-              <div className="item-name">{image.name}</div>
-              <div className="item-meta">
-                <span className={`item-type ${image.contentType}`}>
-                  {image.contentType}
-                </span>
-                <span className="item-date">
-                  {new Date(image.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <div className="item-meta">
-                <span className="item-provider">{image.provider}</span>
-                {image.category && (
-                  <span className="item-usage">{image.category}</span>
-                )}
-                {image.usageCount > 0 && (
-                  <span className="item-usage">Used {image.usageCount}x</span>
-                )}
-              </div>
-            </div>
+      {images.length === 0 ? (
+        <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white/[0.04]">
+            <ImagePlus className="h-7 w-7 text-slate-400" />
           </div>
-        ))}
-      </div>
-
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="gallery-pagination">
-          <button 
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-          >
-            ← Previous
-          </button>
-
-          <span>Page {currentPage} of {totalPages}</span>
-
-          <button 
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-          >
-            Next →
-          </button>
+          <h3 className="mt-5 text-xl font-semibold text-white">No media found in this slice</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+            Try broadening the filters, changing the collection, or uploading a fresh reference image to start building the workspace.
+          </p>
+        </div>
+      ) : (
+        <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'}>
+          {images.map((image) => (
+            <AssetCard
+              key={image.id}
+              image={image}
+              imageErrors={imageErrors}
+              isList={viewMode === 'list'}
+              isSelected={selectedForBatch.some((selected) => selected.id === image.id)}
+              onClick={() => handleImageClick(image)}
+              onCopy={(event) => copyImageUrl(image, event)}
+              onDelete={(event) => deleteImage(image, event)}
+              onFavorite={(event) => toggleFavorite(image.id, event)}
+              onRename={(event) => handleRename(image, event)}
+              onError={() => handleImageError(image.id)}
+              selectMode={selectMode}
+            />
+          ))}
         </div>
       )}
 
-      {/* Empty State */}
-      {images.length === 0 && (
-        <div className="gallery-empty">
-          <div className="empty-icon">🖼️</div>
-          <h3>No media found</h3>
-          <p>Try adjusting your filters or upload some media to get started.</p>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-[1.5rem] border border-white/6 bg-white/[0.03] px-4 py-3">
+          <button
+            type="button"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((prev) => prev - 1)}
+            className="rounded-2xl border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <p className="text-sm text-slate-400">Page {currentPage} of {totalPages}</p>
+          <button
+            type="button"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((prev) => prev + 1)}
+            className="rounded-2xl border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
         </div>
       )}
     </div>
   );
-};
+}
 
-export default GalleryManagement;
+function SelectField({ label, value, options, onChange }) {
+  return (
+    <label className="space-y-2">
+      <span className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-[1.1rem] border border-white/10 bg-slate-950/55 px-3 py-2.5 text-sm text-white outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function AssetCard({
+  image,
+  imageErrors,
+  isList,
+  isSelected,
+  onClick,
+  onCopy,
+  onDelete,
+  onFavorite,
+  onRename,
+  onError,
+  selectMode,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group w-full rounded-[1.6rem] border p-3 text-left transition ${
+        isSelected
+          ? 'border-cyan-300/30 bg-gradient-to-br from-cyan-400/12 to-violet-500/10 shadow-[0_20px_45px_rgba(8,47,73,0.25)]'
+          : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+      } ${isList ? 'flex items-start gap-4' : ''}`}
+    >
+      <div className={`relative overflow-hidden ${isList ? 'h-32 w-32 shrink-0 rounded-[1.25rem]' : 'aspect-[1.08/1] rounded-[1.35rem]'}`}>
+        <img
+          src={image.thumbnail || image.url}
+          alt={image.name}
+          loading="lazy"
+          onError={onError}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
+
+        {imageErrors[image.id]?.failed && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs font-medium text-slate-200">
+            Preview unavailable
+          </div>
+        )}
+
+        <div className="absolute left-3 top-3 flex items-center gap-2">
+          <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getTypeChipClass(image.contentType)}`}>
+            {image.contentType}
+          </span>
+          {isSelected && (
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/12 px-2 py-1 text-[11px] font-semibold text-cyan-100">
+              Selected
+            </span>
+          )}
+        </div>
+
+        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+          <IconButton label="Favorite" onClick={onFavorite}>
+            <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-current text-rose-300' : ''}`} />
+          </IconButton>
+          <IconButton label="Copy URL" onClick={onCopy}>
+            <Copy className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Rename" onClick={onRename}>
+            <Pencil className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Delete" onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        </div>
+      </div>
+
+      <div className={`min-w-0 ${isList ? 'flex-1' : 'pt-4'}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="truncate text-base font-semibold text-white">{image.name}</h4>
+            <p className="mt-1 text-sm text-slate-400">{getCategoryLabel(image.category)}</p>
+          </div>
+          {!selectMode && (
+            <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-400">
+              {formatRelativeDate(image.createdAt)}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Size</p>
+            <p className="mt-1 text-slate-200">{formatBytes(image.size)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Provider</p>
+            <p className="mt-1 truncate text-slate-200">{image.provider}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Usage</p>
+            <p className="mt-1 text-slate-200">{image.usageCount || 0} times</p>
+          </div>
+        </div>
+
+        {selectMode && (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {isSelected ? 'Tap again to remove' : 'Tap to add to selection'}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function IconButton({ children, label, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick(event);
+      }}
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-slate-200 backdrop-blur-xl transition hover:border-white/20 hover:text-white"
+    >
+      {children}
+    </button>
+  );
+}
