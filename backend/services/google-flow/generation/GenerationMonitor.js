@@ -691,48 +691,47 @@ class GenerationMonitor {
             const tileText = item.textContent.toLowerCase();
             
             // 💫 Look for error indicators: warning icon + "Không thành công" text
-            const warningIcon = item.querySelector('i.google-symbols');
-            const hasWarningIcon = warningIcon && warningIcon.textContent.trim() === 'warning';
+            const hasWarningIcon = Array.from(item.querySelectorAll('i.google-symbols')).some(icon => {
+              return icon.textContent.trim() === 'warning';
+            });
+            
             const hasErrorText = tileText.includes('không thành công') || 
                                  tileText.includes('đã xảy ra lỗi') ||
                                  tileText.includes('failed');
             
             if (hasWarningIcon && hasErrorText) {
-              // Found failed item - find delete/trash button
-              const buttons = Array.from(item.querySelectorAll('button'));
+              console.log(`   Found failed item at position ${i}`);
               
-              for (const btn of buttons) {
-                const icon = btn.querySelector('i.google-symbols');
-                if (icon && (icon.textContent.trim() === 'delete' || icon.textContent.trim() === 'close' || icon.textContent.trim() === 'trash')) {
-                  // Found delete button
-                  const rect = btn.getBoundingClientRect();
-                  return {
-                    found: true,
-                    position: i,
-                    x: Math.round(rect.left + rect.width / 2),
-                    y: Math.round(rect.top + rect.height / 2),
-                    error: item.textContent.substring(0, 80)
-                  };
-                }
-              }
+              // 💫 FIX: Query button by its icon text directly
+              // Find button that contains i.google-symbols with text 'close', 'delete', 'trash', or 'clear'
+              const deleteBtn = Array.from(item.querySelectorAll('button')).find(btn => {
+                const iconElement = btn.querySelector('i.google-symbols');
+                if (!iconElement) return false;
+                
+                const iconText = iconElement.textContent.trim();
+                console.log(`   Checking button with icon: "${iconText}"`);
+                
+                // Match delete-like icons
+                return iconText === 'close' ||
+                       iconText === 'delete' ||
+                       iconText === 'trash' ||
+                       iconText === 'clear' ||
+                       iconText === 'remove' ||
+                       iconText === 'cancel';
+              });
               
-              // If no delete button found but error exists, try clicking any close/delete icon in item
-              const allButtons = Array.from(item.querySelectorAll('button'));
-              for (const btn of allButtons) {
-                const icon = btn.querySelector('i.google-symbols');
-                if (icon) {
-                  const iconText = icon.textContent.trim();
-                  if (iconText === 'close' || iconText === 'delete' || iconText === 'clear') {
-                    const rect = btn.getBoundingClientRect();
-                    return {
-                      found: true,
-                      position: i,
-                      x: Math.round(rect.left + rect.width / 2),
-                      y: Math.round(rect.top + rect.height / 2),
-                      error: item.textContent.substring(0, 80)
-                    };
-                  }
-                }
+              if (deleteBtn) {
+                const rect = deleteBtn.getBoundingClientRect();
+                return {
+                  found: true,
+                  position: i,
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2),
+                  error: item.textContent.substring(0, 80),
+                  iconName: deleteBtn.querySelector('i.google-symbols')?.textContent.trim()
+                };
+              } else {
+                console.log(`   ⚠️  No delete button found for failed item ${i}`);
               }
             }
           }
@@ -746,29 +745,30 @@ class GenerationMonitor {
         }
         
         // Click delete button
-        console.log(`   [DELETE ${deleteAttempt}] Found failed item #${failureInfo.position + 1}: \"${failureInfo.error}...\")`);
-        console.log(`   🖱️  Clicking delete button...`);
+        console.log(`   [DELETE ${deleteAttempt}] Found failed item #${failureInfo.position + 1}: \"${failureInfo.error}...\"`);
+        console.log(`   🖱️  Clicking ${failureInfo.iconName} button at (${failureInfo.x}, ${failureInfo.y})...`);
         
         try {
           // Move to button and click
           await this.page.mouse.move(failureInfo.x, failureInfo.y);
-          await this.page.waitForTimeout(200);
+          await this.page.waitForTimeout(300);
           await this.page.mouse.click(failureInfo.x, failureInfo.y);
-          await this.page.waitForTimeout(1000);  // Wait for item to be deleted
+          await this.page.waitForTimeout(1500);  // Wait for item to be deleted from gallery
           
           totalDeleted++;
           console.log(`   ✅ Deleted failed item #${failureInfo.position + 1}`);
         } catch (clickError) {
           console.warn(`   ⚠️  Failed to click delete button: ${clickError.message}`);
-          // Try keyboard delete
+          // Try alternative: press Delete key
           try {
             await this.page.keyboard.press('Delete');
-            await this.page.waitForTimeout(500);
+            await this.page.waitForTimeout(800);
             console.log(`   ✅ Deleted via keyboard Delete key`);
             totalDeleted++;
           } catch (keyError) {
-            console.warn(`   ⚠️  Keyboard delete also failed, skipping this item`);
-            break;  // Exit to avoid infinite loop
+            console.warn(`   ⚠️  Keyboard delete also failed: ${keyError.message}`);
+            // Skip this item to avoid infinite loop
+            break;
           }
         }
       }
