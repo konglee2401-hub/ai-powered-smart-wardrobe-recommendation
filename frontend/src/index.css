@@ -18,6 +18,19 @@
   --apple-text: #e2e8f0;
   --apple-muted: #94a3b8;
   --apple-shadow: 0 24px 56px rgba(2, 6, 23, 0.45);
+  --apple-accent: #0a84ff;
+  --apple-accent-soft: rgba(10, 132, 255, 0.2);
+  --apple-accent-violet: #bf5af2;
+  --apple-indigo: #5e5ce6;
+  --apple-teal: #64d2ff;
+  --apple-success: #30d158;
+  --apple-warning: #ffd60a;
+  --apple-orange: #ff9f0a;
+  --apple-danger: #ff453a;
+  --apple-label-primary: #f5f5f7;
+  --apple-label-secondary: #a1a1aa;
+  --apple-fill: rgba(120, 120, 128, 0.2);
+  --apple-fill-strong: rgba(120, 120, 128, 0.32);
 }
 
 html,
@@ -147,7 +160,9 @@ body {
     linear-gradient(180deg, rgba(15, 23, 42, 0.44) 0%, rgba(15, 23, 42, 0.24) 100%),
     radial-gradient(circle at 100% 0%, rgba(129, 140, 248, 0.1) 0%, transparent 40%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--apple-shadow);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .apple-page > * {
@@ -194,6 +209,16 @@ body {
   color: #8ea0ba;
 }
 
+.apple-typography select option,
+.apple-typography select optgroup {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.apple-typography select option:disabled {
+  color: #64748b;
+}
+
 .apple-typography input:focus,
 .apple-typography select:focus,
 .apple-typography textarea:focus {
@@ -222,6 +247,73 @@ body {
   transform: translateY(0);
 }
 
+
+
+/* Unified interaction states (Apple-like) */
+.apple-typography a,
+.apple-typography [role="button"],
+.apple-typography .cursor-pointer {
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.2s ease, transform 0.16s ease;
+}
+
+.apple-typography a {
+  color: #93c5fd;
+}
+
+.apple-typography a:hover {
+  color: #bfdbfe;
+}
+
+.apple-typography button:focus-visible,
+.apple-typography [role="button"]:focus-visible,
+.apple-typography a:focus-visible,
+.apple-typography [tabindex]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--apple-accent-soft), 0 0 0 1px rgba(10, 132, 255, 0.48);
+}
+
+.apple-typography button[aria-pressed="true"],
+.apple-typography [aria-selected="true"],
+.apple-typography .selected,
+.apple-typography .active {
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.26), rgba(139, 92, 246, 0.24)) !important;
+  border-color: rgba(96, 165, 250, 0.62) !important;
+  color: #eaf2ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 10px 24px rgba(8, 47, 73, 0.35);
+}
+
+.apple-typography .hover\:text-gray-900:hover,
+.apple-typography .hover\:text-slate-900:hover,
+.apple-typography .hover\:text-black:hover {
+  color: #f8fafc !important;
+}
+
+.apple-typography .hover\:border-purple-300:hover,
+.apple-typography .hover\:border-gray-300:hover,
+.apple-typography .hover\:border-slate-300:hover {
+  border-color: rgba(125, 211, 252, 0.62) !important;
+}
+
+.apple-typography .focus\:ring-purple-500:focus,
+.apple-typography .focus\:ring-blue-500:focus {
+  --tw-ring-color: rgba(10, 132, 255, 0.45) !important;
+}
+
+.apple-typography .bg-green-500,
+.apple-typography .bg-emerald-500 {
+  background: linear-gradient(160deg, rgba(22, 163, 74, 0.92), rgba(21, 128, 61, 0.86)) !important;
+}
+
+.apple-typography .bg-red-500,
+.apple-typography .bg-rose-500 {
+  background: linear-gradient(160deg, rgba(220, 38, 38, 0.92), rgba(185, 28, 28, 0.84)) !important;
+}
+
+.apple-typography .bg-yellow-500,
+.apple-typography .bg-amber-500,
+.apple-typography .bg-orange-500 {
+  background: linear-gradient(160deg, rgba(217, 119, 6, 0.92), rgba(180, 83, 9, 0.84)) !important;
+}
 .apple-typography .bg-slate-900,
 .apple-typography .bg-slate-800,
 .apple-typography .bg-gray-900,
@@ -262,6 +354,87 @@ body {
   50% {
     transform: translate3d(0, -14px, 0) scale(1.04);
     opacity: 0.8;
+  }
+}
+
+
+
+/* Apple-like polish layer */
+.apple-typography ::selection {
+  background: rgba(10, 132, 255, 0.38);
+  color: #f8fafc;
+}
+
+.apple-typography h1,
+.apple-typography h2,
+.apple-typography h3 {
+  font-weight: 700;
+  letter-spacing: -0.022em;
+}
+
+.apple-typography .tabs-navigation,
+.apple-typography .chart-tabs,
+.apple-typography .time-range-selector,
+.apple-typography [class*="tabs"] {
+  backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.apple-typography button,
+.apple-typography .tab-button,
+.apple-typography .tab-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(148, 163, 184, 0.12));
+  color: var(--apple-label-primary);
+}
+
+.apple-typography button:hover,
+.apple-typography .tab-button:hover,
+.apple-typography .tab-btn:hover {
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.2), rgba(148, 163, 184, 0.18));
+}
+
+.apple-typography .tab-button.active,
+.apple-typography .tab-btn.active,
+.apple-typography .time-range-selector button.active,
+.apple-typography [aria-selected="true"] {
+  background: linear-gradient(135deg, var(--apple-indigo), var(--apple-accent-violet)) !important;
+  color: #fff !important;
+  border-color: rgba(191, 90, 242, 0.45) !important;
+}
+
+.apple-typography .flat-panel,
+.apple-typography .overview-card,
+.apple-typography .chart-card,
+.apple-typography .customization-content,
+.apple-typography .page-content {
+  backdrop-filter: blur(20px) saturate(130%);
+}
+
+.apple-typography .status-success,
+.apple-typography .text-success,
+.apple-typography .result-stat.success {
+  color: var(--apple-success) !important;
+}
+
+.apple-typography .status-warning,
+.apple-typography .text-warning,
+.apple-typography .result-stat.warning {
+  color: var(--apple-warning) !important;
+}
+
+.apple-typography .status-danger,
+.apple-typography .text-danger,
+.apple-typography .result-stat.failed {
+  color: var(--apple-danger) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main-bubble,
+  .app-main-glow,
+  .apple-typography button,
+  .apple-typography [role="button"] {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
