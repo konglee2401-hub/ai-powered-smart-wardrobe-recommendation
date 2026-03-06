@@ -345,14 +345,24 @@ export async function saveCharacterProfile(req, res) {
     console.log(`[Character Save] ✅ Created ${savedRefs.length} reference image objects`);
     console.log(`[Character Save] Sample reference object:`, JSON.stringify(savedRefs[0], null, 2));
 
+    // 💫 FIX: Convert savedRefs to plain JavaScript array of objects (not Mongoose docs)
+    const plainRefs = savedRefs.map(ref => ({
+      url: String(ref.url || ''),
+      path: String(ref.path || ''),
+      angle: String(ref.angle || ''),
+      type: String(ref.type || ''),
+      prompt: String(ref.prompt || ''),
+      seed: Number.isInteger(ref.seed) ? ref.seed : null
+    }));
+
     const characterData = {
-      name,
-      alias: normalizedAlias,
+      name: String(name),
+      alias: String(normalizedAlias),
       portraitUrl: `http://localhost:5000/uploads/characters/${portraitFilename}`,
-      portraitPath: portraitDest,
-      referenceImages: savedRefs,
-      options,
-      analysisProfile,
+      portraitPath: String(portraitDest),
+      referenceImages: plainRefs,
+      options: JSON.parse(JSON.stringify(options)), // Deep clone plain object
+      analysisProfile: JSON.parse(JSON.stringify(analysisProfile)),
       status: 'active'
     };
 
@@ -369,7 +379,7 @@ export async function saveCharacterProfile(req, res) {
     console.log(`[Character Save] 🔥 CRITICAL: referenceImages array (full):`, JSON.stringify(characterData.referenceImages, null, 2));
     console.log(`[Character Save] 🔥 CRITICAL: referenceImages array type:`, typeof characterData.referenceImages);
     console.log(`[Character Save] 🔥 CRITICAL: referenceImages array length:`, characterData.referenceImages.length);
-    console.log(`[Character Save] 🔥 CRITICAL: referenceImages[0] stringified:`, JSON.stringify(characterData.referenceImages[0]));
+    console.log(`[Character Save] 🔥 CRITICAL: referenceImages[0] type check:`, Array.isArray(characterData.referenceImages), characterData.referenceImages[0] ? 'is object' : 'no first item');
 
     const character = await CharacterProfile.create(characterData);
 
