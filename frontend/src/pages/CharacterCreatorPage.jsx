@@ -88,12 +88,38 @@ export default function CharacterCreatorPage() {
 
   const saveCharacter = async () => {
     try {
+      // 💫 FIX: Validate preview is a proper array of objects
+      if (!Array.isArray(preview)) {
+        alert('Error: Preview is not an array. Please regenerate images.');
+        return;
+      }
+      
+      if (preview.length === 0) {
+        alert('Error: No preview images. Please generate preview images first.');
+        return;
+      }
+      
+      // Ensure each preview item is an object, not a string
+      for (let i = 0; i < preview.length; i++) {
+        if (typeof preview[i] === 'string') {
+          console.warn(`[Character Save] ⚠️  Preview[${i}] is a string, skipping it`);
+          preview[i] = null;
+        }
+      }
+      
+      // Filter out null items
+      const cleanedPreview = preview.filter(img => img !== null && typeof img === 'object');
+      if (cleanedPreview.length === 0) {
+        alert('Error: No valid preview images found.');
+        return;
+      }
+      
       const payload = {
         name,
         alias: alias || name,
         portraitTempPath,
         options,
-        generatedImages: preview,  // Should be an array, NOT stringified
+        generatedImages: cleanedPreview,
         analysisProfile: {
           characterName: name,
           primaryLook: options.styling.outfitVibe,
@@ -115,7 +141,8 @@ export default function CharacterCreatorPage() {
         try {
           payload.generatedImages = JSON.parse(payload.generatedImages);
         } catch (e) {
-          payload.generatedImages = [];
+          alert('Error: Could not parse preview data.');
+          return;
         }
       }
       
