@@ -160,13 +160,19 @@ class PreGenerationMonitor {
         const strictNewCount = allItems.filter(item => item.isNew && item.hasMediaTag).length;
         const looseNewCount = allItems.filter(item => item.isNew).length;
         
+        // 💫 FIX: Find first NEW item - prefer ones with media tag, but accept href-only if no media loaded yet
+        const newHrefWithMedia = allItems.find(item => item.isNew && item.hasMediaTag);
+        const newHrefWithoutMedia = allItems.find(item => item.isNew && !item.hasMediaTag);
+        const bestNewHref = newHrefWithMedia || newHrefWithoutMedia;  // Prefer with media, fallback to href-only
+        
         return {
           allItems,
-          newHref: newHref || null,
+          newHref: bestNewHref || null,
           totalItems: firstItems.length,  // Limited to first 15
           baselineCount: baseline.size,
           strictNewCount,  // New items with BOTH href + img
-          looseNewCount    // New items with just href
+          looseNewCount,    // New items with just href
+          effectiveNewCount: Math.max(strictNewCount, looseNewCount > 0 ? 1 : 0)  // 💫 Use loose if strict is 0
         };
       }, baselineArray);  // 💫 Pass array instead of Set
       
@@ -187,9 +193,9 @@ class PreGenerationMonitor {
         console.log(`      New items (no media): ${newWithoutMediaCount}`);
 
         if (result.newHref) {
-          const mediaType = result.newHref.hasVideo ? 'VIDEO' : 'IMAGE';
-          const mediaIcon = result.newHref.hasVideo ? '🎬' : '📸';
-          console.log(`   ✅ FOUND NEW ${mediaType} (href + media tag):`);
+          const mediaType = result.newHref.hasVideo ? 'VIDEO' : (result.newHref.hasImg ? 'IMAGE' : 'HREF-ONLY');
+          const mediaIcon = result.newHref.hasVideo ? '🎬' : (result.newHref.hasImg ? '📸' : '🔗');
+          console.log(`   ✅ FOUND NEW ${mediaType}:`);
           console.log(`      Position: ${result.newHref.position}`);
           console.log(`      Type: ${mediaIcon} ${mediaType}`);
           console.log(`      Has img: ${result.newHref.hasImg ? '✓' : '✗'}`);
@@ -202,24 +208,24 @@ class PreGenerationMonitor {
             mediaType: result.newHref.mediaType,
             position: result.newHref.position,
             totalItems: result.totalItems,
-            newCount: result.strictNewCount,      // 💫 STRICT: Only count items with both href + media tag
+            newCount: result.effectiveNewCount,  // 💫 FIX: Use effective count (loose if strict is 0)
             existingCount,
             newCountLoose: result.looseNewCount,  // For debugging
-            newHrefs: result.allItems.filter(i => i.isNew && i.hasMediaTag).map(i => i.href)
+            newHrefs: result.allItems.filter(i => i.isNew && (i.hasMediaTag || true)).map(i => i.href)  // 💫 Accept all new hrefs
           };
         } else {
-          console.log(`   ⏳ No new media found yet (checking for href + media tag both present)`);
+          console.log(`   ⏳ No new items found yet`);
           if (result.looseNewCount > 0) {
-            console.log(`      ⚠️  Note: ${result.looseNewCount} new href(s) found but missing media tag (img or video)`);
+            console.log(`      ℹ️  ${result.looseNewCount} new href(s) detected (media tag loading or not present)`);
           }
-          // 💫 STRICT: Return strict count (items with both href + media tag)
+          // 💫 FIX: Return effective count (prefer strict, but accept loose if no strict found)
           return {
             href: null,
-            newCount: result.strictNewCount,  // 💫 STRICT COUNT
+            newCount: result.effectiveNewCount,  // 💫 Use effective count
             existingCount,
             totalItems: result.totalItems,
             newCountLoose: result.looseNewCount,
-            newHrefs: result.allItems.filter(i => i.isNew && i.hasMediaTag).map(i => i.href)
+            newHrefs: result.allItems.filter(i => i.isNew).map(i => i.href)  // 💫 Accept all new hrefs
           };
         }
       }

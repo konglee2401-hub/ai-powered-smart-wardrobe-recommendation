@@ -221,6 +221,21 @@ class GenerationMonitor {
           console.warn('⚠️  Generation error detected on page');
           errorRetryCount++;
           
+          // 💫 FIX: Before cleanup, check if any new hrefs exist despite error state
+          console.log('   🔍 Checking if any images were generated despite error state...');
+          let existingNewHrefs = 0;
+          if (this.preGenerationMonitor) {
+            try {
+              const preCheckAnalysis = await this.preGenerationMonitor.findNewHref();
+              existingNewHrefs = preCheckAnalysis?.newCountLoose || 0;
+              if (existingNewHrefs > 0) {
+                console.log(`   ✅ FOUND ${existingNewHrefs} image(s) despite error! Will proceed to download instead of retry.`);
+              }
+            } catch (e) {
+              console.warn(`   ⚠️  Pre-cleanup href check failed: ${e.message}`);
+            }
+          }
+          
           // 💫 NEW: Delete all failed items before retrying
           console.log('   🗑️  Cleaning up failed items before retry...');
           const deletedCount = await this.deleteFailedItems();
@@ -235,6 +250,12 @@ class GenerationMonitor {
               const tileText = firstTile.textContent.toLowerCase();
               return tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi');
             });
+            
+            // 💫 FIX: If we found images before cleanup, proceed to download even if errors still exist
+            if (existingNewHrefs > 0 && !stillHasErrors) {
+              console.log(`   ✅ Error cleared and we have ${existingNewHrefs} image(s) - proceeding to download phase!`);
+              return { success: true, href: 'error-recovery-success', newCount: existingNewHrefs, partial: true, found: existingNewHrefs, expected: expectedNewHrefs };
+            }
             
             if (!stillHasErrors) {
               console.log('   ✅ All failed items cleared! No more error UI elements detected.');
