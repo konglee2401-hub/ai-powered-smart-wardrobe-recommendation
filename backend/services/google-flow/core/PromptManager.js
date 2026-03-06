@@ -29,17 +29,17 @@ class PromptManager {
   }
 
   /**
-   * Enter prompt into textbox using clipboard
+   * Enter prompt into textbox using 3-part strategy
    * Steps:
-   * 1. Find textbox
-   * 2. Focus textbox
-   * 3. Clear any existing text
-   * 4. Copy prompt to clipboard
-   * 5. Paste via Ctrl+V
-   * 6. Wait for button to be enabled
+   * 1. Type first 20 characters
+   * 2. Paste middle part via clipboard
+   * 3. Type last 20 characters
+   * 4. Wait for button to be enabled
+   * 
+   * This approach is more reliable for long prompts
    */
   async enterPrompt(prompts, modelName = 'Nano Banana Pro') {
-    console.log('📝 ENTERING PROMPT\n');
+    console.log('📝 ENTERING PROMPT (3-Part Strategy)\n');
 
     // Support both string and array of prompts (for multi-segment video)
     const promptList = Array.isArray(prompts) ? prompts : [prompts];
@@ -57,6 +57,7 @@ class PromptManager {
 
       // Focus the textbox
       console.log('   🖱️  Focusing textbox...');
+      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
       await this.page.evaluate(() => {
         const box = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
         if (box) box.focus();
@@ -65,18 +66,52 @@ class PromptManager {
 
       // Clear any existing text
       console.log('   🧹 Clearing existing text...');
-      const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
       await ClipboardHelper.clearTextbox(this.page, textboxSelector);
       await this.page.waitForTimeout(200);
 
-      // Use ClipboardHelper to paste prompt
-      console.log(`   📋 Entering prompt: "${prompt.substring(0, 60)}..."`);
-      // Copy to clipboard and paste via Ctrl+V (proper way to interact with Slate)
-      await ClipboardHelper.copyAndPaste(this.page, prompt, textboxSelector);
+      // 💫 NEW: 3-Part Strategy for prompt entry
+      console.log(`   📋 Entering prompt (${prompt.length} chars): "${prompt.substring(0, 60)}..."`);
+      
+      // PART 1: Type first 20 characters
+      const charCount = 20;
+      const part1 = prompt.substring(0, charCount);
+      const part3Start = Math.max(charCount, prompt.length - charCount);
+      const part2 = prompt.substring(charCount, part3Start);
+      const part3 = prompt.substring(part3Start);
+      
+      console.log(`   📌 Part 1 (type first 20): "${part1}"`);
+      console.log(`   📌 Part 2 (paste middle): ${part2.length} chars`);
+      console.log(`   📌 Part 3 (type last 20): "${part3}"`);
+      
+      // Type Part 1
+      console.log('   ✍️  Typing first 20 characters...');
+      for (const char of part1) {
+        await this.page.keyboard.type(char);
+        await this.page.waitForTimeout(20);  // Small delay between chars
+      }
+      console.log('   ✓ Part 1 typed');
+      await this.page.waitForTimeout(300);
 
-      console.log('   ✓ Prompt pasted');
+      // Paste Part 2
+      if (part2.length > 0) {
+        console.log('   📋 Pasting middle part via clipboard...');
+        await ClipboardHelper.copyAndPaste(this.page, part2, textboxSelector);
+        console.log('   ✓ Part 2 pasted');
+        await this.page.waitForTimeout(300);
+      }
 
-      // 💫 FIX: After paste, focus + type spaces to trigger Slate editor recognition
+      // Type Part 3
+      if (part3.length > 0) {
+        console.log('   ✍️  Typing last 20 characters...');
+        for (const char of part3) {
+          await this.page.keyboard.type(char);
+          await this.page.waitForTimeout(20);  // Small delay between chars
+        }
+        console.log('   ✓ Part 3 typed');
+        await this.page.waitForTimeout(300);
+      }
+
+      // 💫 FIX: After entry, focus + type spaces to trigger Slate editor recognition
       console.log('   📍 Focusing textbox for Slate editor...');
       await this.page.focus(textboxSelector);
       await this.page.waitForTimeout(300);
@@ -92,7 +127,7 @@ class PromptManager {
       console.log('   ⏳ Waiting 5s for Slate editor to process...');
       await this.page.waitForTimeout(5000);
 
-      console.log('   ✓ Prompt entered with spaces for editor recognition');
+      console.log('   ✓ Prompt entered with 3-part strategy');
 
       // Wait for send button to become enabled
       console.log('   ⏳ Waiting for send button to be enabled...');

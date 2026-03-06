@@ -939,7 +939,44 @@ class ChatGPTService extends BrowserService {
             
             return {
               chatImagesCount: chatImages.length,
-              visibleFileInputs: Array.from(fileInputs).filter(f => f.offsetHeight > 0 && f.offsetWidth > 0).length,\n              uploadElementsCount: uploadElements.length,\n              pageHasImages: document.querySelectorAll('img').length,\n              hasImagePreview: !!document.querySelector('[class*=\"image-preview\"], [data-testid*=\"image\"]')\n            };\n          } catch (e) {\n            return { error: e.message };\n          }\n        });\n        \n        console.log(`   📊 Upload status: ${uploadStatus.chatImagesCount} chat images, ${uploadStatus.pageHasImages} total images on page`);\n        \n        // If still no images detected, try waiting longer\n        if (uploadStatus.pageHasImages < imagePaths.length) {\n          console.log(`   ⏳ Waiting additional 2s for images to fully load...`);\n          await this.page.waitForTimeout(2000);\n        }\n        \n        const finalImageCheck = await this.page.evaluate(() => {\n          return document.querySelectorAll('img').length;\n        });\n        \n        if (finalImageCheck === 0) {\n          console.warn(`   ⚠️  WARNING: No images detected on page after upload!`);\n          console.warn('   ChatGPT may not be logged in or interface not fully loaded.');\n          console.warn('   Continuing anyway - upload may have worked but preview hidden.');\n        } else {\n          console.log(`   ✅ Images detected on page (${finalImageCheck} total)`);\n        }\n        \n      } catch (uploadError) {\n        console.error(`   ❌ Image upload failed: ${uploadError.message}`);\n        console.error(`   This usually happens when:`);\n        console.error(`     1. ChatGPT is not properly logged in`);\n        console.error(`     2. Browser session is incomplete or expired`);\n        console.error(`     3. File input element is not accessible`);\n        throw new Error(`Failed to upload images: ${uploadError.message}`);\n      }
+              visibleFileInputs: Array.from(fileInputs).filter(f => f.offsetHeight > 0 && f.offsetWidth > 0).length,
+              uploadElementsCount: uploadElements.length,
+              pageHasImages: document.querySelectorAll('img').length,
+              hasImagePreview: !!document.querySelector('[class*=\"image-preview\"], [data-testid*=\"image\"]')
+            };
+          } catch (e) {
+            return { error: e.message };
+          }
+        });
+        
+        console.log(`   📊 Upload status: ${uploadStatus.chatImagesCount} chat images, ${uploadStatus.pageHasImages} total images on page`);
+        
+        // If still no images detected, try waiting longer
+        if (uploadStatus.pageHasImages < imagePaths.length) {
+          console.log(`   ⏳ Waiting additional 2s for images to fully load...`);
+          await this.page.waitForTimeout(2000);
+        }
+        
+        const finalImageCheck = await this.page.evaluate(() => {
+          return document.querySelectorAll('img').length;
+        });
+        
+        if (finalImageCheck === 0) {
+          console.warn(`   ⚠️  WARNING: No images detected on page after upload!`);
+          console.warn('   ChatGPT may not be logged in or interface not fully loaded.');
+          console.warn('   Continuing anyway - upload may have worked but preview hidden.');
+        } else {
+          console.log(`   ✅ Images detected on page (${finalImageCheck} total)`);
+        }
+        
+      } catch (uploadError) {
+        console.error(`   ❌ Image upload failed: ${uploadError.message}`);
+        console.error(`   This usually happens when:`);
+        console.error(`     1. ChatGPT is not properly logged in`);
+        console.error(`     2. Browser session is incomplete or expired`);
+        console.error(`     3. File input element is not accessible`);
+        throw new Error(`Failed to upload images: ${uploadError.message}`);
+      }
 
       // Step 3: Handle login modal if appears
       console.log('📍 STEP 3: Handling login modal...');

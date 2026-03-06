@@ -4,8 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { randomUUID } from 'crypto';
 import OAuthCredentials from '../models/OAuthCredentials.js';
 import { google } from 'googleapis';
+import LogStreamingService from '../services/logs/LogStreamingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -54,9 +56,53 @@ router.post('/run/refresh-google-flow', (req, res) => {
   try {
     const script = path.join(__dirname, '..', 'scripts', 'auth', 'google-flow', 'refresh-session.js');
     if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
-    const child = runNodeScript(script);
-    child.on('error', () => {});
-    res.json({ success: true, pid: child.pid });
+    
+    // Create a unique session ID for this refresh run
+    const sessionId = randomUUID();
+    
+    // Initialize logging session
+    LogStreamingService.createSession(sessionId);
+    LogStreamingService.addLog(sessionId, 'Starting Google Flow Session Refresh...', 'info');
+    
+    const args = [
+      '--log-session', sessionId,
+      '--log-server', `http://localhost:${process.env.PORT || 5000}`
+    ];
+    
+    const child = spawn(process.execPath, [script, ...args], {
+      cwd: path.join(__dirname, '..'),
+      env: process.env,
+      stdio: 'pipe'
+    });
+
+    // Capture script output
+    let scriptOutput = '';
+    child.stdout?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'info');
+    });
+
+    child.stderr?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'warn');
+    });
+
+    child.on('error', (error) => {
+      LogStreamingService.addLog(sessionId, `Process error: ${error.message}`, 'error');
+      LogStreamingService.endSession(sessionId, 'failed');
+    });
+
+    child.on('exit', (code) => {
+      if (code === 0) {
+        LogStreamingService.addLog(sessionId, 'Google Flow refresh completed successfully ✓', 'success');
+        LogStreamingService.endSession(sessionId, 'completed');
+      } else {
+        LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
+        LogStreamingService.endSession(sessionId, 'failed');
+      }
+    });
+
+    res.json({ success: true, sessionId, pid: child.pid });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -66,12 +112,61 @@ router.post('/run/chatgpt-auto-login', (req, res) => {
   try {
     const script = path.join(__dirname, '..', 'scripts', 'auth', 'chatgpt', 'login.js');
     if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
-    const args = [];
-    if (req.query?.mode === 'refresh') args.push('--refresh');
-    if (req.query?.mode === 'validate') args.push('--validate');
-    const child = runNodeScript(script, args);
-    child.on('error', () => {});
-    res.json({ success: true, pid: child.pid });
+    
+    // Create a unique session ID for this auto-login run
+    const sessionId = randomUUID();
+    
+    // Initialize logging session
+    LogStreamingService.createSession(sessionId);
+    LogStreamingService.addLog(sessionId, 'Starting ChatGPT Auto-Login Process...', 'info');
+    
+    const args = [
+      '--log-session', sessionId,
+      '--log-server', `http://localhost:${process.env.PORT || 5000}`
+    ];
+    if (req.query?.mode === 'refresh') {
+      args.push('--refresh');
+      LogStreamingService.addLog(sessionId, 'Mode: Refresh existing session', 'info');
+    }
+    if (req.query?.mode === 'validate') {
+      args.push('--validate');
+      LogStreamingService.addLog(sessionId, 'Mode: Validate session', 'info');
+    }
+    
+    const child = spawn(process.execPath, [script, ...args], {
+      cwd: path.join(__dirname, '..'),
+      env: process.env,
+      stdio: 'pipe'
+    });
+
+    // Capture script output
+    let scriptOutput = '';
+    child.stdout?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'info');
+    });
+
+    child.stderr?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'warn');
+    });
+
+    child.on('error', (error) => {
+      LogStreamingService.addLog(sessionId, `Process error: ${error.message}`, 'error');
+      LogStreamingService.endSession(sessionId, 'failed');
+    });
+
+    child.on('exit', (code) => {
+      if (code === 0) {
+        LogStreamingService.addLog(sessionId, 'ChatGPT Auto-Login completed successfully ✓', 'success');
+        LogStreamingService.endSession(sessionId, 'completed');
+      } else {
+        LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
+        LogStreamingService.endSession(sessionId, 'failed');
+      }
+    });
+
+    res.json({ success: true, sessionId, pid: child.pid });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -381,6 +476,51 @@ router.post('/scraper-videos-config', async (req, res) => {
     };
 
     res.json({ success: true, message: 'Configuration saved', config });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Log Streaming Endpoints
+ */
+
+// Get logs for a specific session (for polling)
+router.get('/logs/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const logs = LogStreamingService.getLogs(sessionId);
+    res.json({ success: true, sessionId, logs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manually add log entry (for scripts to post logs)
+router.post('/logs/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { message, level = 'info' } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'message is required' });
+    }
+
+    LogStreamingService.addLog(sessionId, message, level);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// End session (for cleanup)
+router.post('/logs/:sessionId/end', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { status = 'completed' } = req.body;
+
+    LogStreamingService.endSession(sessionId, status);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

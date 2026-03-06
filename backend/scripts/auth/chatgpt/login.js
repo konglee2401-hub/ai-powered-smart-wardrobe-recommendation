@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
+import LogClient from '../../../utils/LogClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +47,28 @@ class ChatGPTSessionManager {
     this.browser = null;
     this.page = null;
     this.sessionPath = options.sessionPath || SESSION_PATH;
+    this.logClient = options.logClient || new LogClient(); // 💫 Default LogClient if not provided
+  }
+
+  /**
+   * 💫 Helper method to log to both console and remote server
+   */
+  async log(message, level = 'info') {
+    // Always log to console
+    const prefix = {
+      'info': '📋',
+      'warn': '⚠️ ',
+      'error': '❌',
+      'success': '✅'
+    }[level] || '📝';
+    console.log(`${prefix} ${message}`);
+
+    // Also send to LogClient if available
+    try {
+      await this.logClient[level](message);
+    } catch (e) {
+      // Silently fail - don't interrupt the main process
+    }
   }
 
   /**
@@ -601,6 +624,8 @@ class ChatGPTSessionManager {
 async function main() {
   const args = process.argv.slice(2);
   const options = {};
+  let logSessionId = null;
+  let logServerUrl = 'http://localhost:5000';
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
@@ -608,7 +633,16 @@ async function main() {
       options.email = args[++i];
     } else if (args[i] === '--password' && args[i + 1]) {
       options.password = args[++i];
+    } else if (args[i] === '--log-session' && args[i + 1]) {
+      logSessionId = args[++i];
+    } else if (args[i] === '--log-server' && args[i + 1]) {
+      logServerUrl = args[++i];
     }
+  }
+
+  // 💫 Create LogClient if session ID is provided
+  if (logSessionId) {
+    options.logClient = new LogClient(logSessionId, logServerUrl);
   }
 
   const manager = new ChatGPTSessionManager(options);
@@ -619,18 +653,24 @@ async function main() {
     process.exit(isValid ? 0 : 1);
   } else if (args.includes('--refresh')) {
     // Refresh session (login again)
-    console.log('🔄 Refreshing ChatGPT session...\n');
+    await manager.log('🔄 Refreshing ChatGPT session...\n', 'info');
     const success = await manager.login();
+    if (manager.logClient?.enabled) {
+      await manager.logClient.endSession(success ? 'completed' : 'failed');
+    }
     process.exit(success ? 0 : 1);
   } else {
     // Default: login with session saving
-    console.log('🔐 ChatGPT Auto-Login & Session Manager\n');
-    console.log('Commands:');
-    console.log('  node chatgpt-auto-login.js [--email EMAIL] [--password PASSWORD]');
-    console.log('  node chatgpt-auto-login.js --validate     (check session validity)');
-    console.log('  node chatgpt-auto-login.js --refresh      (refresh session)\n');
+    await manager.log('🔐 ChatGPT Auto-Login & Session Manager', 'info');
+    await manager.log('Commands:', 'info');
+    await manager.log('  node chatgpt-auto-login.js [--email EMAIL] [--password PASSWORD]', 'info');
+    await manager.log('  node chatgpt-auto-login.js --validate     (check session validity)', 'info');
+    await manager.log('  node chatgpt-auto-login.js --refresh      (refresh session)\n', 'info');
 
     const success = await manager.login();
+    if (manager.logClient?.enabled) {
+      await manager.logClient.endSession(success ? 'completed' : 'failed');
+    }
     process.exit(success ? 0 : 1);
   }
 }
