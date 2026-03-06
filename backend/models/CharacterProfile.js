@@ -52,23 +52,19 @@ const characterOptionSchema = new mongoose.Schema({
   extraPromptNotes: String
 }, { _id: false });
 
-// 💫 Explicit subdocument schema for reference images
-const referenceImageSchema = new mongoose.Schema({
-  url: { type: String, required: true },
-  path: { type: String, default: '' },
-  angle: { type: String, default: '' },
-  description: { type: String, default: '' },
-  type: { type: String, default: 'portrait' },
-  prompt: { type: String, default: '' },
-  seed: { type: Number, default: null }
-}, { _id: false });
-
 const characterProfileSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, index: true },
   alias: { type: String, required: true, trim: true, unique: true, index: true },
   portraitUrl: { type: String, required: true },
   portraitPath: { type: String, default: '' },
-  referenceImages: [referenceImageSchema],
+  referenceImages: [{
+    url: String,
+    path: String,
+    angle: String,
+    type: String,
+    prompt: String,
+    seed: Number
+  }],
   options: { type: characterOptionSchema, default: {} },
   analysisProfile: {
     type: mongoose.Schema.Types.Mixed,

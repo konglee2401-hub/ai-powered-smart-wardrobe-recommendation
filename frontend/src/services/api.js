@@ -442,6 +442,9 @@ export const browserAutomationAPI = {
     if (options.cameraAngle) formData.append('cameraAngle', options.cameraAngle);
     if (options.aspectRatio) formData.append('aspectRatio', options.aspectRatio);
     if (options.customPrompt) formData.append('customPrompt', options.customPrompt);
+    if (options.useCase) formData.append('useCase', options.useCase);
+    if (options.productFocus) formData.append('productFocus', options.productFocus);
+    if (options.selectedCharacter) formData.append('selectedCharacter', JSON.stringify(options.selectedCharacter));
     
     return api.postFormData('/v1/browser-automation/analyze-browser', formData);
   },

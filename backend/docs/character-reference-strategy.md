@@ -63,3 +63,28 @@ Nếu provider không ổn định khi bám ảnh, dùng thêm **character alias
 ## Kết luận
 - **Best practice:** vẫn là multi-reference + identity lock + (nếu có) model/adaptor chuyên identity.
 - **Fallback practical:** alias token (`LinhPhap`) trong prompt builder giúp workflow đơn giản, dễ scale, và ổn định hơn khi provider chưa giữ identity tốt.
+
+
+## Tích hợp sâu đã triển khai (Google Flow)
+- Khi user chọn `CharacterProfile`, backend không chỉ dùng portrait:
+  - dùng `portrait` làm **primary reference**,
+  - upload thêm `referenceImages[]` làm **multi-reference pack** để lock identity.
+- Prompt generation được enrich bằng `profilePromptContext` (alias + body/face/hair/jewelry/tattoo).
+- Seed control đã chạy ở browser-request layer:
+  - interceptor bắt `flowMedia:batchGenerateImages`,
+  - đọc seed incoming,
+  - override về fixed seed của run,
+  - trả lại `observedSeedRequests` để audit/debug.
+
+## Cách sử dụng hiệu quả trong hệ thống
+1. Tạo character với 4-6 ảnh (portrait + 3/4 + full body).
+2. Trong ImageGeneration/OneClickCreator chọn character từ modal.
+3. Hệ thống tự:
+   - dùng portrait làm ảnh chính,
+   - bơm thêm reference ảnh phụ,
+   - áp alias/profile context vào prompt,
+   - giữ seed cố định khi chạy Google Flow.
+4. Nếu chưa ổn định identity:
+   - tăng số reference ảnh đa góc,
+   - ưu tiên ảnh sạch nền và ánh sáng đồng nhất,
+   - giữ nguyên seed khi regenerate để so sánh đúng chất lượng prompt.

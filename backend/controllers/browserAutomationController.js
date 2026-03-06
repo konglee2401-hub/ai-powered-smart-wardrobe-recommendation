@@ -5,6 +5,7 @@ import ChatGPTService from '../services/browser/chatgptService.js';
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import VideoGeneration from '../models/VideoGeneration.js';
 import Asset from '../models/Asset.js'; // 💫 Asset model for hybrid storage
+import CharacterProfile from '../models/CharacterProfile.js';
 import uploadToImgBB from '../services/uploaders/imgbbUploader.js'; // 💫 NEW
 import AssetManager from '../utils/assetManager.js'; // 💫 Asset manager for saving generated assets
 import HybridStorage from '../services/hybridStorageSync.js'; // 💫 Hybrid storage (local + Drive sync)
@@ -16,6 +17,54 @@ import http from 'http';
 const tempDir = path.join(process.cwd(), 'temp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
+}
+
+
+function resolveCharacterProfilePaths(selectedCharacter) {
+  if (!selectedCharacter) return { profile: null, portraitPath: null, referencePaths: [], profilePromptContext: '' };
+
+  const profile = selectedCharacter._id
+    ? selectedCharacter
+    : null;
+
+  const safeFromUrl = (url = '') => {
+    if (typeof url !== 'string' || !url.includes('/uploads/characters/')) return null;
+    const filename = url.split('/uploads/characters/')[1]?.split('?')[0];
+    if (!filename) return null;
+    return path.join(process.cwd(), 'uploads', 'characters', filename);
+  };
+
+  const portraitPath = (
+    selectedCharacter.portraitPath
+    || safeFromUrl(selectedCharacter.portraitUrl)
+    || null
+  );
+
+  const refs = Array.isArray(selectedCharacter.referenceImages) ? selectedCharacter.referenceImages : [];
+  const referencePaths = refs
+    .map((img) => img?.path || safeFromUrl(img?.url))
+    .filter(Boolean)
+    .filter((p) => fs.existsSync(p));
+
+  const opt = selectedCharacter.options || {};
+  const identity = opt.identity || {};
+  const face = opt.face || {};
+  const hair = opt.hair || {};
+  const styling = opt.styling || {};
+
+  const profilePromptContext = [
+    selectedCharacter.alias ? `Identity anchor token: ${selectedCharacter.alias}.` : '',
+    selectedCharacter.name ? `Character profile name: ${selectedCharacter.name}.` : '',
+    identity.height ? `Height: ${identity.height}.` : '',
+    identity.bust ? `Bust: ${identity.bust}.` : '',
+    identity.waist ? `Waist: ${identity.waist}.` : '',
+    identity.tattoos ? `Tattoos: ${identity.tattoos}.` : '',
+    face.faceShape ? `Face shape: ${face.faceShape}.` : '',
+    hair.style ? `Hair style: ${hair.style}.` : '',
+    styling.jewelry ? `Jewelry: ${styling.jewelry}.` : ''
+  ].filter(Boolean).join(' ');
+
+  return { profile, portraitPath, referencePaths, profilePromptContext };
 }
 
 /**
@@ -33,7 +82,10 @@ function buildAnalysisPrompt(options = {}) {
     makeup = null,
     cameraAngle = 'eye-level',
     aspectRatio = '1:1',
-    customPrompt = ''
+    customPrompt = '',
+    useCase = 'change-clothes',
+    productFocus = 'full-outfit',
+    selectedCharacter = null
   } = options;
 
   // Map option values to descriptive text
@@ -102,7 +154,24 @@ function buildAnalysisPrompt(options = {}) {
   };
 
   // Build prompt with IMPROVED JSON format for clean extraction
-  const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
+  
+
+  const characterCtx = selectedCharacter ? `
+
+CHARACTER PROFILE CONTEXT:
+- Character selected from library: ${selectedCharacter.name || ''} (${selectedCharacter.alias || ''})
+- Available reference images: ${Array.isArray(selectedCharacter.referenceImages) ? selectedCharacter.referenceImages.length : 0}
+- You MUST evaluate which reference image should be primary for this campaign.` : '';
+
+  const campaignCtx = `
+
+CAMPAIGN OBJECTIVE:
+- Use case: ${useCase}
+- Product focus: ${productFocus}
+- If promoting full outfit: prefer 3/4 front or full-body reference.
+- If promoting top only: prefer closer torso reference.
+- If promoting bottom/shoes: prefer lower-body/full-body reference with leg clarity.`;
+const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
 
 {
   "character": {
@@ -182,7 +251,7 @@ CRITICAL RULES:
 2. All choice values MUST be from the provided lists above
 3. Reasons must be 1-2 sentences max
 4. Use lowercase for all choice values with hyphens where shown
-5. If a recommendation is not applicable, use "not-applicable" or "not-needed"`;
+5. If a recommendation is not applicable, use "not-applicable" or "not-needed"${characterCtx}${campaignCtx}`;
 
   return promptText;
 }
@@ -203,7 +272,8 @@ function buildGenerationPrompt(analysisText, options = {}) {
     imageCount = 1,
     negativePrompt = '',
     characterDescription = '',
-    selectedCharacter = null
+    selectedCharacter = null,
+    profilePromptContext = ''
   } = options;
 
   // 💫 NEW: Refined mappings for better AI understanding
@@ -269,6 +339,7 @@ ${environmentPart}
 ${photographyPart}
 ${qualityPart}
 ${avoidPart}
+${profilePromptContext ? `Character Profile Constraints: ${profilePromptContext}` : ''}
 ${countPart}`;
 }
 
@@ -767,8 +838,32 @@ export async function analyzeWithBrowser(req, res) {
       makeup = null,
       cameraAngle = 'eye-level',
       aspectRatio = '1:1',
-      customPrompt = ''
+      customPrompt = '',
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit',
+      selectedCharacter = null
     } = req.body;
+
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
 
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
@@ -791,7 +886,10 @@ export async function analyzeWithBrowser(req, res) {
       makeup,
       cameraAngle,
       aspectRatio,
-      customPrompt
+      customPrompt,
+      useCase,
+      productFocus,
+      selectedCharacter: selectedCharacterResolved
     };
 
     // ====================================
@@ -846,8 +944,11 @@ export async function analyzeWithBrowser(req, res) {
     // ====================================
     console.log(`\n🤖 Analyzing images (no generation)...`);
     
+    const analysisReferencePaths = [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath];
+    console.log(`   📚 Analysis references: ${analysisReferencePaths.length} images (character + extra refs + product)`);
+
     const analysisResult = await browserService.analyzeMultipleImages(
-      [charImagePath, prodImagePath],
+      analysisReferencePaths,
       analysisPrompt
     );
     
@@ -956,6 +1057,7 @@ export async function analyzeWithBrowser(req, res) {
         providers: {
           analysis: analysisProvider
         },
+        analysisReferenceCount: [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath].length,
         // Return empty images array - this is ANALYSIS ONLY
         generatedImages: []
       },
@@ -1012,6 +1114,19 @@ export async function generateWithBrowser(req, res) {
       selectedCharacter = null
     } = req.body;
 
+    // Resolve selected character profile deeply (not just portrait)
+    let selectedCharacterResolved = selectedCharacter;
+    if (selectedCharacter?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacter._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile ${selectedCharacter._id}: ${e.message}`);
+      }
+    }
+
+    const characterProfileAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
+
     // Get image paths - either from temp files or convert base64
     let charImagePath = characterImagePath;
     let prodImagePath = productImagePath;
@@ -1042,6 +1157,11 @@ export async function generateWithBrowser(req, res) {
       });
     }
 
+    // If character profile has canonical portrait, prioritize it as primary reference
+    if (characterProfileAssets.portraitPath && fs.existsSync(characterProfileAssets.portraitPath)) {
+      charImagePath = characterProfileAssets.portraitPath;
+    }
+
     // Build style options
     const styleOptions = {
       scene,
@@ -1054,7 +1174,8 @@ export async function generateWithBrowser(req, res) {
       imageCount,
       negativePrompt,
       characterDescription,
-      selectedCharacter
+      selectedCharacter: selectedCharacterResolved,
+      profilePromptContext: characterProfileAssets.profilePromptContext
     };
 
     // 🔍 LOG: Show all options before sending to Google Flow
@@ -1089,9 +1210,13 @@ export async function generateWithBrowser(req, res) {
         // Build prompts array for generateMultiple
         const prompts = [];
         for (let i = 0; i < imageCount; i++) {
+          const enrichedPrompt = [
+            prompt,
+            characterProfileAssets.profilePromptContext || ''
+          ].filter(Boolean).join('\n\n');
           prompts.push(negativePrompt 
-            ? `${prompt}\n\nNegative: ${negativePrompt}`
-            : prompt
+            ? `${enrichedPrompt}\n\nNegative: ${negativePrompt}`
+            : enrichedPrompt
           );
         }
         
@@ -1104,11 +1229,19 @@ export async function generateWithBrowser(req, res) {
           outputDir
         });
         
-        const generationResults = await flowService.generateMultiple(
+        const generationResultBundle = await flowService.generateMultiple(
           charImagePath,
           prodImagePath,
-          prompts
+          prompts,
+          {
+            characterReferenceImagePaths: characterProfileAssets.referencePaths.slice(0, 6),
+            seed: selectedCharacterResolved?.referenceImages?.[0]?.seed
+          }
         );
+
+        const generationResults = generationResultBundle?.results || [];
+        const fixedSeed = generationResultBundle?.seed;
+        const observedSeedRequests = generationResultBundle?.observedSeedRequests || [];
         
         // Extract downloaded files from results
         const downloadedFiles = generationResults
@@ -1209,6 +1342,9 @@ export async function generateWithBrowser(req, res) {
             providers: {
               generation: 'google-flow'
             },
+            seed: fixedSeed,
+            observedSeedRequests,
+            characterReferenceCount: characterProfileAssets.referencePaths.slice(0, 6).length,
             // 💫 NEW: Also return file paths for backend-to-backend communication
             filePaths: {
               generatedImages: downloadedFiles,
@@ -1608,7 +1744,10 @@ export async function analyzeAndGenerate(req, res) {
       makeup = null,
       cameraAngle = 'eye-level',
       aspectRatio = '1:1',
-      customPrompt = ''
+      customPrompt = '',
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit',
+      selectedCharacter = null
     } = req.body;
     
     // Build style options object
@@ -1623,8 +1762,32 @@ export async function analyzeAndGenerate(req, res) {
       cameraAngle,
       aspectRatio,
       customPrompt,
+      useCase,
+      productFocus,
+      selectedCharacter: selectedCharacterResolved,
       negativePrompt
     };
+
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
 
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
@@ -1894,6 +2057,27 @@ export async function analyzeBrowser(req, res) {
       useRealAnalysis = true
     } = req.body;
     
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
+
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
 
@@ -2021,6 +2205,27 @@ export async function generateImageBrowser(req, res) {
     }
 
     // Get images for reference (optional for styling)
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
+
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
 

@@ -234,6 +234,8 @@ class GoogleFlowAutomationService {
           outgoingSeed: this.seedControl.fixedSeed
         });
 
+        console.log(`[SEED] Intercepted flowMedia:batchGenerateImages | incoming=${JSON.stringify(incomingSeeds)} | outgoing=${this.seedControl.fixedSeed}`);
+
         return request.continue({
           headers: {
             ...request.headers(),
@@ -1180,7 +1182,8 @@ class GoogleFlowAutomationService {
 
     const characterImagePath = images?.characterImagePath || null;
     const productImagePath = images?.productImagePath || null;
-    const hasReferenceImages = !!characterImagePath || !!productImagePath;
+    const characterReferenceImagePaths = Array.isArray(images?.characterReferenceImagePaths) ? images.characterReferenceImagePaths : [];
+    const hasReferenceImages = !!characterImagePath || !!productImagePath || characterReferenceImagePaths.length > 0;
 
     if (this.debugMode) {
       console.log('\n🔧 [DEBUG] generateImages() is disabled (debug mode)');
@@ -1271,6 +1274,29 @@ class GoogleFlowAutomationService {
           } catch (e) {
             console.error(`[UPLOAD] ❌ Character image failed: ${e.message}`);
             throw e;
+          }
+        }
+
+
+        // Upload additional character reference images (optional, improves identity lock)
+        if (characterReferenceImagePaths.length > 0) {
+          console.log(`[UPLOAD] 📚 Uploading ${characterReferenceImagePaths.length} extra character references...`);
+          for (let refIdx = 0; refIdx < characterReferenceImagePaths.length; refIdx++) {
+            const refPath = characterReferenceImagePaths[refIdx];
+            if (!refPath || !fs.existsSync(refPath)) continue;
+            if (characterImagePath && path.resolve(refPath) === path.resolve(characterImagePath)) continue;
+
+            try {
+              console.log(`[UPLOAD] 📎 character-ref-${refIdx + 1}: ${path.basename(refPath)}`);
+              await pasteImage(refPath, `character-ref-${refIdx + 1}`);
+              const refHref = await this.checkSingleImageUpload(`character-ref-${refIdx + 1}`, 45);
+              if (refHref) {
+                this.uploadedImageRefs[`character_ref_${refIdx + 1}`] = { href: refHref, text: `character_ref_${refIdx + 1}`, validated: true };
+                console.log(`[UPLOAD] ✅ character-ref-${refIdx + 1}: ${refHref.substring(0, 60)}...`);
+              }
+            } catch (e) {
+              console.warn(`[UPLOAD] ⚠️ character-ref-${refIdx + 1} failed: ${e.message}`);
+            }
           }
         }
 
