@@ -22,6 +22,9 @@ function buildCharacterPrompts(name, alias, options = {}, imageCount = 6) {
   const hair = options.hair || {};
   const styling = options.styling || {};
   const capturePlan = options.capturePlan || {};
+  const defaultOutfit = 'strapless midriff-baring bandeau crop top with short fitted cotton shorts or tight denim shorts';
+  const outfitConsistency = styling.outfitConsistency || 'Use one consistent outfit type across all generated shots. Do not switch outfit category between images.';
+  const outfitPriority = styling.outfitPriority || `Outfit priority: ${defaultOutfit}. Keep body lines clear and visible while remaining tasteful and fashion-focused.`;
   const base = [
     `Reference character: ${name} (${alias}).`,
     'Strict identity lock. Keep exact same face, skin, body proportions, hairline, and age.',
@@ -29,6 +32,8 @@ function buildCharacterPrompts(name, alias, options = {}, imageCount = 6) {
     `Face details: ${face.faceShape || 'natural'} face, ${face.eyeShape || 'natural'} eyes ${face.eyeColor || ''}, ${face.lipShape || 'natural'} lips, ${face.jawline || 'defined'} jawline.`,
     `Hair details: ${hair.color || 'natural'} ${hair.length || 'medium'} ${hair.texture || 'natural'} hair, style ${hair.style || 'clean natural'}.`,
     `Styling baseline: ${styling.outfitVibe || 'minimal neutral fashion'}, accessories ${styling.accessories || 'minimal'}, jewelry ${styling.jewelry || 'minimal'}, tattoos ${identity.tattoos || 'none visible'}.`,
+    outfitConsistency,
+    outfitPriority,
     `Lighting: ${capturePlan.lightingStyle || 'soft studio'}, background: ${capturePlan.backgroundStyle || 'clean neutral'}, lens: ${capturePlan.cameraLens || '85mm portrait'}.`,
     options.extraPromptNotes || ''
   ].filter(Boolean).join(' ');
