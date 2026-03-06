@@ -42,11 +42,18 @@ function PageTitle() {
 
 function PageLayout({ children, contentClassName = 'overflow-y-auto' }) {
   return (
-    <div className="h-screen bg-[#0f1118] text-slate-100 lg:flex">
+    <div className="app-shell h-screen text-slate-100 lg:flex">
       <PageTitle />
       <Navbar />
-      <main className={`h-screen flex-1 min-w-0 bg-[#181b24] pt-14 lg:pt-0 ${contentClassName}`}>
-        {children}
+      <main className={`app-main h-screen flex-1 min-w-0 pt-14 lg:pt-0 ${contentClassName}`}>
+        <div className="app-main-glow app-main-glow-top" />
+        <div className="app-main-glow app-main-glow-bottom" />
+        <div className="app-main-bubble app-main-bubble-violet" />
+        <div className="app-main-bubble app-main-bubble-blue" />
+        <div className="app-main-bubble app-main-bubble-cyan" />
+        <div className="apple-page apple-typography">
+          <div className="apple-content-frame">{children}</div>
+        </div>
       </main>
     </div>
   );

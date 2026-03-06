@@ -345,14 +345,14 @@ const AnalyticsPage = () => {
         
         .page-header h1 {
           margin: 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .range-select {
           padding: 0.5rem 1rem;
-          border: 1px solid #e2e8f0;
+          border: 1px solid rgba(148, 163, 184, 0.28);
           border-radius: 8px;
-          background: white;
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
           font-size: 0.9rem;
         }
         
@@ -360,10 +360,10 @@ const AnalyticsPage = () => {
           display: flex;
           gap: 0.5rem;
           margin-bottom: 1.5rem;
-          background: white;
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
           padding: 0.5rem;
           border-radius: 12px;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+          box-shadow: 0 14px 30px rgba(2, 6, 23, 0.3);
         }
         
         .tab-button {
@@ -377,11 +377,11 @@ const AnalyticsPage = () => {
           cursor: pointer;
           transition: all 0.2s;
           font-size: 0.9rem;
-          color: #64748b;
+          color: #cbd5e1;
         }
         
         .tab-button:hover {
-          background: #f1f5f9;
+          background: rgba(71, 85, 105, 0.42);
         }
         
         .tab-button.active {
@@ -390,9 +390,9 @@ const AnalyticsPage = () => {
         }
         
         .page-content {
-          background: white;
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
           border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+          box-shadow: 0 16px 34px rgba(2, 6, 23, 0.38);
           padding: 2rem;
           min-height: 600px;
         }
@@ -406,7 +406,7 @@ const AnalyticsPage = () => {
         
         .profile-section h3, .insights-section h3, .recommendations-preview h3 {
           margin: 0 0 1rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .profile-card {
@@ -456,7 +456,7 @@ const AnalyticsPage = () => {
         .insight-type {
           text-transform: capitalize;
           font-size: 0.8rem;
-          color: #64748b;
+          color: #cbd5e1;
         }
         
         .insight-priority {
@@ -469,12 +469,12 @@ const AnalyticsPage = () => {
         
         .insight-card h4 {
           margin: 0 0 0.5rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .insight-card p {
           margin: 0;
-          color: #64748b;
+          color: #cbd5e1;
           font-size: 0.9rem;
         }
         
@@ -507,12 +507,12 @@ const AnalyticsPage = () => {
         
         .rec-content h5 {
           margin: 0 0 0.25rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .rec-content p {
           margin: 0;
-          color: #64748b;
+          color: #cbd5e1;
           font-size: 0.9rem;
         }
         
@@ -535,11 +535,11 @@ const AnalyticsPage = () => {
         
         .predictions-header h3 {
           margin: 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .predictions-header p {
-          color: #64748b;
+          color: #cbd5e1;
         }
         
         .prediction-card {
@@ -604,11 +604,11 @@ const AnalyticsPage = () => {
         
         .rec-header h3 {
           margin: 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .rec-header p {
-          color: #64748b;
+          color: #cbd5e1;
         }
         
         .rec-section {
@@ -617,7 +617,7 @@ const AnalyticsPage = () => {
         
         .rec-section h4 {
           margin: 0 0 1rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .providers-grid, .workflows-grid {
@@ -634,12 +634,12 @@ const AnalyticsPage = () => {
         
         .provider-card h5, .workflow-card h5 {
           margin: 0 0 0.5rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .provider-card p, .workflow-card p {
           margin: 0 0 1rem 0;
-          color: #64748b;
+          color: #cbd5e1;
           font-size: 0.9rem;
         }
         
@@ -647,7 +647,7 @@ const AnalyticsPage = () => {
           display: flex;
           justify-content: space-between;
           font-size: 0.85rem;
-          color: #64748b;
+          color: #cbd5e1;
         }
         
         .provider-meta .cost {
@@ -698,12 +698,12 @@ const AnalyticsPage = () => {
         
         .step-content h5 {
           margin: 0 0 0.25rem 0;
-          color: #1a1a2e;
+          color: #f8fafc;
         }
         
         .step-content p {
           margin: 0;
-          color: #64748b;
+          color: #cbd5e1;
           font-size: 0.9rem;
         }
         
@@ -729,7 +729,7 @@ const AnalyticsPage = () => {
         .empty-state {
           text-align: center;
           padding: 3rem;
-          color: #64748b;
+          color: #cbd5e1;
         }
       `}</style>
     </div>
