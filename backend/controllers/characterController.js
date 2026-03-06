@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import CharacterProfile from '../models/CharacterProfile.js';
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
+import GoogleDriveOAuthService from '../services/googleDriveOAuth.js';
 
 const tempDir = path.join(process.cwd(), 'temp');
 const characterDir = path.join(process.cwd(), 'uploads', 'characters');
@@ -432,6 +433,53 @@ export async function saveCharacterProfile(req, res) {
     if (savedChar.referenceImages[0]) {
       console.log(`[Character Save] ✅ First ref in DB:`, JSON.stringify(savedChar.referenceImages[0], null, 2).substring(0, 200));
     }
+
+    // 💫 Upload character images to Google Drive asynchronously
+    console.log(`[Character Save] 📤 Starting Google Drive upload for character images...`);
+    (async () => {
+      try {
+        const driveService = new GoogleDriveOAuthService();
+        await driveService.authenticate();
+
+        for (let i = 0; i < character.referenceImages.length; i++) {
+          const ref = character.referenceImages[i];
+          if (!ref.path || !fs.existsSync(ref.path)) {
+            console.warn(`[Character Save] ⚠️  Image ${i} file not found: ${ref.path}`);
+            continue;
+          }
+
+          try {
+            const fileBuffer = fs.readFileSync(ref.path);
+            const fileName = `${character.alias}-${ref.angle || `shot-${i + 1}`}.jpeg`;
+            
+            console.log(`[Character Save] 📤 Uploading image ${i + 1}: ${fileName}`);
+            
+            const uploadResult = await driveService.uploadCharacterCompletedImage(
+              fileBuffer,
+              fileName,
+              {
+                characterName: character.name,
+                characterAlias: character.alias,
+                description: `Character preview - ${character.name} (${ref.angle || `shot-${i + 1}`})`
+              }
+            );
+
+            if (uploadResult.success) {
+              console.log(`[Character Save] ✅ Image ${i + 1} uploaded to Drive: ${uploadResult.data?.id}`);
+            } else {
+              console.warn(`[Character Save] ⚠️  Image ${i + 1} upload failed:`, uploadResult.error);
+            }
+          } catch (err) {
+            console.warn(`[Character Save] ⚠️  Error uploading image ${i + 1}: ${err.message}`);
+          }
+        }
+        
+        console.log(`[Character Save] ✅ Google Drive upload completed for character`);
+      } catch (driveErr) {
+        console.warn(`[Character Save] ⚠️  Google Drive upload failed:`, driveErr.message);
+        // Non-fatal error - character already saved to local database
+      }
+    })();
     
     return res.json({ success: true, data: character });
   } catch (error) {
@@ -635,6 +683,56 @@ export async function updateCharacter(req, res) {
     // Save updates
     await character.save();
     console.log(`[Character Update] ✅ Successfully updated character`);
+
+    // 💫 Upload character images to Google Drive asynchronously
+    console.log(`[Character Update] 📤 Starting Google Drive upload for updated character images...`);
+    (async () => {
+      try {
+        const driveService = new GoogleDriveOAuthService();
+        await driveService.authenticate();
+
+        // Only upload newly added/updated images
+        if (character.referenceImages && character.referenceImages.length > 0) {
+          for (let i = 0; i < character.referenceImages.length; i++) {
+            const ref = character.referenceImages[i];
+            if (!ref.path || !fs.existsSync(ref.path)) {
+              console.warn(`[Character Update] ⚠️  Image ${i} file not found: ${ref.path}`);
+              continue;
+            }
+
+            try {
+              const fileBuffer = fs.readFileSync(ref.path);
+              const fileName = `${character.alias}-${ref.angle || `shot-${i + 1}`}.jpeg`;
+              
+              console.log(`[Character Update] 📤 Uploading image ${i + 1}: ${fileName}`);
+              
+              const uploadResult = await driveService.uploadCharacterCompletedImage(
+                fileBuffer,
+                fileName,
+                {
+                  characterName: character.name,
+                  characterAlias: character.alias,
+                  description: `Character preview - ${character.name} (${ref.angle || `shot-${i + 1}`})`
+                }
+              );
+
+              if (uploadResult.success) {
+                console.log(`[Character Update] ✅ Image ${i + 1} uploaded to Drive: ${uploadResult.data?.id}`);
+              } else {
+                console.warn(`[Character Update] ⚠️  Image ${i + 1} upload failed:`, uploadResult.error);
+              }
+            } catch (err) {
+              console.warn(`[Character Update] ⚠️  Error uploading image ${i + 1}: ${err.message}`);
+            }
+          }
+          
+          console.log(`[Character Update] ✅ Google Drive upload completed for character`);
+        }
+      } catch (driveErr) {
+        console.warn(`[Character Update] ⚠️  Google Drive upload failed:`, driveErr.message);
+        // Non-fatal error - character already saved to local database
+      }
+    })();
 
     return res.json({ success: true, data: character });
   } catch (error) {

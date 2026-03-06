@@ -47,6 +47,7 @@ class GoogleDriveOAuthService {
       imagesCharacter: this.loadedFolderStructure?.folders?.['Affiliate AI/Images/Uploaded/App/Character'] || null,
       imagesProduct: this.loadedFolderStructure?.folders?.['Affiliate AI/Images/Uploaded/App/Product'] || null,
       imagesCompleted: this.loadedFolderStructure?.folders?.['Affiliate AI/Images/Completed'] || null,
+      imagesCompletedCharacter: this.loadedFolderStructure?.folders?.['Affiliate AI/Images/Completed/Character'] || null,
       imagesDownloaded: this.loadedFolderStructure?.folders?.['Affiliate AI/Images/Downloaded'] || null,
       videos: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos'] || null,
       videosUploaded: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Uploaded'] || null,
@@ -844,6 +845,24 @@ class GoogleDriveOAuthService {
         ...(options.properties || {}),
         imageType: 'generated',
         category: 'generated-image',
+      }
+    });
+  }
+
+  /**
+   * 💫 Upload Character Completed Image
+   * Auto-saves to: Images/Completed/Character
+   */
+  async uploadCharacterCompletedImage(buffer, fileName, options = {}) {
+    return this.uploadBuffer(buffer, fileName, {
+      ...options,
+      folderId: this.folderIds.imagesCompletedCharacter || this.folderIds.imagesCompleted || this.folderIds.images,
+      description: options.description || 'Character preview image from Smart Wardrobe App',
+      properties: {
+        ...(options.properties || {}),
+        imageType: 'character',
+        category: 'character-preview',
+        characterName: options.characterName || 'unknown',
       }
     });
   }
