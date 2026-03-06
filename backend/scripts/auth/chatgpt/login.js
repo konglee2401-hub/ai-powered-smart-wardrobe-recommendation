@@ -257,6 +257,19 @@ class ChatGPTSessionManager {
       console.log(`      - SessionStorage items: ${Object.keys(sessionStorage).length}`);
       console.log(`      - Authenticated: ${sessionData.authStatus.isAuthenticated ? '✅' : '❌'}`);
       
+      // 🔐 CRITICAL: Validate auth token is actually present
+      const hasAuthToken = cookies.some(c => 
+        c.name === '__Secure-next-auth.session-token' || 
+        c.name.includes('auth') && c.name.includes('token')
+      );
+      console.log(`      - Auth token present: ${hasAuthToken ? '✅' : '⚠️  MISSING'}`);
+      
+      if (!hasAuthToken) {
+        console.warn('⚠️  WARNING: Auth token cookie not found in captured session!');
+        console.warn('   This session will NOT be reusable for future logins.');
+        console.warn('   User will need to login again next time.');
+      }
+      
       return sessionData;
     } catch (error) {
       console.error(`❌ Failed to capture session: ${error.message}`);
