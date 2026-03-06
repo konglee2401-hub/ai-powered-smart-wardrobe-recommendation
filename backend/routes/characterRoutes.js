@@ -6,9 +6,9 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 router.get('/', listCharacters);
-router.get('/:id', getCharacter);
 router.post('/generate-preview', upload.single('portraitImage'), generateCharacterPreview);
 router.post('/:id/regenerate-image', upload.single('portraitImage'), regenerateCharacterImage);
+router.get('/:id', getCharacter);
 router.post('/', saveCharacterProfile);
 router.delete('/:id', deleteCharacter);
 

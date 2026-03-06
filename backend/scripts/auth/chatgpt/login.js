@@ -327,33 +327,67 @@ class ChatGPTSessionManager {
         }
       });
 
+      // Log detailed authentication checks
+      console.log('   📋 Authentication Checks:');
+      console.log(`     ✓ Chat textarea: ${authStatus.hasTextarea ? '✅' : '❌'}`);
+      console.log(`     ✓ Profile button: ${authStatus.hasProfileButton ? '✅' : '❌'}`);
+      console.log(`     ✓ Create chat button: ${authStatus.hasCreateButton ? '✅' : '❌'}`);
+      console.log(`     ✓ No login button: ${!authStatus.hasLoginButton ? '✅' : '❌'}`);
+      console.log(`     ✓ Correct page: ${authStatus.isCorrectPage ? '✅' : '❌'}`);
+      console.log(`   📄 Page title: ${authStatus.pageTitle}`);
+
       return authStatus.isAuthed;
     } catch (error) {
+      console.log(`   ⚠️  Error checking authentication: ${error.message}`);
       return false;
     }
   }
 
   /**
-   * Wait for user to manually login and press Enter
+   * Wait for user to manually login and press Enter (with timeout auto-check)
    */
-  async waitForManualLoginWithEnter() {
+  async waitForManualLoginWithEnter(timeoutSeconds = 120) {
     console.log('\n🔓 MANUAL LOGIN REQUIRED\n');
+    console.log('═══════════════════════════════════════════════════════════════════');
     console.log('A browser window will open. Please:');
-    console.log('  1. Login to ChatGPT manually');
-    console.log('  2. When logged in successfully, press ENTER in this terminal\n');
+    console.log('  1. Login to ChatGPT with your email and password');
+    console.log('  2. Complete any 2FA if needed');
+    console.log('  3. When logged in successfully, press ENTER in this terminal');
+    console.log('  4. Or wait 120 seconds for auto-check\n');
+    console.log('═══════════════════════════════════════════════════════════════════\n');
     
-    // Read one line of input (just pressing Enter)
     return new Promise((resolve) => {
+      let resolved = false;
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
       });
 
-      rl.question('Press ENTER when you\'re logged in: ', () => {
+      // Ask user to press ENTER
+      rl.question('⏳ Press ENTER when logged in (or wait for auto-check...): ', () => {
         rl.close();
-        console.log('\n✅ Got your confirmation!');
-        console.log('⏳ Checking authentication...\n');
-        resolve(true);
+        if (!resolved) {
+          resolved = true;
+          console.log('\n✅ Got your confirmation!');
+          console.log('⏳ Checking authentication status...\n');
+          resolve(true);
+        }
+      });
+
+      // Auto-check after timeout
+      const timeoutHandle = setTimeout(async () => {
+        if (!resolved) {
+          resolved = true;
+          rl.close();
+          console.log('\n⏱️  Timeout reached! Starting auto-check...');
+          console.log('⏳ Checking authentication status...\n');
+          resolve(true);
+        }
+      }, timeoutSeconds * 1000);
+
+      // Cleanup timeout on early resolution
+      rl.on('close', () => {
+        clearTimeout(timeoutHandle);
       });
     });
   }
@@ -395,6 +429,9 @@ class ChatGPTSessionManager {
    */
   async login() {
     // Try to launch browser
+    console.log('\n🚀 Starting ChatGPT Auto-Login Script');
+    console.log('═════════════════════════════════════════════════════════\n');
+    
     if (!await this.launchBrowser()) {
       return false;
     }
@@ -403,6 +440,7 @@ class ChatGPTSessionManager {
       // Navigate to ChatGPT
       console.log('📍 Navigating to ChatGPT...');
       await this.page.goto('https://chatgpt.com', { waitUntil: 'networkidle2', timeout: 120000 });
+      console.log('✅ Page loaded\n');
       
       // Try applying saved session first
       const savedSession = this.loadSession();
@@ -439,10 +477,11 @@ class ChatGPTSessionManager {
       await this.page.waitForTimeout(2000);
       
       // Check if authenticated now
+      console.log('🔍 Verifying authentication...');
       const isAuthed = await this.isAuthenticated();
       
       if (isAuthed) {
-        console.log('✅ Authentication confirmed!\n');
+        console.log('\n✅ Authentication confirmed!\n');
         
         // Capture and save session
         const sessionData = await this.captureSession();
@@ -452,15 +491,45 @@ class ChatGPTSessionManager {
         }
         return true;
       } else {
-        console.log('❌ Not authenticated. Please make sure you logged in correctly and try again.\n');
+        console.log('\n⚠️  Authentication not detected. Checking if page loaded correctly...');
+        
+        // Try refreshing and checking again (sometimes page needs a moment)
+        console.log('🔄 Refreshing page and retrying...');
+        await this.page.reload({ waitUntil: 'networkidle2' });
+        await this.page.waitForTimeout(3000);
+        
+        const isAuthedRetry = await this.isAuthenticated();
+        if (isAuthedRetry) {
+          console.log('\n✅ Authentication confirmed on retry!\n');
+          const sessionData = await this.captureSession();
+          if (sessionData) {
+            this.saveSession(sessionData);
+            console.log('✅ Session saved successfully!\n');
+          }
+          return true;
+        }
+        
+        console.log('❌ Still not authenticated. Please check:');
+        console.log('  1. Did you see the browser window open?');
+        console.log('  2. Did you complete the login process?');
+        console.log('  3. Are you logged in to ChatGPT in the browser?\n');
         return false;
       }
     } catch (error) {
       console.error(`❌ Error during login: ${error.message}`);
       return false;
     } finally {
-      // Keep browser open for inspection if needed
-      console.log('\n💡 Browser remains open for manual verification. Close when done.');
+      // Close browser after a delay to allow user inspection
+      setTimeout(async () => {
+        try {
+          if (this.browser) {
+            await this.browser.close();
+            console.log('🔒 Browser closed.\n');
+          }
+        } catch (e) {
+          // Browser already closed
+        }
+      }, 2000);
     }
   }
 
