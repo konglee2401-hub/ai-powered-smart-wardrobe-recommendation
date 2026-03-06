@@ -1,4 +1,4 @@
-import { IMAGE_PROVIDERS } from './config/imageProviders.js';
+import { IMAGE_PROVIDERS } from '../../config/imageProviders.js';
 
 // Seed script to verify image providers configuration
 async function seedImageProviders() {

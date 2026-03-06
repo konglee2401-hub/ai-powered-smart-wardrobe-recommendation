@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import mongoose from 'mongoose';
-import PromptOption from './models/PromptOption.js';
+import PromptOption from '../../models/PromptOption.js';
 
 const DEFAULT_OPTIONS = {
   scene: [
@@ -63,18 +63,6 @@ const DEFAULT_OPTIONS = {
     { value: 'neon', label: 'Neon', description: 'Bright neon colors' },
     { value: 'jewel-tones', label: 'Jewel Tones', description: 'Rich, deep colors' },
     { value: 'neutral', label: 'Neutral', description: 'Beige, cream, and neutral tones' }
-  ],
-  
-  useCase: [
-    { value: 'fashion-editorial', label: 'Fashion Editorial', description: 'Magazine-style fashion photography' },
-    { value: 'e-commerce', label: 'E-commerce Product', description: 'Clean product photography for online stores' },
-    { value: 'social-media', label: 'Social Media Content', description: 'Eye-catching content for Instagram/TikTok' },
-    { value: 'lookbook', label: 'Lookbook', description: 'Seasonal collection showcase' },
-    { value: 'campaign', label: 'Brand Campaign', description: 'Marketing campaign imagery' },
-    { value: 'catalog', label: 'Catalog', description: 'Product catalog photography' },
-    { value: 'influencer', label: 'Influencer Content', description: 'Lifestyle influencer content' },
-    { value: 'advertisement', label: 'Advertisement', description: 'Commercial advertising' },
-    { value: 'change-clothes', label: '👔 Change Clothes', description: 'Virtual try-on - dress a character in new clothing' }
   ]
 };
 

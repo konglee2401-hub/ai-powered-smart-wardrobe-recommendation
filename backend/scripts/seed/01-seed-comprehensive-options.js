@@ -19,7 +19,7 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Import PromptOption model
-const { default: PromptOption } = await import('./models/PromptOption.js');
+const { default: PromptOption } = await import('../../models/PromptOption.js');
 
 // Connect to MongoDB with sensible defaults
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart-wardrobe';
