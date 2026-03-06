@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './GalleryManagement.css';
+import PhotoAlbum from 'react-photo-album';
+import 'react-photo-album/rows.css';
 
 const GalleryManagement = ({ 
   onImageSelect, 

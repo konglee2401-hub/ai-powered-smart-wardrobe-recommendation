@@ -505,8 +505,9 @@ const GalleryPicker = ({
           display: viewMode === 'grid' 
             ? 'grid'
             : 'flex',
-          gridTemplateColumns: viewMode === 'grid' ? 'repeat(4, minmax(150px, 1fr))' : 'none',
-          gridAutoRows: viewMode === 'grid' ? 'minmax(150px, auto)' : 'unset',
+          gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(140px, 1fr))' : 'none',
+          gridAutoRows: viewMode === 'grid' ? '140px' : 'unset',
+          gridAutoFlow: viewMode === 'grid' ? 'dense' : 'unset',
           flexDirection: viewMode === 'list' ? 'column' : 'row',
           gap: '1rem',
           alignContent: 'start'
