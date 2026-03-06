@@ -39,6 +39,11 @@ router.patch('/accounts/:accountId', VideoProductionController.updateAccount);
 router.post('/accounts/:accountId/deactivate', VideoProductionController.deactivateAccount);
 router.delete('/accounts/:accountId', VideoProductionController.deleteAccount);
 
+router.get('/accounts/requirements', VideoProductionController.getPlatformRequirements);
+router.get('/accounts/oauth/:platform/config', VideoProductionController.getOAuthAppConfig);
+router.post('/accounts/oauth/:platform/config', VideoProductionController.saveOAuthAppConfig);
+router.post('/accounts/oauth/:platform/url', VideoProductionController.createOAuthUrl);
+router.post('/accounts/oauth/youtube/exchange-code', VideoProductionController.exchangeYouTubeOAuthCode);
 router.post('/accounts/:accountId/verify', VideoProductionController.verifyAccount);
 router.post('/accounts/verify-all', VideoProductionController.verifyAllAccounts);
 router.post('/accounts/validate-config', VideoProductionController.validateAccountConfig);

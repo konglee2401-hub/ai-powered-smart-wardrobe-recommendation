@@ -87,7 +87,22 @@ export const videoProductionApi = {
       api.post('/accounts/verify-all'),
 
     validateConfig: (platform, config) =>
-      api.post('/accounts/validate-config', { platform, config })
+      api.post('/accounts/validate-config', { platform, config }),
+
+    getRequirements: (platform) =>
+      api.get('/accounts/requirements', { params: { platform } }),
+
+    getOAuthConfig: (platform) =>
+      api.get(`/accounts/oauth/${platform}/config`),
+
+    saveOAuthConfig: (platform, config) =>
+      api.post(`/accounts/oauth/${platform}/config`, config),
+
+    createOAuthUrl: (platform, accountLabel = '', stateMeta = {}) =>
+      api.post(`/accounts/oauth/${platform}/url`, { accountLabel, stateMeta }),
+
+    exchangeYouTubeCode: (code, state, accountName) =>
+      api.post('/accounts/oauth/youtube/exchange-code', { code, state, accountName })
   },
 
   // ============ MEDIA LIBRARY OPERATIONS ============
