@@ -92,42 +92,69 @@ export async function generateCharacterPreview(req, res) {
       seed: Number.isInteger(Number(seed)) ? Number(seed) : undefined
     });
 
+    console.log(`🎬 Starting Google Flow generation...`);
     // Generate with all prompts, Google Flow will do x4 for each
     const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts, outputCount: 4 });
+    console.log(`🎬 Google Flow generation completed!`);
+    console.log(`📦 Result object keys: ${Object.keys(result).join(', ')}`);
+    
     const generationSeed = result.seed;
     
-    // Collect all successful images and randomly pick 1 per prompt
+    console.log(`\n✅ Generation completed. Processing results...`);
+    console.log(`📊 Total results received: ${result.results?.length || 0}`);
+    
+    // Group successful results by prompt and pick 1 per prompt
     const generatedImages = [];
-    let promptIndex = 0;
+    const resultsByPrompt = {};
     
     // Group results by prompt
     for (const genResult of (result.results || [])) {
-      if (genResult.success && genResult.downloadedFile) {
-        const filename = path.basename(genResult.downloadedFile);
-        global.generatedImagePaths = global.generatedImagePaths || {};
-        global.generatedImagePaths[filename] = genResult.downloadedFile;
-        
+      if (!genResult.success || !genResult.downloadedFile) continue;
+      
+      const promptNum = genResult.promptNumber || 1;
+      if (!resultsByPrompt[promptNum]) {
+        resultsByPrompt[promptNum] = [];
+      }
+      
+      const filename = path.basename(genResult.downloadedFile);
+      global.generatedImagePaths = global.generatedImagePaths || {};
+      global.generatedImagePaths[filename] = genResult.downloadedFile;
+      
+      resultsByPrompt[promptNum].push({
+        url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
+        path: genResult.downloadedFile,
+        filename,
+        prompt: genResult.prompt,
+        seed: genResult.seed || generationSeed
+      });
+    }
+    
+    console.log(`\n📂 Grouped by prompt: ${Object.keys(resultsByPrompt).length} prompts with results`);
+    
+    // Pick random 1 image from each prompt's successful results
+    for (const promptNum in resultsByPrompt) {
+      const images = resultsByPrompt[promptNum];
+      if (images.length > 0) {
+        const randomIdx = Math.floor(Math.random() * images.length);
+        const selected = images[randomIdx];
         generatedImages.push({
-          url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
-          path: genResult.downloadedFile,
-          filename,
+          ...selected,
           angle: `shot-${generatedImages.length + 1}`,
-          prompt: genResult.prompt,
-          seed: genResult.seed || generationSeed,
-          promptNumber: promptIndex + 1
+          promptNumber: parseInt(promptNum)
         });
-      } else if (genResult.promptNumber && genResult.promptNumber > promptIndex) {
-        promptIndex = genResult.promptNumber;
+        console.log(`✅ Prompt ${promptNum}: Selected ${selected.filename} (${randomIdx + 1}/${images.length})`);
       }
     }
-
-    console.log('\n═══════════════════════════════════════════════════════════════');
+    
+    console.log(`\n═══════════════════════════════════════════════════════════════`);
     console.log('🎭 CHARACTER GENERATION RESULTS');
-    console.log(`📊 Generated: ${generatedImages.length} images from ${prompts.length} prompts (x4 per prompt)`);
-    console.log(`✅ Selected: Top successful image from each prompt`);
+    console.log(`📊 Generated: ${generatedImages.length} final images from ${prompts.length} prompts`);
+    console.log(`✅ Selection: 1 random image per prompt`);
     console.log(`📸 Preview images: ${generatedImages.length > 0 ? generatedImages.map(img => img.filename).join(', ') : 'NO SUCCESS'}`);
     console.log('═══════════════════════════════════════════════════════════════\n');
-
+    
+    console.log('📤 Returning results to frontend...');
+    
     return res.json({
       success: true,
       data: {
