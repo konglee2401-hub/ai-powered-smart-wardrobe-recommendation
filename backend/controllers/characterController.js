@@ -361,8 +361,8 @@ export async function saveCharacterProfile(req, res) {
       portraitUrl: `http://localhost:5000/uploads/characters/${portraitFilename}`,
       portraitPath: String(portraitDest),
       referenceImages: plainRefs,
-      options: JSON.parse(JSON.stringify(options)), // Deep clone plain object
-      analysisProfile: JSON.parse(JSON.stringify(analysisProfile)),
+      options: options,  // Let Mongoose handle validation
+      analysisProfile: analysisProfile,
       status: 'active'
     };
 
