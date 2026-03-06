@@ -765,6 +765,7 @@ export const characterAPI = {
   getById: (id) => api.get(`/characters/${id}`),
   generatePreview: (formData) => api.postFormData('/characters/generate-preview', formData),
   save: (payload) => api.post('/characters', payload),
+  update: (id, payload) => api.put(`/characters/${id}`, payload),
   delete: (id) => api.delete(`/characters/${id}`),
 };
 

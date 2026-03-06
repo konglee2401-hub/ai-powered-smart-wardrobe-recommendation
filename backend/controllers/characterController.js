@@ -447,3 +447,129 @@ export async function deleteCharacter(req, res) {
     res.status(500).json({ success: false, error: error.message });
   }
 }
+
+export async function updateCharacter(req, res) {
+  try {
+    console.log(`[Character Update] ═══════════════════════════════════════════════════`);
+    const { id } = req.params;
+    
+    // Find existing character
+    const character = await CharacterProfile.findById(id);
+    if (!character) {
+      return res.status(404).json({ success: false, error: 'Character not found' });
+    }
+
+    console.log(`[Character Update] Found existing character: ${character.name}`);
+
+    // Parse request body
+    let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    
+    if (typeof req.body === 'string') {
+      console.warn(`[Character Update] ⚠️  Request body is a string! Parsing...`);
+      try {
+        const parsed = JSON.parse(req.body);
+        ({ name, alias, portraitTempPath, options, generatedImages, analysisProfile } = parsed);
+      } catch (e) {
+        return res.status(400).json({ success: false, error: 'Invalid request body' });
+      }
+    }
+
+    // Parse generatedImages if string
+    if (typeof generatedImages === 'string') {
+      try {
+        generatedImages = JSON.parse(generatedImages);
+      } catch (e) {
+        generatedImages = [];
+      }
+    }
+    if (!Array.isArray(generatedImages)) {
+      generatedImages = [];
+    }
+
+    // Parse options if string
+    if (typeof options === 'string') {
+      try {
+        options = JSON.parse(options);
+      } catch (e) {
+        options = {};
+      }
+    }
+
+    // Update basic fields
+    if (name) character.name = String(name);
+    if (alias) {
+      const normalizedAlias = safeAlias(alias);
+      // Check if alias already exists (other than current character)
+      const existing = await CharacterProfile.findOne({ 
+        alias: normalizedAlias,
+        _id: { $ne: id }
+      });
+      if (existing) {
+        return res.status(400).json({ success: false, error: `Character alias "${normalizedAlias}" already exists` });
+      }
+      character.alias = String(normalizedAlias);
+    }
+
+    // Update options
+    if (options && typeof options === 'object') {
+      character.options = options;
+    }
+
+    // Update analysis profile
+    if (analysisProfile && typeof analysisProfile === 'object') {
+      character.analysisProfile = analysisProfile;
+    }
+
+    // Update reference images if provided
+    if (generatedImages.length > 0) {
+      const savedRefs = generatedImages
+        .filter((img, idx) => {
+          if (typeof img !== 'object' || img === null) return false;
+          if (typeof img === 'string') return false;
+          if (!img.url) return false;
+          return true;
+        })
+        .map((img, idx) => ({
+          url: String(img.url || ''),
+          path: String(img.path || ''),
+          angle: String(img.angle || `shot-${idx + 1}`),
+          type: String(img.type || (idx < 2 ? 'portrait' : 'full-body')),
+          prompt: String(img.prompt || ''),
+          seed: Number.isInteger(img.seed) ? img.seed : null
+        }));
+
+      character.referenceImages = savedRefs;
+      console.log(`[Character Update] Updated with ${savedRefs.length} reference images`);
+    }
+
+    // Update portrait if new one provided
+    if (portraitTempPath && fs.existsSync(portraitTempPath)) {
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'characters');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Delete old portrait if exists
+      if (character.portraitPath && fs.existsSync(character.portraitPath)) {
+        fs.unlinkSync(character.portraitPath);
+      }
+
+      const portraitFilename = `${character.alias}-${Date.now()}-portrait.png`;
+      const portraitDest = path.join(uploadsDir, portraitFilename);
+      fs.copyFileSync(portraitTempPath, portraitDest);
+      
+      character.portraitUrl = `http://localhost:5000/uploads/characters/${portraitFilename}`;
+      character.portraitPath = String(portraitDest);
+      console.log(`[Character Update] Updated portrait`);
+    }
+
+    // Save updates
+    await character.save();
+    console.log(`[Character Update] ✅ Successfully updated character`);
+
+    return res.json({ success: true, data: character });
+  } catch (error) {
+    console.error(`[Character Update] ❌ Error: ${error.message}`);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+}
