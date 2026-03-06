@@ -66,9 +66,11 @@ class GenerationMonitor {
     let lastHrefCount = 0;  // Track href count to detect completion
     let errorRetryCount = 0;  // 💫 NEW: Track how many times we've retried on error
     let lastNewHrefTime = Date.now();  // 💫 Track last time we found a new href
+    let lastHrefLogTime = Date.now();  // 💫 NEW: Track last time we logged href analysis (to reduce spam)
     const MAX_SIMPLE_RETRIES = 3;  // Max direct retry button clicks
     const PARTIAL_TIMEOUT_MS = 20000;  // 20s - if no new hrefs in 20s, assume partial failure
     const POLL_INTERVAL_MS = 800;  // 💫 OPTIMIZED: Fast polling for quick href detection (was 2000ms)
+    const LOG_INTERVAL_MS = 5000;  // 💫 NEW: Log href analysis every 5 seconds (not every poll)
 
     try {
       while (Date.now() - startTime < timeoutMs) {
@@ -131,12 +133,16 @@ class GenerationMonitor {
             hrefAnalysis = await this.preGenerationMonitor.findNewHref();
             newHrefCount = hrefAnalysis?.newCount || 0;
             
-            // 🔥 DEBUG: Log detailed href analysis
-            console.log(`      📊 [MONITOR] Href analysis (check ${statusCheckCount}):`);
-            console.log(`         New (strict): ${hrefAnalysis?.newCount || 0}/${expectedNewHrefs}`);
-            console.log(`         New (loose): ${hrefAnalysis?.newCountLoose || 0}`);
-            console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
-            console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
+            // � NEW: Only log href analysis every 5 seconds (reduce spam)
+            const now = Date.now();
+            if (now - lastHrefLogTime >= LOG_INTERVAL_MS) {
+              console.log(`      📊 [MONITOR] Href analysis (check ${statusCheckCount}):`);
+              console.log(`         New (strict): ${hrefAnalysis?.newCount || 0}/${expectedNewHrefs}`);
+              console.log(`         New (loose): ${hrefAnalysis?.newCountLoose || 0}`);
+              console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
+              console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
+              lastHrefLogTime = now;
+            }
             
             // 💫 NEW REQUIREMENT: Exit monitoring as soon as we have >= 1 successful image!
             // Don't wait for all expectedNewHrefs - per user requirement, 1 image = download + next prompt
@@ -221,6 +227,21 @@ class GenerationMonitor {
           if (deletedCount > 0) {
             console.log(`   ✅ Deleted ${deletedCount} failed item(s)`);
             await this.page.waitForTimeout(1000);  // Wait after deletion
+            
+            // 💫 NEW: Check if errors still exist after deletion
+            const stillHasErrors = await this.page.evaluate(() => {
+              const firstTile = document.querySelector('[data-testid="virtuoso-item-list"] [data-tile-id]');
+              if (!firstTile) return false;
+              const tileText = firstTile.textContent.toLowerCase();
+              return tileText.includes('không thành công') || tileText.includes('đã xảy ra lỗi');
+            });
+            
+            if (!stillHasErrors) {
+              console.log('   ✅ All failed items cleared! No more error UI elements detected.');
+              console.log('   🔄 Skipping "Use Again" strategy (no error buttons to click), going straight to Strategy 3 (full rehash)...');
+              // Skip Use Again strategy and go directly to rehash
+              return { success: false, error: 'All failures cleaned up, triggering full rehash' };
+            }
           }
           
           // 💫 ESCALATION STRATEGY:
