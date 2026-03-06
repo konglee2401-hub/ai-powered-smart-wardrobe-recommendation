@@ -179,6 +179,10 @@ export async function saveCharacterProfile(req, res) {
     let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
     
     console.log(`[Character Save] Name: ${name}, Alias: ${alias}, Portrait path: ${portraitTempPath}`);
+    console.log(`[Character Save] generatedImages type: ${typeof generatedImages}, is array: ${Array.isArray(generatedImages)}`);
+    if (typeof generatedImages === 'string') {
+      console.log(`[Character Save] generatedImages (first 100 chars): ${generatedImages.substring(0, 100)}`);
+    }
     
     if (!name || !alias || !portraitTempPath) {
       const missing = [];
@@ -193,19 +197,26 @@ export async function saveCharacterProfile(req, res) {
     // Parse if generatedImages comes as string
     if (typeof generatedImages === 'string') {
       try {
-        console.log(`[Character Save] Parsing generatedImages from string...`);
+        console.log(`[Character Save] 🔄 Parsing generatedImages from string...`);
         generatedImages = JSON.parse(generatedImages);
-        console.log(`[Character Save] ✅ Parsed ${generatedImages.length} generated images`);
+        console.log(`[Character Save] ✅ Parsed to array with ${generatedImages.length} items`);
       } catch (e) {
         console.warn(`[Character Save] ⚠️  Failed to parse generatedImages: ${e.message}`);
+        console.warn(`[Character Save] Raw value (first 200 chars): ${generatedImages.substring(0, 200)}`);
         generatedImages = [];
       }
+    }
+    
+    // Ensure it's an array
+    if (!Array.isArray(generatedImages)) {
+      console.warn(`[Character Save] ⚠️  generatedImages is not an array after parsing: ${typeof generatedImages}`);
+      generatedImages = [];
     }
     
     // Parse if options comes as string
     if (typeof options === 'string') {
       try {
-        console.log(`[Character Save] Parsing options from string...`);
+        console.log(`[Character Save] 🔄 Parsing options from string...`);
         options = JSON.parse(options);
         console.log(`[Character Save] ✅ Parsed options`);
       } catch (e) {
@@ -251,19 +262,34 @@ export async function saveCharacterProfile(req, res) {
       console.warn(`[Character Save] ⚠️  Portrait temp path does not exist: ${portraitTempPath}`);
     }
 
-    // Process generated images - keep URLs from preview, don't try to copy files
-    const savedRefs = (Array.isArray(generatedImages) ? generatedImages : [])
-      .filter(img => img && img.url) // Only keep images with URLs
-      .map((img, idx) => ({
-        url: img.url || '',
-        path: img.path || '',
-        angle: img.angle || `shot-${idx + 1}`,
-        type: idx < 2 ? 'portrait' : 'full-body',
-        prompt: img.prompt || '',
-        seed: (typeof img.seed === 'number') ? img.seed : null
-      }));
+    // 💫 FIX: Process generated images - validate each image
+    console.log(`[Character Save] 🔄 Processing ${generatedImages.length} generatedImages...`);
+    const savedRefs = generatedImages
+      .filter((img, idx) => {
+        if (!img) {
+          console.warn(`[Character Save]   ⚠️  Image ${idx} is null/undefined, skipping`);
+          return false;
+        }
+        if (!img.url) {
+          console.warn(`[Character Save]   ⚠️  Image ${idx} has no URL, skipping`);
+          return false;
+        }
+        return true;
+      })
+      .map((img, idx) => {
+        const ref = {
+          url: img.url || '',
+          path: img.path || '',
+          angle: img.angle || `shot-${idx + 1}`,
+          type: idx < 2 ? 'portrait' : 'full-body',
+          prompt: img.prompt || '',
+          seed: (typeof img.seed === 'number') ? img.seed : null
+        };
+        console.log(`[Character Save]   ✅ Image ${idx}: ${img.url.substring(0, 60)}...`);
+        return ref;
+      });
 
-    console.log(`[Character Save] Processing ${savedRefs.length} reference images`);
+    console.log(`[Character Save] ✅ Created ${savedRefs.length} reference image objects`);
 
     const character = await CharacterProfile.create({
       name,
@@ -277,6 +303,7 @@ export async function saveCharacterProfile(req, res) {
     });
 
     console.log(`[Character Save] ✅ Successfully saved character: ${name} (${normalizedAlias}), ID: ${character._id}`);
+    console.log(`[Character Save] ✅ Saved with ${character.referenceImages.length} reference images`);
     return res.json({ success: true, data: character });
   } catch (error) {
     console.error(`[Character Save] ❌ Error: ${error.message}`);
