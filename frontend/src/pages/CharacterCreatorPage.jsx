@@ -237,13 +237,13 @@ export default function CharacterCreatorPage() {
         <>
           {generationSeed !== null && <div className="text-xs text-emerald-400">Seed lock: {generationSeed}</div>}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="space-y-3 lg:col-span-2 bg-[#111522] border border-slate-700 rounded-xl p-4">
+            <div className="space-y-3 lg:col-span-1 bg-[#111522] border border-slate-700 rounded-xl p-4">
               <div className="grid grid-cols-2 gap-3">
                 <input value={name} onChange={e=>setName(e.target.value)} placeholder="Character name" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2"/>
                 <input value={alias} onChange={e=>setAlias(e.target.value)} placeholder="Alias (ex: LinhPhap)" className="bg-[#0b0f1a] border border-slate-600 rounded px-3 py-2"/>
               </div>
               <input type="file" accept="image/*" onChange={e=>setPortrait(e.target.files?.[0] || null)} className="text-sm" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <input placeholder="Gender" value={options.identity.gender} onChange={e=>setNested('identity','gender',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
                 <input placeholder="Age range" value={options.identity.ageRange} onChange={e=>setNested('identity','ageRange',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
                 <input placeholder="Height" value={options.identity.height} onChange={e=>setNested('identity','height',e.target.value)} className="bg-[#0b0f1a] border border-slate-600 rounded px-2 py-1"/>
@@ -269,9 +269,9 @@ export default function CharacterCreatorPage() {
                 <button onClick={saveCharacter} disabled={!preview.length || !portraitTempPath || loading} className="bg-emerald-600 rounded px-4 py-2">{loading ? 'Saving...' : (isEditMode ? 'Update Character' : 'Save Character')}</button>
               </div>
             </div>
-            <div className="bg-[#111522] border border-slate-700 rounded-xl p-4">
+            <div className="bg-[#111522] border border-slate-700 rounded-xl p-4 lg:col-span-2">
               <h3 className="font-semibold mb-3">Preview ({preview.length})</h3>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {preview.map((img) => <img key={img.url} src={img.url} alt={img.filename || img.angle} className="w-full h-28 object-cover rounded border border-slate-700" />)}
               </div>
             </div>
