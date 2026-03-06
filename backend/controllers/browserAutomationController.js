@@ -82,7 +82,10 @@ function buildAnalysisPrompt(options = {}) {
     makeup = null,
     cameraAngle = 'eye-level',
     aspectRatio = '1:1',
-    customPrompt = ''
+    customPrompt = '',
+    useCase = 'change-clothes',
+    productFocus = 'full-outfit',
+    selectedCharacter = null
   } = options;
 
   // Map option values to descriptive text
@@ -151,7 +154,24 @@ function buildAnalysisPrompt(options = {}) {
   };
 
   // Build prompt with IMPROVED JSON format for clean extraction
-  const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
+  
+
+  const characterCtx = selectedCharacter ? `
+
+CHARACTER PROFILE CONTEXT:
+- Character selected from library: ${selectedCharacter.name || ''} (${selectedCharacter.alias || ''})
+- Available reference images: ${Array.isArray(selectedCharacter.referenceImages) ? selectedCharacter.referenceImages.length : 0}
+- You MUST evaluate which reference image should be primary for this campaign.` : '';
+
+  const campaignCtx = `
+
+CAMPAIGN OBJECTIVE:
+- Use case: ${useCase}
+- Product focus: ${productFocus}
+- If promoting full outfit: prefer 3/4 front or full-body reference.
+- If promoting top only: prefer closer torso reference.
+- If promoting bottom/shoes: prefer lower-body/full-body reference with leg clarity.`;
+const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
 
 {
   "character": {
@@ -231,7 +251,7 @@ CRITICAL RULES:
 2. All choice values MUST be from the provided lists above
 3. Reasons must be 1-2 sentences max
 4. Use lowercase for all choice values with hyphens where shown
-5. If a recommendation is not applicable, use "not-applicable" or "not-needed"`;
+5. If a recommendation is not applicable, use "not-applicable" or "not-needed"${characterCtx}${campaignCtx}`;
 
   return promptText;
 }
@@ -818,8 +838,32 @@ export async function analyzeWithBrowser(req, res) {
       makeup = null,
       cameraAngle = 'eye-level',
       aspectRatio = '1:1',
-      customPrompt = ''
+      customPrompt = '',
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit',
+      selectedCharacter = null
     } = req.body;
+
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
 
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
@@ -842,7 +886,10 @@ export async function analyzeWithBrowser(req, res) {
       makeup,
       cameraAngle,
       aspectRatio,
-      customPrompt
+      customPrompt,
+      useCase,
+      productFocus,
+      selectedCharacter: selectedCharacterResolved
     };
 
     // ====================================
@@ -897,8 +944,11 @@ export async function analyzeWithBrowser(req, res) {
     // ====================================
     console.log(`\n🤖 Analyzing images (no generation)...`);
     
+    const analysisReferencePaths = [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath];
+    console.log(`   📚 Analysis references: ${analysisReferencePaths.length} images (character + extra refs + product)`);
+
     const analysisResult = await browserService.analyzeMultipleImages(
-      [charImagePath, prodImagePath],
+      analysisReferencePaths,
       analysisPrompt
     );
     
@@ -1007,6 +1057,7 @@ export async function analyzeWithBrowser(req, res) {
         providers: {
           analysis: analysisProvider
         },
+        analysisReferenceCount: [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath].length,
         // Return empty images array - this is ANALYSIS ONLY
         generatedImages: []
       },
@@ -1693,7 +1744,10 @@ export async function analyzeAndGenerate(req, res) {
       makeup = null,
       cameraAngle = 'eye-level',
       aspectRatio = '1:1',
-      customPrompt = ''
+      customPrompt = '',
+      useCase = 'change-clothes',
+      productFocus = 'full-outfit',
+      selectedCharacter = null
     } = req.body;
     
     // Build style options object
@@ -1708,8 +1762,32 @@ export async function analyzeAndGenerate(req, res) {
       cameraAngle,
       aspectRatio,
       customPrompt,
+      useCase,
+      productFocus,
+      selectedCharacter: selectedCharacterResolved,
       negativePrompt
     };
+
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
 
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
@@ -1979,6 +2057,27 @@ export async function analyzeBrowser(req, res) {
       useRealAnalysis = true
     } = req.body;
     
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
+
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
 
@@ -2106,6 +2205,27 @@ export async function generateImageBrowser(req, res) {
     }
 
     // Get images for reference (optional for styling)
+    const selectedCharacterParsed = (() => {
+      try {
+        if (!selectedCharacter) return null;
+        return typeof selectedCharacter === 'string' ? JSON.parse(selectedCharacter) : selectedCharacter;
+      } catch {
+        return null;
+      }
+    })();
+
+    let selectedCharacterResolved = selectedCharacterParsed;
+    if (selectedCharacterParsed?._id) {
+      try {
+        const dbChar = await CharacterProfile.findById(selectedCharacterParsed._id).lean();
+        if (dbChar) selectedCharacterResolved = dbChar;
+      } catch (e) {
+        console.warn(`⚠️ Could not load CharacterProfile in analysis: ${e.message}`);
+      }
+    }
+
+    const characterAssets = resolveCharacterProfilePaths(selectedCharacterResolved);
+
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
 

@@ -514,7 +514,10 @@ export default function ImageGenerationPage() {
             mood: selectedOptions.mood || 'confident',
             style: selectedOptions.style || 'minimalist',
             colorPalette: selectedOptions.colorPalette || 'neutral',
-            cameraAngle: selectedOptions.cameraAngle || 'eye-level'
+            cameraAngle: selectedOptions.cameraAngle || 'eye-level',
+            useCase,
+            productFocus,
+            selectedCharacter
           }
         );
       }
