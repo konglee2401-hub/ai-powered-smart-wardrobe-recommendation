@@ -116,9 +116,26 @@ export async function generateCharacterPreview(req, res) {
 
 export async function saveCharacterProfile(req, res) {
   try {
-    const { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
+    let { name, alias, portraitTempPath, options = {}, generatedImages = [], analysisProfile = {} } = req.body;
     if (!name || !alias || !portraitTempPath) {
       return res.status(400).json({ success: false, error: 'name, alias, portraitTempPath are required' });
+    }
+
+    // Parse if generatedImages comes as string
+    if (typeof generatedImages === 'string') {
+      try {
+        generatedImages = JSON.parse(generatedImages);
+      } catch (e) {
+        generatedImages = [];
+      }
+    }
+    // Parse if options comes as string
+    if (typeof options === 'string') {
+      try {
+        options = JSON.parse(options);
+      } catch (e) {
+        options = {};
+      }
     }
 
     const normalizedAlias = safeAlias(alias || name);
@@ -132,15 +149,15 @@ export async function saveCharacterProfile(req, res) {
     }
 
     // Process generated images - keep URLs from preview, don't try to copy files
-    const savedRefs = generatedImages
-      .filter(img => img.url) // Only keep images with URLs
+    const savedRefs = (Array.isArray(generatedImages) ? generatedImages : [])
+      .filter(img => img && img.url) // Only keep images with URLs
       .map((img, idx) => ({
-        url: img.url,
+        url: img.url || '',
         path: img.path || '',
         angle: img.angle || `shot-${idx + 1}`,
         type: idx < 2 ? 'portrait' : 'full-body',
         prompt: img.prompt || '',
-        seed: typeof img.seed === 'number' ? img.seed : null
+        seed: (typeof img.seed === 'number') ? img.seed : null
       }));
 
     const character = await CharacterProfile.create({
