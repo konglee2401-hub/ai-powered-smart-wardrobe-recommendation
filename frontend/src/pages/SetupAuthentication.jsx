@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Settings, RefreshCw, CheckCircle, AlertCircle, Shield, Save, Link as LinkIcon, Play, FileText } from 'lucide-react';
 import axiosInstance from '../services/axios';
 import { useTranslation } from 'react-i18next';
+import LogViewer from '../components/LogViewer';
 
 const SectionCard = ({ title, description, active, onClick }) => (
   <button
@@ -31,6 +32,8 @@ export default function SetupAuthentication() {
   const [loadingDriveConfig, setLoadingDriveConfig] = useState(false);
   const [scraperConfig, setScraperConfig] = useState(null);
   const [savingScraperConfig, setSavingScraperConfig] = useState(false);
+  const [logViewerVisible, setLogViewerVisible] = useState(false);
+  const [logSessionId, setLogSessionId] = useState(null);
 
   const loadStatuses = async () => {
     try {
@@ -84,7 +87,7 @@ export default function SetupAuthentication() {
   const saveScraperConfig = async () => {
     setSavingScraperConfig(true);
     try {
-      const { data } = await axiosInstance.post('/api/auth-setup/scraper-videos-config', scraperConfig);
+      const { data } = await axiosInstance.post('/auth-setup/scraper-videos-config', scraperConfig);
       if (data.success) {
         setMessage('✅ Scraper configuration saved successfully');
       }
@@ -110,16 +113,42 @@ export default function SetupAuthentication() {
 
   const runGoogleFlowRefresh = async () => {
     setMessage('');
-    await axiosInstance.post('/auth-setup/run/refresh-google-flow');
-    setMessage(t('authSetup.messages.startedGoogleFlow'));
-    setTimeout(loadStatuses, 4000);
+    try {
+      const response = await axiosInstance.post('/auth-setup/run/refresh-google-flow');
+      if (response.data?.sessionId) {
+        // Show log viewer with the session ID
+        setLogSessionId(response.data.sessionId);
+        setLogViewerVisible(true);
+        setMessage('📋 Log viewer opened - monitoring refresh process...');
+        // Check status after refresh completes
+        setTimeout(loadStatuses, 5000);
+      } else {
+        setMessage(t('authSetup.messages.startedGoogleFlow'));
+        setTimeout(loadStatuses, 4000);
+      }
+    } catch (error) {
+      setMessage('Error starting refresh: ' + (error.response?.data?.error || error.message));
+    }
   };
 
   const runChatGPTLogin = async (mode) => {
     setMessage('');
-    await axiosInstance.post(`/auth-setup/run/chatgpt-auto-login?mode=${mode || ''}`);
-    setMessage(t('authSetup.messages.startedChatGPTLogin'));
-    setTimeout(loadStatuses, 4000);
+    try {
+      const response = await axiosInstance.post(`/auth-setup/run/chatgpt-auto-login?mode=${mode || ''}`);
+      if (response.data?.sessionId) {
+        // Show log viewer with the session ID
+        setLogSessionId(response.data.sessionId);
+        setLogViewerVisible(true);
+        setMessage('📋 Log viewer opened - monitoring auto-login process...');
+        // Check status after auto-login completes
+        setTimeout(loadStatuses, 5000);
+      } else {
+        setMessage(t('authSetup.messages.startedChatGPTLogin'));
+        setTimeout(loadStatuses, 4000);
+      }
+    } catch (error) {
+      setMessage('Error starting auto-login: ' + (error.response?.data?.error || error.message));
+    }
   };
 
   const saveCreds = async (provider, creds) => {
@@ -145,7 +174,7 @@ export default function SetupAuthentication() {
 
   const exchangeDriveCode = async (code) => {
     try {
-      await axiosInstance.post('/api/auth-setup/google-drive/exchange-code', { code });
+      await axiosInstance.post('/auth-setup/google-drive/exchange-code', { code });
       setMessage(t('authSetup.messages.savedDriveToken'));
     } catch (e) {
       setMessage(t('authSetup.messages.exchangeErrorPrefix') + (e.response?.data?.error || e.message));
@@ -316,7 +345,7 @@ export default function SetupAuthentication() {
                     <FileText className="w-4 h-4 text-gray-400" />
                     <span>{t('authSetup.diagnostic.labelDrive')}</span>
                     <button onClick={async () => {
-                      const { data } = await axiosInstance.get('/api/auth-setup/diagnostic/google-drive');
+                      const { data } = await axiosInstance.get('/auth-setup/diagnostic/google-drive');
                       setMessage(data.tokenExists ? t('authSetup.diagnostic.driveTokenExists') : t('authSetup.diagnostic.driveTokenMissing'));
                     }} className="ml-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs">{t('authSetup.buttons.runDiagnostic')}</button>
                   </div>
@@ -370,7 +399,7 @@ export default function SetupAuthentication() {
                     <FileText className="w-4 h-4 text-gray-400" />
                     <span>{t('authSetup.diagnostic.labelYouTube')}</span>
                     <button onClick={async () => {
-                      const { data } = await axiosInstance.get('/api/auth-setup/diagnostic/youtube');
+                      const { data } = await axiosInstance.get('/auth-setup/diagnostic/youtube');
                       setMessage(data.tokenExists ? t('authSetup.diagnostic.youtubeTokenExists') : t('authSetup.diagnostic.youtubeTokenMissing'));
                     }} className="ml-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs">{t('authSetup.buttons.runDiagnostic')}</button>
                   </div>
@@ -597,6 +626,13 @@ export default function SetupAuthentication() {
           </div>
         </div>
       </div>
+
+      {/* Log Viewer Modal */}
+      <LogViewer
+        sessionId={logSessionId}
+        isOpen={logViewerVisible}
+        onClose={() => setLogViewerVisible(false)}
+      />
     </div>
   );
 }

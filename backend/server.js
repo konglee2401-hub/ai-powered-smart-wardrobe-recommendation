@@ -9,6 +9,7 @@ import { Server as SocketServer } from 'socket.io';
 import connectDB from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { printServicesSummary, initKeyManager } from './utils/keyManager.js';
+import LogStreamingService from './services/logs/LogStreamingService.js';
 import authRoutes from './routes/authRoutes.js';
 import testAuthRoutes from './routes/testAuthRoutes.js';
 import clothingRoutes from './routes/clothingRoutes.js';
@@ -202,6 +203,34 @@ io.on('connection', (socket) => {
   socket.on('leave-session', (sessionId) => {
     socket.leave(`video-generation-${sessionId}`);
     console.log(`👋 Left session: ${sessionId}`);
+  });
+
+  // 🆕 Log Streaming: Join a log session
+  socket.on('join-log-session', (sessionId) => {
+    try {
+      // Register with LogStreamingService
+      const logsCount = LogStreamingService.registerClient(sessionId, {
+        readyState: 1,
+        send: (message) => {
+          socket.emit('log', JSON.parse(message));
+        }
+      });
+      socket.join(`logs-${sessionId}`);
+      console.log(`📋 Client ${socket.id} joined log session ${sessionId} (${logsCount} historical logs)`);
+    } catch (error) {
+      console.error(`Error joining log session: ${error.message}`);
+    }
+  });
+
+  // 🆕 Log Streaming: Leave a log session
+  socket.on('leave-log-session', (sessionId) => {
+    try {
+      LogStreamingService.unregisterClient(sessionId, this);
+      socket.leave(`logs-${sessionId}`);
+      console.log(`📋 Client ${socket.id} left log session ${sessionId}`);
+    } catch (error) {
+      console.error(`Error leaving log session: ${error.message}`);
+    }
   });
 
   // Disconnect
