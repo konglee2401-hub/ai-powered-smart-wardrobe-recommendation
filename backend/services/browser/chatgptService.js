@@ -327,6 +327,22 @@ class ChatGPTService extends BrowserService {
       console.log(`      ✓ LocalStorage items: ${verifyResult.localStorageSize}`);
       console.log(`      ✓ SessionStorage items: ${verifyResult.sessionStorageSize}\n`);
       
+      // 🔐 CRITICAL: Check if auth token cookie was actually set
+      const hasAuthTokenCookie = await this.page.evaluate(() => {
+        const cookies = document.cookie.split(';').map(c => c.trim().split('=')[0]);
+        return cookies.some(c => 
+          c.includes('session') && c.includes('token') || 
+          c.includes('next-auth')
+        );
+      });
+      console.log(`      ✓ NextAuth token present: ${hasAuthTokenCookie ? '✅ YES' : '❌ NO'}`);
+      
+      if (!verifyResult.hasAuthCookie || !hasAuthTokenCookie) {
+        console.warn('\n   ⚠️  WARNING: Auth cookies not properly applied to page!');
+        console.warn('   The saved session may be incomplete or expired.');
+        console.warn('   Deep analysis will likely fail without proper authentication.\n');
+      }
+      
       // CRITICAL: Wait another moment before reload to ensure everything settles
       console.log('   ⏳ STEP 4: Waiting before page reload (2 seconds)...');
       for (let i = 2; i > 0; i--) {
@@ -354,7 +370,9 @@ class ChatGPTService extends BrowserService {
         console.log('   ✅ Successfully authenticated with saved session!\n');
       } else {
         console.log('   ❌ Saved session expired or invalid - user not authenticated\n');
-        console.log('⚠️  Session expired. Proceeding without saved session.\n');
+        console.log('⚠️  Session is incomplete. For deep ChatGPT analysis to work:\n');
+        console.log('   → Please run the authentication setup again from SetupAuthentication page');
+        console.log('   → Or manually login to ChatGPT in the auto-login popup to refresh session\n');
         // Continue without session - user may need to login manually
       }
     }
@@ -881,64 +899,47 @@ class ChatGPTService extends BrowserService {
         }
       }
 
-      // Step 2: Upload all images
+      // Step 2: Upload all images together 
       console.log('📍 STEP 2: Uploading images...');
-      for (const imagePath of imagePaths) {
-        let uploadSucceeded = false;
-        let retries = 0;
-        const maxRetries = 3;
-
-        while (!uploadSucceeded && retries < maxRetries) {
+      console.log(`   📋 Attempting to upload ${imagePaths.length} images...`);
+      
+      try {
+        // Find file input
+        const inputElements = await this.page.$$('input[type="file"]');
+        if (inputElements.length === 0) {
+          throw new Error('No file input elements found on page');
+        }
+        
+        const fileInput = inputElements[0];
+        
+        // Upload ALL images at once to file input (ChatGPT supports multi-file)
+        console.log(`   └─ Found ${inputElements.length} file input(s), uploading ${imagePaths.length} files...`);
+        
+        try {
+          await fileInput.uploadFile(...imagePaths);
+          console.log(`   ✅ Files submitted to input element`);
+        } catch (uploadErr) {
+          console.log(`   ⚠️  uploadFile() failed: ${uploadErr.message}, trying setInputFiles...`);
+          // Fallback: try setInputFiles
+          await fileInput.setInputFiles(imagePaths);
+          console.log(`   ✅ Files set via setInputFiles`);
+        }
+        
+        // Wait for uploads to complete and images to appear
+        console.log(`   ⏳ Waiting for ${imagePaths.length} image(s) to process...`);
+        await this.page.waitForTimeout(3000);
+        
+        // Enhanced image detection - check for uploaded image indicators
+        const uploadStatus = await this.page.evaluate(() => {
           try {
-            console.log(`   📤 Uploading file: ${path.basename(imagePath)} (attempt ${retries + 1}/${maxRetries})`);
-              
-            // 💫 IMPROVED: Use setInputFiles directly (most stable)
-            const inputElements = await this.page.$$('input[type="file"]');
-            if (inputElements.length > 0) {
-              try {
-                console.log(`   └─ Using setInputFiles (found ${inputElements.length} file input)...`);
-                await inputElements[0].uploadFile(imagePath);
-                
-                // Verify upload succeeded
-                await this.page.waitForTimeout(2000);
-                
-                // Confirm image is in DOM
-                const hasImage = await this.page.evaluate(() => {
-                  const imgs = document.querySelectorAll('img');
-                  return imgs.length > 0;
-                });
-                
-                if (hasImage) {
-                  console.log(`   ✅ File uploaded: ${path.basename(imagePath)}`);
-                  uploadSucceeded = true;
-                } else {
-                  console.log(`   ⚠️  Upload processed but image not detected, retrying...`);
-                  retries++;
-                }
-              } catch (setInputErr) {
-                console.log(`   ⚠️  setInputFiles failed: ${setInputErr.message}`);
-                retries++;
-              }
-            } else {
-              console.log(`   ⚠️  No file input found, retrying...`);
-              retries++;
-            }
-          } catch (e) {
-            console.log(`   ⚠️  Attempt ${retries + 1} failed: ${e.message}`);
-            retries++;
+            // Check multiple indicators of image upload
+            const chatImages = document.querySelectorAll('[class*=\"image\"], [class*=\"preview\"], img[src*=\"blob\"]');
+            const fileInputs = document.querySelectorAll('input[type=\"file\"]');
+            const uploadElements = document.querySelectorAll('[data-testid*=\"upload\"], [class*=\"upload\"]');
             
-            if (retries < maxRetries) {
-              console.log(`   ⏳ Waiting 2s before retry...`);
-              await this.page.waitForTimeout(2000);
-            }
-          }
-        }
-
-        if (!uploadSucceeded) {
-          console.error(`   ❌ Failed to upload ${path.basename(imagePath)} after ${maxRetries} attempts`);
-          throw new Error(`Failed to upload ${path.basename(imagePath)} after ${maxRetries} attempts`);
-        }
-      }
+            return {
+              chatImagesCount: chatImages.length,
+              visibleFileInputs: Array.from(fileInputs).filter(f => f.offsetHeight > 0 && f.offsetWidth > 0).length,\n              uploadElementsCount: uploadElements.length,\n              pageHasImages: document.querySelectorAll('img').length,\n              hasImagePreview: !!document.querySelector('[class*=\"image-preview\"], [data-testid*=\"image\"]')\n            };\n          } catch (e) {\n            return { error: e.message };\n          }\n        });\n        \n        console.log(`   📊 Upload status: ${uploadStatus.chatImagesCount} chat images, ${uploadStatus.pageHasImages} total images on page`);\n        \n        // If still no images detected, try waiting longer\n        if (uploadStatus.pageHasImages < imagePaths.length) {\n          console.log(`   ⏳ Waiting additional 2s for images to fully load...`);\n          await this.page.waitForTimeout(2000);\n        }\n        \n        const finalImageCheck = await this.page.evaluate(() => {\n          return document.querySelectorAll('img').length;\n        });\n        \n        if (finalImageCheck === 0) {\n          console.warn(`   ⚠️  WARNING: No images detected on page after upload!`);\n          console.warn('   ChatGPT may not be logged in or interface not fully loaded.');\n          console.warn('   Continuing anyway - upload may have worked but preview hidden.');\n        } else {\n          console.log(`   ✅ Images detected on page (${finalImageCheck} total)`);\n        }\n        \n      } catch (uploadError) {\n        console.error(`   ❌ Image upload failed: ${uploadError.message}`);\n        console.error(`   This usually happens when:`);\n        console.error(`     1. ChatGPT is not properly logged in`);\n        console.error(`     2. Browser session is incomplete or expired`);\n        console.error(`     3. File input element is not accessible`);\n        throw new Error(`Failed to upload images: ${uploadError.message}`);\n      }
 
       // Step 3: Handle login modal if appears
       console.log('📍 STEP 3: Handling login modal...');
