@@ -67,7 +67,8 @@ class GenerationMonitor {
     let errorRetryCount = 0;  // 💫 NEW: Track how many times we've retried on error
     let lastNewHrefTime = Date.now();  // 💫 Track last time we found a new href
     const MAX_SIMPLE_RETRIES = 3;  // Max direct retry button clicks
-    const PARTIAL_TIMEOUT_MS = 30000;  // 30s - if no new hrefs in 30s, assume partial failure
+    const PARTIAL_TIMEOUT_MS = 20000;  // 20s - if no new hrefs in 20s, assume partial failure
+    const POLL_INTERVAL_MS = 800;  // 💫 OPTIMIZED: Fast polling for quick href detection (was 2000ms)
 
     try {
       while (Date.now() - startTime < timeoutMs) {
@@ -282,7 +283,7 @@ class GenerationMonitor {
               
               if (useAgainResult.found) {
                 console.log(`✅ Clicked 'Use Again' button (${useAgainAttempt}/${maxUseAgainRetries})`);
-                await this.page.waitForTimeout(2000);
+                await this.page.waitForTimeout(1000);  // 💫 OPTIMIZED: Reduced from 2000ms
                 
                 // 💫 NEW: Focus and add spaces
                 console.log(`📝 Focusing textbox and adding spaces...`);
@@ -296,15 +297,15 @@ class GenerationMonitor {
                   await this.page.waitForTimeout(100);
                 }
                 
-                // Wait 3 seconds
-                console.log(`⏳ Waiting 3 seconds for input processing...`);
-                await this.page.waitForTimeout(3000);
+                // Wait 2 seconds
+                console.log(`⏳ Waiting 2 seconds for input processing...`);
+                await this.page.waitForTimeout(2000);  // 💫 OPTIMIZED: Reduced from 3000ms
                 
                 // 💫 FIX: Submit by pressing Enter key (not looking for submit button)
                 console.log(`📤 Submitting with Enter key...`);
                 await this.page.keyboard.press('Enter');
                 console.log(`✅ Submitted after 'Use Again' (${useAgainAttempt}/${maxUseAgainRetries})`);
-                await this.page.waitForTimeout(3000);
+                await this.page.waitForTimeout(1500);  // 💫 OPTIMIZED: Reduced from 3000ms
                 continue;
               } else {
                 console.log(`⚠️  'Use Again' button not found`);
@@ -385,7 +386,7 @@ class GenerationMonitor {
           console.log(`   ⏳ Still waiting... (${elapsedSec}s/${timeoutSeconds}s | ${remainingSec}s remaining)`);
         }
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(POLL_INTERVAL_MS);  // 💫 OPTIMIZED: 800ms for fast href scanning
       }
 
       if (!generationDetected) {
@@ -751,9 +752,9 @@ class GenerationMonitor {
         try {
           // Move to button and click
           await this.page.mouse.move(failureInfo.x, failureInfo.y);
-          await this.page.waitForTimeout(300);
+          await this.page.waitForTimeout(150);  // 🎯 OPTIMIZED: Reduced from 300ms
           await this.page.mouse.click(failureInfo.x, failureInfo.y);
-          await this.page.waitForTimeout(1500);  // Wait for item to be deleted from gallery
+          await this.page.waitForTimeout(800);  // 🎯 OPTIMIZED: Reduced from 1500ms for faster deletion
           
           totalDeleted++;
           console.log(`   ✅ Deleted failed item #${failureInfo.position + 1}`);
@@ -762,7 +763,7 @@ class GenerationMonitor {
           // Try alternative: press Delete key
           try {
             await this.page.keyboard.press('Delete');
-            await this.page.waitForTimeout(800);
+            await this.page.waitForTimeout(500);  // 🎯 OPTIMIZED: Reduced from 800ms
             console.log(`   ✅ Deleted via keyboard Delete key`);
             totalDeleted++;
           } catch (keyError) {
