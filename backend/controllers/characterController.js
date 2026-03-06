@@ -176,3 +176,35 @@ export async function getCharacter(req, res) {
   if (!data) return res.status(404).json({ success: false, error: 'Character not found' });
   res.json({ success: true, data });
 }
+
+export async function deleteCharacter(req, res) {
+  try {
+    const { id } = req.params;
+    const character = await CharacterProfile.findById(id);
+    if (!character) {
+      return res.status(404).json({ success: false, error: 'Character not found' });
+    }
+
+    // Delete associated files
+    if (character.portraitPath && fs.existsSync(character.portraitPath)) {
+      fs.unlinkSync(character.portraitPath);
+    }
+    if (character.referenceImages && Array.isArray(character.referenceImages)) {
+      character.referenceImages.forEach((ref) => {
+        if (ref.path && fs.existsSync(ref.path)) {
+          try {
+            fs.unlinkSync(ref.path);
+          } catch (e) {
+            // Ignore file deletion errors
+          }
+        }
+      });
+    }
+
+    // Delete character record
+    await CharacterProfile.findByIdAndDelete(id);
+    res.json({ success: true, message: 'Character deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+}
