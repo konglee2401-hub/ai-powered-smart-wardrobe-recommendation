@@ -69,6 +69,14 @@ export async function generateCharacterPreview(req, res) {
     fs.writeFileSync(portraitPath, portrait.buffer);
 
     const prompts = buildCharacterPrompts(name, normalizedAlias, parsedOptions, Number(imageCount));
+    
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('🎭 CHARACTER GENERATION STARTING');
+    console.log(`📋 Character: ${name} (${normalizedAlias})`);
+    console.log(`🖼️  Portrait: ${path.basename(portraitPath)}`);
+    console.log(`📸 Prompts: ${prompts.length} images with 3-PART PROMPT ENTRY STRATEGY`);
+    console.log('═══════════════════════════════════════════════════════════════\n');
+    
     const flow = new GoogleFlowAutomationService({
       type: 'image',
       aspectRatio,
