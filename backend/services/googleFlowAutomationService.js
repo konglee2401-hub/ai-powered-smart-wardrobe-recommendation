@@ -742,7 +742,12 @@ class GoogleFlowAutomationService {
         const maxPartialRetries = 3;
         let partialRetryResult = null;
         
-        while (retryCount < maxPartialRetries && generationResult.found < generationResult.expected) {
+        // 💫 NEW REQUIREMENT: Only retry if we have 0 images. If we have >= 1, skip retries!
+        if (generationResult.found >= 1) {
+          console.log(`[SHARED-FLOW] ✅ Already got ${generationResult.found} image(s) - per requirement (1 image = download + next prompt), skipping retries`);
+        } else {
+        
+        while (retryCount < maxPartialRetries && generationResult.found < 1) {
           retryCount++;
           console.log(`\n[SHARED-FLOW] 🔄 Retry ${retryCount}/${maxPartialRetries} for missing images...`);
           
@@ -780,8 +785,10 @@ class GoogleFlowAutomationService {
           }
         }
         
-        if (generationResult.found < generationResult.expected) {
-          console.log(`[SHARED-FLOW] ⚠️  Could only get ${generationResult.found}/${generationResult.expected} after ${retryCount} retry attempt(s)`);
+        } // End of else block (only retry if found < 1)
+        
+        if (generationResult.found < 1 && generationResult.found < generationResult.expected) {
+          console.log(`[SHARED-FLOW] ⚠️  Could not get any images after ${retryCount} retry attempt(s)`);
         }
         
         console.log(`[SHARED-FLOW] 💾 Proceeding to download ${generationResult.found} available image(s)`);
