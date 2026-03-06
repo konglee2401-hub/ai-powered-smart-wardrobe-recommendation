@@ -138,10 +138,11 @@ class GenerationMonitor {
             console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
             console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
             
-            // If we found expected number of new hrefs (or more), generation is complete
-            if (newHrefCount >= expectedNewHrefs) {
+            // 💫 NEW REQUIREMENT: Exit monitoring as soon as we have >= 1 successful image!
+            // Don't wait for all expectedNewHrefs - per user requirement, 1 image = download + next prompt
+            if (newHrefCount >= 1) {
               preGenStatus = 'ready-by-hrefs';
-              console.log(`      ✅ DETECTED: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} via PreGenerationMonitor`);
+              console.log(`      ✅ DETECTED: ${newHrefCount}/${expectedNewHrefs} image(s) generated - per requirement, proceeding to download (1+ images = success)`);
             } else if (newHrefCount > lastHrefCount) {
               lastHrefCount = newHrefCount;
               lastNewHrefTime = Date.now();  // 💫 Update time when new href found
