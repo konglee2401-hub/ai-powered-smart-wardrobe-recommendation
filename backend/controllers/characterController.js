@@ -212,6 +212,21 @@ export async function saveCharacterProfile(req, res) {
       console.warn(`[Character Save] ⚠️  generatedImages is not an array after parsing: ${typeof generatedImages}`);
       generatedImages = [];
     }
+
+    // 💫 FIX: Handle case where array has stringified content as single element
+    if (Array.isArray(generatedImages) && generatedImages.length === 1 && typeof generatedImages[0] === 'string') {
+      console.warn(`[Character Save] ⚠️  Array contains single stringified element, attempting to parse...`);
+      try {
+        const parsed = JSON.parse(generatedImages[0]);
+        if (Array.isArray(parsed)) {
+          console.log(`[Character Save] ✅ Recovered array from stringified element`);
+          generatedImages = parsed;
+        }
+      } catch (e) {
+        console.warn(`[Character Save] ⚠️  Could not parse stringified element: ${e.message}`);
+        generatedImages = [];
+      }
+    }
     
     // Parse if options comes as string
     if (typeof options === 'string') {
@@ -264,12 +279,16 @@ export async function saveCharacterProfile(req, res) {
 
     // 💫 FIX: Process generated images - validate each image
     console.log(`[Character Save] 🔄 Processing ${generatedImages.length} generatedImages...`);
+    console.log(`[Character Save] generatedImages after all validation:`, JSON.stringify(generatedImages.slice(0, 1), null, 2));
+    
     const savedRefs = generatedImages
       .filter((img, idx) => {
-        if (!img) {
-          console.warn(`[Character Save]   ⚠️  Image ${idx} is null/undefined, skipping`);
+        // Skip if not an object
+        if (typeof img !== 'object' || img === null) {
+          console.warn(`[Character Save]   ⚠️  Image ${idx} is not an object (${typeof img}), skipping`);
           return false;
         }
+        
         if (!img.url) {
           console.warn(`[Character Save]   ⚠️  Image ${idx} has no URL, skipping`);
           return false;
