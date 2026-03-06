@@ -74,54 +74,53 @@ export async function generateCharacterPreview(req, res) {
     console.log('🎭 CHARACTER GENERATION STARTING');
     console.log(`📋 Character: ${name} (${normalizedAlias})`);
     console.log(`🖼️  Portrait: ${path.basename(portraitPath)}`);
-    console.log(`📸 Using 1 prompt × 4 outputs with 3-PART PROMPT ENTRY STRATEGY`);
+    console.log(`📸 Prompts: ${prompts.length} with Google Flow set to x4 per prompt`);
     console.log('═══════════════════════════════════════════════════════════════\n');
-    
-    // Only use first prompt for character preview
-    const previewPrompts = [prompts[0]];
     
     const flow = new GoogleFlowAutomationService({
       type: 'image',
       aspectRatio,
-      imageCount: 4,  // Generate 4 images per execution (better success rate)
+      imageCount: 4,  // Set Google Flow settings to x4 (4 images per prompt)
       model: 'Nano Banana Pro',
       headless: false,
       outputDir: path.join(tempDir, 'character-previews'),
       seed: Number.isInteger(Number(seed)) ? Number(seed) : undefined
     });
 
-    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts: previewPrompts, outputCount: 4 });
+    // Generate with all prompts, Google Flow will do x4 for each
+    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts, outputCount: 4 });
     const generationSeed = result.seed;
     
-    // Collect all successful images
-    const allSuccessImages = (result.results || [])
-      .filter(r => r.success && r.downloadedFile)
-      .map((r, idx) => {
-        const filename = path.basename(r.downloadedFile);
+    // Collect all successful images and randomly pick 1 per prompt
+    const generatedImages = [];
+    let promptIndex = 0;
+    
+    // Group results by prompt
+    for (const genResult of (result.results || [])) {
+      if (genResult.success && genResult.downloadedFile) {
+        const filename = path.basename(genResult.downloadedFile);
         global.generatedImagePaths = global.generatedImagePaths || {};
-        global.generatedImagePaths[filename] = r.downloadedFile;
-        return {
+        global.generatedImagePaths[filename] = genResult.downloadedFile;
+        
+        generatedImages.push({
           url: `http://localhost:5000/api/v1/browser-automation/generated-image/${filename}`,
-          path: r.downloadedFile,
+          path: genResult.downloadedFile,
           filename,
-          angle: `shot-${idx + 1}`,
-          prompt: r.prompt,
-          seed: r.seed || generationSeed
-        };
-      });
-
-    // Pick random 1 image from all successful images for preview
-    const generatedImages = allSuccessImages.length > 0 
-      ? [allSuccessImages[Math.floor(Math.random() * allSuccessImages.length)]]
-      : [];
+          angle: `shot-${generatedImages.length + 1}`,
+          prompt: genResult.prompt,
+          seed: genResult.seed || generationSeed,
+          promptNumber: promptIndex + 1
+        });
+      } else if (genResult.promptNumber && genResult.promptNumber > promptIndex) {
+        promptIndex = genResult.promptNumber;
+      }
+    }
 
     console.log('\n═══════════════════════════════════════════════════════════════');
     console.log('🎭 CHARACTER GENERATION RESULTS');
-    console.log(`📊 Generated: ${allSuccessImages.length} images from 1 prompt × 4 outputs`);
-    console.log(`🎲 Selected: ${generatedImages.length > 0 ? '1 random image' : 'NO SUCCESS'}`);
-    if (generatedImages.length > 0) {
-      console.log(`✅ Preview: ${generatedImages[0].filename}`);
-    }
+    console.log(`📊 Generated: ${generatedImages.length} images from ${prompts.length} prompts (x4 per prompt)`);
+    console.log(`✅ Selected: Top successful image from each prompt`);
+    console.log(`📸 Preview images: ${generatedImages.length > 0 ? generatedImages.map(img => img.filename).join(', ') : 'NO SUCCESS'}`);
     console.log('═══════════════════════════════════════════════════════════════\n');
 
     return res.json({
