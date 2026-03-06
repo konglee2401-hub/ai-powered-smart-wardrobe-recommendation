@@ -1,17 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import GalleryManagement from '../components/GalleryManagement';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Grid3x3, List, Upload, Folder, Image, Film, Music,
-  MoreVertical, ChevronRight, Home, Clock, Star, Zap,
-  Search, Filter, Download
+  ArrowUpRight,
+  Clock3,
+  Grid3X3,
+  HardDrive,
+  Image as ImageIcon,
+  Layers3,
+  List,
+  Search,
+  Sparkles,
+  Upload,
+  Video,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 
-const GalleryPage = () => {
-  const navigate = useNavigate();
-  const { t } = useTranslation();
+import GalleryManagement from '../components/GalleryManagement';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const STORAGE_TOTAL_GB = 100;
+
+const CATEGORY_META = {
+  all: { label: 'All media', description: 'Everything across uploads, generated outputs, and references.', icon: Layers3 },
+  'character-image': { label: 'Characters', description: 'Model portraits and character source images.', icon: ImageIcon },
+  'product-image': { label: 'Products', description: 'Product packshots, cutouts, and product references.', icon: ImageIcon },
+  'generated-image': { label: 'Generated', description: 'Finished outputs ready for campaigns and reviews.', icon: Sparkles },
+  'source-video': { label: 'Videos', description: 'Source clips and motion assets for production.', icon: Video },
+  recent: { label: 'Recent', description: 'Assets touched in the last 24 hours.', icon: Clock3 },
+  favorites: { label: 'Favorites', description: 'Items you marked for repeated use.', icon: Sparkles },
+};
+
+function formatCount(value) {
+  return new Intl.NumberFormat('en-US').format(value || 0);
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || Number.isNaN(bytes)) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+export default function GalleryPage() {
   const [viewMode, setViewMode] = useState('grid');
   const [selectedImages, setSelectedImages] = useState([]);
   const [currentCategory, setCurrentCategory] = useState('all');
@@ -21,509 +54,317 @@ const GalleryPage = () => {
     character: 0,
     product: 0,
     generated: 0,
-    source: 0
+    source: 0,
+    totalSize: 0,
   });
   const [recentFiles, setRecentFiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-  // Category sidebar items
-  const categories = [
-    { id: 'all', label: 'All Media', icon: Home, count: stats.total },
-    { id: 'character-image', label: 'Character Images', icon: Image, count: stats.character },
-    { id: 'product-image', label: 'Product Images', icon: Image, count: stats.product },
-    { id: 'generated-image', label: 'Generated Images', icon: Zap, count: stats.generated },
-    { id: 'source-video', label: 'Source Videos', icon: Film, count: stats.source },
-  ];
-
-  const otherFilters = [
-    { id: 'recent', label: 'Recent Files', icon: Clock },
-    { id: 'favorites', label: 'Favorites', icon: Star },
-  ];
-
   useEffect(() => {
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_BASE}/admin/stats/assets`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.message || 'Failed to load asset stats');
+
+        const statsData = data.stats || {};
+        const byCategory = statsData.byCategory || {};
+
+        setStats({
+          total: statsData.active || 0,
+          character: byCategory['character-image'] || 0,
+          product: byCategory['product-image'] || 0,
+          generated: byCategory['generated-image'] || 0,
+          source: byCategory['source-video'] || 0,
+          totalSize: statsData.totalSize || 0,
+        });
+        setRecentFiles((statsData.recent || []).slice(0, 6));
+      } catch (error) {
+        console.error('Failed to load gallery stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadStats();
   }, []);
 
-  const loadStats = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/admin/stats/assets`);
-      const data = await res.json();
-      
-      if (data.success) {
-        const { stats: statsData } = data;
-        setStats({
-          total: statsData.active || 0,
-          character: statsData.byCategory?.['character-image'] || 0,
-          product: statsData.byCategory?.['product-image'] || 0,
-          generated: statsData.byCategory?.['generated-image'] || 0,
-          source: statsData.byCategory?.['source-video'] || 0,
-        });
+  const categories = useMemo(
+    () => [
+      { id: 'all', count: stats.total },
+      { id: 'character-image', count: stats.character },
+      { id: 'product-image', count: stats.product },
+      { id: 'generated-image', count: stats.generated },
+      { id: 'source-video', count: stats.source },
+      { id: 'recent', count: recentFiles.length },
+      { id: 'favorites', count: null },
+    ],
+    [recentFiles.length, stats],
+  );
 
-        // Load recent files
-        if (data.stats.recent) {
-          setRecentFiles(data.stats.recent.slice(0, 5));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const activeCategory = CATEGORY_META[currentCategory] || CATEGORY_META.all;
+  const storageUsedGb = stats.totalSize / (1024 ** 3);
+  const storagePercent = Math.min(100, Math.round((storageUsedGb / STORAGE_TOTAL_GB) * 100));
 
-  const handleImageSelect = (image) => {
-    console.log('Image selected:', image);
-  };
-
-  const handleBatchSelect = (images) => {
-    setSelectedImages(images);
-  };
-
-  const handleCategoryClick = (categoryId) => {
-    setCurrentCategory(categoryId);
-  };
+  const insightCards = [
+    {
+      label: 'Assets',
+      value: formatCount(stats.total),
+      note: `${formatCount(stats.generated)} generated ready to ship`,
+      accent: 'from-sky-500/30 via-cyan-400/10 to-transparent',
+    },
+    {
+      label: 'Library mix',
+      value: formatCount(stats.character + stats.product),
+      note: `${formatCount(stats.character)} character + ${formatCount(stats.product)} product`,
+      accent: 'from-violet-500/30 via-fuchsia-400/10 to-transparent',
+    },
+    {
+      label: 'Storage',
+      value: formatFileSize(stats.totalSize),
+      note: `${storagePercent}% of ${STORAGE_TOTAL_GB} GB workspace`,
+      accent: 'from-emerald-500/25 via-teal-400/10 to-transparent',
+    },
+  ];
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      background: '#0f172a',
-      color: '#f1f5f9',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      {/* LEFT SIDEBAR */}
-      <div style={{
-        width: '240px',
-        background: '#1e293b',
-        borderRight: '1px solid #334155',
-        display: 'flex',
-        flexDirection: 'column',
-        overflowY: 'auto',
-        marginTop: '80px',
-        height: 'calc(100vh - 80px)',
-        padding: '1.5rem 1rem',
-        gap: '2rem'
-      }}>
-        {/* Main Menu */}
-        <div>
-          <div style={{
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#64748b',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '1rem',
-            paddingLeft: '0.5rem'
-          }}>
-            📁 MAIN MENU
-          </div>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {categories.map(cat => {
-              const IconComponent = cat.icon;
-              const isActive = currentCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => handleCategoryClick(cat.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: isActive ? '#3b82f6' : 'transparent',
-                    color: isActive ? '#ffffff' : '#cbd5e1',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    fontWeight: isActive ? '600' : '500',
-                    transition: 'all 0.2s ease',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = '#334155';
-                      e.currentTarget.style.color = '#f1f5f9';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#cbd5e1';
-                    }
-                  }}
-                >
-                  <IconComponent size={18} />
-                  <span style={{ flex: 1 }}>{cat.label}</span>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    background: '#334155',
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    minWidth: '28px',
-                    textAlign: 'center'
-                  }}>
-                    {cat.count}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Other Filters */}
-        <div>
-          <div style={{
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#64748b',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '1rem',
-            paddingLeft: '0.5rem'
-          }}>
-            🎯 FILTERS
-          </div>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {otherFilters.map(filter => {
-              const IconComponent = filter.icon;
-              return (
-                <button
-                  key={filter.id}
-                  onClick={() => handleCategoryClick(filter.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: 'transparent',
-                    color: '#cbd5e1',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease',
-                    textAlign: 'left'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#334155';
-                    e.currentTarget.style.color = '#f1f5f9';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#cbd5e1';
-                  }}
-                >
-                  <IconComponent size={18} />
-                  <span>{filter.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Storage Info */}
-        <div style={{
-          marginTop: 'auto',
-          paddingTop: '1.5rem',
-          borderTop: '1px solid #334155'
-        }}>
-          <div style={{
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#64748b',
-            marginBottom: '0.75rem'
-          }}>
-            📦 STORAGE
-          </div>
-          <div style={{
-            background: '#0f172a',
-            padding: '1rem',
-            borderRadius: '6px',
-            fontSize: '0.85rem'
-          }}>
-            <div style={{ marginBottom: '0.5rem' }}>
-              <span style={{ color: '#94a3b8' }}>78.5 GB of 100 GB used</span>
+    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.22),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.18),transparent_26%),linear-gradient(145deg,rgba(8,15,31,0.96),rgba(12,24,43,0.88))] p-6 shadow-[0_30px_80px_rgba(2,6,23,0.45)] lg:p-8">
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-[radial-gradient(circle_at_center,rgba(125,211,252,0.18),transparent_62%)]" />
+        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              Media workspace
             </div>
-            <div style={{
-              width: '100%',
-              height: '6px',
-              background: '#334155',
-              borderRadius: '3px',
-              overflow: 'hidden',
-              marginBottom: '0.75rem'
-            }}>
-              <div style={{
-                width: '78.5%',
-                height: '100%',
-                background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)'
-              }}></div>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white md:text-4xl">
+                Gallery that feels like a production control room, not a file dump.
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
+                Browse campaign assets, generated outputs, and references from one place. Search fast, switch context fast,
+                and keep the gallery visually useful while the library grows.
+              </p>
             </div>
-            <button style={{
-              width: '100%',
-              padding: '0.5rem',
-              background: '#3b82f6',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
-            >
-              Upgrade
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        marginTop: '80px',
-        height: 'calc(100vh - 80px)',
-        overflowY: 'auto'
-      }}>
-        {/* TOP TOOLBAR */}
-        <div style={{
-          borderBottom: '1px solid #334155',
-          padding: '1.5rem 2rem',
-          background: '#1e293b',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          flexWrap: 'wrap'
-        }}>
-          {/* Title & Breadcrumb */}
-          <div>
-            <h2 style={{
-              margin: '0',
-              fontSize: '1.5rem',
-              fontWeight: '600',
-              color: '#f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}>
-              Project Files
-            </h2>
           </div>
 
-          {/* Actions */}
-          <div style={{
-            display: 'flex',
-            gap: '0.75rem',
-            alignItems: 'center'
-          }}>
-            <button style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.75rem 1rem',
-              background: '#3b82f6',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: '600',
-              fontSize: '0.9rem',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
-            >
-              <Upload size={18} />
-              Upload File
-            </button>
-
-            {/* View Mode Toggle */}
-            <div style={{
-              display: 'flex',
-              gap: '0.5rem',
-              background: '#334155',
-              padding: '0.5rem',
-              borderRadius: '6px'
-            }}>
-              <button
-                onClick={() => setViewMode('grid')}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  background: viewMode === 'grid' ? '#3b82f6' : 'transparent',
-                  color: viewMode === 'grid' ? '#ffffff' : '#cbd5e1',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
+          <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[580px]">
+            {insightCards.map((card) => (
+              <div
+                key={card.label}
+                className={`rounded-[1.5rem] border border-white/10 bg-gradient-to-br ${card.accent} p-4 backdrop-blur-xl`}
               >
-                <Grid3x3 size={18} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  background: viewMode === 'list' ? '#3b82f6' : 'transparent',
-                  color: viewMode === 'list' ? '#ffffff' : '#cbd5e1',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <List size={18} />
-              </button>
-            </div>
-
-            {/* Filter */}
-            <button style={{
-              padding: '0.75rem',
-              background: 'transparent',
-              color: '#cbd5e1',
-              border: '1px solid #334155',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#334155';
-              e.currentTarget.style.color = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = '#cbd5e1';
-            }}
-            >
-              <Filter size={18} />
-            </button>
-
-            {/* More Options */}
-            <button style={{
-              padding: '0.75rem',
-              background: 'transparent',
-              color: '#cbd5e1',
-              border: '1px solid #334155',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#334155';
-              e.currentTarget.style.color = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = '#cbd5e1';
-            }}
-            >
-              <MoreVertical size={18} />
-            </button>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{card.label}</p>
+                <p className="mt-3 text-2xl font-semibold text-white">{card.value}</p>
+                <p className="mt-2 text-sm text-slate-300">{card.note}</p>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* CONTENT AREA */}
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '2rem'
-        }}>
-          <div style={{
-            background: '#1e293b',
-            borderRadius: '12px',
-            border: '1px solid #334155',
-            padding: '2rem',
-            minHeight: '600px'
-          }}>
-            <GalleryManagement 
-              onImageSelect={handleImageSelect}
-              onBatchSelect={handleBatchSelect}
-              selectedImages={selectedImages}
-              viewMode={viewMode}
-              currentCategory={currentCategory}
-              searchQuery={searchQuery}
-            />
-          </div>
-
-          {/* Recent Files Section */}
-          {recentFiles.length > 0 && (
-            <div style={{ marginTop: '2rem' }}>
-              <h3 style={{
-                fontSize: '1rem',
-                fontWeight: '600',
-                marginBottom: '1rem',
-                color: '#f1f5f9'
-              }}>
-                Recent Files
-              </h3>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                gap: '1rem'
-              }}>
-                {recentFiles.map((file, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      background: '#334155',
-                      borderRadius: '8px',
-                      padding: '1rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      border: '1px solid #475569'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#475569';
-                      e.currentTarget.style.borderColor = '#64748b';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#334155';
-                      e.currentTarget.style.borderColor = '#475569';
-                    }}
-                  >
-                    <div style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                      borderRadius: '4px',
-                      marginBottom: '0.75rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      fontSize: '2rem'
-                    }}>
-                      📄
-                    </div>
-                    <div style={{
-                      fontSize: '0.85rem',
-                      fontWeight: '500',
-                      color: '#f1f5f9',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>
-                      {file?.filename || 'File ' + (idx + 1)}
-                    </div>
-                  </div>
-                ))}
+      <section className="grid gap-6 xl:grid-cols-[300px,minmax(0,1fr)]">
+        <aside className="space-y-6">
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/65 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Collections</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Browse by intent</h2>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
+                <Layers3 className="h-4 w-4 text-slate-300" />
               </div>
             </div>
-          )}
+
+            <div className="space-y-2">
+              {categories.map((category) => {
+                const meta = CATEGORY_META[category.id];
+                const Icon = meta.icon;
+                const isActive = currentCategory === category.id;
+
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setCurrentCategory(category.id)}
+                    className={`group flex w-full items-start gap-3 rounded-[1.2rem] border px-3 py-3 text-left transition ${
+                      isActive
+                        ? 'border-cyan-300/35 bg-gradient-to-r from-cyan-400/18 to-violet-500/18 shadow-[0_18px_40px_rgba(8,47,73,0.28)]'
+                        : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    <div className={`mt-0.5 rounded-2xl p-2 ${isActive ? 'bg-white/12 text-cyan-100' : 'bg-white/6 text-slate-300'}`}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className={`truncate text-sm font-semibold ${isActive ? 'text-white' : 'text-slate-200'}`}>{meta.label}</p>
+                        {category.count !== null && (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-white/12 text-cyan-100' : 'bg-white/6 text-slate-400'}`}>
+                            {formatCount(category.count)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{meta.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/65 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Storage</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Workspace capacity</h2>
+              </div>
+              <HardDrive className="h-4 w-4 text-slate-400" />
+            </div>
+
+            <div className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <div>
+                  <p className="text-2xl font-semibold text-white">{storageUsedGb.toFixed(1)} GB</p>
+                  <p className="text-sm text-slate-400">Used of {STORAGE_TOTAL_GB} GB</p>
+                </div>
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">
+                  {storagePercent}%
+                </span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee_0%,#818cf8_52%,#22c55e_100%)]"
+                  style={{ width: `${storagePercent}%` }}
+                />
+              </div>
+              <button
+                type="button"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                Upgrade storage plan
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/65 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Recent assets</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">Fresh arrivals</h2>
+              </div>
+              <Clock3 className="h-4 w-4 text-slate-400" />
+            </div>
+
+            <div className="space-y-2.5">
+              {loading && Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-16 animate-pulse rounded-[1.15rem] border border-white/6 bg-white/[0.04]" />
+              ))}
+
+              {!loading && recentFiles.length === 0 && (
+                <div className="rounded-[1.15rem] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-slate-400">
+                  No recent files yet.
+                </div>
+              )}
+
+              {!loading && recentFiles.map((file, index) => (
+                <div
+                  key={`${file.filename || 'recent'}-${index}`}
+                  className="flex items-center gap-3 rounded-[1.15rem] border border-white/6 bg-white/[0.03] px-3 py-3"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400/20 via-blue-500/10 to-violet-500/20 text-cyan-100">
+                    <ImageIcon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{file.filename || `Asset ${index + 1}`}</p>
+                    <p className="truncate text-xs text-slate-400">
+                      {(file.assetCategory || file.category || 'Asset').replace(/-/g, ' ')}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <div className="space-y-6">
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/60 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl md:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.18em] text-slate-400">
+                  {activeCategory.label}
+                </div>
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">Curate, compare, and move faster.</h2>
+                  <p className="mt-1 text-sm text-slate-400">{activeCategory.description}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <label className="group flex min-w-[280px] items-center gap-3 rounded-[1.1rem] border border-white/10 bg-white/[0.04] px-4 py-3 transition focus-within:border-cyan-300/35">
+                  <Search className="h-4 w-4 text-slate-500 transition group-focus-within:text-cyan-200" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search by filename, source, or campaign..."
+                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </label>
+
+                <div className="inline-flex items-center gap-1 rounded-[1.1rem] border border-white/10 bg-white/[0.04] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grid')}
+                    className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm font-medium transition ${
+                      viewMode === 'grid' ? 'bg-cyan-400/15 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                    Grid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm font-medium transition ${
+                      viewMode === 'list' ? 'bg-cyan-400/15 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <List className="h-4 w-4" />
+                    List
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center gap-2 rounded-[1.1rem] border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+                >
+                  <Upload className="h-4 w-4" />
+                  Add assets
+                </button>
+              </div>
+            </div>
+
+            {selectedImages.length > 0 && (
+              <div className="mt-4 rounded-[1.15rem] border border-violet-300/20 bg-violet-400/10 px-4 py-3 text-sm text-violet-100">
+                {selectedImages.length} selected for batch actions.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/60 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl md:p-5">
+            <GalleryManagement
+              currentCategory={currentCategory}
+              onBatchSelect={setSelectedImages}
+              onImageSelect={(image) => console.log('Image selected:', image)}
+              searchQuery={searchQuery}
+              selectedImages={selectedImages}
+              viewMode={viewMode}
+            />
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
-};
-
-export default GalleryPage;
+}
