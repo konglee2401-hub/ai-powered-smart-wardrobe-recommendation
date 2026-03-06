@@ -133,7 +133,20 @@ export default function CharacterCreatorPage() {
       console.log('[Character Save] generatedImages length:', payload.generatedImages?.length);
       if (payload.generatedImages?.length > 0) {
         console.log('[Character Save] First image:', payload.generatedImages[0]);
+        console.log('[Character Save] First image type:', typeof payload.generatedImages[0]);
+        console.log('[Character Save] First image keys:', Object.keys(payload.generatedImages[0] || {}));
       }
+      
+      // Deep inspection of the payload structure
+      console.log('[Character Save] Full payload structure:', {
+        hasName: !!payload.name,
+        hasAlias: !!payload.alias,
+        hasPortraitTempPath: !!payload.portraitTempPath,
+        hasOptions: !!payload.options,
+        generatedImagesIsArray: Array.isArray(payload.generatedImages),
+        generatedImagesLength: payload.generatedImages?.length,
+        generatedImagesFirstItemType: typeof payload.generatedImages?.[0]
+      });
       
       // Ensure generatedImages is NOT a string
       if (typeof payload.generatedImages === 'string') {
