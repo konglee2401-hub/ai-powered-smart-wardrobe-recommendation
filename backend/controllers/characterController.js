@@ -80,16 +80,18 @@ export async function generateCharacterPreview(req, res) {
     const flow = new GoogleFlowAutomationService({
       type: 'image',
       aspectRatio,
-      imageCount: 1,
+      imageCount: 4,  // Generate 4 images per prompt (better success rate)
       model: 'Nano Banana Pro',
       headless: false,
       outputDir: path.join(tempDir, 'character-previews'),
       seed: Number.isInteger(Number(seed)) ? Number(seed) : undefined
     });
 
-    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts, outputCount: 1 });
+    const result = await flow.generateImages({ characterImagePath: portraitPath }, { prompts, outputCount: 4 });
     const generationSeed = result.seed;
-    const generatedImages = (result.results || [])
+    
+    // Collect all successful images
+    const allSuccessImages = (result.results || [])
       .filter(r => r.success && r.downloadedFile)
       .map((r, idx) => {
         const filename = path.basename(r.downloadedFile);
@@ -104,6 +106,20 @@ export async function generateCharacterPreview(req, res) {
           seed: r.seed || generationSeed
         };
       });
+
+    // Pick random 1 image from all successful images for preview
+    const generatedImages = allSuccessImages.length > 0 
+      ? [allSuccessImages[Math.floor(Math.random() * allSuccessImages.length)]]
+      : [];
+
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('🎭 CHARACTER GENERATION RESULTS');
+    console.log(`📊 Generated: ${allSuccessImages.length} total images from ${prompts.length} prompts × 4 attempts`);
+    console.log(`🎲 Selected: ${generatedImages.length > 0 ? '1 random image' : 'NO SUCCESS'}`);
+    if (generatedImages.length > 0) {
+      console.log(`✅ Preview: ${generatedImages[0].filename}`);
+    }
+    console.log('═══════════════════════════════════════════════════════════════\n');
 
     return res.json({
       success: true,
