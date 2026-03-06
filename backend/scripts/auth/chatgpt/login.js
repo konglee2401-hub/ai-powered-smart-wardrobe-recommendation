@@ -593,7 +593,7 @@ class ChatGPTSessionManager {
       await this.page.reload({ waitUntil: 'networkidle0' });
       await this.page.waitForTimeout(3000);
 
-      if (await this.isLoggedIn()) {
+      if (await this.isAuthenticated()) {
         console.log('✅ Session is valid and working!');
         return true;
       } else {
