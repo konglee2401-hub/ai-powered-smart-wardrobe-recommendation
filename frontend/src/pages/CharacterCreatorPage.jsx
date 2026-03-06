@@ -93,7 +93,7 @@ export default function CharacterCreatorPage() {
         alias: alias || name,
         portraitTempPath,
         options,
-        generatedImages: preview,
+        generatedImages: preview,  // Should be an array, NOT stringified
         analysisProfile: {
           characterName: name,
           primaryLook: options.styling.outfitVibe,
@@ -101,12 +101,32 @@ export default function CharacterCreatorPage() {
         }
       };
       
-      console.log('[Character Save] Payload:', payload);
-      console.log('[Character Save] Options type:', typeof options, 'imageCount:', options.capturePlan?.imageCount);
+      console.log('[Character Save] Payload keys:', Object.keys(payload));
+      console.log('[Character Save] generatedImages type:', typeof payload.generatedImages);
+      console.log('[Character Save] generatedImages is array:', Array.isArray(payload.generatedImages));
+      console.log('[Character Save] generatedImages length:', payload.generatedImages?.length);
+      if (payload.generatedImages?.length > 0) {
+        console.log('[Character Save] First image:', payload.generatedImages[0]);
+      }
+      
+      // Ensure generatedImages is NOT a string
+      if (typeof payload.generatedImages === 'string') {
+        console.warn('[Character Save] ⚠️ generatedImages is a string! Converting to array...');
+        try {
+          payload.generatedImages = JSON.parse(payload.generatedImages);
+        } catch (e) {
+          payload.generatedImages = [];
+        }
+      }
       
       const result = await characterAPI.save(payload);
       console.log('[Character Save] ✅ Success:', result);
       alert('Character saved successfully!');
+      setName('');
+      setAlias('');
+      setPortrait(null);
+      setPreview([]);
+      setPortraitTempPath('');
     } catch (error) {
       console.error('[Character Save] ❌ Error:', error);
       alert(`Error saving character: ${error.message || JSON.stringify(error)}`);
