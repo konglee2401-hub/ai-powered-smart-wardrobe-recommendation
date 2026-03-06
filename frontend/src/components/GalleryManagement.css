@@ -274,9 +274,22 @@
 /* Gallery Grid/List */
 .gallery-grid.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-auto-rows: 180px;
+  grid-auto-flow: dense;
   gap: 1.5rem;
   margin-bottom: 2rem;
+}
+
+/* Create masonry effect - wider items for wider aspect ratios */
+.gallery-grid.grid .gallery-item:nth-child(4n+1) {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.gallery-grid.grid .gallery-item:nth-child(5n+2) {
+  grid-column: span 1;
+  grid-row: span 1;
 }
 
 .gallery-grid.list {

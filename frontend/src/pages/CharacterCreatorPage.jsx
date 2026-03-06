@@ -2,6 +2,8 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { characterAPI } from '../services/api';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
+import PhotoAlbum from 'react-photo-album';
+import 'react-photo-album/rows.css';
 
 const defaultOptions = {
   identity: { 
@@ -271,9 +273,24 @@ export default function CharacterCreatorPage() {
             </div>
             <div className="bg-[#111522] border border-slate-700 rounded-xl p-4 lg:col-span-2">
               <h3 className="font-semibold mb-3">Preview ({preview.length})</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {preview.map((img) => <img key={img.url} src={img.url} alt={img.filename || img.angle} className="w-full h-28 object-cover rounded border border-slate-700" />)}
-              </div>
+              {preview.length > 0 ? (
+                <PhotoAlbum 
+                  layout="rows"
+                  photos={preview.map((img) => ({
+                    src: img.url || img.src,
+                    alt: img.filename || img.alt || 'Character preview',
+                    width: img.width || 1080,
+                    height: img.height || 1440,
+                  }))}
+                  targetRowHeight={200}
+                  spacing={8}
+                  className="[&_img]:rounded [&_img]:border [&_img]:border-slate-700"
+                />
+              ) : (
+                <div className="text-center py-8 text-slate-400">
+                  <p>Generate preview images to see them here</p>
+                </div>
+              )}
             </div>
           </div>
         </>
