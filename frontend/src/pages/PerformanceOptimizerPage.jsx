@@ -44,9 +44,10 @@ const PerformanceOptimizerPage = () => {
         }
         
         .page-content {
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
+          border-radius: 16px;
+          border: 1px solid rgba(148, 163, 184, 0.24);
+          box-shadow: 0 16px 34px rgba(2, 6, 23, 0.38);
           padding: 2rem;
         }
       `}</style>

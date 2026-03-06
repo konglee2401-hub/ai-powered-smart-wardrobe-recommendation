@@ -139,20 +139,20 @@ const BatchProcessingPage = () => {
         }
         
         .page-content {
-          background: white;
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
           border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+          box-shadow: 0 16px 34px rgba(2, 6, 23, 0.38);
           padding: 2rem;
         }
         
         .batch-results {
           margin-top: 2rem;
           padding-top: 2rem;
-          border-top: 1px solid #ecf0f1;
+          border-top: 1px solid rgba(148, 163, 184, 0.24);
         }
         
         .batch-results h3 {
-          color: #2c3e50;
+          color: #f8fafc;
           margin-bottom: 1rem;
         }
         
@@ -185,10 +185,10 @@ const BatchProcessingPage = () => {
         }
         
         .result-item {
-          border: 1px solid #ecf0f1;
+          border: 1px solid rgba(148, 163, 184, 0.24);
           border-radius: 8px;
           overflow: hidden;
-          background: white;
+          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
         }
         
         .result-item.completed {
@@ -211,7 +211,7 @@ const BatchProcessingPage = () => {
         
         .result-name {
           font-weight: 600;
-          color: #2c3e50;
+          color: #f8fafc;
           margin-bottom: 0.5rem;
           overflow: hidden;
           text-overflow: ellipsis;

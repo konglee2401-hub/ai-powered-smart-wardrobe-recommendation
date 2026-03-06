@@ -116,12 +116,12 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   }[status];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-lg border border-purple-500 w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-6">
+      <div className="bg-gray-900 rounded-xl border border-purple-400/60 shadow-2xl w-full max-w-6xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <div className="flex items-center justify-between p-4 md:p-5 border-b border-gray-700 bg-slate-900">
           <div className="flex items-center gap-3">
-            <div className="text-lg font-semibold">📋 Auto-Login Logs</div>
+            <div className="text-xl font-semibold">📋 Auto-Login Logs</div>
             <div className={`text-sm font-mono ${statusColor}`}>
               {status === 'running' && '⏳ Running...'}
               {status === 'completed' && '✅ Completed'}
@@ -138,7 +138,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
         </div>
 
         {/* Logs Container */}
-        <div className="flex-1 overflow-y-auto bg-gray-950 p-4 font-mono text-sm">
+        <div className="flex-1 overflow-y-auto bg-gray-950 p-4 md:p-5 font-mono text-sm md:text-[1rem]">
           {logs.length === 0 ? (
             <div className="text-gray-500 text-center py-8">
               Waiting for logs... 🕐
@@ -173,11 +173,11 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-3 border-t border-gray-700 bg-gray-800">
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 md:p-4 border-t border-gray-700 bg-slate-900">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setIsAutoScrollEnabled(!isAutoScrollEnabled)}
-              className={`px-3 py-1.5 rounded text-xs text-white transition ${
+              className={`px-4 py-2 rounded-lg text-sm text-white transition ${
                 isAutoScrollEnabled ? 'bg-purple-600' : 'bg-gray-700 hover:bg-gray-600'
               }`}
             >
@@ -185,14 +185,14 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
             </button>
             <button
               onClick={copyLogsToClipboard}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 text-white transition"
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
               title="Copy logs to clipboard"
             >
               <Copy className="w-4 h-4" /> Copy
             </button>
             <button
               onClick={downloadLogs}
-              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 text-white transition"
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
               title="Download logs as file"
             >
               <Download className="w-4 h-4" /> Download
