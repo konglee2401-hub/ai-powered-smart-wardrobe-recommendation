@@ -265,6 +265,12 @@ export async function saveCharacterProfile(req, res) {
       console.log(`[Character Save] ✅ Converted to number: ${options.capturePlan.imageCount}`);
     }
 
+    console.log(`[Character Save] 🔍 After options parsing - options type: ${typeof options}, is object: ${typeof options === 'object'}`);
+    console.log(`[Character Save] 🔍 Options keys: ${options ? Object.keys(options).join(', ') : 'null'}`);
+
+    console.log(`[Character Save] 🔍 After options parsing - options type: ${typeof options}, is object: ${typeof options === 'object'}`);
+    console.log(`[Character Save] 🔍 Options keys: ${options ? Object.keys(options).join(', ') : 'null'}`);
+
     const normalizedAlias = safeAlias(alias || name);
     console.log(`[Character Save] Normalized alias: ${normalizedAlias}`);
     
@@ -358,6 +364,12 @@ export async function saveCharacterProfile(req, res) {
     if (characterData.referenceImages[0]) {
       console.log(`[Character Save]   - referenceImages[0] keys: ${Object.keys(characterData.referenceImages[0]).join(', ')}`);
     }
+
+    // 💫 CRITICAL: Log the ACTUAL referenceImages array that will be sent to MongoDB
+    console.log(`[Character Save] 🔥 CRITICAL: referenceImages array (full):`, JSON.stringify(characterData.referenceImages, null, 2));
+    console.log(`[Character Save] 🔥 CRITICAL: referenceImages array type:`, typeof characterData.referenceImages);
+    console.log(`[Character Save] 🔥 CRITICAL: referenceImages array length:`, characterData.referenceImages.length);
+    console.log(`[Character Save] 🔥 CRITICAL: referenceImages[0] stringified:`, JSON.stringify(characterData.referenceImages[0]));
 
     const character = await CharacterProfile.create(characterData);
 
