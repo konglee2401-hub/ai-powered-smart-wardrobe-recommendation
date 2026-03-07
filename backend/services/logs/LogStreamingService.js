@@ -9,6 +9,7 @@ class LogStreamingService {
     // Store active sessions with their log buffers
     this.sessions = new Map(); // sessionId -> { logs: [], clients: Set }
     this.wsClients = new Set(); // All connected WebSocket clients
+    this.processes = new Map(); // sessionId -> { child, scriptName }
   }
 
   /**
@@ -115,7 +116,79 @@ class LogStreamingService {
     // Keep session data for 5 minutes
     setTimeout(() => {
       this.sessions.delete(sessionId);
+      // also clean up any attached process record if exists
+      if (this.processes.has(sessionId)) this.processes.delete(sessionId);
     }, 5 * 60 * 1000);
+  }
+
+  /**
+   * Attach a spawned child process to a session
+   */
+  attachProcess(sessionId, child, scriptName = 'script') {
+    if (!sessionId || !child) return false;
+    this.processes.set(sessionId, { child, scriptName });
+    // Emit socket event to notify clients that a process is attached
+    try {
+      if (global && global.io) {
+        global.io.to(`logs-${sessionId}`).emit('process-attached', JSON.stringify({ sessionId, pid: child.pid || null, scriptName }));
+      }
+    } catch (e) {
+      // ignore
+    }
+    return true;
+  }
+
+  /**
+   * Detach process from session
+   */
+  detachProcess(sessionId) {
+    if (this.processes.has(sessionId)) {
+      this.processes.delete(sessionId);
+      try {
+        if (global && global.io) {
+          global.io.to(`logs-${sessionId}`).emit('process-detached', JSON.stringify({ sessionId }));
+        }
+      } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Send signal to attached process
+   */
+  sendSignal(sessionId, signal = 'SIGTERM') {
+    const p = this.processes.get(sessionId);
+    if (!p || !p.child) return false;
+    try {
+      p.child.kill(signal);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Write to stdin of attached process
+   */
+  writeStdin(sessionId, data) {
+    const p = this.processes.get(sessionId);
+    if (!p || !p.child || !p.child.stdin) return false;
+    try {
+      p.child.stdin.write(data);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Get process info for a session
+   */
+  getProcessInfo(sessionId) {
+    const p = this.processes.get(sessionId);
+    if (!p) return null;
+    return { pid: p.child?.pid || null, scriptName: p.scriptName || null };
   }
 
   /**

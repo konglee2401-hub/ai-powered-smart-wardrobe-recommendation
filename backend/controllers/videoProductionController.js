@@ -46,14 +46,14 @@ class VideoProductionController {
    * Add single video to queue
    * POST /api/queue/add
    */
-  static addToQueue = asyncHandler((req, res) => {
+  static addToQueue = asyncHandler(async (req, res) => {
     const { videoConfig, platform = 'all', contentType = 'product_promo', priority = 'normal' } = req.body;
 
     if (!videoConfig) {
       return res.status(400).json({ error: 'videoConfig is required' });
     }
 
-    const result = VideoQueueService.addToQueue({
+    const result = await VideoQueueService.addToQueue({
       videoConfig,
       platform,
       contentType,
@@ -67,14 +67,14 @@ class VideoProductionController {
    * Batch add videos to queue
    * POST /api/queue/batch-add
    */
-  static batchAddToQueue = asyncHandler((req, res) => {
+  static batchAddToQueue = asyncHandler(async (req, res) => {
     const { videos, platform = 'all', contentType = 'product_promo', priority = 'normal' } = req.body;
 
     if (!Array.isArray(videos) || videos.length === 0) {
       return res.status(400).json({ error: 'videos array is required' });
     }
 
-    const result = VideoQueueService.addBatchToQueue({
+    const result = await VideoQueueService.addBatchToQueue({
       videos,
       platform,
       contentType,
@@ -88,9 +88,9 @@ class VideoProductionController {
    * Get queue statistics
    * GET /api/queue/stats
    */
-  static getQueueStats = asyncHandler((req, res) => {
-    const result = VideoQueueService.getQueueStats();
-    const itemsResult = VideoQueueService.getAllQueueItems(200);
+  static getQueueStats = asyncHandler(async (req, res) => {
+    const result = await VideoQueueService.getQueueStats();
+    const itemsResult = await VideoQueueService.getAllQueueItems(200);
     res.json({
       ...result,
       items: itemsResult.items || []
@@ -101,9 +101,9 @@ class VideoProductionController {
    * Get specific queue item
    * GET /api/queue/:queueId
    */
-  static getQueueItem = asyncHandler((req, res) => {
+  static getQueueItem = asyncHandler(async (req, res) => {
     const { queueId } = req.params;
-    const result = VideoQueueService.getQueueItem(queueId);
+    const result = await VideoQueueService.getQueueItem(queueId);
     
     if (!result.success) {
       return res.status(404).json(result);
@@ -116,9 +116,9 @@ class VideoProductionController {
    * Get next pending video
    * GET /api/queue/next-pending
    */
-  static getNextPending = asyncHandler((req, res) => {
+  static getNextPending = asyncHandler(async (req, res) => {
     const { platform } = req.query;
-    const result = VideoQueueService.getNextPending(platform);
+    const result = await VideoQueueService.getNextPending(platform);
     
     if (!result.success) {
       return res.status(404).json(result);
@@ -131,9 +131,9 @@ class VideoProductionController {
    * Get process logs for queue item
    * GET /api/queue/:queueId/logs
    */
-  static getQueueLogs = asyncHandler((req, res) => {
+  static getQueueLogs = asyncHandler(async (req, res) => {
     const { queueId } = req.params;
-    const result = VideoQueueService.getProcessLogs(queueId);
+    const result = await VideoQueueService.getProcessLogs(queueId);
     res.json(result);
   });
 
@@ -141,9 +141,9 @@ class VideoProductionController {
    * Clear queue
    * DELETE /api/queue
    */
-  static clearQueue = asyncHandler((req, res) => {
+  static clearQueue = asyncHandler(async (req, res) => {
     const { statusFilter } = req.query;
-    const result = VideoQueueService.clearQueue(statusFilter);
+    const result = await VideoQueueService.clearQueue(statusFilter);
     res.json(result);
   });
 
@@ -358,7 +358,7 @@ class VideoProductionController {
     const { queueId } = req.params;
     const { accountIds = [], uploadConfig = {}, accountTargets = [] } = req.body;
 
-    const queueResult = VideoQueueService.getQueueItem(queueId);
+    const queueResult = await VideoQueueService.getQueueItem(queueId);
     if (!queueResult.success) return res.status(404).json(queueResult);
 
     const queueItem = queueResult.queueItem;
@@ -406,7 +406,9 @@ class VideoProductionController {
     }
 
     const successful = results.filter(r => r.success).length;
-    if (successful > 0) VideoQueueService.updateQueueStatus(queueId, 'uploaded');
+    if (successful > 0) {
+      await VideoQueueService.updateQueueStatus(queueId, 'uploaded');
+    }
 
     const grouped = results.reduce((acc, item) => {
       const key = item.platform || 'unknown';
@@ -670,7 +672,7 @@ class VideoProductionController {
 
     const handler = async job => {
       if (job.jobType === 'publish') {
-        const ready = VideoQueueService.getNextReady(job.platform || 'all');
+        const ready = await VideoQueueService.getNextReady(job.platform || 'all');
         if (!ready.success) {
           return { success: true, output: { message: 'No ready videos to publish' } };
         }
@@ -839,8 +841,8 @@ class VideoProductionController {
    * Get complete system status
    * GET /api/system/status
    */
-  static getSystemStatus = asyncHandler((req, res) => {
-    const result = ProcessOrchestratorService.getSystemStatus();
+  static getSystemStatus = asyncHandler(async (req, res) => {
+    const result = await ProcessOrchestratorService.getSystemStatus();
     res.json(result);
   });
 

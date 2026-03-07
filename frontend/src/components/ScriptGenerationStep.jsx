@@ -7,11 +7,15 @@ import React, { useState } from 'react';
 import { FileText, Loader2, Copy, RefreshCw, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { browserAutomationAPI } from '../services/api';
+import { captureGenerationSession } from '../services/generationSessionsService';
 
 export default function ScriptGenerationStep({
+  flowId = null,
+  ensureSession = null,
   videos = [],
   productImage,
   style,
+  language = 'vi',
   readingStyle,
   productName = 'Fashion Product',
   productDescription = '',
@@ -31,7 +35,36 @@ export default function ScriptGenerationStep({
     }
 
     setIsGenerating(true);
+    let sessionId = flowId || null;
     try {
+      sessionId = ensureSession ? await ensureSession() : flowId;
+
+      if (sessionId) {
+        await captureGenerationSession(sessionId, {
+          flowType: 'voice-generation',
+          useCase: style,
+          status: 'in-progress',
+          artifacts: {
+            sourceVideoPaths: videos.map((video) => video?.name || video?.file?.name).filter(Boolean),
+            productImagePath: productImage?.file?.name || null,
+          },
+          analysis: {
+            voiceScriptRequest: {
+              style,
+              language,
+              productName,
+              productDescription,
+              videoCount: videos.length,
+            },
+          },
+          log: {
+            category: 'voice-script',
+            message: `Generating script for ${style}`,
+            details: { videoCount: videos.length },
+          },
+        });
+      }
+
       // Build analysis prompt based on platform
       const platformPrompts = {
         'tiktok-sales': `Analyze these videos and create a TikTok sales voiceover script for: ${productName}.
@@ -112,12 +145,51 @@ Format: Provide ONLY the script text, no additional commentary.`,
         const script = response.analysis || response.script || '';
         setScriptText(script);
         onScriptGenerated(script);
+        if (sessionId) {
+          await captureGenerationSession(sessionId, {
+            flowType: 'voice-generation',
+            useCase: style,
+            status: 'in-progress',
+            analysis: {
+              generatedScript: script,
+              voiceScriptMeta: {
+                characters: script.length,
+                words: script.trim().split(/\s+/).filter(Boolean).length,
+                language,
+              },
+            },
+            metricStage: {
+              stage: 'voice-script',
+              status: 'completed',
+              endTime: new Date(),
+            },
+            log: {
+              category: 'voice-script',
+              message: 'Voice script generated successfully',
+            },
+          });
+        }
         toast.success('Script generated successfully!');
       } else {
         throw new Error(response.error || 'Failed to generate script');
       }
     } catch (error) {
       console.error('Script generation error:', error);
+      if (sessionId) {
+        await captureGenerationSession(sessionId, {
+          flowType: 'voice-generation',
+          useCase: style,
+          error: {
+            stage: 'voice-script',
+            message: error.message || 'Failed to generate script',
+          },
+          log: {
+            level: 'error',
+            category: 'voice-script',
+            message: error.message || 'Failed to generate script',
+          },
+        });
+      }
       toast.error(error.message || 'Failed to generate script');
     } finally {
       setIsGenerating(false);

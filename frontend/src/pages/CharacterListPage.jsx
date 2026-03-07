@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { characterAPI } from '../services/api';
 import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 export default function CharacterListPage() {
   const navigate = useNavigate();
@@ -45,24 +46,22 @@ export default function CharacterListPage() {
 
   return (
     <div className="min-h-screen bg-[#050609] text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0a0e18] border-b border-slate-700 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">Characters</h1>
-              <p className="text-slate-400 text-sm mt-1">Manage your character profiles and reference images</p>
-            </div>
-            <button
-              onClick={() => navigate('/characters/create')}
-              className="bg-emerald-600 hover:bg-emerald-700 rounded-lg px-6 py-3 font-medium inline-flex items-center gap-2 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Create Character
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeaderBar
+        icon={<Plus className="h-4 w-4 text-emerald-300" />}
+        title="Characters"
+        subtitle="Character workspace"
+        meta="Manage your character profiles and reference images"
+        className="z-10 bg-[#0a0e18]/95"
+        actions={(
+          <button
+            onClick={() => navigate('/characters/create')}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
+          >
+            <Plus className="h-4 w-4" />
+            Create Character
+          </button>
+        )}
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">

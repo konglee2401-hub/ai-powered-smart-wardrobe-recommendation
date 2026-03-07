@@ -18,6 +18,7 @@ import GalleryPicker from '../components/GalleryPicker';
 import ScenarioImageUploadComponent from '../components/ScenarioImageUploadComponent';  // 💫 NEW
 import SessionLogModal from '../components/SessionLogModal';
 import driveAPI from '../services/driveAPI';
+import { captureGenerationSession } from '../services/generationSessionsService';
 import { 
   VIDEO_DURATIONS, 
   VIDEO_SCENARIOS,
@@ -530,17 +531,17 @@ export default function VideoGenerationPage() {
 
     setIsGenerating(true);
     setGenerated(false);
+    let flowId = null;
     try {
       // 💫 NEW: Initialize backend session to get flowId
       console.log('\n📝 Initializing backend session...');
-      let flowId = null;
       try {
         const sessionResponse = await fetch('/api/sessions/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             flowType: 'video-generation',
-            useCase: 'video'
+            useCase: selectedScenario
           })
         });
 
@@ -551,7 +552,30 @@ export default function VideoGenerationPage() {
         const sessionData = await sessionResponse.json();
         flowId = sessionData.data?.flowId || sessionData.data?.sessionId;
         console.log(`✅ Session created: ${flowId}`);
-        setSelectedFlowId(flowId);  // Enable View Session Log button
+        setSelectedFlowId(flowId);  // Enable Preview Session button
+        await captureGenerationSession(flowId, {
+          flowType: 'video-generation',
+          useCase: selectedScenario,
+          status: 'in-progress',
+          analysis: {
+            videoRequest: {
+              provider: videoProvider,
+              duration: selectedDuration,
+              scenario: selectedScenario,
+              aspectRatio: selectedAspectRatio,
+              segments: (prompts || []).map((prompt) => (typeof prompt === 'string' ? prompt : prompt?.script || '')),
+            },
+          },
+          log: {
+            category: 'video-generation',
+            message: 'Video generation requested',
+            details: {
+              provider: videoProvider,
+              duration: selectedDuration,
+              scenario: selectedScenario,
+            },
+          },
+        });
       } catch (sessionError) {
         console.warn(`⚠️ Could not create backend session (non-blocking):`, sessionError.message);
         // Continue without session logging
@@ -593,6 +617,34 @@ export default function VideoGenerationPage() {
         if (Array.isArray(generatedVideos) && generatedVideos.length > 0) {
           console.log(`📊 Generated ${generatedVideos.length} video segments`);
           console.log('   Segments:', generatedVideos);
+          if (flowId) {
+            await captureGenerationSession(flowId, {
+              flowType: 'video-generation',
+              useCase: selectedScenario,
+              status: 'completed',
+              artifacts: {
+                videoSegmentPaths: generatedVideos.map((video) => video.path || video.url).filter(Boolean),
+              },
+              analysis: {
+                videoResult: {
+                  provider: videoProvider,
+                  generatedCount: generatedVideos.length,
+                  totalVideos,
+                  totalSegments,
+                  outputDir,
+                },
+              },
+              metricStage: {
+                stage: 'video-generation',
+                status: 'completed',
+                endTime: new Date(),
+              },
+              log: {
+                category: 'video-generation',
+                message: `Generated ${generatedVideos.length} video segment(s) successfully`,
+              },
+            });
+          }
           
           // Store generated videos info
           setGeneratedVideos(generatedVideos);  // If you have this state
@@ -615,6 +667,21 @@ export default function VideoGenerationPage() {
       }
     } catch (error) {
       console.error('❌ Video generation failed:', error);
+      if (flowId) {
+        await captureGenerationSession(flowId, {
+          flowType: 'video-generation',
+          useCase: selectedScenario,
+          error: {
+            stage: 'video-generation',
+            message: error.message || 'Video generation failed',
+          },
+          log: {
+            level: 'error',
+            category: 'video-generation',
+            message: error.message || 'Video generation failed',
+          },
+        });
+      }
       alert(`❌ Video generation error: ${error.message}`);
     } finally {
       setIsGenerating(false);
@@ -1193,7 +1260,7 @@ export default function VideoGenerationPage() {
                           className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium text-white transition"
                         >
                           <Database className="w-4 h-4" />
-                          <span>View Session Log</span>
+                          <span>Preview Session</span>
                         </button>
                       </div>
                     )}

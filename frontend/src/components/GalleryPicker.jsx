@@ -4,8 +4,76 @@
  * Integrates with Database records for proper asset tracking
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Grid3x3, List, Search } from 'lucide-react';
+import useGalleryPickerCacheStore from '../stores/useGalleryPickerCacheStore';
+
+const galleryPreviewInflight = new Map();
+const galleryCacheStore = useGalleryPickerCacheStore;
+
+const getApiBase = () => import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const buildAssetSources = (asset) => {
+  const apiUrl = getApiBase();
+  const sources = [
+    asset.preview?.url,
+    asset.assetId ? `${apiUrl}/assets/proxy/${asset.assetId}` : null,
+    asset.storage?.url,
+    asset.cloudStorage?.thumbnailLink,
+    asset.cloudStorage?.webViewLink,
+  ].filter(Boolean);
+
+  return [...new Set(sources)];
+};
+
+const warmImageSource = (src) => new Promise((resolve) => {
+  const image = new Image();
+  image.onload = () => resolve(true);
+  image.onerror = () => resolve(false);
+  image.src = src;
+});
+
+const getAssetSignature = (asset) => {
+  if (!asset?.assetId) return null;
+  return `${asset.assetId}:${asset.updatedAt || asset.createdAt || 'unknown'}`;
+};
+
+const resolveAssetPreview = async (assetId, sources, signature = null) => {
+  if (!assetId || !sources?.length) {
+    return { resolvedUrl: null, sourceIndex: -1, available: false };
+  }
+
+  const cachedPreview = galleryCacheStore.getState().getPreview(assetId, signature);
+  if (cachedPreview) {
+    return cachedPreview;
+  }
+
+  if (galleryPreviewInflight.has(assetId)) {
+    return galleryPreviewInflight.get(assetId);
+  }
+
+  const task = (async () => {
+    for (let i = 0; i < sources.length; i += 1) {
+      const src = sources[i];
+      // Prefer proxy first; browser cache will keep this warm after modal opens.
+      const ok = await warmImageSource(src);
+      if (ok) {
+        const result = { resolvedUrl: src, sourceIndex: i, available: true };
+        galleryCacheStore.getState().setPreview(assetId, result, signature);
+        galleryPreviewInflight.delete(assetId);
+        return result;
+      }
+    }
+
+    const result = { resolvedUrl: sources[0] || null, sourceIndex: 0, available: false };
+    galleryCacheStore.getState().setPreview(assetId, result, signature);
+    galleryPreviewInflight.delete(assetId);
+    return result;
+  })();
+
+  galleryPreviewInflight.set(assetId, task);
+  return task;
+};
 
 const GalleryPicker = ({ 
   isOpen, 
@@ -35,22 +103,69 @@ const GalleryPicker = ({
   });
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef(null);
   const observerTarget = React.useRef(null);
+  const searchTimeoutRef = useRef(null);
+
+  const getQueryKey = (page) => JSON.stringify({
+    assetType,
+    assetCategory: filters.assetCategory,
+    sortBy: filters.sortBy,
+    storageLocation,
+    search: filters.search,
+    page,
+  });
+
+  const enrichItemsWithPreview = async (baseItems) => {
+    const previewed = await Promise.all(
+      baseItems.map(async (item) => {
+        const previewState = await resolveAssetPreview(item.assetId, item.sources, item.assetSignature);
+        return {
+          ...item,
+          url: previewState.resolvedUrl || item.url,
+          thumbnail: previewState.resolvedUrl || item.thumbnail,
+          resolvedUrl: previewState.resolvedUrl || item.url,
+          sourceIndex: previewState.sourceIndex >= 0 ? previewState.sourceIndex : item.sourceIndex,
+          previewAvailable: previewState.available,
+        };
+      })
+    );
+
+    return previewed;
+  };
 
   // Load gallery items from API
   useEffect(() => {
     if (isOpen) {
-      // Reset on filter change
-      if (filters.page === 1) {
-        setItems([]);
-        loadGalleryItems();
-      }
+      setFilters(prev => ({ ...prev, page: 1 }));
+      setItems([]);
+      loadGalleryItems(1, true);
     }
   }, [isOpen, assetType, filters.assetCategory, filters.sortBy, storageLocation]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setItems([]);
+      setFilters(prev => ({ ...prev, page: 1 }));
+      loadGalleryItems(1, true);
+    }, 250);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [filters.search, isOpen]);
+
   // Infinite scroll observer
   useEffect(() => {
-    if (!observerTarget.current || !hasMore || isLoadingMore) return;
+    if (!observerTarget.current || !scrollContainerRef.current || !hasMore || isLoadingMore) return;
 
     const observer = new IntersectionObserver(
       entries => {
@@ -58,23 +173,40 @@ const GalleryPicker = ({
           loadMoreItems();
         }
       },
-      { threshold: 0.1 }
+      {
+        root: scrollContainerRef.current,
+        rootMargin: '0px 0px 240px 0px',
+        threshold: 0.01,
+      }
     );
 
     observer.observe(observerTarget.current);
     return () => observer.disconnect();
-  }, [hasMore, isLoadingMore]);
+  }, [hasMore, isLoadingMore, items.length, viewMode]);
 
-  const loadGalleryItems = async () => {
-    setLoading(true);
+  const loadGalleryItems = async (pageToLoad = 1, replace = true) => {
+    const queryKey = getQueryKey(pageToLoad);
+    const cached = galleryCacheStore.getState().getQuery(queryKey);
+    const shouldRefreshInBackground = Boolean(cached && replace && pageToLoad === 1);
+
+    if (cached) {
+      setItems(prev => replace ? cached.items : [...prev, ...cached.items]);
+      setPagination(cached.pagination);
+      setHasMore(pageToLoad < cached.pagination.pages);
+      if (!shouldRefreshInBackground) {
+        return;
+      }
+    }
+
+    setLoading(!cached || !replace);
     setError(null);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = getApiBase();
       const params = new URLSearchParams({
         assetType: assetType,
         category: filters.assetCategory,
-        page: filters.page,
-        limit: 60, // Load more per request for infinite scroll
+        page: pageToLoad,
+        limit: 40,
         sortBy: filters.sortBy,
         storageLocation: storageLocation
       });
@@ -93,38 +225,53 @@ const GalleryPicker = ({
       
       // Transform API assets to component format
       const transformedItems = data.assets.map(asset => {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const imageUrl = `${apiUrl}/assets/proxy/${asset.assetId}`;
-        
+        const sources = buildAssetSources(asset);
+        const primarySource = sources[0] || null;
+
         return {
           assetId: asset.assetId,
           id: asset._id,
           name: asset.filename,
-          url: imageUrl,
-          thumbnail: imageUrl,
+          url: primarySource,
+          thumbnail: primarySource,
           type: asset.assetType,
           category: asset.assetCategory,
           createdAt: new Date(asset.createdAt),
+          updatedAt: asset.updatedAt,
+          assetSignature: getAssetSignature(asset),
           size: asset.fileSize,
           metadata: asset.metadata,
           isFavorite: asset.isFavorite,
           tags: asset.tags,
-          storage: asset.storage
+          storage: asset.storage,
+          cloudStorage: asset.cloudStorage,
+          preview: asset.preview,
+          sources,
+          sourceIndex: 0,
+          previewAvailable: true,
         };
       });
 
-      setItems(transformedItems);
-      setPagination({
+      const previewReadyItems = await enrichItemsWithPreview(transformedItems);
+      const nextPagination = {
         total: data.pagination.total,
         pages: data.pagination.pages
+      };
+
+      galleryCacheStore.getState().setQuery(queryKey, {
+        items: previewReadyItems,
+        pagination: nextPagination,
       });
+
+      setItems(prev => replace ? previewReadyItems : [...prev, ...previewReadyItems]);
+      setPagination(nextPagination);
       
       // Check if there are more pages to load
-      setHasMore(filters.page < data.pagination.pages);
+      setHasMore(pageToLoad < data.pagination.pages);
     } catch (error) {
       console.error('Failed to load gallery items:', error);
       setError('Failed to load gallery. Please try again.');
-      setItems([]);
+      if (replace) setItems([]);
     } finally {
       setLoading(false);
     }
@@ -136,65 +283,23 @@ const GalleryPicker = ({
     setIsLoadingMore(true);
     try {
       const nextPage = filters.page + 1;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const params = new URLSearchParams({
-        assetType: assetType,
-        category: filters.assetCategory,
-        page: nextPage,
-        limit: 60,
-        sortBy: filters.sortBy,
-        storageLocation: storageLocation
-      });
-
-      if (filters.search) {
-        params.append('query', filters.search);
-      }
-
-      const response = await fetch(`${apiUrl}/assets/gallery?${params}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch more items');
-      }
-
-      const data = await response.json();
-      
-      const transformedItems = data.assets.map(asset => {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const imageUrl = `${apiUrl}/assets/proxy/${asset.assetId}`;
-        
-        return {
-          assetId: asset.assetId,
-          id: asset._id,
-          name: asset.filename,
-          url: imageUrl,
-          thumbnail: imageUrl,
-          type: asset.assetType,
-          category: asset.assetCategory,
-          createdAt: new Date(asset.createdAt),
-          size: asset.fileSize,
-          metadata: asset.metadata,
-          isFavorite: asset.isFavorite,
-          tags: asset.tags,
-          storage: asset.storage
-        };
-      });
-
-      // Append to existing items
-      setItems(prev => [...prev, ...transformedItems]);
-      setPagination({
-        total: data.pagination.total,
-        pages: data.pagination.pages
-      });
-      
-      // Update page number
+      await loadGalleryItems(nextPage, false);
       setFilters(prev => ({ ...prev, page: nextPage }));
-      
-      // Check if there are more pages
-      setHasMore(nextPage < data.pagination.pages);
     } catch (error) {
       console.error('Failed to load more items:', error);
     } finally {
       setIsLoadingMore(false);
+    }
+  };
+
+  const handleItemsScroll = (event) => {
+    if (isLoadingMore || !hasMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+
+    if (distanceToBottom <= 160) {
+      loadMoreItems();
     }
   };
 
@@ -498,7 +603,10 @@ const GalleryPicker = ({
         </div>
 
         {/* Items Grid/List */}
-        <div style={{
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleItemsScroll}
+          style={{
           flex: 1,
           overflow: 'auto',
           padding: '1rem',
@@ -582,7 +690,23 @@ const GalleryPicker = ({
                   }}
                   onError={(e) => {
                     console.warn(`Image failed to load: ${item.name}`);
-                    setImageErrors(prev => ({ ...prev, [item.assetId]: true }));
+                    const nextIndex = (item.sourceIndex || 0) + 1;
+                    if (item.sources && nextIndex < item.sources.length) {
+                      const nextSource = item.sources[nextIndex];
+                      galleryCacheStore.getState().deletePreview(item.assetId);
+                      galleryCacheStore.getState().setPreview(item.assetId, {
+                        resolvedUrl: nextSource,
+                        sourceIndex: nextIndex,
+                        available: true,
+                      }, item.assetSignature);
+                      setItems(prev => prev.map((entry) => (
+                        entry.id === item.id
+                          ? { ...entry, sourceIndex: nextIndex, url: nextSource, thumbnail: nextSource, resolvedUrl: nextSource }
+                          : entry
+                      )));
+                    } else {
+                      setImageErrors(prev => ({ ...prev, [item.assetId]: true }));
+                    }
                   }}
                 />
                 {imageErrors[item.assetId] && (

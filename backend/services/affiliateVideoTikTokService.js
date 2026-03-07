@@ -293,6 +293,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       videoDurationUnit = 'seconds',
       voiceGender = 'female',
       voicePace = 'fast',
+      voiceName,  // 💫 NEW: Direct voice name from frontend
       productFocus = 'full-outfit',
       language = 'en',  // 💫 Support language selection: 'en' or 'vi'
       imageProvider = 'bfl',  // 💫 Default to BFL Playground
@@ -2061,6 +2062,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           videoDuration,
           voiceGender,
           voicePace,
+          voiceName: voiceName || 'aoede',  // 💫 NEW: Include actual voice name
           productFocus,
           timestamp: new Date().toISOString(),
           savedAssets: {
@@ -2704,15 +2706,16 @@ function parseHashtags(text) {
 
 function buildDeepAnalysisPrompt(analysis, images, config) {
   const { images: characterImages = [] } = images;  // ✅ Updated: 2 character images (wearing + holding)
-  const { videoDuration, voiceGender, voicePace, productFocus } = config;
+  const { videoDuration, voiceGender, voicePace, productFocus, videoProvider = 'grok' } = config;
 
-  // 🔥 FIX: Calculate segment count based on actual generation time (~8s per video)
-  // Not hardcoded, but realistic based on Google Flow generation speed
-  const generationTimePerVideo = 8;  // seconds per video
-  const segmentCount = Math.max(2, Math.ceil(videoDuration / generationTimePerVideo));
+  // 🔥 FIX: Calculate segment count based on VIDEO PROVIDER clip duration
+  // Google Flow: 8s/clip → 20s = 3 segments, 30s = 4 segments
+  // Grok: 10s/clip → 20s = 2 segments, 30s = 3 segments
+  const generateTimePerVideo = getProviderClipDuration(videoProvider);
+  const segmentCount = Math.max(2, Math.ceil(videoDuration / generateTimePerVideo));
 
   return `
-You are a professional TikTok affiliate marketing content creator.
+You are a professional TikTok affiliate video director & script writer.
 
 PRODUCT INFORMATION:
 - Product: ${analysis.product?.garment_type}
@@ -2721,69 +2724,139 @@ PRODUCT INFORMATION:
 - Style: ${analysis.product?.style_category}
 - Details: ${analysis.product?.key_details}
 
-AVAILABLE CHARACTER IMAGES:
-🔒 CHARACTER CONSISTENCY RULE: Both images show THE SAME CHARACTER wearing (pose 1) and holding (pose 2):
-1. "Character Wearing" - Character wearing the product
-2. "Character Holding" - Character holding/demonstrating the product
+CHARACTER INFORMATION:
+- Age/Gender: ${analysis.character?.age} ${analysis.character?.gender}
+- Body Type: ${analysis.character?.bodyType}
+- Hair: ${analysis.character?.hair?.color} ${analysis.character?.hair?.style}
 
-⚠️ FOR EACH SEGMENT: Choose 1 character image that best fits the narrative. You may choose the same image multiple times if it's the best fit.
+AVAILABLE CHARACTER IMAGES:
+🔒 CHARACTER CONSISTENCY: Both images show THE SAME CHARACTER:
+1. "Wearing" - Character WEARING the product (showing fit on body)
+2. "Holding" - Character HOLDING/DISPLAYING the product (close-up showcase)
+
+VIDEO CONSTRAINTS:
+- Total Duration: ${videoDuration}s (exactly)
+- Provider: ${videoProvider === 'google-flow' ? 'Google Flow (8s max per clip)' : 'Grok Imagine (10s max per clip)'}
+- Segments Needed: ${segmentCount} (60s = ${Math.ceil(60 / generateTimePerVideo)} segments, ${videoDuration}s = ${segmentCount} segments)
+- Format: Vertical 9:16 TikTok
 
 YOUR TASK:
-Create engaging TikTok video content (9:16 vertical, ${videoDuration}s total).
+Create ${segmentCount} connected video segments with COMPLETE VISUAL DIRECTIONS + SCRIPTS.
+Each segment flows naturally into the next (NOT disconnected pieces).
 
-Generate ${segmentCount} video segments that naturally flow together. Each segment should feel like part of one cohesive story, not disconnected pieces.
+⚠️ CRITICAL FORMAT - FOLLOW EXACTLY:
 
-⚠️ FORMAT REQUIREMENTS (MUST USE THESE MARKERS - PROVIDE EXACTLY ONE VERSION ONLY):
+[SEGMENT_#] [TIME RANGE: Xs-Ys] [START_FRAME: wearing/holding/product]
+**VISUAL DIRECTION:**
+- Camera: [describe angle/movement: fixed/zoom-in/zoom-out/pan left/pan right with speed]
+- Character Pose: [describe starting pose and any movement transitions]
+- Product Focus: [describe what product part is shown: full-body/face/torso/hands/detail]
+- Movement: [describe character movement if any: walking/gesturing/posing/turning]
+- Duration per action: [when pose changes within segment]
 
-📹 VIDEO SEGMENTS (${segmentCount} total for ${videoDuration}s video):
-Create exactly ${segmentCount} video segments that flow naturally. ChatGPT, you decide the pacing for each segment:
+**SCRIPT:**
+[Write 1-2 sentence narrative script that syncs with the visual direction]
+[Script should guide lip-sync timing if character speaks]
 
-[SEGMENT_1] [CHARACTER IMAGE: choose wearing OR holding]
-Natural script introducing the product with energy and hook
+**LIP-SYNC GUIDE** (if narrator speaking at timestamps):
+- Seconds X-Y: [emotion/mouth shape: smiling/talking/neutral]
+- Seconds X-Y: [next emotion/action]
 
-[SEGMENT_2] [CHARACTER IMAGE: choose wearing OR holding]  
-Script showing the product in action, emphasizing fit and comfort
+---
 
-${segmentCount > 2 ? `[SEGMENT_3] [CHARACTER IMAGE: choose wearing OR holding]
-Script highlighting quality, details, and premium feel
+TIME RANGE CALCULATION GUIDE:
+You have ${videoDuration} total seconds for ${segmentCount} segments.
+Distribute evenly or strategically:
+- SEGMENT 1 (Hook): 2-3s CRITICAL to grab attention
+- SEGMENT 2-N (Features): ${Math.floor(videoDuration / segmentCount)}-${Math.ceil(videoDuration / segmentCount)}s each
+- SEGMENT_${segmentCount} (CTA): 2-3s with urgency
 
-` : ''}[SEGMENT_${segmentCount}] [CHARACTER IMAGE: choose wearing OR holding]
-Powerful call-to-action with urgency
+Example time allocation for ${videoDuration}s:
+${(() => {
+  let distribution = [];
+  for (let i = 1; i <= segmentCount; i++) {
+    const segDuration = Math.ceil(videoDuration / segmentCount);
+    const startTime = (i - 1) * segDuration;
+    const endTime = i === segmentCount ? videoDuration : i * segDuration;
+    distribution.push('  [SEGMENT_' + i + ']: ' + startTime + '-' + endTime + 's (' + (endTime - startTime) + 's)');
+  }
+  return distribution.join('\n');
+})()}
 
-✓ Each segment must feel natural and conversational (NOT robotic)
-✓ Write segment scripts as flowing narratives, not bullet points
-✓ Keep font size appropriate for script length (NO "Reason:" or explanations)
-✓ Scripts should be TikTok-paced and engaging
-✓ CHARACTER LOCK: Use the same character across all segments for consistency
-✓ PROVIDE ONLY ONE VERSION OF THE SEGMENTS - DO NOT provide alternative formats or multiple versions
+VISUAL DIRECTION EXAMPLES:
 
-🎙️ VOICEOVER SCRIPT (IN VIETNAMESE):
-Write one continuous ${voiceGender} narrator script (${voicePace} pace, 250-300 words) in VIETNAMESE language:
-- Hook viewer immediately with Vietnamese appeal
-- Build excitement about product benefits
-- Highlight quality and style advantages
-- End with compelling call-to-action in Vietnamese
-- Make it sound natural and conversational for Vietnamese TikTok audience
-- Format as one flowing paragraph (NOT bullet list unless it fits naturally)
-- Use Vietnamese slang and expressions that resonate with Vietnamese viewers
+🎬 WEARING IMAGE SEGMENT:
+- Camera: Slow zoom-in from full-body to torso (2 seconds)
+- Character Pose: Standing, turning slowly to show product fit from different angles
+- Movement: Natural 90° turn, slight hand gestures to emphasize fit
+- Product Focus: Showing how product fits on body, flattering angle
+- Lip-sync: [Smiling while describing product quality - seconds 0-2]
 
-⚠️ IMPORTANT: Voiceover MUST be in VIETNAMESE, not English
-⚠️ DO NOT PROVIDE MULTIPLE VERSIONS - Only one voiceover script
+🎬 HOLDING IMAGE SEGMENT:
+- Camera: Fixed close-up on hands and product
+- Character Pose: Holding product up slightly, fingers pointing to details
+- Movement: Slight hand rotation to show product from multiple angles
+- Product Focus: Close-up of material, color, quality details
+- Lip-sync: [Animated, excited expressions while highlighting features - seconds X-Y]
+
+🎬 PRODUCT SHOT SEGMENT:
+- Camera Layer product shot over background (zoom to fill frame)
+- Character Pose: N/A for product-only shots, OR character partially visible
+- Movement: Subtle fade-in/fade-out, or gentle rotation
+- Product Focus: Full product display, premium feel
+- Lip-sync: [Narrator voiceover synchronized with on-screen text]
+
+---
+
+📝 COMPLETE RESPONSE FORMAT:
+
+[SEGMENT_1] [TIME RANGE: 0-Xs] [START_FRAME: wearing]
+**VISUAL DIRECTION:**
+- Camera: [specific movement]
+- Pose: [starting position + transitions]
+- Product Focus: [what's shown]
+- Movement: [character actions]
+- Duration: [timing of each action]
+
+**SCRIPT:**
+[Your script here]
+
+**LIP-SYNC GUIDE:**
+- 0-1s: [emotion 1]
+- 1-Xs: [emotion 2]
+
+---
+
+🎙️ VOICEOVER SCRIPT (VIETNAMESE ONLY):
+Write complete ${voiceGender} narrator script (${voicePace} pace) for entire ${videoDuration}s video.
+- Must be 100% VIETNAMESE (NO ENGLISH)
+- Hook: 0-3s critical period - grab attention immediately
+- Features: Describe product benefits with Vietnamese appeal
+- CTA: Final 2-3s with urgency and action call
+- Format: One flowing paragraph, conversational tone
+- Character will lip-sync parts of this narrator voiceover
+
+⚠️ VOICEOVER RULES:
+✓ EXCLUSIVELY in VIETNAMESE - not English
+✓ Natural Vietnamese expressions and slang
+✓ Synchronized with segment timing
+✓ One continuous script (not multiple versions)
+✓ Make segments about 250-300 total words for natural pacing
 
 #️⃣ HASHTAGS:
-Generate 8-10 trending hashtags including:
-- #Fashion #Affiliate #MustHave (required)
-- 5-7 additional trending tags
-Format: All tags on ONE line with spaces (#Tag1 #Tag2 #Tag3...)
+8-10 trending tags: #Fashion #Affiliate #MustHave #[5-7 more viral tags]
+Format all on one line.
 
-CREATIVE GUIDELINES:
-✓ Let your creativity shine - don't follow a template
-✓ Use natural language, not stiff marketing speak
-✓ Show personality and authenticity
-✓ Focus on why the product matters to viewers
-✓ Drive affiliate conversions through genuine enthusiasm
-✓ Mix segment types naturally for better storytelling
-✓ THE SAME CHARACTER APPEARS IN ALL SEGMENTS - this is intentional for recognition
+---
+
+✅ RESPONSE VALIDATION:
+✓ Exactly ${segmentCount} segments (not more, not less)
+✓ Total time = ${videoDuration}s (no gaps, no overlaps)
+✓ Each segment has [START_FRAME], camera direction, pose, movement, script, lip-sync
+✓ Voiceover is 100% VIETNAMESE
+✓ Scripts are conversational and TikTok-paced
+✓ Only ONE version per segment
+✓ Character is THE SAME across all segments
 `;
 }
 

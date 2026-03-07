@@ -1,0 +1,29 @@
+{
+  "audioFile": "C:\\Work\\Affiliate-AI\\smart-wardrobe\\backend\\test-affiliate\\step5-voiceover-fenrir-2026-03-07.mp3",
+  "audioSize": 1094926,
+  "voiceConfig": {
+    "voiceName": "fenrir",
+    "language": "VI"
+  },
+  "scripture": {
+    "length": 375,
+    "estimatedDuration": 34
+  },
+  "videoMetadata": {
+    "segments": 4,
+    "videoDuration": "11.2s",
+    "hashtags": [
+      "#quanAoTheThao",
+      "#VayNguVien",
+      "#DungCuTheThao",
+      "#NangLuongXanh",
+      "#SangSuaXuanHe",
+      "#ThuThayTay",
+      "#SanPhamDangCapNhat",
+      "#CoTheLamBeToiDa"
+    ],
+    "hasVisualDirections": true
+  },
+  "generatedAt": "2026-03-07T01:02:40.940Z",
+  "status": "success"
+}

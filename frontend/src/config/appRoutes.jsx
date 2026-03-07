@@ -40,14 +40,7 @@ const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const AdvancedCustomizationPage = lazy(() => import('../pages/AdvancedCustomizationPage'));
 const PerformanceOptimizerPage = lazy(() => import('../pages/PerformanceOptimizerPage'));
 const AIProviderManager = lazy(() => import('../pages/AIProviderManager'));
-const VideoProduction = lazy(() =>
-  import('../pages/VideoProduction').then((module) => ({ default: module.VideoProduction })),
-);
-const ShortsReelsDashboard = lazy(() => import('../pages/trend-automation/ShortsReelsDashboard'));
-const ShortsReelsChannels = lazy(() => import('../pages/trend-automation/ShortsReelsChannels'));
-const ShortsReelsVideos = lazy(() => import('../pages/trend-automation/ShortsReelsVideos'));
-const ShortsReelsLogs = lazy(() => import('../pages/trend-automation/ShortsReelsLogs'));
-const ShortsReelsSettings = lazy(() => import('../pages/trend-automation/ShortsReelsSettings'));
+const VideoPipeline = lazy(() => import('../pages/VideoPipeline'));
 
 export const pageRoutes = [
   { path: '/', Component: ImageGenerationPage, contentClassName: 'overflow-hidden' },
@@ -73,12 +66,14 @@ export const pageRoutes = [
   { path: '/customization', Component: AdvancedCustomizationPage },
   { path: '/performance', Component: PerformanceOptimizerPage },
   { path: '/admin/providers', Component: AIProviderManager },
-  { path: '/video-production', Component: VideoProduction },
-  { path: '/shorts-reels/dashboard', Component: ShortsReelsDashboard },
-  { path: '/shorts-reels/channels', Component: ShortsReelsChannels },
-  { path: '/shorts-reels/videos', Component: ShortsReelsVideos },
-  { path: '/shorts-reels/logs', Component: ShortsReelsLogs },
-  { path: '/shorts-reels/settings', Component: ShortsReelsSettings },
+  { path: '/video-pipeline', Component: VideoPipeline },
+  { path: '/video-pipeline/:section', Component: VideoPipeline },
+  { path: '/video-production', Component: VideoPipeline },
+  { path: '/shorts-reels/dashboard', Component: VideoPipeline },
+  { path: '/shorts-reels/channels', Component: VideoPipeline },
+  { path: '/shorts-reels/videos', Component: VideoPipeline },
+  { path: '/shorts-reels/logs', Component: VideoPipeline },
+  { path: '/shorts-reels/settings', Component: VideoPipeline },
 ];
 
 export const redirectRoutes = [
@@ -94,8 +89,8 @@ export const navGroups = [
       { path: '/video-generation', labelKey: 'navbar.video', icon: Video },
       { path: '/voice-over', labelKey: 'navbar.voiceover', icon: Volume2 },
       { path: '/generate/one-click', labelKey: 'navbar.oneClick', icon: Sparkles },
+      { path: '/video-pipeline', label: 'Video Pipeline', icon: Film },
       { path: '/characters', label: 'Characters', icon: UserRound },
-      { path: '/video-production', labelKey: 'navbar.videoProduction', icon: Film },
     ],
   },
   {
@@ -117,12 +112,8 @@ export const navGroups = [
   {
     titleKey: 'navbar.tools',
     items: [
-      { path: '/prompt-builder', labelKey: 'navbar.promptBuilder', icon: FileText },
       { path: '/prompt-templates', labelKey: 'navbar.promptTemplates', icon: BookOpen },
-      { path: '/video-script-generator', labelKey: 'navbar.videoScriptGenerator', icon: Film },
-      { path: '/tester', labelKey: 'navbar.providerTester', icon: Zap },
       { path: '/performance', labelKey: 'navbar.performance', icon: Gauge },
-      { path: '/shorts-reels/dashboard', label: 'Shorts/Reels', icon: TrendingUp },
     ],
   },
   {

@@ -1,18 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   Grid3X3,
   Heart,
+  Image as ImageIcon,
   ImagePlus,
   List,
   Pencil,
   RefreshCw,
   Search,
   Trash2,
-  UploadCloud,
   X,
 } from 'lucide-react';
 
@@ -35,16 +39,6 @@ const DATE_RANGES = [
   { value: 'today', label: 'Today' },
   { value: 'week', label: 'This week' },
   { value: 'month', label: 'This month' },
-];
-
-const PROVIDER_OPTIONS = [
-  { value: 'all', label: 'All providers' },
-  { value: 'OpenRouter', label: 'OpenRouter' },
-  { value: 'NVIDIA', label: 'NVIDIA' },
-  { value: 'Replicate', label: 'Replicate' },
-  { value: 'Fal.ai', label: 'Fal.ai' },
-  { value: 'Manual Upload', label: 'Manual Upload' },
-  { value: 'Google Drive', label: 'Google Drive' },
 ];
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -87,6 +81,304 @@ function getCategoryLabel(category) {
   return category.replace(/-/g, ' ');
 }
 
+function SelectField({ label, value, options, onChange }) {
+  return (
+    <label className="space-y-2">
+      <span className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-[1.1rem] border border-white/10 bg-slate-950/55 px-3 py-2.5 text-sm text-white outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function IconButton({ children, label, onClick, tone = 'default' }) {
+  const toneClass =
+    tone === 'danger'
+      ? 'hover:border-rose-400/35 hover:text-rose-100'
+      : tone === 'favorite'
+        ? 'hover:border-rose-300/35 hover:text-rose-200'
+        : 'hover:border-white/20 hover:text-white';
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick(event);
+      }}
+      className={`flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-slate-200 transition ${toneClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SelectionButton({ checked, isGrid = false, onToggle }) {
+  return (
+    <button
+      type="button"
+      aria-label={checked ? 'Unselect asset' : 'Select asset'}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${
+        checked
+          ? 'border-cyan-300/45 bg-cyan-400/18 text-cyan-100 shadow-[0_10px_24px_rgba(8,47,73,0.22)]'
+          : 'border-white/14 bg-slate-950/72 text-slate-300 hover:border-cyan-300/35 hover:text-cyan-100'
+      } ${isGrid ? '' : 'shrink-0'}`}
+    >
+      {checked ? <Check className="h-4.5 w-4.5" /> : <span className="h-3 w-3 rounded-full border border-current opacity-70" />}
+    </button>
+  );
+}
+
+function PreviewModal({ image, index, total, onClose, onPrevious, onNext, hasPrevious, hasNext }) {
+  if (!image) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/88 px-4 py-6 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(7,14,28,0.98))] shadow-[0_30px_120px_rgba(2,6,23,0.62)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-semibold text-white">{image.name}</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {index + 1} / {total} • {getCategoryLabel(image.category)} • {formatBytes(image.size)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-200 transition hover:bg-white/[0.1]"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.08),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.3),rgba(2,6,23,0.72))] px-5 py-5">
+          <img
+            src={image.url || image.thumbnail}
+            alt={image.name}
+            className="max-h-[70vh] w-auto max-w-full rounded-[1.5rem] object-contain shadow-[0_28px_80px_rgba(2,6,23,0.45)]"
+          />
+
+          <button
+            type="button"
+            disabled={!hasPrevious}
+            onClick={onPrevious}
+            className="absolute left-5 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-slate-950/75 text-white transition hover:bg-slate-900/90 disabled:opacity-35"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            disabled={!hasNext}
+            onClick={onNext}
+            className="absolute right-5 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-slate-950/75 text-white transition hover:bg-slate-900/90 disabled:opacity-35"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetCard({
+  image,
+  imageErrors,
+  isList,
+  isSelected,
+  onOpenPreview,
+  onToggleSelected,
+  onCopy,
+  onDelete,
+  onFavorite,
+  onRename,
+  onError,
+}) {
+  if (isList) {
+    return (
+      <div
+        className={`flex items-start gap-4 rounded-[1.5rem] border p-3 transition ${
+          isSelected
+            ? 'border-cyan-300/30 bg-gradient-to-br from-cyan-400/12 to-violet-500/10 shadow-[0_20px_45px_rgba(8,47,73,0.25)]'
+            : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+        }`}
+      >
+        <SelectionButton checked={isSelected} onToggle={onToggleSelected} />
+
+        <button
+          type="button"
+          onClick={onOpenPreview}
+          className="relative h-32 w-32 shrink-0 overflow-hidden rounded-[1.25rem] border border-white/8 bg-slate-950/60"
+        >
+          <img
+            src={image.thumbnail || image.url}
+            alt={image.name}
+            loading="lazy"
+            onError={onError}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+          {imageErrors[image.id]?.failed && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/85 px-4 text-center text-xs font-medium text-slate-200">
+              Preview unavailable
+            </div>
+          )}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <button type="button" onClick={onOpenPreview} className="text-left">
+                <h4 className="truncate text-base font-semibold text-white">{image.name}</h4>
+              </button>
+              <p className="mt-1 text-sm text-slate-400">{getCategoryLabel(image.category)}</p>
+            </div>
+            <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-400">
+              {formatRelativeDate(image.createdAt)}
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Type</p>
+              <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${getTypeChipClass(image.contentType)}`}>
+                {image.contentType}
+              </span>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Size</p>
+              <p className="mt-1 text-slate-200">{formatBytes(image.size)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Provider</p>
+              <p className="mt-1 truncate text-slate-200">{image.provider}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Usage</p>
+              <p className="mt-1 text-slate-200">{image.usageCount || 0} times</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-start gap-2">
+          <IconButton label="Favorite" onClick={onFavorite} tone="favorite">
+            <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-current text-rose-300' : ''}`} />
+          </IconButton>
+          <IconButton label="Copy URL" onClick={onCopy}>
+            <Copy className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Rename" onClick={onRename}>
+            <Pencil className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Delete" onClick={onDelete} tone="danger">
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`group rounded-[1.6rem] border p-3 transition ${
+        isSelected
+          ? 'border-cyan-300/30 bg-gradient-to-br from-cyan-400/12 to-violet-500/10 shadow-[0_20px_45px_rgba(8,47,73,0.25)]'
+          : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+      }`}
+    >
+      <div className="relative overflow-hidden rounded-[1.35rem]">
+        <button type="button" onClick={onOpenPreview} className="block aspect-[1.08/1] w-full overflow-hidden rounded-[1.35rem]">
+          <img
+            src={image.thumbnail || image.url}
+            alt={image.name}
+            loading="lazy"
+            onError={onError}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          />
+        </button>
+
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
+        {imageErrors[image.id]?.failed && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs font-medium text-slate-200">
+            Preview unavailable
+          </div>
+        )}
+
+        <div className="absolute left-3 top-3">
+          <SelectionButton checked={isSelected} isGrid onToggle={onToggleSelected} />
+        </div>
+
+        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+          <IconButton label="Favorite" onClick={onFavorite} tone="favorite">
+            <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-current text-rose-300' : ''}`} />
+          </IconButton>
+          <IconButton label="Copy URL" onClick={onCopy}>
+            <Copy className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Rename" onClick={onRename}>
+            <Pencil className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Delete" onClick={onDelete} tone="danger">
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        </div>
+
+        <div className="absolute left-3 bottom-3">
+          <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getTypeChipClass(image.contentType)}`}>
+            {image.contentType}
+          </span>
+        </div>
+      </div>
+
+      <div className="pt-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <button type="button" onClick={onOpenPreview} className="text-left">
+              <h4 className="truncate text-base font-semibold text-white">{image.name}</h4>
+            </button>
+            <p className="mt-1 text-sm text-slate-400">{getCategoryLabel(image.category)}</p>
+          </div>
+          <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-400">
+            {formatRelativeDate(image.createdAt)}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Size</p>
+            <p className="mt-1 text-slate-200">{formatBytes(image.size)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Provider</p>
+            <p className="mt-1 truncate text-slate-200">{image.provider}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Usage</p>
+            <p className="mt-1 text-slate-200">{image.usageCount || 0} times</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GalleryManagement({
   onImageSelect,
   onBatchSelect,
@@ -94,9 +386,12 @@ export default function GalleryManagement({
   viewMode = 'grid',
   currentCategory = 'all',
   searchQuery = '',
+  toolbarHost = null,
 }) {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeViewMode, setActiveViewMode] = useState(viewMode);
+  const [searchInput, setSearchInput] = useState(searchQuery);
   const [filters, setFilters] = useState({
     contentType: 'all',
     dateRange: 'all',
@@ -106,11 +401,10 @@ export default function GalleryManagement({
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [selectMode, setSelectMode] = useState(false);
   const [selectedForBatch, setSelectedForBatch] = useState(selectedImages);
   const [imageErrors, setImageErrors] = useState({});
   const [actionLoading, setActionLoading] = useState(false);
-  const fileInputRef = useRef(null);
+  const [previewIndex, setPreviewIndex] = useState(null);
 
   const mapSortParam = useCallback((sort) => {
     switch (sort) {
@@ -204,13 +498,11 @@ export default function GalleryManagement({
       const params = new URLSearchParams({
         assetType: 'image',
         page: currentPage,
-        limit: 60,
+        limit: 30,
         sortBy: mapSortParam(sortBy),
       });
 
-      if (filters.search) {
-        params.append('query', filters.search);
-      }
+      if (filters.search) params.append('query', filters.search);
 
       const response = await fetch(`${API_BASE}/assets/gallery?${params}`);
       if (!response.ok) throw new Error('Failed to fetch gallery items');
@@ -254,6 +546,7 @@ export default function GalleryManagement({
   }, [loadGallery]);
 
   useEffect(() => {
+    setSearchInput(searchQuery);
     setFilters((prev) => (prev.search === searchQuery ? prev : { ...prev, search: searchQuery }));
     setCurrentPage(1);
   }, [searchQuery]);
@@ -266,6 +559,23 @@ export default function GalleryManagement({
     setSelectedForBatch(selectedImages);
   }, [selectedImages]);
 
+  useEffect(() => {
+    setActiveViewMode(viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (previewIndex == null) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setPreviewIndex(null);
+      if (event.key === 'ArrowLeft') setPreviewIndex((current) => (current > 0 ? current - 1 : current));
+      if (event.key === 'ArrowRight') setPreviewIndex((current) => (current < images.length - 1 ? current + 1 : current));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [images.length, previewIndex]);
+
   const contentTypeCounts = useMemo(
     () => ({
       all: images.length,
@@ -276,18 +586,20 @@ export default function GalleryManagement({
   );
 
   const brokenCount = Object.keys(imageErrors).length;
+  const previewImage = previewIndex != null ? images[previewIndex] : null;
 
-  const handleImageClick = (image) => {
-    if (selectMode) {
-      setSelectedForBatch((prev) => {
-        const exists = prev.some((selected) => selected.id === image.id);
-        const next = exists ? prev.filter((selected) => selected.id !== image.id) : [...prev, image];
-        onBatchSelect?.(next);
-        return next;
-      });
-      return;
-    }
+  const toggleSelection = (image) => {
+    setSelectedForBatch((prev) => {
+      const exists = prev.some((selected) => selected.id === image.id);
+      const next = exists ? prev.filter((selected) => selected.id !== image.id) : [...prev, image];
+      onBatchSelect?.(next);
+      return next;
+    });
+  };
 
+  const openPreview = (image) => {
+    const nextIndex = images.findIndex((item) => item.id === image.id);
+    if (nextIndex >= 0) setPreviewIndex(nextIndex);
     onImageSelect?.(image);
   };
 
@@ -359,6 +671,7 @@ export default function GalleryManagement({
         body: JSON.stringify({ deleteFile: true }),
       });
       setImages((prev) => prev.filter((item) => item.id !== image.id));
+      setSelectedForBatch((prev) => prev.filter((item) => item.id !== image.id));
     } catch (error) {
       console.error('Delete failed:', error);
       window.alert('Delete failed. Please try again.');
@@ -383,7 +696,6 @@ export default function GalleryManagement({
       setImages((prev) => prev.filter((image) => !selectedIds.has(image.id)));
       setSelectedForBatch([]);
       onBatchSelect?.([]);
-      setSelectMode(false);
     } catch (error) {
       console.error('Batch delete failed:', error);
       window.alert('Batch delete failed. Please try again.');
@@ -403,55 +715,13 @@ export default function GalleryManagement({
 
   const handleApplySelected = () => {
     onBatchSelect?.(selectedForBatch);
-    setSelectMode(false);
   };
 
-  const handleUpload = async (file) => {
-    if (!file) return;
-
-    setActionLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const uploadResponse = await fetch(`${API_BASE}/drive/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      const uploadData = await uploadResponse.json();
-      const uploadedFile = uploadData.file;
-
-      if (!uploadedFile?.id) {
-        throw new Error('Upload failed');
-      }
-
-      await fetch(`${API_BASE}/assets/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: uploadedFile.name || file.name,
-          mimeType: uploadedFile.mimeType || file.type,
-          fileSize: uploadedFile.size || file.size,
-          assetType: 'image',
-          assetCategory: 'uploaded-image',
-          storage: {
-            location: uploadedFile.source === 'local' ? 'local' : 'google-drive',
-            googleDriveId: uploadedFile.id,
-            url: uploadedFile.webViewLink || uploadedFile.thumbnailLink,
-            localPath: uploadedFile.localPath,
-          },
-          metadata: {},
-        }),
-      });
-
-      await loadGallery();
-    } catch (error) {
-      console.error('Upload failed:', error);
-      window.alert('Upload failed or Drive is not configured.');
-    } finally {
-      setActionLoading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+  const handleSearchSubmit = (event) => {
+    event?.preventDefault?.();
+    const nextSearch = searchInput.trim();
+    setCurrentPage(1);
+    setFilters((prev) => (prev.search === nextSearch ? prev : { ...prev, search: nextSearch }));
   };
 
   if (loading) {
@@ -465,183 +735,148 @@ export default function GalleryManagement({
     );
   }
 
-  return (
-    <div className="space-y-5">
-      <div className="grid gap-4 xl:grid-cols-[1.35fr,0.95fr]">
-        <div className="rounded-[1.5rem] border border-white/6 bg-white/[0.03] p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Library pulse</p>
-              <h3 className="mt-2 text-xl font-semibold text-white">{images.length} assets in this view</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {selectedForBatch.length} selected, {brokenCount} broken previews, page {currentPage} of {totalPages}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectMode((prev) => !prev)}
-                className={`inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-medium transition ${
-                  selectMode
-                    ? 'border-cyan-300/25 bg-cyan-400/12 text-cyan-100'
-                    : 'border-white/10 bg-white/[0.04] text-slate-300 hover:text-white'
-                }`}
-              >
-                {selectMode ? <X className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                {selectMode ? 'Exit select' : 'Select assets'}
-              </button>
-
-              <button
-                type="button"
-                onClick={loadGallery}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-medium text-slate-300 transition hover:text-white"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </button>
-
-              <button
-                type="button"
-                onClick={clearBrokenImages}
-                disabled={!brokenCount}
-                className="inline-flex items-center gap-2 rounded-2xl border border-amber-300/12 bg-amber-400/10 px-3.5 py-2 text-sm font-medium text-amber-100 transition disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <AlertTriangle className="h-4 w-4" />
-                Clear broken
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3.5 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <UploadCloud className="h-4 w-4" />
-                Upload
-              </button>
-            </div>
-          </div>
-
-          {selectMode && selectedForBatch.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2 rounded-[1.2rem] border border-violet-300/15 bg-violet-400/10 p-3">
-              <button
-                type="button"
-                onClick={handleApplySelected}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Use selected ({selectedForBatch.length})
-              </button>
-              <button
-                type="button"
-                onClick={exportSelected}
-                className="inline-flex items-center gap-2 rounded-2xl border border-sky-300/15 bg-sky-400/10 px-3.5 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-              <button
-                type="button"
-                onClick={deleteSelected}
-                disabled={actionLoading}
-                className="inline-flex items-center gap-2 rounded-2xl border border-rose-300/15 bg-rose-400/10 px-3.5 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-[1.5rem] border border-white/6 bg-white/[0.03] p-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Search inside current view</span>
-              <div className="flex items-center gap-3 rounded-[1.1rem] border border-white/10 bg-slate-950/55 px-3 py-2.5">
-                <Search className="h-4 w-4 text-slate-500" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-                  placeholder="Search by filename"
-                />
-              </div>
-            </label>
-
-            <div className="space-y-2">
-              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">View mode</span>
-              <div className="inline-flex rounded-[1.1rem] border border-white/10 bg-slate-950/55 p-1">
-                <button
-                  type="button"
-                  className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm transition ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                  Grid
-                </button>
-                <button
-                  type="button"
-                  className={`inline-flex items-center gap-2 rounded-[0.95rem] px-3 py-2 text-sm transition ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
-                >
-                  <List className="h-4 w-4" />
-                  List
-                </button>
-              </div>
-            </div>
-
-            <SelectField
-              label="Content source"
-              value={filters.contentType}
-              options={CONTENT_TYPES}
-              onChange={(value) => setFilters((prev) => ({ ...prev, contentType: value }))}
-            />
-            <SelectField
-              label="Provider"
-              value={filters.provider}
-              options={PROVIDER_OPTIONS}
-              onChange={(value) => setFilters((prev) => ({ ...prev, provider: value }))}
-            />
-            <SelectField
-              label="Date range"
-              value={filters.dateRange}
-              options={DATE_RANGES}
-              onChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
-            />
-            <SelectField
-              label="Sort by"
-              value={sortBy}
-              options={SORT_OPTIONS}
-              onChange={setSortBy}
-            />
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {CONTENT_TYPES.map((type) => (
-              <button
-                key={type.value}
-                type="button"
-                onClick={() => setFilters((prev) => ({ ...prev, contentType: type.value }))}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                  filters.contentType === type.value
-                    ? 'border-cyan-300/25 bg-cyan-400/12 text-cyan-100'
-                    : 'border-white/8 bg-white/[0.04] text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {type.label} ({contentTypeCounts[type.value] || 0})
-              </button>
-            ))}
+  const toolbar = (
+    <div className="rounded-[1.35rem] bg-white/[0.02] px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-[-0.03em] text-white">Manage assets</h2>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+          >
+            <ImagePlus className="h-4 w-4" />
+            Add assets
+          </button>
+          <button
+            type="button"
+            onClick={loadGallery}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-slate-300 transition hover:text-white"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={clearBrokenImages}
+            disabled={!brokenCount}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-100 transition disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Clear broken
+          </button>
+          <div className="inline-flex rounded-[0.9rem] border border-white/10 bg-slate-950/55 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('grid')}
+              className={`inline-flex items-center justify-center rounded-[0.7rem] px-2 py-2 text-xs transition ${activeViewMode === 'grid' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
+              aria-label="Grid view"
+            >
+              <Grid3X3 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveViewMode('list')}
+              className={`inline-flex items-center justify-center rounded-[0.7rem] px-2 py-2 text-xs transition ${activeViewMode === 'list' ? 'bg-white/10 text-white' : 'text-slate-400'}`}
+              aria-label="List view"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => handleUpload(event.target.files?.[0])}
-      />
+      <form onSubmit={handleSearchSubmit} className="mt-3 grid items-end gap-2 lg:grid-cols-[minmax(320px,1.5fr),minmax(130px,0.55fr),minmax(150px,0.65fr),auto]">
+        <label className="min-w-0 space-y-2">
+          <span className="text-xs uppercase tracking-[0.16em] text-transparent select-none">Search</span>
+          <div className="flex min-h-12 items-center gap-3 rounded-[1rem] border border-white/10 bg-slate-950/55 px-4 py-3">
+            <Search className="h-4 w-4 shrink-0 text-slate-500" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className="w-full bg-transparent py-0.5 pr-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500"
+              placeholder="Search by filename"
+            />
+          </div>
+        </label>
+        <div className="min-w-[110px]">
+          <SelectField
+            label="Date"
+            value={filters.dateRange}
+            options={DATE_RANGES}
+            onChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
+          />
+        </div>
+        <div className="min-w-[120px]">
+          <SelectField
+            label="Sort"
+            value={sortBy}
+            options={SORT_OPTIONS}
+            onChange={setSortBy}
+          />
+        </div>
+        <button
+          type="submit"
+          aria-label="Search"
+          title="Search"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-100 transition hover:bg-cyan-400/15"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      </form>
+
+      <div className="mt-3 h-px bg-gradient-to-r from-transparent via-slate-700/35 to-transparent" />
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-400">
+            {selectedForBatch.length} selected / {brokenCount} broken
+          </span>
+          {CONTENT_TYPES.map((type) => (
+            <button
+              key={type.value}
+              type="button"
+              onClick={() => setFilters((prev) => ({ ...prev, contentType: type.value }))}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                filters.contentType === type.value
+                  ? 'border-cyan-300/25 bg-cyan-400/12 text-cyan-100'
+                  : 'border-white/8 bg-white/[0.04] text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {type.label} ({contentTypeCounts[type.value] || 0})
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">{images.length} on page</span>
+          <button
+            type="button"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((prev) => prev - 1)}
+            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Prev
+          </button>
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-slate-300">
+            {currentPage}/{totalPages}
+          </div>
+          <button
+            type="button"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((prev) => prev + 1)}
+            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {toolbarHost ? createPortal(toolbar, toolbarHost) : toolbar}
 
       {images.length === 0 ? (
         <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.02] px-6 py-16 text-center">
@@ -650,192 +885,71 @@ export default function GalleryManagement({
           </div>
           <h3 className="mt-5 text-xl font-semibold text-white">No media found in this slice</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
-            Try broadening the filters, changing the collection, or uploading a fresh reference image to start building the workspace.
+            Try broadening the filters, changing the collection, or loading a different page to continue reviewing assets.
           </p>
         </div>
       ) : (
-        <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'}>
+        <div className={activeViewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'}>
           {images.map((image) => (
             <AssetCard
               key={image.id}
               image={image}
               imageErrors={imageErrors}
-              isList={viewMode === 'list'}
+              isList={activeViewMode === 'list'}
               isSelected={selectedForBatch.some((selected) => selected.id === image.id)}
-              onClick={() => handleImageClick(image)}
+              onOpenPreview={() => openPreview(image)}
+              onToggleSelected={() => toggleSelection(image)}
               onCopy={(event) => copyImageUrl(image, event)}
               onDelete={(event) => deleteImage(image, event)}
               onFavorite={(event) => toggleFavorite(image.id, event)}
               onRename={(event) => handleRename(image, event)}
               onError={() => handleImageError(image.id)}
-              selectMode={selectMode}
             />
           ))}
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-[1.5rem] border border-white/6 bg-white/[0.03] px-4 py-3">
+      {selectedForBatch.length > 0 && (
+        <div className="flex flex-wrap gap-2 rounded-[1.2rem] border border-violet-300/15 bg-violet-400/10 p-3">
           <button
             type="button"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev) => prev - 1)}
-            className="rounded-2xl border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={handleApplySelected}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
           >
-            Previous
+            <CheckCircle2 className="h-4 w-4" />
+            Use selected ({selectedForBatch.length})
           </button>
-          <p className="text-sm text-slate-400">Page {currentPage} of {totalPages}</p>
           <button
             type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((prev) => prev + 1)}
-            className="rounded-2xl border border-white/10 px-3.5 py-2 text-sm text-slate-300 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={exportSelected}
+            className="inline-flex items-center gap-2 rounded-2xl border border-sky-300/15 bg-sky-400/10 px-3.5 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
           >
-            Next
+            <Download className="h-4 w-4" />
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={deleteSelected}
+            disabled={actionLoading}
+            className="inline-flex items-center gap-2 rounded-2xl border border-rose-300/15 bg-rose-400/10 px-3.5 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
           </button>
         </div>
       )}
+
+      <PreviewModal
+        image={previewImage}
+        index={previewIndex ?? 0}
+        total={images.length}
+        onClose={() => setPreviewIndex(null)}
+        onPrevious={() => setPreviewIndex((current) => Math.max(current - 1, 0))}
+        onNext={() => setPreviewIndex((current) => Math.min(current + 1, images.length - 1))}
+        hasPrevious={(previewIndex ?? 0) > 0}
+        hasNext={(previewIndex ?? 0) < images.length - 1}
+      />
     </div>
   );
 }
 
-function SelectField({ label, value, options, onChange }) {
-  return (
-    <label className="space-y-2">
-      <span className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-[1.1rem] border border-white/10 bg-slate-950/55 px-3 py-2.5 text-sm text-white outline-none"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function AssetCard({
-  image,
-  imageErrors,
-  isList,
-  isSelected,
-  onClick,
-  onCopy,
-  onDelete,
-  onFavorite,
-  onRename,
-  onError,
-  selectMode,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group w-full rounded-[1.6rem] border p-3 text-left transition ${
-        isSelected
-          ? 'border-cyan-300/30 bg-gradient-to-br from-cyan-400/12 to-violet-500/10 shadow-[0_20px_45px_rgba(8,47,73,0.25)]'
-          : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
-      } ${isList ? 'flex items-start gap-4' : ''}`}
-    >
-      <div className={`relative overflow-hidden ${isList ? 'h-32 w-32 shrink-0 rounded-[1.25rem]' : 'aspect-[1.08/1] rounded-[1.35rem]'}`}>
-        <img
-          src={image.thumbnail || image.url}
-          alt={image.name}
-          loading="lazy"
-          onError={onError}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
-
-        {imageErrors[image.id]?.failed && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs font-medium text-slate-200">
-            Preview unavailable
-          </div>
-        )}
-
-        <div className="absolute left-3 top-3 flex items-center gap-2">
-          <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getTypeChipClass(image.contentType)}`}>
-            {image.contentType}
-          </span>
-          {isSelected && (
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/12 px-2 py-1 text-[11px] font-semibold text-cyan-100">
-              Selected
-            </span>
-          )}
-        </div>
-
-        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
-          <IconButton label="Favorite" onClick={onFavorite}>
-            <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-current text-rose-300' : ''}`} />
-          </IconButton>
-          <IconButton label="Copy URL" onClick={onCopy}>
-            <Copy className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="Rename" onClick={onRename}>
-            <Pencil className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="Delete" onClick={onDelete}>
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
-        </div>
-      </div>
-
-      <div className={`min-w-0 ${isList ? 'flex-1' : 'pt-4'}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h4 className="truncate text-base font-semibold text-white">{image.name}</h4>
-            <p className="mt-1 text-sm text-slate-400">{getCategoryLabel(image.category)}</p>
-          </div>
-          {!selectMode && (
-            <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-400">
-              {formatRelativeDate(image.createdAt)}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Size</p>
-            <p className="mt-1 text-slate-200">{formatBytes(image.size)}</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Provider</p>
-            <p className="mt-1 truncate text-slate-200">{image.provider}</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Usage</p>
-            <p className="mt-1 text-slate-200">{image.usageCount || 0} times</p>
-          </div>
-        </div>
-
-        {selectMode && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {isSelected ? 'Tap again to remove' : 'Tap to add to selection'}
-          </div>
-        )}
-      </div>
-    </button>
-  );
-}
-
-function IconButton({ children, label, onClick }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick(event);
-      }}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-slate-200 backdrop-blur-xl transition hover:border-white/20 hover:text-white"
-    >
-      {children}
-    </button>
-  );
-}

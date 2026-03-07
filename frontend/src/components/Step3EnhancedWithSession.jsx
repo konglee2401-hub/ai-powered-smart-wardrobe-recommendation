@@ -8,7 +8,7 @@ import {
   Wand2, FileText, Image, Copy, Check, ChevronDown, ChevronUp,
   Loader2, Zap, RotateCcw, Upload, Shuffle, X
 } from 'lucide-react';
-import { promptsAPI } from '../services/api';
+import { unifiedFlowAPI } from '../services/api';
 import SessionHistoryService from '../services/sessionHistoryService';
 import { SessionHistory, generateSessionId } from '../utils/sessionHistory';
 import {
@@ -29,7 +29,8 @@ const Step3EnhancedWithSessionComponent = ({
   useCase = 'change-clothes',
   analysis = null,
   userId = null,
-  characterDescription = null
+  characterDescription = null,
+  productFocus = 'full-outfit'
 }, ref) => {
   // Session Management
   const [sessionHistory, setSessionHistory] = useState(null);
@@ -99,11 +100,10 @@ const Step3EnhancedWithSessionComponent = ({
 
   // Helper: Extract product description from analysis
   const getProductDescription = () => {
-    if (!analysis?.recommendations?.productDetails) {
+    const prod = analysis?.productDetails || analysis?.product || analysis?.recommendations?.productDetails;
+    if (!prod) {
       return 'fashion item';
     }
-    
-    const prod = analysis.recommendations.productDetails;
     const parts = [
       prod.garment_type,
       prod.style_category,
@@ -116,10 +116,11 @@ const Step3EnhancedWithSessionComponent = ({
 
   // Helper: Extract product name/type from analysis
   const getProductName = () => {
-    if (!analysis?.recommendations?.productDetails?.garment_type) {
+    const prod = analysis?.productDetails || analysis?.product || analysis?.recommendations?.productDetails;
+    if (!prod?.garment_type) {
       return 'product';
     }
-    return analysis.recommendations.productDetails.garment_type;
+    return prod.garment_type;
   };
 
   // Helper: Replace placeholders in prompt with actual values
@@ -183,29 +184,47 @@ const Step3EnhancedWithSessionComponent = ({
         const productName = getProductName();
         console.log('🏷️ Product info - Name:', productName, 'Description:', productDesc);
         
-        const basePrompt = await generateAdvancedPrompt(
-          useCase,
-          optionsToUse,
-          {
-            productName: productName,
-            characterName: 'character-image'
+        let finalPositive = '';
+        let finalNegative = '';
+
+        try {
+          const backendPrompt = analysis
+            ? await unifiedFlowAPI.buildPrompt(analysis, optionsToUse, useCase, productFocus)
+            : null;
+
+          if (backendPrompt?.success && backendPrompt.data?.prompt) {
+            finalPositive = backendPrompt.data.prompt.positive || "";
+            finalNegative = backendPrompt.data.prompt.negative || "";
+            console.log('??? Using backend buildPrompt result for Step 3 preview');
           }
-        );
-
-        console.log('✅ Base prompt generated (with placeholders):', basePrompt.positive.substring(0, 100) + '...');
-        
-        // Replace placeholders with actual product information
-        let finalPositive = replacePlaceholders(basePrompt.positive, productDesc, productName);
-        const finalNegative = replacePlaceholders(basePrompt.negative, productDesc, productName);
-        
-        // 💫 NEW: Add character description to prompt if available
-        if (characterDescription) {
-          finalPositive = `Character: ${characterDescription}\n\n${finalPositive}`;
-          console.log('✅ Added character description to prompt');
+        } catch (backendError) {
+          console.warn('?????? Step 3 backend prompt build failed, falling back to local builder:', backendError.message);
         }
-        
-        console.log('✅ Prompt after placeholder replacement:', finalPositive.substring(0, 100) + '...');
 
+        if (!finalPositive) {
+          const basePrompt = await generateAdvancedPrompt(
+            useCase,
+            optionsToUse,
+            {
+              productName: productName,
+              characterName: 'character-image'
+            }
+          );
+
+          console.log('??? Base prompt generated (with placeholders):', basePrompt.positive.substring(0, 100) + '...');
+
+          finalPositive = replacePlaceholders(basePrompt.positive, productDesc, productName);
+          finalNegative = replacePlaceholders(basePrompt.negative, productDesc, productName);
+
+          if (characterDescription) {
+            finalPositive = `Character: ${characterDescription}
+
+${finalPositive}`;
+            console.log('??? Added character description to fallback prompt');
+          }
+        }
+
+        console.log('??? Prompt ready:', finalPositive.substring(0, 100) + '...');
         const layering = new PromptLayering(
           finalPositive,
           'high-quality, professional, sharp, well-composed',
@@ -251,7 +270,7 @@ const Step3EnhancedWithSessionComponent = ({
     };
 
     generatePrompt();
-  }, [selectedOptions, useCase, analysis, sessionHistory, userId, onPromptChange, characterDescription]);
+  }, [selectedOptions, useCase, analysis, sessionHistory, userId, onPromptChange, characterDescription, productFocus]);
 
   const toggleCategory = useCallback((key) => {
     setExpandedCategories(prev => ({

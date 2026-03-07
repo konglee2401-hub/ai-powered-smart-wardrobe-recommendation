@@ -44,7 +44,8 @@ export default function Navbar() {
   const renderLink = (item) => {
     const Icon = item.icon;
     const isActive = !!matchPath({ path: item.path, end: item.path !== '/characters' }, location.pathname)
-      || (item.path === '/characters' && location.pathname.startsWith('/characters'));
+      || (item.path === '/characters' && location.pathname.startsWith('/characters'))
+      || (item.path === '/video-pipeline' && location.pathname.startsWith('/video-pipeline'));
 
     return (
       <Link
@@ -58,7 +59,15 @@ export default function Navbar() {
         } ${isCollapsed ? 'justify-center px-2.5' : ''}`}
         title={isCollapsed ? item.label : ''}
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300 ${
+            isActive
+              ? 'border-amber-300/50 bg-amber-300 text-slate-950 shadow-[0_10px_24px_rgba(250,204,21,0.28)]'
+              : 'border-white/10 bg-white/5 text-slate-200 group-hover:border-amber-200/25 group-hover:bg-amber-200/12 group-hover:text-amber-100'
+          }`}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+        </span>
         {!isCollapsed && <span className="truncate">{item.label}</span>}
       </Link>
     );

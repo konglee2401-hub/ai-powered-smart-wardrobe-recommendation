@@ -62,3 +62,8 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+
+# Generated affiliate test reports
+backend/test-affiliate/step1-affiliate-prompts-*.json
+backend/test-affiliate/affiliate-tiktok-flow-e2e-*.json
+backend/test-affiliate/generation-monitoring-test.log

@@ -227,10 +227,232 @@ function resolveCharacterAlias(selectedOptions = {}) {
 
   const normalized = sourceName
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-zA-Z0-9]/g, '');
 
   return normalized.trim();
+}
+
+function normalizeOptionText(value) {
+  const ignoredValues = new Set(['none', 'n/a', 'na', 'null', 'undefined', 'false', 'khong', 'khong co']);
+  const normalizeSingle = (input) => {
+    const normalized = String(input || '').trim();
+    if (!normalized) return '';
+    return ignoredValues.has(normalized.toLowerCase()) ? '' : normalized;
+  };
+
+  if (Array.isArray(value)) {
+    return value.map(normalizeSingle).filter(Boolean).join(', ');
+  }
+
+  return normalizeSingle(value);
+}
+
+async function buildPromptOptionContext(selectedOptions = {}, language = 'en', mode = 'wearing') {
+  const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language);
+  const moodSuggestion = selectedOptions.mood ? await loadPromptSuggestion(selectedOptions.mood, 'mood') : '';
+  const styleSuggestion = selectedOptions.style ? await loadPromptSuggestion(selectedOptions.style, 'style') : '';
+  const lightingSuggestion = selectedOptions.lighting ? await loadPromptSuggestion(selectedOptions.lighting, 'lighting') : '';
+  const colorPaletteSuggestion = selectedOptions.colorPalette ? await loadPromptSuggestion(selectedOptions.colorPalette, 'colorPalette') : '';
+
+  return {
+    sceneDirective,
+    moodSuggestion,
+    styleSuggestion,
+    lightingSuggestion,
+    colorPaletteSuggestion,
+    cameraAngle: normalizeOptionText(selectedOptions.cameraAngle) || 'eye-level',
+    hairstyle: normalizeOptionText(selectedOptions.hairstyle),
+    makeup: normalizeOptionText(selectedOptions.makeup),
+    bottoms: normalizeOptionText(selectedOptions.bottoms),
+    shoes: normalizeOptionText(selectedOptions.shoes),
+    accessories: normalizeOptionText(selectedOptions.accessories),
+    outerwear: normalizeOptionText(selectedOptions.outerwear),
+    poseSuggestion: resolvePoseSuggestion(selectedOptions, mode),
+    framing: normalizeOptionText(selectedOptions?.cameraLock?.framing),
+    lens: normalizeOptionText(selectedOptions?.cameraLock?.lens),
+    cameraDistance: normalizeOptionText(selectedOptions?.cameraLock?.cameraDistance),
+    subjectBackgroundDistance: normalizeOptionText(selectedOptions?.cameraLock?.subjectBackgroundDistance),
+    horizonAlignment: normalizeOptionText(selectedOptions?.cameraLock?.horizonAlignment),
+    holdingMethod: normalizeOptionText(selectedOptions?.holdingPresentation?.method),
+    handPlacement: normalizeOptionText(selectedOptions?.holdingPresentation?.handPlacement),
+    orientation: normalizeOptionText(selectedOptions?.holdingPresentation?.orientation),
+    practicalNotes: normalizeOptionText(selectedOptions?.holdingPresentation?.notes)
+  };
+}
+function appendEnglishStylingSection(parts, ctx = {}, mode = 'wearing') {
+  parts.push('[HAIR, MAKEUP & STYLING SUPPORT]');
+  parts.push(ctx.hairstyle ? `Hairstyle direction: ${ctx.hairstyle}. Preserve character identity while adapting only styling finish.` : 'Hairstyle: keep the exact same hairstyle from Image 1 unless the locked character profile already defines a compatible styling default.');
+  parts.push(ctx.makeup ? `Makeup direction: ${ctx.makeup}. Keep it realistic and consistent with the character identity.` : 'Makeup: natural, clean, realistic, and consistent with Image 1.');
+  if (mode === 'wearing' && ctx.bottoms) parts.push(`Bottoms coordination: ${ctx.bottoms}. Use only if it supports the outfit naturally without conflicting with the product.`);
+  if (ctx.outerwear) parts.push(`Outerwear coordination: ${ctx.outerwear}. Apply only when it complements the product and does not cover key product details.`);
+  if (ctx.shoes) parts.push(`Footwear direction: ${ctx.shoes}. Keep proportion and styling coherent with the scene and product.`);
+  if (ctx.accessories) parts.push(`Accessories direction: ${ctx.accessories}. Keep accessories supportive, not dominant over the product.`);
+  parts.push('');
+}
+
+function appendEnglishSceneQualitySection(parts, selectedOptions = {}, ctx = {}, options = {}) {
+  const includePresentation = Boolean(options.includePresentation);
+  parts.push('[SCENE & QUALITY]');
+  parts.push(`Scene: ${selectedOptions.scene || 'studio'}.`);
+  if (ctx.sceneDirective) parts.push(`Scene lock: ${ctx.sceneDirective}`);
+  parts.push(`Lighting: ${ctx.lightingSuggestion || normalizeOptionText(selectedOptions.lighting) || 'soft diffused studio-quality lighting'}.`);
+  parts.push(`Mood: ${ctx.moodSuggestion || normalizeOptionText(selectedOptions.mood) || 'professional, confident'}.`);
+  parts.push(`Style direction: ${ctx.styleSuggestion || normalizeOptionText(selectedOptions.style) || 'modern, professional'}.`);
+  parts.push(`Color palette: ${ctx.colorPaletteSuggestion || normalizeOptionText(selectedOptions.colorPalette) || 'neutral and balanced'}.`);
+  parts.push(`Camera angle: ${ctx.cameraAngle || 'eye-level'}.`);
+  if (ctx.framing) parts.push(`Framing lock: ${ctx.framing}.`);
+  if (ctx.lens) parts.push(`Lens lock: ${ctx.lens} equivalent.`);
+  if (ctx.cameraDistance) parts.push(`Camera distance lock: ${ctx.cameraDistance}.`);
+  if (ctx.subjectBackgroundDistance) parts.push(`Subject/background distance: ${ctx.subjectBackgroundDistance}.`);
+  if (ctx.horizonAlignment) parts.push(`Horizon alignment: ${ctx.horizonAlignment}.`);
+  if (includePresentation && ctx.holdingMethod) parts.push(`Holding method: ${ctx.holdingMethod}.`);
+  if (includePresentation && ctx.handPlacement) parts.push(`Hand placement: ${ctx.handPlacement}.`);
+  if (includePresentation && ctx.orientation) parts.push(`Product orientation: ${ctx.orientation}.`);
+  if (includePresentation && ctx.practicalNotes) parts.push(`Practical notes: ${ctx.practicalNotes}.`);
+  parts.push('High realism, premium affiliate fashion photography.');
+  parts.push('Sharp focus, natural skin texture, realistic fabric texture, accurate anatomy, and scene-consistent shadows.');
+  parts.push('');
+}
+
+function appendVietnameseStylingSection(parts, ctx = {}, mode = 'wearing') {
+  parts.push('[STYLING BO TRO]');
+  parts.push(ctx.hairstyle ? `Toc: ${ctx.hairstyle}. Giu danh tinh nhan vat, chi dieu chinh o muc styling hop ly.` : 'Toc: giu dung nhan vat goc, khong doi danh tinh.');
+  parts.push(ctx.makeup ? `Makeup: ${ctx.makeup}. Tu nhien, that da, khong lam mat net nhan vat.` : 'Makeup: tu nhien, gon gang, on dinh voi nhan vat goc.');
+  if (mode === 'wearing' && ctx.bottoms) parts.push(`Bottoms phoi: ${ctx.bottoms}. Chi dung khi phu hop va khong xung dot voi san pham.`);
+  if (ctx.outerwear) parts.push(`Outerwear phoi: ${ctx.outerwear}. Khong che mat chi tiet chinh cua san pham.`);
+  if (ctx.shoes) parts.push(`Giay/dep: ${ctx.shoes}. Giu tong the can doi voi scene va outfit.`);
+  if (ctx.accessories) parts.push(`Phu kien: ${ctx.accessories}. Bo tro san pham, khong tranh spotlight.`);
+  parts.push('');
+}
+
+function appendVietnameseSceneQualitySection(parts, selectedOptions = {}, ctx = {}, options = {}) {
+  const includePresentation = Boolean(options.includePresentation);
+  parts.push('[SCENE & CAMERA]');
+  parts.push(`Scene: ${selectedOptions.scene || 'studio'}`);
+  if (ctx.sceneDirective) parts.push(`Scene lock: ${ctx.sceneDirective}`);
+  parts.push(`Lighting: ${ctx.lightingSuggestion || normalizeOptionText(selectedOptions.lighting) || 'soft-diffused'}`);
+  parts.push(`Mood: ${ctx.moodSuggestion || normalizeOptionText(selectedOptions.mood) || 'confident'}`);
+  parts.push(`Style: ${ctx.styleSuggestion || normalizeOptionText(selectedOptions.style) || 'minimalist'}`);
+  parts.push(`Color palette: ${ctx.colorPaletteSuggestion || normalizeOptionText(selectedOptions.colorPalette) || 'neutral'}`);
+  parts.push(`Camera angle: ${ctx.cameraAngle || 'eye-level'}`);
+  if (ctx.framing) parts.push(`Framing lock: ${ctx.framing}`);
+  if (ctx.lens) parts.push(`Lens lock: ${ctx.lens}`);
+  if (ctx.cameraDistance) parts.push(`Camera distance: ${ctx.cameraDistance}`);
+  if (ctx.subjectBackgroundDistance) parts.push(`Subject/background distance: ${ctx.subjectBackgroundDistance}`);
+  if (ctx.horizonAlignment) parts.push(`Horizon alignment: ${ctx.horizonAlignment}`);
+  if (includePresentation && ctx.holdingMethod) parts.push(`Holding method: ${ctx.holdingMethod}`);
+  if (includePresentation && ctx.handPlacement) parts.push(`Hand placement: ${ctx.handPlacement}`);
+  if (includePresentation && ctx.orientation) parts.push(`Orientation: ${ctx.orientation}`);
+  if (includePresentation && ctx.practicalNotes) parts.push(`Practical notes: ${ctx.practicalNotes}`);
+  parts.push('Anh phai co shadow hop scene, texture da that, texture vai that, va tong the de tin nhu affiliate frame thuc te.');
+  parts.push('');
+}
+
+function buildVietnameseWearingPromptDetailed(analysis, selectedOptions = {}, ctx = {}) {
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+  const alias = resolveCharacterAlias(selectedOptions);
+  const garmentColor = product.primary_color ? (product.secondary_color ? product.primary_color + ' voi ' + product.secondary_color : product.primary_color) : 'nhu Hinh 2';
+  const parts = [
+    '[ANH XA HINH ANH]',
+    'Hinh 1 = NHAN VAT tham chieu.',
+    'Hinh 2 = TRANG PHUC tham chieu.',
+    'Hinh 3 = SCENE REFERENCE neu co.',
+    '',
+    '[KHOA NHAN DANG - TUYET DOI]',
+    'Giu nguyen dung nguoi tu Hinh 1: khuon mat, co the, ti le, toc, goc nhin, than thai.',
+    'Khong doi danh tinh, khong tron nguoi, khong thay goc mat.',
+    ...(alias ? ['Identity anchor token: ' + alias + '.'] : []),
+    '',
+    '[CHE DO - WEARING]',
+    'Nhan vat MAC trang phuc tu Hinh 2. Neu Hinh 2 co model thi bo qua model, chi lay trang phuc.',
+    '',
+    '[THONG TIN NHAN VAT]',
+    ...(character.age ? ['Tuoi tham chieu: ' + character.age] : []),
+    ...(character.gender ? ['Gioi tinh tham chieu: ' + character.gender] : []),
+    ...(character.skinTone ? ['Skin tone: ' + character.skinTone] : []),
+    'Body, mat, gaze va identity phai giu nguyen nhu Image 1.',
+    '',
+    '[THONG TIN TRANG PHUC]',
+    'Loai: ' + (product.garment_type || product.type || 'trang phuc'),
+    'Mau sac: ' + garmentColor,
+    'Chat lieu: ' + (product.fabric_type || product.material || 'nhu Hinh 2'),
+    'Form dang: ' + ([product.fit_type || product.fit, product.style_category].filter(Boolean).join(', ') || 'natural fit'),
+    'Do dai/coverage: ' + (product.length || product.coverage || 'chuan'),
+    ...(product.pattern ? ['Pattern: ' + product.pattern] : []),
+    ...(product.key_details ? ['Chi tiet noi bat: ' + product.key_details] : []),
+    '',
+    '[HANH VI VAI & FIT]',
+    'Tai tao dung do ru, do co gian, nep gap, trong luc va ap luc cua chat lieu.',
+    'Khong thay doi co the de ep vua do.',
+    'Canh co, nach, eo va hem phai ngam dung vi tri.',
+    '',
+    '[POSE TRONG SCENE]',
+    ctx.poseSuggestion || 'Cho phep pose tu nhien theo scene, can bang co the that, khong pasted-on, khong dung cung.',
+    ''
+  ];
+
+  appendVietnameseStylingSection(parts, ctx, 'wearing');
+  appendVietnameseSceneQualitySection(parts, selectedOptions, ctx);
+
+  parts.push('[RANG BUOC CUNG]');
+  parts.push('Khong loi giai phau, khong them tay chan, khong blur, khong text/logo/watermark.');
+  parts.push('Giu texture da, texture vai va ti le co the that.');
+
+  return parts.join('\n');
+}
+
+function buildVietnameseHoldingPromptDetailed(analysis, selectedOptions = {}, ctx = {}) {
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+  const alias = resolveCharacterAlias(selectedOptions);
+  const garmentColor = product.primary_color ? (product.secondary_color ? product.primary_color + ' voi ' + product.secondary_color : product.primary_color) : 'nhu Hinh 2';
+  const parts = [
+    '[ANH XA HINH ANH]',
+    'Hinh 1 = NHAN VAT tham chieu.',
+    'Hinh 2 = SAN PHAM/TRANG PHUC tham chieu.',
+    'Hinh 3 = SCENE REFERENCE neu co.',
+    '',
+    '[KHOA NHAN DANG - TUYET DOI]',
+    'Giu dung nhan vat tu Hinh 1: khuon mat, co the, toc, than thai, ty le, goc nhin.',
+    'Khong doi danh tinh va khong de san pham che mat/chia cat co the bat hop ly.',
+    ...(alias ? ['Identity anchor token: ' + alias + '.'] : []),
+    '',
+    '[CHE DO - HOLDING]',
+    'Nhan vat KHONG mac san pham. Nhan vat CAM va TRINH BAY san pham tu Hinh 2 ro rang truoc camera.',
+    'Neu Hinh 2 co model thi bo qua model, chi lay san pham/trang phuc.',
+    '',
+    '[THONG TIN NHAN VAT]',
+    ...(character.age ? ['Tuoi tham chieu: ' + character.age] : []),
+    ...(character.gender ? ['Gioi tinh tham chieu: ' + character.gender] : []),
+    ...(character.skinTone ? ['Skin tone: ' + character.skinTone] : []),
+    'Nhan vat la chu the chinh, san pham duoc gioi thieu ro rang nhu affiliate presenter thuc te.',
+    '',
+    '[THONG TIN SAN PHAM]',
+    'Loai: ' + (product.garment_type || product.type || 'trang phuc'),
+    'Mau sac: ' + garmentColor,
+    'Chat lieu: ' + (product.fabric_type || product.material || 'nhu Hinh 2'),
+    'Pattern/style: ' + ([product.pattern, product.style_category].filter(Boolean).join(', ') || 'product showcase'),
+    ...(product.key_details ? ['Chi tiet noi bat: ' + product.key_details] : []),
+    '',
+    '[TRINH BAY SAN PHAM]',
+    'San pham phai thay ro, khong bi gap sai, khong quay lung ve camera neu lam mat dang san pham.',
+    'Ban tay, co tay, va tu the phai tro thanh mot presenter frame tu nhien va thuyet phuc.',
+    '',
+    '[POSE TRONG SCENE]',
+    ctx.poseSuggestion || 'Presenter pose tu nhien, khuyu tay thoai mai, san pham huong ve camera, than nguoi can bang voi perspective scene.',
+    ''
+  ];
+
+  appendVietnameseStylingSection(parts, ctx, 'holding');
+  appendVietnameseSceneQualitySection(parts, selectedOptions, ctx, { includePresentation: true });
+
+  parts.push('[RANG BUOC CUNG]');
+  parts.push('Khong de san pham bi mac tren nguoi. Khong anatomy error, khong extra limbs, khong blur, khong text/logo/watermark.');
+  parts.push('Anh phai giong mot frame affiliate thuc te, de tin, de ban hang.');
+
+  return parts.join('\n');
 }
 
 function getFallbackTechnicalDetails(category, optionValue) {
@@ -283,65 +505,37 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   
   if (normalizedLanguage === 'vi') {
     try {
-      console.log(`\n🇻🇳 Using Vietnamese prompts for image generation...`);
+      console.log(`\n???? Using Vietnamese prompts for image generation...`);
       console.log(`   Use case: ${useCase}`);
-      
-      // Build Vietnamese prompt based on use case
-      let vietnamesePrompt = '';
-      
-      // Extract relevant garment data from analysis parameter
-      const product = analysis?.product || {};
-      const garmentData = {
-        garment_type: product.garment_type || product.type || 'trang phuc',
-        primary_color: product.primary_color || product.color || 'mau chinh',
-        secondary_color: product.secondary_color ? `với ${product.secondary_color}` : '',
-        secondary_color: product.secondary_color || '',
-        fabric_type: product.fabric_type || product.material || 'chat vai',
-        fabric_texture: 'cam giac vai',
-        fit_type: product.fit_type || product.fit || 'kieu dang',
-        pattern: product.pattern || 'mau tron',
-        neckline_line: product.neckline ? `Cổ: ${product.neckline}` : '',
-        sleeves_line: product.sleeves ? `Tay: ${product.sleeves}` : '',
-        key_details: product.key_details || 'chi tiet noi bat',
-        key_details_line: product.key_details ? `Chi tiết: ${product.key_details}` : '',
-        length_coverage: product.length ? product.length : 'chieu dai',
-        scene: selectedOptions.scene || 'nen trang',
-        scene_directive: selectedOptions.scene || 'canh nhat tren nha',
-        lighting: selectedOptions.lighting || 'sang tu nhien',
-        lighting_info: selectedOptions.lighting || 'sang tu nhien',
-        mood: selectedOptions.mood || 'chuyen nghiep',
-        style: selectedOptions.style || 'hien dai',
-        camera_angle: selectedOptions.cameraAngle || 'tam ngang',
-        color_palette: selectedOptions.colorPalette || 'am ap'
-      };
-      
-      if (useCase === 'change-clothes') {
-        // Use Vietnamese image generation prompt for wearing product (virtual try-on)
-        const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, normalizedLanguage);
-        vietnamesePrompt = VietnamesePromptBuilder.buildImageGenerationWearingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'wearing'), sceneDirective });
-        console.log(`✅ Using Vietnamese WEARING product prompt`);
-      } else if (useCase === 'character-holding-product') {
-        // Use Vietnamese image generation prompt for holding product
-        const sceneDirective = await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, normalizedLanguage);
-        vietnamesePrompt = VietnamesePromptBuilder.buildHoldingProductPrompt(garmentData, { short: useShortPrompt, pose: resolvePoseSuggestion(selectedOptions, 'holding'), sceneDirective });
-        console.log(`✅ Using Vietnamese HOLDING product prompt`);
-      } else {
-        // Fallback to character analysis for other use cases
-        vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
-        console.log(`⚠️ No specific Vietnamese image generation prompt for use case '${useCase}', using character analysis prompt`);
+
+      if (!analysis) {
+        return { prompt: '', negativePrompt: buildNegativePromptGeneric(selectedOptions) };
       }
-      
-      // Ensure prompt is a valid string
-      const finalPrompt = (vietnamesePrompt || '').toString().trim();
-      const negPrompt = (buildNegativePromptGeneric(selectedOptions) || '').toString().trim();
-      
+
+      if (!analysis.product) {
+        analysis.product = {};
+      }
+
+      const viContext = await buildPromptOptionContext(selectedOptions, normalizedLanguage, useCase === 'character-holding-product' ? 'holding' : 'wearing');
+      let vietnamesePrompt = '';
+
+      if (useCase === 'change-clothes') {
+        vietnamesePrompt = buildVietnameseWearingPromptDetailed(analysis, selectedOptions, viContext);
+        console.log(`? Using Vietnamese WEARING product prompt`);
+      } else if (useCase === 'character-holding-product') {
+        vietnamesePrompt = buildVietnameseHoldingPromptDetailed(analysis, selectedOptions, viContext);
+        console.log(`? Using Vietnamese HOLDING product prompt`);
+      } else {
+        vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
+        console.log(`?? No specific Vietnamese image generation prompt for use case '${useCase}', using character analysis prompt`);
+      }
+
       return {
-        prompt: finalPrompt,
-        negativePrompt: negPrompt
+        prompt: (vietnamesePrompt || '').toString().trim(),
+        negativePrompt: (buildNegativePromptGeneric(selectedOptions) || '').toString().trim()
       };
     } catch (error) {
-      console.warn(`⚠️ Vietnamese prompt builder error, falling back to English:`, error.message);
-      // Fall through to English prompts if Vietnamese fails
+      console.warn(`?? Vietnamese prompt builder error, falling back to English:`, error.message);
     }
   }
 
@@ -421,6 +615,7 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   const character = analysis.character || {};
   const product = analysis.product || {};
   const characterAlias = resolveCharacterAlias(selectedOptions);
+  const promptContext = await buildPromptOptionContext(selectedOptions, language, 'wearing');
 
   if (useShortPrompt) {
     const garmentType = product.garment_type || product.type || 'garment';
@@ -574,57 +769,10 @@ async function buildChangeClothesPrompt(analysis, selectedOptions, productFocus,
   }
 
   // ==========================================
-  // HAIR & MAKEUP
-  // ==========================================
-  parts.push('[HAIR & MAKEUP]');
-  parts.push('Keep the same hairstyle and makeup as Image 1.');
-  parts.push('Natural, professional, unchanged.\n');
+  appendEnglishStylingSection(parts, promptContext, 'wearing');
+  appendEnglishSceneQualitySection(parts, selectedOptions, promptContext);
 
-  // ==========================================
-  // SCENE & QUALITY
-  // ==========================================
-  parts.push('[SCENE & QUALITY]');
-  parts.push('Lighting: studio, soft diffused.');
-  
-  if (selectedOptions.mood) {
-    const moodSuggestion = await loadPromptSuggestion(selectedOptions.mood, 'mood');
-    parts.push(`Mood: ${moodSuggestion}`);
-  } else {
-    parts.push('Mood: professional, confident');
-  }
-  
-  if (selectedOptions.style) {
-    const styleSuggestion = await loadPromptSuggestion(selectedOptions.style, 'style');
-    parts.push(`Style: ${styleSuggestion}`);
-  } else {
-    parts.push('Style: modern, professional');
-  }
-  
-  const cameraAngle = selectedOptions.cameraAngle || 'eye-level';
-  parts.push(`Camera: ${cameraAngle}.`);
-  if (selectedOptions.cameraLock?.framing) {
-    parts.push(`Framing lock: ${selectedOptions.cameraLock.framing}.`);
-  }
-  if (selectedOptions.cameraLock?.lens) {
-    parts.push(`Lens lock: ${selectedOptions.cameraLock.lens} equivalent.`);
-  }
-  if (selectedOptions.cameraLock?.cameraDistance) {
-    parts.push(`Camera distance lock: ${selectedOptions.cameraLock.cameraDistance}.`);
-  }
-  if (selectedOptions.cameraLock?.subjectBackgroundDistance) {
-    parts.push(`Subject/background distance: ${selectedOptions.cameraLock.subjectBackgroundDistance}.`);
-  }
-  if (selectedOptions.cameraLock?.horizonAlignment) {
-    parts.push(`Horizon alignment: ${selectedOptions.cameraLock.horizonAlignment}.`);
-  }
-  parts.push('Color palette: neutral.\n');
-
-  parts.push('High realism, professional fashion photography.');
-  parts.push('Sharp focus, natural skin texture.');
-  parts.push('Realistic fabric texture and accurate anatomy.\n');
-
-  // ==========================================
-  // 💫 NEW: SCENE REFERENCE IMAGE HANDLING
+  // SCENE REFERENCE IMAGE HANDLING
   // ==========================================
   if (selectedOptions.scene) {
     const sceneInfo = await getSceneReferenceInfo(selectedOptions.scene, selectedOptions, language);
@@ -716,6 +864,7 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   const character = analysis.character || {};
   const product = analysis.product || {};
   const characterAlias = resolveCharacterAlias(selectedOptions);
+  const promptContext = await buildPromptOptionContext(selectedOptions, language, 'holding');
 
   if (useShortPrompt) {
     const garmentType = product.garment_type || product.type || 'garment';
@@ -883,56 +1032,9 @@ async function buildCharacterHoldingProductPrompt(analysis, selectedOptions, pro
   }
 
   // ==========================================
-  // HAIR & MAKEUP
-  // ==========================================
-  parts.push('[HAIR & MAKEUP]');
-  parts.push('Keep the same hairstyle and makeup as Image 1.');
-  parts.push('Natural, professional, unchanged.\n');
+  appendEnglishStylingSection(parts, promptContext, 'holding');
+  appendEnglishSceneQualitySection(parts, selectedOptions, promptContext, { includePresentation: true });
 
-  // ==========================================
-  // SCENE & QUALITY
-  // ==========================================
-  parts.push('[SCENE & QUALITY]');
-  parts.push('Lighting: studio, soft diffused.');
-  
-  if (selectedOptions.mood) {
-    const moodSuggestion = await loadPromptSuggestion(selectedOptions.mood, 'mood');
-    parts.push(`Mood: ${moodSuggestion}`);
-  } else {
-    parts.push('Mood: professional, confident, engaging');
-  }
-  
-  if (selectedOptions.style) {
-    const styleSuggestion = await loadPromptSuggestion(selectedOptions.style, 'style');
-    parts.push(`Style: ${styleSuggestion}`);
-  } else {
-    parts.push('Style: modern, professional');
-  }
-  
-  const cameraAngle = selectedOptions.cameraAngle || 'eye-level';
-  parts.push(`Camera: ${cameraAngle}.`);
-  if (selectedOptions.cameraLock?.framing) {
-    parts.push(`Framing lock: ${selectedOptions.cameraLock.framing}.`);
-  }
-  if (selectedOptions.cameraLock?.lens) {
-    parts.push(`Lens lock: ${selectedOptions.cameraLock.lens} equivalent.`);
-  }
-  if (selectedOptions.cameraLock?.cameraDistance) {
-    parts.push(`Camera distance lock: ${selectedOptions.cameraLock.cameraDistance}.`);
-  }
-  if (selectedOptions.cameraLock?.subjectBackgroundDistance) {
-    parts.push(`Subject/background distance: ${selectedOptions.cameraLock.subjectBackgroundDistance}.`);
-  }
-  if (selectedOptions.cameraLock?.horizonAlignment) {
-    parts.push(`Horizon alignment: ${selectedOptions.cameraLock.horizonAlignment}.`);
-  }
-  parts.push('Color palette: neutral.\n');
-
-  parts.push('High realism, professional fashion photography.');
-  parts.push('Sharp focus, natural skin texture.');
-  parts.push('Realistic fabric texture and accurate anatomy.\n');
-
-  // ==========================================
   // HARD CONSTRAINTS
   // ==========================================
   parts.push('[HARD CONSTRAINTS]');

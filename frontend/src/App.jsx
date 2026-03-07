@@ -38,9 +38,6 @@ function PageLayout() {
       <main className={`app-main h-screen flex-1 min-w-0 pt-14 lg:pt-0 ${contentClassName}`}>
         <div className="app-main-glow app-main-glow-top" />
         <div className="app-main-glow app-main-glow-bottom" />
-        <div className="app-main-bubble app-main-bubble-violet" />
-        <div className="app-main-bubble app-main-bubble-blue" />
-        <div className="app-main-bubble app-main-bubble-cyan" />
         <div className="apple-page apple-typography">
           <div className="apple-content-frame">
             <div className="apple-page-content">

@@ -4,6 +4,7 @@ import { characterAPI } from '../services/api';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import PhotoAlbum from 'react-photo-album';
 import 'react-photo-album/rows.css';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 const defaultOptions = {
   identity: { 
@@ -220,25 +221,23 @@ export default function CharacterCreatorPage() {
 
   return (
     <div className="p-6 space-y-4 text-white">
-      <div className="flex items-center gap-3 mb-4">
-        <button 
-          onClick={() => navigate('/characters')}
-          className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-          title="Back to characters"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold">
-            {isEditMode ? `Edit ${name || 'Character'}` : 'Create New Character'}
-          </h1>
-          <p className="text-slate-400 text-sm">
-            {isEditMode 
-              ? 'Update character profile, regenerate images, or modify details' 
-              : 'Upload portrait + fill detailed options, generate 4-8 reference images via Google Flow, preview, regenerate, then save.'}
-          </p>
-        </div>
-      </div>
+      <PageHeaderBar
+        icon={<ArrowLeft className="h-4 w-4 text-emerald-300" />}
+        title={isEditMode ? `Edit ${name || 'Character'}` : 'Create New Character'}
+        subtitle={isEditMode ? 'Character profile workspace' : 'Character profile workspace'}
+        meta={isEditMode
+          ? 'Update character profile, regenerate images, or modify details'
+          : 'Upload portrait, tune identity options, generate references, then save.'}
+        actions={(
+          <button
+            onClick={() => navigate('/characters')}
+            className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700"
+            title="Back to characters"
+          >
+            Back to Characters
+          </button>
+        )}
+      />
 
       {pageLoading && (
         <div className="flex items-center justify-center py-12">

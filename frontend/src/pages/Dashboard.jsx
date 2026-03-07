@@ -9,6 +9,7 @@ import {
   BarChart3, TrendingUp, Image, Clock, 
   CheckCircle, XCircle, AlertCircle, RefreshCw
 } from 'lucide-react';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -53,15 +54,23 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">{t('dashboard.title')}</h1>
-        <button 
-          onClick={loadDashboardData}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          {t('dashboard.refresh')}
-        </button>
+      <div className="mb-8">
+        <PageHeaderBar
+          icon={<BarChart3 className="h-4 w-4 text-sky-300" />}
+          title={t('dashboard.title')}
+          subtitle="Workspace overview"
+          meta="Generation volume, success rate, and recent activity"
+          className="rounded-xl border border-gray-200/10 bg-slate-950/85"
+          actions={(
+            <button
+              onClick={loadDashboardData}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-purple-700"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {t('dashboard.refresh')}
+            </button>
+          )}
+        />
       </div>
 
       {/* Stats Cards */}

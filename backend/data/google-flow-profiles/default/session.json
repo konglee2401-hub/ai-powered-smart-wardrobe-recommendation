@@ -1,11 +1,19 @@
 {
+  "timestamp": "2026-03-07T04:48:21.453Z",
+  "expiresAt": "2026-03-08T04:48:21.454Z",
+  "url": "https://labs.google/fx/vi/tools/flow",
+  "localStorage": {
+    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"LANDSCAPE\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772858882}"
+  },
+  "sessionStorage": {},
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..jiiqyPBaRxrExlBM.nzz3Ko5WN-1nO6qvJOHTadv_zjnioVWo9pVEFAMY-ZrtFnhs_decAvFUZLczXOmBCjxtxSiHiDXa6nrXTl67nZtVPvY1cmI4wXV2Sa2p93v0bNk4wUOvDD6I25aUvmd4RW0yJUQ4Yj88NkbD6yHMBans_wX4e4BMsBbD0wVhASEq0zqtd4ITucdLIiHwYZafv5-Oz2Ry0Jy0HashDI1_uX7fkG2YAyC0PNWSE2UZ2bKkziq24PR-eblds7UdM6V7ZbXl5Lig_UwvhTTTpEEDouDPVtoRXoEyVtBKx83yF2qlapf3ZbS9ATPq4sQUnap8VCq6CZj2awYyFw3wHW6fVQfvE3vn54YGuiIXfZVoBsE5opdrhtlBLL43fsNfepdu6KKzCSzr5v3utpi_hcALELTnVzyjZmR-7OtPpBcv2wdJ7Pir-Ti6fxGKY-OebVZg13mpcmtWkStodPjq8oyJyzlc892eWm2-BoghmXX2O47j_gf2urSsY7BzNRjyK_2rER8cMahKZ5EuxN3IevTGGS-CBbkM1yqDrz7OMRU8ZLWce6ExX1XzkzBLJ9eH5RBg-Yle39wFyw9jscH8afypfqyqk21n8YfBaeO1jddfZ1hGDg63eFecT3iotyU-ojzzFlfVlfAjXhNOyhFep1D2VZJSTLsIjUbiIaz9VufgmL9ShZIoPTcMueQLgrtHzv1ztY3mhOSeNvLzELsg17j7zt03kMJn-xeaPshOl2QbutmAp0176Zqo-vvuLX3hkc9baE0YdjlmEz3oBV4EyCx7hMc6jFfdTRNhtwVBkW4-K-EfTdXhQD4BJsGmIJMTBBJ4Aox6fDN37MYHCRxnO7BhZKu-KxIUsXyF_QUQSQlxogQN3mYUJ95Zv75fk__7ggR5zwTLT2GIQiazdB59VjqxBGwn_xzkfW0Q47c7Wsut-g2qAfMETFAHxFlrLblBruAS-SgSIvXyJNUcfWIPeiuGYsvyDspanVA.NaKT4_oGlOusPFlIDk1j-w",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..BA6wYh4tc5XNYJzi.ncX0S-ZesUk4rOE9ICg_eiL24_LpjYS4Fy--BDX5tfIDogRyXvzgn8HHK0baQy75Z57niBlIW4bVupI9zEGNugtrsBj5MS058xkUkIZP6TIoLUYhWGPo2M7DajueHkk6zrre6hD8ni5ZUijzZgdcwmcZR2o2ocZg6hyFYzXTSRRDY2Lo7lMP6FWDKJk5inVxb9Z5BnLoR5BquK-x5qB6A9mgKtxjFtI46uwGCpV2LqEnVmnNrm_MuvT8EavgFKy7PhHcxt87nOlD49XGe0I6SRqGdMC8wzZ03W-ATpMp11q4XrWIVECcV5udlUjuGb_qzmzkjgqIY8NuvYSHS_9QQWiaHuqb2Wtbyq0IgvIuR4TCVXTHrz2A4yCwO-X_9m1gjEfj5V9lQYQCiQ_yJLNZefhQOY7j62iGQnbhnQHuJ_EFyrQ-ZSN-NyFfpv79pUYuvV3JOM8D2Or0E0ZRbBJI61o2yFh_Dww6MY4RptE2b9Dzo8kUg-Nn1tYVetAK0A92Uvkk7Oa9bVU9FLTgqw6oKMqhczREsXmvJqBu2jB4CXsbwNfORqbFAjCUP-lF-uQKoYIejXvB7sNYG4G_GqVjc7YJlM_oUJ0opkFdKyfJ3Jdyvuw4EwlsdKs1Kvkoaa4VjtpXLuLx8u7SKmQdTI9C3iYyZ3UemMlqdlfNn5UynlzPc2d1iWsDj8_Plsd8s045cJuJD2RuRP0LWjfuuBtejOZsfmb7JEXgh0VHu2IvyIclNYeu8N2D0Y5z0JFLxScSqfeaTo1NamRysYI6lQJg8Zc8PGUImAED2nlerG9-A1yHme_L9_W8sNaoBv8Bug5KY98O2kiw_DR1YQ5a7ndqUy2dajIeVA404w6CoRHzbHynTEQxecE_wqWOhEwNlBlrbP3-xZIugXQ-WOrlmGcdYCjXQEmFkQtNxfWp5iT9nUims5AboWQ0tMy7Xsqs7bY2XDjXmN1SxH0G1QQSfvMD-pv_Mce_abg.Hvy1bTlGx8IpVnx0Zai9CQ",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775409199.299123,
+      "expires": 1775450895.578626,
       "size": 1104,
       "httpOnly": true,
       "secure": true,
@@ -17,10 +25,10 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1772817188$o16$g0$t1772817188$j60$l0$h246247124",
+      "value": "GS2.1.s1772858831$o1$g1$t1772858875$j16$l0$h1163656863",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807377188.33824,
+      "expires": 1807418875.65704,
       "size": 68,
       "httpOnly": false,
       "secure": false,
@@ -31,10 +39,10 @@
     },
     {
       "name": "_ga",
-      "value": "GA1.1.1406218656.1772713598",
+      "value": "GA1.1.1392335880.1772858832",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807377188.24379,
+      "expires": 1807418865.40896,
       "size": 30,
       "httpOnly": false,
       "secure": false,
@@ -48,41 +56,11 @@
       "value": "%22leecris241%40gmail.com%22",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775366087,
+      "expires": 1775450865,
       "size": 33,
       "httpOnly": false,
       "secure": false,
       "session": false,
-      "sameParty": false,
-      "sourceScheme": "Secure",
-      "sourcePort": 443
-    },
-    {
-      "name": "__Secure-next-auth.callback-url",
-      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow%2Fproject%2F58d791d4-37c9-47a8-ae3b-816733bc3ec0",
-      "domain": "labs.google",
-      "path": "/",
-      "expires": -1,
-      "size": 130,
-      "httpOnly": true,
-      "secure": true,
-      "session": true,
-      "sameSite": "Lax",
-      "sameParty": false,
-      "sourceScheme": "Secure",
-      "sourcePort": 443
-    },
-    {
-      "name": "__Host-next-auth.csrf-token",
-      "value": "490c78f068e6a1b35a0600e19550eebb8cf981a3f7ca039103f379bcfe615621%7Cde7bb32e2bf4b2f6b7763021cb30599cd6bcc1c579ae63086a058b985b8f36e6",
-      "domain": "labs.google",
-      "path": "/",
-      "expires": -1,
-      "size": 158,
-      "httpOnly": true,
-      "secure": true,
-      "session": true,
-      "sameSite": "Lax",
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
@@ -100,15 +78,62 @@
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
+    },
+    {
+      "name": "__Secure-next-auth.callback-url",
+      "value": "https%3A%2F%2Flabs.google%2Ffx%2Fvi%2Ftools%2Fflow",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 81,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
+      "name": "__Host-next-auth.csrf-token",
+      "value": "bb7ff20fa5a0258eab98021b50ec650ca960b25652d9990e221def3dfc9817c1%7C80ac21b8d37510bb10660e8f6e7b9bd875989d5e4098c1a769267dd4264ca968",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 158,
+      "httpOnly": true,
+      "secure": true,
+      "session": true,
+      "sameSite": "Lax",
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
     }
   ],
-  "localStorage": {
-    "_grecaptcha": "09AKhCRwjzLCDC-iDVjwM8T-CVwRfKv2Di95bgRoaUaH0-P2oFgZSYkBBtCg8ILg1rQmi286qnc6v2qUc7EzmkXFwbo5DwxUUxJI-w6rn-PQoO1D9-0DIWP-9ImO8nChKm",
-    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"PORTRAIT\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
-    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772817191}"
+  "tokens": {
+    "recaptcha": {
+      "_grecaptcha": null,
+      "rc::a": null,
+      "rc::f": null
+    },
+    "capturedAt": "2026-03-07T04:48:21.454Z"
   },
-  "sessionStorage": {},
-  "timestamp": "2026-03-06T17:15:30.082Z",
-  "url": "https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0",
-  "isAuthenticated": true
+  "flowConfig": {},
+  "metadata": {
+    "currentUrl": "https://labs.google/fx/vi/tools/flow",
+    "title": "Flow - Affiliate AI",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "timezone": "Asia/Saigon",
+    "language": "en-US",
+    "cookieEnabled": true,
+    "onLine": true
+  },
+  "auth": {},
+  "diagnostics": {
+    "recaptchaAvailable": true,
+    "recaptchaConfigured": false,
+    "authTokensPresent": true,
+    "recaptchaTokensPresent": false,
+    "capturedRequests": 0
+  }
 }

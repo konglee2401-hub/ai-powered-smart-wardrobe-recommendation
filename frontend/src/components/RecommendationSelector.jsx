@@ -12,17 +12,20 @@ import { ChevronDown, ChevronUp, Check, Plus, AlertCircle } from 'lucide-react';
 export default function RecommendationSelector({
   analysis,
   existingOptions,
+  currentSelections = {},
+  defaultAction = 'keep',
+  defaultSaveStrategy = 'manual',
   onApplyRecommendations, // Pass final selections
   isSaving = false
 }) {
   // Hardcoded primary categories (always shown if available)
   const PRIMARY_CATEGORIES = [
-    'scene', 'lighting', 'mood', 'cameraAngle', 
+    'scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle',
     'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'
   ];
 
-  // Extract current selected values (from promptOptions)
-  const currentValues = existingOptions || {};
+  // Current user selections are different from the saved option library.
+  const currentValues = currentSelections || {};
 
   // Extract ALL recommendations from analysis (both primary + any additional ones)
   const allRecommendationKeys = useMemo(() => {
@@ -64,16 +67,17 @@ export default function RecommendationSelector({
       if (decisions[cat]) {
         newDecisions[cat] = decisions[cat];
       } else {
+        const recommendation = analysis?.recommendations?.[cat] || {};
+        const hasNewCandidates = Array.isArray(recommendation?.newOptionCandidates) && recommendation.newOptionCandidates.length > 0;
         newDecisions[cat] = {
-          action: 'keep', // 'apply' | 'keep' | 'choose'
-          chosenOption: currentValues[cat] || null,
-          saveAsOption: false,
+          action: defaultAction, // 'apply' | 'keep' | 'choose'
+          chosenOption: Array.isArray(currentValues[cat]) ? currentValues[cat].join(', ') : (currentValues[cat] || null),
+          saveAsOption: defaultSaveStrategy === 'all' ? true : (defaultSaveStrategy === 'new-only' ? hasNewCandidates : false),
           expandWhy: false
         };
-      }
-    });
+      }    });
     setDecisions(newDecisions);
-  }, [allRecommendationKeys]);
+  }, [allRecommendationKeys, currentValues, analysis, defaultAction, defaultSaveStrategy]);
 
   // Extract recommendations from analysis - handles dynamic keys
   const recommendations = useMemo(() => {
@@ -297,7 +301,10 @@ export default function RecommendationSelector({
         break;
     }
     
-    // Ensure it's always a string
+    if (Array.isArray(finalVal)) {
+      return finalVal;
+    }
+
     return typeof finalVal === 'string' ? finalVal : String(finalVal || 'Not set');
   };
 
@@ -438,7 +445,7 @@ export default function RecommendationSelector({
                         Current: <span className="text-gray-300 font-medium">{typeof rec.current === 'string' ? rec.current : String(rec.current || 'Not set')}</span>
                       </div>
                       <div className="text-purple-400">
-                        AI suggests: <span className="text-purple-300 font-medium">{typeof rec.choice === 'string' ? rec.choice : String(rec.choice || 'Unknown')}</span>
+                        AI suggests: <span className="text-purple-300 font-medium">{Array.isArray(rec.choiceArray) && rec.choiceArray.length > 0 ? rec.choiceArray.join(', ') : (typeof rec.choice === 'string' ? rec.choice : String(rec.choice || 'Unknown'))}</span>
                       </div>
                     </div>
 
@@ -466,7 +473,7 @@ export default function RecommendationSelector({
                   <div className="text-right flex-shrink-0">
                     <div className="text-xs text-gray-500">Final:</div>
                     <div className="text-xs font-semibold text-green-400 mt-0.5 px-2 py-1 bg-green-900/20 rounded border border-green-700/30">
-                      {typeof finalValue === 'string' ? finalValue : String(finalValue || 'Not set')}
+{Array.isArray(finalValue) ? finalValue.join(', ') : (typeof finalValue === 'string' ? finalValue : String(finalValue || 'Not set'))}
                     </div>
                   </div>
                 </div>
@@ -537,7 +544,7 @@ export default function RecommendationSelector({
                     className="mr-2 w-3.5 h-3.5 rounded bg-gray-700 border-gray-600 cursor-pointer"
                   />
                   <span className="text-gray-300 hover:text-gray-200">
-                    💾 Save "{rec.choice}" as new option for next time
+                    ???? Save "{Array.isArray(rec.choiceArray) && rec.choiceArray.length > 0 ? rec.choiceArray.join(', ') : rec.choice}" as new option for next time
                   </span>
                 </label>
               </div>

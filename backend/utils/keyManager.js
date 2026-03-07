@@ -43,7 +43,7 @@ class KeyRotationManager {
     const providers = [
       'OPENROUTER', 'ANTHROPIC', 'OPENAI', 'GOOGLE', 'GROQ', 'MISTRAL',
       'FIREWORKS', 'NVIDIA', 'REPLICATE', 'FAL', 'TOGETHER', 'HUGGINGFACE',
-      'DEEPINFRA', 'SEGMIND'
+      'DEEPINFRA', 'SEGMIND', 'GEMINI'
     ];
 
     let totalKeys = 0;

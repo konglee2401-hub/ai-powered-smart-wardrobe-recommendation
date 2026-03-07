@@ -21,7 +21,8 @@ const ImagePromptWithTemplates = ({
   useCase,
   userId,
   analysis,
-  characterDescription
+  characterDescription,
+  productFocus
 }) => {
   const { t } = useTranslation();
   const [mode, setMode] = useState('step3'); // 'template' or 'step3'
@@ -283,6 +284,7 @@ const ImagePromptWithTemplates = ({
           userId={userId}
           analysis={analysis}
           characterDescription={characterDescription}
+          productFocus={productFocus}
         />
       )}
     </div>

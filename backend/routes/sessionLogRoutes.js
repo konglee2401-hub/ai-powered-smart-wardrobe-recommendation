@@ -206,20 +206,133 @@ router.get('/:sessionId/logs', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
-    const { limit = 10, flowType, status } = req.query;
+    const {
+      limit = 24,
+      page = 1,
+      flowType,
+      status,
+      search = '',
+    } = req.query;
 
-    let query = {};
-    if (flowType) query.flowType = flowType;
-    if (status) query.status = status;
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 24, 1), 100);
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const skip = (parsedPage - 1) * parsedLimit;
+    const searchTerm = String(search || '').trim();
 
-    const sessions = await SessionLog.find(query)
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .select('sessionId flowType status createdAt updatedAt metrics.totalDuration error.message');
+    const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const baseQuery = {};
+    if (flowType && flowType !== 'all') baseQuery.flowType = flowType;
+    if (status && status !== 'all') baseQuery.status = status;
+
+    if (searchTerm) {
+      const regex = new RegExp(escapeRegex(searchTerm), 'i');
+      baseQuery.$or = [
+        { sessionId: regex },
+        { flowType: regex },
+        { 'error.message': regex },
+        { 'logs.message': regex },
+        { 'logs.category': regex },
+      ];
+    }
+
+    const [sessions, total, statusBuckets, flowBuckets] = await Promise.all([
+      SessionLog.find(baseQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parsedLimit)
+        .select('sessionId flowType status createdAt updatedAt metrics artifacts analysis error logs')
+        .lean(),
+      SessionLog.countDocuments(baseQuery),
+      SessionLog.aggregate([
+        { $match: baseQuery },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      SessionLog.aggregate([
+        { $match: baseQuery },
+        { $group: { _id: '$flowType', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const data = sessions.map((session) => {
+      const latestLog = Array.isArray(session.logs) && session.logs.length > 0
+        ? session.logs[session.logs.length - 1]
+        : null;
+      const initLog = Array.isArray(session.logs)
+        ? session.logs.find((entry) => entry?.category === 'session-init')
+        : null;
+      const generatedImageCount = Array.isArray(session.artifacts?.generatedImagePaths)
+        ? session.artifacts.generatedImagePaths.length
+        : 0;
+      const generatedVideoCount = Array.isArray(session.artifacts?.videoSegmentPaths)
+        ? session.artifacts.videoSegmentPaths.length
+        : 0;
+      const generatedAudioCount = Array.isArray(session.artifacts?.audioPaths)
+        ? session.artifacts.audioPaths.length
+        : 0;
+      const sourceVideoCount = Array.isArray(session.artifacts?.sourceVideoPaths)
+        ? session.artifacts.sourceVideoPaths.length
+        : 0;
+
+      return {
+        sessionId: session.sessionId,
+        flowType: session.flowType,
+        status: session.status,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        totalDuration: session.metrics?.totalDuration || null,
+        stageCount: Array.isArray(session.metrics?.stages) ? session.metrics.stages.length : 0,
+        logCount: Array.isArray(session.logs) ? session.logs.length : 0,
+        inputCount: [
+          session.artifacts?.characterImagePath,
+          session.artifacts?.productImagePath,
+        ].filter(Boolean).length + sourceVideoCount,
+        outputCount: generatedImageCount + generatedVideoCount + generatedAudioCount,
+        generatedImageCount,
+        generatedVideoCount,
+        generatedAudioCount,
+        useCase: initLog?.details?.useCase || null,
+        latestLog: latestLog
+          ? {
+              timestamp: latestLog.timestamp,
+              level: latestLog.level,
+              category: latestLog.category,
+              message: latestLog.message,
+            }
+          : null,
+        error: session.error
+          ? {
+              stage: session.error.stage,
+              message: session.error.message,
+              timestamp: session.error.timestamp,
+            }
+          : null,
+      };
+    });
+
+    const summary = {
+      total,
+      status: statusBuckets.reduce((accumulator, bucket) => {
+        accumulator[bucket._id || 'unknown'] = bucket.count;
+        return accumulator;
+      }, {}),
+      flowTypes: flowBuckets.reduce((accumulator, bucket) => {
+        accumulator[bucket._id || 'unknown'] = bucket.count;
+        return accumulator;
+      }, {}),
+    };
 
     res.json({
       success: true,
-      data: sessions
+      data,
+      pagination: {
+        page: parsedPage,
+        limit: parsedLimit,
+        total,
+        totalPages: Math.max(Math.ceil(total / parsedLimit), 1),
+        hasMore: skip + data.length < total,
+      },
+      summary,
     });
   } catch (error) {
     console.error('Error fetching sessions:', error);
@@ -260,6 +373,116 @@ router.get('/:sessionId/artifacts', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/:sessionId/capture
+ * Merge structured history data into a session log
+ */
+router.post('/:sessionId/capture', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const {
+      flowType = 'one-click',
+      useCase,
+      status,
+      log,
+      artifacts,
+      analysis,
+      metricStage,
+      totalDuration,
+      error,
+    } = req.body || {};
+
+    let session = await SessionLog.findOne({ sessionId });
+    if (!session) {
+      session = await SessionLog.createSession(sessionId, flowType);
+    }
+
+    if (useCase && !session.logs?.some((entry) => entry?.category === 'session-init')) {
+      session.addLog(`Session initialized for ${useCase}`, 'info', 'session-init', { flowType, useCase });
+    }
+
+    if (log?.message) {
+      session.addLog(
+        log.message,
+        log.level || 'info',
+        log.category || 'capture',
+        log.details || null
+      );
+    }
+
+    if (artifacts && typeof artifacts === 'object') {
+      const currentArtifacts = session.artifacts || {};
+      const mergeList = (currentList = [], nextList = []) =>
+        Array.from(new Set([...(currentList || []), ...(nextList || [])].filter(Boolean)));
+
+      session.artifacts = {
+        ...currentArtifacts,
+        ...artifacts,
+        sourceVideoPaths: mergeList(currentArtifacts.sourceVideoPaths, artifacts.sourceVideoPaths),
+        generatedImagePaths: mergeList(currentArtifacts.generatedImagePaths, artifacts.generatedImagePaths),
+        videoSegmentPaths: mergeList(currentArtifacts.videoSegmentPaths, artifacts.videoSegmentPaths),
+        audioPaths: mergeList(currentArtifacts.audioPaths, artifacts.audioPaths),
+      };
+    }
+
+    if (analysis && typeof analysis === 'object') {
+      session.analysis = {
+        ...(session.analysis || {}),
+        ...analysis,
+      };
+    }
+
+    if (metricStage?.stage) {
+      session.metrics = session.metrics || {};
+      session.metrics.stages = session.metrics.stages || [];
+      session.metrics.stages.push({
+        stage: metricStage.stage,
+        startTime: metricStage.startTime || undefined,
+        endTime: metricStage.endTime || new Date(),
+        duration: metricStage.duration || undefined,
+        status: metricStage.status || 'completed',
+      });
+    }
+
+    if (typeof totalDuration === 'number') {
+      session.metrics = session.metrics || {};
+      session.metrics.totalDuration = totalDuration;
+    }
+
+    if (error?.message) {
+      session.error = {
+        stage: error.stage || 'unknown',
+        message: error.message,
+        stack: error.stack || null,
+        timestamp: error.timestamp || new Date(),
+      };
+      session.status = 'failed';
+    } else if (status) {
+      session.status = status;
+    }
+
+    session.flowType = flowType || session.flowType;
+    session.updatedAt = new Date();
+    await session.save();
+
+    res.json({
+      success: true,
+      data: {
+        sessionId: session.sessionId,
+        flowType: session.flowType,
+        status: session.status,
+        updatedAt: session.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error capturing session state:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });

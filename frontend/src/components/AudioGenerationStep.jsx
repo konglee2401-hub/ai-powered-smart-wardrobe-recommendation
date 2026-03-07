@@ -7,8 +7,11 @@ import React, { useState, useRef } from 'react';
 import { Music, Loader2, Play, Pause, Download, Volume2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ttsAPI from '../services/ttsService';
+import { captureGenerationSession } from '../services/generationSessionsService';
 
 export default function AudioGenerationStep({
+  flowId = null,
+  ensureSession = null,
   script = '',
   voiceName = '',
   language = 'VI',
@@ -51,13 +54,34 @@ export default function AudioGenerationStep({
     }
 
     setIsGenerating(true);
+    let sessionId = flowId || null;
     try {
+      sessionId = ensureSession ? await ensureSession() : flowId;
+
+      if (sessionId) {
+        await captureGenerationSession(sessionId, {
+          flowType: 'voice-generation',
+          status: 'in-progress',
+          analysis: {
+            voiceAudioRequest: {
+              voiceName,
+              language,
+              textLength: script.length,
+            },
+          },
+          log: {
+            category: 'voice-audio',
+            message: `Generating audio with ${voiceName}`,
+          },
+        });
+      }
+
       // Generate audio and save on backend
       const response = await ttsAPI.generateAndSaveAudio(
         script,
         voiceName,
         `voiceover_${Date.now()}.wav`,
-        { language }
+        { language, flowId: sessionId }
       );
 
       if (response.success) {
@@ -68,12 +92,52 @@ export default function AudioGenerationStep({
           fileName: response.fileName,
           filePath: response.filePath,
         });
+        if (sessionId) {
+          await captureGenerationSession(sessionId, {
+            flowType: 'voice-generation',
+            status: 'completed',
+            artifacts: {
+              audioPaths: [response.filePath || audioUrl],
+            },
+            analysis: {
+              generatedAudio: {
+                fileName: response.fileName,
+                url: audioUrl,
+                voiceName,
+                language,
+              },
+            },
+            metricStage: {
+              stage: 'voice-audio',
+              status: 'completed',
+              endTime: new Date(),
+            },
+            log: {
+              category: 'voice-audio',
+              message: 'Voice audio generated successfully',
+            },
+          });
+        }
         toast.success('Audio generated successfully!');
       } else {
         throw new Error(response.error || 'Failed to generate audio');
       }
     } catch (error) {
       console.error('Audio generation error:', error);
+      if (sessionId) {
+        await captureGenerationSession(sessionId, {
+          flowType: 'voice-generation',
+          error: {
+            stage: 'voice-audio',
+            message: error.message || 'Failed to generate audio',
+          },
+          log: {
+            level: 'error',
+            category: 'voice-audio',
+            message: error.message || 'Failed to generate audio',
+          },
+        });
+      }
       toast.error(error.message || 'Failed to generate audio');
     } finally {
       setIsGenerating(false);
