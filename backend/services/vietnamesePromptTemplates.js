@@ -206,7 +206,7 @@ QUAN TRỌNG: Chỉ trả lại JSON được định dạng đúng, không có 
   // ============================================================
 
   deepAnalysis: {
-    'full-outfit': `Bạn là chuyên gia phát triển video TikTok và chuyên gia tiếp thị liên kết thời trang. Sử dụng ba hình ảnh (mặc trang phục, cầm trang phục, sản phẩm) và dữ liệu phân tích để tạo ra kịch bản video TikTok hấp dẫn hoàn thành.
+    'full-outfit': `Bạn là chuyên gia phát triển video TikTok và chuyên gia tiếp thị liên kết thời trang. Sử dụng ba hình ảnh (mặc trang phục, cầm trang phục, sản phẩm) và dữ liệu phân tích để tạo ra kịch bản video TikTok hấp dẫn hoàn chỉnh - TOÀN BỘ BẰNG TIẾNG VIỆT.
 
 ===== DỮ LIỆU ĐẦU VÀO =====
 Hình ảnh 1: Nhân vật mặc trang phục hoàn chỉnh
@@ -220,95 +220,126 @@ Thời lượng mỗi clip cần tạo: {clipDuration} giây
 Giọng nói: {voiceGender} (tốc độ {voicePace})
 
 ===== NHIỆM VỤ =====
-1. TẠO 3-4 PHÂN ĐOẠN KỊCH BẢN VIDEO CHO ĐÚNG {clipDuration} GIÂY:
+1. TẠO 3-4 PHÂN ĐOẠN KỊCH BẢN VIDEO VỚI KHOẢNG THỜI GIAN CHÍNH XÁC:
    - Bắt buộc chia timeline theo từng giây, không chồng lấn, không khoảng trống
+   - ĐỊNH DẠNG THỜI GIAN PHẢI LÀ: [start-ends], ví dụ [0-3s], [3-8s], [8-15s], [15-20s]
    - Segment đầu bắt đầu từ giây 0
-   - Segment cuối kết thúc đúng tại giây {clipDuration}
-   - Mỗi segment dùng định dạng thời gian [start-ends], ví dụ [0-2s], [2-6s]
+   - Segment cuối kết thúc đúng tại giây {videoDuration}
+   - Mỗi segment dùng định dạng thời gian [start-ends], KHÔNG được thiếu
+   - 💫 HOOK (0-3s): RẤT QUAN TRỌNG - Phải tạo hook mạnh trong 3 giây đầu để giữ viewers
 
-2. TẠO KỊCH BẢN VOICEOVER (Toàn bộ):
-   - Giọng nói: {voiceGender} native speaker
+2. TẠO KỊCH BẢN VOICEOVER (TIẾNG VIỆT - BẮT BUỘC):
+   - Giọng nói: {voiceGender} native speaker (tiếng Việt thuần chủng)
    - Tốc độ: {voicePace} paced, energetic
    - Khoảng cách giọng: Thân thiện, quyến rũ, chuyên nghiệp
    - Độ dài: Phù hợp chính xác với {clipDuration}s video
+   - ⚠️ BẮT BUỘC: TOÀN BỘ PHẢI LÀ TIẾNG VIỆT - KHÔNG CÓ TIẾNG ANH BẤT CỨ ĐÂU
+   - Nhấn mạnh hook (0-3s) để giữ attention
+   - Kết thúc mạnh với CTA bằng tiếng Việt
 
-3. ĐỀ XUẤT HASHTAG:
+3. ĐỀ XUẤT HASHTAG (TIẾNG VIỆT):
    - 5-8 hashtag liên quan
    - Bao gồm: thời trang, thử đồ ảo, liên kết, top xu hướng
    - Tiếng Việt, hỗn hợp cách viết hoa thấp
 
-===== ĐỊNH DẠNG ĐẦURAOUTPUT =====
-Chỉ trả lại JSON hợp lệ:
+===== ĐỊNH DẠNG ĐẦU OUTPUT =====
+Chỉ trả lại JSON hợp lệ với CHI TIẾT VIDEO PRODUCTION:
 {
   "videoScripts": [
     {
       "segment": "Hook",
-      "timeRange": "0-2s",
-      "duration": 2,
-      "image": "wearing",
-      "script": "Mở đầu hấp dẫn tại đây..."
+      "timeRange": "0-3s",
+      "duration": 3,
+      "startFrame": "wearing",
+      "cameraDirection": "Zoom in từ full body tới torso (2s)",
+      "characterPose": "Đứng, quay chậm để thể hiện cách áo vừa vặn",
+      "characterMovement": "Quay 90°, cử chỉ tay nhẹ để nhấn mạnh chiếu sáng",
+      "productFocus": "Toàn thân, nhấn mạnh vào cách áo tôn dáng",
+      "lipSyncTiming": "0-1s: Mỉm cười, 1-3s: Nói chuyên nghiệp",
+      "script": "Mở đầu hấp dẫn tại đây - PHẢI LÀ TIẾNG VIỆT, không tiếng Anh..."
     },
     {
       "segment": "Introduction",
-      "timeRange": "2-5s",
-      "duration": 3,
-      "image": "wearing",
-      "script": "Giới thiệu trang phục tại đây..."
+      "timeRange": "3-8s",
+      "duration": 5,
+      "startFrame": "wearing",
+      "cameraDirection": "Fixed shot hoặc pan nhẹ từ trái sang phải",
+      "characterPose": "Đứng tự nhiên, đôi khi cầm sản phẩm",
+      "characterMovement": "Động tác tay nhẹ nhàng để chỉ chi tiết",
+      "productFocus": "Cách áo vừa vặn trên cơ thể, chi tiết cổ/tay",
+      "lipSyncTiming": "Nói liên tục với ngã hứng trong giọng",
+      "script": "Giới thiệu trang phục tại đây - TIẾNG VIỆT THUẦN..."
     },
     {
       "segment": "Features",
-      "timeRange": "5-8s",
-      "duration": 3,
-      "image": "holding",
-      "script": "Làm nổi bật chi tiết tại đây..."
+      "timeRange": "8-15s",
+      "duration": 7,
+      "startFrame": "holding",
+      "cameraDirection": "Close-up trên tay cầm sản phẩm - chi tiết chất vải",
+      "characterPose": "Cầm áo lên nhẹ, chỉ tay vào chi tiết (viền, khóa, etc)",
+      "characterMovement": "Xoay áo từ từ để thể hiện nhiều góc",
+      "productFocus": "Chi tiết chất vải, viền, khóa, màu sắc - close-up",
+      "lipSyncTiming": "Nói sôi nổi, biểu cảm excited về chất lượng",
+      "script": "Làm nổi bật chi tiết tại đây - TOÀN TIẾNG VIỆT..."
     },
     {
       "segment": "CTA",
-      "timeRange": "8-{clipDuration}s",
-      "duration": 2,
-      "image": "wearing",
-      "script": "Gọi hành động tại đây..."
+      "timeRange": "15-{videoDuration}s",
+      "duration": 5,
+      "startFrame": "wearing",
+      "cameraDirection": "Zoom out từ close-up tới full body (urgency effect)",
+      "characterPose": "Đứng tự tin, nhìn thẳng vào camera",
+      "characterMovement": "Cử chỉ tay mạnh mẽ - chỉ vào camera hoặc xuống",
+      "productFocus": "Toàn bộ áo trên cơ thể - premium feel",
+      "lipSyncTiming": "Nói rõ ràng, urgency - đặc biệt phần CTA link",
+      "script": "Gọi hành động mạnh mẽ tại đây - CTA TIẾNG VIỆT với urgency..."
     }
   ],
-  "voiceoverScript": "Toàn bộ kịch bản voiceover...",
+  "voiceoverScript": "Toàn bộ kịch bản voiceover TIẾNG VIỆT, 200-250 từ, tốc độ {voicePace}...",
   "hashtags": ["#thời trang", "#thử đồ", ...]
-}`,
+}
 
-    'top': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm áo/áo sơ mi.
+⚠️ QUAN TRỌNG NHẤT:
+- ✅ TOÀN BỘ LÀ TIẾNG VIỆT
+- ✅ KHÔNG CÓ TIẾNG ANH
+- ✅ HOOK (0-3s) PHẢI MẠNH ĐỂ GIỮ VIEWERS
+- ✅ CTA CUỐI PHẢI CÓ URGENCY ĐỂ ĐẢY VIEWERS HÀNH ĐỘNG`,
+
+    'top': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm áo/áo sơ mi - TOÀN BỘ TIẾNG VIỆT.
 
 TRỌNG TÂM: Chi tiết áo/áo sơ mi
-- Hook: Tập trung vào cách áo áo tôn dáng
-- Features: Chất vải, thiết kế cổ, tay áo, phối màu
-- CTA: "Thêm vào giỏ hàng", "Link trong bio"
+- Hook (0-3s): Tập trung vào cách áo tôn dáng - TIẾNG VIỆT
+- Features: Chất vải, thiết kế cổ, tay áo, phối màu - TIẾNG VIỆT
+- CTA: "Thêm vào giỏ hàng", "Link trong bio" - TIẾNG VIỆT
 
-Định dạng: Giống như full-outfit nhưng điểm nổi bật trên áo.`,
+Định dạng: Giống như full-outfit nhưng điểm nổi bật trên áo, BẮT BUỘC thời gian [start-ends].`,
 
-    'bottom': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm dưới/quần.
+    'bottom': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm dưới/quần - TOÀN BỘ TIẾNG VIỆT.
 
 TRỌNG TÂM: Chi tiết quần/chân váy
-- Hook: Tập trung vào cách quần làm thon gọn chân
-- Features: Kiểu vừa, chiều dài, chi tiết, mix and match
-- CTA: "Đặt hàng ngay", "Link trong bio"
+- Hook (0-3s): Tập trung vào cách quần làm thon gọn chân - TIẾNG VIỆT
+- Features: Kiểu vừa, chiều dài, chi tiết, mix and match - TIẾNG VIỆT
+- CTA: "Đặt hàng ngay", "Link trong bio" - TIẾNG VIỆT
 
-Định dạng: Giống như full-outfit nhưng điểm nổi bật trên quần.`,
+Định dạng: Giống như full-outfit nhưng điểm nổi bật trên quần, BẮT BUỘC thời gian [start-ends].`,
 
-    'accessories': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm phụ kiện.
+    'accessories': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm phụ kiện - TOÀN BỘ TIẾNG VIỆT.
 
 TRỌNG TÂM: Chi tiết phụ kiện (túi, giày, trang sức)
-- Hook: Phụ kiện hoàn thành bộ trang phục
-- Features: Chất lượng, kiểu dáng, cách sử dụng
-- Examples: Phối với các trang phục khác nhau
+- Hook (0-3s): Phụ kiện hoàn thành bộ trang phục - TIẾNG VIỆT
+- Features: Chất lượng, kiểu dáng, cách sử dụng - TIẾNG VIỆT
+- Examples: Phối với các trang phục khác nhau - TIẾNG VIỆT
 
-Định dạng: Giống như full-outfit nhưng điểm nổi bật trên phụ kiện.`,
+Định dạng: Giống như full-outfit nhưng điểm nổi bật trên phụ kiện, BẮT BUỘC thời gian [start-ends].`,
 
-    'shoes': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm giày.
+    'shoes': `Bạn là chuyên gia phát triển video TikTok. Tạo kịch bản video TikTok trọng tâm giày - TOÀN BỘ TIẾNG VIỆT.
 
 TRỌNG TÂM: Chi tiết giày
-- Hook: Giày hoàn hảo cho bất kỳ dịp nào
-- Features: Kiểu dáng, độ thoải mái, chất liệu, mix and match
-- Examples: Mặc với quần jeans, váy, chinos
+- Hook (0-3s): Giày hoàn hảo cho bất kỳ dịp nào - TIẾNG VIỆT
+- Features: Kiểu dáng, độ thoải mái, chất liệu, mix and match - TIẾNG VIỆT
+- Examples: Mặc với quần jeans, váy, chinos - TIẾNG VIỆT
 
-Định dạng: Giống như full-outfit nhưng điểm nổi bật trên giày.`,
+Định dạng: Giống như full-outfit nhưng điểm nổi bật trên giày, BẮT BUỘC thời gian [start-ends].`,
   },
 
   // ============================================================
@@ -316,7 +347,7 @@ TRỌNG TÂM: Chi tiết giày
   // ============================================================
 
   videoGeneration: {
-    'full-outfit-Hook': `Video TikTok 9:16 bắt đầu hấp dẫn với trang phục hoàn chỉnh.
+    'full-outfit-Hook': `Video TikTok 9:16 bắt đầu hấp dẫn với trang phục hoàn chỉnh - 💫 HOOK RẤT QUAN TRỌNG (0-3s để giữ viewers).
 
 === KHÓA NHÂN VẬT TUYỆT ĐỐI - LÀM VIỆC NGAY ===
 CHỈ SỬ DỤNG NHÂN VẬT TỪ HÌNH ẢNH THAM CHIẾU - KHÔNG THAY ĐỔI:
@@ -337,7 +368,16 @@ Giây 8-10: Tay phải kéo thoáng áo, cử chỉ tự nhiên, gật đầu nh
 - Zoom: Bắt đầu từ xa, pháp nhân từ từ khi tiếp cận
 - Cảm giác: Năng động, thú vị, hấp dẫn, khiến người xem muốn tiếp tục
 - Biểu cảm: Tự tin, hạnh phúc, lan tỏa sự quyến rũ và tự tại
-- Tương tác: Nhìn camera, cử chỉ tay tự nhiên, mãn nguyện với trang phục`,
+- Tương tác: Nhìn camera, cử chỉ tay tự nhiên, mãn nguyện với trang phục
+
+=== 💫 GỢI Ý HIỂN THỊ TEXT TRÊN MÀNG HÌNH (TIẾNG VIỆT) ===
+ĐÂY LÀ PHẦN HOOK RẤT QUAN TRỌNG - TEXT GIÚP GIỮ ATTENTION:
+- Giây 0-1: Hiển thị TEXT BIG: "✨ PHÁT HIỆN TREND" (hoặc "🔥 MUST HAVE" tùy sản phẩm)
+- Giây 1-3: Thêm tên sản phẩm + màu sắc: "Chiếc [Trang phục] Màu [Mầu]"
+- Giây 2-3: Thêm lợi ích chính: "Tôn dáng • Thoải mái • Style"
+- Toàn bộ text PHẢI LÀ TIẾNG VIỆT
+- Font: Bold, nổi bật, dễ đọc trên màn hình nhỏ
+- Vị trí: Giữa hoặc dưới bottom (tránh che mặt nhân vật)`,
 
     'full-outfit-Introduction': `Video TikTok 9:16 giới thiệu trang phục với chi tiết chuyên sâu.
 
@@ -359,7 +399,16 @@ Giây 10-12: Đứng yên, tay hạ xuống, nhìn thẳng camera, biểu cảm 
 - Cảm ứng: Quay tròn mượt mà, zoom nhẹ vào chi tiết
 - Chuyển cảnh: Mượt mà giữa các chi tiết, không giật
 - Cảm giác: Chuyên nghiệp, phong cách, muốn sở hữu trang phục
-- Biểu cảm: Tự hào, tự tin về sự lựa chọn trang phục`,
+- Biểu cảm: Tự hào, tự tin về sự lựa chọn trang phục
+
+=== 💫 GỢI Ý HIỂN THỊ TEXT TRÊN MÀNG HÌNH (TIẾNG VIỆT) ===
+GIỚI THIỆU CHI TIẾT BẰNG TEXT SẼ GIÚP CẢI THIỆN HIỂU BIẾT:
+- Giây 0-2: Text: "Chi tiết thiết kế" (hoặc "Chất lựa chọn tốt")
+- Giây 2-4: Khi show cổ: "Cổ tròn • Dạng cơi lỏng"
+- Giây 4-6: Khi show tay áo: "Tay áo bồng • Chất vải mềm"
+- Giây 6-8: Khi show chiều dài: "Chiều dài [đến gối/mắt cá]"
+- Giây 8-12: Text: "Hoàn hảo cho mọi dâu dượng" (hoặc "Phối được nhiều kiểu")
+- Toàn bộ TIẾNG VIỆT, bold, dễ đọc`,
 
     'full-outfit-Features': `Video TikTok 9:16 làm nổi bật tính năng và chất lượng trang phục.
 
@@ -383,9 +432,18 @@ Giây 12-15: Đứng yên, tay dạo hạ thấp, nhìn thẳng camera tự tin,
 - Cảm ứng: Từng chuyển động mục đích, giáng lực
 - Chi tiết: Close-up vào vải, cổ, tay áo để show chất lượng
 - Cảm giác: Kỹ thuật, thuyết phục, tạo FOMO - muốn sở hữu ngay
-- Biểu cảm: Chân thành, tin tưởng, gật đầu thỏa thuận với các tính năng`,
+- Biểu cảm: Chân thành, tin tưởng, gật đầu thỏa thuận với các tính năng
 
-    'full-outfit-CTA': `Video TikTok 9:16 kết luận hấp dẫn với hành động được gọi rõ ràng.
+=== 💫 GỢI Ý HIỂN THỊ TEXT TRÊN MÀNG HÌNH (TIẾNG VIỆT) ===
+TEXT GIÚP ĐẨY CHẤT LƯỢNG - TĂNG FOMO:
+- Giây 0-2: "Chất lượng [Premium/Cao cấp]"
+- Giây 1-4: "Vải 100% [Chất liệu] • Mịn • Thoải mái"
+- Giây 4-6: "Độ giãn tốt" hoặc "Giữ form"
+- Giây 6-8: "Fit tuyệt vời" + emoji (✨/💯)
+- Giây 8-12: "Bền và đẹp" • "Có thể mặc lâu năm"
+- Tiếng Việt, font bold, size to để dễ nhìn trên điện thoại`,
+
+    'full-outfit-CTA': `Video TikTok 9:16 kết luận hấp dẫn với hành động được gọi rõ ràng - 💫 CTA MẠNH ĐỂ ĐẢY HÀNH ĐỘNG.
 
 === KHÓA NHÂN VẬT HÀNH ===
 GIỮ NGUYÊN NHÂN VẬT HOÀN TOÀN - Chuẩn như hình tham chiếu từ đầu đến cuối:
@@ -410,7 +468,23 @@ Giây 18-20: Full body frame cuối cùng, đứng tự tin, tay nâng áo nhẹ
 - Zoom: Zoom in từ từ vào gương mặt khi nhìn camera trực tiếp
 - Cảm giác: Khuyến khích, FOMO mạnh, năng động, hố lôi
 - Biểu cảm: Tươi cười, hài lòng, khuyến khích, quyết đoán - "Mua ngay!"
-- CTA: Vang vọng - "Đặt hàng", "Link trong bio", "Mua ngay", "Không chần chừ"`,
+
+=== 💫 GỢI Ý HIỂN THỊ TEXT TRÊN MÀNG HÌNH - CTA RẤT QUAN TRỌNG (TIẾNG VIỆT) ===
+ĐЯY LÀ LỰC CUỐI - TEXT PHẢI MẠNH VÀ CÓ URGENCY:
+- Giây 0-3: "Bạn nên có cái này!" hoặc "Không thể bỏ qua!"
+- Giây 2-5: "Có sẵn bây giờ" + "Link trong bio" (pinned)
+- Giây 5-10: "Giảm giá [X]%" hoặc "Hạn chế số lượng" (tạo urgency)
+- Giây 10-15: 
+  - "🔥 Đặt hàng NGAY"
+  - "✅ Giao nhanh"
+  - "🎁 Miễn phí ship"
+  - (chọn 1-2 benefit chính)
+- Giây 15-20: Cuối cùng - BIG TEXT:
+  - "👉 LINK BIO 👈" hoặc "👉 TẠP CHÍ 👈"
+  - Hoặc: "Mua ngay" + "Không hối hận"
+- Toàn bộ CTA TIẾNG VIỆT, font BOLD + SIZE LỚN
+- Dùng emoji để tăng attention (🔥✨💯)
+- Thời gian text: tối thiểu 2-3 giây để viewers kịp thấy`,
   },
 
   // ============================================================

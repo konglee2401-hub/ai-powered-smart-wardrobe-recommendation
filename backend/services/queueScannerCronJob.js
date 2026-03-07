@@ -24,7 +24,18 @@ class QueueScannerCronJob {
     this.mediaDir = path.join(__dirname, '../media');
     this.isRunning = false;
     this.scheduleIntervalRef = null;
-    this.scheduleConfig = { intervalMinutes: 60, autoPublish: false, accountIds: [], platform: 'youtube', youtubePublishType: 'shorts', enabled: false };
+    this.scheduleConfig = {
+      intervalMinutes: 60,
+      scheduleMode: 'hourly',
+      everyHours: 1,
+      dailyTime: '09:00',
+      scheduleLabel: 'Every 1 hour',
+      autoPublish: false,
+      accountIds: [],
+      platform: 'youtube',
+      youtubePublishType: 'shorts',
+      enabled: false,
+    };
     this.settingsLoaded = false;
     this.ensureDirectories();
   }
@@ -110,7 +121,7 @@ class QueueScannerCronJob {
 
           // 4. Update queue item status
           // Create queue record
-          const queueResult = VideoQueueService.addToQueue({
+          const queueResult = await VideoQueueService.addToQueue({
             videoConfig: {
               layout: '2-3-1-3',
               duration: 30,
@@ -127,7 +138,7 @@ class QueueScannerCronJob {
             accountIds: options.accountIds || []
           });
           if (queueResult.success) {
-            VideoQueueService.updateQueueStatus(queueResult.queueId, 'ready');
+            await VideoQueueService.updateQueueStatus(queueResult.queueId, 'ready');
           }
           console.log(`✓ Queue item created: ${queueResult.queueId}`);
 
@@ -168,7 +179,7 @@ class QueueScannerCronJob {
             }
 
             if (autoPublishResults.some(r => r.success)) {
-              VideoQueueService.updateQueueStatus(queueResult.queueId, 'uploaded');
+              await VideoQueueService.updateQueueStatus(queueResult.queueId, 'uploaded');
             }
           }
 
@@ -227,6 +238,10 @@ class QueueScannerCronJob {
       if (settings) {
         this.scheduleConfig = {
           intervalMinutes: settings.intervalMinutes || 60,
+          scheduleMode: settings.scheduleMode || 'hourly',
+          everyHours: settings.everyHours || Math.max(1, Math.round((settings.intervalMinutes || 60) / 60)),
+          dailyTime: settings.dailyTime || '09:00',
+          scheduleLabel: settings.scheduleLabel || `Every ${Math.max(1, Math.round((settings.intervalMinutes || 60) / 60))} hour(s)`,
           autoPublish: !!settings.autoPublish,
           accountIds: settings.accountIds || [],
           platform: settings.platform || 'youtube',
@@ -253,6 +268,10 @@ class QueueScannerCronJob {
         key: 'default',
         enabled: !!config.enabled,
         intervalMinutes: config.intervalMinutes || 60,
+        scheduleMode: config.scheduleMode || 'hourly',
+        everyHours: config.everyHours || Math.max(1, Math.round((config.intervalMinutes || 60) / 60)),
+        dailyTime: config.dailyTime || '09:00',
+        scheduleLabel: config.scheduleLabel || `Every ${config.everyHours || Math.max(1, Math.round((config.intervalMinutes || 60) / 60))} hour(s)`,
         autoPublish: !!config.autoPublish,
         accountIds: config.accountIds || [],
         platform: config.platform || 'youtube',
@@ -273,6 +292,10 @@ class QueueScannerCronJob {
 
     this.scheduleConfig = {
       intervalMinutes,
+      scheduleMode: options.scheduleMode || 'hourly',
+      everyHours: options.everyHours || Math.max(1, Math.round(intervalMinutes / 60)),
+      dailyTime: options.dailyTime || '09:00',
+      scheduleLabel: options.scheduleLabel || `Every ${options.everyHours || Math.max(1, Math.round(intervalMinutes / 60))} hour(s)`,
       autoPublish: !!options.autoPublish,
       accountIds: options.accountIds || [],
       platform: options.platform || 'youtube',

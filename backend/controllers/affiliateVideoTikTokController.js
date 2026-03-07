@@ -419,6 +419,7 @@ export async function generateVoiceoverEndpoint(req, res) {
       voiceoverScript,
       voiceGender = 'female',
       voicePace = 'fast',
+      voiceName,  // 💫 NEW: Direct voice name from frontend
       videoUrl,
       synthesizer = 'google-tts',
       videoDuration = 20,
@@ -448,19 +449,21 @@ export async function generateVoiceoverEndpoint(req, res) {
     console.log(`  Pace: ${voicePace}`);
     console.log(`  Synthesizer: ${synthesizer}`);
 
-    // Map voice gender + pace to voice names (Gemini TTS)
+    // Map voice gender + pace to voice names (Gemini TTS - lowercase)
+    // Source: https://ai.google.dev/gemini-api/docs/speech-generation (30 prebuilt voices)
     const voiceNameMap = {
-      'female-fast': 'Aoede',
-      'female-normal': 'Puck',
-      'female-slow': 'Lah-Kha',
-      'male-fast': 'Charon',
-      'male-normal': 'Breeze',
-      'male-slow': 'Ember'
+      'female-fast': 'fenrir',      // Excitable, energetic
+      'female-normal': 'aoede',     // Breezy, neutral
+      'female-slow': 'enceladus',   // Breathy, soft
+      'male-fast': 'puck',          // Upbeat, energetic
+      'male-normal': 'kore',        // Firm, balanced
+      'male-slow': 'charon'         // Informative, authoritative
     };
 
     const voiceKey = `${voiceGender}-${voicePace}`;
-    const voiceName = voiceNameMap[voiceKey] || 'Puck';
-    console.log(`  Selected Voice: ${voiceName}`);
+    // Use provided voiceName or fallback to mapped voice
+    const selectedVoiceName = voiceName || voiceNameMap[voiceKey] || 'aoede';
+    console.log(`  Selected Voice: ${selectedVoiceName}`);
 
     // Import and use actual TTS service
     const { default: ttsService } = await import('../services/ttsService.js');
@@ -481,9 +484,9 @@ export async function generateVoiceoverEndpoint(req, res) {
     // Call actual TTS service
     const audioPath = await ttsService.generateAndSaveAudio(
       voiceoverScript,
-      voiceName,
+      selectedVoiceName,  // 💫 Use correct voice name
       audioFilePath,
-      { language: 'EN' }
+      { language: 'VI' }  // 💫 Use Vietnamese for TikTok content
     );
 
     const ttsDuration = ((Date.now() - ttsStart) / 1000).toFixed(2);

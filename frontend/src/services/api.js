@@ -445,6 +445,7 @@ export const browserAutomationAPI = {
     if (options.useCase) formData.append('useCase', options.useCase);
     if (options.productFocus) formData.append('productFocus', options.productFocus);
     if (options.selectedCharacter) formData.append('selectedCharacter', JSON.stringify(options.selectedCharacter));
+    if (options.optionsLibrary) formData.append('optionsLibrary', JSON.stringify(options.optionsLibrary));
     
     return api.postFormData('/v1/browser-automation/analyze-browser', formData);
   },
@@ -457,6 +458,7 @@ export const browserAutomationAPI = {
   generateBrowserOnly: async (prompt, options = {}) => {
     const payload = {
       prompt,
+      flowId: options.flowId || null,
       generationProvider: options.generationProvider || 'grok',  // 💫 Image generation provider
       imageGenProvider: options.imageGenProvider || options.provider || 'grok',
       negativePrompt: options.negativePrompt || '',
@@ -571,10 +573,12 @@ export const browserAutomationAPI = {
     const payload = {
       duration: videoData.duration,
       scenario: videoData.scenario,
+      aspectRatio: videoData.aspectRatio,
       segments: videoData.segments,
       sourceImage: videoData.sourceImage,
       characterImage: videoData.characterImage,
       productImage: videoData.productImage,
+      flowId: videoData.flowId || null,
       videoProvider: videoData.videoProvider || 'google-flow',  // 💫 Primary field name for backend
       provider: videoData.videoProvider || 'google-flow',  // Backward compatibility
       language: videoData.language || 'en'  // 💫 Pass language for Vietnamese support
@@ -701,12 +705,30 @@ export const affiliateVideoTiktokAPI = {
    * @param {File} productImage - Product image file
    * @param {string} flowId - Optional flow ID
    */
-  step1Analyze: async (characterImage, productImage, flowId = null) => {
+  step1Analyze: async (characterImage, productImage, flowId = null, options = {}) => {
     const formData = new FormData();
     formData.append('characterImage', characterImage);
     formData.append('productImage', productImage);
     if (flowId) {
       formData.append('flowId', flowId);
+    }
+
+    if (options.productFocus) {
+      formData.append('productFocus', options.productFocus);
+    }
+
+    ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'hairstyle', 'makeup', 'aspectRatio'].forEach((key) => {
+      if (options[key] != null && options[key] !== '') {
+        formData.append(key, options[key]);
+      }
+    });
+
+    if (options.optionsLibrary) {
+      formData.append('optionsLibrary', JSON.stringify(options.optionsLibrary));
+    }
+
+    if (options.selectedCharacter) {
+      formData.append('selectedCharacter', JSON.stringify(options.selectedCharacter));
     }
 
     return api.postFormData('/ai/affiliate-video-tiktok/step-1-analyze', formData);

@@ -1,85 +1,135 @@
 /**
  * TTS Service - Google Gemini Text-to-Speech Integration
  * Handles audio generation using Google's Gemini TTS API
+ * ENHANCED: Uses key rotation for multiple GEMINI_API_KEY_1, 2, 3, 4
+ * 
+ * Model: gemini-2.5-flash-preview-tts (as per official Google Docs)
+ * Reference: https://ai.google.dev/gemini-api/docs/speech-generation
+ * 
+ * NOTE: Uses REST API instead of SDK due to SDK bug with response modalities
  */
 
-import { GoogleGenAI } from '@google/genai';
-import mime from 'mime';
 import fs from 'fs';
 import path from 'path';
+import fetch from 'node-fetch';
+import { getKeyManager } from '../utils/keyManager.js';
 
 class TTSService {
   constructor() {
-    this.aiClient = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-    });
-    this.model = 'gemini-2.5-pro-preview-tts';
+    // Use gemini-2.5-flash-preview-tts as recommended in official docs
+    this.model = 'gemini-2.5-flash-preview-tts';
+    this.keyManager = getKeyManager('GEMINI');
   }
 
   /**
-   * Generate TTS audio from text
-   * @param {string} text - Text to convert to speech
-   * @param {string} voiceName - Voice name (e.g., 'Puck', 'Aoede')
-   * @param {string} language - Language code (EN, VI)
-   * @param {Object} options - Additional TTS options
-   * @returns {Promise<Buffer>} Audio buffer
+   * Get next available GEMINI API key with rotation
    */
-  async generateAudio(text, voiceName, language = 'VI', options = {}) {
+  getNextKey() {
+    const keyObj = this.keyManager.getNextKey('GEMINI');
+    return keyObj.key;
+  }
+
+  /**
+   * Generate TTS audio from text with automatic retry on rate limit
+   * Uses official Google Gemini TTS API via REST:
+   * https://ai.google.dev/gemini-api/docs/speech-generation
+   * 
+   * @param {string} text - Text to convert to speech
+   * @param {string} voiceName - Voice name (must be lowercase: puck, aoede, kore, etc.)
+   * @param {string} language - Language code (auto-detected by API)
+   * @param {Object} options - Additional TTS options
+   * @param {number} retryCount - Internal retry counter
+   * @returns {Promise<Buffer>} Audio buffer (PCM format from Gemini)
+   */
+  async generateAudio(text, voiceName, language = 'VI', options = {}, retryCount = 0) {
     try {
       if (!text || text.trim().length === 0) {
         throw new Error('Text cannot be empty');
       }
 
-      const config = {
-        temperature: options.temperature || 1.1,
-        responseModalities: ['audio'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voiceName || 'Puck',
+      // Get next available API key with rotation
+      const apiKey = this.getNextKey();
+      const model = this.model;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      // Voice names must be lowercase
+      const voiceNameLower = (voiceName || 'puck').toLowerCase();
+
+      // Build request payload according to REST API spec
+      const payload = {
+        contents: [
+          {
+            parts: [
+              {
+                text: text,
+              },
+            ],
+          },
+        ],
+        generation_config: {
+          response_modalities: ['AUDIO'],
+          speech_config: {
+            voice_config: {
+              prebuilt_voice_config: {
+                voice_name: voiceNameLower,
+              },
             },
           },
         },
       };
 
-      const contents = [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: text,
-            },
-          ],
-        },
-      ];
+      console.log(`🔍 DEBUG: Using model: ${model}`);
+      console.log(`🔍 DEBUG: Using voice: ${voiceNameLower}`);
+      console.log(`🔍 DEBUG: Endpoint: ${endpoint.split('?')[0]}...`);
 
-      const response = await this.aiClient.models.generateContentStream({
-        model: this.model,
-        config,
-        contents,
+      // Call REST API
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
-      // Collect audio chunks
-      const audioChunks = [];
-      let hasAudio = false;
+      const responseData = await response.json();
 
-      for await (const chunk of response) {
-        if (
-          chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData
-        ) {
-          const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-          const buffer = Buffer.from(inlineData.data || '', 'base64');
-          audioChunks.push(buffer);
-          hasAudio = true;
+      if (!response.ok) {
+        throw responseData.error || new Error('Unknown API error');
+      }
+
+      // Extract audio data from response
+      const audioData = responseData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+      if (!audioData) {
+        throw new Error('No audio data received from Gemini TTS API');
+      }
+
+      // Convert base64 to buffer
+      const audioBuffer = Buffer.from(audioData, 'base64');
+
+      // Mark key as successful on success
+      this.keyManager.markKeySuccess('GEMINI', apiKey);
+
+      return audioBuffer;
+    } catch (error) {
+      // Check if this is a rate limit error (429 or quota exceeded)
+      const isRateLimit = error.status === 429 || 
+                          error.message?.includes('RESOURCE_EXHAUSTED') || 
+                          error.message?.includes('quota') ||
+                          error.message?.includes('429');
+      
+      if (isRateLimit && retryCount < 3) {
+        console.warn(`⏳ Rate limited, marking current key and trying next available key...`);
+        
+        // Try next key
+        if (this.keyManager.hasAvailableKeys('GEMINI')) {
+          console.log(`🔄 Retrying with next GEMINI key (attempt ${retryCount + 1}/3)...`);
+          return this.generateAudio(text, voiceName, language, options, retryCount + 1);
+        } else {
+          throw new Error('All GEMINI API keys are rate limited. Please try again later.');
         }
       }
-
-      if (!hasAudio) {
-        throw new Error('No audio data received from Gemini API');
-      }
-
-      return Buffer.concat(audioChunks);
-    } catch (error) {
+      
       console.error('TTS Generation Error:', error.message);
       throw new Error(`Failed to generate audio: ${error.message}`);
     }

@@ -14,6 +14,18 @@ const __dirname = dirname(__filename);
 
 const router = express.Router();
 
+// Helper: admin API key enforcement
+function checkAdminKey(req, res) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) return true; // no admin key configured -> allow
+  const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
+  if (!provided || provided !== adminKey) {
+    res.status(403).json({ success: false, error: 'admin_key_required' });
+    return false;
+  }
+  return true;
+}
+
 router.post('/credentials/save', async (req, res) => {
   try {
     const { provider, clientId, clientSecret, redirectUri } = req.body || {};
@@ -75,6 +87,13 @@ router.post('/run/refresh-google-flow', (req, res) => {
       stdio: 'pipe'
     });
 
+    // Attach child process to log session for runtime control
+    try {
+      LogStreamingService.attachProcess(sessionId, child, path.basename(script));
+    } catch (e) {
+      console.warn('Failed to attach process to LogStreamingService', e.message || e);
+    }
+
     // Capture script output
     let scriptOutput = '';
     child.stdout?.on('data', (data) => {
@@ -100,6 +119,8 @@ router.post('/run/refresh-google-flow', (req, res) => {
         LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
         LogStreamingService.endSession(sessionId, 'failed');
       }
+      // ensure attached process record is cleaned up
+      try { LogStreamingService.detachProcess(sessionId); } catch (e) {}
     });
 
     res.json({ success: true, sessionId, pid: child.pid });
@@ -139,6 +160,13 @@ router.post('/run/chatgpt-auto-login', (req, res) => {
       stdio: 'pipe'
     });
 
+    // Attach child process to log session for runtime control
+    try {
+      LogStreamingService.attachProcess(sessionId, child, path.basename(script));
+    } catch (e) {
+      console.warn('Failed to attach process to LogStreamingService', e.message || e);
+    }
+
     // Capture script output
     let scriptOutput = '';
     child.stdout?.on('data', (data) => {
@@ -164,6 +192,8 @@ router.post('/run/chatgpt-auto-login', (req, res) => {
         LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
         LogStreamingService.endSession(sessionId, 'failed');
       }
+      // ensure attached process record is cleaned up
+      try { LogStreamingService.detachProcess(sessionId); } catch (e) {}
     });
 
     res.json({ success: true, sessionId, pid: child.pid });
@@ -521,6 +551,87 @@ router.post('/logs/:sessionId/end', (req, res) => {
 
     LogStreamingService.endSession(sessionId, status);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check if a process is attached to a session
+router.get('/session-process/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const info = LogStreamingService.getProcessInfo(sessionId);
+    if (!info) return res.json({ success: true, exists: false });
+    res.json({ success: true, exists: true, pid: info.pid, scriptName: info.scriptName });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Kill a running process attached to a session
+router.post('/run/kill-session', (req, res) => {
+  try {
+    if (!checkAdminKey(req, res)) return;
+    const { sessionId, signal = 'SIGTERM' } = req.body || {};
+    if (!sessionId) return res.status(400).json({ success: false, error: 'sessionId required' });
+    const ok = LogStreamingService.sendSignal(sessionId, signal);
+    res.json({ success: ok });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Write to stdin of attached process
+router.post('/run/session-stdin', (req, res) => {
+  try {
+    if (!checkAdminKey(req, res)) return;
+    const { sessionId, data } = req.body || {};
+    if (!sessionId) return res.status(400).json({ success: false, error: 'sessionId required' });
+    const ok = LogStreamingService.writeStdin(sessionId, data || '\n');
+    res.json({ success: ok });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Run a whitelisted command and attach logs to a session
+router.post('/run/command', (req, res) => {
+  try {
+    if (!checkAdminKey(req, res)) return;
+    const { command, args = [], cwd } = req.body || {};
+    if (!command) return res.status(400).json({ success: false, error: 'command required' });
+
+    const allowed = (process.env.ALLOWED_COMMANDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (allowed.length > 0 && !allowed.includes(command)) {
+      return res.status(403).json({ success: false, error: 'command_not_allowed' });
+    }
+
+    const sessionId = randomUUID();
+    LogStreamingService.createSession(sessionId);
+    LogStreamingService.addLog(sessionId, `Starting command: ${command} ${args.join(' ')}`, 'info');
+
+    const child = spawn(command, args, {
+      cwd: cwd ? path.resolve(cwd) : path.join(__dirname, '..'),
+      env: process.env,
+      stdio: 'pipe'
+    });
+
+    LogStreamingService.attachProcess(sessionId, child, command);
+
+    child.stdout?.on('data', (d) => LogStreamingService.addLog(sessionId, d.toString().trim(), 'info'));
+    child.stderr?.on('data', (d) => LogStreamingService.addLog(sessionId, d.toString().trim(), 'warn'));
+    child.on('error', (err) => {
+      LogStreamingService.addLog(sessionId, `Process error: ${err.message}`, 'error');
+      LogStreamingService.endSession(sessionId, 'failed');
+      LogStreamingService.detachProcess(sessionId);
+    });
+    child.on('exit', (code) => {
+      if (code === 0) LogStreamingService.endSession(sessionId, 'completed');
+      else LogStreamingService.endSession(sessionId, 'failed');
+      LogStreamingService.detachProcess(sessionId);
+    });
+
+    res.json({ success: true, sessionId, pid: child.pid });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -1,148 +1,121 @@
 /**
  * Video Queue Service
- * - Manage video processing queue
- * - Track status: pending, processing, ready, uploaded, failed
- * - Store queue items with metadata
- * - Retry failed videos
- * - Provide queue statistics
+ *
+ * This service is the Mongo-backed replacement for the deprecated queue.json
+ * file store. It preserves the old queue method names so older controllers
+ * and orchestrators can keep calling the same API while the data now lives
+ * in Mongo and can be shared across the unified pipeline UI.
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import VideoPipelineJob from '../models/VideoPipelineJob.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const mediaDir = path.join(__dirname, '../media');
-const queueDir = path.join(mediaDir, 'queue');
+const PRIORITY_ORDER = { high: 1, normal: 2, low: 3 };
+
+function createQueueId() {
+  return `queue-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function normalizeDate(value, fallback = new Date()) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
+function toPlainJob(job) {
+  if (!job) return null;
+  const plain = typeof job.toObject === 'function' ? job.toObject() : { ...job };
+  return {
+    ...plain,
+    scheduleTime: plain.scheduleTime ? new Date(plain.scheduleTime).toISOString() : null,
+    startedAt: plain.startedAt ? new Date(plain.startedAt).toISOString() : null,
+    completedAt: plain.completedAt ? new Date(plain.completedAt).toISOString() : null,
+    uploadedAt: plain.uploadedAt ? new Date(plain.uploadedAt).toISOString() : null,
+    createdAt: plain.createdAt ? new Date(plain.createdAt).toISOString() : null,
+    updatedAt: plain.updatedAt ? new Date(plain.updatedAt).toISOString() : null,
+    processLogs: (plain.processLogs || []).map((entry) => ({
+      ...entry,
+      timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString() : null,
+    })),
+    errorLog: (plain.errorLog || []).map((entry) => ({
+      ...entry,
+      timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString() : null,
+    })),
+  };
+}
 
 class VideoQueueService {
-  constructor() {
-    this.ensureDirectories();
-    this.queueFile = path.join(queueDir, 'queue.json');
-    this.logFile = path.join(queueDir, 'process-log.json');
-    this.loadQueue();
-  }
-
-  ensureDirectories() {
-    if (!fs.existsSync(queueDir)) {
-      fs.mkdirSync(queueDir, { recursive: true });
-    }
-  }
-
   /**
-   * Load queue from file
+   * Adds a single job into the unified production queue.
+   * The payload intentionally mirrors the legacy queue item shape.
    */
-  loadQueue() {
-    try {
-      if (fs.existsSync(this.queueFile)) {
-        const data = fs.readFileSync(this.queueFile, 'utf8');
-        this.queue = JSON.parse(data);
-      } else {
-        this.queue = [];
-        this.saveQueue();
-      }
-    } catch (error) {
-      console.error('Error loading queue:', error);
-      this.queue = [];
-    }
-  }
-
-  /**
-   * Save queue to file
-   */
-  saveQueue() {
-    try {
-      fs.writeFileSync(this.queueFile, JSON.stringify(this.queue, null, 2));
-    } catch (error) {
-      console.error('Error saving queue:', error);
-    }
-  }
-
-  /**
-   * Add video to queue
-   */
-  addToQueue(config) {
+  async addToQueue(config) {
     try {
       const {
         videoConfig,
-        platform = 'all', // tiktok, youtube, facebook, all
-        contentType = 'product_promo', // product_promo, hot_mashup, mixed
-        priority = 'normal', // low, normal, high
-        scheduleTime = null, // ISO timestamp or null for immediately
-        accountIds = null, // Target specific accounts
-        metadata = {}
-      } = config;
+        platform = 'all',
+        contentType = 'product_promo',
+        priority = 'normal',
+        scheduleTime = null,
+        accountIds = [],
+        metadata = {},
+      } = config || {};
 
-      const queueId = `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      const queueItem = {
+      if (!videoConfig) {
+        return { success: false, error: 'videoConfig is required' };
+      }
+
+      const queueId = createQueueId();
+      const job = await VideoPipelineJob.create({
         queueId,
         videoConfig,
         platform,
         contentType,
         priority,
-        scheduleTime: scheduleTime || new Date().toISOString(),
-        accountIds,
-        status: 'pending', // pending, processing, ready, uploaded, failed
-        createdAt: new Date().toISOString(),
-        startedAt: null,
-        completedAt: null,
-        uploadedAt: null,
-        uploadUrl: null,
-        uploadedByAccount: null,
-        errorCount: 0,
-        errorLog: [],
+        scheduleTime: normalizeDate(scheduleTime),
+        accountIds: Array.isArray(accountIds) ? accountIds : [],
         metadata,
-        retry: 0,
-        maxRetries: 3
-      };
-
-      this.queue.push(queueItem);
-      this.saveQueue();
-
-      this.logProcess({
-        queueId,
-        stage: 'created',
-        status: 'success',
-        message: 'Video added to queue'
+        processLogs: [{
+          stage: 'created',
+          status: 'success',
+          message: 'Video added to queue',
+          timestamp: new Date(),
+        }],
       });
 
       return {
         success: true,
         queueId,
-        queueItem,
-        message: 'Video added to queue successfully'
+        queueItem: toPlainJob(job),
+        message: 'Video added to queue successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Add multiple videos to queue (batch)
+   * Adds multiple jobs in one request. The batch metadata is stored on each
+   * child job so the UI can still reconstruct the original operator action.
    */
-  addBatchToQueue(config) {
+  async addBatchToQueue(config) {
     try {
       const {
         videos = [],
         platform = 'all',
         contentType = 'product_promo',
         priority = 'normal',
-        metadata = {}
-      } = config;
+        metadata = {},
+      } = config || {};
 
       if (!Array.isArray(videos) || videos.length === 0) {
         return { success: false, error: 'Videos array is empty' };
       }
 
-      const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
       const queueIds = [];
 
-      videos.forEach((video, index) => {
-        const result = this.addToQueue({
+      for (const [index, video] of videos.entries()) {
+        const result = await this.addToQueue({
           videoConfig: video,
           platform,
           contentType,
@@ -151,414 +124,348 @@ class VideoQueueService {
             ...metadata,
             batchId,
             batchIndex: index,
-            batchSize: videos.length
-          }
+            batchSize: videos.length,
+          },
         });
 
         if (result.success) {
           queueIds.push(result.queueId);
         }
-      });
+      }
 
       return {
         success: true,
         batchId,
         totalAdded: queueIds.length,
         queueIds,
-        message: `Added ${queueIds.length} videos to queue`
+        message: `Added ${queueIds.length} videos to queue`,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Update queue item status
+   * Changes the lifecycle status of one queue job and stores a process log entry.
    */
-  updateQueueStatus(queueId, status, metadata = {}) {
+  async updateQueueStatus(queueId, status, metadata = {}) {
     try {
-      const item = this.queue.find(q => q.queueId === queueId);
-
-      if (!item) {
+      const job = await VideoPipelineJob.findOne({ queueId });
+      if (!job) {
         return { success: false, error: `Queue item not found: ${queueId}` };
       }
 
-      const oldStatus = item.status;
-      item.status = status;
+      const oldStatus = job.status;
+      job.status = status;
 
-      // Update timestamps
-      if (status === 'processing' && !item.startedAt) {
-        item.startedAt = new Date().toISOString();
-      }
+      if (status === 'processing' && !job.startedAt) job.startedAt = new Date();
+      if (status === 'ready' && !job.completedAt) job.completedAt = new Date();
+      if (status === 'uploaded' && !job.uploadedAt) job.uploadedAt = new Date();
 
-      if (status === 'ready' && !item.completedAt) {
-        item.completedAt = new Date().toISOString();
-      }
-
-      if (status === 'uploaded' && !item.uploadedAt) {
-        item.uploadedAt = new Date().toISOString();
-      }
-
-      // Update metadata
-      Object.assign(item, metadata);
-
-      this.saveQueue();
-
-      this.logProcess({
-        queueId,
+      Object.assign(job, metadata);
+      job.processLogs.push({
         stage: status,
         status: 'success',
-        message: `Status changed from ${oldStatus} to ${status}`
+        message: `Status changed from ${oldStatus} to ${status}`,
+        timestamp: new Date(),
       });
+
+      await job.save();
 
       return {
         success: true,
         oldStatus,
         newStatus: status,
-        queueItem: item,
-        message: 'Queue item updated successfully'
+        queueItem: toPlainJob(job),
+        message: 'Queue item updated successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Record error for queue item
+   * Records a stage-specific failure and automatically decides if the job
+   * should go back to pending or remain failed after max retry attempts.
    */
-  recordError(queueId, error, stage = 'processing') {
+  async recordError(queueId, error, stage = 'processing') {
     try {
-      const item = this.queue.find(q => q.queueId === queueId);
-
-      if (!item) {
+      const job = await VideoPipelineJob.findOne({ queueId });
+      if (!job) {
         return { success: false, error: `Queue item not found: ${queueId}` };
       }
 
-      item.errorCount++;
-      item.errorLog.push({
+      job.errorCount += 1;
+      job.retry = job.errorCount;
+      job.errorLog.push({
         stage,
-        error: error.message || error,
-        timestamp: new Date().toISOString()
+        error: error?.message || String(error),
+        timestamp: new Date(),
       });
 
-      // Check if should retry
-      if (item.errorCount <= item.maxRetries) {
-        item.status = 'pending';
-        item.retry = item.errorCount;
-      } else {
-        item.status = 'failed';
-      }
-
-      this.saveQueue();
-
-      this.logProcess({
-        queueId,
+      job.status = job.errorCount <= job.maxRetries ? 'pending' : 'failed';
+      job.processLogs.push({
         stage,
         status: 'error',
-        error: error.message || error,
-        retryAttempt: item.retry
+        error: error?.message || String(error),
+        retryAttempt: job.retry,
+        timestamp: new Date(),
       });
+
+      await job.save();
 
       return {
         success: true,
-        errorCount: item.errorCount,
-        willRetry: item.errorCount <= item.maxRetries,
-        queueItem: item
+        errorCount: job.errorCount,
+        willRetry: job.errorCount <= job.maxRetries,
+        queueItem: toPlainJob(job),
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Get next video for processing
+   * Returns the next pending job with legacy priority ordering.
    */
-  getNextPending(platform = 'all') {
+  async getNextPending(platform = 'all') {
     try {
-      let pending = this.queue.filter(q => q.status === 'pending');
-
+      const query = { status: 'pending' };
       if (platform !== 'all') {
-        pending = pending.filter(q => q.platform === platform || q.platform === 'all');
+        query.$or = [{ platform }, { platform: 'all' }];
       }
 
-      // Sort by priority, then by created time
-      pending.sort((a, b) => {
-        const priorityOrder = { low: 3, normal: 2, high: 1 };
-        const aScore = priorityOrder[a.priority] * 1000000 + new Date(a.createdAt).getTime();
-        const bScore = priorityOrder[b.priority] * 1000000 + new Date(b.createdAt).getTime();
-        return aScore - bScore;
-      });
-
-      if (pending.length === 0) {
+      const pending = await VideoPipelineJob.find(query).lean();
+      if (!pending.length) {
         return { success: false, error: 'No pending videos in queue' };
       }
 
-      const next = pending[0];
+      pending.sort((a, b) => {
+        const aPriority = PRIORITY_ORDER[a.priority] || PRIORITY_ORDER.normal;
+        const bPriority = PRIORITY_ORDER[b.priority] || PRIORITY_ORDER.normal;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+
       return {
         success: true,
-        queueItem: next,
-        position: this.queue.indexOf(next)
+        queueItem: toPlainJob(pending[0]),
+        position: 0,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Get next video ready for upload
+   * Returns the next ready-to-publish job while respecting scheduleTime.
    */
-  getNextReady(platform = 'all') {
+  async getNextReady(platform = 'all') {
     try {
-      let ready = this.queue.filter(q => q.status === 'ready');
+      const query = {
+        status: 'ready',
+        scheduleTime: { $lte: new Date() },
+      };
 
       if (platform !== 'all') {
-        ready = ready.filter(q => q.platform === platform || q.platform === 'all');
+        query.$or = [{ platform }, { platform: 'all' }];
       }
 
-      // Filter by schedule time
-      const now = new Date();
-      ready = ready.filter(q => new Date(q.scheduleTime) <= now);
-
-      // Sort by priority and schedule time
-      ready.sort((a, b) => {
-        const priorityOrder = { low: 3, normal: 2, high: 1 };
-        const aScore = priorityOrder[a.priority] * 1000000 + new Date(a.scheduleTime).getTime();
-        const bScore = priorityOrder[b.priority] * 1000000 + new Date(b.scheduleTime).getTime();
-        return aScore - bScore;
-      });
-
-      if (ready.length === 0) {
+      const ready = await VideoPipelineJob.find(query).lean();
+      if (!ready.length) {
         return { success: false, error: 'No ready videos in queue' };
       }
 
-      const next = ready[0];
+      ready.sort((a, b) => {
+        const aPriority = PRIORITY_ORDER[a.priority] || PRIORITY_ORDER.normal;
+        const bPriority = PRIORITY_ORDER[b.priority] || PRIORITY_ORDER.normal;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return new Date(a.scheduleTime).getTime() - new Date(b.scheduleTime).getTime();
+      });
+
       return {
         success: true,
-        queueItem: next,
-        position: this.queue.indexOf(next)
+        queueItem: toPlainJob(ready[0]),
+        position: 0,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Get queue item by ID
+   * Returns a single queue job for detail views and publish flows.
    */
-  getQueueItem(queueId) {
+  async getQueueItem(queueId) {
     try {
-      const item = this.queue.find(q => q.queueId === queueId);
-
-      if (!item) {
+      const job = await VideoPipelineJob.findOne({ queueId }).lean();
+      if (!job) {
         return { success: false, error: `Queue item not found: ${queueId}` };
       }
-
-      return {
-        success: true,
-        queueItem: item
-      };
+      return { success: true, queueItem: toPlainJob(job) };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
+  /**
+   * Lists the latest queue jobs for dashboard and queue screens.
+   */
+  async getAllQueueItems(limit = 100) {
+    try {
+      const items = await VideoPipelineJob.find({})
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+      const count = await VideoPipelineJob.countDocuments();
 
-  getAllQueueItems(limit = 100) {
-    const sorted = [...this.queue].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return {
-      success: true,
-      items: sorted.slice(0, limit),
-      count: this.queue.length
-    };
+      return {
+        success: true,
+        items: items.map(toPlainJob),
+        count,
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 
   /**
-   * Get queue statistics
+   * Produces summary metrics for the queue tab and dashboard widgets.
    */
-  getQueueStats() {
+  async getQueueStats() {
     try {
+      const jobs = await VideoPipelineJob.find({}).lean();
       const stats = {
-        total: this.queue.length,
+        total: jobs.length,
         byStatus: {
-          pending: this.queue.filter(q => q.status === 'pending').length,
-          processing: this.queue.filter(q => q.status === 'processing').length,
-          ready: this.queue.filter(q => q.status === 'ready').length,
-          uploaded: this.queue.filter(q => q.status === 'uploaded').length,
-          failed: this.queue.filter(q => q.status === 'failed').length
+          pending: jobs.filter((job) => job.status === 'pending').length,
+          processing: jobs.filter((job) => job.status === 'processing').length,
+          ready: jobs.filter((job) => job.status === 'ready').length,
+          uploaded: jobs.filter((job) => job.status === 'uploaded').length,
+          failed: jobs.filter((job) => job.status === 'failed').length,
         },
         byPlatform: {},
         byContentType: {},
         errorRate: 0,
         averageProcessingTime: 0,
         oldestPending: null,
-        newestAdded: null
+        newestAdded: null,
       };
 
-      // Count by platform
-      this.queue.forEach(q => {
-        if (!stats.byPlatform[q.platform]) {
-          stats.byPlatform[q.platform] = 0;
-        }
-        stats.byPlatform[q.platform]++;
-      });
+      for (const job of jobs) {
+        stats.byPlatform[job.platform] = (stats.byPlatform[job.platform] || 0) + 1;
+        stats.byContentType[job.contentType] = (stats.byContentType[job.contentType] || 0) + 1;
+      }
 
-      // Count by content type
-      this.queue.forEach(q => {
-        if (!stats.byContentType[q.contentType]) {
-          stats.byContentType[q.contentType] = 0;
-        }
-        stats.byContentType[q.contentType]++;
-      });
+      const errored = jobs.filter((job) => job.errorCount > 0).length;
+      stats.errorRate = jobs.length ? (errored / jobs.length) * 100 : 0;
 
-      // Error rate
-      const totalWithErrors = this.queue.filter(q => q.errorCount > 0).length;
-      stats.errorRate = this.queue.length > 0 ? (totalWithErrors / this.queue.length) * 100 : 0;
-
-      // Average processing time
-      const completed = this.queue.filter(q => q.completedAt && q.startedAt);
-      if (completed.length > 0) {
-        const totalTime = completed.reduce((sum, q) => {
-          const start = new Date(q.startedAt);
-          const end = new Date(q.completedAt);
-          return sum + (end - start);
+      const completed = jobs.filter((job) => job.startedAt && job.completedAt);
+      if (completed.length) {
+        const totalTime = completed.reduce((sum, job) => {
+          return sum + (new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime());
         }, 0);
-        stats.averageProcessingTime = Math.round(totalTime / completed.length / 1000); // seconds
+        stats.averageProcessingTime = Math.round(totalTime / completed.length / 1000);
       }
 
-      // Oldest pending
-      const pending = this.queue.filter(q => q.status === 'pending');
-      if (pending.length > 0) {
-        pending.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        stats.oldestPending = pending[0];
-      }
+      const pending = jobs
+        .filter((job) => job.status === 'pending')
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      if (pending.length) stats.oldestPending = toPlainJob(pending[0]);
 
-      // Newest added
-      const sorted = [...this.queue].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      stats.newestAdded = sorted[0];
+      const newest = [...jobs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (newest.length) stats.newestAdded = toPlainJob(newest[0]);
 
-      return {
-        success: true,
-        stats
-      };
+      return { success: true, stats };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Get failed videos for retry
+   * Returns queue jobs that permanently failed and may need manual retry.
    */
-  getFailedVideos() {
+  async getFailedVideos() {
     try {
-      const failed = this.queue.filter(q => q.status === 'failed');
-
+      const failed = await VideoPipelineJob.find({ status: 'failed' }).sort({ updatedAt: -1 }).lean();
       return {
         success: true,
-        failed,
+        failed: failed.map(toPlainJob),
         count: failed.length,
-        message: `Found ${failed.length} failed videos`
+        message: `Found ${failed.length} failed videos`,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Retry failed batch
+   * Resets failed jobs back to pending when retry attempts are still allowed.
    */
-  retryFailedBatch(maxRetries = 3) {
+  async retryFailedBatch(maxRetries = 3) {
     try {
-      const failed = this.queue.filter(q => q.status === 'failed');
+      const jobs = await VideoPipelineJob.find({ status: 'failed' });
       let retryCount = 0;
 
-      failed.forEach(q => {
-        if (q.errorCount < maxRetries) {
-          q.status = 'pending';
-          q.retry = 0;
-          q.errorLog = [];
-          retryCount++;
+      for (const job of jobs) {
+        if (job.errorCount < maxRetries) {
+          job.status = 'pending';
+          job.retry = 0;
+          job.errorLog = [];
+          job.processLogs.push({
+            stage: 'retry',
+            status: 'success',
+            message: 'Job moved back to pending',
+            timestamp: new Date(),
+          });
+          await job.save();
+          retryCount += 1;
         }
-      });
-
-      this.saveQueue();
+      }
 
       return {
         success: true,
         retriedCount: retryCount,
-        message: `Retried ${retryCount} failed videos`
+        message: `Retried ${retryCount} failed videos`,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Clean up old queue items
+   * Deletes historical jobs that are older than the configured cutoff.
    */
-  cleanupQueue(config = {}) {
+  async cleanupQueue(config = {}) {
     try {
       const {
         daysOld = 30,
-        statuses = ['uploaded', 'failed'] // Which statuses to clean
+        statuses = ['uploaded', 'failed'],
       } = config;
 
       const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-      const beforeCount = this.queue.length;
-
-      this.queue = this.queue.filter(q => {
-        if (statuses.includes(q.status) && new Date(q.completedAt || q.createdAt) < cutoffDate) {
-          return false;
-        }
-        return true;
+      const result = await VideoPipelineJob.deleteMany({
+        status: { $in: statuses },
+        $or: [
+          { completedAt: { $lt: cutoffDate } },
+          { completedAt: null, createdAt: { $lt: cutoffDate } },
+        ],
       });
-
-      const deleted = beforeCount - this.queue.length;
-      this.saveQueue();
 
       return {
         success: true,
-        deleted,
-        message: `Cleaned up ${deleted} old queue items`
+        deleted: result.deletedCount || 0,
+        message: `Cleaned up ${result.deletedCount || 0} old queue items`,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Log process event
+   * Writes a process log entry without changing the queue status.
    */
-  logProcess(logEntry) {
+  async logProcess(logEntry) {
     try {
       const {
         queueId,
@@ -567,96 +474,70 @@ class VideoQueueService {
         message = '',
         error = null,
         duration = null,
-        retryAttempt = 0
-      } = logEntry;
+        retryAttempt = 0,
+      } = logEntry || {};
 
-      const log = {
-        queueId,
+      if (!queueId) return { success: false, error: 'queueId is required' };
+
+      const job = await VideoPipelineJob.findOne({ queueId });
+      if (!job) return { success: false, error: `Queue item not found: ${queueId}` };
+
+      job.processLogs.push({
         stage,
         status,
         message,
         error,
         duration,
         retryAttempt,
-        timestamp: new Date().toISOString()
-      };
+        timestamp: new Date(),
+      });
 
-      let logs = [];
-      if (fs.existsSync(this.logFile)) {
-        const data = fs.readFileSync(this.logFile, 'utf8');
-        logs = JSON.parse(data);
-      }
-
-      logs.push(log);
-
-      // Keep only last 10000 logs
-      if (logs.length > 10000) {
-        logs = logs.slice(-10000);
-      }
-
-      fs.writeFileSync(this.logFile, JSON.stringify(logs, null, 2));
-
+      await job.save();
       return { success: true };
     } catch (error) {
-      console.error('Error logging process:', error);
-      return { success: false };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Get process logs for queue item
+   * Returns process logs embedded in the queue job document.
    */
-  getProcessLogs(queueId) {
+  async getProcessLogs(queueId) {
     try {
-      if (!fs.existsSync(this.logFile)) {
-        return { success: true, logs: [] };
-      }
-
-      const data = fs.readFileSync(this.logFile, 'utf8');
-      const logs = JSON.parse(data);
-
-      const queueLogs = logs.filter(l => l.queueId === queueId);
+      const job = await VideoPipelineJob.findOne({ queueId }).lean();
+      if (!job) return { success: false, error: `Queue item not found: ${queueId}` };
 
       return {
         success: true,
-        logs: queueLogs,
-        count: queueLogs.length
+        logs: (job.processLogs || []).map((entry) => ({
+          ...entry,
+          timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString() : null,
+        })),
+        count: job.processLogs?.length || 0,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
-   * Clear queue (use with caution!)
+   * Clears queue items completely or by one status bucket.
    */
-  clearQueue(statusFilter = null) {
+  async clearQueue(statusFilter = null) {
     try {
-      const beforeCount = this.queue.length;
-
-      if (statusFilter) {
-        this.queue = this.queue.filter(q => q.status !== statusFilter);
-      } else {
-        this.queue = [];
-      }
-
-      const deleted = beforeCount - this.queue.length;
-      this.saveQueue();
+      const query = statusFilter ? { status: statusFilter } : {};
+      const deleted = await VideoPipelineJob.countDocuments(query);
+      await VideoPipelineJob.deleteMany(query);
+      const remaining = await VideoPipelineJob.countDocuments();
 
       return {
         success: true,
         deleted,
-        remaining: this.queue.length,
-        message: `Cleared ${deleted} queue items`
+        remaining,
+        message: `Cleared ${deleted} queue items`,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 }

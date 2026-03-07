@@ -36,7 +36,7 @@ class ProcessOrchestratorService {
       } = config;
 
       // Step 1: Add to queue
-      const queueResult = this.videoQueue.addToQueue({
+      const queueResult = await this.videoQueue.addToQueue({
         videoConfig: config,
         platform,
         contentType,
@@ -51,20 +51,20 @@ class ProcessOrchestratorService {
 
       try {
         // Step 2: Update status to processing
-        this.videoQueue.updateQueueStatus(queueId, 'processing');
+        await this.videoQueue.updateQueueStatus(queueId, 'processing');
 
         // Step 3: Generate mashup video
         const mashupResult = await this.generateMashupVideo(config);
 
         if (!mashupResult.success) {
-          this.videoQueue.recordError(queueId, new Error(mashupResult.error), 'mashup_generation');
+          await this.videoQueue.recordError(queueId, new Error(mashupResult.error), 'mashup_generation');
           return mashupResult;
         }
 
         const videoPath = mashupResult.videoPath;
 
         // Step 4: Update status to ready
-        this.videoQueue.updateQueueStatus(queueId, 'ready', {
+        await this.videoQueue.updateQueueStatus(queueId, 'ready', {
           videoPath,
           uploadUrl: null
         });
@@ -80,7 +80,7 @@ class ProcessOrchestratorService {
           uploads: uploadResults
         };
       } catch (error) {
-        this.videoQueue.recordError(queueId, error, 'workflow');
+        await this.videoQueue.recordError(queueId, error, 'workflow');
         return {
           success: false,
           queueId,
@@ -272,7 +272,7 @@ class ProcessOrchestratorService {
    */
   async processNextVideo() {
     try {
-      const nextResult = this.videoQueue.getNextPending();
+      const nextResult = await this.videoQueue.getNextPending();
 
       if (!nextResult.success) {
         return {
@@ -358,7 +358,7 @@ class ProcessOrchestratorService {
         });
 
         // Update queue item
-        this.videoQueue.updateQueueStatus(upload.queueId, 'uploaded', {
+        await this.videoQueue.updateQueueStatus(upload.queueId, 'uploaded', {
           uploadUrl: uploadResult.uploadUrl
         });
       } else {
@@ -380,7 +380,7 @@ class ProcessOrchestratorService {
    */
   async runCleanupJob() {
     try {
-      const queueCleanup = this.videoQueue.cleanupQueue({
+      const queueCleanup = await this.videoQueue.cleanupQueue({
         daysOld: 30,
         statuses: ['uploaded', 'failed']
       });
@@ -412,9 +412,9 @@ class ProcessOrchestratorService {
   /**
    * Get complete system status
    */
-  getSystemStatus() {
+  async getSystemStatus() {
     try {
-      const queueStats = this.videoQueue.getQueueStats();
+      const queueStats = await this.videoQueue.getQueueStats();
       const uploadStats = this.autoUpload.getUploadStats();
       const accountStats = this.multiAccount.getAccountStats();
       const jobStats = this.cronJob.getJobStatistics();

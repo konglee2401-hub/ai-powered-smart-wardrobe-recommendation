@@ -67,11 +67,132 @@ function resolveCharacterProfilePaths(selectedCharacter) {
   return { profile, portraitPath, referencePaths, profilePromptContext };
 }
 
+export function normalizeOptionLibrary(rawOptionsLibrary) {
+  if (!rawOptionsLibrary) return {};
+
+  let parsed = rawOptionsLibrary;
+  if (typeof rawOptionsLibrary === 'string') {
+    try {
+      parsed = JSON.parse(rawOptionsLibrary);
+    } catch {
+      return {};
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object') return {};
+
+  return Object.entries(parsed).reduce((acc, [category, options]) => {
+    const values = (Array.isArray(options) ? options : [options])
+      .map((option) => {
+        if (!option) return null;
+        if (typeof option === 'string') return option.trim();
+        if (typeof option === 'object') {
+          return String(option.value || option.label || '').trim();
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (values.length > 0) {
+      acc[category] = [...new Set(values)].slice(0, 25);
+    }
+
+    return acc;
+  }, {});
+}
+
+export function buildCharacterAnalysisContext(selectedCharacter) {
+  if (!selectedCharacter?.options) {
+    return { lockedTraitsText: '', styleDefaultsText: '', extraNotesText: '' };
+  }
+
+  const opt = selectedCharacter.options || {};
+  const identity = opt.identity || {};
+  const face = opt.face || {};
+  const hair = opt.hair || {};
+  const styling = opt.styling || {};
+  const capturePlan = opt.capturePlan || {};
+
+  const lockedTraits = [
+    selectedCharacter.alias ? 'alias ' + selectedCharacter.alias : '',
+    identity.gender ? 'gender ' + identity.gender : '',
+    identity.ageRange ? 'age range ' + identity.ageRange : '',
+    identity.ethnicity ? 'ethnicity ' + identity.ethnicity : '',
+    identity.height ? 'height ' + identity.height : '',
+    identity.bodyType ? 'body type ' + identity.bodyType : '',
+    identity.skinTone ? 'skin tone ' + identity.skinTone : '',
+    identity.distinctiveMarks ? 'distinctive marks ' + identity.distinctiveMarks : '',
+    identity.tattoos ? 'tattoos ' + identity.tattoos : '',
+    face.faceShape ? 'face shape ' + face.faceShape : '',
+    face.eyeColor ? 'eye color ' + face.eyeColor : '',
+    face.jawline ? 'jawline ' + face.jawline : '',
+    hair.color ? 'hair color ' + hair.color : '',
+    hair.length ? 'hair length ' + hair.length : '',
+    hair.texture ? 'hair texture ' + hair.texture : ''
+  ].filter(Boolean);
+
+  const styleDefaults = [
+    hair.style ? 'preferred hairstyle ' + hair.style : '',
+    styling.makeupStyle ? 'preferred makeup ' + styling.makeupStyle : '',
+    styling.accessories ? 'typical accessories ' + styling.accessories : '',
+    styling.jewelry ? 'jewelry ' + styling.jewelry : '',
+    styling.nails ? 'nails ' + styling.nails : '',
+    styling.footwearPreference ? 'footwear preference ' + styling.footwearPreference : '',
+    styling.outfitVibe ? 'outfit vibe ' + styling.outfitVibe : '',
+    capturePlan.backgroundStyle ? 'background preference ' + capturePlan.backgroundStyle : '',
+    capturePlan.lightingStyle ? 'lighting preference ' + capturePlan.lightingStyle : '',
+    capturePlan.cameraLens ? 'camera lens preference ' + capturePlan.cameraLens : '',
+    capturePlan.expressionRange ? 'expression range ' + capturePlan.expressionRange : '',
+    capturePlan.poseDirection ? 'pose direction ' + capturePlan.poseDirection : ''
+  ].filter(Boolean);
+
+  return {
+    lockedTraitsText: lockedTraits.length > 0 ? lockedTraits.join('; ') : '',
+    styleDefaultsText: styleDefaults.length > 0 ? styleDefaults.join('; ') : '',
+    extraNotesText: opt.extraPromptNotes ? String(opt.extraPromptNotes).trim() : ''
+  };
+}
+
+function buildOptionLibraryContext(optionsLibrary) {
+  const entries = Object.entries(optionsLibrary || {}).filter(([, values]) => Array.isArray(values) && values.length > 0);
+  if (entries.length === 0) return '';
+
+  return '\nAVAILABLE OPTION LIBRARY:\n' + entries.map(([category, values]) => '- ' + category + ': ' + values.join(', ')).join('\n');
+}
+
+function normalizeChoiceToken(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isSpecialRecommendationValue(value) {
+  return ['keep-current', 'not-applicable', 'not-needed', ''].includes(normalizeChoiceToken(value));
+}
+
+function extractChoiceArray(choice, category = '') {
+  if (Array.isArray(choice)) {
+    return choice
+      .map((item) => normalizeChoiceToken(item))
+      .filter(Boolean);
+  }
+
+  const normalized = normalizeChoiceToken(choice);
+  if (!normalized) return [];
+
+  if (category === 'accessories' && normalized.includes(',')) {
+    return normalized
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [normalized];
+}
+
 /**
  * Build comprehensive analysis prompt with all VTO style options
  * RETURNS JSON FORMAT for clean parsing
  */
-function buildAnalysisPrompt(options = {}) {
+export function buildAnalysisPrompt(options = {}) {
   const {
     scene = 'studio',
     lighting = 'soft-diffused',
@@ -85,93 +206,52 @@ function buildAnalysisPrompt(options = {}) {
     customPrompt = '',
     useCase = 'change-clothes',
     productFocus = 'full-outfit',
-    selectedCharacter = null
+    selectedCharacter = null,
+    optionsLibrary = {}
   } = options;
 
-  // Map option values to descriptive text
-  const sceneMap = {
-    'studio': 'Professional Studio',
-    'white-background': 'White Background',
-    'urban-street': 'Urban Street',
-    'minimalist-indoor': 'Minimalist Indoor',
-    'cafe': 'Cafe',
-    'outdoor-park': 'Outdoor Park',
-    'office': 'Modern Office',
-    'luxury-interior': 'Luxury Interior',
-    'rooftop': 'Rooftop'
+  const normalizedLibrary = normalizeOptionLibrary(optionsLibrary);
+  const choiceSets = {
+    scene: normalizedLibrary.scene || ['studio', 'white-background', 'urban-street', 'minimalist-indoor', 'cafe', 'outdoor-park', 'office', 'luxury-interior', 'rooftop'],
+    lighting: normalizedLibrary.lighting || ['soft-diffused', 'natural-window', 'golden-hour', 'dramatic-rembrandt', 'high-key', 'backlit', 'neon-colored', 'overcast-outdoor'],
+    mood: normalizedLibrary.mood || ['confident', 'relaxed', 'elegant', 'energetic', 'playful', 'mysterious', 'romantic', 'professional'],
+    style: normalizedLibrary.style || ['minimalist', 'editorial', 'commercial', 'lifestyle', 'high-fashion', 'vintage', 'street', 'bohemian'],
+    colorPalette: normalizedLibrary.colorPalette || ['neutral', 'warm', 'cool', 'pastel', 'monochrome', 'vibrant', 'earth-tones', 'metallic'],
+    cameraAngle: normalizedLibrary.cameraAngle || ['eye-level', 'slight-angle', 'three-quarter', 'full-front', 'over-shoulder']
   };
 
-  const lightingMap = {
-    'soft-diffused': 'Soft Diffused Lighting',
-    'natural-window': 'Natural Window Light',
-    'golden-hour': 'Golden Hour Lighting',
-    'dramatic-rembrandt': 'Dramatic Rembrandt Lighting',
-    'high-key': 'High Key Bright Lighting',
-    'backlit': 'Backlit Effect',
-    'neon-colored': 'Neon/Colored Lighting',
-    'overcast-outdoor': 'Overcast Outdoor Light'
-  };
+  const characterContext = buildCharacterAnalysisContext(selectedCharacter);
+  const choiceList = (category) => (choiceSets[category] || normalizedLibrary[category] || []).join(', ');
 
-  const moodMap = {
-    'confident': 'Confident & Powerful',
-    'relaxed': 'Relaxed & Casual',
-    'elegant': 'Elegant & Sophisticated',
-    'energetic': 'Energetic & Dynamic',
-    'playful': 'Playful & Fun',
-    'mysterious': 'Mysterious & Edgy',
-    'romantic': 'Romantic & Dreamy',
-    'professional': 'Professional'
-  };
+  const currentSelectionContext = [
+    '- scene preference: ' + scene,
+    '- lighting preference: ' + lighting,
+    '- mood preference: ' + mood,
+    '- style preference: ' + style,
+    '- color palette preference: ' + colorPalette,
+    '- camera angle preference: ' + cameraAngle,
+    '- hairstyle preference: ' + (hairstyle || 'none'),
+    '- makeup preference: ' + (makeup || 'none'),
+    '- aspect ratio: ' + aspectRatio,
+    '- custom prompt guidance: ' + (customPrompt || 'none')
+  ].join('\n');
 
-  const styleMap = {
-    'minimalist': 'Minimalist Photography',
-    'editorial': 'Editorial Style',
-    'commercial': 'Commercial Photography',
-    'lifestyle': 'Lifestyle Photography',
-    'high-fashion': 'High Fashion Style',
-    'vintage': 'Vintage/Retro Style',
-    'street': 'Street Style',
-    'bohemian': 'Bohemian Style'
-  };
-
-  const colorPaletteMap = {
-    'neutral': 'Neutral Colors',
-    'warm': 'Warm Tones',
-    'cool': 'Cool Tones',
-    'pastel': 'Pastel Colors',
-    'monochrome': 'Monochrome',
-    'vibrant': 'Vibrant Colors',
-    'earth-tones': 'Earth Tones',
-    'metallic': 'Metallic'
-  };
-
-  const cameraAngleMap = {
-    'eye-level': 'Eye Level Camera',
-    'slight-angle': 'Slight Angle',
-    'three-quarter': 'Three-Quarter View',
-    'full-front': 'Full Front View',
-    'over-shoulder': 'Over Shoulder View'
-  };
-
-  // Build prompt with IMPROVED JSON format for clean extraction
-  
-
-  const characterCtx = selectedCharacter ? `
-
-CHARACTER PROFILE CONTEXT:
-- Character selected from library: ${selectedCharacter.name || ''} (${selectedCharacter.alias || ''})
-- Available reference images: ${Array.isArray(selectedCharacter.referenceImages) ? selectedCharacter.referenceImages.length : 0}
-- You MUST evaluate which reference image should be primary for this campaign.` : '';
+  const characterCtx = selectedCharacter ? `\n\nCHARACTER PROFILE CONTEXT:\n- Selected library character: ${selectedCharacter.name || ''} (${selectedCharacter.alias || ''})\n- Reference images available: ${Array.isArray(selectedCharacter.referenceImages) ? selectedCharacter.referenceImages.length : 0}\n- Locked identity traits: ${characterContext.lockedTraitsText || 'none provided'}\n- Style defaults and affinities: ${characterContext.styleDefaultsText || 'none provided'}\n- Additional notes: ${characterContext.extraNotesText || 'none provided'}` : '';
 
   const campaignCtx = `
-
 CAMPAIGN OBJECTIVE:
 - Use case: ${useCase}
 - Product focus: ${productFocus}
 - If promoting full outfit: prefer 3/4 front or full-body reference.
 - If promoting top only: prefer closer torso reference.
-- If promoting bottom/shoes: prefer lower-body/full-body reference with leg clarity.`;
-const promptText = `You are a professional fashion analyst. Analyze the two images and respond with ONLY this exact JSON structure (NO other text):
+- If promoting bottom/shoes: prefer lower-body/full-body reference with leg clarity.
+
+CURRENT USER SELECTIONS:
+${currentSelectionContext}
+${buildOptionLibraryContext(normalizedLibrary)}
+`;
+
+  const promptText = `You are a professional fashion analyst for virtual try-on. Analyze the images and respond with ONLY valid JSON.
 
 {
   "character": {
@@ -183,75 +263,58 @@ const promptText = `You are a professional fashion analyst. Analyze the two imag
     "hair_color": "string",
     "hair_length": "short|medium|long",
     "hair_texture": "straight|wavy|curly",
-    "hair_style": "string - specific style name",
+    "hair_style": "string",
     "face_shape": "oval|square|round|heart|oblong"
   },
   "product": {
-    "garment_type": "string - specific type",
+    "garment_type": "string",
     "style_category": "string",
     "primary_color": "string",
     "secondary_color": "string or null",
     "pattern": "solid|striped|floral|geometric|printed|plaid|other",
-    "fabric_type": "string - cotton, silk, wool, etc",
+    "fabric_type": "string",
     "fit_type": "tight|fitted|regular|loose|oversized",
-    "key_details": "string - 2-3 main features"
+    "key_details": "string"
   },
   "analysis": {
     "compatibility_score": 1-10,
-    "fit_assessment": "Does product fit body type well? Any issues?",
-    "color_harmony": "How does color work with skin tone?",
-    "styling_notes": "Key styling recommendations"
+    "fit_assessment": "string",
+    "color_harmony": "string",
+    "styling_notes": "string"
   },
   "recommendations": {
-    "scene": {
-      "choice": "ONE value from: studio, white-background, urban-street, minimalist-indoor, cafe, outdoor-park, office, luxury-interior, rooftop",
-      "reason": "2-3 sentences why this scene works best"
-    },
-    "lighting": {
-      "choice": "ONE from: soft-diffused, natural-window, golden-hour, dramatic-rembrandt, high-key, backlit, neon-colored, overcast-outdoor",
-      "reason": "why this lighting"
-    },
-    "mood": {
-      "choice": "ONE from: confident, relaxed, elegant, energetic, playful, mysterious, romantic, professional",
-      "reason": "why this mood"
-    },
-    "cameraAngle": {
-      "choice": "ONE from: eye-level, slight-angle, three-quarter, full-front, over-shoulder",
-      "reason": "why this angle"
-    },
-    "hairstyle": {
-      "choice": "specific style like ponytail, bun, waves, etc OR keep-current",
-      "reason": "why this hairstyle"
-    },
-    "makeup": {
-      "choice": "ONE from: natural, light-makeup, glowing-skin, smokey-eyes, bold-lips, winged-eyeliner, contoured, matte-finish, glossy-lips, bronzed, dramatic, minimalist, keep-current",
-      "reason": "why this makeup"
-    },
-    "bottoms": {
-      "choice": "specific like skinny-jeans, midi-skirt, etc OR not-applicable",
-      "reason": "why these bottoms"
-    },
-    "shoes": {
-      "choice": "specific like block-heels, white-sneakers, ballet-flats, etc OR not-applicable",
-      "reason": "why these shoes"
-    },
-    "accessories": {
-      "choice": "comma-separated list like: gold-necklace, hoop-earrings, crossbody-bag OR minimal OR none",
-      "reason": "how these accessories complete the look"
-    },
-    "outerwear": {
-      "choice": "specific like blazer, denim-jacket, wool-coat, etc OR not-needed",
-      "reason": "why or why not needed"
-    }
+    "scene": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "lighting": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "mood": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "style": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "colorPalette": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "cameraAngle": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "hairstyle": { "choice": "string", "choiceType": "existing|new|keep-current|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "makeup": { "choice": "string", "choiceType": "existing|new|keep-current|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "bottoms": { "choice": "string", "choiceType": "existing|new|not-applicable", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "shoes": { "choice": "string", "choiceType": "existing|new|not-applicable", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "accessories": { "choice": ["string"], "choiceType": "existing|new|not-applicable", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "outerwear": { "choice": "string", "choiceType": "existing|new|not-needed", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" }
   }
 }
 
-CRITICAL RULES:
-1. Return ONLY the JSON object - no other text before or after
-2. All choice values MUST be from the provided lists above
-3. Reasons must be 1-2 sentences max
-4. Use lowercase for all choice values with hyphens where shown
-5. If a recommendation is not applicable, use "not-applicable" or "not-needed"${characterCtx}${campaignCtx}`;
+Rules:
+1. Return JSON only.
+2. Prefer values from the AVAILABLE OPTION LIBRARY whenever they are a good fit.
+3. If none of the existing options fit, create a short lowercase kebab-case token, set choiceType to "new", and repeat it in newOptionCandidates.
+4. If a category is effectively fixed by the character profile, set choiceType to "keep_locked" and lockedByCharacter to true.
+5. Accessories may contain up to 3 tokens as an array.
+6. Use "keep-current", "not-applicable", or "not-needed" when appropriate.
+7. Keep reasons short and concrete.
+8. Scene choices should prioritize this list: ${choiceList('scene')}.
+9. Lighting choices should prioritize this list: ${choiceList('lighting')}.
+10. Mood choices should prioritize this list: ${choiceList('mood')}.
+11. Style choices should prioritize this list: ${choiceList('style')}.
+12. Color palette choices should prioritize this list: ${choiceList('colorPalette')}.
+13. Camera angle choices should prioritize this list: ${choiceList('cameraAngle')}.
+${characterCtx}
+
+${campaignCtx}`;
 
   return promptText;
 }
@@ -388,47 +451,58 @@ function extractCharacterDescription(analysisText) {
   }
 
   try {
-    // Extract CHARACTER PROFILE section
     const profileMatch = analysisText.match(/\*\*\* CHARACTER PROFILE START \*\*\*([\s\S]*?)\*\*\* CHARACTER PROFILE END \*\*\*/);
-    if (!profileMatch) {
-      return '';
+    if (profileMatch) {
+      const profileText = profileMatch[1];
+      const lines = profileText.trim().split('\n');
+      const details = {};
+
+      lines.forEach((line) => {
+        const [key, ...valueParts] = line.split(':');
+        if (key && valueParts.length > 0) {
+          details[key.trim().toLowerCase()] = valueParts.join(':').trim();
+        }
+      });
+
+      return [
+        details['gender'] || '',
+        details['age range'] ? 'age ' + details['age range'] : '',
+        details['ethnicity'] || '',
+        details['body type'] ? details['body type'] + ' build' : '',
+        details['skin tone'] ? details['skin tone'] + ' skin' : '',
+        details['hair length'] && details['hair color'] ? details['hair length'] + ' ' + details['hair color'] + ' hair' : '',
+        details['face shape'] ? details['face shape'] + ' face shape' : '',
+        details['distinctive features'] || ''
+      ]
+        .filter(Boolean)
+        .join(', ')
+        .trim();
     }
 
-    const profileText = profileMatch[1];
-    const lines = profileText.trim().split('\n');
-    const details = {};
+    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return '';
 
-    // Parse profile lines
-    lines.forEach(line => {
-      const [key, ...valueParts] = line.split(':');
-      if (key && valueParts.length > 0) {
-        details[key.trim().toLowerCase()] = valueParts.join(':').trim();
-      }
-    });
+    const parsed = JSON.parse(jsonMatch[0]);
+    const character = parsed?.character || {};
 
-    // 💫 Build natural language character description
-    const description = [
-      details['gender'] && `${details['gender']}`,
-      details['age range'] && `age ${details['age range']}`,
-      details['ethnicity'] && `${details['ethnicity']}`,
-      details['body type'] && `${details['body type']} build`,
-      details['skin tone'] && `${details['skin tone']} skin`,
-      details['hair length'] && details['hair color'] ? `${details['hair length']} ${details['hair color']} hair` : null,
-      details['face shape'] && `${details['face shape']} face shape`,
-      details['distinctive features'] && `${details['distinctive features']}`
+    return [
+      character.gender || '',
+      character.age_range ? 'age ' + character.age_range : '',
+      character.body_type ? character.body_type + ' build' : '',
+      character.skin_tone ? character.skin_tone + ' skin' : '',
+      character.hair_length && character.hair_color ? character.hair_length + ' ' + character.hair_color + ' hair' : '',
+      character.hair_texture ? character.hair_texture + ' texture' : '',
+      character.hair_style ? 'hairstyle ' + character.hair_style : '',
+      character.face_shape ? character.face_shape + ' face shape' : ''
     ]
       .filter(Boolean)
       .join(', ')
       .trim();
-
-    console.log(`💫 Extracted character description: ${description.substring(0, 100)}...`);
-    return description;
   } catch (error) {
-    console.warn(`⚠️  Failed to extract character description: ${error.message}`);
+    console.warn(`??????  Failed to extract character description: ${error.message}`);
     return '';
   }
 }
-
 /**
  * Validate generated image file
  */
@@ -598,7 +672,8 @@ function extractConversationId(url) {
  * Parse JSON recommendations from AI analysis response
  * Much simpler and more reliable than regex-based parsing
  */
-function parseRecommendations(analysisText) {
+export function parseRecommendations(analysisText, optionLibrary = {}) {
+  const normalizedLibrary = normalizeOptionLibrary(optionLibrary);
   const recommendations = {
     characterProfile: {},
     productDetails: {},
@@ -606,6 +681,8 @@ function parseRecommendations(analysisText) {
     scene: null,
     lighting: null,
     mood: null,
+    style: null,
+    colorPalette: null,
     cameraAngle: null,
     hairstyle: null,
     makeup: null,
@@ -617,40 +694,32 @@ function parseRecommendations(analysisText) {
   };
 
   try {
-    // Try to extract JSON from response
-    let jsonText = analysisText;
-    
-    // If response contains extra text, try to find JSON block
-    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+    const jsonMatch = analysisText?.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn(`⚠️  No JSON found in response, attempting text parsing fallback...`);
+      console.warn('??????  No JSON found in response, attempting text parsing fallback...');
       return recommendations;
     }
-    
-    jsonText = jsonMatch[0];
-    console.log(`📄 Found JSON block (${jsonText.length} chars)`);
-    
-    // Parse JSON
+
+    let jsonText = jsonMatch[0];
     let parsed;
+
     try {
       parsed = JSON.parse(jsonText);
     } catch (jsonErr) {
-      // Try to fix common JSON issues
-      console.log(`   Attempting to fix JSON format...`);
+      console.log('   Attempting to fix JSON format...');
       jsonText = jsonText
-        .replace(/,\s*}/g, '}')  // Remove trailing commas
-        .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
-        .replace(/'/g, '"');     // Single to double quotes
-      
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']')
+        .replace(/'/g, '"');
+
       try {
         parsed = JSON.parse(jsonText);
       } catch (retryErr) {
-        console.error(`❌ Failed to parse JSON:`, retryErr.message);
+        console.error('??? Failed to parse JSON:', retryErr.message);
         return recommendations;
       }
     }
-    
-    // Extract character profile
+
     if (parsed.character && typeof parsed.character === 'object') {
       recommendations.characterProfile = {
         gender: parsed.character.gender || '',
@@ -663,10 +732,8 @@ function parseRecommendations(analysisText) {
         hair_style: parsed.character.hair_style || '',
         face_shape: parsed.character.face_shape || ''
       };
-      console.log(`   ✅ Character profile extracted: ${Object.keys(recommendations.characterProfile).length} fields`);
     }
-    
-    // Extract product details
+
     if (parsed.product && typeof parsed.product === 'object') {
       recommendations.productDetails = {
         garment_type: parsed.product.garment_type || '',
@@ -678,10 +745,8 @@ function parseRecommendations(analysisText) {
         fit_type: parsed.product.fit_type || '',
         key_details: parsed.product.key_details || ''
       };
-      console.log(`   ✅ Product details extracted: ${Object.keys(recommendations.productDetails).length} fields`);
     }
-    
-    // Extract analysis
+
     if (parsed.analysis && typeof parsed.analysis === 'object') {
       recommendations.analysis = {
         compatibilityScore: parsed.analysis.compatibility_score || 0,
@@ -689,74 +754,65 @@ function parseRecommendations(analysisText) {
         colorHarmony: parsed.analysis.color_harmony || '',
         stylingNotes: parsed.analysis.styling_notes || ''
       };
-      console.log(`   ✅ Analysis extracted: score ${recommendations.analysis.compatibilityScore}`);
     }
-    
-    // Extract recommendations
-    if (parsed.recommendations && typeof parsed.recommendations === 'object') {
-      const recs = parsed.recommendations;
-      
-      [
-        'scene', 'lighting', 'mood', 'cameraAngle', 'hairstyle', 
-        'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'
-      ].forEach(key => {
-        if (recs[key] && typeof recs[key] === 'object') {
-          let choice = (recs[key].choice || '').toLowerCase().trim();
-          const reason = (recs[key].reason || '').trim();
-          
-          // ✅ NEW: Support comma-separated multiple values
-          // Example: "gold-bracelet, structured-handbag" → ["gold-bracelet", "structured-handbag"]
-          let choiceArray = [];
-          if (choice && choice.includes(',')) {
-            // Split by comma and clean each value
-            choiceArray = choice
-              .split(',')
-              .map(c => c.toLowerCase().trim())
-              .filter(c => c && c.length > 0 && c !== 'not-applicable');
-            console.log(`   ℹ️  ${key}: Multi-value (${choiceArray.length} items)`);
-          } else if (choice && choice.length > 0 && choice !== 'not-applicable') {
-            choiceArray = [choice];
-          }
-          
-          // Store as array (supports both single and multi-select)
-          recommendations[key] = {
-            choice: choiceArray.length === 1 ? choiceArray[0] : choiceArray, // Single string or array
-            choiceArray: choiceArray, // Always keep array version for components
-            reason: reason,
-            isMulti: choiceArray.length > 1, // Flag for multi-value
-            alternatives: recs[key].alternatives?.length > 0 
-              ? recs[key].alternatives.map(a => (typeof a === 'string' ? a.toLowerCase().trim() : '')) 
-              : []
-          };
-          
-          // Filter empty alternatives
-          recommendations[key].alternatives = recommendations[key].alternatives.filter(
-            a => a && a.length > 0 && a !== 'not-applicable'
-          );
-          
-          if (choiceArray.length > 0) {
-            const display = choiceArray.length > 1 ? choiceArray.join(' + ') : choiceArray[0];
-            console.log(`   ✅ ${key}: ${display}`);
-          }
-        }
-      });
-    }
-    
-    console.log(`✅ JSON parsing complete!`);
-    return recommendations;
 
+    if (parsed.recommendations && typeof parsed.recommendations === 'object') {
+      for (const [key, value] of Object.entries(parsed.recommendations)) {
+        if (!value) continue;
+
+        const libraryValues = new Set((normalizedLibrary[key] || []).map((entry) => normalizeChoiceToken(entry)));
+        const choiceType = typeof value === 'object' && value !== null && typeof value.choiceType === 'string' ? value.choiceType : 'existing';
+        const lockedByCharacter = Boolean(typeof value === 'object' && value !== null && value.lockedByCharacter);
+        const reason = typeof value === 'object' && value !== null && typeof value.reason === 'string' ? value.reason.trim() : '';
+        const rawChoice = typeof value === 'object' && value !== null ? (value.choiceArray || value.choice || value.value || '') : value;
+        const choiceArray = extractChoiceArray(rawChoice, key);
+        const normalizedChoice = Array.isArray(rawChoice) ? choiceArray : normalizeChoiceToken(rawChoice);
+        const alternatives = Array.isArray(value?.alternatives)
+          ? value.alternatives.map((entry) => normalizeChoiceToken(entry)).filter(Boolean)
+          : [];
+        const declaredNewOptions = Array.isArray(value?.newOptionCandidates)
+          ? value.newOptionCandidates.map((entry) => normalizeChoiceToken(entry)).filter(Boolean)
+          : [];
+        const inferredNewOptions = choiceArray.filter((entry) => {
+          const normalized = normalizeChoiceToken(entry);
+          if (!normalized || isSpecialRecommendationValue(normalized)) return false;
+          if (libraryValues.size === 0) return choiceType === "new";
+          return !libraryValues.has(normalized);
+        });
+        const newOptionCandidates = [...new Set([...declaredNewOptions, ...(choiceType === "new" ? choiceArray : []), ...inferredNewOptions])]
+          .filter((entry) => entry && !isSpecialRecommendationValue(entry));
+
+        recommendations[key] = {
+          choice: Array.isArray(rawChoice)
+            ? choiceArray
+            : (choiceArray.length === 1 ? choiceArray[0] : (choiceArray.length > 1 ? choiceArray : normalizedChoice)),
+          choiceArray,
+          reason,
+          isMulti: choiceArray.length > 1,
+          alternatives,
+          choiceType,
+          lockedByCharacter,
+          newOptionCandidates
+        };
+
+        if (newOptionCandidates.length > 0) {
+          recommendations.newOptions[key] = [...new Set([...(recommendations.newOptions[key] || []), ...newOptionCandidates])];
+        }
+      }
+    }
+
+    console.log('??? JSON parsing complete!');
+    return recommendations;
   } catch (error) {
-    console.error(`❌ Error parsing recommendations:`, error.message);
+    console.error('??? Error parsing recommendations:', error.message);
     return recommendations;
   }
 }
-
-
 /**
  * Auto-save new options to database (with validation)
  * Only saves options from newOptions array that meet criteria
  */
-async function autoSaveRecommendations(recommendations) {
+export async function autoSaveRecommendations(recommendations) {
   try {
     const { default: PromptOption } = await import('../models/PromptOption.js');
     
@@ -841,8 +897,11 @@ export async function analyzeWithBrowser(req, res) {
       customPrompt = '',
       useCase = 'change-clothes',
       productFocus = 'full-outfit',
-      selectedCharacter = null
+      selectedCharacter = null,
+      optionsLibrary = null
     } = req.body;
+
+    const optionLibraryParsed = normalizeOptionLibrary(optionsLibrary);
 
     const selectedCharacterParsed = (() => {
       try {
@@ -889,7 +948,8 @@ export async function analyzeWithBrowser(req, res) {
       customPrompt,
       useCase,
       productFocus,
-      selectedCharacter: selectedCharacterResolved
+      selectedCharacter: selectedCharacterResolved,
+      optionsLibrary: optionLibraryParsed
     };
 
     // ====================================
@@ -984,7 +1044,7 @@ export async function analyzeWithBrowser(req, res) {
           await fallbackService.close();
           
           // Continue with fallback result
-          const recommendations = parseRecommendations(fallbackText);
+          const recommendations = parseRecommendations(fallbackText, optionLibraryParsed);
           const characterDescription = extractCharacterDescription(fallbackText);
           const newOptionsCreated = await autoSaveRecommendations(recommendations);
           
@@ -1025,7 +1085,7 @@ export async function analyzeWithBrowser(req, res) {
     // STEP 6: Parse recommendations from AI response
     // ====================================
     console.log(`\n📋 Parsing recommendations from AI response...`);
-    const recommendations = parseRecommendations(analysisText);
+    const recommendations = parseRecommendations(analysisText, optionLibraryParsed);
     
     // 💫 NEW: Extract character description for generation
     const characterDescription = extractCharacterDescription(analysisText);

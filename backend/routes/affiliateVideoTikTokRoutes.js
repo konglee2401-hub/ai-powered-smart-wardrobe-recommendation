@@ -16,9 +16,10 @@ import GoogleDriveOAuthService from '../services/googleDriveOAuth.js';
 import MultiVideoGenerationService from '../services/multiVideoGenerationService.js';
 import TTSService from '../services/ttsService.js';
 import ChatGPTService from '../services/browser/chatgptService.js';
-import { buildDetailedPrompt } from '../services/smartPromptBuilder.js';
+import { buildDetailedPrompt, getSceneReferenceInfo } from '../services/smartPromptBuilder.js';
 import VietnamesePromptBuilder from '../services/vietnamesePromptBuilder.js';
 import aiController from '../controllers/aiController.js';
+import { buildAnalysisPrompt, normalizeOptionLibrary, parseRecommendations, autoSaveRecommendations } from '../controllers/browserAutomationController.js';
 import upload from '../middleware/upload.js';
 import fs from 'fs';
 import path from 'path';
@@ -27,6 +28,42 @@ const router = express.Router();
 
 // 💾 In-memory flow state storage (in production, use Redis)
 const flowStates = new Map();
+
+function parseJsonField(value, fallback = null) {
+  if (value == null || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function extractAnalysisText(result) {
+  if (!result) return '';
+  if (typeof result === 'string') return result;
+  if (result.success && typeof result.data === 'string') return result.data;
+  if (result.success && result.data && typeof result.data === 'object') return JSON.stringify(result.data);
+  if (typeof result.data === 'string') return result.data;
+  if (typeof result === 'object') return JSON.stringify(result);
+  return String(result || '');
+}
+
+function buildAffiliateStep1AnalysisShape(parsedRecommendations, productFocus = 'full-outfit') {
+  const characterProfile = parsedRecommendations?.characterProfile || {};
+  const productDetails = parsedRecommendations?.productDetails || {};
+
+  return {
+    ...parsedRecommendations,
+    characterProfile,
+    productDetails,
+    character: { ...characterProfile },
+    product: { ...productDetails, focus: productFocus },
+    recommendations: Object.fromEntries(
+      Object.entries(parsedRecommendations || {}).filter(([key, value]) => !['characterProfile', 'productDetails', 'analysis', 'newOptions', 'character', 'product', 'recommendations'].includes(key) && value)
+    )
+  };
+}
 
 /**
  * 🔵 STEP 1: ANALYZE IMAGES
@@ -48,7 +85,7 @@ router.post('/step-1-analyze', upload.fields([
     
     // Initialize session logger
     console.log(`\n[INIT] Creating SessionLogService for ${flowId}...`);
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     console.log(`[INIT] SessionLogService created`);
     
     console.log(`[INIT] Calling logger.init()...`);
@@ -161,99 +198,90 @@ router.post('/step-1-analyze', upload.fields([
     await logger.info(`Images saved to temp: character=${characterImagePath}, product=${productImagePath}`, 'step-1-save');
 
     // ========== BUILD ANALYSIS PROMPT ==========
-    console.log(`\n🎯 Building analysis prompt...`);
-    const analysisPrompt = affiliateVideoTikTokService.buildAnalysisPrompt();
-    console.log(`  ✅ Prompt built (${analysisPrompt.length} chars)`);
-    await logger.info(`Analysis prompt built (${analysisPrompt.length} characters)`, 'step-1-prompt');
+    const productFocus = req.body.productFocus || 'full-outfit';
+    const selectedCharacter = parseJsonField(req.body.selectedCharacter, null);
+    const optionsLibrary = normalizeOptionLibrary(parseJsonField(req.body.optionsLibrary, {}));
+    const analysisPrompt = buildAnalysisPrompt({
+      scene: req.body.scene || 'studio',
+      lighting: req.body.lighting || 'soft-diffused',
+      mood: req.body.mood || 'confident',
+      style: req.body.style || 'minimalist',
+      colorPalette: req.body.colorPalette || 'neutral',
+      cameraAngle: req.body.cameraAngle || 'eye-level',
+      hairstyle: req.body.hairstyle || null,
+      makeup: req.body.makeup || null,
+      aspectRatio: req.body.aspectRatio || '9:16',
+      useCase: 'affiliate-video-tiktok',
+      productFocus,
+      selectedCharacter,
+      optionsLibrary
+    });
+    console.log(`\n?? Building analysis prompt...`);
+    console.log(`  ? Prompt built (${analysisPrompt.length} chars)`);
+    await logger.info(`Analysis prompt built (${analysisPrompt.length} characters)`, 'step-1-prompt', {
+      optionLibraryCategories: Object.keys(optionsLibrary || {}),
+      selectedCharacter: selectedCharacter?.alias || selectedCharacter?.name || null,
+      productFocus
+    });
 
     // ========== ANALYZE WITH CHATGPT ==========
-    console.log(`\n🤖 Initializing ChatGPT Service...`);
+    console.log(`\n?? Initializing ChatGPT Service...`);
     const chatGPTService = new ChatGPTService({ debug: false });
     await chatGPTService.initialize();
-    console.log(`  ✅ ChatGPT browser initialized`);
+    console.log(`  ? ChatGPT browser initialized`);
     await logger.info(`ChatGPT service initialized`, 'step-1-chatgpt');
-    
-    console.log(`\n📊 Analyzing images with ChatGPT...`);
+
+    console.log(`\n?? Analyzing images with ChatGPT...`);
     const analysisResult = await chatGPTService.analyzeMultipleImages(
       [characterImagePath, productImagePath],
       analysisPrompt
     );
-    
-    console.log(`  ✅ Analysis result received`);
+
+    console.log(`  ? Analysis result received`);
     await logger.info(`ChatGPT analysis completed`, 'step-1-chatgpt');
-    
+
     await chatGPTService.close();
-    console.log(`  ✅ ChatGPT browser closed`);
+    console.log(`  ? ChatGPT browser closed`);
 
     // ========== PARSE ANALYSIS RESULT ==========
-    console.log(`\n📝 Parsing analysis result...`);
+    console.log(`\n?? Parsing analysis result...`);
     if (!analysisResult) {
       throw new Error('ChatGPT returned empty result');
     }
 
-    console.log(`  Result success: ${analysisResult.success}`);
-    console.log(`  Result type: ${typeof analysisResult.data}`);
-    
-    let analysis = null;
-    
-    // Case 1: Wrapped response { success: true, data: "..." }
-    if (analysisResult && analysisResult.success && analysisResult.data) {
-      try {
-        if (typeof analysisResult.data === 'string') {
-          console.log(`  📄 Parsing JSON from wrapped response...`);
-          analysis = JSON.parse(analysisResult.data);
-        } else {
-          console.log(`  📦 Using object from wrapped response`);
-          analysis = analysisResult.data;
-        }
-        console.log(`  ✅ Analysis parsed from wrapped response`);
-        console.log(`     Keys: ${Object.keys(analysis).join(', ')}`);
-      } catch (parseError) {
-        console.warn(`⚠️ Could not parse wrapped data: ${parseError.message}`);
-        await logger.warn(`Wrapped response parse failed`, 'step-1-parse');
-        analysis = analysisResult.data || analysisResult;
-      }
-    } 
-    // Case 2: Direct string response
-    else if (typeof analysisResult === 'string') {
-      console.log(`  📄 Parsing direct string response...`);
-      try {
-        analysis = JSON.parse(analysisResult);
-        console.log(`  ✅ String parsed successfully`);
-      } catch (parseError) {
-        console.warn(`⚠️ Could not parse string: ${parseError.message}`);
-        analysis = analysisResult;
-      }
-    }
-    // Case 3: Direct object response
-    else if (typeof analysisResult === 'object' && analysisResult !== null) {
-      console.log(`  📦 Using object directly (not wrapped)`);
-      console.log(`  Result keys: ${Object.keys(analysisResult).join(', ')}`);
-      analysis = analysisResult;
+    const analysisText = extractAnalysisText(analysisResult);
+    if (!analysisText) {
+      throw new Error('No analysis text received from ChatGPT');
     }
 
-    if (!analysis) {
-      throw new Error('No analysis data received from ChatGPT');
-    }
+    const parsedRecommendations = parseRecommendations(analysisText, optionsLibrary);
+    const analysis = buildAffiliateStep1AnalysisShape(parsedRecommendations, productFocus);
+    const newOptionsCreated = await autoSaveRecommendations(parsedRecommendations);
 
-    console.log(`✅ Analysis validated`);
-    await logger.info(`Analysis parsed and validated`, 'step-1-parse', { keys: Object.keys(analysis) });
+    console.log(`  ? Analysis parsed with shared recommendation schema`);
+    await logger.info(`Analysis parsed and normalized`, 'step-1-parse', {
+      keys: Object.keys(analysis || {}),
+      newOptionsCreated: newOptionsCreated.length
+    });
 
     // ========== STORE AND RETURN ==========
     const step1Duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    
-    console.log(`\n✅ STEP 1 COMPLETE in ${step1Duration}s`);
-    
-    // Log step completion
+
+    console.log(`\n? STEP 1 COMPLETE in ${step1Duration}s`);
+
     await logger.info(`Step 1 analysis complete`, 'step-1-complete', {
       analysis_keys: Object.keys(analysis || {}),
-      duration: parseFloat(step1Duration)
+      duration: parseFloat(step1Duration),
+      newOptionsCreated: newOptionsCreated.length
     });
 
-    // Store in flow state
     flowStates.set(flowId, {
       step1: {
-        analysis: analysis,
+        analysis,
+        analysisText,
+        newOptionsCreated,
+        selectedCharacter,
+        optionsLibrary,
         characterImageBuffer,
         productImageBuffer,
         characterImagePath,
@@ -266,7 +294,9 @@ router.post('/step-1-analyze', upload.fields([
       success: true,
       flowId,
       step: 1,
-      analysis: analysis,
+      analysis,
+      analysisText,
+      newOptionsCreated,
       step_duration: parseFloat(step1Duration)
     });
 
@@ -311,7 +341,7 @@ router.post('/step-2-generate-images', async (req, res) => {
     
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-2-generate-images');
     await logger.info('Starting Step 2: Image Generation', 'step-2-init');
@@ -361,12 +391,101 @@ router.post('/step-2-generate-images', async (req, res) => {
       videoDuration = 20,
       aspectRatio = '9:16',
       negativePrompt = '',
-      useShortPrompt = false
+      useShortPrompt = false,
+      productFocus: requestedProductFocus = 'full-outfit',
+      scene = '',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      style = 'minimalist',
+      colorPalette = 'neutral',
+      cameraAngle = 'eye-level',
+      hairstyle = '',
+      makeup = '',
+      bottoms = '',
+      shoes = '',
+      accessories = [],
+      outerwear = '',
+      language = 'vi',
+      characterName = '',
+      characterAlias = '',
+      characterDisplayName = '',
+      sceneOverridePrompt = '',
+      sceneLockOverridePrompt = ''
     } = req.body;
 
     const shouldUseShortPrompt = typeof useShortPrompt === 'string'
       ? useShortPrompt.toLowerCase() === 'true'
       : Boolean(useShortPrompt);
+    const normalizedLanguage = (language || 'vi').split('-')[0].split('_')[0].toLowerCase();
+    const normalizedAccessories = Array.isArray(accessories)
+      ? accessories.filter(Boolean)
+      : (typeof accessories === 'string' ? accessories.split(',').map(item => item.trim()).filter(Boolean) : []);
+    const tempDir = path.join(process.cwd(), 'temp', 'step-2-generate-images', flowId);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const selectedOptions = {
+      scene,
+      lighting,
+      mood,
+      style,
+      colorPalette,
+      cameraAngle,
+      hairstyle,
+      makeup,
+      bottoms,
+      shoes,
+      accessories: normalizedAccessories,
+      outerwear,
+      negativePrompt,
+      aspectRatio,
+      language: normalizedLanguage,
+      characterName,
+      characterAlias,
+      characterDisplayName: characterDisplayName || characterName,
+      sceneOverridePrompt,
+      sceneLockOverridePrompt
+    };
+
+    let sceneReferenceInfo = { prompt: '', imageUrl: null, hasImage: false };
+    let sceneImagePath = null;
+    if (scene) {
+      try {
+        sceneReferenceInfo = await getSceneReferenceInfo(scene, selectedOptions, normalizedLanguage);
+
+        const sceneImageUrl = typeof sceneReferenceInfo?.imageUrl === 'string'
+          ? sceneReferenceInfo.imageUrl.trim()
+          : '';
+        if (sceneImageUrl) {
+          if (/^https?:\/\//i.test(sceneImageUrl)) {
+            const response = await fetch(sceneImageUrl);
+            if (response.ok) {
+              const sceneBuffer = Buffer.from(await response.arrayBuffer());
+              const sceneExt = path.extname(new URL(sceneImageUrl).pathname) || '.jpg';
+              sceneImagePath = path.join(tempDir, `scene-reference${sceneExt}`);
+              fs.writeFileSync(sceneImagePath, sceneBuffer);
+            }
+          } else {
+            const normalizedRelative = sceneImageUrl.replace(/^\/+/, '');
+            const candidatePaths = [
+              path.resolve(process.cwd(), normalizedRelative),
+              path.resolve(process.cwd(), '..', normalizedRelative),
+              path.resolve(process.cwd(), '..', 'frontend', 'public', normalizedRelative)
+            ];
+            const localScenePath = candidatePaths.find(p => fs.existsSync(p));
+            if (localScenePath) {
+              const sceneExt = path.extname(localScenePath) || '.jpg';
+              sceneImagePath = path.join(tempDir, `scene-reference${sceneExt}`);
+              fs.copyFileSync(localScenePath, sceneImagePath);
+            }
+          }
+        }
+      } catch (sceneError) {
+        console.warn(`⚠️ Could not resolve scene reference for ${scene}: ${sceneError.message}`);
+        await logger.warn(`Scene reference skipped: ${sceneError.message}`, 'step-2-scene-reference');
+      }
+    }
 
     // 💡 REUSE: Use GoogleFlowAutomationService for image generation
     const imageGenService = new GoogleFlowAutomationService({
@@ -383,13 +502,13 @@ router.post('/step-2-generate-images', async (req, res) => {
     
     // Prepare base options for prompt building
     const baseOptions = {
-      language: 'vi',  // Generate Vietnamese prompts
-      style: 'professional',
+      ...selectedOptions,
+      language: normalizedLanguage,
       detailLevel: 'detailed'
     };
     
-    // Determine product focus from analysis
-    const productFocus = analysis.product?.focus || 'full-outfit';
+    // Determine product focus from analysis / caller
+    const productFocus = requestedProductFocus || analysis.product?.focus || 'full-outfit';
     
     // Generate both prompts in parallel
     console.log('  📝 Building WEARING prompt (character wearing product)...');
@@ -398,7 +517,7 @@ router.post('/step-2-generate-images', async (req, res) => {
       baseOptions,
       'change-clothes',
       productFocus,
-      'vi',  // Vietnamese
+      normalizedLanguage,
       { useShortPrompt: shouldUseShortPrompt }
     );
     const wearingPrompt = wearingPromptData.prompt;
@@ -409,7 +528,7 @@ router.post('/step-2-generate-images', async (req, res) => {
       baseOptions,
       'character-holding-product',
       productFocus,
-      'vi',  // Vietnamese
+      normalizedLanguage,
       { useShortPrompt: shouldUseShortPrompt }
     );
     const holdingPrompt = holdingPromptData.prompt;
@@ -434,7 +553,12 @@ router.post('/step-2-generate-images', async (req, res) => {
       multiGenResult = await imageGenService.generateMultiple(
         characterImagePath,
         productImagePath,
-        [wearingPrompt, holdingPrompt]
+        [wearingPrompt, holdingPrompt],
+        {
+          sceneImagePath,
+          sceneLockedPrompt: sceneReferenceInfo?.prompt || null,
+          sceneName: scene || null
+        }
       );
     } catch (genMultiError) {
       console.error('❌ generateMultiple threw error:', genMultiError.message);
@@ -536,6 +660,10 @@ router.post('/step-2-generate-images', async (req, res) => {
         holdingImagePath: holdingResult.screenshotPath || holdingResult.imageUrl,
         wearingImageDriveUrl: wearingImageDriveUrl,
         holdingImageDriveUrl: holdingImageDriveUrl,
+        wearingPrompt,
+        holdingPrompt,
+        promptLanguage: normalizedLanguage,
+        selectedOptions: baseOptions,
         productImagePath: productImagePath,  // Keep for Step 3/4
         duration: parseFloat(step2Duration)
       }
@@ -604,7 +732,7 @@ router.post('/step-3-deep-analysis', async (req, res) => {
     
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-3-deep-analysis');
     await logger.info('Starting Step 3: Deep Analysis', 'step-3-init');
@@ -694,6 +822,8 @@ router.post('/step-3-deep-analysis', async (req, res) => {
         videoScripts,
         metadata,
         hashtags,
+        deepAnalysisPrompt,
+        deepAnalysis,
         wearingImagePath,      // For Step 4
         holdingImagePath,      // For Step 4
         productImagePath,      // For Step 4
@@ -759,7 +889,7 @@ router.post('/step-4-generate-video', async (req, res) => {
     
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-4-generate-video');
     await logger.info('Starting Step 4: Video Generation', 'step-4-init');
@@ -880,7 +1010,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
     
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-5-generate-voiceover');
     await logger.info('Starting Step 5: Voiceover Generation', 'step-5-init');
@@ -949,6 +1079,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
         voiceGender,
         voicePace,
         language,
+        voiceoverText,
         textLength: voiceoverText.length,
         wordCount: voiceoverText.split(' ').length,
         duration: parseFloat(step5Duration)
@@ -1012,7 +1143,7 @@ router.post('/step-6-finalize', async (req, res) => {
     
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'one-click');
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-6-finalize');
     await logger.info('Starting Step 6: Finalization', 'step-6-init');
@@ -1266,38 +1397,95 @@ router.get('/status/:flowId', (req, res) => {
     });
   }
 
+  const buildMediaPreview = (filePath, extra = {}) => {
+    if (!filePath) return null;
+
+    const normalizedPath = String(filePath);
+    const exists = fs.existsSync(normalizedPath);
+    const stats = exists ? fs.statSync(normalizedPath) : null;
+    const ext = path.extname(normalizedPath || '').replace('.', '').toLowerCase();
+    const tempRoot = path.join(process.cwd(), 'temp');
+    const relativeTempPath = normalizedPath.startsWith(tempRoot)
+      ? path.relative(tempRoot, normalizedPath).split(path.sep).join('/')
+      : null;
+
+    return {
+      path: normalizedPath,
+      previewUrl: relativeTempPath ? `/temp/${relativeTempPath}` : null,
+      title: path.basename(normalizedPath),
+      format: ext || null,
+      sizeBytes: stats?.size || null,
+      sizeLabel: stats?.size ? formatBytes(stats.size) : null,
+      exists,
+      ...extra
+    };
+  };
+
   res.json({
     success: true,
     flowId,
     status: flowState.status || 'in-progress',
+    totalDuration: flowState.totalDuration || null,
     flowState: {
       step1: {
         completed: !!flowState.step1,
         analysis: flowState.step1?.analysis,
+        analysisText: flowState.step1?.analysisText,
+        selectedCharacter: flowState.step1?.selectedCharacter,
+        characterImage: buildMediaPreview(flowState.step1?.characterImagePath, { kind: 'character' }),
+        productImage: buildMediaPreview(flowState.step1?.productImagePath, { kind: 'product' }),
         duration: flowState.step1?.duration
       },
       step2: {
         completed: !!flowState.step2,
+        prompts: {
+          language: flowState.step2?.promptLanguage || null,
+          wearing: flowState.step2?.wearingPrompt || null,
+          holding: flowState.step2?.holdingPrompt || null
+        },
+        selectedOptions: flowState.step2?.selectedOptions || null,
         images: {
-          wearing: flowState.step2?.wearingImagePath,
-          holding: flowState.step2?.holdingImagePath
+          wearing: buildMediaPreview(flowState.step2?.wearingImagePath, {
+            driveUrl: flowState.step2?.wearingImageDriveUrl || null,
+            uploadedToDrive: Boolean(flowState.step2?.wearingImageDriveUrl),
+            kind: 'wearing'
+          }),
+          holding: buildMediaPreview(flowState.step2?.holdingImagePath, {
+            driveUrl: flowState.step2?.holdingImageDriveUrl || null,
+            uploadedToDrive: Boolean(flowState.step2?.holdingImageDriveUrl),
+            kind: 'holding'
+          })
         },
         duration: flowState.step2?.duration
       },
       step3: {
         completed: !!flowState.step3,
-        scripts_count: flowState.step3?.videoScripts?.length,
-        hashtags: flowState.step3?.hashtags,
+        deepAnalysisPrompt: flowState.step3?.deepAnalysisPrompt || null,
+        scripts: flowState.step3?.videoScripts || [],
+        metadata: flowState.step3?.metadata || {},
+        hashtags: flowState.step3?.hashtags || [],
+        language: flowState.step3?.language || null,
         duration: flowState.step3?.duration
       },
       step4: {
         completed: !!flowState.step4,
-        video: flowState.step4?.videoPath,
+        video: buildMediaPreview(flowState.step4?.videoPath, {
+          ...(flowState.step4?.videoMetadata || {}),
+          kind: 'video'
+        }),
         duration: flowState.step4?.duration
       },
       step5: {
         completed: !!flowState.step5,
-        audio: flowState.step5?.audioPath,
+        audio: buildMediaPreview(flowState.step5?.audioPath, {
+          voiceGender: flowState.step5?.voiceGender || null,
+          voicePace: flowState.step5?.voicePace || null,
+          language: flowState.step5?.language || null,
+          textLength: flowState.step5?.textLength || null,
+          wordCount: flowState.step5?.wordCount || null,
+          kind: 'audio'
+        }),
+        voiceoverText: flowState.step5?.voiceoverText || '',
         duration: flowState.step5?.duration
       },
       step6: {
@@ -1313,6 +1501,19 @@ router.get('/status/:flowId', (req, res) => {
 // HELPERS
 // ============================================================
 
+function formatBytes(bytes) {
+  if (!bytes || Number.isNaN(bytes)) return null;
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return unitIndex === 0
+    ? String(Math.round(value)) + ' ' + units[unitIndex]
+    : value.toFixed(value >= 10 ? 1 : 2) + ' ' + units[unitIndex];
+}
 /**
  * Map voice gender and pace to TTS voice name
  */

@@ -35,6 +35,8 @@
     "session:delete": "node scripts/debug/session-manager.js delete",
     "session:clear": "node scripts/debug/session-manager.js clear",
     "scene-lock:workflow": "node scripts/scene-lock/run-scene-lock-workflow.js --scene studio --count 2",
+    "test:affiliate:tiktok-flow": "node scripts/test-affiliate-flow.js",
+    "test:affiliate:step1-prompts": "node scripts/test-affiliate-step1-prompts.js",
     "test:dailyhaha:youtube-upload": "node scripts/trend-automation/test-dailyhaha-youtube-upload.js",
     "utils:drive:check": "node scripts/utils/drive/check-config.js",
     "utils:drive:share": "node scripts/utils/drive/share-assets.js",

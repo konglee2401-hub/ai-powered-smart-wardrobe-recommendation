@@ -1,302 +1,624 @@
-import React, { useState, useEffect } from 'react';
-import { X, ChevronDown, ChevronUp, Copy, Loader2, AlertCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  X,
+  Copy,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  Image as ImageIcon,
+  Video,
+  Mic,
+  FileText,
+  Sparkles,
+  Package,
+  ExternalLink,
+  RefreshCw,
+  Database,
+  User,
+  Hash,
+  Clock,
+  HardDrive,
+  Check,
+} from 'lucide-react';
 
-const SessionLogModal = ({ isOpen, onClose, sessionId, flowId }) => {
+const AFFILIATE_STEPS = [
+  { key: 'step1', label: 'Analyze', icon: Sparkles },
+  { key: 'step2', label: 'Images', icon: ImageIcon },
+  { key: 'step3', label: 'Scripts', icon: FileText },
+  { key: 'step4', label: 'Video', icon: Video },
+  { key: 'step5', label: 'Voice', icon: Mic },
+  { key: 'step6', label: 'Final', icon: Package },
+];
+
+function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   const [sessionData, setSessionData] = useState(null);
+  const [affiliateStatus, setAffiliateStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [expandedLogs, setExpandedLogs] = useState({});
+  const [activeStep, setActiveStep] = useState('step1');
   const [copiedId, setCopiedId] = useState(null);
 
-  useEffect(() => {
-    if (isOpen && flowId) {
-      loadSessionLog();
-    }
-  }, [isOpen, flowId]);
+  const effectiveFlowId = flowId || sessionId;
 
-  const loadSessionLog = async () => {
+  useEffect(() => {
+    if (!isOpen || !effectiveFlowId) return;
+    loadSessionPreview();
+  }, [isOpen, effectiveFlowId]);
+
+  useEffect(() => {
+    if (!affiliateStatus?.flowState) return;
+    const completedSteps = AFFILIATE_STEPS.filter(({ key }) => affiliateStatus.flowState?.[key]?.completed);
+    setActiveStep(completedSteps[completedSteps.length - 1]?.key || 'step1');
+  }, [affiliateStatus]);
+
+  const loadSessionPreview = async () => {
     setLoading(true);
     setError(null);
+
     try {
-      const response = await fetch(`/api/debug-sessions/${flowId}`);
-      if (!response.ok) {
-        throw new Error(`Failed to load session log: ${response.status}`);
+      const [sessionResult, affiliateResult] = await Promise.allSettled([
+        fetch(`/api/debug-sessions/${effectiveFlowId}`),
+        fetch(`/api/ai/affiliate-video-tiktok/status/${effectiveFlowId}`),
+      ]);
+
+      if (sessionResult.status === 'fulfilled' && sessionResult.value.ok) {
+        const data = await sessionResult.value.json();
+        setSessionData(data.data || data);
+      } else {
+        setSessionData(null);
       }
-      const data = await response.json();
-      setSessionData(data.data || data);
+
+      if (affiliateResult.status === 'fulfilled' && affiliateResult.value.ok) {
+        const data = await affiliateResult.value.json();
+        setAffiliateStatus(data);
+      } else {
+        setAffiliateStatus(null);
+      }
+
+      if (
+        (sessionResult.status !== 'fulfilled' || !sessionResult.value.ok) &&
+        (affiliateResult.status !== 'fulfilled' || !affiliateResult.value.ok)
+      ) {
+        throw new Error('Failed to load session preview');
+      }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to load session preview');
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const copyToClipboard = async (text, id) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
   };
 
-  const groupLogsByCategory = (logs) => {
-    const grouped = {};
-    logs?.forEach(log => {
-      const category = log.category || 'general';
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(log);
-    });
-    return grouped;
-  };
+  const isAffiliateMode = Boolean(affiliateStatus?.flowState);
 
-  const formatTimestamp = (ts) => {
-    if (!ts) return '';
-    if (typeof ts === 'string') return ts;
-    return new Date(ts).toLocaleTimeString();
-  };
+  const summary = useMemo(() => {
+    const totalDuration = affiliateStatus?.totalDuration ?? sessionData?.metrics?.totalDuration ?? null;
+    return {
+      status: affiliateStatus?.status || sessionData?.status || 'unknown',
+      flowType: sessionData?.flowType || 'affiliate-tiktok',
+      totalDuration,
+      createdAt: sessionData?.createdAt || null,
+      logCount: sessionData?.logs?.length || 0,
+    };
+  }, [affiliateStatus, sessionData]);
 
   if (!isOpen) return null;
 
+  const currentStep = affiliateStatus?.flowState?.[activeStep] || null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-800 bg-slate-950/95 px-6 py-5">
           <div>
-            <h2 className="text-lg font-bold text-white">Session Log Viewer</h2>
-            <p className="text-xs text-gray-400 mt-1">Flow ID: {flowId}</p>
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-slate-400">
+              <Database className="h-3.5 w-3.5" />
+              Session Preview
+            </div>
+            <h2 className="mt-2 text-xl font-semibold text-white">Affiliate TikTok Flow</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span className="rounded-full border border-slate-700 px-2 py-1">Flow ID: {effectiveFlowId}</span>
+              <span className={`rounded-full px-2 py-1 ${summary.status === 'completed' ? 'bg-emerald-500/15 text-emerald-300' : summary.status === 'failed' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                {summary.status}
+              </span>
+              {summary.totalDuration ? <span>{formatDuration(summary.totalDuration)}</span> : null}
+              {summary.createdAt ? <span>{new Date(summary.createdAt).toLocaleString()}</span> : null}
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
             <button
-              onClick={loadSessionLog}
+              onClick={loadSessionPreview}
               disabled={loading}
-              className="px-3 py-1 text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded transition-colors flex items-center gap-1"
-              title="Refresh logs"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800 disabled:opacity-60"
             >
-              <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors p-1"
+              className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-400 transition hover:border-slate-500 hover:text-white"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-6 py-5">
           {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
-              <span className="ml-2 text-gray-400">Loading session data...</span>
+            <div className="flex h-48 items-center justify-center gap-3 text-slate-300">
+              <Loader2 className="h-6 w-6 animate-spin text-cyan-400" />
+              <span>Loading session preview...</span>
             </div>
           ) : error ? (
-            <div className="p-4 bg-red-900/30 border border-red-700 m-4 rounded-lg flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-red-300 font-semibold">Error Loading Session</p>
-                <p className="text-red-200 text-sm mt-1">{error}</p>
+            <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-red-200">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                <div>
+                  <div className="font-semibold">Failed to load session preview</div>
+                  <div className="mt-1 text-sm text-red-300">{error}</div>
+                </div>
               </div>
             </div>
-          ) : sessionData ? (
-            <div className="p-4 space-y-4">
-              {/* Session Metadata */}
-              <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                <h3 className="text-sm font-semibold text-blue-300 mb-3">📋 Session Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Status:</span>
-                    <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
-                      sessionData.status === 'completed' ? 'bg-green-600/30 text-green-300' :
-                      sessionData.status === 'failed' ? 'bg-red-600/30 text-red-300' :
-                      'bg-yellow-600/30 text-yellow-300'
-                    }`}>
-                      {sessionData.status || 'unknown'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Flow Type:</span>
-                    <span className="text-gray-300 ml-2">{sessionData.flowType || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Started:</span>
-                    <span className="text-gray-300 ml-2">{new Date(sessionData.createdAt).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Duration:</span>
-                    <span className="text-gray-300 ml-2">
-                      {sessionData.metrics?.totalDuration || 'N/A'}
-                    </span>
-                  </div>
-                </div>
+          ) : isAffiliateMode ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 md:grid-cols-4">
+                <StatCard label="Completed Steps" value={`${AFFILIATE_STEPS.filter(({ key }) => affiliateStatus.flowState?.[key]?.completed).length}/6`} icon={CheckCircle2} />
+                <StatCard label="Logs" value={String(summary.logCount || 0)} icon={Database} />
+                <StatCard label="Flow Type" value={summary.flowType || 'affiliate-tiktok'} icon={Sparkles} />
+                <StatCard label="Duration" value={summary.totalDuration ? formatDuration(summary.totalDuration) : 'Pending'} icon={Clock} />
               </div>
 
-              {/* Stage Metrics */}
-              {sessionData.metrics?.stages && sessionData.metrics.stages.length > 0 && (
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-sm font-semibold text-purple-300 mb-3">⏱️ Stage Timings</h3>
-                  <div className="space-y-2">
-                    {sessionData.metrics.stages.map((stage, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-sm">
-                        <div>
-                          <span className="text-gray-400">{stage.name}</span>
-                          {stage.success && <span className="text-green-400 ml-2">✓</span>}
-                          {!stage.success && <span className="text-red-400 ml-2">✗</span>}
-                        </div>
-                        <span className="text-gray-500">{stage.duration}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Artifacts */}
-              {sessionData.artifacts && Object.keys(sessionData.artifacts).length > 0 && (
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-sm font-semibold text-green-300 mb-3">📦 Generated Artifacts</h3>
-                  <div className="space-y-2 text-sm">
-                    {sessionData.artifacts.images && (
-                      <div>
-                        <span className="text-gray-400">Images:</span>
-                        {typeof sessionData.artifacts.images === 'object' ? (
-                          <div className="text-gray-500 text-xs ml-4 mt-1 space-y-1">
-                            {Object.entries(sessionData.artifacts.images).map(([key, val]) => (
-                              <div key={key}>{key}: {typeof val === 'string' ? val : JSON.stringify(val)}</div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-500 ml-2">{sessionData.artifacts.images}</span>
-                        )}
-                      </div>
-                    )}
-                    {sessionData.artifacts.videos && (
-                      <div>
-                        <span className="text-gray-400">Videos:</span>
-                        <span className="text-gray-500 ml-2">{JSON.stringify(sessionData.artifacts.videos).substring(0, 100)}...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Analysis Data */}
-              {sessionData.analysis && Object.keys(sessionData.analysis).length > 0 && (
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-sm font-semibold text-cyan-300 mb-3">🔍 Analysis Data</h3>
-                  <div className="text-xs text-gray-400 space-y-1">
-                    {Object.entries(sessionData.analysis).map(([key, val]) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-gray-500">{key}:</span>
-                        <span className="text-gray-400 max-w-xs truncate">
-                          {typeof val === 'object' ? JSON.stringify(val).substring(0, 50) : String(val)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Logs by Category */}
-              {sessionData.logs && sessionData.logs.length > 0 && (
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-sm font-semibold text-amber-300 mb-3">📝 Logs ({sessionData.logs.length})</h3>
-                  <div className="space-y-2">
-                    {Object.entries(groupLogsByCategory(sessionData.logs)).map(([category, logs]) => (
-                      <div key={category} className="border border-gray-700 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto pb-2">
+                <div className="flex min-w-max items-center gap-2">
+                  {AFFILIATE_STEPS.map(({ key, label, icon: Icon }, index) => {
+                    const completed = affiliateStatus.flowState?.[key]?.completed;
+                    const active = activeStep === key;
+                    return (
+                      <React.Fragment key={key}>
                         <button
-                          onClick={() => setExpandedLogs(prev => ({
-                            ...prev,
-                            [category]: !prev[category]
-                          }))}
-                          className="w-full flex items-center justify-between p-3 hover:bg-gray-800 transition-colors"
+                          onClick={() => setActiveStep(key)}
+                          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${active ? 'border-cyan-400 bg-cyan-400/10 text-white' : completed ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500'}`}
                         >
-                          <div className="flex items-center gap-2">
-                            {expandedLogs[category] ? (
-                              <ChevronUp className="w-4 h-4 text-gray-400" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            )}
-                            <span className="text-sm font-semibold text-gray-300">{category}</span>
-                            <span className="text-xs text-gray-500">({logs.length})</span>
-                          </div>
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyToClipboard(
-                                logs.map(l => `[${formatTimestamp(l.timestamp)}] ${l.message}`).join('\n'),
-                                `${category}-copy`
-                              );
-                            }}
-                            className="text-gray-500 hover:text-white transition-colors p-1 cursor-pointer"
-                            title="Copy logs"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </div>
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full ${active ? 'bg-cyan-400 text-slate-950' : completed ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>
+                            {completed ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                          </span>
+                          <span>{index + 1}. {label}</span>
                         </button>
-                        {expandedLogs[category] && (
-                          <div className="bg-black/30 p-3 max-h-48 overflow-y-auto border-t border-gray-700 space-y-1">
-                            {logs.map((log, idx) => (
-                              <div
-                                key={idx}
-                                className="text-xs font-mono text-gray-400 hover:text-gray-300 transition-colors"
-                              >
-                                <span className="text-gray-600">[{formatTimestamp(log.timestamp)}]</span>
-                                <span className={log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : ''}>
-                                  {' '}{log.message}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {index < AFFILIATE_STEPS.length - 1 ? <div className="h-px w-6 bg-slate-700" /> : null}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+                {renderAffiliateStep({
+                  activeStep,
+                  stepData: currentStep,
+                  flowState: affiliateStatus.flowState,
+                  copyToClipboard,
+                  copiedId,
+                })}
+              </div>
+
+              {sessionData?.logs?.length ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm font-semibold text-slate-100">Recent Logs</div>
+                    <button
+                      onClick={() => copyToClipboard(sessionData.logs.map((log) => `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.category || 'general'}: ${log.message}`).join('\n'), 'recent-logs')}
+                      className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedId === 'recent-logs' ? 'Copied' : 'Copy Logs'}
+                    </button>
+                  </div>
+                  <div className="max-h-56 space-y-2 overflow-y-auto text-xs text-slate-300">
+                    {sessionData.logs.slice(-12).reverse().map((log, index) => (
+                      <div key={`${log.timestamp}-${index}`} className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                          <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                          <span className="rounded-full bg-slate-800 px-2 py-0.5">{log.category || 'general'}</span>
+                          <span className={`rounded-full px-2 py-0.5 ${log.level === 'error' ? 'bg-red-500/15 text-red-300' : log.level === 'warn' ? 'bg-amber-500/15 text-amber-300' : 'bg-slate-800 text-slate-300'}`}>{log.level}</span>
+                        </div>
+                        <div className="mt-1 text-slate-200">{log.message}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
-
-              {/* Error Info */}
-              {sessionData.error && (
-                <div className="bg-red-900/30 border border-red-700 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-red-300 mb-2">❌ Error Details</h3>
-                  <div className="text-sm text-red-400">
-                    <p><span className="text-red-500">Stage:</span> {sessionData.error.stage}</p>
-                    <p className="mt-1"><span className="text-red-500">Message:</span> {sessionData.error.message}</p>
-                    {sessionData.error.stack && (
-                      <pre className="mt-2 text-xs bg-black/50 p-2 rounded overflow-x-auto">
-                        {sessionData.error.stack}
-                      </pre>
-                    )}
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
-          ) : null}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-gray-700 p-4 flex-shrink-0 flex items-center justify-between">
-          <button
-            onClick={() => loadSessionLog()}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
-          >
-            Refresh
-          </button>
-          <button
-            onClick={() => {
-              const fullLog = JSON.stringify(sessionData, null, 2);
-              copyToClipboard(fullLog, 'full-log');
-            }}
-            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center gap-2"
-          >
-            <Copy className="w-4 h-4" />
-            {copiedId === 'full-log' ? 'Copied!' : 'Copy All'}
-          </button>
+          ) : (
+            <GenericSessionFallback sessionData={sessionData} copyToClipboard={copyToClipboard} copiedId={copiedId} />
+          )}
         </div>
       </div>
     </div>
   );
-};
+}
+
+function renderAffiliateStep({ activeStep, stepData, flowState, copyToClipboard, copiedId }) {
+  switch (activeStep) {
+    case 'step1':
+      return (
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-4">
+            <SectionTitle title="Analysis Summary" subtitle="Character, product, and AI analysis from step 1" />
+            <JsonPanel title="Analysis" value={stepData?.analysis} copyId="step1-analysis" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+            <PromptPanel title="Raw Analysis Text" value={stepData?.analysisText} copyId="step1-analysis-text" copyToClipboard={copyToClipboard} copiedId={copiedId} minHeight="min-h-[240px]" />
+          </div>
+          <div className="space-y-4">
+            <SectionTitle title="Input Assets" subtitle="Character and product references used for the flow" />
+            <MediaCard media={stepData?.characterImage} title="Character Reference" />
+            <MediaCard media={stepData?.productImage} title="Product Reference" />
+            <InfoList
+              title="Character"
+              items={[
+                ['Name', stepData?.selectedCharacter?.name],
+                ['Alias', stepData?.selectedCharacter?.alias],
+                ['Duration', formatSeconds(stepData?.duration)],
+              ]}
+            />
+          </div>
+        </div>
+      );
+    case 'step2':
+      return (
+        <div className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-2">
+            <PromptPanel title="Wearing Prompt" value={stepData?.prompts?.wearing} copyId="step2-wearing-prompt" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+            <PromptPanel title="Holding Prompt" value={stepData?.prompts?.holding} copyId="step2-holding-prompt" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid gap-5 md:grid-cols-2">
+              <MediaCard media={stepData?.images?.wearing} title="Wearing Output" showDriveStatus />
+              <MediaCard media={stepData?.images?.holding} title="Holding Output" showDriveStatus />
+            </div>
+            <JsonPanel title="Selected Options" value={stepData?.selectedOptions} copyId="step2-options" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+          </div>
+        </div>
+      );
+    case 'step3':
+      return (
+        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="space-y-4">
+            <PromptPanel title="Deep Analysis Prompt" value={stepData?.deepAnalysisPrompt} copyId="step3-prompt" copyToClipboard={copyToClipboard} copiedId={copiedId} minHeight="min-h-[200px]" />
+            <InfoList
+              title="Metadata"
+              items={[
+                ['Language', stepData?.language],
+                ['Scripts', String(stepData?.scripts?.length || 0)],
+                ['Duration', formatSeconds(stepData?.duration)],
+                ['Hashtags', Array.isArray(stepData?.hashtags) ? stepData.hashtags.join(', ') : ''],
+              ]}
+            />
+            <JsonPanel title="Step Metadata" value={stepData?.metadata} copyId="step3-metadata" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+          </div>
+          <div className="space-y-4">
+            <SectionTitle title="Video Scripts" subtitle="One card per generated script segment" />
+            <div className="grid gap-4">
+              {(stepData?.scripts || []).length ? stepData.scripts.map((script, index) => (
+                <ScriptCard key={index} script={script} index={index} copyToClipboard={copyToClipboard} copiedId={copiedId} />
+              )) : <EmptyState label="No scripts generated yet" />}
+            </div>
+          </div>
+        </div>
+      );
+    case 'step4':
+      return (
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <MediaCard media={stepData?.video} title="Generated Video" allowWidePreview />
+          <InfoList
+            title="Video Details"
+            items={[
+              ['Title', stepData?.video?.title],
+              ['Format', stepData?.video?.format],
+              ['Size', stepData?.video?.sizeLabel],
+              ['Provider', stepData?.video?.provider],
+              ['Duration', formatSeconds(stepData?.duration)],
+              ['Status', stepData?.completed ? 'Completed' : 'Pending'],
+            ]}
+          />
+        </div>
+      );
+    case 'step5':
+      return (
+        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="space-y-4">
+            <MediaCard media={stepData?.audio} title="Voice Preview" />
+            <InfoList
+              title="Voice Details"
+              items={[
+                ['Voice Gender', stepData?.audio?.voiceGender],
+                ['Voice Pace', stepData?.audio?.voicePace],
+                ['Language', stepData?.audio?.language],
+                ['Word Count', stepData?.audio?.wordCount ? String(stepData.audio.wordCount) : ''],
+                ['Text Length', stepData?.audio?.textLength ? `${stepData.audio.textLength} chars` : ''],
+                ['Format', stepData?.audio?.format],
+                ['Size', stepData?.audio?.sizeLabel],
+              ]}
+            />
+          </div>
+          <PromptPanel title="Voiceover Text" value={stepData?.voiceoverText || combineScripts(flowState?.step3?.scripts)} copyId="step5-text" copyToClipboard={copyToClipboard} copiedId={copiedId} minHeight="min-h-[320px]" />
+        </div>
+      );
+    case 'step6':
+      return (
+        <div className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-3">
+            <InfoList
+              title="Final Package"
+              items={[
+                ['Flow ID', stepData?.finalPackage?.flowId],
+                ['Type', stepData?.finalPackage?.type],
+                ['Timestamp', stepData?.finalPackage?.timestamp],
+                ['Duration', formatSeconds(stepData?.duration)],
+              ]}
+            />
+            <MediaCard media={normalizeFinalMedia(stepData?.finalPackage?.images?.wearing)} title="Final Wearing" showDriveStatus />
+            <MediaCard media={normalizeFinalMedia(stepData?.finalPackage?.images?.holding)} title="Final Holding" showDriveStatus />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+            <MediaCard media={normalizeFinalMedia(stepData?.finalPackage?.video, 'video')} title="Final Video" allowWidePreview />
+            <MediaCard media={normalizeFinalMedia(stepData?.finalPackage?.audio, 'audio')} title="Final Voice" />
+          </div>
+          <JsonPanel title="Final Analysis Package" value={stepData?.finalPackage?.analysis} copyId="step6-analysis" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+        </div>
+      );
+    default:
+      return <EmptyState label="Select a step to inspect the session preview" />;
+  }
+}
+
+function normalizeFinalMedia(source, fallbackKind) {
+  if (!source?.path) return null;
+  const pathValue = source.path;
+  const ext = pathValue.split('.').pop()?.toLowerCase() || null;
+  return {
+    path: pathValue,
+    previewUrl: pathValue.includes('/temp/') ? pathValue : pathValue.includes('temp\\') || pathValue.includes('temp/') ? `/temp/${pathValue.split(/temp[\\/]/).pop().replace(/\\/g, '/')}` : null,
+    title: pathValue.split(/[/\\]/).pop(),
+    format: ext,
+    driveUrl: source.driveUrl || null,
+    uploadedToDrive: Boolean(source.driveUrl),
+    kind: fallbackKind || (['mp4', 'mov', 'webm'].includes(ext) ? 'video' : ['mp3', 'wav', 'm4a'].includes(ext) ? 'audio' : 'image'),
+  };
+}
+
+function MediaCard({ media, title, showDriveStatus = false, allowWidePreview = false }) {
+  const previewUrl = media?.previewUrl || media?.driveUrl || null;
+  const kind = media?.kind || inferMediaKind(media?.format);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-white">{title}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            {media?.format ? <span className="rounded-full bg-slate-800 px-2 py-0.5 uppercase">{media.format}</span> : null}
+            {media?.sizeLabel ? <span>{media.sizeLabel}</span> : null}
+            {media?.title ? <span className="truncate">{media.title}</span> : null}
+          </div>
+        </div>
+        {showDriveStatus ? <DriveStatusBadge media={media} /> : null}
+      </div>
+
+      <div className={`p-4 ${allowWidePreview ? 'min-h-[340px]' : 'min-h-[260px]'}`}>
+        {previewUrl ? (
+          kind === 'video' ? (
+            <video controls src={previewUrl} className="h-full max-h-[340px] w-full rounded-xl bg-black object-contain" />
+          ) : kind === 'audio' ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <audio controls src={previewUrl} className="w-full" />
+            </div>
+          ) : (
+            <img src={previewUrl} alt={title} className="h-full max-h-[340px] w-full rounded-xl bg-slate-900 object-contain" />
+          )
+        ) : (
+          <EmptyState label="No preview URL available" compact />
+        )}
+      </div>
+
+      <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-400">
+        <div className="grid gap-2 md:grid-cols-2">
+          <span className="truncate">Path: {media?.path || 'N/A'}</span>
+          {media?.driveUrl ? (
+            <a href={media.driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-start gap-1 text-cyan-300 hover:text-cyan-200">
+              Open Drive <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromptPanel({ title, value, copyId, copyToClipboard, copiedId, minHeight = 'min-h-[260px]' }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div className="text-sm font-semibold text-white">{title}</div>
+        <CopyButton text={value} copyId={copyId} copyToClipboard={copyToClipboard} copiedId={copiedId} />
+      </div>
+      <div className={`overflow-auto p-4 ${minHeight}`}>
+        {value ? (
+          <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{value}</pre>
+        ) : (
+          <EmptyState label="No content available" compact />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function JsonPanel({ title, value, copyId, copyToClipboard, copiedId }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div className="text-sm font-semibold text-white">{title}</div>
+        <CopyButton text={value ? JSON.stringify(value, null, 2) : ''} copyId={copyId} copyToClipboard={copyToClipboard} copiedId={copiedId} />
+      </div>
+      <div className="max-h-[360px] overflow-auto p-4">
+        {value ? (
+          <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">{JSON.stringify(value, null, 2)}</pre>
+        ) : (
+          <EmptyState label="No data available" compact />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScriptCard({ script, index, copyToClipboard, copiedId }) {
+  const scriptText = typeof script === 'string' ? script : script?.text || script?.script || JSON.stringify(script, null, 2);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-white">Segment {index + 1}</div>
+          <div className="text-xs text-slate-500">{typeof script === 'object' && script?.segment ? script.segment : 'Generated script'}</div>
+        </div>
+        <CopyButton text={scriptText} copyId={`script-${index}`} copyToClipboard={copyToClipboard} copiedId={copiedId} />
+      </div>
+      <div className="p-4 text-sm leading-6 text-slate-200">
+        <pre className="whitespace-pre-wrap break-words">{scriptText}</pre>
+      </div>
+    </div>
+  );
+}
+
+function InfoList({ title, items }) {
+  const filteredItems = items.filter(([, value]) => value !== null && value !== undefined && value !== '');
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+      <div className="mb-3 text-sm font-semibold text-white">{title}</div>
+      {filteredItems.length ? (
+        <div className="space-y-2 text-sm">
+          {filteredItems.map(([label, value]) => (
+            <div key={label} className="flex items-start justify-between gap-3 border-b border-slate-800/70 pb-2 last:border-b-0 last:pb-0">
+              <span className="text-slate-500">{label}</span>
+              <span className="max-w-[65%] break-words text-right text-slate-200">{String(value)}</span>
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState label="No details available" compact />}
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-3 text-lg font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function SectionTitle({ title, subtitle }) {
+  return (
+    <div>
+      <div className="text-base font-semibold text-white">{title}</div>
+      {subtitle ? <div className="mt-1 text-sm text-slate-400">{subtitle}</div> : null}
+    </div>
+  );
+}
+
+function DriveStatusBadge({ media }) {
+  if (!media) return null;
+  return media.uploadedToDrive ? (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+      <CheckCircle2 className="h-3.5 w-3.5" />
+      Uploaded to Drive
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-400">
+      <Circle className="h-3.5 w-3.5" />
+      Not on Drive
+    </span>
+  );
+}
+
+function CopyButton({ text, copyId, copyToClipboard, copiedId }) {
+  return (
+    <button
+      onClick={() => copyToClipboard(text, copyId)}
+      disabled={!text}
+      className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <Copy className="h-3.5 w-3.5" />
+      {copiedId === copyId ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
+function EmptyState({ label, compact = false }) {
+  return (
+    <div className={`flex items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/60 text-slate-500 ${compact ? 'min-h-[120px]' : 'min-h-[220px]'}`}>
+      {label}
+    </div>
+  );
+}
+
+function GenericSessionFallback({ sessionData, copyToClipboard, copiedId }) {
+  return (
+    <div className="space-y-4">
+      <InfoList
+        title="Session Summary"
+        items={[
+          ['Status', sessionData?.status],
+          ['Flow Type', sessionData?.flowType],
+          ['Created At', sessionData?.createdAt ? new Date(sessionData.createdAt).toLocaleString() : ''],
+          ['Logs', sessionData?.logs?.length ? String(sessionData.logs.length) : '0'],
+        ]}
+      />
+      <JsonPanel title="Session Data" value={sessionData} copyId="generic-session" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+    </div>
+  );
+}
+
+function inferMediaKind(format) {
+  const value = String(format || '').toLowerCase();
+  if (['mp4', 'mov', 'webm'].includes(value)) return 'video';
+  if (['mp3', 'wav', 'm4a'].includes(value)) return 'audio';
+  return 'image';
+}
+
+function formatSeconds(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const num = Number(value);
+  return Number.isFinite(num) ? `${num.toFixed(1)}s` : String(value);
+}
+
+function formatDuration(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 'Pending';
+  if (num > 1000) {
+    return `${(num / 1000).toFixed(1)}s`;
+  }
+  return `${num.toFixed(1)}s`;
+}
+
+function combineScripts(scripts = []) {
+  return scripts
+    .map((script) => (typeof script === 'string' ? script : script?.text || script?.script || ''))
+    .filter(Boolean)
+    .join('\n\n');
+}
 
 export default SessionLogModal;

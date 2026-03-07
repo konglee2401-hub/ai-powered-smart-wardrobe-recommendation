@@ -20,6 +20,7 @@ import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import SessionLogModal from '../components/SessionLogModal';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 import ScenePickerModal from '../components/ScenePickerModal';
+import PageHeaderBar from '../components/PageHeaderBar';
 import { 
   calculateVideoCount, 
   VIDEO_PROVIDER_LIMITS, 
@@ -28,6 +29,30 @@ import {
   VIDEO_DURATIONS,
   getScenarioByValue
 } from '../constants/videoGeneration';
+import { GOOGLE_VOICES } from '../constants/voiceOverOptions';
+
+/**
+ * Map voice gender and pace to actual Gemini TTS voice name
+ * @param {string} gender - 'male' or 'female'
+ * @param {string} pace - 'slow', 'normal', or 'fast'
+ * @returns {string} Lowercase voice name for API (e.g., 'puck', 'aoede')
+ */
+function getVoiceNameFromGenderPace(gender, pace) {
+  const voiceMap = {
+    female: {
+      slow: 'enceladus',    // Breathy, soft - slower pacing
+      normal: 'aoede',      // Breezy - neutral pace
+      fast: 'fenrir',       // Excitable - fast-paced
+    },
+    male: {
+      slow: 'charon',       // Informative - slower/authoritative
+      normal: 'kore',       // Firm - balanced pace
+      fast: 'puck',         // Upbeat - energetic/fast
+    }
+  };
+  
+  return voiceMap[gender]?.[pace] || 'aoede'; // Fallback to aoede
+}
 
 // Constants - Use cases and focus options from ImageGenerationPage
 // Note: Labels will be set dynamically using translations in the component
@@ -48,14 +73,14 @@ const FOCUS_OPTIONS = [
 ];
 
 const IMAGE_PROVIDERS = [
-  { id: 'grok', label: 'Grok', icon: '🤖' },
-  { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
-  { id: 'bfl', label: 'BFL FLUX', icon: '🎨' },
+  { id: 'grok', label: 'Grok' },
+  { id: 'google-flow', label: 'Google Flow' },
+  { id: 'bfl', label: 'BFL FLUX' },
 ];
 
 const VIDEO_PROVIDERS = [
-  { id: 'grok', label: 'Grok', icon: '🤖' },
-  { id: 'google-flow', label: 'Google Flow', icon: '🌐' },
+  { id: 'grok', label: 'Grok' },
+  { id: 'google-flow', label: 'Google Flow' },
 ];
 
 const ASPECT_RATIOS = [
@@ -66,6 +91,46 @@ const ASPECT_RATIOS = [
 // 📊 Image Generation Configuration
 const DESIRED_OUTPUT_COUNT = 1;  // 💫 Default: Generate 1 session per click (user can increase in UI)
 const DEFAULT_SCENE_VALUE = 'linhphap-tryon-room';
+
+function ProviderIcon({ providerId }) {
+  const glyphClass = 'h-[18px] w-[18px]';
+
+  if (providerId === 'google-flow') {
+    return (
+      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+          <path d="M5 12c0-3.5 2.4-6 6-6 1.8 0 3.3.6 4.5 1.8" />
+          <path d="M19 12c0 3.5-2.4 6-6 6-1.8 0-3.3-.6-4.5-1.8" />
+          <path d="M14.5 5.5h2.8v2.8" />
+          <path d="M9.5 18.5H6.7v-2.8" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (providerId === 'bfl') {
+    return (
+      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+          <path d="M12 3.5 5 7.5v8.8l7 4 7-4V7.5l-7-4Z" />
+          <path d="m8.5 9.2 3.5 2 3.5-2" />
+          <path d="M12 11.2v5.6" />
+        </svg>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+        <path d="M7 5h6l4 4v10H7z" />
+        <path d="M13 5v4h4" />
+        <path d="M9.25 15.5c.9-1.7 1.95-2.55 3.15-2.55 1.27 0 2.38.85 3.35 2.55" />
+        <circle cx="10.2" cy="10.2" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    </span>
+  );
+}
 
 
 // Workflow steps - will be set dynamically in component using translations
@@ -360,10 +425,10 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
   };
 
   return (
-    <div className="border border-gray-700 rounded-lg p-4 bg-gray-800/50">
+    <div className="border border-gray-700 rounded-lg bg-gray-800/50 p-3">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-gray-200">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-200">
           {t('oneClickCreator.session')} #{session.id}{session.completed && ' ✓'}
           {session.error && ' ✗'}
         </h4>
@@ -375,7 +440,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
       </div>
 
       {/* Steps Progress */}
-      <div className={`grid gap-2 mb-4 ${session.steps?.length > 6 ? 'grid-cols-4' : 'grid-cols-4'}`}>
+      <div className={`mb-3 grid gap-1.5 ${session.steps?.length > 6 ? 'grid-cols-4' : 'grid-cols-4'}`}>
         {session.steps?.map(step => {
           // Find the step definition
           const allSteps = [...WORKFLOW_STEPS, ...WORKFLOW_STEPS_AFFILIATE_TIKTOK];
@@ -393,7 +458,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
       </div>
 
       {/* Compact Step Previews */}
-      <div className="mb-4 grid grid-cols-2 gap-2">
+      <div className="mb-3 grid grid-cols-2 gap-2">
         <details className="bg-gray-900/40 border border-gray-700 rounded p-2">
           <summary className="text-xs text-gray-300 cursor-pointer">📝 Step 1 Prompts</summary>
           <div className="mt-2 space-y-2">
@@ -456,7 +521,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
       </div>
 
       {/* Logs */}
-      <div className="border-t border-gray-700 pt-3">
+      <div className="border-t border-gray-700 pt-2.5">
         <button
           onClick={() => setExpandedLogs(!expandedLogs)}
           className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
@@ -465,7 +530,7 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
           {expandedLogs ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
         {expandedLogs && (
-          <div className="mt-2 max-h-40 overflow-y-auto bg-gray-900/50 rounded p-2 space-y-1">
+          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded bg-gray-900/50 p-2">
             {session.logs?.length > 0 ? (
               session.logs.map((log, idx) => (
                 <div key={idx} className="text-xs text-gray-500 font-mono">
@@ -480,17 +545,17 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
       </div>
 
       {/* View Session Log Button */}
-      <div className="border-t border-gray-700 pt-3 flex gap-2">
+      <div className="flex gap-2 border-t border-gray-700 pt-2.5">
         <button
           onClick={() => onViewLog && onViewLog(session.flowId)}
-          className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+          className="flex flex-1 items-center justify-center gap-2 rounded bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700"
         >
           <Database className="w-4 h-4" />
           {t('oneClickCreator.viewSessionLog')}
         </button>
         <button
           onClick={() => setExpandedLogs(false)}
-          className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+          className="rounded bg-gray-700 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-600"
         >
           {t('oneClickCreator.collapseAll')}
         </button>
@@ -503,18 +568,34 @@ export default function OneClickCreatorPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
-  const sidebarCardClass = 'rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900 via-[#10182d] to-[#0b1326] p-4 shadow-[0_10px_35px_rgba(2,6,23,0.35)]';
-  const accentCardClass = 'rounded-xl border border-violet-700/50 bg-gradient-to-br from-violet-950/55 via-slate-900 to-[#101a34] p-4 shadow-[0_12px_36px_rgba(76,29,149,0.22)]';
-  const optionButtonBaseClass = 'w-full rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const sidebarCardClass = 'rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900 via-[#10182d] to-[#0b1326] p-3 shadow-[0_10px_35px_rgba(2,6,23,0.35)]';
+  const accentCardClass = 'rounded-xl border border-violet-700/50 bg-gradient-to-br from-violet-950/55 via-slate-900 to-[#101a34] p-3 shadow-[0_12px_36px_rgba(76,29,149,0.22)]';
+  const optionButtonBaseClass = 'w-full rounded-xl border px-3 py-2 text-xs font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const providerButtonClass = 'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
   const optionButtonIdleClass = 'border-slate-600/70 bg-slate-800/75 text-slate-200 hover:border-slate-400 hover:bg-slate-700/90 hover:text-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.32)]';
+  const selectedOptionClass = {
+    amber: 'border-amber-400/80 bg-amber-500/16 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,0.30),0_8px_22px_rgba(245,158,11,0.16)]',
+    cyan: 'border-cyan-400/80 bg-cyan-500/14 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.26),0_8px_22px_rgba(8,145,178,0.14)]',
+    violet: 'border-violet-400/80 bg-violet-500/16 text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,0.28),0_8px_22px_rgba(139,92,246,0.16)]',
+    emerald: 'border-emerald-400/80 bg-emerald-500/16 text-emerald-50 shadow-[0_0_0_1px_rgba(52,211,153,0.26),0_8px_22px_rgba(16,185,129,0.14)]',
+    sky: 'border-sky-400/80 bg-sky-500/16 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,0.26),0_8px_22px_rgba(59,130,246,0.14)]',
+    pink: 'border-pink-400/80 bg-pink-500/16 text-pink-50 shadow-[0_0_0_1px_rgba(244,114,182,0.26),0_8px_22px_rgba(236,72,153,0.14)]',
+  };
 
   const getOptionButtonClass = (isSelected, selectedClass) =>
-    `${optionButtonBaseClass} ${isSelected ? selectedClass : optionButtonIdleClass}`;
+    `${optionButtonBaseClass} ${isSelected ? `ring-1 ring-white/20 ${selectedClass}` : optionButtonIdleClass}`;
 
-  const getSelectCardClass = (isActive) =>
-    `${sidebarCardClass} transition-all duration-200 ${isActive ? 'border-amber-500/60 shadow-[0_0_0_1px_rgba(251,191,36,0.14),0_14px_32px_rgba(245,158,11,0.12)]' : 'hover:border-slate-500/80'}`;
+  const getProviderButtonClass = (isSelected, selectedClass) =>
+    `${providerButtonClass} ${isSelected ? `ring-1 ring-white/20 ${selectedClass}` : optionButtonIdleClass}`;
 
-  const selectInputClass = 'w-full appearance-none rounded-2xl border border-slate-500/80 bg-slate-900/90 px-4 py-3 pr-11 text-sm font-semibold text-white shadow-inner outline-none transition-all duration-200 hover:border-slate-300 hover:bg-slate-800/95 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50';
+  const getSelectCardClass = (isActive, accent = 'amber') => {
+    const activeClass = accent === 'cyan'
+      ? 'border-cyan-400/80 bg-gradient-to-br from-cyan-500/12 via-slate-900 to-[#0b1326] shadow-[0_0_0_1px_rgba(34,211,238,0.24),0_12px_28px_rgba(8,145,178,0.12)]'
+      : 'border-amber-400/80 bg-gradient-to-br from-amber-500/12 via-slate-900 to-[#0b1326] shadow-[0_0_0_1px_rgba(251,191,36,0.24),0_12px_28px_rgba(245,158,11,0.12)]';
+    return `${sidebarCardClass} transition-all duration-300 ${isActive ? activeClass : 'hover:border-slate-500/80 hover:shadow-[0_8px_24px_rgba(51,65,85,0.15)]'}`;
+  };
+
+  const selectInputClass = 'w-full appearance-none rounded-xl border border-slate-500/80 bg-slate-900/90 px-3 py-2.5 pr-10 text-xs font-semibold text-white shadow-inner outline-none transition-all duration-200 hover:border-slate-300 hover:bg-slate-800/95 focus:border-amber-400/90 focus:ring-3 focus:ring-amber-500/30 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.15)] disabled:cursor-not-allowed disabled:opacity-50';
 
   const getUseCaseLabel = (value) => {
     const option = USE_CASES.find((item) => item.value === value);
@@ -577,14 +658,14 @@ export default function OneClickCreatorPage() {
   const [imageSource, setImageSource] = useState({ character: 'upload', product: 'upload' }); // 'upload' or 'gallery'
 
   // Settings
-  const [useCase, setUseCase] = useState('change-clothes');
+  const [useCase, setUseCase] = useState('affiliate-video-tiktok');
   const [productFocus, setProductFocus] = useState('full-outfit');
-  const [imageProvider, setImageProvider] = useState('bfl');
+  const [imageProvider, setImageProvider] = useState('google-flow');
   const [videoProvider, setVideoProvider] = useState('google-flow');  // Aligned with image provider
   const [videoScenario, setVideoScenario] = useState('product-intro');  // Default scenario
   const [videoDuration, setVideoDuration] = useState(20);  // Default 20 seconds
   const [quantity, setQuantity] = useState(DESIRED_OUTPUT_COUNT);
-  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [aspectRatio, setAspectRatio] = useState('9:16');
   const [isHeadless, setIsHeadless] = useState(true);
   const [useShortPrompt, setUseShortPrompt] = useState(false);
   
@@ -960,6 +1041,7 @@ export default function OneClickCreatorPage() {
       
       // Extract voice settings
       const [voiceGender, voicePace] = voiceOption.split('-');
+      const voiceName = getVoiceNameFromGenderPace(voiceGender, voicePace);
       
       // Construct payload from parameters - send base64 strings as JSON
       const payload = {
@@ -969,6 +1051,7 @@ export default function OneClickCreatorPage() {
         videoDuration: tiktokVideoDuration,
         voiceGender,
         voicePace,
+        voiceName,  // 💫 NEW: Actual Gemini voice name
         productFocus: productFocus || 'full-outfit',
         imageProvider: imageProvider || 'google-flow',
         videoProvider: videoProvider || 'google-flow',
@@ -1572,35 +1655,26 @@ export default function OneClickCreatorPage() {
 };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
-      {/* Header */}
-      <div className="bg-gray-900/50 border-b border-gray-800 sticky top-0 z-40">
-        <div className="w-full px-6 py-4 flex items-center">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-6 h-6 text-amber-400" />
-            <div>
-              <h1 className="text-2xl font-bold">{t('oneClickCreator.title')}</h1>
-              <p className="text-sm text-gray-400">{t('oneClickCreator.subtitle')}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="-mx-5 -mt-5 min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-[13px] text-white lg:-mx-6 lg:-mt-6">
+      <PageHeaderBar
+        icon={<Sparkles className="h-4 w-4 text-amber-400" />}
+        title={t('oneClickCreator.title')}
+        subtitle={t('oneClickCreator.subtitle')}
+        meta={`${getUseCaseLabel(useCase)} / ${getFocusLabel(productFocus)} / ${quantity} sessions`}
+      />
 
-      <div className="w-full px-6 py-6 h-[calc(100vh-80px)]">
+      <div className="h-[calc(100vh-56px)] w-full px-5 py-4">
 
-        <div className="grid grid-cols-12 gap-6 h-full">
+        <div className="grid h-full grid-cols-12 gap-4">
           {/* LEFT SIDEBAR - Settings */}
-          <div className="col-span-4 grid grid-cols-2 gap-4 content-start overflow-y-auto pr-2">
+          <div className="col-span-4 grid grid-cols-2 content-start gap-3 overflow-y-auto pr-1">
             {/* Use Case */}
-            <div className={getSelectCardClass(Boolean(useCase))}>
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+            <div className={getSelectCardClass(Boolean(useCase), 'amber')}>
+              <div className="mb-2 flex items-start gap-2">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-gray-100">
                   <Target className="w-4 h-4 text-amber-300" />
                   {t('oneClickCreator.useCase')}
                 </h3>
-                <span className="rounded-full border border-amber-400/35 bg-amber-500/12 px-2.5 py-1 text-[11px] font-semibold text-amber-200">
-                  {getUseCaseLabel(useCase)}
-                </span>
               </div>
               <div className="relative">
                 <select
@@ -1618,15 +1692,12 @@ export default function OneClickCreatorPage() {
             </div>
 
             {/* Product Focus */}
-            <div className={getSelectCardClass(Boolean(productFocus))}>
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+            <div className={getSelectCardClass(Boolean(productFocus), 'cyan')}>
+              <div className="mb-2 flex items-start gap-2">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-gray-100">
                   <FileText className="w-4 h-4 text-cyan-300" />
                   {t('oneClickCreator.productFocus')}
                 </h3>
-                <span className="rounded-full border border-cyan-400/35 bg-cyan-500/12 px-2.5 py-1 text-[11px] font-semibold text-cyan-200">
-                  {getFocusLabel(productFocus)}
-                </span>
               </div>
               <div className="relative">
                 <select
@@ -1646,7 +1717,7 @@ export default function OneClickCreatorPage() {
 
             {/* Image Provider */}
             <div className={sidebarCardClass}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-3 flex items-center gap-2">
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-gray-100">
                 <ImageIcon className="w-4 h-4 text-amber-300" />
                 {t('oneClickCreator.imageProvider')}
               </h3>
@@ -1656,12 +1727,13 @@ export default function OneClickCreatorPage() {
                     key={p.id}
                     onClick={() => setImageProvider(p.id)}
                     disabled={isGenerating}
-                    className={getOptionButtonClass(
+                    className={getProviderButtonClass(
                       imageProvider === p.id,
-                      'border-amber-400/70 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_26px_rgba(245,158,11,0.35)] hover:from-amber-400 hover:to-orange-400'
+                      selectedOptionClass.amber
                     )}
                   >
-                    {p.icon} {p.label}
+                    <ProviderIcon providerId={p.id} />
+                    <span className="leading-none">{p.label}</span>
                   </button>
                 ))}
               </div>
@@ -1670,24 +1742,24 @@ export default function OneClickCreatorPage() {
 
             {/* Prompt Mode */}
             <div className={sidebarCardClass}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.useShortPrompt')}</h3>
+              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.useShortPrompt')}</h3>
               <button
                 type="button"
                 onClick={() => setUseShortPrompt(prev => !prev)}
                 disabled={isGenerating}
                 className={getOptionButtonClass(
                   useShortPrompt,
-                  'border-amber-400/70 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_26px_rgba(245,158,11,0.35)] hover:from-amber-400 hover:to-orange-400'
+                  selectedOptionClass.amber
                 )}
               >
                 {useShortPrompt ? t('oneClickCreator.enabled') : t('oneClickCreator.disabled')}
               </button>
-              <p className="text-xs text-gray-400 mt-2 leading-5">{t('oneClickCreator.shortPromptHint')}</p>
+              <p className="mt-2 text-[11px] leading-4 text-gray-400">{t('oneClickCreator.shortPromptHint')}</p>
             </div>
 
             {/* Video Provider */}
             <div className={sidebarCardClass}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-3 flex items-center gap-2">
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-gray-100">
                 <Video className="w-4 h-4 text-violet-300" />
                 {t('oneClickCreator.videoProvider')}
               </h3>
@@ -1697,12 +1769,13 @@ export default function OneClickCreatorPage() {
                     key={p.id}
                     onClick={() => setVideoProvider(p.id)}
                     disabled={isGenerating}
-                    className={getOptionButtonClass(
+                    className={getProviderButtonClass(
                       videoProvider === p.id,
-                      'border-violet-400/70 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-[0_10px_26px_rgba(139,92,246,0.35)] hover:from-violet-400 hover:to-fuchsia-400'
+                      selectedOptionClass.violet
                     )}
                   >
-                    {p.icon} {p.label}
+                    <ProviderIcon providerId={p.id} />
+                    <span className="leading-none">{p.label}</span>
                   </button>
                 ))}
               </div>
@@ -1710,16 +1783,16 @@ export default function OneClickCreatorPage() {
 
             {/* Quantity */}
             <div className={sidebarCardClass}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.quantity')}</h3>
-              <div className="grid grid-cols-5 gap-1.5">
-                {[1, 2, 3, 4, 5].map(q => (
+              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.quantity')}</h3>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[1, 2, 3, 4].map(q => (
                   <button
                     key={q}
                     onClick={() => setQuantity(q)}
                     disabled={isGenerating}
                     className={getOptionButtonClass(
                       quantity === q,
-                      'border-emerald-400/70 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_10px_26px_rgba(16,185,129,0.32)] hover:from-emerald-400 hover:to-teal-400'
+                      selectedOptionClass.emerald
                     )}
                   >
                     {q}
@@ -1730,7 +1803,7 @@ export default function OneClickCreatorPage() {
 
             {/* Aspect Ratio */}
             <div className={sidebarCardClass}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-3">{t('oneClickCreator.aspectRatio')}</h3>
+              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.aspectRatio')}</h3>
               <div className="space-y-2">
                 {ASPECT_RATIOS.map(ar => (
                   <button
@@ -1739,7 +1812,7 @@ export default function OneClickCreatorPage() {
                     disabled={isGenerating}
                     className={getOptionButtonClass(
                       aspectRatio === ar.id,
-                      'border-sky-400/70 bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-[0_10px_26px_rgba(59,130,246,0.34)] hover:from-sky-400 hover:to-blue-400'
+                      selectedOptionClass.sky
                     )}
                   >
                     {ar.label}
@@ -1750,14 +1823,14 @@ export default function OneClickCreatorPage() {
 
             {/* Video Settings Info (Collapsed by default) */}
             <div className={accentCardClass}>
-              <h3 className="text-sm font-semibold text-violet-200 mb-2 flex items-center gap-2">
+              <h3 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-violet-200">
                 <Video className="w-4 h-4" />
                 {t('oneClickCreator.videoGenerationAuto')}
               </h3>
-              <p className="text-xs text-violet-100/90 mb-2 leading-5">
+              <p className="mb-1.5 text-[11px] leading-4 text-violet-100/90">
                 {videoDuration}s video with scenario: <span className="font-bold text-white">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
               </p>
-              <p className="text-xs text-violet-100/90 leading-5">
+              <p className="text-[11px] leading-4 text-violet-100/90">
                 {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold text-white">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
               </p>
             </div>
@@ -1767,7 +1840,7 @@ export default function OneClickCreatorPage() {
               <>
                 {/* Video Duration Selector */}
                 <div className={accentCardClass}>
-                  <h3 className="text-sm font-semibold text-sky-200 mb-3 flex items-center gap-2">
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-sky-200">
                     <Clock className="w-4 h-4" />
                     {t('oneClickCreator.videoDuration')}
                   </h3>
@@ -1779,7 +1852,7 @@ export default function OneClickCreatorPage() {
                         disabled={isGenerating}
                         className={getOptionButtonClass(
                           tiktokVideoDuration === duration,
-                          'border-sky-400/70 bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-[0_10px_26px_rgba(59,130,246,0.34)] hover:from-sky-400 hover:to-blue-400'
+                          selectedOptionClass.sky
                         )}
                       >
                         {duration}s
@@ -1790,7 +1863,7 @@ export default function OneClickCreatorPage() {
 
                 {/* Voice Options Selector */}
                 <div className={accentCardClass}>
-                  <h3 className="text-sm font-semibold text-pink-200 mb-3 flex items-center gap-2">
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-pink-200">
                     <Volume2 className="w-4 h-4" />
                     {t('oneClickCreator.narratorVoice')}
                   </h3>
@@ -1802,7 +1875,7 @@ export default function OneClickCreatorPage() {
                         disabled={isGenerating}
                         className={`${getOptionButtonClass(
                           voiceOption === option.value,
-                          'border-pink-400/70 bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_10px_26px_rgba(236,72,153,0.32)] hover:from-pink-400 hover:to-rose-400'
+                          selectedOptionClass.pink
                         )} text-left`}
                       >
                         {t(option.labelKey)}
@@ -1813,8 +1886,8 @@ export default function OneClickCreatorPage() {
 
                 {/* TikTok Info */}
                 {suggestedHashtags.length > 0 && (
-                  <div className="col-span-2 bg-green-900/30 border border-green-700/50 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-green-300 mb-2 flex items-center gap-2">
+                  <div className="col-span-2 rounded-lg border border-green-700/50 bg-green-900/30 p-3">
+                    <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-green-300">
                       <CheckCircle className="w-4 h-4" />
                       {t('oneClickCreator.suggestedHashtags')}
                     </h3>
@@ -1832,56 +1905,64 @@ export default function OneClickCreatorPage() {
           </div>
 
           {/* CENTER - Main Content */}
-          <div className="col-span-8 space-y-0 flex flex-col overflow-hidden">
+          <div className="col-span-8 flex flex-col overflow-hidden">
             {/* Scrollable Content Container */}
-            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
               {/* Upload Section */}
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  {t('oneClickCreator.uploadImagesStep')}
-                </h3>
-                <button onClick={() => setShowCharacterSelector(true)} className="px-3 py-2 text-xs rounded bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-medium transition-colors">Select Character Profile</button>
+              <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-xs font-semibold text-gray-200">
+                    <Upload className="w-4 h-4" />
+                    {t('oneClickCreator.uploadImagesStep')}
+                  </h3>
+                  <p className="mt-1 text-[11px] text-gray-500">Keep inputs compact: character, product, then optional scene reference.</p>
+                </div>
               </div>
 
-              <div className="mb-4 p-3 rounded-lg border border-purple-700/60 bg-purple-950/30">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase text-purple-300">Scene Locked</p>
-                    <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
+              <div className="mb-3 rounded-lg border border-purple-700/60 bg-purple-950/30 p-3">
+                <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-300">Scene Locked</p>
+                      <p className="truncate text-sm font-medium text-white">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-300">{selectedScenePrompt || 'No locked prompt'}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowScenePicker(true)}
-                    className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 text-white"
+                    className="rounded bg-purple-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-purple-500"
                   >
                     Pick Scene
                   </button>
                 </div>
-                <details className="mt-2">
-                  <summary className="text-xs text-purple-200 cursor-pointer">Locked prompt</summary>
-                  <p className="text-xs text-gray-200 mt-1">{selectedScenePrompt || 'No locked prompt'}</p>
-                </details>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-stretch">
+                <div className="flex h-full flex-col gap-2">
+                  <div className="flex h-[286px] flex-col rounded-lg border border-gray-700 bg-gray-900/35 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
+                    <Upload className="h-3.5 w-3.5 text-amber-300" />
+                    Character Image
+                  </div>
                   <div
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50 relative group"
+                    className="relative flex-1 overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-amber-500 disabled:opacity-50 group"
                   >
                     {characterImage ? (
                       <>
-                        <img src={characterImage} alt="Character" className="w-full h-40 object-cover rounded" />
+                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
+                          <img src={characterImage} alt="Character" className="max-h-full max-w-full rounded object-contain" />
+                        </div>
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
                           <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
-                      <div className="py-8">
-                        <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                        <p className="text-sm text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
+                      <div className="flex h-full flex-col items-center justify-center">
+                        <Upload className="mx-auto mb-2 h-7 w-7 text-gray-500" />
+                        <p className="text-xs text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
                         <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
@@ -1902,22 +1983,41 @@ export default function OneClickCreatorPage() {
                       }}
                     />
                   </div>
-                  <button
-                    onClick={() => {
-                      if (!isGenerating) {
-                        setGalleryPickerFor('character');
-                        setShowGalleryPicker(true);
-                      }
-                    }}
-                    disabled={isGenerating}
-                    className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    {t('oneClickCreator.chooseFromGallery')}
-                  </button>
+                  </div>
+                  <div className="grid min-h-[40px] grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        if (!isGenerating) {
+                          setShowCharacterSelector(true);
+                        }
+                      }}
+                      disabled={isGenerating}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-fuchsia-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-fuchsia-500 disabled:bg-gray-600"
+                    >
+                      Select Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!isGenerating) {
+                          setGalleryPickerFor('character');
+                          setShowGalleryPicker(true);
+                        }
+                      }}
+                      disabled={isGenerating}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-gray-600"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      {t('oneClickCreator.chooseFromGallery')}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="flex h-full flex-col gap-2">
+                  <div className="flex h-[286px] flex-col rounded-lg border border-gray-700 bg-gray-900/35 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">
+                    <Upload className="h-3.5 w-3.5 text-cyan-300" />
+                    Product Image
+                  </div>
                   <div
                     onClick={() => {
                       if (isGenerating) return;
@@ -1935,22 +2035,25 @@ export default function OneClickCreatorPage() {
                       };
                       input.click();
                     }}
-                    className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 transition-colors disabled:opacity-50 relative group"
+                    className="relative flex-1 overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-amber-500 disabled:opacity-50 group"
                   >
                     {productImage ? (
                       <>
-                        <img src={productImage} alt="Product" className="w-full h-40 object-cover rounded" />
+                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
+                          <img src={productImage} alt="Product" className="max-h-full max-w-full rounded object-contain" />
+                        </div>
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
                           <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
-                      <div className="py-8">
-                        <Upload className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-                        <p className="text-sm text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
+                      <div className="flex h-full flex-col items-center justify-center">
+                        <Upload className="mx-auto mb-2 h-7 w-7 text-gray-500" />
+                        <p className="text-xs text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
                         <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
+                  </div>
                   </div>
                   <button
                     onClick={() => {
@@ -1960,52 +2063,55 @@ export default function OneClickCreatorPage() {
                       }
                     }}
                     disabled={isGenerating}
-                    className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-gray-600"
                   >
                     <ImageIcon className="w-4 h-4" />
                     {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="border border-dashed border-gray-600 rounded-lg p-3 bg-gray-900/50 h-full">
-                    <p className="text-xs uppercase text-gray-400 font-semibold mb-2 flex items-center gap-2">
-                      <Wand2 className="w-3 h-3" /> Scene Reference Image (Optional)
+                <div className="flex h-full flex-col gap-2">
+                  <div className="flex h-[286px] flex-col rounded-lg border border-dashed border-gray-600 bg-gray-900/50 p-3">
+                    <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-200/90">
+                      <Wand2 className="w-3 h-3 text-violet-300" /> Scene Reference
                     </p>
-                    <p className="text-xs text-gray-500 mb-3">Upload a reference image of your scene to ensure consistent background and lighting across all generations.</p>
-                    <div className="flex gap-2">
+                    <p className="mb-2 text-[11px] leading-4 text-gray-500">Optional image to keep background and lighting consistent across generations.</p>
+                    <div className="flex flex-1">
                       <div
                         onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                        className="flex-1 min-h-[221px] border-2 border-dashed border-gray-600 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition-colors disabled:opacity-50 relative group flex items-center justify-center"
+                        className="relative flex flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-blue-500 disabled:opacity-50 group"
                       >
                         {sceneImage ? (
                           <>
-                            <img src={sceneImage} alt="Scene" className="w-full h-40 object-cover rounded" />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
+                              <img src={sceneImage} alt="Scene" className="max-h-full max-w-full rounded object-contain" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (isGenerating) return;
+                                setSceneImageMode('auto');
+                                const autoSceneData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
+                                setSceneImage(autoSceneData || null);
+                              }}
+                              disabled={isGenerating}
+                              className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-red-300/70 bg-red-500/90 text-white opacity-0 shadow-lg shadow-black/40 transition-all hover:scale-105 hover:bg-red-400 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              aria-label="Remove scene reference"
+                            >
+                              <X className="h-4.5 w-4.5" />
+                            </button>
+                            <div className="absolute inset-0 z-10 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
                               <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                             </div>
                           </>
                         ) : (
-                          <div className="py-4">
-                            <ImageIcon className="w-5 h-5 mx-auto text-gray-500 mb-1" />
+                          <div className="flex h-full flex-col items-center justify-center">
+                            <ImageIcon className="mx-auto mb-1 h-5 w-5 text-gray-500" />
                             <p className="text-xs text-gray-400">Click to add scene image</p>
                           </div>
                         )}
                       </div>
-                      {sceneImage && (
-                        <button
-                          onClick={async () => {
-                            if (isGenerating) return;
-                            setSceneImageMode('auto');
-                            const autoSceneData = await resolveSceneImageDataUrl(selectedScene, aspectRatio);
-                            setSceneImage(autoSceneData || null);
-                          }}
-                          disabled={isGenerating}
-                          className="px-2 py-2 text-xs rounded bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 transition-colors flex items-center gap-1 self-start"
-                        >
-                          Remove
-                        </button>
-                      )}
                     </div>
                     <input
                       ref={sceneFileInputRef}
@@ -2026,21 +2132,22 @@ export default function OneClickCreatorPage() {
                       }}
                     />
                   </div>
+                  <div className="min-h-[40px]" />
                 </div>
               </div>
               </div>
 
             {/* Sessions Display (now inside scrollable container) */}
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-                <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+              <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-200">
                   <Clock className="w-4 h-4" />
                   {t('oneClickCreator.generationSessions')} ({sessions.length})
                 </h3>
                 
                 {sessions.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">{t('oneClickCreator.sessionsWillAppear')}</p>
+                  <p className="py-6 text-center text-xs text-gray-500">{t('oneClickCreator.sessionsWillAppear')}</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {sessions.map((session) => (
                       <SessionRow
                         key={session.id}
@@ -2062,7 +2169,7 @@ export default function OneClickCreatorPage() {
             <button
               onClick={handleOneClickGeneration}
               disabled={!characterImage || !productImage || isGenerating}
-              className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold flex items-center justify-center gap-2 transition-all mt-4 flex-shrink-0 sticky bottom-0 z-10"
+              className="sticky bottom-0 z-10 mt-3 flex w-full flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 py-3 text-sm font-semibold transition-all hover:from-amber-500 hover:to-orange-500 disabled:cursor-not-allowed disabled:from-gray-700 disabled:to-gray-700"
             >
               {isGenerating ? (
                 <>
@@ -2099,153 +2206,25 @@ export default function OneClickCreatorPage() {
           setGalleryPickerFor(null);
         }}
         onSelect={(imageData) => {
-          if (!imageData || !imageData.url) {
-            console.error('❌ Invalid image data from gallery:', imageData);
+          const resolvedImageUrl = imageData?.resolvedUrl || imageData?.thumbnail || imageData?.url;
+          if (!imageData || !resolvedImageUrl) {
+            console.error('Invalid image data from gallery:', imageData);
             alert(t('oneClickCreator.imageMissingUrl'));
             return;
           }
-          
-          console.log(`🖼️ Gallery image selected:`, { assetId: imageData.assetId, name: imageData.name, url: imageData.url });
-          
-          if (galleryPickerFor === 'character') {
-            console.log(`⏳ Loading character image from gallery...`);
-            
-            // 💡 Smart image loading: check cache first, only fetch if not cached
-            const loadImageSmart = async (assetId, url) => {
-              try {
-                // 1️⃣ Check if already in cache
-                if (imageCacheRef.current.has(assetId)) {
-                  console.log(`✅ Image found in cache (${assetId})`);
-                  const cachedDataUrl = imageCacheRef.current.get(assetId);
-                  setCharacterImage(cachedDataUrl);
-                  setImageSource(prev => ({ ...prev, character: 'gallery' }));
-                  return;
-                }
-                
-                // 2️⃣ Not cached, fetch with retry
-                const fetchWithRetry = (attempt = 1, maxAttempts = 3) => {
-                  fetch(url, {
-                    method: 'GET',
-                    headers: { 'Accept': 'image/*' }
-                  })
-                    .then(res => {
-                      // Handle 503 (asset still processing) with retry
-                      if (res.status === 503) {
-                        const retryAfter = res.headers?.get('Retry-After') || '5';
-                        const waitTime = parseInt(retryAfter) * 1000;
-                        
-                        if (attempt < maxAttempts) {
-                          console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
-                          setTimeout(() => fetchWithRetry(attempt + 1, maxAttempts), waitTime);
-                          return;
-                        } else {
-                          throw new Error('Asset is still being prepared after multiple retries');
-                        }
-                      }
-                      
-                      if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                      return res.blob();
-                    })
-                    .then(blob => {
-                      if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                      console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                      
-                      // Convert blob to data URL and cache it
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const dataUrl = evt.target?.result;
-                        // Cache for future use
-                        imageCacheRef.current.set(assetId, dataUrl);
-                        setCharacterImage(dataUrl);
-                        setImageSource(prev => ({ ...prev, character: 'gallery' }));
-                        console.log(`✨ Character image cached and updated (${dataUrl?.length}B)`);
-                      };
-                      reader.readAsDataURL(blob);
-                    })
-                    .catch(err => {
-                      console.error('❌ Failed to load gallery image:', err);
-                      alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-                    });
-                };
-                
-                fetchWithRetry();
-              } catch (err) {
-                console.error('❌ Error in smart image loading:', err);
-                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-              }
-            };
-            
-            loadImageSmart(imageData.assetId, imageData.url);
-          } else if (galleryPickerFor === 'product') {
-            console.log(`⏳ Loading product image from gallery...`);
-            
-            // 💡 Smart image loading: check cache first, only fetch if not cached
-            const loadImageSmart = async (assetId, url) => {
-              try {
-                // 1️⃣ Check if already in cache
-                if (imageCacheRef.current.has(assetId)) {
-                  console.log(`✅ Image found in cache (${assetId})`);
-                  const cachedDataUrl = imageCacheRef.current.get(assetId);
-                  setProductImage(cachedDataUrl);
-                  setImageSource(prev => ({ ...prev, product: 'gallery' }));
-                  return;
-                }
-                
-                // 2️⃣ Not cached, fetch with retry
-                const fetchWithRetry = (attempt = 1, maxAttempts = 3) => {
-                  fetch(url, {
-                    method: 'GET',
-                    headers: { 'Accept': 'image/*' }
-                  })
-                    .then(res => {
-                      // Handle 503 (asset still processing) with retry
-                      if (res.status === 503) {
-                        const retryAfter = res.headers?.get('Retry-After') || '5';
-                        const waitTime = parseInt(retryAfter) * 1000;
-                        
-                        if (attempt < maxAttempts) {
-                          console.log(`⏳ Asset is being prepared... retrying in ${retryAfter}s (attempt ${attempt}/${maxAttempts})`);
-                          setTimeout(() => fetchWithRetry(attempt + 1, maxAttempts), waitTime);
-                          return;
-                        } else {
-                          throw new Error('Asset is still being prepared after multiple retries');
-                        }
-                      }
-                      
-                      if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch image`);
-                      return res.blob();
-                    })
-                    .then(blob => {
-                      if (!blob || blob.size === 0) throw new Error('Received empty blob');
-                      console.log(`✅ Image loaded: ${blob.size} bytes, type: ${blob.type}`);
-                      
-                      // Convert blob to data URL and cache it
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const dataUrl = evt.target?.result;
-                        // Cache for future use
-                        imageCacheRef.current.set(assetId, dataUrl);
-                        setProductImage(dataUrl);
-                        setImageSource(prev => ({ ...prev, product: 'gallery' }));
-                        console.log(`✨ Product image cached and updated (${dataUrl?.length}B)`);
-                      };
-                      reader.readAsDataURL(blob);
-                    })
-                    .catch(err => {
-                      console.error('❌ Failed to load gallery image:', err);
-                      alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-                    });
-                };
-                
-                fetchWithRetry();
-              } catch (err) {
-                console.error('❌ Error in smart image loading:', err);
-                alert(`${t('oneClickCreator.failedToLoadImage')}: ${err.message}`);
-              }
-            };
-            
-            loadImageSmart(imageData.assetId, imageData.url)
+
+          if (imageData.assetId) {
+            imageCacheRef.current.set(imageData.assetId, resolvedImageUrl);
           }
+
+          if (galleryPickerFor === 'character') {
+            setCharacterImage(resolvedImageUrl);
+            setImageSource(prev => ({ ...prev, character: 'gallery' }));
+          } else if (galleryPickerFor === 'product') {
+            setProductImage(resolvedImageUrl);
+            setImageSource(prev => ({ ...prev, product: 'gallery' }));
+          }
+
           setShowGalleryPicker(false);
           setGalleryPickerFor(null);
         }}

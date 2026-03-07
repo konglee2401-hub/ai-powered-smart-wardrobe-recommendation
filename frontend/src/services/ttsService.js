@@ -26,13 +26,15 @@ export const ttsAPI = {
   /**
    * Generate and save audio file on backend
    */
-  generateAndSaveAudio: async (text, voiceName, fileName = null, language = 'VI') => {
+  generateAndSaveAudio: async (text, voiceName, fileName = null, options = 'VI') => {
     try {
+      const resolvedOptions = typeof options === 'string' ? { language: options } : (options || {});
       const response = await axiosInstance.post('/api/tts/generate-and-save', {
         text,
         voiceName,
-        language,
+        language: resolvedOptions.language || 'VI',
         fileName,
+        flowId: resolvedOptions.flowId || null,
       });
       return response.data;
     } catch (error) {

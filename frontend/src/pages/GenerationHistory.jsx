@@ -1,1121 +1,807 @@
-/**
- * Generation History Page
- * Display and manage generation history with full API integration
- */
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Clock, Trash2, Download, RefreshCw, Search, Filter,
-  ChevronLeft, ChevronRight, Eye, AlertCircle, CheckCircle,
-  XCircle, Loader2, Calendar, Image as ImageIcon, X,
-  MoreVertical, ExternalLink, Copy, Info
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Image as ImageIcon,
+  Loader2,
+  Mic2,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Trash2,
+  Video,
+  Wand2,
+  XCircle,
 } from 'lucide-react';
-
-// Import services
+import PageHeaderBar from '../components/PageHeaderBar';
+import EmptyState from '../components/ui/EmptyState';
+import SemanticIconBadge from '../components/ui/SemanticIconBadge';
+import { SkeletonBlock, SkeletonCards } from '../components/ui/Skeleton';
+import StatusPill from '../components/ui/StatusPill';
 import {
-  getHistory,
-  deleteHistory,
-  deleteHistoryBatch,
-  regenerateFromHistory,
-  searchHistory,
-  getHistoryByDateRange,
-  exportHistory,
-} from '../services/historyService';
+  deleteGenerationSession,
+  getGenerationSessionDetail,
+  getGenerationSessions,
+} from '../services/generationSessionsService';
 
-import { downloadFile } from '../services/axios';
-import { useTranslation } from 'react-i18next';
+const FLOW_OPTIONS = [
+  { value: 'all', label: 'All flows', icon: Clock3, tone: 'neutral' },
+  { value: 'one-click', label: '1-Click', icon: Sparkles, tone: 'accent' },
+  { value: 'image-generation', label: 'Image', icon: ImageIcon, tone: 'info' },
+  { value: 'video-generation', label: 'Video', icon: Video, tone: 'pink' },
+  { value: 'voice-generation', label: 'Voice', icon: Mic2, tone: 'success' },
+];
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All status' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'in-progress', label: 'In progress' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
-export default function GenerationHistory() {
-  const { t } = useTranslation();
-  // ============================================
-  // STATE MANAGEMENT
-  // ============================================
-  
-  // History data
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // Pagination
-  const [pagination, setPagination] = useState({
-    total: 0,
-    limit: 20,
-    offset: 0,
-    hasMore: false,
-  });
-  
-  // Filters
-  const [filters, setFilters] = useState({
-    status: '',
-    provider: '',
-    startDate: '',
-    endDate: '',
-    search: '',
-  });
-  const [showFilters, setShowFilters] = useState(false);
-  
-  // Selection
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [selectAll, setSelectAll] = useState(false);
-  
-  // UI state
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(null);
-  
-  // Messages
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
-  
-  // ============================================
-  // LOAD HISTORY
-  // ============================================
-  
-  useEffect(() => {
-    loadHistory();
-  }, [pagination.offset, filters]);
-  
-  async function loadHistory() {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const result = await getHistory({
-        ...filters,
-        limit: pagination.limit,
-        offset: pagination.offset,
-      });
-      
-      setHistory(result.data);
-      setPagination(result.pagination);
-    } catch (error) {
-      console.error('[Load History Error]', error);
-      setError(error.message || 'Không thể tải lịch sử');
-    } finally {
-      setLoading(false);
-    }
+const PAGE_SIZE = 20;
+
+const SURFACE_CARD_CLASS =
+  'overflow-hidden rounded-[28px] border border-slate-800/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(7,14,28,0.98))] shadow-[0_26px_80px_rgba(2,6,23,0.34),0_0_0_1px_rgba(148,163,184,0.05)]';
+
+function getStatusAccentClass(status) {
+  if (status === 'failed') {
+    return 'border-rose-500/55 bg-[linear-gradient(180deg,rgba(127,29,29,0.24),rgba(15,23,42,0.96))] shadow-[0_0_0_1px_rgba(244,63,94,0.18),0_24px_70px_rgba(127,29,29,0.28)]';
   }
-  
-  // ============================================
-  // FILTER HANDLERS
-  // ============================================
-  
-  function handleFilterChange(key, value) {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value,
-    }));
-    setPagination(prev => ({ ...prev, offset: 0 })); // Reset to first page
+  if (status === 'completed') {
+    return 'border-sky-400/20 shadow-[0_24px_70px_rgba(56,189,248,0.08)]';
   }
-  
-  function handleSearch(searchTerm) {
-    handleFilterChange('search', searchTerm);
+  if (status === 'in-progress') {
+    return 'border-violet-400/25 shadow-[0_24px_70px_rgba(139,92,246,0.12)]';
   }
-  
-  function clearFilters() {
-    setFilters({
-      status: '',
-      provider: '',
-      startDate: '',
-      endDate: '',
-      search: '',
-    });
+  return 'border-slate-800/80';
+}
+
+function getFilterButtonClass(active, tone = 'neutral') {
+  if (active) {
+    return {
+      warning: 'border-amber-400/75 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(120,53,15,0.16))] text-amber-100 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_18px_48px_rgba(120,53,15,0.22)]',
+      accent: 'border-violet-400/70 bg-[linear-gradient(180deg,rgba(139,92,246,0.22),rgba(76,29,149,0.16))] text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,0.16),0_18px_48px_rgba(76,29,149,0.24)]',
+      info: 'border-sky-400/70 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(14,116,144,0.14))] text-sky-50 shadow-[0_0_0_1px_rgba(125,211,252,0.14),0_18px_48px_rgba(14,116,144,0.24)]',
+      pink: 'border-fuchsia-400/65 bg-[linear-gradient(180deg,rgba(217,70,239,0.18),rgba(131,24,67,0.14))] text-fuchsia-50 shadow-[0_0_0_1px_rgba(232,121,249,0.14),0_18px_48px_rgba(131,24,67,0.24)]',
+      success: 'border-emerald-400/65 bg-[linear-gradient(180deg,rgba(16,185,129,0.18),rgba(6,78,59,0.14))] text-emerald-50 shadow-[0_0_0_1px_rgba(110,231,183,0.14),0_18px_48px_rgba(6,78,59,0.24)]',
+      neutral: 'border-amber-400/75 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(120,53,15,0.16))] text-amber-100 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_18px_48px_rgba(120,53,15,0.22)]',
+    }[tone];
   }
-  
-  // ============================================
-  // PAGINATION HANDLERS
-  // ============================================
-  
-  function goToNextPage() {
-    if (pagination.hasMore) {
-      setPagination(prev => ({
-        ...prev,
-        offset: prev.offset + prev.limit,
-      }));
-    }
-  }
-  
-  function goToPrevPage() {
-    if (pagination.offset > 0) {
-      setPagination(prev => ({
-        ...prev,
-        offset: Math.max(0, prev.offset - prev.limit),
-      }));
-    }
-  }
-  
-  // ============================================
-  // SELECTION HANDLERS
-  // ============================================
-  
-  function toggleSelectAll() {
-    if (selectAll) {
-      setSelectedItems([]);
-    } else {
-      setSelectedItems(history.map(item => item._id));
-    }
-    setSelectAll(!selectAll);
-  }
-  
-  function toggleSelectItem(id) {
-    setSelectedItems(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(itemId => itemId !== id);
-      } else {
-        return [...prev, id];
-      }
-    });
-  }
-  
-  // ============================================
-  // ACTION HANDLERS
-  // ============================================
-  
-  async function handleDelete(id) {
-    if (!confirm('Bạn có chắc muốn xóa mục này?')) return;
-    
-    setActionLoading(id);
-    
-    try {
-      await deleteHistory(id);
-      setSuccessMessage('Đã xóa thành công!');
-      loadHistory();
-    } catch (error) {
-      console.error('[Delete Error]', error);
-      setErrorMessage(error.message || 'Không thể xóa');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-  
-  async function handleDeleteSelected() {
-    if (selectedItems.length === 0) return;
-    
-    if (!confirm(`Bạn có chắc muốn xóa ${selectedItems.length} mục?`)) return;
-    
-    setActionLoading('batch');
-    
-    try {
-      const result = await deleteHistoryBatch(selectedItems);
-      setSuccessMessage(result.message);
-      setSelectedItems([]);
-      setSelectAll(false);
-      loadHistory();
-    } catch (error) {
-      console.error('[Batch Delete Error]', error);
-      setErrorMessage(error.message || 'Không thể xóa nhiều mục');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-  
-  async function handleRegenerate(id) {
-    setActionLoading(id);
-    
-    try {
-      const result = await regenerateFromHistory(id);
-      setSuccessMessage('Đã tạo lại ảnh thành công!');
-      
-      // Open result in new tab or show modal
-      if (result.data?.imageUrl) {
-        window.open(result.data.imageUrl, '_blank');
-      }
-      
-      loadHistory();
-    } catch (error) {
-      console.error('[Regenerate Error]', error);
-      setErrorMessage(error.message || 'Không thể tạo lại ảnh');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-  
-  async function handleDownload(item) {
-    if (item.resultImage?.url) {
-      const filename = `product-photo-${item._id}.jpg`;
-      downloadFile(item.resultImage.url, filename);
-      setSuccessMessage('Đã tải xuống ảnh!');
-    }
-  }
-  
-  async function handleExport() {
-    setActionLoading('export');
-    
-    try {
-      const result = await exportHistory(selectedItems);
-      
-      // Download as JSON
-      const blob = new Blob([JSON.stringify(result.data, null, 2)], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `history-export-${Date.now()}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      setSuccessMessage('Đã export lịch sử!');
-    } catch (error) {
-      console.error('[Export Error]', error);
-      setErrorMessage(error.message || 'Không thể export');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-  
-  function handleViewDetail(item) {
-    setSelectedItem(item);
-    setShowDetailModal(true);
-  }
-  
-  // ============================================
-  // RENDER HELPERS
-  // ============================================
-  
-  function getStatusBadge(status) {
-    const statusConfig = {
-      completed: {
-        color: 'bg-green-100 text-green-700 border-green-200',
-        icon: CheckCircle,
-        label: 'Hoàn thành',
-      },
-      failed: {
-        color: 'bg-red-100 text-red-700 border-red-200',
-        icon: XCircle,
-        label: 'Thất bại',
-      },
-      processing: {
-        color: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-        icon: Loader2,
-        label: 'Đang xử lý',
-      },
-      pending: {
-        color: 'bg-gray-100 text-gray-700 border-gray-200',
-        icon: Clock,
-        label: 'Chờ xử lý',
-      },
-    };
-    
-    const config = statusConfig[status] || statusConfig.pending;
-    const Icon = config.icon;
-    
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>
-        <Icon className={`w-3 h-3 ${status === 'processing' ? 'animate-spin' : ''}`} />
-        {config.label}
-      </span>
-    );
-  }
-  
-  function formatDate(dateString) {
-    // Handle invalid or missing dates
-    if (!dateString) return 'Invalid date';
-    
-    const date = new Date(dateString);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) return 'Invalid date';
-    
-    return new Intl.DateTimeFormat('vi-VN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  }
-  
-  function formatDuration(ms) {
-    if (!ms) return 'N/A';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}m`;
-  }
-  
-  // ============================================
-  // RENDER
-  // ============================================
-  
+
+  return 'border-slate-700/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(15,23,42,0.58))] text-slate-300 hover:border-slate-600/90 hover:bg-slate-900/90';
+}
+
+function getFlowMeta(flowType) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                <Clock className="w-8 h-8 text-purple-500" />
-                {t('history.title')}
-              </h1>
-              <p className="text-gray-600 mt-2">
-                Quản lý và xem lại các ảnh đã tạo
-              </p>
+    FLOW_OPTIONS.find((option) => option.value === flowType) || {
+      value: flowType,
+      label: flowType || 'Unknown',
+      icon: Wand2,
+      tone: 'neutral',
+    }
+  );
+}
+
+function getStatusTone(status) {
+  if (status === 'completed') return 'success';
+  if (status === 'failed') return 'danger';
+  if (status === 'in-progress') return 'info';
+  if (status === 'cancelled') return 'warning';
+  return 'neutral';
+}
+
+function formatDateTime(value) {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function formatDuration(duration) {
+  if (!duration || Number.isNaN(duration)) return 'Pending';
+  if (duration < 1000) return `${duration} ms`;
+  const seconds = Math.round(duration / 100) / 10;
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round((seconds % 60) * 10) / 10;
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
+function summarizeJson(data) {
+  if (!data || typeof data !== 'object') return [];
+  return Object.entries(data)
+    .filter(([, value]) => value != null && value !== '')
+    .slice(0, 8);
+}
+
+function DetailSection({ title, subtitle, actions, children }) {
+  return (
+    <section className={`${SURFACE_CARD_CLASS} min-w-0 overflow-x-hidden p-3.5`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          {subtitle ? <p className="mt-1 text-xs leading-5 text-slate-400">{subtitle}</p> : null}
+        </div>
+        {actions}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function SummaryCard({ title, value, helper, tone, icon: Icon }) {
+  const toneAccent =
+    {
+      info: 'border-sky-400/45 bg-[linear-gradient(180deg,rgba(14,165,233,0.16),rgba(7,14,28,0.98))] shadow-[0_0_0_1px_rgba(56,189,248,0.12),0_24px_80px_rgba(56,189,248,0.16)]',
+      success:
+        'border-emerald-400/45 bg-[linear-gradient(180deg,rgba(16,185,129,0.16),rgba(7,14,28,0.98))] shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_24px_80px_rgba(16,185,129,0.16)]',
+      danger:
+        'border-rose-500/55 bg-[linear-gradient(180deg,rgba(225,29,72,0.18),rgba(7,14,28,0.98))] shadow-[0_0_0_1px_rgba(244,63,94,0.16),0_24px_80px_rgba(127,29,29,0.28)]',
+      warning:
+        'border-amber-400/55 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(7,14,28,0.98))] shadow-[0_0_0_1px_rgba(251,191,36,0.16),0_24px_80px_rgba(120,53,15,0.22)]',
+      accent:
+        'border-violet-400/50 bg-[linear-gradient(180deg,rgba(139,92,246,0.18),rgba(7,14,28,0.98))] shadow-[0_0_0_1px_rgba(167,139,250,0.14),0_24px_80px_rgba(91,33,182,0.24)]',
+    }[tone] || '';
+  const toneText =
+    {
+      info: 'text-sky-200',
+      success: 'text-emerald-200',
+      danger: 'text-rose-200',
+      warning: 'text-amber-200',
+      accent: 'text-violet-200',
+    }[tone] || 'text-slate-300';
+
+  return (
+    <div className={`${SURFACE_CARD_CLASS} ${toneAccent} p-4`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${toneText}`}>{title}</p>
+          <p className="mt-2 text-[28px] font-semibold leading-none text-white">{value}</p>
+          <p className="mt-2 text-[11px] text-slate-400">{helper}</p>
+        </div>
+        <SemanticIconBadge icon={Icon} tone={tone} className="h-11 w-11" />
+      </div>
+    </div>
+  );
+}
+
+function MetricPill({ label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-900/55 px-2 py-1">
+      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-0.5 text-[11px] font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function JsonPreview({ data, emptyLabel = 'No structured data captured yet.' }) {
+  const entries = summarizeJson(data);
+
+  if (!entries.length) {
+    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded-2xl border border-slate-800/80 bg-slate-900/55 px-3 py-3">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{key}</p>
+          <p className="mt-2 break-words text-xs leading-5 text-slate-200">
+            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SessionCard({ session, selected, onSelect }) {
+  const flow = getFlowMeta(session.flowType);
+  const FlowIcon = flow.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-[20px] border p-2 text-left transition ${
+        selected
+          ? `bg-[linear-gradient(180deg,rgba(250,204,21,0.12),rgba(15,23,42,0.96))] ${session.status === 'failed' ? 'border-rose-500/75 shadow-[0_0_0_1px_rgba(244,63,94,0.2),0_24px_70px_rgba(127,29,29,0.28)]' : 'border-amber-400/75 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_24px_70px_rgba(120,53,15,0.22)]'}`
+          : `bg-[linear-gradient(180deg,rgba(15,23,42,0.94),rgba(7,14,28,0.98))] hover:border-slate-700/90 hover:bg-slate-900/80 ${getStatusAccentClass(session.status)}`
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <SemanticIconBadge icon={FlowIcon} tone={selected ? 'warning' : flow.tone} className="h-8 w-8 rounded-xl" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h3 className="truncate text-[12px] font-semibold text-white">{flow.label}</h3>
+              <StatusPill tone={getStatusTone(session.status)}>{session.status || 'unknown'}</StatusPill>
             </div>
-            
-            <div className="flex items-center gap-3">
-              {/* View Mode Toggle */}
-              <div className="flex bg-white rounded-lg shadow-sm border border-gray-200">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`px-4 py-2 rounded-l-lg transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-purple-500 text-white'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  Grid
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-4 py-2 rounded-r-lg transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-purple-500 text-white'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  List
-                </button>
-              </div>
-              
-              {/* Export Button */}
-              <button
-                onClick={handleExport}
-                disabled={actionLoading === 'export'}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:bg-gray-400"
-              >
-                {actionLoading === 'export' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                Export
-              </button>
-            </div>
-          </div>
-          
-          {/* Search & Filters */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center gap-3 mb-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Tìm kiếm..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              
-              {/* Filter Toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
-              >
-                <Filter className="w-4 h-4" />
-                Bộ Lọc
-              </button>
-              
-              {/* Clear Filters */}
-              {(filters.status || filters.provider || filters.startDate || filters.endDate) && (
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  Xóa Bộ Lọc
-                </button>
-              )}
-            </div>
-            
-            {/* Filter Options */}
-            {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-                {/* Status Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Trạng Thái
-                  </label>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Tất cả</option>
-                    <option value="completed">Hoàn thành</option>
-                    <option value="failed">Thất bại</option>
-                    <option value="processing">Đang xử lý</option>
-                    <option value="pending">Chờ xử lý</option>
-                  </select>
-                </div>
-                
-                {/* Provider Filter */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Provider
-                  </label>
-                  <select
-                    value={filters.provider}
-                    onChange={(e) => handleFilterChange('provider', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Tất cả</option>
-                    <option value="replicate">Replicate</option>
-                    <option value="stability">Stability AI</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="midjourney">Midjourney</option>
-                  </select>
-                </div>
-                
-                {/* Start Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Từ Ngày
-                  </label>
-                  <input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                
-                {/* End Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Đến Ngày
-                  </label>
-                  <input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            )}
+            <p className="mt-0.5 truncate text-[11px] text-slate-400">{session.useCase || session.sessionId}</p>
           </div>
         </div>
-        
-        {/* Alert Messages */}
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-red-800 font-medium">Lỗi</p>
-              <p className="text-red-600 text-sm">{errorMessage}</p>
+        <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(session.createdAt)}</p>
+      </div>
+
+      <div className="mt-2 grid grid-cols-4 gap-1">
+        <MetricPill label="In" value={session.inputCount || 0} />
+        <MetricPill label="Out" value={session.outputCount || 0} />
+        <MetricPill label="Stages" value={session.stageCount || 0} />
+        <MetricPill label="Time" value={formatDuration(session.totalDuration)} />
+      </div>
+
+      <div className="mt-1.5 rounded-xl border border-slate-800/80 bg-slate-950/60 px-2 py-1.5">
+        <p className={`line-clamp-1 text-[10px] leading-4 ${session.error?.message ? 'text-rose-200' : 'text-slate-300'}`}>
+          {session.error?.message || session.latestLog?.message || 'No detailed event captured yet.'}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+export default function GenerationHistory() {
+  const [filters, setFilters] = useState({
+    search: '',
+    flowType: 'all',
+    status: 'all',
+  });
+  const [page, setPage] = useState(1);
+  const [sessions, setSessions] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, status: {}, flowTypes: {} });
+  const [pagination, setPagination] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSessions() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const response = await getGenerationSessions({
+          page,
+          limit: PAGE_SIZE,
+          search: filters.search,
+          flowType: filters.flowType,
+          status: filters.status,
+        });
+
+        if (ignore) return;
+
+        const nextSessions = response.data || [];
+        setSessions(nextSessions);
+        setSummary(response.summary || { total: 0, status: {}, flowTypes: {} });
+        setPagination(response.pagination || { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
+
+        if (!nextSessions.length) {
+          setSelectedSessionId('');
+          setSelectedSession(null);
+          return;
+        }
+
+        setSelectedSessionId((current) => {
+          const hasCurrent = nextSessions.some((item) => item.sessionId === current);
+          return hasCurrent ? current : nextSessions[0].sessionId;
+        });
+      } catch (loadError) {
+        if (!ignore) setError(loadError.message || 'Failed to load session history.');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadSessions();
+
+    return () => {
+      ignore = true;
+    };
+  }, [filters.flowType, filters.search, filters.status, page]);
+
+  useEffect(() => {
+    if (!selectedSessionId) return undefined;
+
+    let ignore = false;
+
+    async function loadSessionDetail() {
+      setDetailLoading(true);
+
+      try {
+        const response = await getGenerationSessionDetail(selectedSessionId);
+        if (!ignore) setSelectedSession(response.data || null);
+      } catch (detailError) {
+        if (!ignore) {
+          setSelectedSession(null);
+          setError(detailError.message || 'Failed to load session detail.');
+        }
+      } finally {
+        if (!ignore) setDetailLoading(false);
+      }
+    }
+
+    loadSessionDetail();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedSessionId]);
+
+  const summaryCards = useMemo(() => {
+    const total = summary.total || 0;
+    const completed = summary.status?.completed || 0;
+    const failed = summary.status?.failed || 0;
+    const inProgress = summary.status?.['in-progress'] || 0;
+    const oneClick = summary.flowTypes?.['one-click'] || 0;
+
+    return [
+      {
+        title: 'Sessions',
+        value: total,
+        helper: 'All captured runs across generation flows.',
+        tone: 'info',
+        icon: Clock3,
+      },
+      {
+        title: 'Completed',
+        value: completed,
+        helper: `${total ? Math.round((completed / total) * 100) : 0}% finished cleanly.`,
+        tone: 'success',
+        icon: CheckCircle2,
+      },
+      {
+        title: 'Failed',
+        value: failed,
+        helper: 'Sessions needing inspection or rerun.',
+        tone: 'danger',
+        icon: XCircle,
+      },
+      {
+        title: 'Live / Queue',
+        value: inProgress,
+        helper: 'Still running or waiting for downstream work.',
+        tone: 'warning',
+        icon: Loader2,
+      },
+      {
+        title: '1-Click',
+        value: oneClick,
+        helper: 'Cross-stage flows combining multiple generation steps.',
+        tone: 'accent',
+        icon: Sparkles,
+      },
+    ];
+  }, [summary]);
+
+  const selectedFlow = selectedSession ? getFlowMeta(selectedSession.flowType) : null;
+  const selectedLogs = selectedSession?.logs || [];
+  const selectedStages = selectedSession?.metrics?.stages || [];
+  const selectedArtifacts = selectedSession?.artifacts || {};
+  const inputArtifacts = [
+    selectedArtifacts.characterImagePath,
+    selectedArtifacts.productImagePath,
+    ...(selectedArtifacts.sourceVideoPaths || []),
+  ].filter(Boolean);
+  const outputArtifacts = [
+    ...(selectedArtifacts.generatedImagePaths || []),
+    ...(selectedArtifacts.videoSegmentPaths || []),
+    ...(selectedArtifacts.audioPaths || []),
+  ];
+
+  async function handleDeleteSession(sessionId) {
+    const confirmed = window.confirm(`Delete session ${sessionId}?`);
+    if (!confirmed) return;
+
+    setDeletingId(sessionId);
+    try {
+      await deleteGenerationSession(sessionId);
+      setSessions((current) => current.filter((item) => item.sessionId !== sessionId));
+      if (selectedSessionId === sessionId) {
+        setSelectedSessionId('');
+        setSelectedSession(null);
+      }
+      setPage(1);
+    } catch (deleteError) {
+      setError(deleteError.message || 'Failed to delete session.');
+    } finally {
+      setDeletingId('');
+    }
+  }
+
+  function copySessionId(sessionId) {
+    navigator.clipboard?.writeText(sessionId);
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-56px)] overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.16),transparent_24%),radial-gradient(circle_at_78%_32%,rgba(217,70,239,0.12),transparent_22%),radial-gradient(circle_at_12%_78%,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#020817_0%,#030b1f_46%,#020617_100%)]">
+      <PageHeaderBar
+        icon={<Clock3 className="h-5 w-5 text-cyan-200" />}
+        title="Generation History"
+        subtitle="Session-first review workspace"
+        meta="Trace inputs, outputs, options, runtime signals, and failures across image, video, voice, and 1-click flows."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setPage(1);
+              setFilters((current) => ({ ...current }));
+            }}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-800/85 px-3 py-2 text-[12px] font-medium text-slate-100 transition hover:bg-slate-700/90"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        }
+      />
+
+      <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-[1720px] flex-col gap-4 overflow-x-hidden px-3 py-3 lg:px-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {loading ? (
+            <div className="md:col-span-2 xl:col-span-5">
+              <SkeletonCards count={5} />
             </div>
-            <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-        
-        {successMessage && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-green-800 font-medium">Thành công</p>
-              <p className="text-green-600 text-sm">{successMessage}</p>
+          ) : (
+            summaryCards.map((card) => <SummaryCard key={card.title} {...card} />)
+          )}
+        </section>
+
+        <section className={`${SURFACE_CARD_CLASS} shrink-0 p-3 shadow-[0_30px_90px_rgba(14,165,233,0.08)]`}>
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-1 flex-col gap-3 lg:flex-row">
+              <label className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={filters.search}
+                  onChange={(event) => {
+                    setPage(1);
+                    setFilters((current) => ({ ...current, search: event.target.value }));
+                  }}
+                  placeholder="Search session id, flow, error, or log text"
+                  className="h-11 w-full rounded-2xl border border-slate-800/80 bg-slate-950/70 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setPage(1);
+                      setFilters((current) => ({ ...current, status: option.value }));
+                    }}
+                    className={`rounded-2xl border px-3 py-2 text-[12px] font-medium transition ${
+                      option.value === 'failed'
+                        ? filters.status === option.value
+                          ? 'border-rose-500/80 bg-[linear-gradient(180deg,rgba(225,29,72,0.2),rgba(127,29,29,0.16))] text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.18),0_18px_48px_rgba(127,29,29,0.28)]'
+                          : 'border-rose-500/25 bg-slate-900/65 text-rose-200 hover:border-rose-400/45'
+                        : getFilterButtonClass(filters.status === option.value, option.value === 'completed' ? 'info' : option.value === 'in-progress' ? 'accent' : option.value === 'cancelled' ? 'warning' : 'neutral')
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <button onClick={() => setSuccessMessage(null)} className="text-green-400 hover:text-green-600">
-              <X className="w-5 h-5" />
-            </button>
+
+            <div className="flex flex-wrap gap-2">
+              {FLOW_OPTIONS.map((option) => {
+                const FlowIcon = option.icon;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setPage(1);
+                      setFilters((current) => ({ ...current, flowType: option.value }));
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-[12px] font-medium transition ${getFilterButtonClass(filters.flowType === option.value, option.tone)}`}
+                  >
+                    <FlowIcon className="h-4 w-4" />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-        
-        {/* Bulk Actions */}
-        {selectedItems.length > 0 && (
-          <div className="mb-6 bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-purple-700 font-medium">
-                Đã chọn {selectedItems.length} mục
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span className="rounded-2xl border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-slate-300">
+                {PAGE_SIZE} sessions / page
+              </span>
+              <span>
+                Page {pagination.page || 1} of {pagination.totalPages || 1}
+              </span>
+              <span className="text-slate-500">
+                Showing {sessions.length} on this page / {pagination.total || 0} total
               </span>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleDeleteSelected}
-                disabled={actionLoading === 'batch'}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 disabled:bg-gray-400"
+                type="button"
+                disabled={(pagination.page || 1) <= 1}
+                onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                className="rounded-2xl border border-slate-700/80 bg-slate-900/70 px-3 py-2 text-[12px] font-medium text-slate-200 transition hover:border-amber-400/55 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-slate-600"
               >
-                {actionLoading === 'batch' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
-                Xóa
+                Previous page
+              </button>
+              <button
+                type="button"
+                disabled={!pagination.hasMore}
+                onClick={() => setPage((current) => current + 1)}
+                className="rounded-2xl border border-amber-400/45 bg-[linear-gradient(180deg,rgba(245,158,11,0.14),rgba(15,23,42,0.92))] px-3 py-2 text-[12px] font-medium text-amber-100 shadow-[0_16px_40px_rgba(120,53,15,0.16)] transition hover:border-amber-300/70 disabled:cursor-not-allowed disabled:border-slate-700/80 disabled:bg-slate-900/70 disabled:text-slate-600 disabled:shadow-none"
+              >
+                Next page
               </button>
             </div>
           </div>
-        )}
-        
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
-          </div>
-        )}
-        
-        {/* Error State */}
-        {error && !loading && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Không thể tải lịch sử
-            </h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={loadHistory}
-              className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-            >
-              Thử Lại
-            </button>
-          </div>
-        )}
-        
-        {/* Empty State */}
-        {!loading && !error && history.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Chưa có lịch sử
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Bạn chưa tạo ảnh nào. Hãy bắt đầu tạo ảnh đầu tiên!
-            </p>
-            <a
-              href="/"
-              className="inline-block px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-            >
-              Tạo Ảnh Ngay
-            </a>
-          </div>
-        )}
-        
-        {/* History Grid */}
-        {!loading && !error && history.length > 0 && (
-          <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {history.map((item) => (
-                  <HistoryCard
-                    key={item._id}
-                    item={item}
-                    isSelected={selectedItems.includes(item._id)}
-                    onSelect={() => toggleSelectItem(item._id)}
-                    onView={() => handleViewDetail(item)}
-                    onDownload={() => handleDownload(item)}
-                    onRegenerate={() => handleRegenerate(item._id)}
-                    onDelete={() => handleDelete(item._id)}
-                    isLoading={actionLoading === item._id}
-                    getStatusBadge={getStatusBadge}
-                    formatDate={formatDate}
-                    formatDuration={formatDuration}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left">
-                        <input
-                          type="checkbox"
-                          checked={selectAll}
-                          onChange={toggleSelectAll}
-                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Ảnh
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Preset
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Provider
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Trạng Thái
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Thời Gian
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                        Ngày Tạo
-                      </th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
-                        Hành Động
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {history.map((item) => (
-                      <HistoryRow
-                        key={item._id}
-                        item={item}
-                        isSelected={selectedItems.includes(item._id)}
-                        onSelect={() => toggleSelectItem(item._id)}
-                        onView={() => handleViewDetail(item)}
-                        onDownload={() => handleDownload(item)}
-                        onRegenerate={() => handleRegenerate(item._id)}
-                        onDelete={() => handleDelete(item._id)}
-                        isLoading={actionLoading === item._id}
-                        getStatusBadge={getStatusBadge}
-                        formatDate={formatDate}
-                        formatDuration={formatDuration}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            
-            {/* Pagination */}
-            <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Hiển thị {pagination.offset + 1} - {Math.min(pagination.offset + pagination.limit, pagination.total)} trong tổng số {pagination.total} mục
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={goToPrevPage}
-                  disabled={pagination.offset === 0}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Trước
-                </button>
-                
-                <button
-                  onClick={goToNextPage}
-                  disabled={!pagination.hasMore}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  Sau
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-        
-        {/* Detail Modal */}
-        {showDetailModal && selectedItem && (
-          <DetailModal
-            item={selectedItem}
-            onClose={() => setShowDetailModal(false)}
-            onDownload={() => handleDownload(selectedItem)}
-            onRegenerate={() => handleRegenerate(selectedItem._id)}
-            onDelete={() => {
-              handleDelete(selectedItem._id);
-              setShowDetailModal(false);
-            }}
-            getStatusBadge={getStatusBadge}
-            formatDate={formatDate}
-            formatDuration={formatDuration}
-          />
-        )}
-        
-      </div>
-    </div>
-  );
-}
+        </section>
 
-// ============================================
-// HISTORY CARD COMPONENT (Grid View)
-// ============================================
-
-function HistoryCard({
-  item,
-  isSelected,
-  onSelect,
-  onView,
-  onDownload,
-  onRegenerate,
-  onDelete,
-  isLoading,
-  getStatusBadge,
-  formatDate,
-  formatDuration,
-}) {
-  return (
-    <div className={`bg-white rounded-xl shadow-sm border-2 transition-all hover:shadow-lg ${
-      isSelected ? 'border-purple-500' : 'border-gray-200'
-    }`}>
-      {/* Image */}
-      <div className="relative aspect-square">
-        {item.resultImage?.url ? (
-          <img
-            src={item.resultImage.url}
-            alt="Generated"
-            className="w-full h-full object-cover rounded-t-xl"
-          />
-        ) : (
-          <div className="w-full h-full bg-gray-100 rounded-t-xl flex items-center justify-center">
-            <ImageIcon className="w-12 h-12 text-gray-400" />
+        {error ? (
+          <div className="rounded-3xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            {error}
           </div>
-        )}
-        
-        {/* Selection Checkbox */}
-        <div className="absolute top-3 left-3">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onSelect}
-            className="w-5 h-5 text-purple-600 border-2 border-white rounded focus:ring-purple-500 shadow-lg"
-          />
-        </div>
-        
-        {/* Status Badge */}
-        <div className="absolute top-3 right-3">
-          {getStatusBadge(item.status)}
-        </div>
-      </div>
-      
-      {/* Content */}
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-gray-800">
-            {item.options?.preset || 'Custom'}
-          </span>
-          <span className="text-xs text-gray-500">
-            {item.provider}
-          </span>
-        </div>
-        
-        <div className="text-xs text-gray-500 mb-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="w-3 h-3" />
-            {formatDate(item.createdAt)}
-          </div>
-          {item.generationTime && (
-            <div className="flex items-center gap-2">
-              <Info className="w-3 h-3" />
-              {formatDuration(item.generationTime)}
-            </div>
-          )}
-        </div>
-        
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onView}
-            className="flex-1 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm flex items-center justify-center gap-2"
-          >
-            <Eye className="w-4 h-4" />
-            Xem
-          </button>
-          
-          <button
-            onClick={onDownload}
-            disabled={!item.resultImage?.url}
-            className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:bg-gray-300"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={onRegenerate}
-            disabled={isLoading}
-            className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-300"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-          </button>
-          
-          <button
-            onClick={onDelete}
-            disabled={isLoading}
-            className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:bg-gray-300"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+        ) : null}
 
-// ============================================
-// HISTORY ROW COMPONENT (List View)
-// ============================================
-
-function HistoryRow({
-  item,
-  isSelected,
-  onSelect,
-  onView,
-  onDownload,
-  onRegenerate,
-  onDelete,
-  isLoading,
-  getStatusBadge,
-  formatDate,
-  formatDuration,
-}) {
-  return (
-    <tr className="hover:bg-gray-50 transition-colors">
-      <td className="px-4 py-3">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onSelect}
-          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-        />
-      </td>
-      
-      <td className="px-4 py-3">
-        {item.resultImage?.url ? (
-          <img
-            src={item.resultImage.url}
-            alt="Generated"
-            className="w-12 h-12 object-cover rounded"
-          />
-        ) : (
-          <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
-            <ImageIcon className="w-6 h-6 text-gray-400" />
-          </div>
-        )}
-      </td>
-      
-      <td className="px-4 py-3 text-sm text-gray-800">
-        {item.options?.preset || 'Custom'}
-      </td>
-      
-      <td className="px-4 py-3 text-sm text-gray-600">
-        {item.provider}
-      </td>
-      
-      <td className="px-4 py-3">
-        {getStatusBadge(item.status)}
-      </td>
-      
-      <td className="px-4 py-3 text-sm text-gray-600">
-        {formatDuration(item.generationTime)}
-      </td>
-      
-      <td className="px-4 py-3 text-sm text-gray-600">
-        {formatDate(item.createdAt)}
-      </td>
-      
-      <td className="px-4 py-3">
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={onView}
-            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-            title="Xem chi tiết"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={onDownload}
-            disabled={!item.resultImage?.url}
-            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:text-gray-300"
-            title="Tải xuống"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={onRegenerate}
-            disabled={isLoading}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:text-gray-300"
-            title="Tạo lại"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-          </button>
-          
-          <button
-            onClick={onDelete}
-            disabled={isLoading}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:text-gray-300"
-            title="Xóa"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-// ============================================
-// DETAIL MODAL COMPONENT
-// ============================================
-
-function DetailModal({
-  item,
-  onClose,
-  onDownload,
-  onRegenerate,
-  onDelete,
-  getStatusBadge,
-  formatDate,
-  formatDuration,
-}) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Chi Tiết</h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        
-        {/* Content */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Images */}
-            <div className="space-y-4">
-              {/* Result Image */}
-              {item.resultImage?.url && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Kết Quả</h3>
-                  <img
-                    src={item.resultImage.url}
-                    alt="Result"
-                    className="w-full rounded-lg shadow-lg"
-                  />
-                </div>
-              )}
-              
-              {/* Product Image */}
-              {item.productImage?.url && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Ảnh Sản Phẩm</h3>
-                  <img
-                    src={item.productImage.url}
-                    alt="Product"
-                    className="w-full rounded-lg shadow-lg"
-                  />
-                </div>
-              )}
-              
-              {/* Model Image */}
-              {item.modelImage?.url && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Ảnh Người Mẫu</h3>
-                  <img
-                    src={item.modelImage.url}
-                    alt="Model"
-                    className="w-full rounded-lg shadow-lg"
-                  />
-                </div>
-              )}
-            </div>
-            
-            {/* Metadata */}
-            <div className="space-y-4">
-              {/* Status */}
+        <div className="grid min-h-0 flex-1 gap-4 overflow-x-hidden xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
+          <section className={`${SURFACE_CARD_CLASS} min-h-0 max-h-[540px] overflow-hidden shadow-[0_30px_100px_rgba(139,92,246,0.12)]`}>
+            <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3.5">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Trạng Thái</h3>
-                {getStatusBadge(item.status)}
+                <h2 className="text-base font-semibold text-white">Session feed</h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  Browse captured runs and jump into the exact input, output, and failure context.
+                </p>
               </div>
-              
-              {/* Basic Info */}
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Preset:</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {item.options?.preset || 'Custom'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Provider:</span>
-                  <span className="text-sm font-medium text-gray-800">{item.provider}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Thời gian tạo:</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {formatDuration(item.generationTime)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Ngày tạo:</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {formatDate(item.createdAt)}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Options */}
-              {item.options && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Tùy Chọn</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-60 overflow-y-auto">
-                    {Object.entries(item.options).map(([key, value]) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-sm text-gray-600">{key}:</span>
-                        <span className="text-sm font-medium text-gray-800">
-                          {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Error */}
-              {item.error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-red-700 mb-2">Lỗi</h3>
-                  <p className="text-sm text-red-600">{item.error}</p>
-                </div>
-              )}
-              
-              {/* Actions */}
-              <div className="space-y-2">
-                <button
-                  onClick={onDownload}
-                  disabled={!item.resultImage?.url}
-                  className="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-300"
-                >
-                  <Download className="w-5 h-5" />
-                  Tải Xuống
-                </button>
-                
-                <button
-                  onClick={onRegenerate}
-                  className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  Tạo Lại
-                </button>
-                
-                <button
-                  onClick={onDelete}
-                  className="w-full px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-5 h-5" />
-                  Xóa
-                </button>
-              </div>
+              <p className="text-[11px] text-slate-500">
+                {sessions.length} shown / {pagination.total || 0} total
+              </p>
             </div>
-          </div>
+
+            <div className="min-h-0 max-h-[430px] space-y-1.5 overflow-y-auto px-2.5 py-2.5">
+              {loading ? (
+                <div className="space-y-2">
+                  <SkeletonCards count={4} />
+                </div>
+              ) : sessions.length ? (
+                sessions.map((session) => (
+                  <SessionCard
+                    key={session.sessionId}
+                    session={session}
+                    selected={session.sessionId === selectedSessionId}
+                    onSelect={() => setSelectedSessionId(session.sessionId)}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  icon={Clock3}
+                  title="No sessions match these filters"
+                  description="Try widening the flow type or status filter, or clear your search to bring back older runs."
+                  className="border-none bg-transparent shadow-none"
+                />
+              )}
+            </div>
+
+          </section>
+
+          <section className="min-h-0 min-w-0 overflow-x-hidden">
+            {detailLoading ? (
+              <div className="space-y-4">
+                <div className={`${SURFACE_CARD_CLASS} p-4`}>
+                  <SkeletonBlock className="h-5 w-40" />
+                  <SkeletonBlock className="mt-4 h-20 w-full" />
+                </div>
+                <div className={`${SURFACE_CARD_CLASS} p-4`}>
+                  <SkeletonBlock className="h-5 w-32" />
+                  <SkeletonBlock className="mt-4 h-32 w-full" />
+                </div>
+              </div>
+            ) : selectedSession ? (
+              <div className="grid min-w-0 gap-3 overflow-x-hidden">
+                <DetailSection
+                  title="Session overview"
+                  subtitle="Quick read on flow type, runtime health, and last known state."
+                  actions={
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copySessionId(selectedSession.sessionId)}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-800/80 px-3 py-2 text-[12px] font-medium text-slate-200 transition hover:bg-slate-700/90"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy ID
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSession(selectedSession.sessionId)}
+                        disabled={deletingId === selectedSession.sessionId}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-500/12 px-3 py-2 text-[12px] font-medium text-rose-100 transition hover:bg-rose-500/18 disabled:cursor-not-allowed"
+                      >
+                        {deletingId === selectedSession.sessionId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                        Delete
+                      </button>
+                    </div>
+                  }
+                >
+                  <div className="flex flex-wrap items-start gap-4">
+                    <div className="flex items-start gap-3">
+                      <SemanticIconBadge icon={selectedFlow?.icon || Wand2} tone={selectedFlow?.tone || 'neutral'} className="h-12 w-12" />
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-lg font-semibold text-white">{selectedFlow?.label || 'Unknown flow'}</h2>
+                          <StatusPill tone={getStatusTone(selectedSession.status)}>{selectedSession.status || 'unknown'}</StatusPill>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">{selectedSession.useCase || selectedSession.sessionId}</p>
+                      </div>
+                    </div>
+                    <div className="grid flex-1 gap-2 sm:grid-cols-2">
+                      <MetricPill label="Created" value={formatDateTime(selectedSession.createdAt)} />
+                      <MetricPill label="Updated" value={formatDateTime(selectedSession.updatedAt)} />
+                      <MetricPill label="Duration" value={formatDuration(selectedSession.metrics?.totalDuration)} />
+                      <MetricPill label="Logs" value={selectedLogs.length} />
+                    </div>
+                  </div>
+                </DetailSection>
+
+                <DetailSection
+                  title="Inputs and outputs"
+                  subtitle="Stored artifacts captured from the run. Inputs stay separate from generated outputs to keep review fast."
+                >
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Inputs</p>
+                      <div className="mt-3 space-y-2">
+                        {inputArtifacts.length ? (
+                          inputArtifacts.map((item) => (
+                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200">
+                              {item}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500">No persisted input artifact path was recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-pink-400/20 bg-pink-500/8 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-pink-200/80">Outputs</p>
+                      <div className="mt-3 space-y-2">
+                        {outputArtifacts.length ? (
+                          outputArtifacts.map((item) => (
+                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200">
+                              {item}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500">No generated output artifact was stored on this session.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </DetailSection>
+
+                <DetailSection
+                  title="Options and analysis"
+                  subtitle="Structured values captured during the run. This is where provider choices and analysis payloads become visible."
+                >
+                  <div className="grid gap-4">
+                    <div>
+                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">Analysis payload</p>
+                      <JsonPreview data={selectedSession.analysis} />
+                    </div>
+                    <div>
+                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">Error payload</p>
+                      <JsonPreview data={selectedSession.error} emptyLabel="No error payload captured for this session." />
+                    </div>
+                  </div>
+                </DetailSection>
+
+                <DetailSection
+                  title="Stage timeline"
+                  subtitle="Step-by-step timing and state changes captured during the session."
+                >
+                  {selectedStages.length ? (
+                    <div className="space-y-3">
+                      {selectedStages.map((stage, index) => (
+                        <div key={`${stage.stage || 'stage'}-${index}`} className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <StatusPill tone={stage.status === 'completed' ? 'success' : stage.status === 'failed' ? 'danger' : 'info'}>
+                                {stage.status || 'unknown'}
+                              </StatusPill>
+                              <p className="text-sm font-medium text-white">{stage.stage || `Stage ${index + 1}`}</p>
+                            </div>
+                            <p className="text-xs text-slate-400">{formatDuration(stage.duration)}</p>
+                          </div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <MetricPill label="Started" value={formatDateTime(stage.startTime)} />
+                            <MetricPill label="Finished" value={formatDateTime(stage.endTime)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={Loader2}
+                      title="No stage timing recorded"
+                      description="This run either finished too early or the pipeline did not persist stage-level metrics."
+                      compact
+                    />
+                  )}
+                </DetailSection>
+
+                <DetailSection
+                  title="Runtime log stream"
+                  subtitle="The latest debug and error messages captured for this run."
+                >
+                  {selectedLogs.length ? (
+                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                      {selectedLogs
+                        .slice()
+                        .reverse()
+                        .map((log, index) => (
+                          <div
+                            key={`${log.timestamp || 'log'}-${index}`}
+                            className={`rounded-2xl border px-3 py-3 ${
+                              log.level === 'error'
+                                ? 'border-rose-400/25 bg-rose-500/10'
+                                : log.level === 'warn'
+                                  ? 'border-amber-400/25 bg-amber-500/10'
+                                  : log.level === 'info'
+                                    ? 'border-cyan-400/20 bg-cyan-500/8'
+                                    : 'border-slate-800/80 bg-slate-950/60'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <StatusPill tone={log.level === 'error' ? 'danger' : log.level === 'warn' ? 'warning' : log.level === 'info' ? 'info' : 'neutral'}>
+                                {log.level || 'debug'}
+                              </StatusPill>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{log.category || 'general'}</p>
+                              <p className="ml-auto text-[11px] text-slate-500">{formatDateTime(log.timestamp)}</p>
+                            </div>
+                            <p className="mt-2 text-xs leading-5 text-slate-200">{log.message || 'No message'}</p>
+                            {log.details ? (
+                              <pre className="mt-3 overflow-x-auto rounded-2xl border border-slate-800/80 bg-slate-950/80 p-3 text-[11px] leading-5 text-slate-300">
+                                {JSON.stringify(log.details, null, 2)}
+                              </pre>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={AlertTriangle}
+                      title="No logs were persisted"
+                      description="The session exists, but no log entries were written to the central logger for this run."
+                      compact
+                    />
+                  )}
+                </DetailSection>
+              </div>
+            ) : (
+              <EmptyState
+                icon={Clock3}
+                title="Choose a session"
+                description="Select a run from the left to inspect its inputs, outputs, runtime stages, and log trail."
+              />
+            )}
+          </section>
         </div>
       </div>
     </div>

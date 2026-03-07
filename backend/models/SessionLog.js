@@ -11,7 +11,7 @@ const sessionLogSchema = new mongoose.Schema({
   // Flow type
   flowType: {
     type: String,
-    enum: ['one-click', 'affiliate-tiktok', 'image-generation', 'video-generation'],
+    enum: ['one-click', 'affiliate-tiktok', 'image-generation', 'video-generation', 'voice-generation'],
     default: 'one-click',
     index: true
   },
@@ -48,8 +48,10 @@ const sessionLogSchema = new mongoose.Schema({
   artifacts: {
     characterImagePath: String,
     productImagePath: String,
+    sourceVideoPaths: [String],
     generatedImagePaths: [String],
-    videoSegmentPaths: [String]
+    videoSegmentPaths: [String],
+    audioPaths: [String]
   },
 
   // Analysis results

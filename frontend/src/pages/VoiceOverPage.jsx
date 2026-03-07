@@ -40,6 +40,7 @@ export default function VoiceOverPage() {
   // Step 3: Audio
   const [generatedAudio, setGeneratedAudio] = useState(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [flowId, setFlowId] = useState(null);
 
   // Metadata
   const [productName, setProductName] = useState('');
@@ -68,6 +69,28 @@ export default function VoiceOverPage() {
 
   const handleAudioGenerated = (audio) => {
     setGeneratedAudio(audio);
+  };
+
+  const ensureSession = async () => {
+    if (flowId) return flowId;
+
+    const sessionResponse = await fetch('/api/sessions/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        flowType: 'voice-generation',
+        useCase: selectedStyle,
+      }),
+    });
+
+    if (!sessionResponse.ok) {
+      throw new Error(`Session creation failed: ${sessionResponse.status}`);
+    }
+
+    const sessionData = await sessionResponse.json();
+    const nextFlowId = sessionData.data?.flowId || sessionData.data?.sessionId;
+    setFlowId(nextFlowId);
+    return nextFlowId;
   };
 
   return (
@@ -193,9 +216,12 @@ export default function VoiceOverPage() {
 
             {currentStep === 2 && (
               <ScriptGenerationStep
+                flowId={flowId}
+                ensureSession={ensureSession}
                 videos={videos}
                 productImage={productImage}
                 style={selectedStyle}
+                language={selectedLanguage}
                 readingStyle={selectedStyle}
                 productName={productName || 'Fashion Product'}
                 productDescription={productDescription}
@@ -208,6 +234,8 @@ export default function VoiceOverPage() {
 
             {currentStep === 3 && (
               <AudioGenerationStep
+                flowId={flowId}
+                ensureSession={ensureSession}
                 script={generatedScript}
                 voiceName={selectedVoice}
                 language={selectedLanguage.toUpperCase()}

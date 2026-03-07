@@ -9,9 +9,17 @@ import io from 'socket.io-client';
 export default function LogViewer({ sessionId, onClose, isOpen }) {
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState('running'); // running, completed, failed
+  const [activeSession, setActiveSession] = useState(sessionId);
   const logsEndRef = useRef(null);
   const socketRef = useRef(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [processRunning, setProcessRunning] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
+  const [processInfo, setProcessInfo] = useState(null);
+  const [command, setCommand] = useState('');
+  const [argsText, setArgsText] = useState('');
+  const [cwd, setCwd] = useState('');
+  const [notice, setNotice] = useState(null); // { text, type }
 
   // Auto-scroll to bottom when new logs arrive
   const scrollToBottom = () => {
@@ -25,9 +33,14 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   }, [logs, isAutoScrollEnabled]);
 
   useEffect(() => {
-    if (!isOpen || !sessionId) return;
+    // sync when parent prop changes
+    if (sessionId) setActiveSession(sessionId);
+  }, [sessionId]);
 
-    console.log(`🔌 Connecting to log session: ${sessionId}`);
+  useEffect(() => {
+    if (!isOpen || !activeSession) return;
+
+    console.log(`🔌 Connecting to log session: ${activeSession}`);
 
     // Connect to Socket.io
     socketRef.current = io(window.location.origin, {
@@ -38,7 +51,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     });
 
     // Join log session
-    socketRef.current.emit('join-log-session', sessionId);
+    socketRef.current.emit('join-log-session', activeSession);
 
     // Receive logs
     socketRef.current.on('log', (message) => {
@@ -68,10 +81,31 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
       setStatus(message.status);
     });
 
+    // Process attach/detach events
+    socketRef.current.on('process-attached', (payload) => {
+      try {
+        const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        setProcessRunning(true);
+        setProcessInfo({ pid: p.pid || null, scriptName: p.scriptName || null });
+        setNotice({ text: `Process attached (pid=${p.pid || 'n/a'})`, type: 'info' });
+        setTimeout(() => setNotice(null), 4000);
+      } catch (e) {}
+    });
+
+    socketRef.current.on('process-detached', (payload) => {
+      try {
+        const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        setProcessRunning(false);
+        setProcessInfo(null);
+        setNotice({ text: `Process detached`, type: 'info' });
+        setTimeout(() => setNotice(null), 3000);
+      } catch (e) {}
+    });
+
     // FallBack: Poll for logs every 2 seconds (in case WebSocket doesn't work)
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/auth-setup/logs/${sessionId}`);
+        const response = await fetch(`/api/auth-setup/logs/${activeSession}`);
         const data = await response.json();
         if (data.success && data.logs.length > 0) {
           setLogs(data.logs);
@@ -81,15 +115,45 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
       }
     }, 2000);
 
+    // initial check handled by polling effect
+
     return () => {
       // Cleanup
       clearInterval(pollInterval);
       if (socketRef.current) {
-        socketRef.current.emit('leave-log-session', sessionId);
+        socketRef.current.emit('leave-log-session', activeSession);
         socketRef.current.disconnect();
       }
     };
-  }, [sessionId, isOpen]);
+  }, [activeSession, isOpen]);
+
+  // Poll for attached process info every 2s so UI can enable/disable controls
+  useEffect(() => {
+    if (!isOpen || !activeSession) return;
+    let mounted = true;
+
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/auth-setup/session-process/${activeSession}`);
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!mounted) return;
+        if (j.success && j.exists) {
+          setProcessRunning(true);
+          setProcessInfo({ pid: j.pid || null, scriptName: j.scriptName || null });
+        } else {
+          setProcessRunning(false);
+          setProcessInfo(null);
+        }
+      } catch (e) {
+        // ignore transient errors
+      }
+    };
+
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => { mounted = false; clearInterval(id); };
+  }, [isOpen, activeSession]);
 
   const downloadLogs = () => {
     const logText = logs.map(log => `[${log.timestamp}] [${log.level}] ${log.message}`).join('\n');
@@ -97,7 +161,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `logs-${sessionId}-${new Date().toISOString()}.txt`;
+    a.download = `logs-${activeSession || sessionId}-${new Date().toISOString()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -105,6 +169,76 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   const copyLogsToClipboard = () => {
     const logText = logs.map(log => `[${log.timestamp}] [${log.level}] ${log.message}`).join('\n');
     navigator.clipboard.writeText(logText);
+  };
+
+  // Kill a running process attached to this session
+  const killSession = async () => {
+    try {
+      await fetch('/api/auth-setup/run/kill-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        body: JSON.stringify({ sessionId: activeSession, signal: 'SIGTERM' })
+      });
+      setProcessRunning(false);
+    } catch (e) {
+      console.error('Kill session failed', e);
+    }
+  };
+
+  // Send ENTER to process stdin
+  const sendEnter = async () => {
+    try {
+      await fetch('/api/auth-setup/run/session-stdin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        body: JSON.stringify({ sessionId: activeSession, data: '\n' })
+      });
+    } catch (e) {
+      console.error('Send stdin failed', e);
+    }
+  };
+
+  const runAutoLogin = async (mode) => {
+    try {
+      const url = `/api/auth-setup/run/chatgpt-auto-login${mode?('?mode='+mode):''}`;
+      const r = await fetch(url, { method: 'POST' });
+      const j = await r.json();
+      if (j.success && j.sessionId) {
+        setActiveSession(j.sessionId);
+        setLogs([]);
+        setStatus('running');
+        setNotice({ text: 'Auto-login started', type: 'success' });
+        setTimeout(() => setNotice(null), 3000);
+      } else {
+        console.error('Failed to start auto-login', j);
+      }
+    } catch (e) {
+      console.error('Run auto-login failed', e);
+    }
+  };
+
+  const runCommand = async () => {
+    try {
+      const args = argsText ? argsText.split(' ').filter(Boolean) : [];
+      const r = await fetch('/api/auth-setup/run/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        body: JSON.stringify({ command, args, cwd })
+      });
+      const j = await r.json();
+      if (j.success && j.sessionId) {
+        setActiveSession(j.sessionId);
+        setLogs([]);
+        setStatus('running');
+        setNotice({ text: 'Command started', type: 'success' });
+        setTimeout(() => setNotice(null), 3000);
+        console.log('Command started, sessionId=', j.sessionId);
+      } else {
+        console.error('Failed to run command', j);
+      }
+    } catch (e) {
+      console.error('runCommand failed', e);
+    }
   };
 
   if (!isOpen) return null;
@@ -127,6 +261,11 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
               {status === 'completed' && '✅ Completed'}
               {status === 'failed' && '❌ Failed'}
             </div>
+            {notice && (
+              <div className="ml-3 px-2 py-1 rounded text-xs bg-white/8 text-white">
+                {notice.text}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -197,6 +336,50 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
             >
               <Download className="w-4 h-4" /> Download
             </button>
+            <input
+              type="password"
+              placeholder="admin key (optional)"
+              value={adminKey}
+              onChange={e => setAdminKey(e.target.value)}
+              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white"
+              style={{ width: 220 }}
+            />
+            <button
+              onClick={() => runAutoLogin()}
+              className="px-4 py-2 bg-green-700 hover:bg-green-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
+              title="Run Auto-Login"
+            >
+              ▶️ Run Auto-Login
+            </button>
+            <button
+              onClick={() => runAutoLogin('validate')}
+              className="px-4 py-2 bg-yellow-700 hover:bg-yellow-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
+              title="Validate Session"
+            >
+              ✔️ Validate
+            </button>
+            <button
+              onClick={sendEnter}
+              disabled={!processRunning}
+              className={`px-4 py-2 ${processRunning? 'bg-gray-700 hover:bg-gray-600':'bg-gray-600 opacity-50'} rounded-lg text-sm flex items-center gap-1.5 text-white transition`}
+              title="Send ENTER to process"
+            >
+              ⏎ Send ENTER
+            </button>
+            <button
+              onClick={killSession}
+              disabled={!processRunning}
+              className={`px-4 py-2 ${processRunning? 'bg-red-700 hover:bg-red-600':'bg-gray-600 opacity-50'} rounded-lg text-sm flex items-center gap-1.5 text-white transition`}
+              title="Kill running process"
+            >
+              <X className="w-4 h-4" /> Kill
+            </button>
+            <div className="flex items-center gap-2">
+              <input placeholder="command" value={command} onChange={e=>setCommand(e.target.value)} className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-white" />
+              <input placeholder="args (space separated)" value={argsText} onChange={e=>setArgsText(e.target.value)} className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-white" />
+              <input placeholder="cwd (optional)" value={cwd} onChange={e=>setCwd(e.target.value)} className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-white" />
+              <button onClick={runCommand} className="px-3 py-1 bg-indigo-700 hover:bg-indigo-600 rounded text-sm text-white">Run Command</button>
+            </div>
           </div>
           <div className="text-xs text-gray-400">
             {logs.length} log{logs.length !== 1 ? 's' : ''}
