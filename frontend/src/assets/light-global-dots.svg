@@ -1,0 +1,27 @@
+<svg width="1800" height="1333" viewBox="0 0 1800 1333" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1800" y2="1333" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4E86F3"/>
+      <stop offset="0.18" stop-color="#53A7F2"/>
+      <stop offset="0.5" stop-color="#24BDEB"/>
+      <stop offset="1" stop-color="#44E0E8"/>
+    </linearGradient>
+    <radialGradient id="softGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(896 779) rotate(90) scale(808 1042.13)">
+      <stop stop-color="#98F5FF" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#98F5FF" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" x="0" y="0" width="33" height="33" patternUnits="userSpaceOnUse">
+      <circle cx="16.5" cy="16.5" r="5.4" fill="#6EF3FF" fill-opacity="0.36"/>
+    </pattern>
+    <mask id="dotFade">
+      <rect width="1800" height="1333" fill="url(#bg)"/>
+      <ellipse cx="906" cy="728" rx="652" ry="534" fill="white" fill-opacity="0.55"/>
+      <rect x="0" y="0" width="1800" height="260" fill="white" fill-opacity="0.85"/>
+      <rect x="0" y="995" width="1800" height="338" fill="white" fill-opacity="0.32"/>
+    </mask>
+  </defs>
+
+  <rect width="1800" height="1333" fill="url(#bg)"/>
+  <rect width="1800" height="1333" fill="url(#softGlow)"/>
+  <rect width="1800" height="1333" fill="url(#dots)" mask="url(#dotFade)"/>
+</svg>

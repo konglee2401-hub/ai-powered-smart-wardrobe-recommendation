@@ -4,13 +4,14 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronRight, ChevronLeft, Volume2, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Volume2, CheckCircle2, Mic2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import VoiceSettings from '../components/VoiceSettings';
 import VideoUploadStep from '../components/VideoUploadStep';
 import ScriptGenerationStep from '../components/ScriptGenerationStep';
 import AudioGenerationStep from '../components/AudioGenerationStep';
 import { useTranslation } from 'react-i18next';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 const STEPS = [
   { id: 1, name: 'Upload Videos', icon: '📹' },
@@ -94,11 +95,17 @@ export default function VoiceOverPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden">
-      {/* Main Content Grid */}
-      <div className="flex-1 overflow-hidden flex">
+    <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
+      <PageHeaderBar
+        icon={<Mic2 className="h-4 w-4 text-sky-400" />}
+        title={t('voiceOver.title')}
+        meta={`${STEPS[currentStep - 1].name} / ${selectedLanguage.toUpperCase()} / ${selectedVoice}`}
+        className="h-16"
+      />
+
+      <div className="flex min-h-0 gap-4 px-5 py-4 lg:px-6">
         {/* Left Sidebar - Voice Settings */}
-        <div className="w-72 border-r border-gray-700 overflow-y-auto bg-gray-900/50 backdrop-blur">
+        <div className="studio-card-shell w-72 overflow-y-auto rounded-[1.35rem]">
           <div className="p-4 space-y-4">
             {/* Branding */}
             <div className="flex items-center gap-2 mb-6">
@@ -174,12 +181,12 @@ export default function VoiceOverPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="studio-card-shell flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem]">
           {/* Step Header */}
-          <div className="border-b border-gray-700 bg-gray-800/30 backdrop-blur px-8 py-4">
+          <div className="px-8 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-xl font-semibold text-white">
                   {STEPS[currentStep - 1].icon} {STEPS[currentStep - 1].name}
                 </h2>
                 <p className="text-sm text-gray-400 mt-1">
@@ -246,27 +253,26 @@ export default function VoiceOverPage() {
               />
             )}
           </div>
+        </div>
+      </div>
 
-          {/* Navigation Footer */}
-          <div className="border-t border-gray-700 bg-gray-800/30 backdrop-blur px-8 py-4 flex items-center justify-between">
-            <button
-              onClick={handlePrev}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                currentStep === 1
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-700 hover:bg-gray-600 text-white'
-              }`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
+      <div className="apple-footer-bar z-20 flex h-[60px] flex-shrink-0 items-center px-5 lg:px-6">
+        <div className="flex h-full w-full items-center justify-between">
+          <button
+            onClick={handlePrev}
+            disabled={currentStep === 1}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-all ${
+              currentStep === 1
+                ? 'apple-option-chip cursor-not-allowed text-gray-400 opacity-60'
+                : 'apple-option-chip hover:text-slate-900'
+            }`}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
 
-            <div className="text-sm text-gray-400">
-              Step {currentStep} of {STEPS.length}
-            </div>
-
-            {/* Next button is in the step components for more control */}
+          <div className="text-sm text-gray-400">
+            Step {currentStep} of {STEPS.length}
           </div>
         </div>
       </div>

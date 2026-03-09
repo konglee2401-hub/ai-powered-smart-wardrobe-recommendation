@@ -26,6 +26,7 @@ const ANALYTICS_ENDPOINTS = {
   CONTENT_SUMMARY: '/api/analytics/content/summary',
   USAGE: '/api/analytics/usage',
   DASHBOARD: '/api/analytics/dashboard',
+  MARKETING_DASHBOARD: '/api/analytics/marketing-dashboard',
 };
 
 /**
@@ -360,6 +361,22 @@ export async function getDashboard(range = '30d') {
   }
 }
 
+export async function getMarketingDashboard(range = '30d') {
+  try {
+    const response = await axiosInstance.get(
+      `${ANALYTICS_ENDPOINTS.MARKETING_DASHBOARD}?range=${range}`
+    );
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('[Get Marketing Dashboard Error]', error);
+    throw error;
+  }
+}
+
 export default {
   getAnalyticsOverview,
   getDailyStats,
@@ -378,4 +395,5 @@ export default {
   getContentSummary,
   getUsageAnalytics,
   getDashboard,
+  getMarketingDashboard,
 };

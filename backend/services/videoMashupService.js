@@ -1,10 +1,9 @@
-/**
+﻿/**
  * Video Mashup Service
  *
- * High-level FFmpeg helper used by production flows. The older implementation
- * depended on shell features such as `grep` and `/bin/bash`, which breaks on
- * Windows. This version keeps the public service surface but delegates the
- * primary 2/3 + 1/3 mashup work to the cross-platform generator service.
+ * High-level FFmpeg helper used by production flows.
+ * This layer keeps the historical API surface but now delegates to the
+ * template-driven video factory generator.
  */
 
 import fs from 'fs';
@@ -13,14 +12,38 @@ import videoMashupGenerator from './videoMashupGenerator.js';
 
 class VideoMashupService {
   constructor() {
-    this.ffmpegPath = 'ffmpeg';
-    this.ffprobePath = 'ffprobe';
+    this.ffmpegPath = this._findFFmpegPath();
+    this.ffprobePath = this._findFFprobePath();
   }
 
-  /**
-   * Reads video duration using ffprobe so duration checks work across Windows
-   * and Linux without relying on shell pipes.
-   */
+  _findFFmpegPath() {
+    const ffmpegPath = 'C:\\Users\\Dell\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin\\ffmpeg.exe';
+
+    try {
+      if (fs.existsSync(ffmpegPath)) {
+        return ffmpegPath;
+      }
+    } catch {
+      // Continue to PATH fallback.
+    }
+
+    return 'ffmpeg';
+  }
+
+  _findFFprobePath() {
+    const ffprobePath = 'C:\\Users\\Dell\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin\\ffprobe.exe';
+
+    try {
+      if (fs.existsSync(ffprobePath)) {
+        return ffprobePath;
+      }
+    } catch {
+      // Continue to PATH fallback.
+    }
+
+    return 'ffprobe';
+  }
+
   getVideoDuration(videoPath) {
     try {
       const output = execFileSync(this.ffprobePath, [
@@ -40,11 +63,6 @@ class VideoMashupService {
     }
   }
 
-  /**
-   * Legacy merge API retained for callers that still pass explicit main/template
-   * video paths. The output uses the standard mashup generator so the layout
-   * stays consistent with queue scanner jobs.
-   */
   async mergeVideos(config) {
     try {
       const {
@@ -55,6 +73,23 @@ class VideoMashupService {
         aspectRatio = '9:16',
         quality = 'high',
         audioFromMain = true,
+        templateName,
+        templateOverrides,
+        backgroundAudioPath,
+        audioPath,
+        backgroundAudioVolume,
+        audioVolume,
+        memeOverlayPath,
+        memeOverlayWindow,
+        subtitleMode,
+        subtitleFilePath,
+        subtitleText,
+        videoContext,
+        affiliateKeywords,
+        highlightDetection,
+        clipExtraction,
+        additionalVideoPaths,
+        dryRun = false,
       } = config;
 
       if (!fs.existsSync(mainVideoPath)) {
@@ -69,48 +104,83 @@ class VideoMashupService {
         quality,
         aspectRatio,
         audioSource: audioFromMain ? 'main' : 'sub',
+        templateName: templateName || (config.layout === 'pip' ? 'highlight' : undefined),
+        templateOverrides,
+        outputPath,
+        backgroundAudioPath: backgroundAudioPath || audioPath || '',
+        backgroundAudioVolume: backgroundAudioVolume ?? audioVolume ?? 0.18,
+        memeOverlayPath,
+        memeOverlayWindow,
+        subtitleMode: subtitleMode || 'none',
+        subtitleFilePath,
+        subtitleText,
+        videoContext,
+        affiliateKeywords,
+        highlightDetection,
+        clipExtraction,
+        additionalVideoPaths,
+        dryRun,
       });
 
       if (!result.success) {
         return result;
       }
 
-      if (outputPath && outputPath !== result.outputPath) {
-        fs.copyFileSync(result.outputPath, outputPath);
-      }
-
       return {
         success: true,
         outputPath: outputPath || result.outputPath,
         duration: videoDuration,
-        layout: '2-3-1-3',
-        fileSize: fs.statSync(outputPath || result.outputPath).size,
-        message: 'Videos merged successfully',
+        layout: result.metadata?.layout?.type || 'factory',
+        fileSize: result.metadata?.output?.size || (fs.existsSync(outputPath || result.outputPath) ? fs.statSync(outputPath || result.outputPath).size : 0),
+        message: dryRun ? 'Videos planned successfully' : 'Videos merged successfully',
+        metadata: result.metadata || {},
+        dryRun,
       };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  /**
-   * Newer orchestrators call `generateMashupVideo`; keep it as a thin wrapper
-   * around `mergeVideos` so older and newer code paths share the same encoder.
-   */
   async generateMashupVideo(config) {
     return this.mergeVideos({
       mainVideoPath: config.video1Path || config.mainVideoPath,
       templateVideoPath: config.video2Path || config.templateVideoPath,
       outputPath: config.outputPath,
-      videoDuration: config.duration || 30,
+      videoDuration: config.duration || config.videoDuration || 30,
       aspectRatio: config.aspectRatio || '9:16',
       quality: config.quality || 'high',
       audioFromMain: config.audioSource !== 'sub',
+      templateName: config.templateName,
+      templateOverrides: config.templateOverrides,
+      backgroundAudioPath: config.backgroundAudioPath || config.audioPath,
+      backgroundAudioVolume: config.backgroundAudioVolume ?? config.audioVolume,
+      memeOverlayPath: config.memeOverlayPath,
+      memeOverlayWindow: config.memeOverlayWindow,
+      subtitleMode: config.subtitleMode,
+      subtitleFilePath: config.subtitleFilePath,
+      subtitleText: config.subtitleText,
+      videoContext: config.videoContext,
+      affiliateKeywords: config.affiliateKeywords,
+      highlightDetection: config.highlightDetection,
+      clipExtraction: config.clipExtraction,
+      additionalVideoPaths: config.additionalVideoPaths,
+      dryRun: config.dryRun,
+      layout: config.layout,
     });
   }
 
-  /**
-   * Adds a background audio track to an existing rendered video.
-   */
+  async generateBatchMashups(config) {
+    return videoMashupGenerator.generateBatchMashups(config);
+  }
+
+  async generateGridMashup(videoPaths, options = {}) {
+    return videoMashupGenerator.generateGridMashup(videoPaths, options);
+  }
+
+  listFactoryTemplates() {
+    return videoMashupGenerator.listTemplates();
+  }
+
   addAudioTrack(config) {
     try {
       const {
@@ -129,8 +199,9 @@ class VideoMashupService {
 
       execFileSync(this.ffmpegPath, [
         '-i', videoPath,
+        '-stream_loop', '-1',
         '-i', audioPath,
-        '-filter_complex', `[0:a][1:a]amix=inputs=2:duration=first,volume=${volume}[a]`,
+        '-filter_complex', `[0:a][1:a]amix=inputs=2:duration=first:normalize=0,volume=${volume}[a]`,
         '-map', '0:v:0',
         '-map', '[a]',
         '-c:v', 'copy',
@@ -153,9 +224,6 @@ class VideoMashupService {
     }
   }
 
-  /**
-   * Burns an external subtitle file into a rendered video.
-   */
   addCaptions(config) {
     try {
       const {
@@ -191,9 +259,6 @@ class VideoMashupService {
     }
   }
 
-  /**
-   * Applies a simple transition effect to an already-rendered clip.
-   */
   applyTransition(config) {
     try {
       const {
@@ -235,3 +300,5 @@ class VideoMashupService {
 }
 
 export default new VideoMashupService();
+
+

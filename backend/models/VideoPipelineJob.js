@@ -49,6 +49,7 @@ const VideoPipelineJobSchema = new mongoose.Schema({
     default: 'pending',
     index: true,
   },
+  lastRetryAt: Date,
   startedAt: Date,
   completedAt: Date,
   uploadedAt: Date,

@@ -23,11 +23,14 @@ import { buildAnalysisPrompt, normalizeOptionLibrary, parseRecommendations, auto
 import upload from '../middleware/upload.js';
 import fs from 'fs';
 import path from 'path';
+import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse } from '../services/affiliateStoryboardService.js';
+import { extractLastFrame, concatenateVideos, isFfmpegAvailable } from '../services/videoContinuityService.js';
 
 const router = express.Router();
 
 // 💾 In-memory flow state storage (in production, use Redis)
 const flowStates = new Map();
+const step2Jobs = new Map();
 
 function parseJsonField(value, fallback = null) {
   if (value == null || value === '') return fallback;
@@ -63,6 +66,234 @@ function buildAffiliateStep1AnalysisShape(parsedRecommendations, productFocus = 
       Object.entries(parsedRecommendations || {}).filter(([key, value]) => !['characterProfile', 'productDetails', 'analysis', 'newOptions', 'character', 'product', 'recommendations'].includes(key) && value)
     )
   };
+}
+
+function pickLegacyFrameKeys(frameLibrary = []) {
+  const hookStart = frameLibrary.find((frame) => frame.frameKey === 'seg1_start') || frameLibrary[0] || null;
+  const showcaseEnd = frameLibrary.find((frame) => frame.segmentName === 'showcase' && frame.role === 'end')
+    || frameLibrary.find((frame) => frame.frameKey === 'seg2_end')
+    || frameLibrary[1]
+    || hookStart;
+
+  return { hookStart, showcaseEnd };
+}
+
+function resolveFramePath(frameLibrary = [], frameKey) {
+  return frameLibrary.find((frame) => frame.frameKey === frameKey)?.imagePath || null;
+}
+
+function buildStoryboardMetadata(step1Analysis, reqBody) {
+  return buildStoryboardBlueprint(step1Analysis, {
+    productFocus: reqBody.productFocus || 'full-outfit',
+    videoDuration: Number(reqBody.videoDuration) || 20,
+    clipDuration: 8
+  });
+}
+
+function buildStep2Payload(flowState) {
+  const step2 = flowState?.step2 || {};
+  const frameLibrary = Array.isArray(step2.frameLibrary) ? step2.frameLibrary : [];
+  const { hookStart, showcaseEnd } = pickLegacyFrameKeys(frameLibrary);
+
+  return {
+    storyboardBlueprint: step2.storyboardBlueprint || null,
+    framePlan: step2.framePlan || [],
+    frameLibrary,
+    wearingImage: hookStart?.imagePath || null,
+    holdingImage: showcaseEnd?.imagePath || null,
+    wearingImageDriveUrl: step2.wearingImageDriveUrl || null,
+    holdingImageDriveUrl: step2.holdingImageDriveUrl || null,
+    step_duration: step2.duration || null,
+    job: {
+      status: step2.status || 'idle',
+      progress: step2.progress || null,
+      error: step2.error || null,
+      startedAt: step2.startedAt || null,
+      completedAt: step2.completedAt || null
+    }
+  };
+}
+
+async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
+  const startedAt = Date.now();
+  let logger = null;
+
+  try {
+    let flowState = flowStates.get(flowId);
+    if (!flowState?.step1) {
+      throw new Error('Step 1 not completed. Run Step 1 before Step 2.');
+    }
+
+    logger = new SessionLogService(flowId, 'affiliate-tiktok');
+    await logger.init();
+    await logger.startStage('step-2-generate-images');
+    await logger.info('Starting Step 2: Frame Library Generation', 'step-2-init');
+
+    const { analysis, characterImagePath, productImagePath, storyboardBlueprint: step1Blueprint } = flowState.step1;
+    const {
+      aspectRatio = '9:16',
+      scene = '',
+      lighting = 'soft-diffused',
+      mood = 'confident',
+      language = 'vi',
+      characterName = '',
+      characterDisplayName = '',
+      productFocus = 'full-outfit'
+    } = requestBody;
+
+    const normalizedLanguage = (language || 'vi').split('-')[0].split('_')[0].toLowerCase();
+    const storyboardBlueprint = step1Blueprint || buildStoryboardMetadata(analysis, requestBody);
+    const framePlan = buildFrameGenerationPlan(analysis, storyboardBlueprint, {
+      scene,
+      lighting,
+      mood,
+      language: normalizedLanguage,
+      characterName,
+      characterDisplayName,
+      productFocus
+    });
+
+    flowStates.set(flowId, {
+      ...flowState,
+      status: 'step2-processing',
+      step2: {
+        storyboardBlueprint,
+        framePlan,
+        frameLibrary: [],
+        wearingImagePath: null,
+        holdingImagePath: null,
+        wearingPrompt: null,
+        holdingPrompt: null,
+        wearingImageDriveUrl: null,
+        holdingImageDriveUrl: null,
+        promptLanguage: normalizedLanguage,
+        selectedOptions: { scene, lighting, mood, aspectRatio, language: normalizedLanguage },
+        productImagePath,
+        status: 'processing',
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+        error: null,
+        progress: {
+          phase: 'generating',
+          message: 'Generating frame library in background',
+          totalFrames: framePlan.frames.length,
+          completedFrames: 0
+        },
+        duration: null
+      },
+      step3: null,
+      step4: null,
+      step5: null,
+      step6: null
+    });
+
+    const prompts = framePlan.frames.map((frame) => frame.prompt);
+    const imageGenService = new GoogleFlowAutomationService({
+      type: 'image',
+      aspectRatio,
+      imageCount: 1,
+      headless: true,
+      outputDir: path.join(process.cwd(), 'temp', 'step-2-generate-images', flowId)
+    });
+
+    const multiGenResult = await imageGenService.generateMultiple(
+      characterImagePath,
+      productImagePath,
+      prompts,
+      { outputCount: 1 }
+    );
+
+    if (!multiGenResult?.success && !(multiGenResult?.results || []).some((result) => result?.success)) {
+      throw new Error(multiGenResult?.error || 'Frame generation failed');
+    }
+
+    const frameLibrary = framePlan.frames.map((frame, index) => {
+      const result = multiGenResult.results?.[index];
+      if (!result?.success || !result?.downloadedFile) {
+        throw new Error(`Frame generation failed for ${frame.key}: ${result?.error || 'missing file'}`);
+      }
+
+      return {
+        frameKey: frame.key,
+        segmentIndex: frame.segmentIndex,
+        segmentName: frame.segmentName,
+        role: frame.role,
+        focus: frame.focus,
+        purpose: frame.purpose,
+        prompt: frame.prompt,
+        imagePath: result.downloadedFile,
+        href: result.href || null
+      };
+    });
+
+    const { hookStart, showcaseEnd } = pickLegacyFrameKeys(frameLibrary);
+    const step2Duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+    flowState = flowStates.get(flowId) || flowState;
+
+    flowStates.set(flowId, {
+      ...flowState,
+      status: 'step2-complete',
+      step2: {
+        ...(flowState.step2 || {}),
+        storyboardBlueprint,
+        framePlan,
+        frameLibrary,
+        wearingImagePath: hookStart?.imagePath || null,
+        holdingImagePath: showcaseEnd?.imagePath || null,
+        wearingPrompt: hookStart?.prompt || null,
+        holdingPrompt: showcaseEnd?.prompt || null,
+        wearingImageDriveUrl: null,
+        holdingImageDriveUrl: null,
+        promptLanguage: normalizedLanguage,
+        selectedOptions: { scene, lighting, mood, aspectRatio, language: normalizedLanguage },
+        productImagePath,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        error: null,
+        progress: {
+          phase: 'completed',
+          message: 'Frame library generation completed',
+          totalFrames: frameLibrary.length,
+          completedFrames: frameLibrary.length
+        },
+        duration: parseFloat(step2Duration)
+      }
+    });
+
+    await logger.info('Step 2 frame library generation complete', 'step-2-complete', {
+      frames: frameLibrary.length,
+      storyboardTemplate: storyboardBlueprint.templateKey,
+      duration: parseFloat(step2Duration)
+    });
+    await logger.endStage('step-2-generate-images', true);
+  } catch (error) {
+    const step2Duration = ((Date.now() - startedAt) / 1000).toFixed(2);
+    const flowState = flowStates.get(flowId) || {};
+    flowStates.set(flowId, {
+      ...flowState,
+      status: 'failed',
+      step2: {
+        ...(flowState.step2 || {}),
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: error.message,
+        progress: {
+          ...(flowState.step2?.progress || {}),
+          phase: 'failed',
+          message: error.message
+        },
+        duration: parseFloat(step2Duration)
+      }
+    });
+
+    console.error(`\n? STEP 2 ERROR [${flowId}] after ${step2Duration}s:`, error.message);
+    if (logger) {
+      await logger.error(`Step 2 failed: ${error.message}`, 'step-2-error', { stack: error.stack, duration: parseFloat(step2Duration) });
+      await logger.endStage('step-2-generate-images', false);
+    }
+  } finally {
+    step2Jobs.delete(flowId);
+  }
 }
 
 /**
@@ -256,12 +487,16 @@ router.post('/step-1-analyze', upload.fields([
 
     const parsedRecommendations = parseRecommendations(analysisText, optionsLibrary);
     const analysis = buildAffiliateStep1AnalysisShape(parsedRecommendations, productFocus);
+    const storyboardBlueprint = buildStoryboardMetadata(analysis, req.body);
+    analysis.storyboardBlueprint = storyboardBlueprint;
     const newOptionsCreated = await autoSaveRecommendations(parsedRecommendations);
 
     console.log(`  ? Analysis parsed with shared recommendation schema`);
     await logger.info(`Analysis parsed and normalized`, 'step-1-parse', {
       keys: Object.keys(analysis || {}),
-      newOptionsCreated: newOptionsCreated.length
+      newOptionsCreated: newOptionsCreated.length,
+      storyboardTemplate: storyboardBlueprint.templateKey,
+      requiredFrames: storyboardBlueprint.requiredFrames.length
     });
 
     // ========== STORE AND RETURN ==========
@@ -286,8 +521,11 @@ router.post('/step-1-analyze', upload.fields([
         productImageBuffer,
         characterImagePath,
         productImagePath,
+        storyboardBlueprint,
         duration: parseFloat(step1Duration)
-      }
+      },
+      status: 'step1-complete',
+      startedAt: new Date().toISOString()
     });
 
     res.json({
@@ -297,6 +535,7 @@ router.post('/step-1-analyze', upload.fields([
       analysis,
       analysisText,
       newOptionsCreated,
+      storyboardBlueprint,
       step_duration: parseFloat(step1Duration)
     });
 
@@ -333,393 +572,69 @@ router.post('/step-1-analyze', upload.fields([
  */
 router.post('/step-2-generate-images', async (req, res) => {
   const flowId = req.body.flowId;
-  const startTime = Date.now();
-  let logger = null;
 
   try {
-    console.log(`\n🟢 STEP 2: GENERATE IMAGES [${flowId}]`);
-    
+    console.log(`
+?? STEP 2: QUEUE FRAME LIBRARY [${flowId}]`);
+
     if (!flowId) throw new Error('flowId is required');
 
-    logger = new SessionLogService(flowId, 'affiliate-tiktok');
-    await logger.init();
-    await logger.startStage('step-2-generate-images');
-    await logger.info('Starting Step 2: Image Generation', 'step-2-init');
-
-    // ========== VALIDATE PREVIOUS STEP ==========
-    console.log(`\n🔍 Validating Step 1 output...`);
     const flowState = flowStates.get(flowId);
-    console.log(`  Flow state exists: ${!!flowState}`);
-    console.log(`  Step 1 exists: ${!!flowState?.step1}`);
-    
-    if (!flowState) {
-      const err = `No flow state found for ${flowId}. Start with Step 1 first.`;
-      console.error(`❌ ${err}`);
-      await logger.error(err, 'step-2-validation');
-      throw new Error(err);
+    if (!flowState?.step1) {
+      throw new Error('Step 1 not completed. Run Step 1 before Step 2.');
     }
 
-    if (!flowState.step1) {
-      const err = `Step 1 not completed. Run Step 1 before Step 2.`;
-      console.error(`❌ ${err}`);
-      await logger.error(err, 'step-2-validation');
-      throw new Error(err);
-    }
-
-    const { analysis, characterImageBuffer, productImageBuffer, characterImagePath, productImagePath } = flowState.step1;
-    
-    console.log(`  ✅ Step 1 analysis: ${!!analysis}`);
-    console.log(`  ✅ Character buffer: ${!!characterImageBuffer} (${characterImageBuffer?.length} bytes)`);
-    console.log(`  ✅ Product buffer: ${!!productImageBuffer} (${productImageBuffer?.length} bytes)`);
-    console.log(`  ✅ Character path: ${characterImagePath}`);
-    console.log(`  ✅ Product path: ${productImagePath}`);
-    
-    if (!analysis) {
-      throw new Error('Step 1 analysis is missing');
-    }
-
-    if (!characterImageBuffer || !productImageBuffer) {
-      throw new Error('Image buffers from Step 1 are missing');
-    }
-
-    await logger.info(`Step 1 validation successful`, 'step-2-validation', {
-      analysis_keys: Object.keys(analysis),
-      buffer_sizes: { character: characterImageBuffer.length, product: productImageBuffer.length }
-    });
-
-    const {
-      videoDuration = 20,
-      aspectRatio = '9:16',
-      negativePrompt = '',
-      useShortPrompt = false,
-      productFocus: requestedProductFocus = 'full-outfit',
-      scene = '',
-      lighting = 'soft-diffused',
-      mood = 'confident',
-      style = 'minimalist',
-      colorPalette = 'neutral',
-      cameraAngle = 'eye-level',
-      hairstyle = '',
-      makeup = '',
-      bottoms = '',
-      shoes = '',
-      accessories = [],
-      outerwear = '',
-      language = 'vi',
-      characterName = '',
-      characterAlias = '',
-      characterDisplayName = '',
-      sceneOverridePrompt = '',
-      sceneLockOverridePrompt = ''
-    } = req.body;
-
-    const shouldUseShortPrompt = typeof useShortPrompt === 'string'
-      ? useShortPrompt.toLowerCase() === 'true'
-      : Boolean(useShortPrompt);
-    const normalizedLanguage = (language || 'vi').split('-')[0].split('_')[0].toLowerCase();
-    const normalizedAccessories = Array.isArray(accessories)
-      ? accessories.filter(Boolean)
-      : (typeof accessories === 'string' ? accessories.split(',').map(item => item.trim()).filter(Boolean) : []);
-    const tempDir = path.join(process.cwd(), 'temp', 'step-2-generate-images', flowId);
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    const selectedOptions = {
-      scene,
-      lighting,
-      mood,
-      style,
-      colorPalette,
-      cameraAngle,
-      hairstyle,
-      makeup,
-      bottoms,
-      shoes,
-      accessories: normalizedAccessories,
-      outerwear,
-      negativePrompt,
-      aspectRatio,
-      language: normalizedLanguage,
-      characterName,
-      characterAlias,
-      characterDisplayName: characterDisplayName || characterName,
-      sceneOverridePrompt,
-      sceneLockOverridePrompt
-    };
-
-    let sceneReferenceInfo = { prompt: '', imageUrl: null, hasImage: false };
-    let sceneImagePath = null;
-    if (scene) {
-      try {
-        sceneReferenceInfo = await getSceneReferenceInfo(scene, selectedOptions, normalizedLanguage);
-
-        const sceneImageUrl = typeof sceneReferenceInfo?.imageUrl === 'string'
-          ? sceneReferenceInfo.imageUrl.trim()
-          : '';
-        if (sceneImageUrl) {
-          if (/^https?:\/\//i.test(sceneImageUrl)) {
-            const response = await fetch(sceneImageUrl);
-            if (response.ok) {
-              const sceneBuffer = Buffer.from(await response.arrayBuffer());
-              const sceneExt = path.extname(new URL(sceneImageUrl).pathname) || '.jpg';
-              sceneImagePath = path.join(tempDir, `scene-reference${sceneExt}`);
-              fs.writeFileSync(sceneImagePath, sceneBuffer);
-            }
-          } else {
-            const normalizedRelative = sceneImageUrl.replace(/^\/+/, '');
-            const candidatePaths = [
-              path.resolve(process.cwd(), normalizedRelative),
-              path.resolve(process.cwd(), '..', normalizedRelative),
-              path.resolve(process.cwd(), '..', 'frontend', 'public', normalizedRelative)
-            ];
-            const localScenePath = candidatePaths.find(p => fs.existsSync(p));
-            if (localScenePath) {
-              const sceneExt = path.extname(localScenePath) || '.jpg';
-              sceneImagePath = path.join(tempDir, `scene-reference${sceneExt}`);
-              fs.copyFileSync(localScenePath, sceneImagePath);
-            }
-          }
-        }
-      } catch (sceneError) {
-        console.warn(`⚠️ Could not resolve scene reference for ${scene}: ${sceneError.message}`);
-        await logger.warn(`Scene reference skipped: ${sceneError.message}`, 'step-2-scene-reference');
-      }
-    }
-
-    // 💡 REUSE: Use GoogleFlowAutomationService for image generation
-    const imageGenService = new GoogleFlowAutomationService({
-      type: 'image',
-      aspectRatio,
-      imageCount: 2,
-      headless: true
-    });
-
-    console.log('📝 Building prompts from analysis with buildDetailedPrompt...');
-    
-    // Build prompts using buildDetailedPrompt for proper Vietnamese support
-    // (same method used in executeAffiliateVideoTikTokFlow)
-    
-    // Prepare base options for prompt building
-    const baseOptions = {
-      ...selectedOptions,
-      language: normalizedLanguage,
-      detailLevel: 'detailed'
-    };
-    
-    // Determine product focus from analysis / caller
-    const productFocus = requestedProductFocus || analysis.product?.focus || 'full-outfit';
-    
-    // Generate both prompts in parallel
-    console.log('  📝 Building WEARING prompt (character wearing product)...');
-    const wearingPromptData = await buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'change-clothes',
-      productFocus,
-      normalizedLanguage,
-      { useShortPrompt: shouldUseShortPrompt }
-    );
-    const wearingPrompt = wearingPromptData.prompt;
-    
-    console.log('  📝 Building HOLDING prompt (character holding product)...');
-    const holdingPromptData = await buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'character-holding-product',
-      productFocus,
-      normalizedLanguage,
-      { useShortPrompt: shouldUseShortPrompt }
-    );
-    const holdingPrompt = holdingPromptData.prompt;
-
-    console.log(`📝 Prompts built from analysis`);
-    console.log(`  Wearing: ${wearingPrompt?.substring(0, 100) || 'N/A'}...`);
-    console.log(`  Holding: ${holdingPrompt?.substring(0, 100) || 'N/A'}...`);
-
-    // Generate both images using generateMultiple
-    console.log(`🎨 Generating both images in parallel...`);
-    
-    // Validate prompts before passing to generateMultiple
-    if (!wearingPrompt || typeof wearingPrompt !== 'string' || wearingPrompt.trim().length === 0) {
-      throw new Error(`Invalid wearing prompt: ${typeof wearingPrompt}`);
-    }
-    if (!holdingPrompt || typeof holdingPrompt !== 'string' || holdingPrompt.trim().length === 0) {
-      throw new Error(`Invalid holding prompt: ${typeof holdingPrompt}`);
-    }
-    
-    let multiGenResult;
-    try {
-      multiGenResult = await imageGenService.generateMultiple(
-        characterImagePath,
-        productImagePath,
-        [wearingPrompt, holdingPrompt],
-        {
-          sceneImagePath,
-          sceneLockedPrompt: sceneReferenceInfo?.prompt || null,
-          sceneName: scene || null
-        }
-      );
-    } catch (genMultiError) {
-      console.error('❌ generateMultiple threw error:', genMultiError.message);
-      multiGenResult = {
-        success: false,
-        error: genMultiError.message,
-        results: []
-      };
-    }
-
-    console.log(`📊 Multi-generation result:`, {
-      success: multiGenResult?.success,
-      resultsType: typeof multiGenResult?.results,
-      resultsLength: multiGenResult?.results?.length,
-      error: multiGenResult?.error
-    });
-
-    if (!multiGenResult || typeof multiGenResult !== 'object' || !Array.isArray(multiGenResult?.results) || (multiGenResult?.results?.length || 0) < 2) {
-      const errorMsg = multiGenResult?.error || 'Image generation failed - no results produced';
-      throw new Error(errorMsg);
-    }
-
-    const wearingResult = multiGenResult.results[0];
-    const holdingResult = multiGenResult.results[1];
-
-    if (!wearingResult?.success) {
-      throw new Error(`Wearing image generation failed: ${wearingResult?.error}`);
-    }
-
-    console.log(`✅ Wearing image generated: ${wearingResult.imageUrl}`);
-
-    if (!holdingResult?.success) {
-      throw new Error(`Holding image generation failed: ${holdingResult?.error}`);
-    }
-
-    console.log(`✅ Holding image generated: ${holdingResult.imageUrl}`);
-
-    // ========== UPLOAD TO GOOGLE DRIVE ==========
-    console.log(`\n📤 Uploading generated images to Google Drive...`);
-    let wearingImageDriveUrl = null;
-    let holdingImageDriveUrl = null;
-
-    try {
-      const driveService = new GoogleDriveOAuthService();
-      
-      const wearingFilePath = wearingResult.screenshotPath || wearingResult.imageUrl;
-      const holdingFilePath = holdingResult.screenshotPath || holdingResult.imageUrl;
-
-      // Upload wearing image
-      console.log(`  📤 Uploading wearing image...`);
-      const wearingUploadResult = await driveService.uploadFile(
-        wearingFilePath,
-        `wearing-${flowId}-${Date.now()}.jpg`,
-        {
-          description: `Affiliate TikTok - Character Wearing Product [${flowId}]`,
-          properties: {
-            flowId: flowId,
-            type: 'wearing'
-          }
-        }
-      );
-      wearingImageDriveUrl = wearingUploadResult.webViewLink;
-      console.log(`  ✅ Wearing image uploaded: ${wearingImageDriveUrl}`);
-
-      // Upload holding image
-      console.log(`  📤 Uploading holding image...`);
-      const holdingUploadResult = await driveService.uploadFile(
-        holdingFilePath,
-        `holding-${flowId}-${Date.now()}.jpg`,
-        {
-          description: `Affiliate TikTok - Character Holding Product [${flowId}]`,
-          properties: {
-            flowId: flowId,
-            type: 'holding'
-          }
-        }
-      );
-      holdingImageDriveUrl = holdingUploadResult.webViewLink;
-      console.log(`  ✅ Holding image uploaded: ${holdingImageDriveUrl}`);
-
-      await logger.info(`Images uploaded to Google Drive`, 'step-2-drive-upload', {
-        wearing_url: wearingImageDriveUrl,
-        holding_url: holdingImageDriveUrl
+    if (flowState.step2?.status === 'completed') {
+      return res.json({
+        success: true,
+        flowId,
+        step: 2,
+        queued: false,
+        ...buildStep2Payload(flowState)
       });
-    } catch (driveError) {
-      console.warn(`⚠️  Google Drive upload failed: ${driveError.message}`);
-      console.warn('   Continuing without Google Drive upload...');
-      await logger.warn(`Google Drive upload skipped: ${driveError.message}`, 'step-2-drive-upload');
-      // Continue without Drive upload - not critical
     }
 
-    const step2Duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    if (step2Jobs.has(flowId) || flowState.step2?.status === 'processing') {
+      return res.status(202).json({
+        success: true,
+        flowId,
+        step: 2,
+        queued: true,
+        status: flowState.step2?.status || 'processing',
+        ...buildStep2Payload(flowState)
+      });
+    }
 
-    // Update flow state - INCLUDE productImagePath for Step 3/4
-    flowStates.set(flowId, {
-      ...flowState,
-      step2: {
-        wearingImagePath: wearingResult.screenshotPath || wearingResult.imageUrl,
-        holdingImagePath: holdingResult.screenshotPath || holdingResult.imageUrl,
-        wearingImageDriveUrl: wearingImageDriveUrl,
-        holdingImageDriveUrl: holdingImageDriveUrl,
-        wearingPrompt,
-        holdingPrompt,
-        promptLanguage: normalizedLanguage,
-        selectedOptions: baseOptions,
-        productImagePath: productImagePath,  // Keep for Step 3/4
-        duration: parseFloat(step2Duration)
-      }
-    });
+    const jobPromise = runStep2FrameGenerationJob(flowId, req.body);
+    step2Jobs.set(flowId, jobPromise);
 
-    // Log
-    await logger.info(`Step 2 image generation complete`, 'step-2-complete', {
-      wearing: wearingResult.screenshotPath || wearingResult.imageUrl,
-      holding: holdingResult.screenshotPath || holdingResult.imageUrl,
-      wearing_drive_url: wearingImageDriveUrl,
-      holding_drive_url: holdingImageDriveUrl,
-      duration: parseFloat(step2Duration)
-    });
-
-    console.log(`✅ STEP 2 COMPLETE in ${step2Duration}s`);
-
-    res.json({
+    const queuedState = flowStates.get(flowId) || flowState;
+    return res.status(202).json({
       success: true,
       flowId,
       step: 2,
-      wearingImage: wearingResult.screenshotPath || wearingResult.imageUrl,
-      holdingImage: holdingResult.screenshotPath || holdingResult.imageUrl,
-      wearingImageDriveUrl: wearingImageDriveUrl,
-      holdingImageDriveUrl: holdingImageDriveUrl,
-      step_duration: parseFloat(step2Duration)
+      queued: true,
+      status: 'processing',
+      message: 'Step 2 started in background. Poll /status/:flowId for progress.',
+      ...buildStep2Payload(queuedState)
     });
-
   } catch (error) {
-    const step2Duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.error(`\n❌ STEP 2 ERROR [${flowId}] after ${step2Duration}s:`, error.message);
-    console.error(`   Stack:`, error.stack);
-    
-    if (logger) {
-      await logger.error(`Step 2 failed: ${error.message}`, 'step-2-error', { 
-        stack: error.stack,
-        duration: parseFloat(step2Duration)
-      });
-      await logger.endStage('step-2-generate-images', false);
-    }
-    
+    console.error(`
+? STEP 2 QUEUE ERROR [${flowId}]:`, error.message);
     res.status(500).json({
       success: false,
       flowId,
       step: 2,
       error: error.message,
-      stage: 'image-generation',
-      duration: parseFloat(step2Duration)
+      stage: 'frame-generation'
     });
   }
 });
-
 /**
- * 🟡 STEP 3: DEEP ANALYSIS
+ * ???? STEP 3: DEEP ANALYSIS
  * POST /api/ai/affiliate-video-tiktok/step-3-deep-analysis
  * 
- * Input: wearingImage, holdingImage, analysis, flowId
+ * Input: frameLibrary, analysis, flowId
  * Output: { success, videoScripts, metadata, hashtags, flowId, step_duration }
  */
 router.post('/step-3-deep-analysis', async (req, res) => {
@@ -728,155 +643,132 @@ router.post('/step-3-deep-analysis', async (req, res) => {
   let logger = null;
 
   try {
-    console.log(`\n🟡 STEP 3: DEEP ANALYSIS [${flowId}]`);
-    
+    console.log(`
+?? STEP 3: DEEP ANALYSIS [${flowId}]`);
+
     if (!flowId) throw new Error('flowId is required');
 
     logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-3-deep-analysis');
-    await logger.info('Starting Step 3: Deep Analysis', 'step-3-init');
+    await logger.info('Starting Step 3: Segment Planning', 'step-3-init');
 
-    // Get flow state from previous steps
     const flowState = flowStates.get(flowId);
     if (!flowState?.step2 || !flowState?.step1) {
       throw new Error('Previous steps not found. Please run Steps 1 and 2 first.');
     }
 
-    const { analysis } = flowState.step1;
-    const { wearingImagePath, holdingImagePath, productImagePath } = flowState.step2;
-    const { videoDuration = 20, productFocus = 'full-outfit', language = 'vi' } = req.body;
+    const { analysis, storyboardBlueprint } = flowState.step1;
+    const { frameLibrary, productImagePath, promptLanguage } = flowState.step2;
+    const { productFocus = 'full-outfit', language = promptLanguage || 'vi' } = req.body;
+    const normalizedLanguage = (language || promptLanguage || 'vi').split('-')[0].split('_')[0].toLowerCase();
 
-    console.log(`📸 Using images from Step 2:`);
-    console.log(`   Wearing: ${wearingImagePath}`);
-    console.log(`   Holding: ${holdingImagePath}`);
-    console.log(`   Product: ${productImagePath}`);
-
-    if (!productImagePath) {
-      throw new Error('Product image path is missing from Step 2. Please complete Step 2 again.');
+    if (!Array.isArray(frameLibrary) || frameLibrary.length === 0) {
+      throw new Error('Frame library is missing from Step 2.');
     }
 
-    // 💡 REUSE: Build deep analysis prompt with language support
-    console.log(`\n📝 Building deep analysis prompt (language: ${language})...`);
-    let deepAnalysisPrompt;
-    
-    const normalizedLanguage = (language || 'vi').split('-')[0].split('_')[0].toLowerCase();
-    
-    if (normalizedLanguage === 'vi') {
-      console.log(`   Using Vietnamese prompt builder...`);
-      deepAnalysisPrompt = VietnamesePromptBuilder.buildDeepAnalysisPrompt(
-        productFocus,
-        { videoDuration, voiceGender: 'female', voicePace: 'fast' }
-      );
-    } else {
-      console.log(`   Using English prompt builder...`);
-      deepAnalysisPrompt = affiliateVideoTikTokService.buildDeepAnalysisPrompt(
-        analysis,
-        productFocus
-      );
-    }
+    const plannerPrompt = buildSegmentPlanningPrompt({
+      analysis,
+      blueprint: storyboardBlueprint,
+      frameLibrary,
+      productFocus,
+      language: normalizedLanguage
+    });
 
-    console.log(`🤖 Analyzing 3 images for video script generation...`);
-    
-    // Use ChatGPT Service for deep analysis with ALL 3 images
     const chatGPTService = new ChatGPTService({ debug: false });
     await chatGPTService.initialize();
-    
-    const deepAnalysisResult = await chatGPTService.analyzeMultipleImages(
-      [wearingImagePath, holdingImagePath, productImagePath],
-      deepAnalysisPrompt
-    );
-    
-    await chatGPTService.close();
 
-    // Parse deep analysis result
-    let deepAnalysis = null;
-    if (deepAnalysisResult && deepAnalysisResult.success) {
-      try {
-        if (typeof deepAnalysisResult.data === 'string') {
-          deepAnalysis = JSON.parse(deepAnalysisResult.data);
-        } else {
-          deepAnalysis = deepAnalysisResult.data;
-        }
-      } catch (parseError) {
-        console.warn('⚠️ Could not parse deep analysis as JSON');
-        deepAnalysis = deepAnalysisResult.data || deepAnalysisResult;
-      }
+    let plannerResult = null;
+    try {
+      plannerResult = await chatGPTService.analyzeMultipleImages(
+        [...frameLibrary.map((frame) => frame.imagePath), productImagePath].filter(Boolean),
+        plannerPrompt
+      );
+    } finally {
+      await chatGPTService.close();
     }
 
-    if (!deepAnalysis) {
-      throw new Error('Deep analysis failed');
-    }
+    const parsedPlan = parseSegmentPlanningResponse(plannerResult, {
+      analysis,
+      blueprint: storyboardBlueprint,
+      frameLibrary,
+      productFocus,
+      language: normalizedLanguage
+    });
 
-    // Extract scripts, metadata, hashtags
-    const videoScripts = deepAnalysis.data?.videoScripts || [];
-    const metadata = deepAnalysis.data?.metadata || {};
-    const hashtags = deepAnalysis.data?.hashtags || [];
+    const segmentPlan = (parsedPlan.segments || []).map((segment, index) => ({
+      segmentIndex: segment.segmentIndex || index + 1,
+      segmentName: segment.segmentName || storyboardBlueprint.segments?.[index]?.segmentName || ('segment-' + (index + 1)),
+      durationSec: Number(segment.durationSec) || storyboardBlueprint.segments?.[index]?.durationSec || 6,
+      startFrameKey: segment.startFrameKey || storyboardBlueprint.segments?.[index]?.startFrameKey,
+      endFrameKey: segment.endFrameKey || storyboardBlueprint.segments?.[index]?.endFrameKey,
+      videoPrompt: segment.videoPrompt || segment.script || '',
+      voiceoverText: segment.voiceoverText || '',
+      continuityTargetForNextSegment: segment.continuityTargetForNextSegment || null
+    }));
 
     const step3Duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    const voiceoverScript = parsedPlan.voiceoverScript || segmentPlan.map((segment) => segment.voiceoverText).join(' ');
+    const hashtags = Array.isArray(parsedPlan.hashtags) ? parsedPlan.hashtags : [];
 
-    // Update flow state - INCLUDE images for Step 4
     flowStates.set(flowId, {
       ...flowState,
       step3: {
-        videoScripts,
-        metadata,
+        storyboardBlueprint,
+        frameLibrary,
+        segmentPlan,
+        videoScripts: segmentPlan,
+        metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
         hashtags,
-        deepAnalysisPrompt,
-        deepAnalysis,
-        wearingImagePath,      // For Step 4
-        holdingImagePath,      // For Step 4
-        productImagePath,      // For Step 4
-        language: normalizedLanguage,  // Log which language was used
+        voiceoverScript,
+        deepAnalysisPrompt: plannerPrompt,
+        deepAnalysis: parsedPlan,
+        productImagePath,
+        language: normalizedLanguage,
         duration: parseFloat(step3Duration)
-      }
+      },
+      status: 'step3-complete'
     });
 
-    // Log
-    await logger.info(`Step 3 deep analysis complete`, 'step-3-complete', {
-      scripts_count: videoScripts.length,
-      hashtags_count: hashtags.length,
-      language: normalizedLanguage,
+    await logger.info('Step 3 segment planning complete', 'step-3-complete', {
+      segments: segmentPlan.length,
+      hashtags: hashtags.length,
       duration: parseFloat(step3Duration)
     });
-
-    console.log(`✅ STEP 3 COMPLETE in ${step3Duration}s`);
-    console.log(`   Scripts: ${videoScripts.length}`);
-    console.log(`   Hashtags: ${hashtags.length}`);
 
     res.json({
       success: true,
       flowId,
       step: 3,
-      videoScripts,
-      metadata,
+      storyboardBlueprint,
+      segmentPlan,
+      videoScripts: segmentPlan,
+      metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
+      voiceoverScript,
       hashtags,
       step_duration: parseFloat(step3Duration)
     });
-
   } catch (error) {
-    console.error(`❌ STEP 3 ERROR [${flowId}]:`, error.message);
+    console.error(`? STEP 3 ERROR [${flowId}]:`, error.message);
     if (logger) {
-      await logger.error(error.message, 'step-3-error', { 
-        stack: error.stack 
-      });
+      await logger.error(error.message, 'step-3-error', { stack: error.stack });
     }
-    
+
     res.status(500).json({
       success: false,
       flowId,
       step: 3,
       error: error.message,
-      stage: 'deep-analysis'
+      stage: 'segment-planning'
     });
   }
 });
 
 /**
- * 🔴 STEP 4: GENERATE VIDEO
+ * ???? STEP 4: GENERATE VIDEO
  * POST /api/ai/affiliate-video-tiktok/step-4-generate-video
  * 
- * Input: wearingImage, holdingImage, videoScripts, duration, flowId
+ * Input: segmentPlan, duration, flowId
  * Output: { success, videoPath, flowId, step_duration }
  */
 router.post('/step-4-generate-video', async (req, res) => {
@@ -885,104 +777,143 @@ router.post('/step-4-generate-video', async (req, res) => {
   let logger = null;
 
   try {
-    console.log(`\n🔴 STEP 4: GENERATE VIDEO [${flowId}]`);
-    
+    console.log(`
+?? STEP 4: GENERATE VIDEO [${flowId}]`);
+
     if (!flowId) throw new Error('flowId is required');
 
     logger = new SessionLogService(flowId, 'affiliate-tiktok');
     await logger.init();
     await logger.startStage('step-4-generate-video');
-    await logger.info('Starting Step 4: Video Generation', 'step-4-init');
+    await logger.info('Starting Step 4: Sequential Frames Video Generation', 'step-4-init');
 
-    // Get flow state
     const flowState = flowStates.get(flowId);
     if (!flowState?.step3 || !flowState?.step2) {
       throw new Error('Previous steps not found. Please run Steps 1-3 first.');
     }
 
-    const { wearingImagePath, holdingImagePath, productImagePath } = flowState.step3;
-    const { videoScripts, language } = flowState.step3;
+    const { segmentPlan, frameLibrary } = flowState.step3;
     const { videoDuration = 20, aspectRatio = '9:16' } = req.body;
 
-    console.log(`📸 Using images from Step 3:`);
-    console.log(`   Wearing: ${wearingImagePath}`);
-    console.log(`   Holding: ${holdingImagePath}`);
-    console.log(`   Product: ${productImagePath}`);
-    console.log(`   Scripts count: ${videoScripts.length}`);
-    console.log(`   Language: ${language}`);
-
-    if (!wearingImagePath || !holdingImagePath || !productImagePath) {
-      throw new Error('Required image paths missing from Step 3. Images: wearing=' + !!wearingImagePath + ', holding=' + !!holdingImagePath + ', product=' + !!productImagePath);
+    if (!Array.isArray(segmentPlan) || segmentPlan.length === 0) {
+      throw new Error('No segment plan available from Step 3');
     }
 
-    if (!videoScripts || videoScripts.length === 0) {
-      throw new Error('No video scripts available from Step 3');
+    const tempVideoDir = path.join(process.cwd(), 'temp', 'step-4-generate-video', flowId);
+    if (!fs.existsSync(tempVideoDir)) {
+      fs.mkdirSync(tempVideoDir, { recursive: true });
     }
 
-    console.log(`🎬 Generating video with ${videoScripts.length} segments...`);
+    const ffmpegReady = await isFfmpegAvailable();
+    const segmentVideos = [];
+    let chainedStartFramePath = null;
 
-    // 💡 REUSE: Use MultiVideoGenerationService
-    const videoGenService = new MultiVideoGenerationService();
+    for (const segment of segmentPlan) {
+      const startFramePath = chainedStartFramePath || resolveFramePath(frameLibrary, segment.startFrameKey);
+      const endFramePath = resolveFramePath(frameLibrary, segment.endFrameKey);
 
-    const videoGenResult = await videoGenService.generateMultiVideoSequence({
-      sessionId: flowId,
-      useCase: 'affiliate-video-tiktok',
-      duration: videoDuration,
-      refImage: wearingImagePath,
-      analysis: {
-        scripts: videoScripts,
-        characterImage: wearingImagePath,
-        holdingImage: holdingImagePath,
-        productImage: productImagePath
-      },
-      quality: 'high',
-      aspectRatio,
-      language: language || 'vi'
-    });
+      if (!startFramePath || !endFramePath) {
+        throw new Error(`Missing frame path for segment ${segment.segmentIndex}: start=${segment.startFrameKey}, end=${segment.endFrameKey}`);
+      }
 
-    if (!videoGenResult?.success || !videoGenResult?.videos?.[0]) {
-      throw new Error(`Video generation failed: ${videoGenResult?.error}`);
+      const videoGenService = new GoogleFlowAutomationService({
+        type: 'video',
+        aspectRatio,
+        videoCount: 1,
+        headless: false,
+        outputDir: tempVideoDir,
+        videoReferenceType: 'frames',
+        timeouts: { generation: Math.max(300000, (Number(videoDuration) + 60) * 1000) }
+      });
+
+      const videoResult = await videoGenService.generateVideo(
+        segment.videoPrompt,
+        startFramePath,
+        endFramePath,
+        { download: true, reloadAfter: false }
+      );
+
+      if (!videoResult?.success || !videoResult?.path) {
+        throw new Error(`Segment ${segment.segmentIndex} generation failed: ${videoResult?.error || 'unknown error'}`);
+      }
+
+      const extractedFramePath = await extractLastFrame(
+        videoResult.path,
+        path.join(tempVideoDir, 'segment-' + segment.segmentIndex + '-last-frame.jpg')
+      );
+
+      segmentVideos.push({
+        segmentIndex: segment.segmentIndex,
+        segmentName: segment.segmentName,
+        startFramePath,
+        endFramePath,
+        chainedStartFrameUsed: Boolean(chainedStartFramePath),
+        continuityFrameExtracted: extractedFramePath,
+        ffmpegFrameExtractionAvailable: ffmpegReady,
+        path: videoResult.path,
+        metadata: videoResult
+      });
+
+      chainedStartFramePath = extractedFramePath || endFramePath;
     }
 
-    const videoPath = videoGenResult.videos[0].path;
-    console.log(`✅ Video generated: ${videoPath}`);
+    const stitchedVideoPath = await concatenateVideos(
+      segmentVideos.map((segment) => segment.path),
+      path.join(tempVideoDir, 'stitched-' + flowId + '.mp4')
+    );
+    const assemblyStatus = stitchedVideoPath
+      ? 'stitched'
+      : segmentVideos.length > 1
+        ? 'segments-only'
+        : 'single-segment';
+    const primaryVideoPath = stitchedVideoPath || segmentVideos[0]?.path || null;
 
     const step4Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // Update flow state
     flowStates.set(flowId, {
       ...flowState,
       step4: {
-        videoPath,
-        videoMetadata: videoGenResult.videos[0],
+        videoPath: primaryVideoPath,
+        stitchedVideoPath: stitchedVideoPath || null,
+        segmentVideos,
+        videoMetadata: {
+          segmentCount: segmentVideos.length,
+          ffmpegFrameExtractionAvailable: ffmpegReady,
+          sequentialFramesMode: true,
+          assemblyStatus,
+          requiresAssembly: assemblyStatus === 'segments-only',
+          ffmpegStitchingAvailable: Boolean(stitchedVideoPath) || segmentVideos.length <= 1
+        },
         duration: parseFloat(step4Duration)
-      }
+      },
+      status: 'step4-complete'
     });
 
-    // Log
-    await logger.info(`Step 4 video generation complete`, 'step-4-complete', {
-      video_path: videoPath,
+    await logger.info('Step 4 sequential video generation complete', 'step-4-complete', {
+      segments: segmentVideos.length,
+      stitchedVideoPath: stitchedVideoPath || null,
+      assemblyStatus,
       duration: parseFloat(step4Duration)
     });
-
-    console.log(`✅ STEP 4 COMPLETE in ${step4Duration}s`);
 
     res.json({
       success: true,
       flowId,
       step: 4,
-      videoPath,
+      videoPath: primaryVideoPath,
+      segmentVideos,
+      stitchedVideoPath: stitchedVideoPath || null,
+      assemblyStatus,
+      requiresAssembly: assemblyStatus === 'segments-only',
       step_duration: parseFloat(step4Duration)
     });
-
   } catch (error) {
-    console.error(`❌ STEP 4 ERROR [${flowId}]:`, error.message);
+
+    console.error(`? STEP 4 ERROR [${flowId}]:`, error.message);
     if (logger) {
-      await logger.error(error.message, 'step-4-error', { 
-        stack: error.stack 
-      });
+      await logger.error(error.message, 'step-4-error', { stack: error.stack });
     }
-    
+
     res.status(500).json({
       success: false,
       flowId,
@@ -994,7 +925,7 @@ router.post('/step-4-generate-video', async (req, res) => {
 });
 
 /**
- * 🔵 STEP 5: GENERATE VOICEOVER
+ * ???? STEP 5: GENERATE VOICEOVER
  * POST /api/ai/affiliate-video-tiktok/step-5-generate-voiceover
  * 
  * Input: voiceoverScript, voiceGender, voicePace, flowId
@@ -1021,16 +952,15 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
       throw new Error('Step 3 analysis not found. Please run Steps 1-3 first.');
     }
 
-    const { videoScripts, metadata, language: step3Language } = flowState.step3;
+    const { videoScripts, metadata, language: step3Language, voiceoverScript } = flowState.step3;
     const { voiceGender = 'female', voicePace = 'fast', language = step3Language || 'vi' } = req.body;
 
-    if (!videoScripts || videoScripts.length === 0) {
-      throw new Error('No video scripts available for voiceover generation');
+    if ((!videoScripts || videoScripts.length === 0) && !voiceoverScript) {
+      throw new Error('No video scripts or voiceover script available for voiceover generation');
     }
 
-    // Build voiceover script from video scripts
-    const voiceoverText = videoScripts
-      .map(script => typeof script === 'object' ? script.text || script.script : script)
+    const voiceoverText = voiceoverScript || videoScripts
+      .map(script => typeof script === 'object' ? script.voiceoverText || script.text || script.script || script.videoPrompt : script)
       .join(' ');
 
     console.log(`🎤 Generating voiceover`);
@@ -1215,15 +1145,24 @@ router.post('/step-6-finalize', async (req, res) => {
           generated: true,
           driveUrl: step2.holdingImageDriveUrl,
           method: 'google-flow'
-        }
+        },
+        frameLibrary: (step2.frameLibrary || []).map((frame) => ({
+          key: frame.frameKey,
+          path: frame.imagePath,
+          segmentIndex: frame.segmentIndex,
+          role: frame.role
+        }))
       },
       analysis: {
         character: step1?.analysis?.character,
         product: step1?.analysis?.product,
         videoScripts: step3.videoScripts,
+        segmentPlan: step3.segmentPlan || step3.videoScripts,
         metadata: step3.metadata,
-        hashtags: step3.hashtags
-      }
+        hashtags: step3.hashtags,
+        voiceoverScript: step3.voiceoverScript || null
+      },
+      videoSegments: step4.segmentVideos || []
     };
 
     console.log(`📦 Final package prepared successfully`);
@@ -1421,6 +1360,27 @@ router.get('/status/:flowId', (req, res) => {
     };
   };
 
+  const frameLibraryPreviews = (flowState.step2?.frameLibrary || []).map((frame) => buildMediaPreview(frame.imagePath, {
+    kind: 'frame',
+    frameKey: frame.frameKey,
+    segmentIndex: frame.segmentIndex,
+    segmentName: frame.segmentName,
+    role: frame.role,
+    purpose: frame.purpose,
+    focus: frame.focus,
+    href: frame.href || null
+  }));
+  const segmentVideoPreviews = (flowState.step4?.segmentVideos || []).map((segment) => buildMediaPreview(segment.path, {
+    kind: 'segment-video',
+    segmentIndex: segment.segmentIndex,
+    segmentName: segment.segmentName,
+    startFramePath: segment.startFramePath,
+    endFramePath: segment.endFramePath,
+    chainedStartFrameUsed: segment.chainedStartFrameUsed,
+    continuityFrameExtracted: segment.continuityFrameExtracted,
+    ffmpegFrameExtractionAvailable: segment.ffmpegFrameExtractionAvailable
+  }));
+
   res.json({
     success: true,
     flowId,
@@ -1431,13 +1391,16 @@ router.get('/status/:flowId', (req, res) => {
         completed: !!flowState.step1,
         analysis: flowState.step1?.analysis,
         analysisText: flowState.step1?.analysisText,
+        storyboardBlueprint: flowState.step1?.storyboardBlueprint || null,
         selectedCharacter: flowState.step1?.selectedCharacter,
         characterImage: buildMediaPreview(flowState.step1?.characterImagePath, { kind: 'character' }),
         productImage: buildMediaPreview(flowState.step1?.productImagePath, { kind: 'product' }),
         duration: flowState.step1?.duration
       },
       step2: {
-        completed: !!flowState.step2,
+        completed: flowState.step2?.status === 'completed',
+        storyboardBlueprint: flowState.step2?.storyboardBlueprint || null,
+        framePlan: flowState.step2?.framePlan || [],
         prompts: {
           language: flowState.step2?.promptLanguage || null,
           wearing: flowState.step2?.wearingPrompt || null,
@@ -1456,14 +1419,23 @@ router.get('/status/:flowId', (req, res) => {
             kind: 'holding'
           })
         },
+        frameLibrary: frameLibraryPreviews,
+        status: flowState.step2?.status || null,
+        progress: flowState.step2?.progress || null,
+        error: flowState.step2?.error || null,
+        startedAt: flowState.step2?.startedAt || null,
+        completedAt: flowState.step2?.completedAt || null,
         duration: flowState.step2?.duration
       },
       step3: {
         completed: !!flowState.step3,
+        storyboardBlueprint: flowState.step3?.storyboardBlueprint || null,
         deepAnalysisPrompt: flowState.step3?.deepAnalysisPrompt || null,
         scripts: flowState.step3?.videoScripts || [],
+        segmentPlan: flowState.step3?.segmentPlan || flowState.step3?.videoScripts || [],
         metadata: flowState.step3?.metadata || {},
         hashtags: flowState.step3?.hashtags || [],
+        voiceoverScript: flowState.step3?.voiceoverScript || '',
         language: flowState.step3?.language || null,
         duration: flowState.step3?.duration
       },
@@ -1473,6 +1445,11 @@ router.get('/status/:flowId', (req, res) => {
           ...(flowState.step4?.videoMetadata || {}),
           kind: 'video'
         }),
+        stitchedVideo: buildMediaPreview(flowState.step4?.stitchedVideoPath, {
+          ...(flowState.step4?.videoMetadata || {}),
+          kind: 'stitched-video'
+        }),
+        segmentVideos: segmentVideoPreviews,
         duration: flowState.step4?.duration
       },
       step5: {
@@ -1497,23 +1474,6 @@ router.get('/status/:flowId', (req, res) => {
   });
 });
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-function formatBytes(bytes) {
-  if (!bytes || Number.isNaN(bytes)) return null;
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return unitIndex === 0
-    ? String(Math.round(value)) + ' ' + units[unitIndex]
-    : value.toFixed(value >= 10 ? 1 : 2) + ' ' + units[unitIndex];
-}
 /**
  * Map voice gender and pace to TTS voice name
  */
@@ -1532,3 +1492,5 @@ function mapVoiceSettings(gender, pace) {
 }
 
 export default router;
+
+

@@ -7,13 +7,6 @@ import { api } from './api';
 
 const BASE_URL = '/prompt-templates';
 
-// ============================================================
-// GET ENDPOINTS
-// ============================================================
-
-/**
- * Get all templates with optional filtering
- */
 export async function getAllTemplates(filters = {}) {
   try {
     const params = new URLSearchParams();
@@ -25,265 +18,227 @@ export async function getAllTemplates(filters = {}) {
 
     const queryString = params.toString();
     const url = queryString ? `${BASE_URL}?${queryString}` : BASE_URL;
-    const response = await api.get(url);
-    return response.data;
+    return await api.get(url);
   } catch (error) {
     console.error('Error fetching templates:', error);
     throw error;
   }
 }
 
-/**
- * Get templates for specific use case
- */
+export async function getTemplateMetadata() {
+  try {
+    return await api.get(`${BASE_URL}/metadata`);
+  } catch (error) {
+    console.error('Error fetching prompt template metadata:', error);
+    throw error;
+  }
+}
+
 export async function getTemplatesByUseCase(useCase) {
   try {
-    const response = await api.get(`${BASE_URL}/usecase/${useCase}`);
-    return response.data;
+    return await api.get(`${BASE_URL}/usecase/${useCase}`);
   } catch (error) {
     console.error(`Error fetching templates for ${useCase}:`, error);
     throw error;
   }
 }
 
-/**
- * Get core templates
- */
 export async function getCoreTemplates() {
   try {
-    const response = await api.get(`${BASE_URL}/core`);
-    return response.data;
+    return await api.get(`${BASE_URL}/core`);
   } catch (error) {
     console.error('Error fetching core templates:', error);
     throw error;
   }
 }
 
-/**
- * Get templates used in specific page
- */
 export async function getTemplatesByPage(page) {
   try {
-    const response = await api.get(`${BASE_URL}/page/${page}`);
-    return response.data;
+    return await api.get(`${BASE_URL}/page/${page}`);
   } catch (error) {
     console.error(`Error fetching templates for page ${page}:`, error);
     throw error;
   }
 }
 
-/**
- * Get templates for specific page and step
- */
 export async function getTemplatesByPageStep(page, step) {
   try {
-    const response = await api.get(`${BASE_URL}/page/${page}/step/${step}`);
-    return response.data;
+    return await api.get(`${BASE_URL}/page/${page}/step/${step}`);
   } catch (error) {
     console.error(`Error fetching templates for ${page} step ${step}:`, error);
     throw error;
   }
 }
 
-/**
- * Get single template by ID
- */
 export async function getTemplateById(id) {
   try {
-    const response = await api.get(`${BASE_URL}/${id}`);
-    return response.data;
+    return await api.get(`${BASE_URL}/${id}`);
   } catch (error) {
     console.error(`Error fetching template ${id}:`, error);
     throw error;
   }
 }
 
-/**
- * Get all templates (for backward compatibility)
- */
+export async function resolveAssignedTemplate(criteria = {}) {
+  try {
+    const params = new URLSearchParams();
+    Object.entries(criteria).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value);
+      }
+    });
+    const queryString = params.toString();
+    return await api.get(`${BASE_URL}/resolve${queryString ? `?${queryString}` : ''}`);
+  } catch (error) {
+    console.error('Error resolving assigned template:', error);
+    throw error;
+  }
+}
+
 export async function getPromptTemplates(filters = {}) {
   return getAllTemplates(filters);
 }
 
-/**
- * Get template by ID (for backward compatibility)
- */
 export async function getPromptTemplateById(id) {
   return getTemplateById(id);
 }
 
-// ============================================================
-// POST ENDPOINTS
-// ============================================================
-
-/**
- * Create new template
- */
 export async function createTemplate(templateData) {
   try {
-    const response = await api.post(BASE_URL, templateData);
-    return response.data;
+    return await api.post(BASE_URL, templateData);
   } catch (error) {
     console.error('Error creating template:', error);
     throw error;
   }
 }
 
-/**
- * Create template (for backward compatibility)
- */
 export async function createPromptTemplate(templateData) {
   return createTemplate(templateData);
 }
 
-/**
- * Clone template
- */
 export async function cloneTemplate(id, name) {
   try {
-    const response = await api.post(`${BASE_URL}/${id}/clone`, { name });
-    return response.data;
+    return await api.post(`${BASE_URL}/${id}/clone`, { name });
   } catch (error) {
     console.error(`Error cloning template ${id}:`, error);
     throw error;
   }
 }
 
-/**
- * Render template with field values
- */
 export async function renderTemplate(id, fieldValues = {}) {
   try {
-    const response = await api.post(`${BASE_URL}/${id}/render`, {
-      fieldValues
-    });
-    return response.data;
+    return await api.post(`${BASE_URL}/${id}/render`, { fieldValues });
   } catch (error) {
     console.error(`Error rendering template ${id}:`, error);
     throw error;
   }
 }
 
-/**
- * Track template usage
- */
+export async function resolveTemplate(criteria = {}, inputValues = {}, runtimeValues = {}) {
+  try {
+    return await api.post(`${BASE_URL}/resolve`, {
+      criteria,
+      inputValues,
+      runtimeValues
+    });
+  } catch (error) {
+    console.error('Error resolving prompt template:', error);
+    throw error;
+  }
+}
+
 export async function trackTemplateUsage(id) {
   try {
-    const response = await api.post(`${BASE_URL}/${id}/usage`);
-    return response.data;
+    return await api.post(`${BASE_URL}/${id}/usage`);
   } catch (error) {
     console.error(`Error tracking usage for template ${id}:`, error);
     throw error;
   }
 }
 
-// ============================================================
-// PUT ENDPOINTS
-// ============================================================
-
-/**
- * Update template
- */
 export async function updateTemplate(id, templateData) {
   try {
-    const response = await api.put(`${BASE_URL}/${id}`, templateData);
-    return response.data;
+    return await api.put(`${BASE_URL}/${id}`, templateData);
   } catch (error) {
     console.error(`Error updating template ${id}:`, error);
     throw error;
   }
 }
 
-/**
- * Update template (for backward compatibility)
- */
 export async function updatePromptTemplate(id, templateData) {
   return updateTemplate(id, templateData);
 }
 
-/**
- * Update template usage location
- */
 export async function updateUsageLocation(id, { page, step, context, field, action }) {
   try {
-    const response = await api.put(`${BASE_URL}/${id}/usage-location`, {
+    return await api.put(`${BASE_URL}/${id}/usage-location`, {
       page,
       step,
       context,
       field,
       action
     });
-    return response.data;
   } catch (error) {
     console.error(`Error updating usage location for template ${id}:`, error);
     throw error;
   }
 }
 
-// ============================================================
-// DELETE ENDPOINTS
-// ============================================================
+export async function assignTemplate(id, targets = []) {
+  try {
+    return await api.post(`${BASE_URL}/${id}/assign`, { targets });
+  } catch (error) {
+    console.error(`Error assigning template ${id}:`, error);
+    throw error;
+  }
+}
 
-/**
- * Delete template
- */
+export async function unassignTemplate(id, targets = []) {
+  try {
+    return await api.post(`${BASE_URL}/${id}/unassign`, { targets });
+  } catch (error) {
+    console.error(`Error unassigning template ${id}:`, error);
+    throw error;
+  }
+}
+
 export async function deleteTemplate(id) {
   try {
-    const response = await api.delete(`${BASE_URL}/${id}`);
-    return response.data;
+    return await api.delete(`${BASE_URL}/${id}`);
   } catch (error) {
     console.error(`Error deleting template ${id}:`, error);
     throw error;
   }
 }
 
-/**
- * Delete template (for backward compatibility)
- */
 export async function deletePromptTemplate(id) {
   return deleteTemplate(id);
 }
 
-
-/**
- * Scan hardcoded prompts from codebase (preview)
- */
 export async function scanHardcodedPrompts() {
   try {
-    const response = await api.get(`${BASE_URL}/hardcoded/scan`);
-    return response.data;
+    return await api.get(`${BASE_URL}/hardcoded/scan`);
   } catch (error) {
     console.error('Error scanning hardcoded prompts:', error);
     throw error;
   }
 }
 
-/**
- * Sync hardcoded prompts to DB
- */
 export async function syncHardcodedPrompts() {
   try {
-    const response = await api.post(`${BASE_URL}/hardcoded/sync`);
-    return response.data;
+    return await api.post(`${BASE_URL}/hardcoded/sync`);
   } catch (error) {
     console.error('Error syncing hardcoded prompts:', error);
     throw error;
   }
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-/**
- * Get template categories
- */
 export async function getTemplateCategories() {
   try {
     const templates = await getAllTemplates();
     const categories = new Set();
-    templates.data?.forEach(t => {
-      if (t.useCase) categories.add(t.useCase);
+    templates.data?.forEach((template) => {
+      if (template.useCase) categories.add(template.useCase);
     });
     return Array.from(categories);
   } catch (error) {
@@ -292,16 +247,13 @@ export async function getTemplateCategories() {
   }
 }
 
-/**
- * Search templates by keyword
- */
 export async function searchPromptTemplates(keyword) {
   try {
     const allTemplates = await getAllTemplates();
-    const filtered = (allTemplates.data || []).filter(t =>
-      t.name?.toLowerCase().includes(keyword?.toLowerCase()) ||
-      t.description?.toLowerCase().includes(keyword?.toLowerCase()) ||
-      t.tags?.some(tag => tag?.toLowerCase().includes(keyword?.toLowerCase()))
+    const filtered = (allTemplates.data || []).filter((template) =>
+      template.name?.toLowerCase().includes(keyword?.toLowerCase()) ||
+      template.description?.toLowerCase().includes(keyword?.toLowerCase()) ||
+      template.tags?.some((tag) => tag?.toLowerCase().includes(keyword?.toLowerCase()))
     );
     return { success: true, data: filtered };
   } catch (error) {
@@ -310,9 +262,6 @@ export async function searchPromptTemplates(keyword) {
   }
 }
 
-/**
- * Get templates by category (for backward compatibility)
- */
 export async function getTemplatesByCategory(category) {
   try {
     return await getTemplatesByUseCase(category);
@@ -322,20 +271,13 @@ export async function getTemplatesByCategory(category) {
   }
 }
 
-// ============================================================
-// EXPORT/IMPORT
-// ============================================================
-
-/**
- * Export templates to JSON
- */
 export async function exportTemplates(ids = []) {
   try {
     let templates;
 
     if (ids.length > 0) {
-      const results = await Promise.all(ids.map(id => getTemplateById(id)));
-      templates = results.map(r => r.data);
+      const results = await Promise.all(ids.map((id) => getTemplateById(id)));
+      templates = results.map((result) => result.data);
     } else {
       const result = await getAllTemplates({ isActive: true });
       templates = result.data || [];
@@ -352,15 +294,12 @@ export async function exportTemplates(ids = []) {
   }
 }
 
-/**
- * Import templates from JSON
- */
 export async function importTemplates(templates) {
   try {
-    const results = await Promise.allSettled(templates.map(t => createTemplate(t)));
+    const results = await Promise.allSettled(templates.map((template) => createTemplate(template)));
 
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const successful = results.filter((result) => result.status === 'fulfilled').length;
+    const failed = results.filter((result) => result.status === 'rejected').length;
 
     return {
       success: true,
@@ -376,37 +315,32 @@ export async function importTemplates(templates) {
   }
 }
 
-// ============================================================
-// DEFAULT EXPORT OBJECT
-// ============================================================
-
 export default {
-  // Get
   getAllTemplates,
+  getTemplateMetadata,
   getTemplatesByUseCase,
   getCoreTemplates,
   getTemplatesByPage,
   getTemplatesByPageStep,
   getTemplateById,
+  resolveAssignedTemplate,
   getPromptTemplates,
   getPromptTemplateById,
-  // Create
   createTemplate,
   createPromptTemplate,
   cloneTemplate,
   renderTemplate,
+  resolveTemplate,
   trackTemplateUsage,
-  // Update
   updateTemplate,
   updatePromptTemplate,
   updateUsageLocation,
-  // Delete
+  assignTemplate,
+  unassignTemplate,
   deleteTemplate,
   deletePromptTemplate,
-  // Hardcoded scan
   scanHardcodedPrompts,
   syncHardcodedPrompts,
-  // Helpers
   getTemplateCategories,
   searchPromptTemplates,
   getTemplatesByCategory,

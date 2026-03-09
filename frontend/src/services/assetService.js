@@ -82,57 +82,29 @@ export const assetService = {
    */
   async saveUploadedFileAsAsset(file, category, sessionId, analysisData = {}) {
     try {
-      // Create blob preview
-      const reader = new FileReader();
-      
-      return new Promise((resolve, reject) => {
-        reader.onload = async (e) => {
-          try {
-            const base64 = e.target.result.split(',')[1];
-            
-            const response = await fetch(`${ASSET_API_BASE}/create`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                filename: file.name,
-                mimeType: file.type,
-                fileSize: file.size,
-                assetType: 'image',
-                assetCategory: category,
-                userId: 'anonymous',
-                sessionId,
-                storage: {
-                  location: 'local',
-                  localPath: `uploads/${sessionId}/${file.name}`,
-                  url: URL.createObjectURL(file)
-                },
-                metadata: {
-                  format: file.name.split('.').pop(),
-                  width: analysisData.width,
-                  height: analysisData.height,
-                  ...analysisData
-                },
-                tags: ['uploaded', category, 'sessionId:' + sessionId],
-                status: 'active'
-              })
-            });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('category', category);
+      formData.append('sessionId', sessionId);
+      formData.append('userId', 'anonymous');
+      formData.append('metadata', JSON.stringify({
+        format: file.name.split('.').pop(),
+        width: analysisData.width,
+        height: analysisData.height,
+        ...analysisData
+      }));
 
-            if (!response.ok) {
-              throw new Error('Failed to create asset record');
-            }
-
-            const asset = await response.json();
-            resolve(asset.asset);
-          } catch (error) {
-            reject(error);
-          }
-        };
-        
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
+      const response = await fetch(`${ASSET_API_BASE}/upload`, {
+        method: 'POST',
+        body: formData
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload asset');
+      }
+
+      const asset = await response.json();
+      return asset.asset;
     } catch (error) {
       console.error('Error saving uploaded file as asset:', error);
       throw error;

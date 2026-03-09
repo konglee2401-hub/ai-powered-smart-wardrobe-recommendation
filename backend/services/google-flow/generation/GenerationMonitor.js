@@ -20,6 +20,7 @@ class GenerationMonitor {
   constructor(page, options = {}) {
     this.page = page;
     this.options = options;
+    this.mediaType = options.type || options.mediaType || 'image';
     this.uploadedImageRefs = options.uploadedImageRefs || {}; // Legacy: for ErrorRecovery compatibility
     this.preGenerationMonitor = null; // NEW: Reference to PreGenerationMonitor for baseline comparison
     
@@ -131,25 +132,27 @@ class GenerationMonitor {
         if (this.preGenerationMonitor && status !== 'error') {
           try {
             hrefAnalysis = await this.preGenerationMonitor.findNewHref();
-            newHrefCount = hrefAnalysis?.newCount || 0;
+            const readyHrefCount = this.mediaType === 'video' ? (hrefAnalysis?.newCountStrict || 0) : (hrefAnalysis?.newCount || 0);
+            newHrefCount = readyHrefCount;
             
             // � NEW: Only log href analysis every 5 seconds (reduce spam)
             const now = Date.now();
             if (now - lastHrefLogTime >= LOG_INTERVAL_MS) {
               console.log(`      📊 [MONITOR] Href analysis (check ${statusCheckCount}):`);
-              console.log(`         New (strict): ${hrefAnalysis?.newCount || 0}/${expectedNewHrefs}`);
+              console.log(`         New (strict): ${hrefAnalysis?.newCountStrict || 0}/${expectedNewHrefs}`);
               console.log(`         New (loose): ${hrefAnalysis?.newCountLoose || 0}`);
+              console.log(`         Ready for ${this.mediaType}: ${readyHrefCount}`);
               console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
               console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
               lastHrefLogTime = now;
             }
             
-            // 💫 NEW REQUIREMENT: Exit monitoring as soon as we have >= 1 successful image!
-            // Don't wait for all expectedNewHrefs - per user requirement, 1 image = download + next prompt
+            // Exit monitoring as soon as a downloadable item is ready.
+            // For video flow, href-only placeholders are not enough.
             if (newHrefCount >= 1) {
               preGenStatus = 'ready-by-hrefs';
-              console.log(`      ✅ DETECTED: ${newHrefCount}/${expectedNewHrefs} image(s) generated - per requirement, proceeding to download (1+ images = success)`);
-            } else if (newHrefCount > lastHrefCount) {
+              const readyLabel = this.mediaType === 'video' ? 'downloadable video item(s)' : 'image(s)';
+              console.log(`      Detected ${newHrefCount}/${expectedNewHrefs} ${readyLabel} generated - proceeding to download`);
               lastHrefCount = newHrefCount;
               lastNewHrefTime = Date.now();  // 💫 Update time when new href found
               console.log(`      📈 Progress: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found so far`);
@@ -199,7 +202,7 @@ class GenerationMonitor {
 
         // Show href count if available (from already-captured analysis)
         if (hrefAnalysis && (status === 'generating' || effectiveStatus === 'generating')) {
-          const totalNew = hrefAnalysis.newCount || 0;
+          const totalNew = this.mediaType === 'video' ? (hrefAnalysis.newCountStrict || 0) : (hrefAnalysis.newCount || 0);
           console.log(`      📊 New hrefs found: ${totalNew}/${expectedNewHrefs}`);
           if (totalNew > 0 && hrefAnalysis.href) {
             console.log(`         ↳ ${hrefAnalysis.href.substring(0, 60)}`);
@@ -227,9 +230,9 @@ class GenerationMonitor {
           if (this.preGenerationMonitor) {
             try {
               const preCheckAnalysis = await this.preGenerationMonitor.findNewHref();
-              existingNewHrefs = preCheckAnalysis?.newCountLoose || 0;
+              existingNewHrefs = this.mediaType === 'video' ? (preCheckAnalysis?.newCountStrict || 0) : (preCheckAnalysis?.newCountLoose || 0);
               if (existingNewHrefs > 0) {
-                console.log(`   ✅ FOUND ${existingNewHrefs} image(s) despite error! Will proceed to download instead of retry.`);
+                console.log(`   Found ${existingNewHrefs} ready item(s) despite error. Proceeding to download instead of retry.`);
               }
             } catch (e) {
               console.warn(`   ⚠️  Pre-cleanup href check failed: ${e.message}`);
@@ -253,7 +256,7 @@ class GenerationMonitor {
             
             // 💫 FIX: If we found images before cleanup, proceed to download even if errors still exist
             if (existingNewHrefs > 0 && !stillHasErrors) {
-              console.log(`   ✅ Error cleared and we have ${existingNewHrefs} image(s) - proceeding to download phase!`);
+              console.log(`   ??? Error cleared and we have ${existingNewHrefs} ready item(s) - proceeding to download phase!`);
               return { success: true, href: 'error-recovery-success', newCount: existingNewHrefs, partial: true, found: existingNewHrefs, expected: expectedNewHrefs };
             }
             
@@ -406,13 +409,14 @@ class GenerationMonitor {
           if (this.preGenerationMonitor) {
             const partialResult = await this.preGenerationMonitor.findNewHref();
             if (partialResult && partialResult.href) {
-              console.log(`   📊 Returning partial success: ${partialResult.newCount}/${expectedNewHrefs} image(s)`);
-              console.log(`      Will download ${partialResult.newCount} images, can retry for remaining ${expectedNewHrefs - partialResult.newCount}`);
-              return { 
-                success: true,  // 💫 Consider it success since we have some images
-                href: partialResult.href, 
+              const partialReadyCount = this.mediaType === 'video' ? (partialResult.newCountStrict || 0) : (partialResult.newCount || 0);
+              console.log(`   Partial success: ${partialReadyCount}/${expectedNewHrefs} ready item(s)`);
+              console.log(`      Will download ${partialReadyCount} items, can retry for remaining ${expectedNewHrefs - partialReadyCount}`);
+              return {
+                success: true,
+                href: partialResult.href,
                 partial: true,
-                found: partialResult.newCount,
+                found: partialReadyCount,
                 expected: expectedNewHrefs
               };
             }
@@ -441,12 +445,13 @@ class GenerationMonitor {
         try {
           console.log('⏰ Timeout reached - checking if images were generated via PreGenerationMonitor...');
           const finalCheck = await this.preGenerationMonitor.findNewHref();
-          if (finalCheck && finalCheck.newCount >= expectedNewHrefs) {
-            console.log(`✅ SUCCESS: ${finalCheck.newCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found, generation completed (despite timeout/status detection failure)`);
+          const finalReadyCount = this.mediaType === 'video' ? (finalCheck?.newCountStrict || 0) : (finalCheck?.newCount || 0);
+          if (finalCheck && finalReadyCount >= expectedNewHrefs) {
+            console.log(`Success: ${finalReadyCount}/${expectedNewHrefs} ready item${expectedNewHrefs > 1 ? 's' : ''} found, generation completed despite timeout/status detection failure`);
             return { success: true, href: finalCheck.href };
-          } else if (finalCheck && finalCheck.newCount > 0) {
-            console.log(`⚠️  Partial: Only ${finalCheck.newCount}/${expectedNewHrefs} href${expectedNewHrefs > 1 ? 's' : ''} found`);
-            return { success: false, href: null, partial: true, found: finalCheck.newCount };
+          } else if (finalCheck && finalReadyCount > 0) {
+            console.log(`Partial: Only ${finalReadyCount}/${expectedNewHrefs} ready item${expectedNewHrefs > 1 ? 's' : ''} found`);
+            return { success: false, href: null, partial: true, found: finalReadyCount };
           }
         } catch (e) {
           console.warn(`⚠️  Final PreGenerationMonitor check failed: ${e.message}`);

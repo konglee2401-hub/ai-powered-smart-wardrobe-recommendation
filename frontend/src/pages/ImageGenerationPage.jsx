@@ -10,7 +10,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import {
   Upload, Sparkles, FileText, Rocket, Image,
-  Loader2, RefreshCw, X, Video, Wand2, Settings, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap, Database
+  Loader2, RefreshCw, X, Wand2, Shirt, Target, Save, ChevronRight, ChevronUp, ChevronDown, Shuffle, Zap, Database, Settings, BrainCircuit, SlidersHorizontal
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI, affiliateVideoTiktokAPI } from '../services/api';
@@ -39,19 +39,28 @@ import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
 import ScenePickerModal from '../components/ScenePickerModal';
 import CharacterSelectorModal from '../components/CharacterSelectorModal';
+import PageHeaderBar from '../components/PageHeaderBar';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
 import { captureGenerationSession } from '../services/generationSessionsService';
+import {
+  IMAGE_STUDIO_USE_CASES,
+  getImageUseCaseLabel,
+  getImageUseCaseUploadInstruction,
+  getImageUseCaseInputSchema
+} from '../config/imageUseCaseMatrix';
+import { getRecommendationLabel } from '../utils/recommendationMeta';
 
 // Steps - Style and Prompt merged into single step
 const STEPS = [
   { id: 1, nameKey: 'imageGeneration.upload', icon: Upload },
-  { id: 2, nameKey: 'imageGeneration.analysis', icon: Sparkles },
-  { id: 3, nameKey: 'imageGeneration.stylePrompt', icon: Wand2 },
+  { id: 2, nameKey: 'imageGeneration.analysis', icon: BrainCircuit },
+  { id: 3, nameKey: 'imageGeneration.stylePrompt', icon: SlidersHorizontal },
   { id: 4, nameKey: 'imageGeneration.generate', icon: Rocket },
 ];
 
 // ?? Image Generation Configuration
 const DESIRED_OUTPUT_COUNT = 2;  // Number of images to generate per request
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Use cases
 const USE_CASES = [
@@ -65,6 +74,14 @@ const USE_CASES = [
   { value: 'before-after', label: 'beforeAfter', description: 'So s�nh tru?c/sau' },
 ];
 
+const ACTIVE_IMAGE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
+  ? IMAGE_STUDIO_USE_CASES.map((item) => ({
+      value: item.value,
+      label: item.labelKey,
+      description: item.description
+    }))
+  : USE_CASES;
+
 // Focus options
 const FOCUS_OPTIONS = [
   { value: 'full-outfit', label: 'fullOutfit', description: 'To�n b? trang ph?c' },
@@ -74,6 +91,133 @@ const FOCUS_OPTIONS = [
   { value: 'accessories', label: 'accessories', description: 'Ph? ki?n' },
   { value: 'specific-item', label: 'specific', description: 'M�n d? c? th?' },
 ];
+
+const USE_CASE_DISPLAY_LABELS = {
+  'change-clothes': 'Change Clothes',
+  'character-holding-product': 'Holding Product',
+  'affiliate-video-tiktok': 'Tiktok Affiliate',
+  'ecommerce-product': 'E-commerce',
+  'social-media': 'Social Media',
+  'fashion-editorial': 'Editorial',
+  'lifestyle-scene': 'Lifestyle',
+  'before-after': 'Before / After',
+};
+
+const FOCUS_DISPLAY_LABELS = {
+  'full-outfit': 'Full Outfit',
+  top: 'Top',
+  bottom: 'Bottom',
+  shoes: 'Shoes',
+  accessories: 'Accessories',
+  'specific-item': 'Specific Item',
+};
+
+const getUseCaseDisplayLabel = (value) => getImageUseCaseLabel(value);
+const getFocusDisplayLabel = (value) => FOCUS_DISPLAY_LABELS[value] || value;
+
+const normalizeAssetUrl = (url) => {
+  if (!url) return null;
+  const normalized = url.replace(/\\/g, '/');
+
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    try {
+      const baseHost = (API_BASE_URL || '').replace('/api', '');
+      if (baseHost && normalized.includes('localhost:5000')) {
+        return normalized.replace(/https?:\/\/localhost:5000/gi, baseHost);
+      }
+    } catch (err) {
+      // ignore
+    }
+    return normalized;
+  }
+
+  const tempMatch = normalized.match(/[\\/](temp)[\\/](.+)/i);
+  if (tempMatch) {
+    return `${API_BASE_URL.replace('/api', '')}/temp/${tempMatch[2]}`;
+  }
+
+  if (normalized.startsWith('/')) {
+    return `${API_BASE_URL.replace('/api', '')}${normalized}`;
+  }
+
+  return `${API_BASE_URL.replace('/api', '')}/${normalized}`;
+};
+
+const getSceneLockedPrompt = (scene, language = 'en') => {
+  const isVi = (language || 'en').toLowerCase().startsWith('vi');
+  return isVi
+    ? (scene?.sceneLockedPromptVi || scene?.sceneLockedPrompt || scene?.promptSuggestionVi || scene?.promptSuggestion || '')
+    : (scene?.sceneLockedPrompt || scene?.sceneLockedPromptVi || scene?.promptSuggestion || scene?.promptSuggestionVi || '');
+};
+
+const getScenePreviewUrl = (scene, aspectRatio = '9:16') => {
+  if (!scene) return null;
+
+  if (scene.sceneLockedImageUrls && typeof scene.sceneLockedImageUrls === 'object') {
+    const exact = scene.sceneLockedImageUrls[aspectRatio];
+    if (exact) return normalizeAssetUrl(exact);
+
+    if (aspectRatio === '16:9' && scene.sceneLockedImageUrls['9:16']) {
+      return normalizeAssetUrl(scene.sceneLockedImageUrls['9:16']);
+    }
+    if (aspectRatio === '9:16' && scene.sceneLockedImageUrls['16:9']) {
+      return normalizeAssetUrl(scene.sceneLockedImageUrls['16:9']);
+    }
+  }
+
+  return normalizeAssetUrl(scene.sceneLockedImageUrl || scene.previewImage);
+};
+
+function ProviderGlyph({ providerId }) {
+  const glyphClass = 'h-[18px] w-[18px]';
+
+  if (providerId === 'google-flow') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+        <path d="M5 12c0-3.5 2.4-6 6-6 1.8 0 3.3.6 4.5 1.8" />
+        <path d="M19 12c0 3.5-2.4 6-6 6-1.8 0-3.3-.6-4.5-1.8" />
+        <path d="M14.5 5.5h2.8v2.8" />
+        <path d="M9.5 18.5H6.7v-2.8" />
+      </svg>
+    );
+  }
+
+  if (providerId === 'bfl') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+        <path d="M12 3.5 5 7.5v8.8l7 4 7-4V7.5l-7-4Z" />
+        <path d="m8.5 9.2 3.5 2 3.5-2" />
+        <path d="M12 11.2v5.6" />
+      </svg>
+    );
+  }
+
+  if (providerId === 'zai') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+        <path d="M6 6h12L6 18h12" />
+      </svg>
+    );
+  }
+
+  if (providerId === 'grok') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+        <path d="M8 6h5a5 5 0 1 1 0 10H8z" />
+        <path d="m12 11 5 7" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
+      <path d="M7 5h6l4 4v10H7z" />
+      <path d="M13 5v4h4" />
+      <path d="M9.25 15.5c.9-1.7 1.95-2.55 3.15-2.55 1.27 0 2.38.85 3.35 2.55" />
+      <circle cx="10.2" cy="10.2" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 // Helper to convert file to base64
 const fileToBase64 = (file) => {
@@ -199,6 +343,118 @@ const buildAutoRecommendationDecisions = (recommendations = {}, saveStrategy = '
   }, {});
 };
 
+const getRecommendationOptionKeys = (recommendations = {}) => {
+  return Object.keys(recommendations || {}).filter((key) => {
+    if (['analysis', 'newOptions', 'characterProfile', 'productDetails'].includes(key)) {
+      return false;
+    }
+    return Boolean(recommendations?.[key]?.choice || recommendations?.[key]?.choiceArray);
+  });
+};
+
+const getUseCaseSmartDefaults = (useCase, sceneValue = 'linhphap-tryon-room') => {
+  switch (useCase) {
+    case 'creator-thumbnail':
+      return {
+        scene: sceneValue,
+        lighting: 'high-key',
+        mood: 'energetic',
+        style: 'commercial',
+        colorPalette: 'vibrant',
+        cameraAngle: 'eye-level',
+        framing: 'shoulders-up',
+        expression: 'excited',
+        gesture: 'reaction-hands',
+        textOverlayZone: 'right-negative-space',
+        productPresence: 'secondary-prop'
+      };
+    case 'story-character':
+      return {
+        scene: sceneValue,
+        lighting: 'dramatic-rembrandt',
+        mood: 'mysterious',
+        style: 'editorial',
+        colorPalette: 'earth-tones',
+        cameraAngle: 'three-quarter',
+        storyRole: 'narrator',
+        expression: 'serious-focus',
+        pose: 'explaining',
+        sceneDepth: 'cinematic-depth',
+        propCue: 'not-needed'
+      };
+    default:
+      return {
+        scene: sceneValue,
+        lighting: 'soft-diffused',
+        mood: 'confident',
+        style: 'fashion-editorial',
+        colorPalette: 'neutral',
+        cameraAngle: 'three-quarter'
+      };
+  }
+};
+
+const getUseCaseStep1Copy = (useCase, { isCharacterRequired, isProductRequired } = {}) => {
+  const base = {
+    characterTitle: 'Character picker',
+    characterUploadTitle: 'Add character image',
+    characterUploadHint: isCharacterRequired
+      ? 'Drag, click, or pick a saved profile below.'
+      : 'Optional for this use case. Add one if you want stronger identity control.',
+    characterUploadedLabel: 'Uploaded character',
+    characterUploadedSubLabel: 'Tap to replace',
+    characterSelectCta: 'Select profile',
+    characterGalleryCta: 'Open gallery',
+    productTitle: 'Product reference',
+    productUploadTitle: 'Add product image',
+    productUploadHint: isProductRequired
+      ? 'Use a clean packshot or isolated product photo.'
+      : 'Optional for this use case. Skip if you only need a character-first visual.',
+    productUploadedLabel: 'Uploaded product',
+    productUploadedSubLabel: 'Tap to replace',
+    productGalleryCta: 'Open gallery',
+    analyzeCta: 'Start Analysis'
+  };
+
+  if (useCase === 'creator-thumbnail') {
+    return {
+      ...base,
+      characterTitle: 'Creator face reference',
+      characterUploadTitle: 'Add creator face image',
+      characterUploadHint: 'Use a clear face or upper-body image with strong identity and readable expression.',
+      characterUploadedLabel: 'Uploaded creator reference',
+      characterSelectCta: 'Select creator',
+      productTitle: 'Optional prop reference',
+      productUploadTitle: 'Add prop or product image',
+      productUploadHint: isProductRequired
+        ? 'Add the object you want the creator to react to or feature.'
+        : 'Optional. Add a product or prop only if it strengthens the thumbnail hook.',
+      productUploadedLabel: 'Uploaded prop reference',
+      analyzeCta: 'Analyze Thumbnail Hook'
+    };
+  }
+
+  if (useCase === 'story-character') {
+    return {
+      ...base,
+      characterTitle: 'Story persona reference',
+      characterUploadTitle: 'Add story character image',
+      characterUploadHint: 'Use a clear image that defines the recurring face, vibe, and silhouette of the character.',
+      characterUploadedLabel: 'Uploaded story persona',
+      characterSelectCta: 'Select persona',
+      productTitle: 'Optional prop or brand cue',
+      productUploadTitle: 'Add prop reference',
+      productUploadHint: isProductRequired
+        ? 'Add the branded object or prop that should appear with the character.'
+        : 'Optional. Add a prop only if it helps define the character world or story role.',
+      productUploadedLabel: 'Uploaded prop cue',
+      analyzeCta: 'Analyze Story Persona'
+    };
+  }
+
+  return base;
+};
+
 // Tooltip component
 function Tooltip({ children, content }) {
   return (
@@ -214,6 +470,47 @@ function Tooltip({ children, content }) {
   );
 }
 
+function ClampedDescription({ text, className = '' }) {
+  const textRef = useRef(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    const element = textRef.current;
+    if (!element) return undefined;
+
+    const measure = () => {
+      setIsTruncated(element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1);
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [text]);
+
+  return (
+    <p
+      ref={textRef}
+      title={isTruncated ? text : undefined}
+      className={className}
+      style={{
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: 2,
+        overflow: 'hidden'
+      }}
+    >
+      {text}
+    </p>
+  );
+}
+
 // Get label by value
 const getLabel = (list, value) => {
   const item = list.find(i => i.value === value);
@@ -222,6 +519,7 @@ const getLabel = (list, value) => {
 
 // Get upload instructions by use case
 const getUploadInstructions = (useCase) => {
+  return getImageUseCaseUploadInstruction(useCase);
   const instructions = {
     'change-clothes': {
       character: 'Person to try on clothes (face, body visible)',
@@ -273,13 +571,16 @@ export default function ImageGenerationPage() {
   const { t, i18n } = useTranslation();
   // State
   const [currentStep, setCurrentStep] = useState(1);
-  const [activeTab, setActiveTab] = useState('image');
   const [activeMode, setActiveMode] = useState('browser');
   const [showFinalPrompt, setShowFinalPrompt] = useState(true);
   
   // Ref for container
   const containerRef = useRef(null);
   const step3ComponentRef = useRef(null);
+  const recommendationSelectorRef = useRef(null);
+  const characterFileInputRef = useRef(null);
+  const productFileInputRef = useRef(null);
+  const sceneFileInputRef = useRef(null);
 
   // Data
   const [characterImage, setCharacterImage] = useState(null);
@@ -288,12 +589,21 @@ export default function ImageGenerationPage() {
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [useCase, setUseCase] = useState('change-clothes');
   const [productFocus, setProductFocus] = useState('full-outfit');
+  const [promptMode, setPromptMode] = useState('step3');
   const [selectedOptions, setSelectedOptions] = useState({});
   const [customOptions, setCustomOptions] = useState({});
   const [expandedCategories, setExpandedCategories] = useState({});
 
   // ?? Filter categories based on product focus
   const getVisibleCategories = () => {
+    if (useCase === 'creator-thumbnail') {
+      return ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'framing', 'expression', 'gesture', 'textOverlayZone', 'productPresence'];
+    }
+
+    if (useCase === 'story-character') {
+      return ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'storyRole', 'expression', 'pose', 'sceneDepth', 'propCue'];
+    }
+
     const baseCategories = ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'shotType', 'bodyPose'];
     
     // Add clothing categories based on product focus
@@ -389,11 +699,11 @@ export default function ImageGenerationPage() {
 
   // Providers
   const PROVIDERS = [
-    { id: 'chatgpt-browser', label: 'ChatGPT', icon: '??' },
-    { id: 'grok', label: 'Grok', icon: '??' },
-    { id: 'google-flow', label: 'Google Flow', icon: '??' },
-    { id: 'zai', label: 'Z.AI', icon: '??' },
-    { id: 'bfl', label: 'BFL FLUX', icon: '??' },
+    { id: 'chatgpt-browser', label: 'ChatGPT', description: 'Browser reasoning' },
+    { id: 'grok', label: 'Grok', description: 'Fast browser flow' },
+    { id: 'google-flow', label: 'Flow', description: 'Labs workflow' },
+    { id: 'zai', label: 'Z.AI', description: 'Alternative browser provider' },
+    { id: 'bfl', label: 'BFL FLUX', description: 'Flux engine' },
   ];
   
   // Image Generation Providers (for generation step)
@@ -434,18 +744,20 @@ export default function ImageGenerationPage() {
     // If single item (not multiselect), items will be an object
     const item = Array.isArray(items) ? items[0] : items;
     
-    if (!item || !item.url) {
+    const selectedUrl = item?.selectUrl || item?.url;
+
+    if (!item || !selectedUrl) {
       console.error('? Invalid item selected from gallery:', item);
       alert('Error: Selected item is missing image URL');
       return;
     }
 
-    console.log(`?? Gallery item selected:`, { assetId: item.assetId, name: item.name, url: item.url });
+    console.log(`?? Gallery item selected:`, { assetId: item.assetId, name: item.name, url: selectedUrl });
     
     if (galleryPickerFor === 'character') {
       // Fetch image from URL and convert to file
       console.log(`? Loading character image from gallery...`);
-      fetch(item.url, {
+      fetch(selectedUrl, {
         method: 'GET',
         headers: {
           'Accept': 'image/*'
@@ -474,7 +786,7 @@ export default function ImageGenerationPage() {
     } else if (galleryPickerFor === 'product') {
       // Fetch image from URL and convert to file
       console.log(`? Loading product image from gallery...`);
-      fetch(item.url, {
+      fetch(selectedUrl, {
         method: 'GET',
         headers: {
           'Accept': 'image/*'
@@ -559,14 +871,18 @@ export default function ImageGenerationPage() {
 
   const handleStartAnalysis = async () => {
     const effectiveCharacterFile = selectedCharacter?.portraitUrl ? await urlToFile(selectedCharacter.portraitUrl, `${selectedCharacter.alias || 'character'}.jpg`) : characterImage?.file;
-    if (!effectiveCharacterFile || !productImage?.file) return;
+    const inputSchema = getImageUseCaseInputSchema(useCase);
+    const characterRequired = inputSchema.character !== 'optional';
+    const productRequired = inputSchema.product !== 'optional';
+
+    if ((characterRequired && !effectiveCharacterFile) || (productRequired && !productImage?.file)) return;
 
     setIsAnalyzing(true);
     const startTime = Date.now();
     
     try {
-      const charBase64 = await fileToBase64(effectiveCharacterFile);
-      const prodBase64 = await fileToBase64(productImage.file);
+      const charBase64 = effectiveCharacterFile ? await fileToBase64(effectiveCharacterFile) : null;
+      const prodBase64 = productImage?.file ? await fileToBase64(productImage.file) : null;
 
       let analysisResponse;
 
@@ -838,12 +1154,12 @@ export default function ImageGenerationPage() {
       const rec = analysis.recommendations;
       console.log('?? Recommendations from analysis:', rec);
       const newOpts = { ...selectedOptions };
-      // Extract .choice value from nested {choice, reason, alternatives} structure
-      if (rec.lighting?.choice) newOpts.lighting = rec.lighting.choice;
-      if (rec.mood?.choice) newOpts.mood = rec.mood.choice;
-      if (rec.style?.choice) newOpts.style = rec.style.choice;
-      if (rec.colorPalette?.choice) newOpts.colorPalette = rec.colorPalette.choice;
-      if (rec.cameraAngle?.choice) newOpts.cameraAngle = rec.cameraAngle.choice;
+      getRecommendationOptionKeys(rec).forEach((key) => {
+        const normalizedValue = normalizeAppliedOptionValue(key, rec[key]?.choiceArray?.length ? rec[key].choiceArray : rec[key]?.choice);
+        if (normalizedValue != null && (!Array.isArray(normalizedValue) || normalizedValue.length > 0)) {
+          newOpts[key] = normalizedValue;
+        }
+      });
       console.log('? New options to apply:', newOpts);
       setSelectedOptions(newOpts);
       
@@ -882,7 +1198,7 @@ export default function ImageGenerationPage() {
     if (Object.keys(newOpts).length === 0 && analysisData?.recommendations) {
       console.log('?? No valid decisions applied, using defaults from analysis...');
       const rec = analysisData.recommendations;
-      ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear'].forEach((key) => {
+      getRecommendationOptionKeys(rec).forEach((key) => {
         if (rec[key]?.choice) {
           const fallbackValue = normalizeAppliedOptionValue(key, rec[key].choice);
           if (fallbackValue != null && (!Array.isArray(fallbackValue) || fallbackValue.length > 0)) {
@@ -892,9 +1208,15 @@ export default function ImageGenerationPage() {
       });
     }
 
-    if (!newOpts.scene) newOpts.scene = baseOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room';
-    if (!newOpts.lighting) newOpts.lighting = baseOptions.lighting || 'soft-diffused';
-    if (!newOpts.mood) newOpts.mood = baseOptions.mood || 'elegant';
+    const smartDefaults = getUseCaseSmartDefaults(
+      useCase,
+      baseOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room'
+    );
+    Object.entries(smartDefaults).forEach(([key, value]) => {
+      if (!newOpts[key]) {
+        newOpts[key] = baseOptions[key] || value;
+      }
+    });
 
     console.log('? Options updated:', newOpts);
     setSelectedOptions(newOpts);
@@ -958,7 +1280,7 @@ export default function ImageGenerationPage() {
         const newOpts = {};
         let appliedCount = 0;
 
-        for (const key of ['scene', 'lighting', 'mood', 'style', 'colorPalette', 'cameraAngle', 'hairstyle', 'makeup', 'bottoms', 'shoes', 'accessories', 'outerwear']) {
+        for (const key of getRecommendationOptionKeys(rec)) {
           if (rec[key]?.choice) {
             const normalizedValue = normalizeAppliedOptionValue(key, rec[key].choice);
             if (normalizedValue != null && (!Array.isArray(normalizedValue) || normalizedValue.length > 0)) {
@@ -980,7 +1302,7 @@ export default function ImageGenerationPage() {
       }
 
       const allCategories = {};
-      Object.keys(STYLE_CATEGORIES).forEach(key => {
+      getVisibleCategories().forEach((key) => {
         allCategories[key] = true;
       });
       setExpandedCategories(allCategories);
@@ -989,15 +1311,10 @@ export default function ImageGenerationPage() {
 
   // ?? NEW: Get default options based on product focus
   const getDefaultOptionsByFocus = () => {
-    const defaults = {
-      // Common for all focuses
-      scene: selectedOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room',
-      lighting: 'soft-diffused',
-      mood: 'confident',
-      style: 'fashion-editorial',
-      colorPalette: 'neutral',
-      cameraAngle: 'three-quarter',
-    };
+    const defaults = getUseCaseSmartDefaults(
+      useCase,
+      selectedOptions.scene || sceneOptions?.[0]?.value || 'linhphap-tryon-room'
+    );
 
     // Add focus-specific defaults
     if (productFocus === 'full-outfit') {
@@ -1187,12 +1504,17 @@ export default function ImageGenerationPage() {
       console.log('?? Starting generation...');
       console.log('   Mode:', activeMode);
       console.log('   Provider:', browserProvider);
-      console.log('   Has stored images:', !!storedImages.character && !!storedImages.product);
+      const generationInputSchema = getImageUseCaseInputSchema(useCase);
+      const canGenerateFromStoredImages =
+        (generationInputSchema.character === 'optional' || !!storedImages.character) &&
+        (generationInputSchema.product === 'optional' || !!storedImages.product) &&
+        (!!storedImages.character || !!storedImages.product);
+      console.log('   Has stored images:', canGenerateFromStoredImages);
       console.log('   Has prompt:', !!finalPrompt);
       
       let response;
       
-      if (activeMode === 'browser' && storedImages.character && storedImages.product) {
+      if (activeMode === 'browser' && canGenerateFromStoredImages) {
         console.log('? Using browser generation mode with provider:', generationProvider);
         const refBase64 = referenceImage?.file ? await fileToBase64(referenceImage.file) : null;
         
@@ -1206,6 +1528,7 @@ export default function ImageGenerationPage() {
           aspectRatio,
           characterImageBase64: storedImages.character,
           productImageBase64: storedImages.product,
+          useCase,
           referenceImageBase64: refBase64,
           imageCount,
           hasWatermark,
@@ -1476,6 +1799,7 @@ export default function ImageGenerationPage() {
     setProductImage(null);
     setUseCase('change-clothes');
     setProductFocus('full-outfit');
+    setPromptMode('step3');
     setSelectedOptions({});
     setCustomOptions({});
     setAnalysis(null);
@@ -1507,25 +1831,47 @@ export default function ImageGenerationPage() {
   // RENDER
   // ============================================================
 
-  const isReadyForAnalysis = (selectedCharacter || characterImage) && productImage;
+  const showUseCaseFocusInfo = currentStep >= 2;
+  const useCaseInputSchema = getImageUseCaseInputSchema(useCase);
+  const isCharacterRequired = useCaseInputSchema.character !== 'optional';
+  const isProductRequired = useCaseInputSchema.product !== 'optional';
+  const hasCharacterInput = Boolean(selectedCharacter || characterImage);
+  const hasProductInput = Boolean(productImage);
+  const showOptionalProductAsSecondary = !isProductRequired && isCharacterRequired;
+  const isReadyForAnalysis = (!isCharacterRequired || hasCharacterInput) && (!isProductRequired || hasProductInput);
+  const step1Copy = getUseCaseStep1Copy(useCase, { isCharacterRequired, isProductRequired });
   const isReadyForPrompt = analysis && Object.keys(selectedOptions).length > 0;
   const isReadyForGeneration = generatedPrompt?.positive;
+  const characterPreviewSrc = selectedCharacter?.portraitUrl || characterImage?.preview || null;
+  const currentScene = sceneOptions.find((scene) => scene.value === selectedOptions.scene);
+  const selectedScenePrompt = getSceneLockedPrompt(currentScene, i18n.language || 'en');
+  const scenePreviewUrl = referenceImage?.preview || getScenePreviewUrl(currentScene, aspectRatio);
+  const step1SectionClass = 'studio-card-shell rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
+  const uploadCardBaseClass = 'studio-card-shell flex min-h-[342px] flex-col rounded-[1.35rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_34px_rgba(2,6,23,0.14)]';
+  const uploadDropzoneBaseClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition';
+  const characterCardClass = `${uploadCardBaseClass} ${!isCharacterRequired ? 'opacity-80' : ''} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
+  const productCardClass = `${uploadCardBaseClass} ${showOptionalProductAsSecondary ? 'min-h-[332px] opacity-75 saturate-[0.88]' : ''} bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
+  const sceneCardClass = `${uploadCardBaseClass} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_40%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
+  const getSectionOptionChipClass = (isSelected, tone = 'cool') =>
+    `apple-option-chip ${tone ? `apple-option-chip-${tone}` : ''} ${isSelected ? 'apple-option-chip-selected' : ''} flex w-full items-center justify-between gap-2 rounded-[1rem] px-3 py-2.5 text-left text-[12px] font-medium leading-4 transition`;
 
-  const showUseCaseFocusInfo = currentStep >= 2;
+  const handleImageFileSelection = (event, setter) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setter({ file, preview: URL.createObjectURL(file) });
+    event.target.value = '';
+  };
 
   return (
-    <div className="bg-gray-900 text-white flex flex-col min-h-screen" ref={containerRef} data-main-body>
-      {/* ==================== HEADER ==================== */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0 h-14">
-        <div className="flex items-center justify-between h-full">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-purple-400" />
-            <span className="font-bold">AI Creative Studio</span>
-          </div>
-
-          {/* Steps */}
-          <div className="flex items-center gap-1">
+    <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6" ref={containerRef} data-main-body>
+      <PageHeaderBar
+        icon={<Wand2 className="h-4 w-4 text-sky-400" />}
+        title="Image generation workflow"
+        meta={`${getUseCaseDisplayLabel(useCase)} / ${getFocusDisplayLabel(productFocus)} / ${browserProvider}`}
+        className="h-16"
+        contentClassName="px-5 lg:px-6"
+        actions={(
+          <div className="hidden items-center gap-1.5 lg:flex">
             {STEPS.map((step, idx) => {
               const Icon = step.icon;
               const isActive = currentStep === step.id;
@@ -1535,157 +1881,161 @@ export default function ImageGenerationPage() {
                   <button
                     onClick={() => isCompleted && setCurrentStep(step.id)}
                     disabled={!isCompleted && !isActive}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all ${
-                      isActive ? 'bg-purple-600 text-white' : 
-                      isCompleted ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 
-                      'bg-gray-700/50 text-gray-500'
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      isActive
+                        ? 'apple-chip-step-active'
+                        : isCompleted
+                          ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15'
+                          : 'border-white/10 bg-white/[0.04] text-slate-400'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{t(step.nameKey)}</span>
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{t(step.nameKey)}</span>
                   </button>
-                  {idx < STEPS.length - 1 && (
-                    <div className={`w-4 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-600'}`} />
-                  )}
+                  {idx < STEPS.length - 1 && <div className={`h-px w-5 ${isCompleted ? 'bg-emerald-400/60' : 'bg-white/10'}`} />}
                 </React.Fragment>
               );
             })}
           </div>
-
-          {/* Right */}
-          <div className="flex items-center gap-2">
-            <div className="flex bg-gray-700 rounded-lg p-0.5">
-              <button
-                onClick={() => setActiveTab('image')}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                  activeTab === 'image' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Image className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setActiveTab('video')}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                  activeTab === 'video' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Video className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <button onClick={handleReset} className="p-1.5 bg-gray-700 rounded hover:bg-gray-600">
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+        )}
+      />
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ==================== LEFT TOOLBAR: Mode + Provider ==================== */}
-        <div className="w-12 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto">
-          <button
-            onClick={() => setActiveMode('browser')}
-            className={`p-2 rounded-lg transition-all ${activeMode === 'browser' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-            title="Browser AI"
-          >
-            <Sparkles className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setActiveMode('upload')}
-            className={`p-2 rounded-lg transition-all ${activeMode === 'upload' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-            title="Upload Mode"
-          >
-            <Upload className="w-5 h-5" />
-          </button>
+      <div className={`${currentStep === 1 ? 'step1-main-shell' : ''} flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3`}>
+        <div className={`${currentStep === 1 ? 'step1-main-row' : ''} flex min-h-0 flex-1 items-stretch gap-4 overflow-hidden`}>
+          {/* ==================== LEFT TOOLBAR: Mode + Provider ==================== */}
+          <div className="hidden">
+          <Tooltip content="Browser AI mode">
+            <button
+              onClick={() => setActiveMode('browser')}
+              className={`rounded-2xl border p-2.5 transition-all ${
+                activeMode === 'browser'
+                  ? 'border-sky-300/35 bg-sky-300/18 text-sky-100 shadow-[0_12px_24px_rgba(8,78,120,0.25)]'
+                  : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/15 hover:bg-white/[0.08] hover:text-white'
+              }`}
+              title="Browser AI"
+            >
+              <Sparkles className="h-4.5 w-4.5" />
+            </button>
+          </Tooltip>
+          <Tooltip content="Upload image mode">
+            <button
+              onClick={() => setActiveMode('upload')}
+              className={`rounded-2xl border p-2.5 transition-all ${
+                activeMode === 'upload'
+                  ? 'border-cyan-300/35 bg-cyan-300/14 text-cyan-100 shadow-[0_12px_24px_rgba(6,78,108,0.25)]'
+                  : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/15 hover:bg-white/[0.08] hover:text-white'
+              }`}
+              title="Upload mode"
+            >
+              <Upload className="h-4.5 w-4.5" />
+            </button>
+          </Tooltip>
 
-          <div className="w-8 h-px bg-gray-700" />
+          <div className="h-px w-8 bg-white/10" />
 
           {activeMode === 'browser' && (
-            <div className="flex flex-col gap-1">
-              {PROVIDERS.map(provider => (
-                <button
-                  key={provider.id}
-                  onClick={() => setBrowserProvider(provider.id)}
-                  className={`p-2 rounded-lg transition-all ${browserProvider === provider.id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-                  title={provider.label}
-                >
-                  <span className="text-lg">{provider.icon}</span>
-                </button>
+            <div className="flex flex-col gap-2">
+              {PROVIDERS.map((provider) => (
+                <Tooltip key={provider.id} content={`${provider.label} · ${provider.description}`}>
+                  <button
+                    onClick={() => setBrowserProvider(provider.id)}
+                    className={`rounded-2xl border p-2.5 transition-all ${
+                      browserProvider === provider.id
+                        ? 'border-sky-300/35 bg-sky-400/15 text-sky-100 shadow-[0_12px_24px_rgba(8,78,120,0.25)]'
+                        : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/15 hover:bg-white/[0.08] hover:text-white'
+                    }`}
+                    title={provider.label}
+                  >
+                    <ProviderGlyph providerId={provider.id} />
+                  </button>
+                </Tooltip>
               ))}
             </div>
           )}
 
           <div className="flex-1" />
-          <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg" title="Settings">
-            <Settings className="w-5 h-5" />
-          </button>
-        </div>
+          <Tooltip content="Reset current workflow">
+            <button onClick={handleReset} className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5 text-slate-400 transition hover:border-white/15 hover:bg-white/[0.08] hover:text-white" title="Reset workflow">
+              <RefreshCw className="h-4.5 w-4.5" />
+            </button>
+          </Tooltip>
+          </div>
 
-        {/* ==================== LEFT SIDEBAR: Options ==================== */}
-        <div className={`${currentStep === 3 ? 'w-96' : 'w-72'} bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0 transition-all duration-300`}>
-          <div className="p-3 space-y-4 overflow-y-auto flex-1">
+          {/* ==================== LEFT SIDEBAR: Options ==================== */}
+          <div className={`${currentStep === 2 ? 'w-[190px] xl:w-[206px]' : currentStep === 3 ? 'w-[206px]' : 'w-[350px] xl:w-[380px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} flex min-h-0 flex-col flex-shrink-0 overflow-hidden rounded-[1.75rem] transition-all duration-300`}>
+          <div className={`step1-sidebar-scroll min-h-0 flex-1 space-y-3 ${currentStep === 1 ? 'overflow-y-auto overflow-x-hidden' : 'overflow-y-auto'}`}>
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
-              <>
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
-                    <Shirt className="w-3 h-3" /> Use Case
-                  </h3>
-                  <div className="grid grid-cols-2 gap-1">
-                    {USE_CASES.map(uc => (
-                      <Tooltip key={uc.value} content={uc.description}>
-                        <button
-                          onClick={() => setUseCase(uc.value)}
-                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
-                            useCase === uc.value 
-                              ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                              : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                          }`}
-                        >
-                          {uc.label}
-                        </button>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
 
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
-                    <Target className="w-3 h-3" /> Focus
-                  </h3>
-                  <div className="grid grid-cols-2 gap-1">
-                    {FOCUS_OPTIONS.map(opt => (
-                      <Tooltip key={opt.value} content={opt.description}>
+                <div className="space-y-3">
+                  <section className={step1SectionClass}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="rounded-xl bg-sky-300/10 p-2 text-sky-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                        <Shirt className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Setup</p>
+                        <h3 className="text-sm font-semibold text-white">Use case</h3>
+                      </div>
+                    </div>
+                    <div className="step1-option-grid grid grid-cols-2 gap-1.5">
+                      {ACTIVE_IMAGE_USE_CASES.map((uc) => (
                         <button
-                          onClick={() => setProductFocus(opt.value)}
-                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all ${
-                            productFocus === opt.value 
-                              ? 'bg-purple-600/20 text-purple-400 border border-purple-600/50' 
-                              : 'text-gray-400 hover:bg-gray-700 border border-transparent'
-                          }`}
+                          key={uc.value}
+                          onClick={() => setUseCase(uc.value)}
+                          className={`${getSectionOptionChipClass(useCase === uc.value, 'warm')} min-h-[38px] px-1.5 py-1.5`}
                         >
-                          {opt.label}
+                          <span className="block min-w-0 truncate">{getUseCaseDisplayLabel(uc.value)}</span>
+                          <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
+                            {useCase === uc.value ? 'ON' : ''}
+                          </span>
                         </button>
-                      </Tooltip>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className={step1SectionClass}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="rounded-xl bg-cyan-300/10 p-2 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                        <Target className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Composition</p>
+                        <h3 className="text-sm font-semibold text-white">Product focus</h3>
+                      </div>
+                    </div>
+                    <div className="step1-option-grid grid grid-cols-2 gap-1.5">
+                      {FOCUS_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setProductFocus(opt.value)}
+                          className={`${getSectionOptionChipClass(productFocus === opt.value, 'cool')} min-h-[38px] px-1.5 py-1.5`}
+                        >
+                          <span className="block min-w-0 truncate">{getFocusDisplayLabel(opt.value)}</span>
+                          <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
+                            {productFocus === opt.value ? 'ON' : ''}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
                 </div>
-              </>
             )}
 
             {/* Step 2: Image Previews */}
-            {currentStep === 2 && (characterImage || productImage) && (
+            {currentStep === 2 && (characterPreviewSrc || productImage) && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
                   <Image className="w-3 h-3" /> Uploaded Images
                 </h3>
                 <div className="space-y-2">
-                  {characterImage?.preview && (
+                  {characterPreviewSrc && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">?? Character</p>
+                      <p className="text-xs text-gray-500 mb-1">Character</p>
                       <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
                         <img 
-                          src={characterImage.preview} 
+                          src={characterPreviewSrc} 
                           alt="Character" 
                           className="w-full h-full object-cover"
                         />
@@ -1694,7 +2044,7 @@ export default function ImageGenerationPage() {
                   )}
                   {productImage?.preview && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">?? Product</p>
+                      <p className="text-xs text-gray-500 mb-1">Product</p>
                       <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
                         <img 
                           src={productImage.preview} 
@@ -1714,17 +2064,27 @@ export default function ImageGenerationPage() {
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
                   <Wand2 className="w-3 h-3" /> Style Options
                 </h3>
-                <div className="border border-purple-700 rounded-lg p-3 bg-purple-950/20 mb-2">
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="mb-3 rounded-[1.45rem] bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="mb-2 flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-xs uppercase text-purple-300 font-semibold">Scene Locked</p>
+                      <p className="text-xs uppercase text-sky-300 font-semibold">Scene Locked</p>
                       <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedOptions.scene)?.label || selectedOptions.scene || 'Not selected'}</p>
                     </div>
-                    <button onClick={() => setShowScenePicker(true)} className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500">Pick Scene</button>
+                    <button
+                      onClick={() => setShowScenePicker(true)}
+                      className="rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.12]"
+                    >
+                      Pick Scene
+                    </button>
                   </div>
-                  <button onClick={() => setShowSceneLockedPrompt(v => !v)} className="text-xs text-purple-200 underline">{showSceneLockedPrompt ? 'Hide locked prompt' : 'Show locked prompt'}</button>
+                  <button
+                    onClick={() => setShowSceneLockedPrompt(v => !v)}
+                    className="text-xs text-sky-300 underline underline-offset-2"
+                  >
+                    {showSceneLockedPrompt ? 'Hide locked prompt' : 'Show locked prompt'}
+                  </button>
                   {showSceneLockedPrompt && (
-                    <p className="text-xs text-gray-200 mt-2 whitespace-pre-wrap">
+                    <p className="mt-2 text-xs leading-6 text-gray-200 whitespace-pre-wrap">
                       {(() => {
                         const currentScene = sceneOptions.find(s => s.value === selectedOptions.scene);
                         const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
@@ -1739,43 +2099,60 @@ export default function ImageGenerationPage() {
                 <div className="space-y-2">
                   {Object.entries(STYLE_CATEGORIES)
                     .filter(([key]) => key !== 'scene' && getVisibleCategories().includes(key))
-                    .map(([key, category]) => (
-                    <div key={key} className="border border-gray-700 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }))}
-                        className="w-full px-2 py-2 bg-gray-700 hover:bg-gray-600 transition flex items-center justify-between text-xs font-medium text-white"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="text-sm">{category.icon}</span>
-                          <span>{category.label}</span>
-                        </span>
-                        {expandedCategories[key] ? (
-                          <ChevronRight className="w-3 h-3 transform rotate-90" />
-                        ) : (
-                          <ChevronRight className="w-3 h-3" />
-                        )}
-                      </button>
+                    .map(([key, category]) => {
+                      const selectedLabel = Array.isArray(selectedOptions[key])
+                        ? selectedOptions[key].join(', ')
+                        : category.options.find((opt) => opt.value === selectedOptions[key])?.label || selectedOptions[key];
 
-                      {expandedCategories[key] && (
-                        <div className="p-2 bg-gray-800 space-y-1 max-h-40 overflow-y-auto">
-                          {category.options.map(opt => (
-                            <button
-                              key={opt.value}
-                              onClick={() => setSelectedOptions(prev => ({ ...prev, [key]: opt.value }))}
-                              className={`w-full px-2 py-1 text-xs rounded text-left transition ${
-                                selectedOptions[key] === opt.value
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                              }`}
-                              title={opt.label}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
+                      return (
+                        <div key={key} className="rounded-[1.35rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                          <button
+                            onClick={() => setExpandedCategories(prev => ({ ...prev, [key]: !prev[key] }))}
+                            className="flex w-full items-center justify-between gap-3 rounded-[1.05rem] px-3 py-2.5 text-left transition hover:bg-white/[0.04]"
+                          >
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-2 text-sm font-medium text-white">
+                                <span className="text-sm">{category.icon}</span>
+                                <span className="truncate">{category.label}</span>
+                              </span>
+                              {selectedLabel ? (
+                                <span className="mt-1 block truncate text-[11px] text-sky-200/85">{selectedLabel}</span>
+                              ) : null}
+                            </span>
+                            {expandedCategories[key] ? (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90 text-slate-500" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                            )}
+                          </button>
+
+                          {expandedCategories[key] && (
+                            <div className="grid max-h-44 grid-cols-2 gap-2 overflow-y-auto px-2 pb-2 pt-1">
+                              {category.options.map(opt => (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => handleOptionChange(key, opt.value)}
+                                  className={getSectionOptionChipClass(selectedOptions[key] === opt.value, 'cool')}
+                                  title={opt.label}
+                                >
+                                  <span className="flex w-full items-center justify-between gap-2">
+                                    {selectedOptions[key] === opt.value ? (
+                                      <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-950/15 text-[9px] font-bold">
+                                        ✓
+                                      </span>
+                                    ) : null}
+                                    <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
+                                    <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
+                                      {selectedOptions[key] === opt.value ? 'ON' : ''}
+                                    </span>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -1808,177 +2185,339 @@ export default function ImageGenerationPage() {
                   onRandomSeedChange={setGenerationRandomSeed}
                   imageGenProvider={imageGenProvider}
                 />
-
-                {/* ?? NEW: Storage Configuration */}
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
-                    <Save className="w-3 h-3" /> Image Storage
-                  </h4>
-                  
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <button
-                      onClick={() => setStorageType('cloud')}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
-                        storageType === 'cloud'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                      }`}
-                    >
-                      ?? Cloud (ImgBB)
-                    </button>
-                    <button
-                      onClick={() => setStorageType('local')}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
-                        storageType === 'local'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                      }`}
-                    >
-                      ?? Local Folder
-                    </button>
-                  </div>
-
-                  {storageType === 'local' && (
-                    <div>
-                      <label className="text-xs text-gray-400 mb-2 block">Folder Path</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., ./generated-images"
-                        value={localFolder || ''}
-                        onChange={(e) => setLocalFolder(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Default: ./generated-images</p>
-                    </div>
-                  )}
-
-                  {storageType === 'cloud' && (
-                    <div className="text-xs text-gray-400">
-                      ?? Auto-folder: <span className="text-purple-400 font-mono">{new Date().toISOString().split('T')[0]}</span>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
-        </div>
+          </div>
 
-        {/* ==================== CENTER + RIGHT ==================== */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 flex min-w-0">
+          {/* ==================== CENTER + RIGHT ==================== */}
+          <div className={`${currentStep === 1 ? 'step1-work-area' : ''} flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
+            <div className={`${currentStep === 1 ? 'step1-work-row' : ''} flex min-h-0 min-w-0 flex-1 overflow-hidden`}>
             {/* ==================== CENTER MAIN CONTENT ==================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-gray-900 center-main">
+            <div className={`${currentStep === 1 ? 'step1-center-panel' : ''} studio-card-shell center-main flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_18px_50px_rgba(2,6,23,0.28)] backdrop-blur-[2px]`}>
               {showUseCaseFocusInfo && (
-                <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
-                  <div className="flex items-center gap-4 text-xs">
-                    <span className="text-gray-400">{t('imageGeneration.useCase')}:</span>
-                    <span className="text-purple-400 font-medium">{t(`imageGeneration.${getLabel(USE_CASES, useCase)}`)}</span>
-                    <span className="text-gray-600">|</span>
-                    <span className="text-gray-400">{t('imageGeneration.focus')}:</span>
-                    <span className="text-purple-400 font-medium">{t(`imageGeneration.${getLabel(FOCUS_OPTIONS, productFocus)}`)}</span>
+                <div className="flex-shrink-0 px-5 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-full bg-white/[0.05] px-3 py-1 text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      Use case: <span className="font-medium text-white">{getUseCaseDisplayLabel(useCase)}</span>
+                    </span>
+                    <span className="rounded-full bg-white/[0.05] px-3 py-1 text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      Focus: <span className="font-medium text-white">{getFocusDisplayLabel(productFocus)}</span>
+                    </span>
+                    </div>
+                    {currentStep === 3 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPromptMode('template')}
+                          className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                            promptMode === 'template'
+                              ? 'bg-sky-400/18 text-sky-50 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                              : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <Wand2 className="h-3.5 w-3.5" />
+                          Use Template Mode
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPromptMode('step3')}
+                          className={`flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                            promptMode === 'step3'
+                              ? 'bg-sky-400/18 text-sky-50 shadow-[inset_0_0_0_1px_rgba(125,211,252,0.18)]'
+                              : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          Use Step3 Mode
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              <div className="flex-1 p-4 overflow-y-auto overflow-x-hidden">
-                <div className="max-w-4xl mx-auto">
+              <div className={`${currentStep === 1 ? 'step1-center-scroll' : ''} flex-1 overflow-y-auto p-4`}>
+                <div className={`${currentStep === 1 ? 'step1-center-shell flex h-full min-h-0 flex-col' : ''} relative mx-auto max-w-6xl`}>
                   {/* Step 1: Upload */}
                   {currentStep === 1 && (
-                    <>
-                      {/* Upload Instructions */}
-                      <div className="mb-4 p-4 bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-lg border border-purple-700/50">
-                        <div className="text-sm font-semibold text-purple-300 mb-3 flex items-center gap-2">
-                          <FileText className="w-4 h-4" />
-                          {t(`imageGeneration.${getLabel(USE_CASES, useCase)}`)} - {t('imageGeneration.uploadInstructions')}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-xs text-gray-300">
-                          <div>
-                            <div className="text-purple-400 font-semibold mb-1">?? Image 1:</div>
-                            <div>{getUploadInstructions(useCase).character}</div>
-                          </div>
-                          <div>
-                            <div className="text-purple-400 font-semibold mb-1">?? Image 2:</div>
-                            <div>{getUploadInstructions(useCase).product}</div>
-                          </div>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-purple-700/30 text-xs text-purple-300">
-                          ?? <span className="italic">{getUploadInstructions(useCase).hint}</span>
-                        </div>
-                      </div>
-
-                      {/* Upload Areas */}
-                    </>
-                  )}
-
-                  {currentStep === 1 && (
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                        {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
+                    <div className="step1-upload-stage flex h-full min-h-0 flex-col gap-3">
+                      <div className="step1-upload-toolbar flex flex-wrap items-center gap-1.5 rounded-[1.1rem] bg-white/[0.03] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] lg:gap-2 lg:px-3 lg:py-2.5 xl:gap-2.5 xl:px-3.5">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMode('browser')}
+                          className={`inline-flex items-center gap-1.25 rounded-full px-2.25 py-1 text-[11px] font-medium transition lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-xs ${
+                            activeMode === 'browser'
+                              ? 'apple-chip-browser-active'
+                              : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Browser
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMode('upload')}
+                          className={`inline-flex items-center gap-1.25 rounded-full px-2.25 py-1 text-[11px] font-medium transition lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-xs ${
+                            activeMode === 'upload'
+                              ? 'apple-chip-upload-active'
+                              : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          API
+                        </button>
+                        {activeMode === 'browser' && (
                           <>
-                            <img src={characterImage.preview} alt="Character" className="w-full h-full object-contain rounded-xl" />
-                            <button onClick={() => setCharacterImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
-                              <X className="w-3 h-3" />
-                            </button>
+                            <div className="mx-0.5 h-3.5 w-px bg-white/10 lg:mx-1 lg:h-4" />
+                            {PROVIDERS.map((provider) => (
+                              <button
+                                key={provider.id}
+                                type="button"
+                                onClick={() => setBrowserProvider(provider.id)}
+                                className={`inline-flex items-center gap-1.25 rounded-full px-2.25 py-1 text-[11px] font-medium transition lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-xs ${
+                                  browserProvider === provider.id
+                                    ? 'apple-chip-browser-active'
+                                    : 'bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white'
+                                }`}
+                              >
+                                <ProviderGlyph providerId={provider.id} />
+                                {provider.label}
+                              </button>
+                            ))}
                           </>
-                        ) : (
-                          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                            <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                            <span className="text-sm text-gray-500">Character</span>
-                            <input type="file" accept="image/*" className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) setCharacterImage({ file, preview: URL.createObjectURL(file) });
-                              }}
-                            />
-                          </label>
                         )}
                       </div>
 
-                      <div className="relative aspect-square bg-gray-800 rounded-xl border-2 border-dashed border-gray-600">
-                        {productImage?.preview ? (
-                          <>
-                            <img src={productImage.preview} alt="Product" className="w-full h-full object-contain rounded-xl" />
-                            <button onClick={() => setProductImage(null)} className="absolute top-2 right-2 p-1 bg-red-500 rounded-full">
-                              <X className="w-3 h-3" />
-                            </button>
-                          </>
-                        ) : (
-                          <label className="flex flex-col items-center justify-center h-full cursor-pointer hover:border-purple-500">
-                            <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                            <span className="text-sm text-gray-500">Product</span>
-                            <input type="file" accept="image/*" className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) setProductImage({ file, preview: URL.createObjectURL(file) });
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                      <div className="step1-upload-grid grid gap-3 md:grid-cols-3">
+                        <section className={`step1-upload-card ${characterCardClass} group relative`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCharacter(null);
+                              setCharacterImage(null);
+                            }}
+                            className="pointer-events-none absolute right-3 top-3 z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900/65 text-white opacity-0 ring-1 ring-white/16 shadow-[0_10px_18px_rgba(15,23,42,0.22)] transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-red-500/85"
+                            title="Clear character"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="mb-3 flex items-start gap-3 pr-12">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300">Character</p>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${isCharacterRequired ? 'apple-required-pill bg-red-500/12 text-red-500 ring-1 ring-red-500/20' : 'bg-slate-400/12 text-slate-300'}`}>
+                                  {isCharacterRequired ? 'Required' : 'Optional'}
+                                </span>
+                              </div>
+                              <ClampedDescription
+                                text={getUploadInstructions(useCase)?.character || 'Upload or select a saved character profile.'}
+                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
+                              />
+                            </div>
+                          </div>
 
-                  {/* Gallery Picker Buttons */}
-                  {currentStep === 1 && (
-                    <div className="grid grid-cols-2 gap-2 mb-6">
-                      <button
-                        onClick={() => {
-                          setGalleryPickerFor('character');
-                          setShowGalleryPicker(true);
-                        }}
-                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 rounded-lg text-white text-sm font-medium transition-all transform hover:scale-105"
-                      >
-                        ?? Pick Character from Gallery
-                      </button>
-                      <button
-                        onClick={() => {
-                          setGalleryPickerFor('product');
-                          setShowGalleryPicker(true);
-                        }}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-lg text-white text-sm font-medium transition-all transform hover:scale-105"
-                      >
-                        ?? Pick Product from Gallery
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => characterFileInputRef.current?.click()}
+                            className={`step1-upload-dropzone ${uploadDropzoneBaseClass} h-[188px] hover:bg-white/[0.03]`}
+                          >
+                            {selectedCharacter ? (
+                              <>
+                                {selectedCharacter.portraitUrl ? (
+                                  <img src={selectedCharacter.portraitUrl} alt={selectedCharacter.name} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-300">
+                                    <Sparkles className="h-8 w-8 text-sky-300" />
+                                    <span className="text-sm font-medium">{selectedCharacter.name}</span>
+                                  </div>
+                                )}
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{selectedCharacter.name}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-slate-300">@{selectedCharacter.alias}</p>
+                                </div>
+                              </>
+                            ) : characterImage?.preview ? (
+                              <>
+                                <img src={characterImage.preview} alt="Character" className="h-full w-full object-contain p-3" />
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{step1Copy.characterUploadedLabel}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{step1Copy.characterUploadedSubLabel}</p>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-center">
+                                <Upload className="mb-3 h-8 w-8 text-slate-500 transition group-hover:text-sky-300" />
+                                <p className="text-[15px] font-medium text-white">{step1Copy.characterUploadTitle}</p>
+                                <p className="mt-1 text-xs text-slate-400">{step1Copy.characterUploadHint}</p>
+                              </div>
+                            )}
+                            <input
+                              ref={characterFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => handleImageFileSelection(event, setCharacterImage)}
+                            />
+                          </button>
+
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowCharacterSelector(true)}
+                              className="rounded-xl border border-sky-300/25 bg-sky-400/12 px-3 py-2 text-[13px] font-medium text-sky-100 transition hover:bg-sky-400/18"
+                            >
+                              {step1Copy.characterSelectCta}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGalleryPickerFor('character');
+                                setShowGalleryPicker(true);
+                              }}
+                              className="rounded-xl border border-sky-300/25 bg-sky-400/12 px-3 py-2 text-[13px] font-medium text-sky-100 transition hover:bg-sky-400/18"
+                            >
+                              {step1Copy.characterGalleryCta}
+                            </button>
+                          </div>
+                        </section>
+
+                        <section className={`step1-upload-card ${productCardClass} group relative`}>
+                          <button
+                            type="button"
+                            onClick={() => setProductImage(null)}
+                            className="pointer-events-none absolute right-3 top-3 z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900/65 text-white opacity-0 ring-1 ring-white/16 shadow-[0_10px_18px_rgba(15,23,42,0.22)] transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-red-500/85"
+                            title="Clear product"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="mb-3 flex items-start gap-3 pr-12">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Product</p>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${isProductRequired ? 'apple-required-pill bg-red-500/12 text-red-500 ring-1 ring-red-500/20' : 'bg-slate-400/12 text-slate-300'}`}>
+                                  {isProductRequired ? 'Required' : 'Optional'}
+                                </span>
+                              </div>
+                              <ClampedDescription
+                                text={getUploadInstructions(useCase)?.product || 'Keep the product clear and tightly framed.'}
+                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => productFileInputRef.current?.click()}
+                            className={`step1-upload-dropzone ${uploadDropzoneBaseClass} h-[188px] hover:bg-white/[0.03]`}
+                          >
+                            {productImage?.preview ? (
+                              <>
+                                <img src={productImage.preview} alt="Product" className="h-full w-full object-contain p-3" />
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{step1Copy.productUploadedLabel}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{step1Copy.productUploadedSubLabel}</p>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-center">
+                                <Upload className="mb-3 h-8 w-8 text-slate-500 transition group-hover:text-cyan-200" />
+                                <p className="text-[15px] font-medium text-white">{step1Copy.productUploadTitle}</p>
+                                <p className="mt-1 text-xs text-slate-400">{step1Copy.productUploadHint}</p>
+                              </div>
+                            )}
+                            <input
+                              ref={productFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => handleImageFileSelection(event, setProductImage)}
+                            />
+                          </button>
+
+                          <div className="mt-3 grid grid-cols-1 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGalleryPickerFor('product');
+                                setShowGalleryPicker(true);
+                              }}
+                              className="rounded-xl border border-sky-300/25 bg-sky-400/12 px-3 py-2 text-[13px] font-medium text-sky-100 transition hover:bg-sky-400/18"
+                            >
+                              {step1Copy.productGalleryCta}
+                            </button>
+                          </div>
+                        </section>
+
+                        <section className={`step1-upload-card ${sceneCardClass} group relative`}>
+                          <button
+                            type="button"
+                            onClick={() => setReferenceImage(null)}
+                            className="pointer-events-none absolute right-3 top-3 z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900/65 text-white opacity-0 ring-1 ring-white/16 shadow-[0_10px_18px_rgba(15,23,42,0.22)] transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-red-500/85"
+                            title="Clear custom scene reference"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="mb-3 flex items-start gap-3 pr-12">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300">Scene</p>
+                              <ClampedDescription
+                                text="Locked scene plus optional custom reference image."
+                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="studio-accent-panel rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_24px_rgba(8,78,120,0.12)]">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="studio-accent-title truncate text-[13px] font-medium text-white md:text-sm">{currentScene?.label || 'No scene selected'}</p>
+                                <p className="studio-accent-copy mt-1 line-clamp-2 text-xs leading-5 text-slate-300">
+                                  {selectedScenePrompt || 'Pick a locked scene to keep environment and lighting consistent.'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowScenePicker(true)}
+                                className="studio-accent-button rounded-xl bg-sky-400/12 px-3 py-2 text-xs font-medium text-sky-100 transition hover:bg-sky-400/18"
+                              >
+                                Pick scene
+                              </button>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => sceneFileInputRef.current?.click()}
+                            className={`step1-upload-dropzone step1-scene-dropzone ${uploadDropzoneBaseClass} mt-3 h-[128px] hover:bg-white/[0.03]`}
+                          >
+                            {scenePreviewUrl ? (
+                              <>
+                                <img src={scenePreviewUrl} alt="Scene reference" className="h-full w-full object-cover" />
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/45 px-4 py-3 text-left backdrop-blur">
+                                  {referenceImage ? <p className="studio-media-overlay-title text-sm font-medium text-white">Custom scene reference</p> : null}
+                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{referenceImage ? 'Tap to replace' : 'Upload to override with your own reference'}</p>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-center">
+                                <Upload className="mb-3 h-8 w-8 text-slate-500 transition group-hover:text-sky-300" />
+                                <p className="text-sm font-medium text-white">Add scene reference</p>
+                                <p className="mt-1 text-xs text-slate-400">Optional image for background and composition consistency.</p>
+                              </div>
+                            )}
+                            <input
+                              ref={sceneFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => handleImageFileSelection(event, setReferenceImage)}
+                            />
+                          </button>
+
+                        </section>
+                      </div>
                     </div>
                   )}
 
@@ -1996,6 +2535,7 @@ export default function ImageGenerationPage() {
                       
                       {/* Recommendation Selector - unified per-category decisions */}
                       <RecommendationSelector
+                        ref={recommendationSelectorRef}
                         analysis={analysis}
                         existingOptions={groupedPromptOptions}
                         currentSelections={selectedOptions}
@@ -2021,6 +2561,8 @@ export default function ImageGenerationPage() {
                 analysis={analysis}
                 characterDescription={characterDescription}
                 productFocus={productFocus}
+                mode={promptMode}
+                onModeChange={setPromptMode}
               />
             )}
 
@@ -2029,54 +2571,34 @@ export default function ImageGenerationPage() {
                   {/* Step 4: Generation Result */}
                   {currentStep === 4 && (
                     <>
-                      {/* Image Generation Provider Selection */}
-                      <div className="mb-6 bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                          <Rocket className="w-4 h-4 text-purple-400" />
-                          Choose Browser Provider
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
+                      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[1.25rem] bg-white/[0.03] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                        <div className="flex flex-wrap items-center gap-2">
                           {IMAGE_GEN_PROVIDERS.map(provider => (
                             <button
                               key={provider.id}
                               onClick={() => setGenerationProvider(provider.id)}
-                              className={`p-3 rounded-lg text-left transition-all ${
+                              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                                 generationProvider === provider.id
-                                  ? 'bg-purple-600 border border-purple-500 shadow-lg shadow-purple-500/20'
-                                  : 'bg-gray-700/50 border border-gray-600 hover:border-gray-500'
+                                  ? 'bg-violet-500/18 text-violet-100'
+                                  : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]'
                               }`}
                             >
-                              <div className="font-medium text-sm text-white">{provider.label}</div>
-                              <div className="text-xs text-gray-400 mt-1">{provider.description}</div>
-                              {generationProvider === provider.id && (
-                                <div className="mt-2 text-xs text-purple-300 font-medium">? Selected</div>
-                              )}
+                              {provider.label.replace(' Browser', '').replace('Google Labs ', '').replace(' FLUX.2 Klein', '')}
                             </button>
                           ))}
                         </div>
-                      </div>
-
-                      {/* Google Drive Upload Option */}
-                      <div className="mb-6 bg-gradient-to-r from-blue-900/50 to-cyan-900/50 rounded-lg p-4 border border-blue-700">
-                        <label className="flex items-center gap-3 cursor-pointer">
+                        <div className="h-5 w-px bg-white/10" />
+                        <label className="flex items-center gap-2 cursor-pointer rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200">
                           <input
                             type="checkbox"
                             checked={uploadToDrive}
                             onChange={(e) => setUploadToDrive(e.target.checked)}
-                            className="w-5 h-5 rounded bg-gray-700 border-gray-600 checked:bg-blue-600"
+                            className="h-4 w-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600"
                           />
-                          <div>
-                            <div className="text-sm font-semibold text-white">?? Upload to Google Drive</div>
-                            <div className="text-xs text-gray-300">
-                              Save generated images to Google Drive (Affiliate AI ? Images ? Uploaded ? App)
-                            </div>
-                          </div>
+                          <span>Upload to Google Drive</span>
                         </label>
-                        
                         {driveUploadStatus && (
-                          <div className="mt-3 p-2 rounded bg-blue-900/50 border border-blue-700">
-                            <p className="text-xs text-blue-300">{driveUploadStatus}</p>
-                          </div>
+                          <span className="text-xs text-cyan-200">{driveUploadStatus}</span>
                         )}
                       </div>
 
@@ -2088,469 +2610,256 @@ export default function ImageGenerationPage() {
                         aspectRatio={aspectRatio}
                         styleOptions={selectedOptions}
                         isRegenerating={isGenerating}
-                        characterImage={characterImage?.preview}
+                        characterImage={characterPreviewSrc}
                         productImage={productImage?.preview}
+                        useCase={useCase}
+                        productFocus={productFocus}
+                        generationProvider={generationProvider}
+                        uploadToDrive={uploadToDrive}
+                        driveUploadStatus={driveUploadStatus}
                       />
                     </>
                   )}
 
-                  {(isAnalyzing) && (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-                      <span className="ml-2 text-gray-400">Analyzing...</span>
+                  {isAnalyzing && currentStep === 1 && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[1.5rem] bg-slate-950/55 backdrop-blur-[2px]">
+                      <div className="flex items-center gap-3 rounded-2xl bg-slate-900/80 px-5 py-3 shadow-[0_18px_40px_rgba(2,6,23,0.34)]">
+                        <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+                        <span className="text-sm font-medium text-slate-100">{t('imageGeneration.analyzing')}</span>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ==================== ACTION BAR ==================== */}
-              <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
-                <div className="max-w-4xl mx-auto flex items-center justify-between">
-                  <div className="text-xs text-gray-400">
-                    {currentStep === 1 && (isReadyForAnalysis ? `? ${t('imageGeneration.readyToAnalyze')}` : `?? ${t('imageGeneration.upload2Images')}`)}
-                    {currentStep === 2 && `?? ${t('imageGeneration.analysisComplete')}`}
-                    {currentStep === 3 && `?? ${t('imageGeneration.stylePromptEditor')}`}
-                    {currentStep === 4 && `?? ${t('imageGeneration.generateImages2')}`}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {currentStep === 1 && (
-                      <button
-                        onClick={handleStartAnalysis}
-                        disabled={!isReadyForAnalysis || isAnalyzing}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isAnalyzing ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.analyzing')}</span></>
-                        ) : (
-                          <><Sparkles className="w-4 h-4" /><span>{t('imageGeneration.startAnalysis')}</span></>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Step 2: No button neede - RecommendationSelector handles apply */}
-
-                    {currentStep === 3 && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => step3ComponentRef.current?.triggerVariations()}
-                          className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-sm"
-                        >
-                          <Shuffle className="w-4 h-4" />
-                          <span>{t('imageGeneration.variations')}</span>
-                        </button>
-                        <button
-                          onClick={() => step3ComponentRef.current?.triggerOptimize()}
-                          className="flex items-center gap-2 px-4 py-2 bg-orange-600 rounded-lg hover:bg-orange-700 text-sm"
-                        >
-                          <Zap className="w-4 h-4" />
-                          <span>{t('imageGeneration.optimize')}</span>
-                        </button>
-                        <div className="flex-1" />
-                        <button
-                          onClick={handleBuildPrompt}
-                          disabled={isLoading || !analysis?.analysis}
-                          className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                          <span>{isLoading ? t('imageGeneration.building') : t('imageGeneration.nextStep')}</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {currentStep === 4 && generatedImages.length === 0 && (
-                      <>
-                        {console.log('? Step 4 render - showing Generate button (generatedImages.length:', generatedImages.length, ')')}
-                        
-                        {/* ?? NEW: Error Display with Retry or Change Images */}
-                        {generationError && (
-                          <div className={`mb-4 p-3 rounded-lg border ${
-                            retryable 
-                              ? 'bg-orange-900/20 border-orange-700/50' 
-                              : 'bg-red-900/20 border-red-700/50'
-                          }`}>
-                            <p className={`text-sm mb-2 ${retryable ? 'text-orange-300' : 'text-red-300'}`}>
-                              {retryable ? '??' : '?'} {generationError}
-                            </p>
-                            {retryable && (
-                              <button
-                                onClick={handleStartGeneration}
-                                disabled={isGenerating}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50 text-white font-medium"
-                              >
-                                {isGenerating ? (
-                                  <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
-                                ) : (
-                                  <><RefreshCw className="w-4 h-4" /><span>{t('imageGeneration.retryGeneration')}</span></>
-                                )}
-                              </button>
-                            )}
-                            {!retryable && (
-                              <p className="text-xs text-gray-400 mt-2">
-                                ?? Please select different images and try again
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        
-                        <button
-                          onClick={handleStartGeneration}
-                          disabled={isGenerating || !generatedPrompt}
-                          className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {isGenerating ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
-                          ) : (
-                            <><Rocket className="w-4 h-4" /><span>{t('imageGeneration.generateImages')}</span></>
-                          )}
-                        </button>
-                      </>
-                    )}
-
-                    {generatedImages.length > 0 && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleReset}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          <span>{t('imageGeneration.startNew')}</span>
-                        </button>
-                        {selectedFlowId && (
-                          <button
-                            onClick={() => {
-                              setShowSessionLogModal(true);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
-                            title="Preview generation session"
-                          >
-                            <Database className="w-4 h-4" />
-                            <span>{t('imageGeneration.sessionLog')}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* ==================== RIGHT SIDEBAR ==================== */}
-            {currentStep >= 2 && (
-            <div className="w-72 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0">
-              <div className="p-4 space-y-4">
-                {/* SIDEBAR-ANALYSIS-SECTION: Character & Product Info in Sidebar */}
-                {currentStep === 2 && analysis && (
-                  <div className="sidebar-analysis-summary space-y-3">
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase">Analysis Summary</h4>
-                    <div className="sidebar-analysis-cards space-y-2">
-                      {/* CHARACTER-PROFILE-CARD: Character Profile */}
-                      <div className="card-character-profile bg-gray-800/80 rounded p-2 border border-gray-700">
-                        <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
-                          <span>??</span> Character
-                        </div>
-                        <div className="card-character-content text-xs text-gray-400 space-y-0.5">
-                          {analysis?.characterProfile && Object.entries(analysis.characterProfile).map(([key, value]) => {
-                            if (!value) return null;
-                            return (
-                              <div key={key} className="truncate">
-                                <span className="text-gray-500">{key}:</span> {value}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* PRODUCT-DETAILS-CARD: Product Details */}
-                      <div className="card-product-details bg-gray-800/80 rounded p-2 border border-gray-700">
-                        <div className="text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
-                          <span>??</span> Product
-                        </div>
-                        <div className="card-product-content text-xs text-gray-400 space-y-0.5">
-                          {analysis?.productDetails && Object.entries(analysis.productDetails).map(([key, value]) => {
-                            if (!value) return null;
-                            return (
-                              <div key={key} className="truncate">
-                                <span className="text-gray-500">{key}:</span> {value}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: Preview Images */}
-                {currentStep === 3 && (
-                  <>
-                    {/* Character & Product Preview */}
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1 font-medium">?? Character</p>
-                          <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
-                            {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
-                              <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1 font-medium">?? Product</p>
-                          <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
-                            {productImage?.preview ? (
-                              <img src={productImage.preview} alt="Product" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Reference Images */}
-                      <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700">
-                        <h4 className="text-xs font-semibold text-white mb-2">?? Style References</h4>
-                        <div className="grid grid-cols-3 gap-1.5 mb-2">
-                          {referenceImages.map((ref, idx) => (
-                            <div key={ref.id} className="relative bg-gray-700 rounded overflow-hidden group aspect-square">
-                              <img src={ref.base64} alt="Ref" className="w-full h-full object-cover" />
-                              <button
-                                onClick={() => setReferenceImages(referenceImages.filter((_, i) => i !== idx))}
-                                className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        {referenceImages.length < 3 && (
-                          <label className="flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs cursor-pointer transition font-medium">
-                            <Upload className="w-3 h-3" />
-                            Add
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const files = Array.from(e.target.files || []);
-                                if (referenceImages.length + files.length > 3) {
-                                  alert('Max 3 reference images');
-                                  return;
-                                }
-                                files.forEach(file => {
-                                  const reader = new FileReader();
-                                  reader.onload = (evt) => {
-                                    setReferenceImages(prev => [...prev, {
-                                      id: `ref-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                      base64: evt.target.result,
-                                      name: file.name
-                                    }]);
-                                  };
-                                  reader.readAsDataURL(file);
-                                });
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-
-                      {/* Deviation Indicator */}
-                      {analysis?.recommendations && (
-                        <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50 space-y-2">
-                          <h3 className="text-xs font-semibold text-blue-300">? AI Recommendations vs Current</h3>
-                          <div className="space-y-1.5 text-xs">
-                            {Object.entries(STYLE_CATEGORIES).map(([categoryKey]) => {
-                              const aiRecObj = analysis.recommendations[categoryKey];
-                              const aiRecChoice = aiRecObj?.choice;
-                              const current = selectedOptions[categoryKey];
-                              const changed = current && aiRecChoice && current !== aiRecChoice;
-                              
-                              // Show AI recommendations when available, OR user-selected values (style, colorPalette)
-                              // style and colorPalette are user-selected, not from Grok analysis
-                              const isUserSelectedOnly = (categoryKey === 'style' || categoryKey === 'colorPalette');
-                              if (!aiRecChoice && !isUserSelectedOnly) return null;
-                              
-                              // Determine what to display
-                              const displayValue = aiRecChoice || (isUserSelectedOnly && current);
-                              if (!displayValue) return null;
-                              
+            {currentStep >= 2 && currentStep !== 4 && (
+              <div className="w-64 min-h-0 flex-shrink-0 overflow-hidden">
+                <div className="h-full space-y-4 overflow-y-auto pl-4 pr-0">
+                  {currentStep === 2 && analysis && (
+                    <div className="sidebar-analysis-summary space-y-3">
+                      <h4 className="text-xs font-semibold uppercase text-gray-400">Analysis Summary</h4>
+                      <div className="sidebar-analysis-cards space-y-4">
+                        <div className="card-character-profile rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.14))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02),0_12px_28px_rgba(2,6,23,0.14)]">
+                          <div className="mb-1 text-xs font-semibold text-gray-300">Character</div>
+                          <div className="card-character-content space-y-0.5 text-xs text-gray-400">
+                            {analysis?.characterProfile && Object.entries(analysis.characterProfile).map(([key, value]) => {
+                              if (!value) return null;
                               return (
-                                <div key={categoryKey} className={`flex items-center justify-between px-2 py-1.5 rounded ${
-                                  changed ? 'bg-yellow-500/20 border border-yellow-500/30' : 
-                                  isUserSelectedOnly ? 'bg-purple-700/20 border border-purple-500/20' : 'bg-gray-700/30'
-                                }`}>
-                                  <span className="text-gray-400">{categoryKey}</span>
-                                  <div className="flex items-center gap-1 text-right">
-                                    <span className={changed ? 'text-yellow-300' : isUserSelectedOnly ? 'text-purple-300' : 'text-green-400'}>
-                                      {displayValue}
-                                    </span>
-                                    {changed && (
-                                      <>
-                                        <span className="text-gray-500">?</span>
-                                        <span className="text-yellow-400 font-medium">{current}</span>
-                                      </>
-                                    )}
-                                  </div>
+                                <div key={key} className="truncate">
+                                  <span className="text-gray-500">{getRecommendationLabel(key)}:</span> {value}
                                 </div>
                               );
                             })}
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </>
-                )}
 
-                {/* Step 3+: Style Summary */}
-                {currentStep >= 3 && currentStep !== 3 && Object.keys(selectedOptions).length > 0 && (
-                  <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700 space-y-2">
-                    <h3 className="text-xs font-semibold text-purple-300">? Current Style</h3>
-                    <div className="space-y-1 text-xs">
-                      {Object.entries(selectedOptions).map(([key, value]) => (
-                        value && (
-                          <div key={key} className="flex justify-between">
-                            <span className="text-gray-500">{key}</span>
-                            <span className="text-purple-300 font-medium">{value}</span>
+                        <div className="card-product-details rounded-[1.6rem] bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.2),transparent_46%),linear-gradient(180deg,rgba(76,29,149,0.16),rgba(15,23,42,0.18))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02),0_14px_30px_rgba(46,16,101,0.16)]">
+                          <div className="mb-1 text-xs font-semibold text-gray-300">Product</div>
+                          <div className="card-product-content space-y-0.5 text-xs text-gray-400">
+                            {analysis?.productDetails && Object.entries(analysis.productDetails).map(([key, value]) => {
+                              if (!value) return null;
+                              return (
+                                <div key={key} className="truncate">
+                                  <span className="text-gray-500">{getRecommendationLabel(key)}:</span> {value}
+                                </div>
+                              );
+                            })}
                           </div>
-                        )
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3+: Prompt Summary */}
-                {currentStep >= 3 && currentStep !== 3 && generatedPrompt && (
-                  <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-lg p-3 border border-purple-700/50 space-y-2">
-                    <h3 className="text-xs font-semibold text-blue-300">?? Prompt Summary</h3>
-                    <div className="text-xs text-gray-400 line-clamp-4 leading-relaxed">
-                      {generatedPrompt.positive}
-                    </div>
-                    {generatedPrompt.negative && (
-                      <div className="pt-2 border-t border-purple-700/50">
-                        <div className="text-xs text-gray-500 mb-1">Negative:</div>
-                        <div className="text-xs text-gray-400 line-clamp-2">
-                          {generatedPrompt.negative}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {/* Step 4: Generation Info */}
-                {currentStep === 4 && (
-                  <>
-                    {/* Preview Images */}
-                    {(characterImage || productImage) && (
-                      <div className="space-y-3 mb-4">
+                  {currentStep === 3 && (
+                    <div className="space-y-4">
+                      <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.14))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02),0_12px_28px_rgba(2,6,23,0.14)]">
+                        <h4 className="mb-3 text-xs font-semibold uppercase text-gray-400">Preview</h4>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1 font-medium">?? Character</p>
-                            <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
-                              {selectedCharacter ? (<div className="text-xs text-slate-400">Using selected character from library</div>) : characterImage?.preview ? (
-                                <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
+                            <p className="mb-1 text-xs font-medium text-gray-500">Character</p>
+                            <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-900">
+                              {characterPreviewSrc ? (
+                                <img src={characterPreviewSrc} alt="Character" className="h-full w-full object-cover" />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                                <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">No image</div>
                               )}
                             </div>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 mb-1 font-medium">?? Product</p>
-                            <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                            <p className="mb-1 text-xs font-medium text-gray-500">Product</p>
+                            <div className="relative aspect-square overflow-hidden rounded-lg bg-gray-900">
                               {productImage?.preview ? (
-                                <img src={productImage.preview} alt="Product" className="w-full h-full object-cover" />
+                                <img src={productImage.preview} alt="Product" className="h-full w-full object-cover" />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No image</div>
+                                <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">No image</div>
                               )}
                             </div>
                           </div>
                         </div>
                       </div>
-                    )}
 
-                    {/* Generation Settings */}
-                    <div className="bg-gray-700/30 rounded-lg p-3 border border-gray-700 space-y-2">
-                      <h3 className="text-xs font-semibold text-gray-300">?? Generation Settings</h3>
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Images:</span>
-                          <span className="text-gray-300">{imageCount}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Aspect Ratio:</span>
-                          <span className="text-gray-300">{aspectRatio}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Watermark:</span>
-                        <span className="text-gray-300">{hasWatermark ? 'Yes' : 'No'}</span>
-                      </div>
-                      {referenceImage && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Reference:</span>
-                          <span className="text-green-400">? Added</span>
+                      {generatedPrompt?.positive && (
+                        <div className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02),0_12px_28px_rgba(2,6,23,0.12)]">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <h4 className="text-xs font-semibold uppercase text-gray-400">Prompt</h4>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard?.writeText(generatedPrompt.positive || '')}
+                              className="rounded-full bg-white/[0.05] px-2 py-1 text-[11px] text-slate-200 transition hover:bg-white/[0.08]"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <p className="line-clamp-6 text-xs leading-5 text-slate-300">{generatedPrompt.positive}</p>
                         </div>
                       )}
                     </div>
-                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          </div>
+        </div>
 
-                    {/* Final Prompt Display */}
-                    {generatedPrompt?.positive && (
-                      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-                        <button
-                          onClick={() => setShowFinalPrompt(!showFinalPrompt)}
-                          className="w-full px-3 py-2.5 flex items-center justify-between bg-gray-700 hover:bg-gray-600 transition"
-                        >
-                          <span className="flex items-center gap-2 text-xs font-medium text-white">
-                            <FileText className="w-3 h-3 text-blue-400" />
-                            Final Prompt
-                          </span>
-                          {showFinalPrompt ? (
-                            <ChevronUp className="w-3 h-3 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-3 h-3 text-gray-400" />
-                          )}
-                        </button>
-                        
-                        {showFinalPrompt && (
-                          <div className="p-3 space-y-2.5">
-                            <div>
-                              <h4 className="text-xs font-semibold text-blue-400 mb-1.5">? Positive</h4>
-                              <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 max-h-32 overflow-y-auto border border-blue-900/30">
-                                {generatedPrompt.positive}
-                              </div>
-                            </div>
-                            
-                            {generatedPrompt.negative && (
-                              <div>
-                                <h4 className="text-xs font-semibold text-red-400 mb-1.5">? Negative</h4>
-                                <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 max-h-20 overflow-y-auto border border-red-900/30">
-                                  {generatedPrompt.negative}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {customPrompt && (
-                              <div>
-                                <h4 className="text-xs font-semibold text-purple-400 mb-1.5">+ Custom</h4>
-                                <div className="bg-gray-900 rounded p-2 text-xs text-gray-300 border border-purple-900/30">
-                                  {customPrompt}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+      </div>
+
+      {/* ==================== ACTION BAR ==================== */}
+      <div className="apple-footer-bar z-20 flex h-[60px] flex-shrink-0 items-center px-4">
+        <div className="flex h-full w-full items-center justify-end gap-3">
+          <div className="flex items-center gap-2">
+            {currentStep === 1 && (
+              <button
+                onClick={handleStartAnalysis}
+                disabled={!isReadyForAnalysis || isAnalyzing}
+                className="apple-cta-primary inline-flex h-11 items-center gap-2 rounded-lg px-4 leading-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAnalyzing ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.analyzing')}</span></>
+                ) : (
+                  <><Sparkles className="w-4 h-4" /><span>{step1Copy.analyzeCta}</span></>
+                )}
+              </button>
+            )}
+
+            {currentStep === 2 && analysis && (
+              <button
+                onClick={() => recommendationSelectorRef.current?.applySelections()}
+                disabled={isSaving}
+                className="apple-cta-primary inline-flex h-11 items-center gap-2 rounded-lg px-4 leading-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Saving...</span></>
+                ) : (
+                  <><ChevronRight className="w-4 h-4" /><span>Apply Selections & Continue</span></>
+                )}
+              </button>
+            )}
+
+            {currentStep === 3 && (
+              <div className="flex w-full items-center justify-between gap-2">
+                <button
+                  onClick={() => step3ComponentRef.current?.triggerVariations()}
+                  className="flex h-11 items-center gap-2 rounded-lg bg-purple-600 px-4 text-sm hover:bg-purple-700"
+                >
+                  <Shuffle className="w-4 h-4" />
+                  <span>{t('imageGeneration.variations')}</span>
+                </button>
+                <button
+                  onClick={() => step3ComponentRef.current?.triggerOptimize()}
+                  className="flex h-11 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm hover:bg-orange-700"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{t('imageGeneration.optimize')}</span>
+                </button>
+                <button
+                  onClick={handleBuildPrompt}
+                  disabled={isLoading || !analysis?.analysis}
+                  className="flex h-11 items-center gap-2 rounded-lg bg-green-600 px-4 text-sm hover:bg-green-700 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                  <span>{isLoading ? t('imageGeneration.building') : t('imageGeneration.nextStep')}</span>
+                </button>
+              </div>
+            )}
+
+            {currentStep === 4 && generatedImages.length === 0 && (
+              <>
+                {console.log('? Step 4 render - showing Generate button (generatedImages.length:', generatedImages.length, ')')}
+                
+                {generationError && (
+                  <div className={`mb-4 rounded-lg border p-3 ${
+                    retryable
+                      ? 'border-orange-700/50 bg-orange-900/20'
+                      : 'border-red-700/50 bg-red-900/20'
+                  }`}>
+                    <p className={`mb-2 text-sm ${retryable ? 'text-orange-300' : 'text-red-300'}`}>
+                      {retryable ? 'Retryable error:' : 'Error:'} {generationError}
+                    </p>
+                    {retryable && (
+                      <button
+                        onClick={handleStartGeneration}
+                        disabled={isGenerating}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                      >
+                        {isGenerating ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
+                        ) : (
+                          <><RefreshCw className="w-4 h-4" /><span>{t('imageGeneration.retryGeneration')}</span></>
                         )}
-                      </div>
+                      </button>
                     )}
-                  </>
+                    {!retryable && (
+                      <p className="mt-2 text-xs text-gray-400">
+                        Please select different images and try again
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                <button
+                  onClick={handleStartGeneration}
+                  disabled={isGenerating || !generatedPrompt}
+                  className="apple-cta-primary inline-flex h-11 items-center gap-2 rounded-lg px-4 leading-none disabled:opacity-50"
+                >
+                  {isGenerating ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('imageGeneration.generating')}</span></>
+                  ) : (
+                    <><Rocket className="w-4 h-4" /><span>{t('imageGeneration.generateImages')}</span></>
+                  )}
+                </button>
+              </>
+            )}
+
+            {generatedImages.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 leading-none hover:bg-gray-600"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>{t('imageGeneration.startNew')}</span>
+                </button>
+                {selectedFlowId && (
+                  <button
+                    onClick={() => {
+                      setShowSessionLogModal(true);
+                    }}
+                    className="apple-cta-primary flex h-11 flex-1 items-center justify-center gap-2 rounded-lg px-4 leading-none"
+                    title="Preview generation session"
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>{t('imageGeneration.sessionLog')}</span>
+                  </button>
                 )}
               </div>
-            </div>
             )}
           </div>
         </div>
       </div>
-
       {/* Gallery Picker Modal */}
       <GalleryPicker
         isOpen={showGalleryPicker}

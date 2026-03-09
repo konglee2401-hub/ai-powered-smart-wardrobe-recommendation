@@ -33,6 +33,7 @@ import PreGenerationMonitor from './google-flow/generation/PreGenerationMonitor.
 import GenerationMonitor from './google-flow/generation/GenerationMonitor.js';
 import GenerationDownloader from './google-flow/generation/GenerationDownloader.js';
 import ErrorRecoveryManager from './google-flow/error-handling/ErrorRecoveryManager.js';
+import VirtuosoQueryHelper from './google-flow/dom-queries/VirtuosoQueryHelper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
@@ -75,6 +76,7 @@ class GoogleFlowAutomationService {
       imageCount: this.type === 'image' ? (options.imageCount || 1) : undefined,
       videoCount: this.type === 'video' ? (options.videoCount || 1) : undefined,
       model: options.model || (this.type === 'image' ? 'Nano Banana 2' : 'Veo 3.1 - Fast'),
+      videoReferenceType: options.videoReferenceType || 'ingredients',
       outputDir: options.outputDir || path.join(__dirname, `../uploads/generated-images`),
       timeouts: {
         pageLoad: 60000,
@@ -174,11 +176,12 @@ class GoogleFlowAutomationService {
       videoReferenceType: this.options.videoReferenceType
     });
     
-    this.preGenerationMonitor = new PreGenerationMonitor();
+    this.preGenerationMonitor = new PreGenerationMonitor(this.page, { preferredMediaType: this.type });
     this.preGenerationMonitor.page = this.page;
     
-    this.generationMonitor = new GenerationMonitor();
+    this.generationMonitor = new GenerationMonitor(this.page, { type: this.type });
     this.generationMonitor.page = this.page;
+    this.generationMonitor.mediaType = this.type;
     this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
     this.generationMonitor.setPreGenerationMonitor(this.preGenerationMonitor); // NEW: Pass baseline monitor
     
@@ -544,14 +547,35 @@ class GoogleFlowAutomationService {
    * @param {string} promptText - Text to enter
    * @returns {Promise<boolean>} - True if successful
    */
+  sanitizePromptForFlow(promptText = '') {
+    const originalPrompt = (promptText || '').toString();
+    const validation = this.contentSafetyFilter.validatePrompt(originalPrompt);
+    const safePrompt = validation.hasHighRisk
+      ? this.contentSafetyFilter.autoCorrect(originalPrompt, 'all')
+      : validation.hasMediumRisk
+        ? this.contentSafetyFilter.autoCorrect(originalPrompt, 'medium')
+        : originalPrompt;
+
+    if (safePrompt !== originalPrompt) {
+      console.log(`[PROMPT-SAFETY] Adjusted prompt for Flow safety (${validation.riskScore}/100)`);
+    }
+
+    return {
+      prompt: safePrompt,
+      validation
+    };
+  }
+
   async _internalEnterPromptViaManager(promptText) {
     try {
-      this.lastPromptSubmitted = promptText; // Store for potential retry
+      const safePromptResult = this.sanitizePromptForFlow(promptText);
+      const safePromptText = safePromptResult.prompt;
+      this.lastPromptSubmitted = safePromptText; // Store for potential retry
       if (this.promptManager) {
         await this.promptManager.enterPrompt(promptText);
         return true;
       }
-      return await this._delegateEnterPrompt(promptText);
+      return await this._delegateEnterPrompt(safePromptText);
     } catch (error) {
       console.error('[PROMPT] Error entering via manager:', error.message);
       return false;
@@ -691,6 +715,8 @@ class GoogleFlowAutomationService {
       }
       
       // Store prompt for retry
+      const safePromptResult = this.sanitizePromptForFlow(promptText);
+      promptText = safePromptResult.prompt;
       this.lastPromptSubmitted = promptText;
 
       // Use PromptManager if available
@@ -961,177 +987,101 @@ class GoogleFlowAutomationService {
    * @returns {string|null} - href of the new image, or null if failed
    */
   async checkSingleImageUpload(imageLabel = 'image', timeoutSeconds = 45) {
-    console.log(`[UPLOAD-CHECK] 🔍 Checking for ${imageLabel} upload...`);
-    
-    // 🔥 DEBUG: Check DOM structure first
-    const domDebugInfo = await this.page.evaluate(() => {
-      const virtuosoList = document.querySelector('[data-testid="virtuoso-item-list"]');
-      const allLinks = document.querySelectorAll('a[href]');
-      const allImages = document.querySelectorAll('img');
-      const linksWithImg = document.querySelectorAll('a[href] img');
-      
-      return {
-        virtuosoListExists: !!virtuosoList,
-        virtuosoListSelector: virtuosoList ? virtuosoList.className : 'N/A',
-        totalAnchorLinks: allLinks.length,
-        totalImages: allImages.length,
-        linksWithImages: linksWithImg.length,
-        virtuosoItemsCount: virtuosoList ? virtuosoList.querySelectorAll('a[href]').length : 0
-      };
+    console.log(`[UPLOAD-CHECK] Checking for ${imageLabel} upload...`);
+
+    const describeTile = (tile) => {
+      if (!tile) return 'N/A';
+      const markers = [];
+      if (tile.hasImg) markers.push('img');
+      if (tile.hasVideo) markers.push('video');
+      if (tile.isLoading) markers.push('loading');
+      if (tile.hasError) markers.push('error');
+      return `tile=${tile.tileId || 'none'} href=${(tile.href || 'none').substring(0, 80)} media=${markers.join(',') || 'none'} text=${(tile.text || '').substring(0, 80)}`;
+    };
+
+    const baselineTiles = await VirtuosoQueryHelper.getVisibleTileSnapshots(this.page, { limit: 20 });
+    const baselineTileIds = new Set(baselineTiles.map((tile) => tile.tileId).filter(Boolean));
+    const baselineHrefs = new Set(baselineTiles.map((tile) => tile.href).filter(Boolean));
+
+    console.log(`[UPLOAD-CHECK] Baseline visible tiles: ${baselineTiles.length}`);
+    baselineTiles.slice(0, 6).forEach((tile, idx) => {
+      console.log(`   [${idx}] ${describeTile(tile)}`);
     });
-    
-    console.log(`[UPLOAD-CHECK] 📋 DOM DEBUG INFO:`);
-    console.log(`   Virtuoso list exists: ${domDebugInfo.virtuosoListExists}`);
-    console.log(`   Total anchor links on page: ${domDebugInfo.totalAnchorLinks}`);
-    console.log(`   Total images on page: ${domDebugInfo.totalImages}`);
-    console.log(`   Links with images: ${domDebugInfo.linksWithImages}`);
-    console.log(`   Items in virtuoso list: ${domDebugInfo.virtuosoItemsCount}`);
-    
-    // Capture baseline of current items BEFORE we start checking for new ones
-    // 💫 VIRTUALIZATION FIX: Only check first 15 items (tail items disappear in virtuoso list)
-    let baselineItems = await this.page.evaluate(() => {
-      const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-      const firstLinks = Array.from(links).slice(0, 15);  // Only first 15
-      return firstLinks.map((link, idx) => {
-        const href = link.getAttribute('href');
-        const img = link.querySelector('img');
-        const imgTag = img ? `<img src="${img.getAttribute('src')?.substring(0, 50) || 'N/A'}...">` : 'NO IMG';
-        return { 
-          idx,
-          href, 
-          hasImg: !!img,
-          imgInfo: imgTag
-        };
-      }).filter(item => item.href);
-    });
-    
-    const baselineHrefs = new Set(baselineItems.map(item => item.href));
-    console.log(`[UPLOAD-CHECK] 📸 BASELINE: ${baselineItems.length} items`);
-    baselineItems.forEach((item, idx) => {
-      console.log(`   [${idx}] ${item.hasImg ? '✓' : '✗'} img | ${item.href.substring(0, 70)}...`);
-    });
-    
+
     const startTime = Date.now();
     const timeoutMs = timeoutSeconds * 1000;
-    let checkCount = 0;
-    let lastNewCount = 0;
-    
+    let lastSignature = '';
+    let fallbackCandidate = null;
+
     while (Date.now() - startTime < timeoutMs) {
-      checkCount++;
-      
-      // 💫 STRICT: Check BOTH href and img present
-      // 💫 VIRTUALIZATION FIX: Only check first 15 items
-      const currentItems = await this.page.evaluate((baselineHrefs) => {
-        const baseline = new Set(baselineHrefs);
-        const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-        const firstLinks = Array.from(links).slice(0, 15);  // Only first 15
-        
-        const allItems = firstLinks.map((link, idx) => {
-          const href = link.getAttribute('href');
-          const img = link.querySelector('img');
-          const hasImg = !!img;
-          return { 
-            idx,
-            href, 
-            hasImg, 
-            isNew: !baseline.has(href),
-            imgSrc: img ? img.getAttribute('src')?.substring(0, 40) : 'N/A'
-          };
-        }).filter(item => item.href);
-        
-        // Only count NEW items with BOTH href + img
-        const newValid = allItems.filter(item => item.isNew && item.hasImg);
-        const newInvalid = allItems.filter(item => item.isNew && !item.hasImg);
-        
-        return {
-          totalItems: allItems.length,
-          newValidCount: newValid.length,
-          newValidItems: newValid,
-          newInvalidCount: newInvalid.length,
-          newInvalidItems: newInvalid,
-          allNewItems: allItems.filter(item => item.isNew),
-          allItems: allItems  // All items for debug
-        };
-      }, Array.from(baselineHrefs));
-      
-      // Log detailed progress
-      const statusIcon = currentItems.newValidCount > lastNewCount ? '📈' : '  ';
-      console.log(`[UPLOAD-CHECK] Check ${checkCount}: NEW valid=${currentItems.newValidCount} | NEW invalid=${currentItems.newInvalidCount} | Total=${currentItems.totalItems} ${statusIcon}`);
-      
-      // Show ALL new items found
-      if (currentItems.allNewItems.length > 0) {
-        console.log(`   📍 New items found:`);
-        currentItems.allNewItems.forEach((item, idx) => {
-          console.log(`      [${idx}] ${item.hasImg ? '✓' : '✗'} img | ${item.href.substring(0, 70)}... | src=${item.imgSrc}`);
+      const currentTiles = await VirtuosoQueryHelper.getVisibleTileSnapshots(this.page, { limit: 20 });
+      const newTiles = currentTiles.filter((tile) => {
+        const isNewTile = tile.tileId && !baselineTileIds.has(tile.tileId);
+        const isNewHref = tile.href && !baselineHrefs.has(tile.href);
+        return isNewTile || isNewHref;
+      });
+
+      const readyTiles = newTiles.filter((tile) => !tile.isLoading && !tile.hasError && (tile.hasImg || tile.hasVideo));
+      const pendingTiles = newTiles.filter((tile) => !tile.hasError && (tile.hasLink || tile.hasImg || tile.hasVideo));
+
+      const signature = JSON.stringify({
+        total: currentTiles.length,
+        newTiles: newTiles.map((tile) => ({
+          tileId: tile.tileId,
+          href: tile.href,
+          hasImg: tile.hasImg,
+          hasVideo: tile.hasVideo,
+          isLoading: tile.isLoading,
+          hasError: tile.hasError
+        }))
+      });
+
+      if (signature !== lastSignature) {
+        console.log(`[UPLOAD-CHECK] Scan: visible=${currentTiles.length} new=${newTiles.length} ready=${readyTiles.length} pending=${pendingTiles.length}`);
+        newTiles.slice(0, 6).forEach((tile, idx) => {
+          console.log(`   [new ${idx}] ${describeTile(tile)}`);
         });
+        lastSignature = signature;
       }
-      
-      // If found 1 new valid image, we're done
-      if (currentItems.newValidCount >= 1) {
-        const newRef = currentItems.newValidItems[0];
-        console.log(`[UPLOAD-CHECK] ✅ SUCCESS: ${imageLabel} uploaded (href + img both present)`);
-        console.log(`   └─ ${newRef.href.substring(0, 100)}\n`);
-        return newRef.href;
+
+      if (readyTiles.length > 0) {
+        const matched = readyTiles[0];
+        console.log(`[UPLOAD-CHECK] Success: ${imageLabel} uploaded`);
+        console.log(`   -> ${describeTile(matched)}\n`);
+        return matched.href || matched.tileId;
       }
-      
-      lastNewCount = currentItems.newValidCount;
-      
-      // Wait before next check
+
+      if (!fallbackCandidate && pendingTiles.length > 0) {
+        fallbackCandidate = pendingTiles[0];
+      }
+
       await this.page.waitForTimeout(1000);
     }
-    
-    // Timeout - show what we found
-    console.error(`[UPLOAD-CHECK] ❌ TIMEOUT: ${imageLabel} not found after ${timeoutSeconds}s`);
-    
-    // 🔥 FINAL DEBUG: Check final state
-    const finalState = await this.page.evaluate((baselineHrefs) => {
-      const baseline = new Set(baselineHrefs);
-      const links = document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]');
-      const firstLinks = Array.from(links).slice(0, 20);  // Check more on final
-      
-      const allItems = firstLinks.map((link, idx) => {
-        const href = link.getAttribute('href');
-        const img = link.querySelector('img');
-        return { 
-          idx,
-          href, 
-          hasImg: !!img, 
-          isNew: !baseline.has(href),
-          imgSrc: img ? img.getAttribute('src')?.substring(0, 40) : 'N/A'
-        };
-      });
-      
-      return {
-        totalItemsScanned: allItems.length,
-        newValid: allItems.filter(i => i.isNew && i.hasImg),
-        newInvalid: allItems.filter(i => i.isNew && !i.hasImg),
-        allItems: allItems
-      };
-    }, Array.from(baselineHrefs));
-    
-    console.error(`[UPLOAD-CHECK] 📊 FINAL STATE:`);
-    console.error(`   Total items: ${finalState.totalItemsScanned}`);
-    console.error(`   New valid: ${finalState.newValid.length}`);
-    console.error(`   New invalid: ${finalState.newInvalid.length}`);
-    if (finalState.allItems.length > 0) {
-      console.error(`   All items:`);
-      finalState.allItems.slice(0, 10).forEach(item => {
-        const marker = item.isNew ? '🆕' : '   ';
-        console.error(`      ${marker} [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href.substring(0, 70)}...`);
-      });
+
+    const finalTiles = await VirtuosoQueryHelper.getVisibleTileSnapshots(this.page, { limit: 24 });
+    const finalNewTiles = finalTiles.filter((tile) => {
+      const isNewTile = tile.tileId && !baselineTileIds.has(tile.tileId);
+      const isNewHref = tile.href && !baselineHrefs.has(tile.href);
+      return isNewTile || isNewHref;
+    });
+    const finalReadyTile = finalNewTiles.find((tile) => !tile.isLoading && !tile.hasError && (tile.hasImg || tile.hasVideo));
+
+    console.error(`[UPLOAD-CHECK] Timeout after ${timeoutSeconds}s for ${imageLabel}`);
+    finalNewTiles.slice(0, 8).forEach((tile, idx) => {
+      console.error(`   [final ${idx}] ${describeTile(tile)}`);
+    });
+
+    if (finalReadyTile) {
+      console.log(`[UPLOAD-CHECK] Final fallback found ready tile for ${imageLabel}`);
+      return finalReadyTile.href || finalReadyTile.tileId;
     }
-    
-    if (finalState.newValid.length > 0) {
-      console.log(`[UPLOAD-CHECK] ✅ Found ${finalState.newValid.length} valid new item(s) on final check`);
-      return finalState.newValid[0].href;
+
+    if (fallbackCandidate && (fallbackCandidate.href || fallbackCandidate.tileId)) {
+      console.warn(`[UPLOAD-CHECK] Returning pending tile fallback for ${imageLabel}: ${describeTile(fallbackCandidate)}`);
+      return fallbackCandidate.href || fallbackCandidate.tileId;
     }
-    if (finalState.newInvalid.length > 0) {
-      console.warn(`[UPLOAD-CHECK] ⚠️  Found ${finalState.newInvalid.length} new href(s) but no img tag`);
-      console.warn(`   This suggests images uploaded but renders still pending...`);
-      return finalState.newInvalid[0].href;  // Return even without img as fallback
-    }
-    
-    console.error(`[UPLOAD-CHECK] ❌ No new items found at all`);
+
+    console.error(`[UPLOAD-CHECK] No new visible tiles detected for ${imageLabel}`);
     return null;
   }
 
@@ -1179,7 +1129,9 @@ class GoogleFlowAutomationService {
       outputCount = 1,
       sceneImagePath = null,
       sceneLockedPrompt = null,
-      sceneName = null
+      sceneName = null,
+      onPromptStart = null,
+      onPromptComplete = null
     } = config;
 
     // Validate inputs
@@ -1377,6 +1329,15 @@ class GoogleFlowAutomationService {
         }
 
         try {
+          if (typeof onPromptStart === 'function') {
+            await onPromptStart({
+              index: i,
+              promptNumber: i + 1,
+              totalPrompts: prompts.length,
+              prompt
+            });
+          }
+
           // For subsequent prompts with reference images, reuse command
           if (i > 0 && hasReferenceImages && lastGeneratedHref) {
             console.log(`[CHAIN] 🔄 Reusing command from previous prompt...\n`);
@@ -1484,15 +1445,33 @@ class GoogleFlowAutomationService {
 
           results.push(resultObj);
 
+          if (typeof onPromptComplete === 'function') {
+            await onPromptComplete({
+              index: i,
+              promptNumber: i + 1,
+              totalPrompts: prompts.length,
+              result: resultObj
+            });
+          }
+
           lastGeneratedHref = genResult.href;
 
         } catch (promptError) {
           console.error(`\n❌ PROMPT ${i + 1} FAILED: ${promptError.message}\n`);
-          results.push({
+          const failedResult = {
             success: false,
             promptNumber: i + 1,
             error: promptError.message
-          });
+          };
+          results.push(failedResult);
+          if (typeof onPromptComplete === 'function') {
+            await onPromptComplete({
+              index: i,
+              promptNumber: i + 1,
+              totalPrompts: prompts.length,
+              result: failedResult
+            });
+          }
           throw promptError;
         }
       }
@@ -1838,3 +1817,6 @@ class GoogleFlowAutomationService {
 }
 
 export default GoogleFlowAutomationService;
+
+
+

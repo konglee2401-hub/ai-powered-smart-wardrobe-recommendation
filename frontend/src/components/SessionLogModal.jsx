@@ -38,6 +38,7 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   const [error, setError] = useState(null);
   const [activeStep, setActiveStep] = useState('step1');
   const [copiedId, setCopiedId] = useState(null);
+  const isLightTheme = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light';
 
   const effectiveFlowId = flowId || sessionId;
 
@@ -118,8 +119,8 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   const currentStep = affiliateStatus?.flowState?.[activeStep] || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+    <div className={`apple-typography fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)]' : 'bg-black/70'}`}>
+      <div className={`flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border shadow-2xl ${isLightTheme ? 'studio-card-shell border-white/50' : 'border-slate-700 bg-slate-950'}`}>
         <div className="flex items-start justify-between border-b border-slate-800 bg-slate-950/95 px-6 py-5">
           <div>
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-slate-400">

@@ -4,10 +4,52 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import driveService from '../services/googleDriveOAuth.js';
+import multer from 'multer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+const GALLERY_UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'gallery-assets');
+
+function sanitizeFilename(filename = 'asset') {
+  const ext = path.extname(filename) || '';
+  const base = path.basename(filename, ext).replace(/[^a-zA-Z0-9-_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return `${base || 'asset'}${ext}`;
+}
+
+async function uploadAssetBufferToDrive(buffer, filename, assetCategory, metadata = {}) {
+  const authResult = await driveService.authenticate();
+  if (!authResult?.authenticated || !authResult?.configured) {
+    return { success: false, reason: 'drive-not-configured' };
+  }
+
+  try {
+    if (assetCategory === 'character-image') {
+      const result = await driveService.uploadCharacterImage(buffer, filename, metadata);
+      return { success: !!result?.id, data: result || null };
+    }
+    if (assetCategory === 'product-image') {
+      const result = await driveService.uploadProductImage(buffer, filename, metadata);
+      return { success: !!result?.id, data: result || null };
+    }
+    if (assetCategory === 'generated-image' || assetCategory === 'reference-image' || assetCategory === 'thumbnail') {
+      const result = await driveService.uploadGeneratedImage(buffer, filename, metadata);
+      return { success: !!result?.id, data: result || null };
+    }
+
+    const parentFolderId = driveService.folderIds?.imagesApp || null;
+    if (!parentFolderId) {
+      return { success: false, reason: 'missing-drive-folder' };
+    }
+    const result = await driveService.uploadBuffer(buffer, filename, { parentFolderId, ...metadata });
+    return { success: !!result?.id, data: result || null };
+  } catch (error) {
+    console.warn(`[assets/upload] Drive upload failed for ${filename}: ${error.message}`);
+    return { success: false, reason: error.message };
+  }
+}
 
 /**
  * GET /api/assets/gallery
@@ -26,24 +68,25 @@ router.get('/gallery', async (req, res) => {
     // ✅ Updated: Handle both new hybrid storage and legacy storage
     if (storageLocation !== 'all') {
       if (storageLocation === 'local') {
-        // Show assets with local storage
-        query.$or = [
-          { 'localStorage.path': { $exists: true, $ne: null } },
-          { 'storage.location': 'local' }
-        ];
+        query.$or = [{ 'localStorage.verified': true }];
       } else if (storageLocation === 'google-drive') {
-        // Show assets with cloud storage
         query.$or = [
           { 'cloudStorage.googleDriveId': { $exists: true, $ne: null } },
+          { 'storage.googleDriveId': { $exists: true, $ne: null } },
           { 'storage.location': 'google-drive' }
         ];
       }
     } else {
-      // Default: show all assets that have either local or cloud storage
       query.$or = [
-        { 'localStorage.path': { $exists: true, $ne: null } },
+        { 'localStorage.verified': true },
         { 'cloudStorage.googleDriveId': { $exists: true, $ne: null } },
-        { 'storage.location': { $exists: true, $ne: null } }
+        { 'storage.googleDriveId': { $exists: true, $ne: null } },
+        {
+          $and: [
+            { 'storage.url': { $regex: '^https?://', $options: 'i' } },
+            { 'storage.url': { $not: /localhost|127\.0\.0\.1/i } }
+          ]
+        }
       ];
     }
     
@@ -59,9 +102,20 @@ router.get('/gallery', async (req, res) => {
     
     console.log(`📋 Gallery query: ${JSON.stringify(query)}, Found: ${assets.length} assets`);
     
+    const filteredAssets = assets.filter((asset) => {
+      const hasVerifiedLocal = asset.localStorage?.verified === true;
+      const hasDrive = !!(asset.cloudStorage?.googleDriveId || asset.storage?.googleDriveId);
+      const hasRemoteUrl =
+        typeof asset.storage?.url === 'string' &&
+        /^https?:\/\//i.test(asset.storage.url) &&
+        !/localhost|127\.0\.0\.1/i.test(asset.storage.url);
+
+      return hasVerifiedLocal || hasDrive || hasRemoteUrl;
+    });
+
     res.json({
       success: true,
-      assets,
+      assets: filteredAssets,
       pagination: {
         total,
         page: parseInt(page),
@@ -71,6 +125,103 @@ router.get('/gallery', async (req, res) => {
     });
   } catch (error) {
     console.error('Gallery fetch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/assets/upload
+ * Persist a real file locally, optionally upload to Google Drive, then create a valid asset record.
+ */
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file provided' });
+    }
+
+    const {
+      category = 'generated-image',
+      sessionId = `session-${Date.now()}`,
+      userId = 'anonymous',
+      metadata = '{}'
+    } = req.body;
+
+    const parsedMetadata = (() => {
+      try {
+        return metadata ? JSON.parse(metadata) : {};
+      } catch {
+        return {};
+      }
+    })();
+
+    const safeFilename = sanitizeFilename(req.file.originalname || `asset-${Date.now()}.bin`);
+    const uploadDir = path.join(GALLERY_UPLOAD_ROOT, sessionId);
+    fs.mkdirSync(uploadDir, { recursive: true });
+
+    const absolutePath = path.join(uploadDir, safeFilename);
+    fs.writeFileSync(absolutePath, req.file.buffer);
+    const stat = fs.statSync(absolutePath);
+
+    const relativeLocalPath = path.relative(process.cwd(), absolutePath).replace(/\\/g, '/');
+    const assetId = `asset-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const proxyUrl = `/api/assets/proxy/${assetId}`;
+
+    const driveUpload = await uploadAssetBufferToDrive(req.file.buffer, safeFilename, category, parsedMetadata);
+
+    const assetPayload = {
+      assetId,
+      filename: safeFilename,
+      mimeType: req.file.mimetype || 'application/octet-stream',
+      fileSize: stat.size,
+      assetType: req.file.mimetype?.startsWith('video') ? 'video' : req.file.mimetype?.startsWith('audio') ? 'audio' : 'image',
+      assetCategory: category,
+      userId,
+      sessionId,
+      status: 'active',
+      metadata: parsedMetadata,
+      storage: {
+        location: driveUpload.success ? 'google-drive' : 'local',
+        localPath: relativeLocalPath,
+        url: proxyUrl,
+        googleDriveId: driveUpload.data?.id || null,
+        googleDrivePath: null
+      },
+      localStorage: {
+        location: 'local',
+        path: relativeLocalPath,
+        fileSize: stat.size,
+        savedAt: new Date(),
+        verified: true
+      },
+      cloudStorage: driveUpload.success
+        ? {
+            location: 'google-drive',
+            googleDriveId: driveUpload.data?.id || null,
+            thumbnailLink: driveUpload.data?.thumbnailLink || null,
+            webViewLink: driveUpload.data?.webViewLink || driveUpload.data?.weblink || null,
+            status: 'synced',
+            syncedAt: new Date(),
+            attempted: 1
+          }
+        : {
+            location: 'google-drive',
+            status: 'failed',
+            attempted: 1
+          },
+      syncStatus: driveUpload.success ? 'synced' : 'failed',
+      tags: ['uploaded', category, `sessionId:${sessionId}`]
+    };
+
+    const asset = await Asset.create(assetPayload);
+
+    res.json({
+      success: true,
+      asset,
+      previewUrl: proxyUrl,
+      driveUploaded: driveUpload.success
+    });
+  } catch (error) {
+    console.error('Asset upload error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

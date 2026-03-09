@@ -910,10 +910,10 @@ export default function VideoPipeline() {
       {activeSection === 'queue' ? (
         <section className="space-y-4">
           <section className={`${SURFACE_CARD_CLASS} p-5`}>
-            <SectionHeader title={tr('Trạng thái queue', 'Queue status')} subtitle={tr('Job được lưu trong Mongo. Bạn có thể manual start các job mashup đang pending.', 'Jobs are stored in Mongo. You can manually start pending mashup jobs when needed.')} />
+            <SectionHeader title={tr('Queue status', 'Queue status')} subtitle={tr('Jobs are stored in Mongo. The system auto-retries transient failures, marks manual-review cases clearly, and still keeps manual trigger controls available.', 'Jobs are stored in Mongo. The system auto-retries transient failures, marks manual-review cases clearly, and still keeps manual trigger controls available.')} />
             <div className="mt-4 max-w-[260px]">
               <select value={jobStatusFilter} onChange={(e) => setJobStatusFilter(e.target.value)} className={INPUT_CLASS}>
-                <option value="">{tr('Tất cả trạng thái', 'All statuses')}</option>
+                <option value="">{tr('All statuses', 'All statuses')}</option>
                 <option value="pending">{tr('Pending', 'Pending')}</option>
                 <option value="processing">{tr('Processing', 'Processing')}</option>
                 <option value="ready">{tr('Ready', 'Ready')}</option>
@@ -921,11 +921,13 @@ export default function VideoPipeline() {
                 <option value="uploaded">{tr('Uploaded', 'Uploaded')}</option>
               </select>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <MetricCard title={tr('Pending', 'Pending')} value={jobStats?.byStatus?.pending || 0} helper={tr('Đang chờ xử lý', 'Awaiting worker pickup')} tone="amber" />
-              <MetricCard title={tr('Processing', 'Processing')} value={jobStats?.byStatus?.processing || 0} helper={tr('Đang chạy', 'Currently running')} tone="sky" />
-              <MetricCard title={tr('Ready', 'Ready')} value={jobStats?.byStatus?.ready || 0} helper={tr('Có thể đăng tải', 'Can be published now')} tone="emerald" />
-              <MetricCard title={tr('Failed', 'Failed')} value={jobStats?.byStatus?.failed || 0} helper={tr('Cần kiểm tra thủ công', 'Needs operator review')} tone="violet" />
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <MetricCard title={tr('Pending', 'Pending')} value={jobStats?.byStatus?.pending || 0} helper={tr('Awaiting worker pickup', 'Awaiting worker pickup')} tone="amber" />
+              <MetricCard title={tr('Auto retry', 'Auto retry')} value={jobStats?.byExecutionState?.['auto-retry-pending'] || 0} helper={tr('Transient failures queued to retry', 'Transient failures queued to retry')} tone="amber" />
+              <MetricCard title={tr('Manual review', 'Manual review')} value={jobStats?.byExecutionState?.['manual-review'] || 0} helper={tr('Needs operator-triggered retry', 'Needs operator-triggered retry')} tone="violet" />
+              <MetricCard title={tr('Processing', 'Processing')} value={jobStats?.byStatus?.processing || 0} helper={tr('Currently running', 'Currently running')} tone="sky" />
+              <MetricCard title={tr('Ready', 'Ready')} value={jobStats?.byStatus?.ready || 0} helper={tr('Can be published now', 'Can be published now')} tone="emerald" />
+              <MetricCard title={tr('Failed', 'Failed')} value={jobStats?.byStatus?.failed || 0} helper={tr('Exceeded retries or needs intervention', 'Exceeded retries or needs intervention')} tone="violet" />
             </div>
           </section>
           {jobs.map((job) => (
@@ -937,23 +939,33 @@ export default function VideoPipeline() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     <SourcePill source={job.sourcePlatform || job.platform} />
                     <StatusPill tone={toneFromStatus(job.status)}>{job.status}</StatusPill>
+                    <StatusPill tone={queueExecutionTone(job)}>{queueExecutionLabel(job, tr)}</StatusPill>
                     <StatusPill tone="sky">{job.contentType}</StatusPill>
+                    {job.errorCount ? <StatusPill tone="amber">{tr('Retry', 'Retry')} {job.errorCount}/{job.maxRetries || 0}</StatusPill> : null}
                   </div>
+                  {job.queueControl?.lastFailureMessage ? <p className="mt-3 max-w-3xl text-xs text-rose-200/80">{job.queueControl.lastFailureMessage}</p> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => toggleLogs(job.queueId)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>{jobLogs[job.queueId] ? tr('Ẩn log', 'Hide Logs') : tr('Xem log', 'View Logs')}</button>
-                  {(job.status === 'pending' || job.status === 'failed') ? (
-                    <button onClick={() => startJob(job.queueId)} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                  <button onClick={() => toggleLogs(job.queueId)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>{jobLogs[job.queueId] ? tr('Hide Logs', 'Hide Logs') : tr('View Logs', 'View Logs')}</button>
+                  {job.canManualStart ? (
+                    <button onClick={() => startJob(job.queueId)} className={getActionButtonClass(job.queueControl?.executionState === 'manual-review' ? 'amber' : 'violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
                       <Clapperboard className="h-3.5 w-3.5" />
-                      {tr('Manual Start', 'Manual Start')}
+                      {queueActionLabel(job, tr)}
                     </button>
                   ) : null}
-                  {job.status === 'ready' ? <button onClick={() => publishJob(job.queueId)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}><Send className="h-3.5 w-3.5" />{tr('Đăng tải', 'Publish')}</button> : null}
+                  {job.status === 'ready' ? <button onClick={() => publishJob(job.queueId)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}><Send className="h-3.5 w-3.5" />{tr('Publish', 'Publish')}</button> : null}
                 </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+                {job.queueControl?.summary ? <StatusPill tone={queueExecutionTone(job)}>{job.queueControl.summary}</StatusPill> : null}
+                {job.queueControl?.retryStopped ? <StatusPill tone="rose">{job.queueControl.retryStoppedReason || tr('Retry stopped', 'Retry stopped')}</StatusPill> : null}
+                {job.queueControl?.nextAction === 'manual-start' ? <StatusPill tone="violet">{tr('Manual trigger available', 'Manual trigger available')}</StatusPill> : null}
+                {job.queueControl?.nextAction === 'auto-retry' && !job.queueControl?.retryStopped ? <StatusPill tone="amber">{tr('Will auto retry', 'Will auto retry')}</StatusPill> : null}
+                {job.queueControl?.lastFailureStage ? <StatusPill tone="rose">{job.queueControl.lastFailureStage}</StatusPill> : null}
               </div>
               {job.status === 'ready' ? (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{tr('Tài khoản đăng tải', 'Publish targets')}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{tr('Publish targets', 'Publish targets')}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(connections.accounts || []).map((account) => (
                       <button key={account.accountId} onClick={() => togglePublishAccount(job.queueId, account.accountId)} className={getActionButtonClass((selectedPublishAccounts[job.queueId] || []).includes(account.accountId) ? 'emerald' : 'sky', 'px-3 py-2 text-xs')}>
@@ -966,18 +978,18 @@ export default function VideoPipeline() {
               {jobLogs[job.queueId] ? (
                 <div className="mt-4 space-y-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-xs text-slate-300">
                   {jobLogs[job.queueId].map((entry, index) => (
-                    <div key={`${job.queueId}-${index}`} className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                    <div key={job.queueId + '-' + index} className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
                       <span className="font-medium text-white">{entry.stage}</span>
                       <span className="mx-2 text-slate-500">|</span>
                       <span>{entry.status}</span>
-                      <p className="mt-1 text-slate-400">{entry.message || entry.error || tr('Không có nội dung log', 'No message')}</p>
+                      <p className="mt-1 text-slate-400">{entry.message || entry.error || tr('No message', 'No message')}</p>
                     </div>
                   ))}
                 </div>
               ) : null}
             </section>
           ))}
-          {!jobs.length ? <EmptyState label={tr('Chưa có job nào trong queue.', 'No jobs in the unified queue yet.')} /> : null}
+          {!jobs.length ? <EmptyState label={tr('No jobs in the unified queue yet.', 'No jobs in the unified queue yet.')} /> : null}
         </section>
       ) : null}
 

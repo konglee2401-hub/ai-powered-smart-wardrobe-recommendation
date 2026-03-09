@@ -248,6 +248,91 @@ class ChatGPTService extends BrowserService {
     }
   }
 
+  async detectBlockingState(context = 'general') {
+    if (!this.page) {
+      return {
+        isBlocked: false,
+        source: null,
+        actionType: null,
+        message: null,
+        context
+      };
+    }
+
+    return await this.page.evaluate((runtimeContext) => {
+      const bodyText = String(document.body?.innerText || '').toLowerCase();
+      const loginVisible = Array.from(document.querySelectorAll('button, a')).some((el) => {
+        const text = String(el.textContent || '').toLowerCase();
+        return el.offsetParent !== null && (text.includes('log in') || text.includes('sign in') || text.includes('continue with google'));
+      });
+      const hasTextarea = !!document.querySelector('textarea, [contenteditable="true"]');
+      const hasFileInput = document.querySelectorAll('input[type="file"]').length > 0;
+      const hasCloudflare = !!(
+        document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+        document.querySelector('form[action*="challenge"]') ||
+        document.querySelector('#cf-turnstile') ||
+        document.querySelector('[data-testid="turnstile"]') ||
+        bodyText.includes('verifying your browser') ||
+        bodyText.includes('one more step') ||
+        bodyText.includes('checking if the site connection is secure')
+      );
+
+      if (hasCloudflare) {
+        return {
+          isBlocked: true,
+          source: 'cloudflare',
+          actionType: 'chatgpt-cloudflare',
+          message: 'ChatGPT is waiting for Cloudflare verification. Resolve it manually in the opened browser window.',
+          context: runtimeContext,
+          hasTextarea,
+          hasFileInput,
+          loginVisible
+        };
+      }
+
+      if (loginVisible && !hasTextarea) {
+        return {
+          isBlocked: true,
+          source: 'auth',
+          actionType: 'chatgpt-login',
+          message: 'ChatGPT requires manual login or verification before the flow can continue.',
+          context: runtimeContext,
+          hasTextarea,
+          hasFileInput,
+          loginVisible
+        };
+      }
+
+      return {
+        isBlocked: false,
+        source: null,
+        actionType: null,
+        message: null,
+        context: runtimeContext,
+        hasTextarea,
+        hasFileInput,
+        loginVisible
+      };
+    }, context);
+  }
+
+  async waitForManualResolution(options = {}) {
+    const timeoutMs = options.timeoutMs || 5 * 60 * 1000;
+    const pollMs = options.pollMs || 2000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const blockingState = await this.detectBlockingState('manual-wait');
+      if (!blockingState.isBlocked) {
+        await this.page.waitForTimeout(1000);
+        return true;
+      }
+      await this.page.waitForTimeout(pollMs);
+    }
+
+    return false;
+  }
+
   /**
    * Initialize ChatGPT with saved session support
    */
@@ -551,6 +636,112 @@ class ChatGPTService extends BrowserService {
   /**
    * Analyze image using ChatGPT
    */
+  async submitPromptWithFallback(stepLabel = 'STEP', options = {}) {
+    const { waitAfterMs = 3000 } = options;
+    console.log(`STEP ${stepLabel}: Sending message...`);
+
+    const sendButtonSelectors = [
+      "button[data-testid=\"send-button\"]",
+      "button[aria-label*=\"Send\"]",
+      "button[aria-label*=\"send\"]",
+      "button[aria-label*=\"Submit\"]",
+      "button[aria-label*=\"submit\"]",
+      "form button[type=\"submit\"]",
+      "button[type=\"submit\"]"
+    ];
+
+    let sendMethod = null;
+
+    for (const selector of sendButtonSelectors) {
+      try {
+        const buttons = await this.page.$$(selector);
+        for (const button of buttons) {
+          const isEnabled = await this.page.evaluate((el) => !!(el && !el.disabled && el.offsetParent !== null && (el.getAttribute("aria-disabled") !== "true")), button);
+          if (!isEnabled) continue;
+          console.log(`   Found send button: ${selector}`);
+          await button.click({ delay: 50 });
+          sendMethod = `button:${selector}`;
+          break;
+        }
+        if (sendMethod) break;
+      } catch (error) {
+        console.log(`   Send button selector failed (${selector}): ${error.message}`);
+      }
+    }
+
+    if (!sendMethod) {
+      try {
+        const genericButton = await this.page.evaluate(() => {
+          const normalize = (value) => String(value || "").toLowerCase().trim();
+          const buttons = Array.from(document.querySelectorAll("button"));
+          const candidate = buttons.find((button) => {
+            if (!button || button.disabled || button.offsetParent === null || button.getAttribute("aria-disabled") === "true") return false;
+            const aria = normalize(button.getAttribute("aria-label"));
+            const testId = normalize(button.getAttribute("data-testid"));
+            const text = normalize(button.textContent);
+            return aria.includes("send") || aria.includes("submit") || testId.includes("send") || text === "send" || text.includes("submit");
+          });
+          if (!candidate) return null;
+          candidate.click();
+          return {
+            ariaLabel: candidate.getAttribute("aria-label") || null,
+            dataTestId: candidate.getAttribute("data-testid") || null,
+            text: candidate.textContent || null
+          };
+        });
+        if (genericButton) {
+          console.log(`   Clicked fallback send button: ${genericButton.ariaLabel || genericButton.dataTestId || genericButton.text || "generic-button"}`);
+          sendMethod = "button:fallback";
+        }
+      } catch (error) {
+        console.log(`   Generic send button fallback failed: ${error.message}`);
+      }
+    }
+
+    if (!sendMethod) {
+      try {
+        console.log("   Trying Ctrl+Enter...");
+        await this.page.keyboard.down("Control");
+        await this.page.keyboard.press("Enter");
+        await this.page.keyboard.up("Control");
+        sendMethod = "keyboard:ctrl+enter";
+      } catch (error) {
+        console.log(`   Ctrl+Enter failed: ${error.message}`);
+      }
+    }
+
+    if (!sendMethod) {
+      console.log("   Pressing Enter...");
+      await this.page.keyboard.press("Enter");
+      sendMethod = "keyboard:enter";
+    }
+
+    await this.page.waitForTimeout(waitAfterMs);
+
+    const submitState = await this.page.evaluate(() => {
+      const input = document.querySelector("textarea, [contenteditable=\"true\"]");
+      const rawValue = input ? (input.tagName === "TEXTAREA" ? input.value : input.textContent || "") : "";
+      const hasAssistant = !!document.querySelector("[data-message-author-role=\"assistant\"]");
+      const hasStopButton = Array.from(document.querySelectorAll("button")).some((button) => {
+        const text = String(button.textContent || "").toLowerCase();
+        const aria = String(button.getAttribute("aria-label") || "").toLowerCase();
+        return button.offsetParent !== null && !button.disabled && (text.includes("stop") || aria.includes("stop"));
+      });
+      return { inputLength: String(rawValue || "").trim().length, hasAssistant, hasStopButton };
+    });
+
+    console.log(`   Submit attempt via ${sendMethod}`);
+    console.log("   Submit state:", submitState);
+
+    if (submitState.inputLength > 0 && !submitState.hasAssistant && !submitState.hasStopButton && sendMethod !== "keyboard:enter") {
+      console.log("   Prompt still present after button submit, retrying with Enter...");
+      await this.page.keyboard.press("Enter");
+      await this.page.waitForTimeout(1500);
+    }
+
+    return { sendMethod, submitState };
+  }
+
   async analyzeImage(imagePath, prompt) {
     console.log('\n📊 ChatGPT BROWSER ANALYSIS');
     console.log('='.repeat(80));
@@ -710,47 +901,9 @@ class ChatGPTService extends BrowserService {
         throw error;
       }
 
-      // Step 7: Find and click send button
-      console.log('📍 STEP 7: Sending message...');
-      
-      const sendButtonSelectors = [
-        'button[aria-label*="send"], button[aria-label*="Send"]',
-        'button[data-testid="send-button"]',
-        'button[type="submit"]',
-        'button:visible'
-      ];
-
-      let sendClicked = false;
-      
-      for (const selector of sendButtonSelectors) {
-        try {
-          const sendButton = await this.page.$(selector);
-          if (sendButton) {
-            const isEnabled = await this.page.evaluate((sel) => {
-              const el = document.querySelector(sel);
-              return !!(el && !el.disabled && el.offsetParent !== null);
-            }, selector);
-
-            if (isEnabled) {
-              console.log(`   ✅ Found send button: ${selector}`);
-              await sendButton.click();
-              sendClicked = true;
-              await this.page.waitForTimeout(500);
-              break;
-            }
-          }
-        } catch (e) {
-          // Continue to next selector
-        }
-      }
-
-      if (!sendClicked) {
-        // Try pressing Enter instead
-        console.log('   ⌨️  Pressing Enter to send...');
-        await this.page.keyboard.press('Enter');
-      }
-
-      console.log('   ✅ Message sent');
+      // Step 7: Submit prompt with button-first fallback
+      const submitResult = await this.submitPromptWithFallback('STEP 7', { waitAfterMs: 2000 });
+      console.log('   Message sent via', submitResult.sendMethod);
 
       // Step 8: Wait for login modal after sending
       console.log('📍 STEP 8: Checking for modal after sending...');
@@ -1070,15 +1223,13 @@ class ChatGPTService extends BrowserService {
         throw error;
       }
 
-      // Step 6: Send message
-      console.log('📍 STEP 6: Sending message...');
-      console.log('   ⌨️  Pressing Enter...');
-      await this.page.keyboard.press('Enter');
+      // Step 6: Submit prompt with button-first fallback
+      const submitResult = await this.submitPromptWithFallback('STEP 6', { waitAfterMs: 3000 });
+      console.log('   Message sent via', submitResult.sendMethod);
+
+      console.log('   Waiting 3s for message to send...');
+
       
-      console.log('   ⏸️  Waiting 3s for message to send...');
-      await this.page.waitForTimeout(3000);
-      
-      console.log('📍 STEP 6.5: Verify message was sent');
       const messageState = await this.page.evaluate(() => {
         const input = document.querySelector('textarea, [contenteditable="true"]');
         const assistantMsg = document.querySelector('[data-message-author-role="assistant"]');
@@ -1631,49 +1782,9 @@ class ChatGPTService extends BrowserService {
         throw error;
       }
 
-      // Step 4: Find and click send button
-      console.log('📍 STEP 4: Sending message...');
-      
-      const sendButtonSelectors = [
-        'button[aria-label*="send"]',
-        'button[aria-label*="Send"]',
-        'button[data-testid="send-button"]',
-        'button[type="submit"]',
-        'button:has-text("Send")',
-        'button svg[viewBox*="send"]'
-      ];
-
-      let sendClicked = false;
-      
-      for (const selector of sendButtonSelectors) {
-        try {
-          const buttons = await this.page.$$(selector);
-          for (const button of buttons) {
-            const isEnabled = await this.page.evaluate((el) => {
-              return !!(el && !el.disabled && el.offsetParent !== null);
-            }, button);
-
-            if (isEnabled) {
-              console.log(`   ✅ Found send button: ${selector}`);
-              await button.click();
-              sendClicked = true;
-              await this.page.waitForTimeout(500);
-              break;
-            }
-          }
-          if (sendClicked) break;
-        } catch (e) {
-          // Continue to next selector
-        }
-      }
-
-      if (!sendClicked) {
-        // Try pressing Ctrl+Enter or Enter
-        console.log('   ⌨️  Pressing Enter to send...');
-        await this.page.keyboard.press('Enter');
-      }
-
-      console.log('   ✅ Message sent');
+      // Step 4: Submit prompt with button-first fallback
+      const submitResult = await this.submitPromptWithFallback('STEP 4', { waitAfterMs: 2000 });
+      console.log('   Message sent via', submitResult.sendMethod);
 
       // Step 5: Wait for response to appear
       console.log('📍 STEP 5: Waiting for ChatGPT response...');

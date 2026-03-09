@@ -11,6 +11,7 @@
 
 import PromptOption from '../models/PromptOption.js';
 import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
+import { renderAssignedPromptTemplate } from './promptTemplateResolver.js';
 
 /**
  * Helper: Compact prompt by removing unnecessary whitespace
@@ -268,8 +269,16 @@ async function buildPromptOptionContext(selectedOptions = {}, language = 'en', m
     shoes: normalizeOptionText(selectedOptions.shoes),
     accessories: normalizeOptionText(selectedOptions.accessories),
     outerwear: normalizeOptionText(selectedOptions.outerwear),
+    expression: normalizeOptionText(selectedOptions.expression),
+    gesture: normalizeOptionText(selectedOptions.gesture),
+    textOverlayZone: normalizeOptionText(selectedOptions.textOverlayZone),
+    productPresence: normalizeOptionText(selectedOptions.productPresence),
+    storyRole: normalizeOptionText(selectedOptions.storyRole),
+    storyPose: normalizeOptionText(selectedOptions.pose),
+    sceneDepth: normalizeOptionText(selectedOptions.sceneDepth),
+    propCue: normalizeOptionText(selectedOptions.propCue),
     poseSuggestion: resolvePoseSuggestion(selectedOptions, mode),
-    framing: normalizeOptionText(selectedOptions?.cameraLock?.framing),
+    framing: normalizeOptionText(selectedOptions.framing) || normalizeOptionText(selectedOptions?.cameraLock?.framing),
     lens: normalizeOptionText(selectedOptions?.cameraLock?.lens),
     cameraDistance: normalizeOptionText(selectedOptions?.cameraLock?.cameraDistance),
     subjectBackgroundDistance: normalizeOptionText(selectedOptions?.cameraLock?.subjectBackgroundDistance),
@@ -278,6 +287,70 @@ async function buildPromptOptionContext(selectedOptions = {}, language = 'en', m
     handPlacement: normalizeOptionText(selectedOptions?.holdingPresentation?.handPlacement),
     orientation: normalizeOptionText(selectedOptions?.holdingPresentation?.orientation),
     practicalNotes: normalizeOptionText(selectedOptions?.holdingPresentation?.notes)
+  };
+}
+
+async function buildPromptTemplateRuntimeValues(analysis = {}, selectedOptions = {}, useCase = 'change-clothes', productFocus = 'full-outfit', language = 'en') {
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+  const mode = useCase === 'character-holding-product' ? 'holding' : 'wearing';
+  const ctx = await buildPromptOptionContext(selectedOptions, language, mode);
+  const sceneInfo = selectedOptions?.scene
+    ? await getSceneReferenceInfo(selectedOptions.scene, selectedOptions, language)
+    : { prompt: '', sceneValue: '', sceneLabel: '' };
+
+  return {
+    language,
+    useCase,
+    productFocus,
+    selectedOptions,
+    analysis,
+    scene: selectedOptions.scene || '',
+    lighting: selectedOptions.lighting || '',
+    mood: selectedOptions.mood || '',
+    style: selectedOptions.style || '',
+    colorPalette: selectedOptions.colorPalette || '',
+    cameraAngle: selectedOptions.cameraAngle || '',
+    hairstyle: selectedOptions.hairstyle || '',
+    makeup: selectedOptions.makeup || '',
+    shoes: selectedOptions.shoes || '',
+    accessories: selectedOptions.accessories || '',
+    outerwear: selectedOptions.outerwear || '',
+    bottoms: selectedOptions.bottoms || '',
+    framing: selectedOptions.framing || ctx.framing || '',
+    expression: selectedOptions.expression || ctx.expression || '',
+    gesture: selectedOptions.gesture || ctx.gesture || '',
+    textOverlayZone: selectedOptions.textOverlayZone || ctx.textOverlayZone || '',
+    productPresence: selectedOptions.productPresence || ctx.productPresence || '',
+    storyRole: selectedOptions.storyRole || ctx.storyRole || '',
+    storyPose: selectedOptions.pose || ctx.storyPose || '',
+    sceneDepth: selectedOptions.sceneDepth || ctx.sceneDepth || '',
+    propCue: selectedOptions.propCue || ctx.propCue || '',
+    poseSuggestion: ctx.poseSuggestion || '',
+    sceneDirective: ctx.sceneDirective || '',
+    lightingSuggestion: ctx.lightingSuggestion || '',
+    moodSuggestion: ctx.moodSuggestion || '',
+    styleSuggestion: ctx.styleSuggestion || '',
+    colorPaletteSuggestion: ctx.colorPaletteSuggestion || '',
+    scene_reference_prompt: sceneInfo.prompt || '',
+    scene_reference_label: sceneInfo.sceneLabel || '',
+    scene_reference_value: sceneInfo.sceneValue || '',
+    character_age: character.age || '',
+    character_gender: character.gender || '',
+    character_skin_tone: character.skinTone || '',
+    character_body_type: character.bodyType || '',
+    character_facial_features: character.facialFeatures || '',
+    character_pose: character.currentPose || '',
+    character_accessories: character.currentAccessories || '',
+    product_type: product.garment_type || product.type || '',
+    product_category: product.category || product.style_category || '',
+    product_primary_color: product.primary_color || '',
+    product_secondary_color: product.secondary_color || '',
+    product_pattern: product.pattern || '',
+    product_material: product.fabric_type || product.material || '',
+    product_fit: product.fit_type || product.fit || '',
+    product_length: product.length || '',
+    product_key_details: product.key_details || '',
   };
 }
 function appendEnglishStylingSection(parts, ctx = {}, mode = 'wearing') {
@@ -502,6 +575,43 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
   // 💫 NEW: Support Vietnamese language for image generation
   // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
   const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+
+  const assignedTemplate = await renderAssignedPromptTemplate({
+    criteria: {
+      page: 'SmartPromptBuilder',
+      context: useCase,
+      field: 'mainPrompt',
+      useCase,
+      templateType: 'image',
+    },
+    runtimeValues: await buildPromptTemplateRuntimeValues(
+      analysis,
+      selectedOptions,
+      useCase,
+      productFocus,
+      normalizedLanguage
+    ),
+  });
+
+  if (assignedTemplate?.rendered?.prompt) {
+    let assignedSceneReferenceImage = null;
+    if (selectedOptions?.scene) {
+      const sceneInfo = await getSceneReferenceInfo(selectedOptions.scene, selectedOptions, normalizedLanguage);
+      if (sceneInfo?.hasImage && sceneInfo.imageUrl) {
+        assignedSceneReferenceImage = {
+          url: sceneInfo.imageUrl,
+          sceneValue: sceneInfo.sceneValue,
+          sceneLabel: sceneInfo.sceneLabel,
+        };
+      }
+    }
+
+    return {
+      prompt: assignedTemplate.rendered.prompt.trim(),
+      negativePrompt: (assignedTemplate.rendered.negativePrompt || '').trim(),
+      sceneReferenceImage: assignedSceneReferenceImage,
+    };
+  }
   
   if (normalizedLanguage === 'vi') {
     try {
@@ -525,6 +635,12 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
       } else if (useCase === 'character-holding-product') {
         vietnamesePrompt = buildVietnameseHoldingPromptDetailed(analysis, selectedOptions, viContext);
         console.log(`? Using Vietnamese HOLDING product prompt`);
+      } else if (useCase === 'creator-thumbnail') {
+        vietnamesePrompt = await buildCreatorThumbnailPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+        console.log(`? Using creator thumbnail prompt for Vietnamese mode`);
+      } else if (useCase === 'story-character') {
+        vietnamesePrompt = await buildStoryCharacterPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+        console.log(`? Using story character prompt for Vietnamese mode`);
       } else {
         vietnamesePrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
         console.log(`?? No specific Vietnamese image generation prompt for use case '${useCase}', using character analysis prompt`);
@@ -572,6 +688,12 @@ export async function buildDetailedPrompt(analysis, selectedOptions, useCase = '
       break;
     case 'before-after':
       promptStr = await buildBeforeAfterPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+      break;
+    case 'creator-thumbnail':
+      promptStr = await buildCreatorThumbnailPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
+      break;
+    case 'story-character':
+      promptStr = await buildStoryCharacterPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
       break;
     case 'styling':
       promptStr = await buildStylingPrompt(analysis, selectedOptions, productFocus, normalizedLanguage);
@@ -1780,6 +1902,138 @@ async function buildBeforeAfterPrompt(analysis, selectedOptions, productFocus, l
   parts.push('- Compelling reason to stylize');
   parts.push('- 8K resolution, sharp, professional');
   parts.push('- Suitable for: Brand campaigns, lookbooks, social proof, styling posts');
+
+  return compactPrompt(parts);
+}
+
+async function buildCreatorThumbnailPrompt(analysis, selectedOptions, productFocus, language = 'en') {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+  const hasProductReference = Boolean(product?.garment_type || product?.type || product?.primary_color || product?.key_details);
+  const characterAlias = resolveCharacterAlias(selectedOptions);
+
+  parts.push('[CREATOR THUMBNAIL / HOOK VISUAL]');
+  parts.push('Image 1 is the PRIMARY CREATOR reference. Keep the exact same identity, face, hair, and recognizability.');
+  if (hasProductReference) {
+    parts.push('Image 2 is an OPTIONAL product/prop reference. Use it only as a supporting object or visual clue, not as the main subject.');
+  }
+
+  parts.push('Goal: create a highly clickable creator-led thumbnail visual.');
+  parts.push('Priority order: face readability > expression impact > composition clarity > optional product clue.');
+
+  parts.push('\n=== CREATOR IDENTITY LOCK ===');
+  parts.push('Keep the same person identity from the character reference.');
+  parts.push('Preserve face shape, eyes, nose, mouth, hairstyle, and signature look.');
+  if (characterAlias) {
+    parts.push(`Identity anchor token: ${characterAlias}.`);
+  }
+  if (character.age) parts.push(`Approx age: ${character.age}.`);
+  if (character.gender) parts.push(`Gender presentation: ${character.gender}.`);
+  if (character.facialFeatures) parts.push(`Distinctive features: ${character.facialFeatures}.`);
+
+  parts.push('\n=== THUMBNAIL COMPOSITION ===');
+  parts.push('Use a creator-first frame with strong face readability.');
+  parts.push('Prefer close-up, chest-up, or half-body framing unless selected camera angle suggests otherwise.');
+  parts.push('Leave clean negative space for title/text overlay.');
+  parts.push('Use strong directional gaze, gesture, or reaction energy suitable for thumbnails.');
+  if (selectedOptions.cameraAngle) parts.push(`Camera angle: ${selectedOptions.cameraAngle}.`);
+  if (selectedOptions.framing) parts.push(`Thumbnail framing: ${selectedOptions.framing}.`);
+  if (selectedOptions.expression) parts.push(`Expression: ${selectedOptions.expression}.`);
+  if (selectedOptions.gesture && selectedOptions.gesture !== 'not-needed') parts.push(`Gesture: ${selectedOptions.gesture}.`);
+  if (selectedOptions.textOverlayZone) parts.push(`Protect this text-safe area: ${selectedOptions.textOverlayZone}.`);
+  if (selectedOptions.mood) parts.push(`Emotion / energy: ${selectedOptions.mood}.`);
+
+  if (hasProductReference) {
+    parts.push('\n=== OPTIONAL PRODUCT CLUE ===');
+    parts.push('Include the product as a secondary supporting prop.');
+    if (product.garment_type || product.type) parts.push(`Product type: ${product.garment_type || product.type}.`);
+    if (product.primary_color) parts.push(`Product color cue: ${product.primary_color}.`);
+    if (product.key_details) parts.push(`Product key cue: ${product.key_details}.`);
+    if (selectedOptions.productPresence) parts.push(`Product placement priority: ${selectedOptions.productPresence}.`);
+    parts.push('Product must remain readable but should not overpower the creator face.');
+  } else {
+    parts.push('\n=== NO PRODUCT REQUIRED ===');
+    parts.push('Build the hook entirely from character performance, framing, expression, and scene direction.');
+  }
+
+  parts.push('\n=== VISUAL DIRECTION ===');
+  if (selectedOptions.scene) {
+    parts.push(`Scene: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}.`);
+  } else {
+    parts.push('Scene: clean creator background, studio corner, desk setup, or high-contrast thumbnail backdrop.');
+  }
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}.`);
+  if (selectedOptions.style) parts.push(`Style: ${selectedOptions.style}.`);
+  if (selectedOptions.colorPalette) parts.push(`Palette: ${selectedOptions.colorPalette}.`);
+
+  parts.push('\n=== HARD RULES ===');
+  parts.push('No clutter, no low-contrast face, no tiny subject, no confusing composition.');
+  parts.push('No identity drift, no extra people, no hidden face, no muddy background.');
+  parts.push('Thumbnail-ready, high-clarity, high-clickability, creator-led image.');
+
+  return compactPrompt(parts);
+}
+
+async function buildStoryCharacterPrompt(analysis, selectedOptions, productFocus, language = 'en') {
+  const parts = [];
+  const character = analysis.character || {};
+  const product = analysis.product || {};
+  const hasProductReference = Boolean(product?.garment_type || product?.type || product?.primary_color || product?.key_details);
+  const characterAlias = resolveCharacterAlias(selectedOptions);
+
+  parts.push('[STORY CHARACTER / RECURRING HOST VISUAL]');
+  parts.push('Image 1 is the PRIMARY recurring character reference.');
+  parts.push('This use case is character-first. Preserve identity consistency above everything else.');
+  if (hasProductReference) {
+    parts.push('Image 2 is an optional prop or branded item reference. It may appear in the story world but is not mandatory.');
+  }
+
+  parts.push('\n=== CHARACTER CONSISTENCY ===');
+  parts.push('Keep the exact same person identity, recognizable face, hair, and silhouette.');
+  parts.push('This character should feel reusable across multiple future scenes.');
+  if (characterAlias) {
+    parts.push(`Identity anchor token: ${characterAlias}.`);
+  }
+  if (character.age) parts.push(`Age cue: ${character.age}.`);
+  if (character.gender) parts.push(`Gender presentation: ${character.gender}.`);
+  if (character.overallVibe) parts.push(`Core vibe: ${character.overallVibe}.`);
+  if (character.facialFeatures) parts.push(`Distinctive features: ${character.facialFeatures}.`);
+
+  parts.push('\n=== STORY ROLE ===');
+  parts.push('Design the image as a story host, mascot, narrator, or recurring explainer persona.');
+  parts.push('The result should feel like a key visual for a repeatable character identity.');
+  parts.push('Pose should be readable, expressive, and suitable for storytelling.');
+  if (selectedOptions.storyRole) parts.push(`Role archetype: ${selectedOptions.storyRole}.`);
+  if (selectedOptions.expression) parts.push(`Facial expression: ${selectedOptions.expression}.`);
+  if (selectedOptions.pose) parts.push(`Story pose: ${selectedOptions.pose}.`);
+  if (selectedOptions.mood) parts.push(`Story mood: ${selectedOptions.mood}.`);
+  if (selectedOptions.cameraAngle) parts.push(`Framing angle: ${selectedOptions.cameraAngle}.`);
+
+  if (hasProductReference) {
+    parts.push('\n=== OPTIONAL PROP / BRAND CUE ===');
+    parts.push('Use the optional product as a prop, symbol, or story clue rather than a dominant sales object.');
+    if (product.garment_type || product.type) parts.push(`Prop/item type: ${product.garment_type || product.type}.`);
+    if (product.primary_color) parts.push(`Prop/item color cue: ${product.primary_color}.`);
+    if (product.key_details) parts.push(`Prop/item detail cue: ${product.key_details}.`);
+    if (selectedOptions.propCue && selectedOptions.propCue !== 'not-needed') parts.push(`Preferred prop behavior: ${selectedOptions.propCue}.`);
+  }
+
+  parts.push('\n=== WORLD BUILDING ===');
+  if (selectedOptions.scene) {
+    parts.push(`Scene: ${await buildLockedSceneDirective(selectedOptions.scene, selectedOptions, language)}.`);
+  } else {
+    parts.push('Scene: cinematic story setup, host corner, stylized room, or simple narrative environment.');
+  }
+  if (selectedOptions.lighting) parts.push(`Lighting: ${selectedOptions.lighting}.`);
+  if (selectedOptions.style) parts.push(`Visual style: ${selectedOptions.style}.`);
+  if (selectedOptions.colorPalette) parts.push(`Color palette: ${selectedOptions.colorPalette}.`);
+  if (selectedOptions.sceneDepth) parts.push(`Scene depth: ${selectedOptions.sceneDepth}.`);
+
+  parts.push('\n=== HARD RULES ===');
+  parts.push('No identity drift, no random extra characters, no overcomplicated scene clutter.');
+  parts.push('Maintain strong face readability and a reusable recurring-character look.');
+  parts.push('Character-first story visual, polished, cinematic, and consistent.');
 
   return compactPrompt(parts);
 }

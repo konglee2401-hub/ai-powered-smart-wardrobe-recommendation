@@ -6,6 +6,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Database, Star, TrendingUp } from 'lucide-react';
+import { getRecommendationLabel } from '../utils/recommendationMeta';
 
 const CATEGORY_ICONS = {
   scene: '🎬',
@@ -148,7 +149,7 @@ export default function NewOptionsDetected({
             <div className="flex items-center gap-2">
               <span className="text-lg">{CATEGORY_ICONS[category] || '📦'}</span>
               <h4 className="text-xs font-semibold text-gray-300">
-                {CATEGORY_LABELS[category] || category}
+                {CATEGORY_LABELS[category] || getRecommendationLabel(category)}
               </h4>
               <span className="text-xs bg-amber-600/30 text-amber-300 px-1.5 py-0.5 rounded">
                 {values.length} new

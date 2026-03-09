@@ -7,7 +7,6 @@ function getImageUrl(url) {
   const normalized = url.replace(/\\/g, '/');
 
   if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
-    // Replace localhost base with configured API host when needed (e.g., staging/prod)
     try {
       const baseHost = (API_BASE_URL || '').replace('/api', '');
       if (baseHost && normalized.includes('localhost:5000')) {
@@ -34,6 +33,8 @@ function getImageUrl(url) {
 export default function ScenePickerModal({ isOpen, onClose, scenes = [], selectedScene, onSelect, language = 'en', aspectRatio = '16:9' }) {
   if (!isOpen) return null;
 
+  const isLightTheme = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light';
+
   const getLockedPrompt = (scene) => {
     const isVi = (language || 'en').toLowerCase().startsWith('vi');
     return isVi
@@ -41,41 +42,29 @@ export default function ScenePickerModal({ isOpen, onClose, scenes = [], selecte
       : (scene.sceneLockedPrompt || scene.sceneLockedPromptVi || scene.promptSuggestion || scene.promptSuggestionVi || '');
   };
 
-  // Get the correct image URL based on aspect ratio
   const getSceneImageUrl = (scene) => {
     if (!scene) return null;
-    
-    // Priority 1: Get aspect-specific URL from sceneLockedImageUrls
+
     if (scene.sceneLockedImageUrls && typeof scene.sceneLockedImageUrls === 'object') {
       const aspectUrl = scene.sceneLockedImageUrls[aspectRatio];
       if (aspectUrl) return aspectUrl;
-      
-      // Fallback: Try other aspects in priority order
-      if (aspectRatio === '16:9' && scene.sceneLockedImageUrls['9:16']) {
-        return scene.sceneLockedImageUrls['9:16'];
-      }
-      if (aspectRatio === '9:16' && scene.sceneLockedImageUrls['16:9']) {
-        return scene.sceneLockedImageUrls['16:9'];
-      }
+      if (aspectRatio === '16:9' && scene.sceneLockedImageUrls['9:16']) return scene.sceneLockedImageUrls['9:16'];
+      if (aspectRatio === '9:16' && scene.sceneLockedImageUrls['16:9']) return scene.sceneLockedImageUrls['16:9'];
     }
-    
-    // Priority 2: Use the generic sceneLockedImageUrl
+
     if (scene.sceneLockedImageUrl) return scene.sceneLockedImageUrl;
-    
-    // Priority 3: Use previewImage
     return scene.previewImage;
   };
 
-
   return (
-    <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-gray-900 border border-gray-700 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Scene Picker</h3>
-          <button onClick={onClose} className="text-gray-300 hover:text-white">✕</button>
+    <div className={`apple-typography fixed inset-0 z-[100] flex items-center justify-center p-4 ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)] backdrop-blur-md' : 'bg-black/70'}`}>
+      <div className={`w-full max-w-6xl max-h-[90vh] overflow-y-auto rounded-xl p-4 ${isLightTheme ? 'studio-card-shell border border-white/50' : 'border border-gray-700 bg-gray-900'}`}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className={`text-lg font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>Scene Picker</h3>
+          <button onClick={onClose} className={isLightTheme ? 'text-slate-500 hover:text-slate-900' : 'text-gray-300 hover:text-white'}>✕</button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {scenes.map((scene) => {
             const locked = getLockedPrompt(scene);
             const isActive = selectedScene === scene.value;
@@ -88,44 +77,49 @@ export default function ScenePickerModal({ isOpen, onClose, scenes = [], selecte
                   onSelect(scene.value, scene);
                   onClose();
                 }}
-                className={`text-left border rounded-lg p-2 transition flex flex-col gap-2 ${isActive ? 'border-purple-500 bg-purple-900/30' : 'border-gray-700 bg-gray-800 hover:border-gray-500'}`}
+                className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition ${
+                  isLightTheme
+                    ? isActive
+                      ? 'apple-option-chip apple-option-chip-cool apple-option-chip-selected border-sky-300'
+                      : 'studio-card-shell border-white/45 hover:border-sky-300'
+                    : isActive
+                      ? 'border-purple-500 bg-purple-900/30'
+                      : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                }`}
               >
-                {/* Thumbnail image */}
                 {imageUrl ? (
-                  <div className="relative w-full aspect-square shrink-0 overflow-hidden rounded border border-gray-600">
+                  <div className={`relative w-full aspect-square shrink-0 overflow-hidden rounded border ${isLightTheme ? 'border-white/40 bg-white/10' : 'border-gray-600'}`}>
                     <img
                       src={imageUrl}
                       alt={scene.label}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                         const placeholder = e.currentTarget.parentElement?.querySelector('.img-placeholder');
                         if (placeholder) placeholder.classList.remove('hidden');
                       }}
                     />
-                    <div className="img-placeholder hidden absolute inset-0 rounded border border-dashed border-gray-600 bg-gray-700/70 text-xs text-gray-300 flex items-center justify-center text-center px-1">
+                    <div className={`img-placeholder absolute inset-0 hidden items-center justify-center rounded border border-dashed px-1 text-center text-xs ${isLightTheme ? 'border-white/45 bg-white/60 text-slate-500' : 'border-gray-600 bg-gray-700/70 text-gray-300'}`}>
                       Image unavailable
                     </div>
                   </div>
                 ) : (
-                  <div className="w-full aspect-square rounded border border-gray-700 bg-gray-700 flex items-center justify-center text-xs text-gray-300">
+                  <div className={`flex w-full aspect-square items-center justify-center rounded border text-xs ${isLightTheme ? 'border-white/45 bg-white/55 text-slate-500' : 'border-gray-700 bg-gray-700 text-gray-300'}`}>
                     No Image
                   </div>
                 )}
-                
-                {/* Scene info */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium text-sm truncate">{scene.label}</div>
-                  <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{scene.description}</div>
+
+                <div className="min-w-0 flex-1">
+                  <div className={`truncate text-sm font-medium ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{scene.label}</div>
+                  <div className={`mt-0.5 line-clamp-2 text-xs ${isLightTheme ? 'text-slate-500' : 'text-gray-400'}`}>{scene.description}</div>
                   <details className="mt-1">
-                    <summary className="text-xs text-purple-300 cursor-pointer">Prompt</summary>
-                    <p className="text-xs text-gray-300 mt-1 line-clamp-3">{locked || 'No locked prompt yet'}</p>
+                    <summary className={`cursor-pointer text-xs ${isLightTheme ? 'text-sky-600' : 'text-purple-300'}`}>Prompt</summary>
+                    <p className={`mt-1 line-clamp-3 text-xs ${isLightTheme ? 'text-slate-600' : 'text-gray-300'}`}>{locked || 'No locked prompt yet'}</p>
                   </details>
                 </div>
               </button>
             );
           })}
-
         </div>
       </div>
     </div>

@@ -1,5 +1,54 @@
 import mongoose from 'mongoose';
 
+const promptLocationSchema = new mongoose.Schema(
+  {
+    page: { type: String, trim: true, default: '' },
+    step: { type: Number, default: null },
+    context: { type: String, trim: true, default: '' },
+    field: { type: String, trim: true, default: '' },
+  },
+  { _id: false }
+);
+
+const promptFieldSchema = new mongoose.Schema(
+  {
+    id: { type: String, trim: true, default: '' },
+    label: { type: String, trim: true, default: '' },
+    description: { type: String, trim: true, default: '' },
+    type: {
+      type: String,
+      enum: ['text', 'textarea', 'select', 'number', 'checkbox', 'radio', 'date', 'color'],
+      default: 'text'
+    },
+    placeholder: { type: String, trim: true, default: '' },
+    defaultValue: { type: mongoose.Schema.Types.Mixed, default: '' },
+    options: [
+      {
+        value: { type: String, trim: true, default: '' },
+        label: { type: String, trim: true, default: '' },
+        description: { type: String, trim: true, default: '' }
+      }
+    ],
+    validation: {
+      required: { type: Boolean, default: false },
+      minLength: Number,
+      maxLength: Number,
+      pattern: String
+    },
+    editable: { type: Boolean, default: true },
+    category: { type: String, trim: true, default: '' },
+    source: {
+      type: String,
+      enum: ['manual', 'option', 'system'],
+      default: 'manual'
+    },
+    optionCategory: { type: String, trim: true, default: '' },
+    allowCustomValue: { type: Boolean, default: true },
+    runtimeKey: { type: String, trim: true, default: '' }
+  },
+  { _id: false }
+);
+
 const promptTemplateSchema = new mongoose.Schema(
   {
     // Basic Info
@@ -55,11 +104,6 @@ const promptTemplateSchema = new mongoose.Schema(
     // Category & Type
     useCase: {
       type: String,
-      enum: [
-        'ecommerce', 'social', 'advertising', 'editorial', 'lookbook',
-        'outfit-change', 'product-showcase', 'styling-guide', 'product-introduction',
-        'style-transformation', 'generic', 'video-script'
-      ],
       default: 'ecommerce',
       index: true
     },
@@ -82,12 +126,10 @@ const promptTemplateSchema = new mongoose.Schema(
     },
 
     // NEW: Where this template is used
-    usedInPages: [{
-      page: String,      // e.g., "VideoGenerationPage", "AdvancedCustomization"
-      step: Number,      // e.g., 1, 2, 3
-      context: String,   // e.g., "video_scenario_outfit_change", "image_prompt_builder"
-      field: String      // e.g., "mainPrompt", "negativePrompt"
-    }],
+    usedInPages: [promptLocationSchema],
+
+    // Active runtime bindings. Only one template should own a target context at a time.
+    assignmentTargets: [promptLocationSchema],
 
     // NEW: Prompt structure with dynamic fields
     content: {
@@ -102,33 +144,7 @@ const promptTemplateSchema = new mongoose.Schema(
     },
 
     // NEW: Dynamic fields/placeholders configuration
-    fields: [{
-      id: String,                    // Unique identifier e.g., "outfit1", "mood"
-      label: String,                 // Display label
-      description: String,           // Help text
-      type: {
-        type: String,
-        enum: ['text', 'textarea', 'select', 'number', 'checkbox', 'radio', 'date', 'color'],
-        default: 'text'
-      },
-      placeholder: String,
-      defaultValue: mongoose.Schema.Types.Mixed,
-      options: [                      // For select/radio/checkbox
-        {
-          value: String,
-          label: String,
-          description: String
-        }
-      ],
-      validation: {
-        required: { type: Boolean, default: false },
-        minLength: Number,
-        maxLength: Number,
-        pattern: String
-      },
-      editable: { type: Boolean, default: true },  // User can change this field
-      category: String  // Group fields by category
-    }],
+    fields: [promptFieldSchema],
 
     // NEW: Version history
     version: {
@@ -185,10 +201,22 @@ const promptTemplateSchema = new mongoose.Schema(
     indexes: [
       { useCase: 1, isActive: 1 },
       { isCore: 1, isActive: 1 },
-      { 'usedInPages.page': 1 }
+      { 'usedInPages.page': 1 },
+      { 'assignmentTargets.page': 1, 'assignmentTargets.context': 1, 'assignmentTargets.field': 1 }
     ]
   }
 );
+
+function normalizeReplacementValue(value) {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
 
 // Instance Methods
 promptTemplateSchema.methods.getRenderedPrompt = function(fieldValues = {}) {
@@ -197,10 +225,11 @@ promptTemplateSchema.methods.getRenderedPrompt = function(fieldValues = {}) {
 
   // Replace placeholders with actual values
   Object.keys(fieldValues).forEach(key => {
-    const value = fieldValues[key];
-    const regex = new RegExp(`{${key}}`, 'g');
-    prompt = prompt.replace(regex, value);
-    negativePrompt = negativePrompt.replace(regex, value);
+    const value = normalizeReplacementValue(fieldValues[key]);
+    const braceRegex = new RegExp(`{${key}}`, 'g');
+    const doubleBraceRegex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+    prompt = prompt.replace(braceRegex, value).replace(doubleBraceRegex, value);
+    negativePrompt = negativePrompt.replace(braceRegex, value).replace(doubleBraceRegex, value);
   });
 
   return {
@@ -238,6 +267,29 @@ promptTemplateSchema.statics.findByPageAndStep = function(page, step) {
     'usedInPages.step': step,
     isActive: true
   });
+};
+
+promptTemplateSchema.statics.findAssignedTemplate = function({
+  page,
+  step = null,
+  context,
+  field,
+  useCase,
+  templateType
+} = {}) {
+  const query = { isActive: true };
+  const contextQuery = {};
+
+  if (page) contextQuery['assignmentTargets.page'] = page;
+  if (step !== null && step !== undefined && step !== '') {
+    contextQuery['assignmentTargets.step'] = Number(step);
+  }
+  if (context) contextQuery['assignmentTargets.context'] = context;
+  if (field) contextQuery['assignmentTargets.field'] = field;
+  if (useCase) query.useCase = useCase;
+  if (templateType) query.templateType = templateType;
+
+  return this.findOne({ ...query, ...contextQuery }).sort({ isCore: 1, updatedAt: -1, createdAt: -1 });
 };
 
 const PromptTemplate = mongoose.model('PromptTemplate', promptTemplateSchema);

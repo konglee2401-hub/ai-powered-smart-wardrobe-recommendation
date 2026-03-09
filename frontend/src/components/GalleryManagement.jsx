@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -13,10 +14,12 @@ import {
   Image as ImageIcon,
   ImagePlus,
   List,
+  Loader2,
   Pencil,
   RefreshCw,
   Search,
   Trash2,
+  Wrench,
   X,
 } from 'lucide-react';
 
@@ -234,7 +237,7 @@ function AssetCard({
             onError={onError}
             className="h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
           {imageErrors[image.id]?.failed && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/85 px-4 text-center text-xs font-medium text-slate-200">
               Preview unavailable
@@ -314,9 +317,9 @@ function AssetCard({
           />
         </button>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-950/5 to-transparent" />
         {imageErrors[image.id]?.failed && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-4 text-center text-xs font-medium text-slate-200">
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 px-4 text-center text-xs font-medium text-slate-200">
             Preview unavailable
           </div>
         )}
@@ -387,6 +390,11 @@ export default function GalleryManagement({
   currentCategory = 'all',
   searchQuery = '',
   toolbarHost = null,
+  maintenanceAction = null,
+  showMaintenanceMenu = false,
+  setShowMaintenanceMenu = () => {},
+  maintenanceMenuRef = null,
+  runMaintenance = () => {},
 }) {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -736,10 +744,10 @@ export default function GalleryManagement({
   }
 
   const toolbar = (
-    <div className="rounded-[1.35rem] bg-white/[0.02] px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+    <div className="rounded-[1.35rem] bg-white/[0.02] px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold tracking-[-0.03em] text-white">Manage assets</h2>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
@@ -755,15 +763,58 @@ export default function GalleryManagement({
             <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
-          <button
-            type="button"
-            onClick={clearBrokenImages}
-            disabled={!brokenCount}
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-100 transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <AlertTriangle className="h-4 w-4" />
-            Clear broken
-          </button>
+          <div className="relative" ref={maintenanceMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowMaintenanceMenu(!showMaintenanceMenu)}
+              disabled={maintenanceAction !== null}
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-300/12 bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-100 transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {maintenanceAction ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cleanup running...
+                </>
+              ) : (
+                <>
+                  <Wrench className="h-4 w-4" />
+                  Clean up
+                  <ChevronDown className={`h-4 w-4 transition ${showMaintenanceMenu ? 'rotate-180' : ''}`} />
+                </>
+              )}
+            </button>
+
+            {showMaintenanceMenu && maintenanceAction === null && (
+              <div className="absolute right-0 top-full mt-2 z-20 min-w-64 rounded-xl border border-white/10 bg-slate-900/95 shadow-lg backdrop-blur-sm">
+                <div className="space-y-1 p-2">
+                  <button
+                    type="button"
+                    onClick={() => runMaintenance('run-gallery-availability-repair', { dryRun: false })}
+                    className="w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/10 active:bg-white/20"
+                  >
+                    <div className="font-semibold text-white">Repair Gallery Availability</div>
+                    <div className="mt-1 text-xs text-slate-400">Check asset visibility and accessibility</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runMaintenance('run-batch-upload-orphaned-assets', { dryRun: false, limit: 100 })}
+                    className="w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/10 active:bg-white/20"
+                  >
+                    <div className="font-semibold text-white">Repair Pending Assets</div>
+                    <div className="mt-1 text-xs text-slate-400">Sync orphaned or incomplete uploads</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runMaintenance('run-asset-integrity-cleanup', { dryRun: false, fixBrokenAssets: true })}
+                    className="w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/10 active:bg-white/20"
+                  >
+                    <div className="font-semibold text-white">Cleanup Broken Assets</div>
+                    <div className="mt-1 text-xs text-slate-400">Remove corrupted or inaccessible files</div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="inline-flex rounded-[0.9rem] border border-white/10 bg-slate-950/55 p-1">
             <button
               type="button"
@@ -785,10 +836,10 @@ export default function GalleryManagement({
         </div>
       </div>
 
-      <form onSubmit={handleSearchSubmit} className="mt-3 grid items-end gap-2 lg:grid-cols-[minmax(320px,1.5fr),minmax(130px,0.55fr),minmax(150px,0.65fr),auto]">
-        <label className="min-w-0 space-y-2">
+      <form onSubmit={handleSearchSubmit} className="mt-2 grid items-end gap-1.5 lg:grid-cols-[minmax(320px,1.5fr),minmax(110px,0.5fr),minmax(130px,0.6fr),auto]">
+        <label className="min-w-0 space-y-1.5">
           <span className="text-xs uppercase tracking-[0.16em] text-transparent select-none">Search</span>
-          <div className="flex min-h-12 items-center gap-3 rounded-[1rem] border border-white/10 bg-slate-950/55 px-4 py-3">
+          <div className="flex min-h-10 items-center gap-2 rounded-[1rem] border border-white/10 bg-slate-950/55 px-3 py-2">
             <Search className="h-4 w-4 shrink-0 text-slate-500" />
             <input
               type="text"
@@ -799,7 +850,7 @@ export default function GalleryManagement({
             />
           </div>
         </label>
-        <div className="min-w-[110px]">
+        <div className="min-w-[90px]">
           <SelectField
             label="Date"
             value={filters.dateRange}
@@ -807,7 +858,7 @@ export default function GalleryManagement({
             onChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
           />
         </div>
-        <div className="min-w-[120px]">
+        <div className="min-w-[100px]">
           <SelectField
             label="Sort"
             value={sortBy}
@@ -825,9 +876,9 @@ export default function GalleryManagement({
         </button>
       </form>
 
-      <div className="mt-3 h-px bg-gradient-to-r from-transparent via-slate-700/35 to-transparent" />
+      <div className="mt-2 h-px bg-gradient-to-r from-transparent via-slate-700/35 to-transparent" />
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-400">
             {selectedForBatch.length} selected / {brokenCount} broken
@@ -848,7 +899,7 @@ export default function GalleryManagement({
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">{images.length} on page</span>
           <button
             type="button"
@@ -889,7 +940,7 @@ export default function GalleryManagement({
           </p>
         </div>
       ) : (
-        <div className={activeViewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'}>
+        <div className={activeViewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'space-y-3'}>
           {images.map((image) => (
             <AssetCard
               key={image.id}

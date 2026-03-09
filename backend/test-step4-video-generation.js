@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 // CONFIGURATION
 // ============================================================
 
-const STEP3_RESULTS_FILE = path.join(__dirname, 'test-affiliate', 'step3-real-test-2026-03-06.json');
+const STEP3_RESULTS_FILE = process.env.STEP3_RESULTS_FILE || path.join(__dirname, 'test-affiliate', 'step3-real-test-2026-03-06.json');
 const CHARACTER_WEARING_IMAGE = path.join(__dirname, 'test-affiliate', 'Wearing.png');
 const CHARACTER_HOLDING_IMAGE = path.join(__dirname, 'test-affiliate', 'Holding.png');
 const PRODUCT_IMAGE = path.join(__dirname, 'test-affiliate', 'Product.jpeg');

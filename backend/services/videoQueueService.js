@@ -11,6 +11,107 @@ import VideoPipelineJob from '../models/VideoPipelineJob.js';
 
 const PRIORITY_ORDER = { high: 1, normal: 2, low: 3 };
 
+const RETRYABLE_ERROR_PATTERNS = [
+  /timeout/i,
+  /timed out/i,
+  /econnreset/i,
+  /econnrefused/i,
+  /enotfound/i,
+  /socket hang up/i,
+  /network/i,
+  /temporar/i,
+  /rate limit/i,
+  /429/,
+  /503/,
+  /google drive/i,
+  /drive upload/i,
+  /drive download/i,
+  /ffmpeg exited with code/i,
+];
+
+const NON_RETRYABLE_ERROR_PATTERNS = [
+  /missing main video/i,
+  /asset not found/i,
+  /no local file path/i,
+  /invalid data found/i,
+  /moov atom not found/i,
+  /unsupported/i,
+  /no enabled sub-video library sources/i,
+  /no suitable public file found/i,
+  /mashup jobs require a main video input/i,
+];
+
+function buildQueueControl(job = {}) {
+  const control = job.metadata?.queueControl || {};
+  const retryEligible = control.retryEligible !== false;
+  const retryStopped = control.retryStopped === true;
+  const manualInterventionRequired = control.manualInterventionRequired === true;
+  const maxRetries = Number(job.maxRetries) || 0;
+  const errorCount = Number(job.errorCount) || 0;
+  const retriesRemaining = Math.max(0, maxRetries - errorCount);
+
+  let executionState = 'idle';
+  if (job.status === 'processing') executionState = 'processing';
+  else if (job.status === 'ready') executionState = 'ready';
+  else if (job.status === 'uploaded') executionState = 'uploaded';
+  else if (job.status === 'failed') executionState = manualInterventionRequired ? 'manual-review' : 'failed';
+  else if (job.status === 'pending' && errorCount > 0 && retryEligible) executionState = 'auto-retry-pending';
+  else if (job.status === 'pending') executionState = 'pending';
+
+  return {
+    retryEligible,
+    retryStopped,
+    manualInterventionRequired,
+    retriesRemaining,
+    retryStoppedReason: control.retryStoppedReason || '',
+    retryStoppedAt: control.retryStoppedAt || null,
+    lastFailureStage: control.lastFailureStage || '',
+    lastFailureMessage: control.lastFailureMessage || '',
+    lastFailureAt: control.lastFailureAt || null,
+    nextAction: control.nextAction || (executionState === 'manual-review' ? 'manual-start' : executionState === 'auto-retry-pending' ? 'auto-retry' : 'none'),
+    executionState,
+    summary: retryStopped
+      ? 'Retry stopped after reaching the retry limit'
+      : executionState === 'manual-review'
+        ? 'Needs manual review before retry'
+        : executionState === 'auto-retry-pending'
+          ? 'Queued for automatic retry'
+          : executionState === 'processing'
+            ? 'Currently processing'
+            : executionState === 'ready'
+              ? 'Ready for publishing'
+              : executionState === 'uploaded'
+                ? 'Uploaded successfully'
+                : executionState === 'pending'
+                  ? 'Waiting for processing'
+                  : 'Idle',
+  };
+}
+
+function classifyQueueError(error, stage = 'processing') {
+  const message = error?.message || String(error || 'Unknown error');
+  const normalizedStage = String(stage || 'processing').toLowerCase();
+
+  if (NON_RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+    return { retryEligible: false, manualInterventionRequired: true, category: 'content', message };
+  }
+
+  if (normalizedStage === 'auto-sub-video' && /no suitable|not found|missing/i.test(message)) {
+    return { retryEligible: false, manualInterventionRequired: true, category: 'asset-selection', message };
+  }
+
+  if (RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+    return { retryEligible: true, manualInterventionRequired: false, category: 'transient', message };
+  }
+
+  return {
+    retryEligible: normalizedStage !== 'validation',
+    manualInterventionRequired: normalizedStage === 'validation',
+    category: normalizedStage === 'validation' ? 'validation' : 'unknown',
+    message,
+  };
+}
+
 function createQueueId() {
   return `queue-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
@@ -24,8 +125,10 @@ function normalizeDate(value, fallback = new Date()) {
 function toPlainJob(job) {
   if (!job) return null;
   const plain = typeof job.toObject === 'function' ? job.toObject() : { ...job };
+  const queueControl = buildQueueControl(plain);
   return {
     ...plain,
+    queueControl,
     scheduleTime: plain.scheduleTime ? new Date(plain.scheduleTime).toISOString() : null,
     startedAt: plain.startedAt ? new Date(plain.startedAt).toISOString() : null,
     completedAt: plain.completedAt ? new Date(plain.completedAt).toISOString() : null,
@@ -163,6 +266,21 @@ class VideoQueueService {
       if (status === 'uploaded' && !job.uploadedAt) job.uploadedAt = new Date();
 
       Object.assign(job, metadata);
+      const previousQueueControl = job.metadata?.queueControl || {};
+      if (['processing', 'ready', 'uploaded'].includes(status)) {
+        job.metadata = {
+          ...(job.metadata || {}),
+          queueControl: {
+            ...previousQueueControl,
+            retryEligible: true,
+            retryStopped: false,
+            retryStoppedReason: '',
+            retryStoppedAt: null,
+            manualInterventionRequired: false,
+            nextAction: status === 'processing' ? 'await-render' : 'none',
+          },
+        };
+      }
       job.processLogs.push({
         stage: status,
         status: 'success',
@@ -188,26 +306,61 @@ class VideoQueueService {
    * Records a stage-specific failure and automatically decides if the job
    * should go back to pending or remain failed after max retry attempts.
    */
-  async recordError(queueId, error, stage = 'processing') {
+  async recordError(queueId, error, stage = 'processing', options = {}) {
     try {
       const job = await VideoPipelineJob.findOne({ queueId });
       if (!job) {
         return { success: false, error: `Queue item not found: ${queueId}` };
       }
 
+      const classification = {
+        ...classifyQueueError(error, stage),
+        ...options,
+      };
+      const message = classification.message || error?.message || String(error);
+
       job.errorCount += 1;
       job.retry = job.errorCount;
       job.errorLog.push({
         stage,
-        error: error?.message || String(error),
+        error: message,
         timestamp: new Date(),
       });
 
-      job.status = job.errorCount <= job.maxRetries ? 'pending' : 'failed';
+      const reachedRetryLimit = classification.retryEligible !== false && job.errorCount >= job.maxRetries;
+      const willRetry = classification.retryEligible !== false && job.errorCount < job.maxRetries;
+      const manualInterventionRequired = classification.manualInterventionRequired === true || !willRetry;
+      job.status = willRetry ? 'pending' : 'failed';
+      job.metadata = {
+        ...(job.metadata || {}),
+        queueControl: {
+          ...(job.metadata?.queueControl || {}),
+          retryEligible: classification.retryEligible !== false,
+          retryStopped: reachedRetryLimit || classification.retryEligible === false,
+          retryStoppedReason: reachedRetryLimit
+            ? 'Reached max retries (' + job.maxRetries + ')'
+            : classification.retryEligible === false
+              ? 'Retry disabled for non-retryable error'
+              : '',
+          retryStoppedAt: !willRetry ? new Date().toISOString() : null,
+          manualInterventionRequired,
+          category: classification.category || 'unknown',
+          lastFailureStage: stage,
+          lastFailureMessage: message,
+          lastFailureAt: new Date().toISOString(),
+          nextAction: willRetry ? 'auto-retry' : 'manual-start',
+        },
+      };
+
       job.processLogs.push({
         stage,
         status: 'error',
-        error: error?.message || String(error),
+        message: willRetry
+            ? 'Job returned to pending for automatic retry'
+            : reachedRetryLimit
+              ? 'Retry stopped after reaching max retries'
+              : 'Job requires manual intervention',
+        error: message,
         retryAttempt: job.retry,
         timestamp: new Date(),
       });
@@ -217,7 +370,7 @@ class VideoQueueService {
       return {
         success: true,
         errorCount: job.errorCount,
-        willRetry: job.errorCount <= job.maxRetries,
+        willRetry,
         queueItem: toPlainJob(job),
       };
     } catch (error) {
@@ -344,6 +497,16 @@ class VideoQueueService {
           uploaded: jobs.filter((job) => job.status === 'uploaded').length,
           failed: jobs.filter((job) => job.status === 'failed').length,
         },
+        byExecutionState: {
+          pending: 0,
+          'auto-retry-pending': 0,
+          processing: 0,
+          ready: 0,
+          uploaded: 0,
+          'manual-review': 0,
+          failed: 0,
+          idle: 0,
+        },
         byPlatform: {},
         byContentType: {},
         errorRate: 0,
@@ -355,6 +518,8 @@ class VideoQueueService {
       for (const job of jobs) {
         stats.byPlatform[job.platform] = (stats.byPlatform[job.platform] || 0) + 1;
         stats.byContentType[job.contentType] = (stats.byContentType[job.contentType] || 0) + 1;
+        const executionState = buildQueueControl(job).executionState;
+        stats.byExecutionState[executionState] = (stats.byExecutionState[executionState] || 0) + 1;
       }
 
       const errored = jobs.filter((job) => job.errorCount > 0).length;
@@ -541,5 +706,7 @@ class VideoQueueService {
     }
   }
 }
+
+export { buildQueueControl, classifyQueueError };
 
 export default new VideoQueueService();

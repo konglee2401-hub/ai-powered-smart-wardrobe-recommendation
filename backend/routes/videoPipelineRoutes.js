@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unified video pipeline routes used by the merged Shorts/Reels + Production UI.
  * The route group intentionally mirrors the operator workflow:
  * dashboard -> sources -> channels -> videos -> jobs -> publish -> settings
@@ -17,6 +17,7 @@ const upload = multer({
 });
 
 router.get('/dashboard', VideoPipelineController.getDashboard);
+router.get('/templates', VideoPipelineController.listTemplates);
 router.get('/sources', VideoPipelineController.listSources);
 router.post('/sources', VideoPipelineController.createSource);
 router.put('/sources/:sourceId', VideoPipelineController.updateSource);
@@ -40,7 +41,9 @@ router.get('/connections', VideoPipelineController.getConnections);
 router.post('/connections', VideoPipelineController.addConnection);
 router.post('/connections/:accountId/verify', VideoPipelineController.verifyConnection);
 router.delete('/connections/:accountId', VideoPipelineController.deleteConnection);
+router.post('/sub-video-sources/public-drive/analyze', VideoPipelineController.analyzePublicSubVideoDriveFolder);
 router.get('/settings', VideoPipelineController.getSettings);
 router.put('/settings', VideoPipelineController.saveSettings);
 
 export default router;
+

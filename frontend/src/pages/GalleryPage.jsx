@@ -1,13 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock3,
+  ChevronDown,
   Image as ImageIcon,
   Layers3,
+  Loader2,
   Sparkles,
+  Wrench,
   Video,
 } from 'lucide-react';
 
 import GalleryManagement from '../components/GalleryManagement';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const STORAGE_TOTAL_GB = 100;
@@ -51,6 +55,9 @@ export default function GalleryPage() {
     totalSize: 0,
   });
   const [recentFiles, setRecentFiles] = useState([]);
+  const [maintenanceAction, setMaintenanceAction] = useState(null);
+  const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
+  const maintenanceMenuRef = useRef(null);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -116,61 +123,101 @@ export default function GalleryPage() {
     },
   ];
 
-  return (
-    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
-      <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_24%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.14),transparent_22%),linear-gradient(145deg,rgba(8,15,31,0.96),rgba(12,24,43,0.88))] p-4 shadow-[0_24px_64px_rgba(2,6,23,0.42)] lg:p-5">
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-[radial-gradient(circle_at_center,rgba(125,211,252,0.18),transparent_62%)]" />
-        <div className="relative flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-[280px] space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">
-              <Sparkles className="h-3.5 w-3.5" />
-              Media workspace
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-white">Gallery</h1>
-              <p className="mt-1 text-sm text-slate-400">Assets, generated outputs, and references.</p>
-            </div>
-          </div>
+  const runMaintenance = async (endpoint, body = {}) => {
+    setMaintenanceAction(endpoint);
+    setShowMaintenanceMenu(false);
+    try {
+      const response = await fetch(`${API_BASE}/admin/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Maintenance action failed');
+      }
+      await (async () => {
+        const statsResponse = await fetch(`${API_BASE}/admin/stats/assets`);
+        const statsData = await statsResponse.json();
+        if (statsData.success) {
+          const byCategory = statsData.stats?.byCategory || {};
+          setStats({
+            total: statsData.stats?.active || 0,
+            character: byCategory['character-image'] || 0,
+            product: byCategory['product-image'] || 0,
+            generated: byCategory['generated-image'] || 0,
+            source: byCategory['source-video'] || 0,
+            totalSize: statsData.stats?.totalSize || 0,
+          });
+        }
+      })();
+      alert(data.message || 'Maintenance completed successfully');
+    } catch (error) {
+      console.error('Gallery maintenance failed:', error);
+      alert(error.message || 'Maintenance failed');
+    } finally {
+      setMaintenanceAction(null);
+    }
+  };
 
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
-            {insightCards.map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-[1.05rem] border border-white/10 bg-gradient-to-br ${card.accent} px-3 py-2`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">{card.label}</p>
-                    <p className="mt-1 text-base font-semibold text-white">{card.value}</p>
-                  </div>
-                  <p className="max-w-[96px] text-right text-[10px] leading-4 text-slate-300">{card.note}</p>
-                </div>
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (maintenanceMenuRef.current && !maintenanceMenuRef.current.contains(event.target)) {
+        setShowMaintenanceMenu(false);
+      }
+    };
+
+    if (showMaintenanceMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMaintenanceMenu]);
+
+  return (
+    <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
+      <PageHeaderBar
+        icon={<Layers3 className="h-4 w-4 text-sky-400" />}
+        title="Gallery"
+        meta="Assets, generated outputs, and references"
+        className="h-16"
+      />
+
+      <div className="min-h-0 overflow-y-auto px-5 py-4 lg:px-6">
+        <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
+      <section className="grid gap-3 sm:grid-cols-3">
+        {insightCards.map((card) => (
+          <div key={card.label} className="studio-card-shell rounded-[1.1rem] px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">{card.value}</p>
               </div>
-            ))}
+              <p className="max-w-[110px] text-right text-[10px] leading-4 text-slate-500">{card.note}</p>
+            </div>
           </div>
-        </div>
+        ))}
       </section>
 
-      <section className="rounded-[1.75rem] border border-white/10 bg-slate-950/60 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] md:p-5">
-        <div>
+      <section className="studio-card-shell rounded-[1.35rem] p-4 md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div ref={setToolbarHost} />
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[300px,minmax(0,1fr)]">
-        <aside className="space-y-6">
-          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/65 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl">
+      <section className="grid min-h-0 gap-6 lg:grid-cols-[300px,minmax(0,1fr)]">
+        <aside className="space-y-6 min-h-0 overflow-y-auto">
+          <div className="studio-card-shell rounded-[1.35rem] p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Collections</p>
                 <h2 className="mt-1 text-lg font-semibold text-white">Collections</h2>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
+              <div className="rounded-2xl border border-white/10 bg-white/20 p-2">
                 <Layers3 className="h-4 w-4 text-slate-300" />
               </div>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-2 lg:overflow-visible lg:pb-0">
               {categories.map((category) => {
                 const meta = CATEGORY_META[category.id];
                 const Icon = meta.icon;
@@ -181,13 +228,13 @@ export default function GalleryPage() {
                     key={category.id}
                     type="button"
                     onClick={() => setCurrentCategory(category.id)}
-                    className={`group flex min-w-[168px] flex-none items-center gap-3 rounded-[1rem] border px-3 py-2.5 text-left transition xl:w-full xl:items-start xl:rounded-[1.2rem] xl:py-3 ${
+                    className={`group flex min-w-[168px] flex-none items-center gap-3 rounded-[1rem] border px-3 py-2.5 text-left transition lg:w-full lg:items-start lg:rounded-[1.2rem] lg:py-3 ${
                       isActive
-                        ? 'border-cyan-300/35 bg-gradient-to-r from-cyan-400/18 to-violet-500/18 shadow-[0_18px_40px_rgba(8,47,73,0.28)]'
-                        : 'border-white/6 bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+                        ? 'apple-option-chip apple-option-chip-selected apple-option-chip-cool shadow-[0_18px_40px_rgba(8,47,73,0.16)]'
+                        : 'apple-option-chip'
                     }`}
                   >
-                    <div className={`rounded-2xl p-2 ${isActive ? 'bg-white/12 text-cyan-100' : 'bg-white/6 text-slate-300'} xl:mt-0.5`}>
+                    <div className={`rounded-2xl p-2 ${isActive ? 'bg-white/12 text-cyan-100' : 'bg-white/6 text-slate-300'} lg:mt-0.5`}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -199,7 +246,7 @@ export default function GalleryPage() {
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 hidden line-clamp-2 text-xs leading-5 text-slate-400 xl:block">{meta.description}</p>
+                      <p className="mt-1 hidden line-clamp-2 text-xs leading-5 text-slate-400 lg:block">{meta.description}</p>
                     </div>
                   </button>
                 );
@@ -209,18 +256,25 @@ export default function GalleryPage() {
 
         </aside>
 
-        <div className="space-y-6">
-          <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/60 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.35)] backdrop-blur-xl md:p-5">
+        <div className="space-y-6 min-h-0 overflow-y-auto">
+          <div className="studio-card-shell rounded-[1.35rem] p-4 md:p-5 min-h-0">
             <GalleryManagement
               currentCategory={currentCategory}
               onBatchSelect={setSelectedImages}
               onImageSelect={(image) => console.log('Image selected:', image)}
               selectedImages={selectedImages}
               toolbarHost={toolbarHost}
+              maintenanceAction={maintenanceAction}
+              showMaintenanceMenu={showMaintenanceMenu}
+              setShowMaintenanceMenu={setShowMaintenanceMenu}
+              maintenanceMenuRef={maintenanceMenuRef}
+              runMaintenance={runMaintenance}
             />
           </div>
         </div>
       </section>
+      </div>
+      </div>
     </div>
   );
 }

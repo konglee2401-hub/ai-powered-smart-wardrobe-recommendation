@@ -17,6 +17,7 @@ import { api, browserAutomationAPI } from '../services/api';
 import GalleryPicker from '../components/GalleryPicker';
 import ScenarioImageUploadComponent from '../components/ScenarioImageUploadComponent';  // 💫 NEW
 import SessionLogModal from '../components/SessionLogModal';
+import PageHeaderBar from '../components/PageHeaderBar';
 import driveAPI from '../services/driveAPI';
 import { captureGenerationSession } from '../services/generationSessionsService';
 import { 
@@ -54,150 +55,116 @@ function VideoSettingsStep({
   selectedScenario, 
   onScenarioChange, 
   onImageChange,
-  scenarioImages = {},  // 💫 NEW: Multiple scenario-specific images
-  onScenarioImagesChange = () => {},  // 💫 NEW: Handler for scenario images
+  scenarioImages = {},
+  onScenarioImagesChange = () => {},
   videoProvider, 
   onVideoProviderChange, 
   selectedAspectRatio, 
   onAspectRatioChange 
 }) {
   const scenario = VIDEO_SCENARIOS.find(s => s.value === selectedScenario);
-  
-  // Get available durations based on provider
   const availableDurations = getAvailableDurations(videoProvider);
   const maxDuration = getMaxDurationForProvider(videoProvider);
   const maxPerVideo = VIDEO_PROVIDER_LIMITS[videoProvider]?.maxDurationPerVideo || 10;
 
   return (
     <div className="space-y-4">
-      {/* 💫 NEW: Provider Selection */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          Video Provider
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {VIDEO_PROVIDERS.map(provider => (
+      <div className="rounded-xl border border-slate-700/70 bg-slate-900/35 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Provider</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {VIDEO_PROVIDERS.map((provider) => (
             <button
               key={provider.id}
+              type="button"
               onClick={() => onVideoProviderChange(provider.id)}
-              className={`p-3 rounded-lg border-2 transition-all text-left ${
-                videoProvider === provider.id
-                  ? 'border-amber-500 bg-amber-600/20 text-white'
-                  : 'border-gray-700 hover:border-gray-600 text-gray-300'
-              }`}
+              className={[
+                'apple-option-chip apple-option-chip-cool flex flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition',
+                videoProvider === provider.id ? 'apple-option-chip-selected' : 'border-slate-700/70 text-slate-300'
+              ].join(' ')}
             >
-              <div className="text-lg mb-1">{provider.icon}</div>
-              <div className="font-medium text-sm">{provider.label}</div>
-              <div className="text-xs text-gray-400 mt-1">{provider.description}</div>
+              <span className="text-sm font-semibold">{provider.label}</span>
+              <span className="text-xs text-slate-400">{provider.description}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+          Up to <span className="font-semibold text-slate-100">{maxPerVideo}s</span> per clip and <span className="font-semibold text-slate-100">{maxDuration}s</span> total.
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-700/70 bg-slate-900/35 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Aspect Ratio</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[
+            { id: '16:9', label: '16:9', meta: 'Landscape' },
+            { id: '9:16', label: '9:16', meta: 'Vertical' }
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onAspectRatioChange(option.id)}
+              className={[
+                'apple-option-chip apple-option-chip-violet rounded-xl border px-3 py-3 text-left transition',
+                selectedAspectRatio === option.id ? 'apple-option-chip-selected' : 'border-slate-700/70 text-slate-300'
+              ].join(' ')}
+            >
+              <div className="text-sm font-semibold">{option.label}</div>
+              <div className="mt-1 text-xs text-slate-400">{option.meta}</div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Provider Info Banner */}
-      <div className={`rounded-lg p-3 border ${
-        videoProvider === 'google-flow' 
-          ? 'bg-blue-900/20 border-blue-700/50' 
-          : 'bg-green-900/20 border-green-700/50'
-      }`}>
-        <div className="text-xs">
-          <span className="text-gray-400">Max </span>
-          <span className="font-semibold text-white">{maxPerVideo}s</span>
-          <span className="text-gray-400"> per video • </span>
-          <span className="font-semibold text-white">{maxDuration}s</span>
-          <span className="text-gray-400"> total</span>
-        </div>
-      </div>
-
-      {/* 💫 NEW: Aspect Ratio Selection */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <Play className="w-4 h-4 text-blue-400" />
-          Aspect Ratio
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => onAspectRatioChange('16:9')}
-            className={`p-3 rounded-lg border-2 transition-all text-center ${
-              selectedAspectRatio === '16:9'
-                ? 'border-blue-500 bg-blue-600/20 text-white'
-                : 'border-gray-700 hover:border-gray-600 text-gray-300'
-            }`}
-          >
-            <div className="text-sm font-semibold">📺 16:9</div>
-            <div className="text-xs text-gray-400 mt-1">Widescreen</div>
-          </button>
-
-          <button
-            onClick={() => onAspectRatioChange('9:16')}
-            className={`p-3 rounded-lg border-2 transition-all text-center ${
-              selectedAspectRatio === '9:16'
-                ? 'border-blue-500 bg-blue-600/20 text-white'
-                : 'border-gray-700 hover:border-gray-600 text-gray-300'
-            }`}
-          >
-            <div className="text-sm font-semibold">📱 9:16</div>
-            <div className="text-xs text-gray-400 mt-1">Portrait</div>
-          </button>
-        </div>
-      </div>
-
-      {/* Duration Selection - Filtered by Provider */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <Play className="w-4 h-4 text-purple-400" />
-          Video Duration
-        </h3>
-        <div className="grid grid-cols-1 gap-2">
-          {availableDurations.map(duration => {
+      <div className="rounded-xl border border-slate-700/70 bg-slate-900/35 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Duration</p>
+        <div className="mt-3 space-y-2">
+          {availableDurations.map((duration) => {
             const videoCount = calculateVideoCount(videoProvider, duration.value);
             return (
               <button
                 key={duration.value}
+                type="button"
                 onClick={() => onDurationChange(duration.value)}
-                className={`p-3 rounded-lg border-2 transition-all text-left ${
-                  selectedDuration === duration.value
-                    ? 'border-purple-500 bg-purple-600/20 text-white'
-                    : 'border-gray-700 hover:border-gray-600 text-gray-300'
-                }`}
+                className={[
+                  'apple-option-chip apple-option-chip-warm flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition',
+                  selectedDuration === duration.value ? 'apple-option-chip-selected' : 'border-slate-700/70 text-slate-300'
+                ].join(' ')}
               >
-                <div className="font-medium text-sm">{duration.label}</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {videoCount} × {maxPerVideo}-second clips
+                <div>
+                  <div className="text-sm font-semibold">{duration.label}</div>
+                  <div className="mt-1 text-xs text-slate-400">{videoCount} clips</div>
                 </div>
+                <span className="text-xs text-slate-500">{maxPerVideo}s/clip</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Scenario Selection */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-blue-400" />
-          Video Scenario
-        </h3>
-        <div className="space-y-2">
-          {VIDEO_SCENARIOS.map(scen => (
+      <div className="rounded-xl border border-slate-700/70 bg-slate-900/35 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Scenario</p>
+          <span className="rounded-full border border-slate-600/70 bg-slate-800/80 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+            {scenario?.scriptTemplate?.length || calculateSegmentCount(videoProvider, selectedDuration)} segments
+          </span>
+        </div>
+        <div className="mt-3 space-y-2">
+          {VIDEO_SCENARIOS.map((scen) => (
             <button
               key={scen.value}
+              type="button"
               onClick={() => onScenarioChange(scen.value)}
-              className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
-                selectedScenario === scen.value
-                  ? 'border-blue-500 bg-blue-600/20'
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
+              className={[
+                'apple-option-chip flex w-full flex-col items-start rounded-xl border px-3 py-3 text-left transition',
+                selectedScenario === scen.value ? 'apple-option-chip-selected apple-option-chip-cool' : 'border-slate-700/70 text-slate-300'
+              ].join(' ')}
             >
-              <div className={`font-medium text-sm ${selectedScenario === scen.value ? 'text-blue-300' : 'text-gray-300'}`}>
-                {scen.label}
-              </div>
-              <div className="text-xs text-gray-400 mt-1">{scen.description}</div>
+              <span className="text-sm font-semibold">{scen.label}</span>
+              <span className="mt-1 text-xs text-slate-400">{scen.description}</span>
             </button>
           ))}
         </div>
       </div>
-
     </div>
   );
 }
@@ -808,52 +775,65 @@ export default function VideoGenerationPage() {
   };
 
   return (
-    <div className="bg-gray-900 text-white flex flex-col" style={{ height: 'calc(100vh - 56px)' }}>
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 flex-shrink-0 h-14">
-        <div className="flex items-center justify-between h-full">
-          <div className="flex items-center gap-2">
-            <Video className="w-5 h-5 text-blue-400" />
-            <span className="font-bold">{t('videoGeneration.title')}</span>
-          </div>
+    <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
+      <PageHeaderBar
+        icon={<Video className="h-4 w-4 text-amber-300" />}
+        title={t('videoGeneration.title')}
+        meta={
+          (VIDEO_SCENARIOS.find((s) => s.value === selectedScenario)?.label || selectedScenario)
+          + ' | '
+          + selectedDuration
+          + 's | '
+          + calculateSegmentCount(videoProvider, selectedDuration)
+          + ' segments | '
+          + (VIDEO_PROVIDERS.find((provider) => provider.id === videoProvider)?.label || videoProvider)
+        }
+        actions={(
+          <button
+            type="button"
+            onClick={handleReset}
+            className="apple-option-chip rounded-lg px-3 py-1.5 text-xs font-medium transition"
+          >
+            Reset
+          </button>
+        )}
+        className="h-16"
+      />
 
-          {/* Steps */}
-          <div className="flex items-center gap-1">
-            {STEPS.map((step, idx) => {
+      <div className="min-h-0 overflow-hidden px-5 py-4 lg:px-6">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+        <div className="studio-card-shell p-3">
+          <div className="flex flex-wrap gap-2">
+            {STEPS.map((step) => {
               const Icon = step.icon;
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
               return (
-                <React.Fragment key={step.id}>
-                  <button
-                    onClick={() => isCompleted && setCurrentStep(step.id)}
-                    disabled={!isCompleted && !isActive}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all ${
-                      isActive ? 'bg-blue-600 text-white' : 
-                      isCompleted ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' : 
-                      'bg-gray-700/50 text-gray-500'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{step.name}</span>
-                  </button>
-                  {idx < STEPS.length - 1 && (
-                    <div className={`w-4 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-600'}`} />
-                  )}
-                </React.Fragment>
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => (isCompleted || isActive) && setCurrentStep(step.id)}
+                  disabled={!isCompleted && !isActive}
+                  className={[
+                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition',
+                    isActive
+                      ? 'apple-chip-step-active'
+                      : isCompleted
+                        ? 'apple-option-chip apple-option-chip-cool text-slate-700'
+                        : 'apple-option-chip text-gray-500',
+                  ].join(' ')}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{step.name}</span>
+                </button>
               );
             })}
           </div>
-
-          <button onClick={handleReset} className="p-1.5 bg-gray-700 rounded hover:bg-gray-600">
-            <X className="w-4 h-4" />
-          </button>
         </div>
-      </div>
 
-      {/* 💫 NEW: Upload Notification Banner */}
+      {/* Upload Notification Banner */}
       {uploadNotification && (
-        <div className={`px-4 py-3 flex-shrink-0 ${
+        <div className={`rounded-lg border px-4 py-3 text-xs font-medium ${
           uploadNotification.type === 'success' ? 'bg-green-900/30 border-b border-green-700/50' :
           uploadNotification.type === 'warning' ? 'bg-yellow-900/30 border-b border-yellow-700/50' :
           'bg-red-900/30 border-b border-red-700/50'
@@ -887,11 +867,11 @@ export default function VideoGenerationPage() {
       />
 
       {/* Main Content - Flex container with scrollable content and fixed bottom buttons */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex-1 min-h-0">
         {/* Main Content Area - Flex container */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="grid h-full gap-4 xl:grid-cols-[260px_minmax(0,1fr)_240px]">
           {/* Left Sidebar - Compact Segment List or Settings */}
-          <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto flex-shrink-0">
+          <div className="studio-card-shell overflow-y-auto rounded-[1.25rem]">
             <div className="p-3 space-y-3">
               {/* 💫 NEW: Scenario Images Preview - Top of Left Sidebar (Step 2 & 3) */}
               {(currentStep === 2 || currentStep === 3) && scenarioImages && Object.values(scenarioImages).some(img => img) && (
@@ -944,48 +924,51 @@ export default function VideoGenerationPage() {
               )}
 
               {currentStep === 2 && (
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-gray-300 mb-3">📝 Segments</h3>
+                <div className="studio-card-shell rounded-[1.1rem] p-4">
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Segments</p>
                   <div className="space-y-2">
-                    {(prompts || []).map((prompt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSegmentSelect(prompt, idx)}
-                        className={`w-full p-2 rounded-lg text-left text-xs border transition-all ${
-                          selectedSegmentIndex === idx
-                            ? 'border-purple-500 bg-purple-600/20 text-white'
-                            : 'border-gray-700 bg-gray-700/50 hover:bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        <div className="font-semibold">Seg {idx + 1}</div>
-                        <div className="truncate text-xs opacity-70 mt-1">
-                          {prompt?.substring(0, 30) || 'Empty'}...
-                        </div>
-                      </button>
-                    ))}
+                    {(prompts || []).map((prompt, idx) => {
+                      const previewText = (typeof prompt === 'string' ? prompt : prompt?.script || '').trim();
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSegmentSelect(prompt, idx)}
+                          className={[
+                            'w-full rounded-xl border px-3 py-3 text-left text-xs transition',
+                            selectedSegmentIndex === idx
+                              ? 'apple-option-chip apple-option-chip-selected apple-option-chip-violet'
+                              : 'border-slate-700/70 bg-slate-950/30 text-slate-300 hover:border-slate-500'
+                          ].join(' ')}
+                        >
+                          <div className="font-semibold text-slate-100">Segment {idx + 1}</div>
+                          <div className="mt-1 truncate text-slate-400">{previewText || 'Empty'}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {currentStep === 3 && (
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-gray-300 mb-3">🎬 Config</h3>
-                  <div className="space-y-2 text-xs text-gray-400">
-                    <div>
-                      <span className="font-semibold">Duration:</span>
-                      <div>{selectedDuration}s</div>
+                <div className="studio-card-shell rounded-[1.1rem] p-4">
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Configuration</p>
+                  <div className="space-y-3 text-xs text-slate-300">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Duration</span>
+                      <span>{selectedDuration}s</span>
                     </div>
-                    <div>
-                      <span className="font-semibold">Scenario:</span>
-                      <div>{selectedScenario}</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Scenario</span>
+                      <span>{scenario?.label || selectedScenario}</span>
                     </div>
-                    <div>
-                      <span className="font-semibold">Provider:</span>
-                      <div>{videoProvider}</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Provider</span>
+                      <span>{VIDEO_PROVIDERS.find((provider) => provider.id === videoProvider)?.label || videoProvider}</span>
                     </div>
-                    <div>
-                      <span className="font-semibold">Segments:</span>
-                      <div>{(prompts || []).length}</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-slate-500">Segments</span>
+                      <span>{(prompts || []).length}</span>
                     </div>
                   </div>
                 </div>
@@ -994,28 +977,33 @@ export default function VideoGenerationPage() {
           </div>
 
           {/* Center - Main Content Area (Full Width for editors) */}
-          <div className="flex-1 bg-gray-900 overflow-y-auto">
+          <div className="studio-card-shell min-w-0 overflow-y-auto rounded-[1.25rem]">
             <div className="p-4">
-              {/* Step 1 - Script Template & Image Upload */}
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  {/* Scenario Details - Script Template */}
                   {scenario && (
-                    <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-700/50">
-                      <h4 className="text-sm font-semibold text-blue-300 mb-3">📝 Script Template for {scenario.label}</h4>
-                      <p className="text-xs text-blue-300 mb-3">This scenario needs {scenario.imageSchema ? Object.values(scenario.imageSchema).filter(img => img.required).length : 1} required + {scenario.imageSchema ? Object.values(scenario.imageSchema).filter(img => !img.required).length : 0} optional images</p>
-                      <div className="space-y-2">
+                    <div className="rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h4 className="text-base font-semibold text-slate-100">{scenario.label}</h4>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">{scenario.description}</p>
+                        </div>
+                        <div className="flex gap-2 text-[11px] font-medium">
+                          <span className="rounded-full border border-slate-600/70 bg-slate-800/80 px-3 py-1 text-slate-300">{scenario.scriptTemplate?.length || 0} segments</span>
+                          <span className="rounded-full border border-slate-600/70 bg-slate-800/80 px-3 py-1 text-slate-300">{selectedAspectRatio}</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-2">
                         {scenario.scriptTemplate.map((template, idx) => (
-                          <div key={idx} className="flex items-start gap-2 text-xs text-gray-300">
-                            <span className="text-blue-400 font-bold">Seg {idx + 1}:</span>
-                            <span>{template}</span>
+                          <div key={idx} className="rounded-xl border border-slate-700/70 bg-slate-900/50 px-3 py-3 text-xs text-slate-300">
+                            <span className="mr-2 font-semibold text-slate-100">{idx + 1}.</span>
+                            {template}
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Scenario-Based Image Upload Component */}
                   <ScenarioImageUploadComponent
                     scenario={selectedScenario}
                     onImagesChange={handleScenarioImagesChange}
@@ -1025,37 +1013,37 @@ export default function VideoGenerationPage() {
                 </div>
               )}
 
-              {/* Default Step 2 Content - Show Prompt Editor */}
               {currentStep === 2 && (
                 <div className="space-y-4">
-                  {/* Prompt Type Selector */}
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-300 mb-3">📝 Prompt Generation Mode</h3>
-                    <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/30 p-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
+                        type="button"
                         onClick={() => setPromptType('template')}
-                        className={`p-2 rounded-lg border-2 transition text-sm ${
+                        className={[
+                          'rounded-xl px-3 py-3 text-sm font-semibold transition',
                           promptType === 'template'
-                            ? 'border-blue-500 bg-blue-600/20'
-                            : 'border-gray-600 hover:border-gray-500'
-                        }`}
+                            ? 'apple-option-chip apple-option-chip-selected apple-option-chip-cool'
+                            : 'border border-slate-700/70 bg-slate-900/40 text-slate-300'
+                        ].join(' ')}
                       >
-                        📋 Template
+                        Template
                       </button>
                       <button
+                        type="button"
                         onClick={() => setPromptType('enhanced')}
-                        className={`p-2 rounded-lg border-2 transition text-sm ${
+                        className={[
+                          'rounded-xl px-3 py-3 text-sm font-semibold transition',
                           promptType === 'enhanced'
-                            ? 'border-purple-500 bg-purple-600/20'
-                            : 'border-gray-600 hover:border-gray-500'
-                        }`}
+                            ? 'apple-option-chip apple-option-chip-selected apple-option-chip-violet'
+                            : 'border border-slate-700/70 bg-slate-900/40 text-slate-300'
+                        ].join(' ')}
                       >
-                        ✨ ChatGPT
+                        ChatGPT
                       </button>
                     </div>
                   </div>
 
-                  {/* Full Prompt Editor Component */}
                   {promptType === 'template' ? (
                     <VideoPromptStepWithTemplates
                       onNext={() => setCurrentStep(3)}
@@ -1083,7 +1071,6 @@ export default function VideoGenerationPage() {
                 </div>
               )}
 
-              {/* Step 3 - Video Generation Editor */}
               {currentStep === 3 && !generated && (
                 <VideoGenerationStep
                   duration={selectedDuration}
@@ -1101,166 +1088,125 @@ export default function VideoGenerationPage() {
                 />
               )}
 
-              {/* 💫 FIXED: Step 3 - Generated Videos in CENTER with Preview */}
               {currentStep === 3 && generated && generatedVideos.length > 0 && (
                 <div className="space-y-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">✅ Generated Video Segments</h2>
-                    <p className="text-gray-400">Preview your video clips or download them</p>
+                    <h2 className="mb-2 text-2xl font-bold text-white">Generated Video Segments</h2>
+                    <p className="text-gray-400">Preview or download each clip.</p>
                   </div>
 
-                  <div className="bg-green-900/20 rounded-lg p-4 border border-green-700/50">
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="rounded-xl border border-green-700/30 bg-green-900/10 p-4">
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                       {generatedVideos.map((video) => {
-                        // 💫 FIXED: Build preview URL with fallback using correct path
                         const previewUrl = video.previewUrl || (
                           video.path ? `/api/v1/browser-automation/preview-video/${video.filename}?path=${encodeURIComponent(video.path)}` : null
                         );
-                        
-                        // 💫 DEBUG: Log URL for troubleshooting
-                        console.log(`📹 Segment ${video.segmentNum}:`, {
-                          filename: video.filename,
-                          path: video.path,
-                          previewUrl: video.previewUrl,
-                          fallbackUrl: previewUrl
-                        });
 
                         return (
-                        <div key={video.segmentNum} className="bg-gray-800/50 rounded-lg border border-green-700/30 overflow-hidden flex flex-col">
-                          {/* Video Preview */}
-                          <div className="relative bg-black aspect-square flex items-center justify-center flex-shrink-0">
-                            {previewUrl ? (
-                              <>
+                          <div key={video.segmentNum} className="flex flex-col overflow-hidden rounded-xl border border-green-700/30 bg-slate-900/60">
+                            <div className="relative flex aspect-square flex-shrink-0 items-center justify-center bg-black">
+                              {previewUrl ? (
                                 <video
                                   key={previewUrl}
                                   controls
-                                  className="w-full h-full object-contain"
+                                  className="h-full w-full object-contain"
                                   src={previewUrl}
                                   onError={(e) => {
-                                    console.error(`❌ Video load error for ${video.filename}:`, e);
-                                    console.error('   Tried URL:', previewUrl);
+                                    console.error(`Video load error for ${video.filename}:`, e);
                                   }}
-                                  onLoadStart={() => console.log(`✓ Loading ${video.filename}`)}
-                                  onCanPlay={() => console.log(`✓ Can play ${video.filename}`)}
                                 >
                                   Your browser does not support the video tag.
                                 </video>
-                              </>
-                            ) : (
-                              <div className="text-gray-400 text-center p-4">
-                                <p className="text-lg mb-2">📹 Segment {video.segmentNum}</p>
-                                <p className="text-sm text-gray-500">{video.filename}</p>
-                                <p className="text-xs text-gray-600 mt-2">⚠️ No path available</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Video Details */}
-                          <div className="p-3 space-y-2 flex-1 flex flex-col">
-                            <div>
-                              <div className="text-green-300 font-semibold flex items-center gap-2">
-                                <span className="text-xs bg-green-700/30 px-2 py-1 rounded">Seg {video.segmentNum}</span>
-                              </div>
-                              <div className="text-gray-400 text-xs mt-1 line-clamp-2">
-                                {video.prompt}
-                              </div>
-                            </div>
-                            <div className="flex gap-2 flex-col mt-auto">
-                              <a
-                                href={video.url}
-                                download={video.filename}
-                                className="flex items-center justify-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white transition"
-                              >
-                                <Download className="w-3 h-3" />
-                                Download
-                              </a>
-                              {!uploadToDrive && (
-                                <>
-                                  {videoUploadStatuses[video.filename]?.status === 'success' ? (
-                                    <button
-                                      disabled
-                                      className="flex items-center justify-center gap-2 px-3 py-1 bg-green-700 rounded text-xs font-medium text-white cursor-default"
-                                    >
-                                      <span>✅</span>
-                                      <span>Uploaded</span>
-                                    </button>
-                                  ) : videoUploadStatuses[video.filename]?.status === 'exists' ? (
-                                    <button
-                                      disabled
-                                      className="flex items-center justify-center gap-2 px-3 py-1 bg-yellow-700 rounded text-xs font-medium text-white cursor-default"
-                                    >
-                                      <span>📌</span>
-                                      <span>Exists</span>
-                                    </button>
-                                  ) : videoUploadStatuses[video.filename]?.status === 'error' ? (
-                                    <button
-                                      onClick={() => uploadToGoogleDrive([video.path || video.url])}
-                                      title={videoUploadStatuses[video.filename]?.message}
-                                      className="flex items-center justify-center gap-2 px-3 py-1 bg-red-700 hover:bg-red-600 rounded text-xs font-medium text-white transition"
-                                    >
-                                      <span>⚠️</span>
-                                      <span>Retry</span>
-                                    </button>
-                                  ) : videoUploadStatuses[video.filename]?.status === 'uploading' ? (
-                                    <button
-                                      disabled
-                                      className="flex items-center justify-center gap-2 px-3 py-1 bg-blue-600 rounded text-xs font-medium text-white"
-                                    >
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                      <span>Uploading</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => uploadToGoogleDrive([video.path || video.url])}
-                                      className="flex items-center justify-center gap-2 px-3 py-1 bg-blue-700 hover:bg-blue-600 rounded text-xs font-medium text-white transition"
-                                    >
-                                      <span>☁️</span>
-                                      <span>Upload</span>
-                                    </button>
-                                  )}
-                                </>
+                              ) : (
+                                <div className="p-4 text-center text-gray-400">
+                                  <p className="text-sm font-medium">Segment {video.segmentNum}</p>
+                                  <p className="mt-1 text-xs text-gray-500">No preview path</p>
+                                </div>
                               )}
                             </div>
+
+                            <div className="flex flex-1 flex-col gap-2 p-3">
+                              <div>
+                                <div className="inline-flex rounded-full border border-green-500/20 bg-green-500/10 px-2 py-1 text-xs font-semibold text-green-200">
+                                  Segment {video.segmentNum}
+                                </div>
+                                <div className="mt-2 line-clamp-2 text-xs text-gray-400">
+                                  {video.prompt}
+                                </div>
+                              </div>
+                              <div className="mt-auto flex flex-col gap-2">
+                                <a
+                                  href={video.url}
+                                  download={video.filename}
+                                  className="flex items-center justify-center gap-2 rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-600"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </a>
+                                {!uploadToDrive && (
+                                  <>
+                                    {videoUploadStatuses[video.filename]?.status === 'success' ? (
+                                      <button disabled className="rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white">Uploaded</button>
+                                    ) : videoUploadStatuses[video.filename]?.status === 'exists' ? (
+                                      <button disabled className="rounded-lg bg-yellow-700 px-3 py-2 text-xs font-medium text-white">Exists</button>
+                                    ) : videoUploadStatuses[video.filename]?.status === 'error' ? (
+                                      <button
+                                        onClick={() => uploadToGoogleDrive([video.path || video.url])}
+                                        title={videoUploadStatuses[video.filename]?.message}
+                                        className="rounded-lg bg-red-700 px-3 py-2 text-xs font-medium text-white transition hover:bg-red-600"
+                                      >
+                                        Retry Upload
+                                      </button>
+                                    ) : videoUploadStatuses[video.filename]?.status === 'uploading' ? (
+                                      <button disabled className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Uploading
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => uploadToGoogleDrive([video.path || video.url])}
+                                        className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-600"
+                                      >
+                                        Upload
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
                         );
                       })}
                     </div>
-                    <div className="mt-4 pt-4 border-t border-green-700/30 text-sm text-green-300">
-                      ✅ {generatedVideos.length} of {calculateSegmentCount(videoProvider, selectedDuration)} video segments ready
+
+                    <div className="mt-4 border-t border-green-700/30 pt-4 text-sm text-green-300">
+                      {generatedVideos.length} / {calculateSegmentCount(videoProvider, selectedDuration)} segments ready
                     </div>
 
-                    {/* 💫 NEW: Upload to Google Drive Options (if not auto-uploaded) */}
                     {!uploadToDrive && (
-                      <div className="mt-4 pt-4 border-t border-blue-700/30">
-                        <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50">
-                          <p className="text-xs text-blue-300 mb-3">💾 Upload videos to Google Drive?</p>
-                          <button
-                            onClick={() => {
-                              // Upload all videos
-                              const videoPaths = generatedVideos.map(v => v.path || v.url).filter(Boolean);
-                              if (videoPaths.length > 0) {
-                                uploadToGoogleDrive(videoPaths);
-                              }
-                            }}
-                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium text-white transition"
-                          >
-                            <span>☁️</span>
-                            <span>Upload All Videos to Drive</span>
-                          </button>
-                        </div>
+                      <div className="mt-4 border-t border-blue-700/30 pt-4">
+                        <button
+                          onClick={() => {
+                            const videoPaths = generatedVideos.map((v) => v.path || v.url).filter(Boolean);
+                            if (videoPaths.length > 0) {
+                              uploadToGoogleDrive(videoPaths);
+                            }
+                          }}
+                          className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-700"
+                        >
+                          Upload All Videos to Drive
+                        </button>
                       </div>
                     )}
 
-                    {/* 💫 NEW: Session Log Button */}
                     {selectedFlowId && (
-                      <div className="mt-4 pt-4 border-t border-purple-700/30">
+                      <div className="mt-4 border-t border-purple-700/30 pt-4">
                         <button
                           onClick={() => setShowSessionLogModal(true)}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium text-white transition"
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-purple-700"
                         >
-                          <Database className="w-4 h-4" />
-                          <span>Preview Session</span>
+                          <Database className="h-4 w-4" />
+                          Preview Session
                         </button>
                       </div>
                     )}
@@ -1270,130 +1216,150 @@ export default function VideoGenerationPage() {
             </div>
           </div>
 
-          {/* Right Sidebar - Summary */}
-        <div className="w-56 bg-gray-800 border-l border-gray-700 overflow-y-auto flex-shrink-0 p-4">
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3">Configuration</h3>
-              <div className="bg-gray-700/30 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Duration:</span>
-                  <span className="text-purple-300 font-medium">{selectedDuration}s</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Scenario:</span>
-                  <span className="text-purple-300 font-medium">
-                    {VIDEO_SCENARIOS.find(s => s.value === selectedScenario)?.label}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Segments:</span>
-                  <span className="text-purple-300 font-medium">
-                    {calculateSegmentCount(videoProvider, selectedDuration)}  {/* 💫 FIXED: Dynamic calculation */}
-                  </span>
+          <div className="studio-card-shell overflow-y-auto rounded-[1.25rem] p-4">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Summary</p>
+                <div className="mt-3 space-y-3 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Provider</span>
+                    <span className="font-medium text-slate-100">{VIDEO_PROVIDERS.find((provider) => provider.id === videoProvider)?.label || videoProvider}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Scenario</span>
+                    <span className="text-right font-medium text-slate-100">{scenario?.label || selectedScenario}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Duration</span>
+                    <span className="font-medium text-slate-100">{selectedDuration}s</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Aspect</span>
+                    <span className="font-medium text-slate-100">{selectedAspectRatio}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Segments</span>
+                    <span className="font-medium text-slate-100">{calculateSegmentCount(videoProvider, selectedDuration)}</span>
+                  </div>
                 </div>
               </div>
+
+              <div className="rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Source</p>
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-700/70 bg-slate-900/50">
+                  <div className="aspect-[4/5] bg-slate-950/60">
+                    {currentImage ? (
+                      <img src={currentImage} alt="Source" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-4 text-center text-xs text-slate-500">
+                        Upload a main input image in step 1.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {currentStep >= 2 && prompts && Array.isArray(prompts) && prompts.some((p) => {
+                if (typeof p === 'string') return p.trim().length > 0;
+                if (typeof p === 'object' && p?.script) return p.script.trim().length > 0;
+                return false;
+              }) && (
+                <div className="rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Prompt Summary</p>
+                  <div className="mt-3 space-y-3">
+                    {prompts.map((prompt, idx) => {
+                      const scriptText = typeof prompt === 'string' ? prompt : prompt?.script || '';
+                      return scriptText.trim().length > 0 ? (
+                        <div key={idx} className="rounded-xl border border-slate-700/70 bg-slate-900/40 px-3 py-3 text-xs">
+                          <div className="mb-1 font-semibold text-slate-100">Segment {idx + 1}</div>
+                          <div className="line-clamp-3 text-slate-400">{scriptText}</div>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+      </div>
+
+      <div className="apple-footer-bar z-20 flex h-[60px] flex-shrink-0 items-center px-5 lg:px-6">
+        <div className="flex h-full w-full items-center justify-between gap-4">
+            <div className="text-xs text-slate-400">
+              {isGenerating
+                ? 'Video generation in progress.'
+                : currentStep === 1
+                  ? 'Complete settings and upload inputs.'
+                  : currentStep === 2
+                    ? 'Finalize prompts for every segment.'
+                    : 'Review and run video generation.'}
             </div>
 
-            {currentStep >= 2 && prompts && Array.isArray(prompts) && prompts.some(p => {
-              // Handle both string prompts and object prompts
-              if (typeof p === 'string') return p.trim().length > 0;
-              if (typeof p === 'object' && p?.script) return p.script.trim().length > 0;
-              return false;
-            }) && (
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3">Script Summary</h3>
-                <div className="bg-gray-700/30 rounded-lg p-3 space-y-2">
-                  {prompts.map((prompt, idx) => {
-                    const scriptText = typeof prompt === 'string' ? prompt : prompt?.script || '';
-                    return scriptText.trim().length > 0 && (
-                      <div key={idx} className="text-xs">
-                        <div className="text-gray-500 mb-1">Seg {idx + 1}:</div>
-                        <div className="text-gray-400 line-clamp-3">{scriptText}</div>
-                      </div>
-                    );
+            <div className="flex flex-wrap items-center gap-2">
+              {currentStep > 1 && !isGenerating && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+                  className="apple-option-chip rounded-lg px-4 py-2 text-sm font-medium transition"
+                >
+                  Back
+                </button>
+              )}
+
+              {currentStep === 1 && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="apple-cta-primary rounded-lg px-4 py-2 text-sm font-semibold transition"
+                >
+                  Continue to Prompt
+                </button>
+              )}
+
+              {currentStep === 2 && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  disabled={isGenerating || prompts.some(p => {
+                    if (!p) return true;
+                    if (typeof p === 'string') return p.trim().length === 0;
+                    if (typeof p === 'object' && p?.script) return !p.script || p.script.trim().length === 0;
+                    return true;
                   })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        </div>
-      </div>
+                  className="apple-cta-primary rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Review Output
+                </button>
+              )}
 
-      {/* ==================== FIXED BOTTOM ACTION BAR ==================== */}
-      <div className="flex-shrink-0 bg-gray-800 border-t border-gray-700 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Status Messages */}
-          <div className="text-xs text-gray-400">
-            {currentStep === 1 && '⬆️ Select video settings in the left panel'}
-            {currentStep === 2 && '✍️ Write your video script (3 segments)'}
-            {currentStep === 3 && '🚀 Ready to generate video'}
-            {isGenerating && '⏳ Video generation in progress...'}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {currentStep > 1 && !isGenerating && (
-              <button
-                onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium text-white"
-              >
-                Back
-              </button>
-            )}
-
-            {currentStep === 1 && (
-              <button
-                onClick={() => setCurrentStep(2)}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm font-medium text-white"
-              >
-                <span>Continue to Script</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-
-            {currentStep === 2 && (
-              <button
-                onClick={() => setCurrentStep(3)}
-                disabled={isGenerating || prompts.some(p => {
-                  // 💫 FIXED: Handle both string and object formats
-                  if (!p) return true;
-                  if (typeof p === 'string') return p.trim().length === 0;
-                  if (typeof p === 'object' && p?.script) return !p.script || p.script.trim().length === 0;
-                  return true;
-                })}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
-              >
-                <span>Review & Generate</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-
-            {currentStep === 3 && (
-              <button
-                onClick={handleGenerateVideo}
-                disabled={isGenerating || !currentImage}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Rocket className="w-4 h-4" />
-                    <span>{generated ? 'Re-generate Video' : 'Create Video'}</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
+              {currentStep === 3 && (
+                <button
+                  type="button"
+                  onClick={handleGenerateVideo}
+                  disabled={isGenerating || !currentImage}
+                  className="apple-cta-primary flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="h-4 w-4" />
+                      <span>{generated ? 'Generate Again' : 'Create Video'}</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
         </div>
       </div>
 
-      {/* 💫 NEW: Session Log Modal */}
+      {/* Session Log Modal */}
       <SessionLogModal
         isOpen={showSessionLogModal}
         onClose={() => {
@@ -1406,4 +1372,3 @@ export default function VideoGenerationPage() {
     </div>
   );
 }
-

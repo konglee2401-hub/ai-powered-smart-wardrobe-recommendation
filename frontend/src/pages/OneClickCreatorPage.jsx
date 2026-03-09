@@ -7,7 +7,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Upload, Sparkles, Rocket, Loader2, ChevronDown, ChevronUp,
+  Upload, Sparkles, Rocket, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Play, Video, X, Settings, Image as ImageIcon,
   AlertCircle, CheckCircle, Clock, FileText, Target, Wand2, Volume2, Mic, Package, Database
 } from 'lucide-react';
@@ -18,6 +18,7 @@ import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService
 import GalleryPicker from '../components/GalleryPicker';
 import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import SessionLogModal from '../components/SessionLogModal';
+import AffiliateSessionWorkspace, { SessionStatusPill, getAffiliateSessionRunningStatus, getAffiliateSessionStepStatus } from '../components/AffiliateSessionWorkspace';
 import VideoPromptEnhancedWithChatGPT from '../components/VideoPromptEnhancedWithChatGPT';
 import ScenePickerModal from '../components/ScenePickerModal';
 import PageHeaderBar from '../components/PageHeaderBar';
@@ -397,10 +398,32 @@ const getWorkflowStepsRaw = (useCase) => {
   return WORKFLOW_STEPS;
 };
 
+const ONE_CLICK_COMPACT_LAYOUT_BREAKPOINT = 1150;
+const ONE_CLICK_COMPACT_SETTINGS_WIDTH = 216;
+const ONE_CLICK_DESKTOP_SETTINGS_WIDTH = 408;
+
+function useAdaptiveOneClickLayout(breakpoint = ONE_CLICK_COMPACT_LAYOUT_BREAKPOINT) {
+  const containerRef = useRef(null);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
+
+  useEffect(() => {
+    const updateLayoutMode = () => {
+      setIsCompactLayout(window.innerWidth < breakpoint);
+    };
+
+    updateLayoutMode();
+    window.addEventListener('resize', updateLayoutMode);
+    return () => window.removeEventListener('resize', updateLayoutMode);
+  }, [breakpoint]);
+
+  return { containerRef, isCompactLayout };
+}
+
 
 // Session component
 function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
   const [expandedLogs, setExpandedLogs] = useState(false);
+  const [expandedPrompts, setExpandedPrompts] = useState(false);
   
   const getStepStatus = (stepId) => {
     const step = session.steps?.find(s => s.id === stepId);
@@ -414,152 +437,207 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
   const getStepIcon = (status) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-3 h-3 text-green-500" />;
       case 'error':
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
+        return <AlertCircle className="w-3 h-3 text-red-500" />;
       case 'inProgress':
-        return <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />;
+        return <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
+        return <Clock className="w-3 h-3 text-gray-500" />;
     }
   };
 
+  // Determine if loading based on step status
+  const isLoading = session.steps?.some(s => s.inProgress);
+  
+  // Animation pulse class for loading state
+  const loadingClass = isLoading ? 'animate-pulse' : '';
+
   return (
-    <div className="border border-gray-700 rounded-lg bg-gray-800/50 p-3">
+    <div className="border border-gray-700 rounded-lg bg-gradient-to-br from-gray-800/50 to-gray-900/50 overflow-hidden">
       {/* Header */}
-      <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-gray-200">
-          {t('oneClickCreator.session')} #{session.id}{session.completed && ' ✓'}
-          {session.error && ' ✗'}
+      <div className="border-b border-gray-700/50 bg-gray-900/80 px-3 py-2 flex items-center justify-between">
+        <h4 className="text-xs font-semibold text-gray-200 flex items-center gap-2">
+          <span className="text-gray-500">Session</span> #{session.id}
+          {session.completed && <CheckCircle className="w-3 h-3 text-green-500" />}
+          {session.error && <AlertCircle className="w-3 h-3 text-red-500" />}
         </h4>
-        {session.error && (
-          <span className="text-xs bg-red-600/20 text-red-300 px-2 py-1 rounded">
-            {session.error}
-          </span>
-        )}
+        {isLoading && <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full animate-pulse">generating...</span>}
       </div>
 
-      {/* Steps Progress */}
-      <div className={`mb-3 grid gap-1.5 ${session.steps?.length > 6 ? 'grid-cols-4' : 'grid-cols-4'}`}>
-        {session.steps?.map(step => {
-          // Find the step definition
-          const allSteps = [...WORKFLOW_STEPS, ...WORKFLOW_STEPS_AFFILIATE_TIKTOK];
-          const stepDef = allSteps.find(s => s.id === step.id);
-          const status = getStepStatus(step.id);
-          return (
-            <div key={step.id} className="text-center">
-              <div className="flex justify-center mb-1">
-                {getStepIcon(status)}
-              </div>
-              <p className="text-xs text-gray-400 truncate">{stepDef?.name || step.id}</p>
-            </div>
-          );
-        })}
-      </div>
+      {session.manualAction && (
+        <div className="border-b border-amber-700/40 bg-amber-950/30 px-3 py-2">
+          <p className="text-[11px] font-medium text-amber-200">Manual action required</p>
+          <p className="mt-1 text-[10px] text-amber-100/80">{session.manualAction.message}</p>
+          <p className="mt-1 text-[10px] text-amber-300/80">Resolve it in the opened ChatGPT browser window. The flow will keep polling and resume when verification is cleared.</p>
+        </div>
+      )}
 
-      {/* Compact Step Previews */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <details className="bg-gray-900/40 border border-gray-700 rounded p-2">
-          <summary className="text-xs text-gray-300 cursor-pointer">📝 Step 1 Prompts</summary>
-          <div className="mt-2 space-y-2">
-            <div>
-              <p className="text-[11px] text-gray-500 mb-1">Wearing prompt</p>
-              <pre className="text-[11px] text-gray-300 whitespace-pre-wrap max-h-24 overflow-y-auto">{session.step1Prompts?.wearing || 'Waiting...'}</pre>
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 mb-1">Holding prompt</p>
-              <pre className="text-[11px] text-gray-300 whitespace-pre-wrap max-h-24 overflow-y-auto">{session.step1Prompts?.holding || 'Waiting...'}</pre>
-            </div>
-          </div>
-        </details>
-
-        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.step2Images}>
-          <summary className="text-xs text-gray-300 cursor-pointer">📸 Step 2 Images</summary>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <div className="bg-gray-950/70 rounded overflow-hidden">
-              {session.step2Images?.wearing ? <img src={session.step2Images.wearing} alt="Wearing" className="w-full h-24 object-cover" /> : <div className="h-24 flex items-center justify-center text-[11px] text-gray-500">Waiting</div>}
-              <p className="text-[11px] text-gray-500 text-center py-1">Wearing</p>
-            </div>
-            <div className="bg-gray-950/70 rounded overflow-hidden">
-              {session.step2Images?.holding ? <img src={session.step2Images.holding} alt="Holding" className="w-full h-24 object-cover" /> : <div className="h-24 flex items-center justify-center text-[11px] text-gray-500">Waiting</div>}
-              <p className="text-[11px] text-gray-500 text-center py-1">Holding</p>
-            </div>
-          </div>
-        </details>
-
-        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.analysis?.videoScripts?.length}>
-          <summary className="text-xs text-gray-300 cursor-pointer">🎬 Step 3 Scripts & Hashtags</summary>
-          <div className="mt-2 space-y-2">
-            <div className="max-h-28 overflow-y-auto space-y-1">
-              {(session.analysis?.videoScripts || []).length > 0 ? (session.analysis.videoScripts.map((seg, idx) => (
-                <div key={idx} className="text-[11px] text-gray-300">
-                  <span className="text-gray-400">[{seg.segment}] {seg.duration}s:</span> {seg.script}
-                </div>
-              ))) : <p className="text-[11px] text-gray-500">Waiting...</p>}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {(session.analysis?.hashtags || []).length > 0 ? session.analysis.hashtags.map((tag, idx) => (
-                <span key={idx} className="text-[11px] bg-gray-800 text-gray-300 px-2 py-0.5 rounded">#{String(tag).replace('#', '')}</span>
-              )) : <p className="text-[11px] text-gray-500">No hashtags yet</p>}
-            </div>
-          </div>
-        </details>
-
-        <details className="bg-gray-900/40 border border-gray-700 rounded p-2" open={!!session.videos?.length}>
-          <summary className="text-xs text-gray-300 cursor-pointer">🎥 Step 4 Videos</summary>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {(session.videos || []).length > 0 ? session.videos.map((video, idx) => (
-              <video key={idx} src={video} controls className="w-full h-24 object-cover rounded bg-black" />
-            )) : <p className="text-[11px] text-gray-500 col-span-2">Waiting...</p>}
-          </div>
-        </details>
-
-        <details className="col-span-2 bg-gray-900/40 border border-gray-700 rounded p-2" open={!!(session.ttsText || session.analysis?.voiceoverScript)}>
-          <summary className="text-xs text-gray-300 cursor-pointer">🎙️ Step 5 TTS Text</summary>
-          <pre className="mt-2 text-[11px] text-gray-300 whitespace-pre-wrap max-h-28 overflow-y-auto">{session.ttsText || session.analysis?.voiceoverScript || 'Waiting...'}</pre>
-        </details>
-      </div>
-
-      {/* Logs */}
-      <div className="border-t border-gray-700 pt-2.5">
-        <button
-          onClick={() => setExpandedLogs(!expandedLogs)}
-          className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
-        >
-          <span>{t('oneClickCreator.logs')} ({session.logs?.length || 0})</span>
-          {expandedLogs ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
-        {expandedLogs && (
-          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded bg-gray-900/50 p-2">
-            {session.logs?.length > 0 ? (
-              session.logs.map((log, idx) => (
-                <div key={idx} className="text-xs text-gray-500 font-mono">
-                  [{log.timestamp}] {log.message}
-                </div>
-              ))
+      {/* Main Content - Split Layout */}
+      <div className="flex p-2 gap-2">
+        {/* Left: Image Strip */}
+        <div className="flex flex-col gap-1.5 min-w-fit">
+          {/* Character Image */}
+          <div className="w-16 h-16 rounded-lg border border-gray-700/50 bg-gray-950/70 overflow-hidden flex items-center justify-center flex-shrink-0">
+            {session.step2Images?.wearing ? (
+              <img src={session.step2Images.wearing} alt="Wearing" className="w-full h-full object-cover" />
             ) : (
-              <p className="text-xs text-gray-600 italic">{t('oneClickCreator.noLogsYet')}</p>
+              <div className={`${loadingClass} w-full h-full bg-gray-800/60 flex items-center justify-center`}>
+                <ImageIcon className="w-4 h-4 text-gray-600" />
+              </div>
             )}
           </div>
-        )}
+
+          {/* Product/Holding Image */}
+          <div className="w-16 h-16 rounded-lg border border-gray-700/50 bg-gray-950/70 overflow-hidden flex items-center justify-center flex-shrink-0">
+            {session.step2Images?.holding ? (
+              <img src={session.step2Images.holding} alt="Holding" className="w-full h-full object-cover" />
+            ) : (
+              <div className={`${loadingClass} w-full h-full bg-gray-800/60 flex items-center justify-center`}>
+                <Package className="w-4 h-4 text-gray-600" />
+              </div>
+            )}
+          </div>
+
+          {/* Video Preview */}
+          <div className="w-16 h-16 rounded-lg border border-gray-700/50 bg-gray-950/70 overflow-hidden flex items-center justify-center flex-shrink-0">
+            {session.videos?.[0] ? (
+              <video src={session.videos[0]} className="w-full h-full object-cover" />
+            ) : (
+              <div className={`${loadingClass} w-full h-full bg-gray-800/60 flex items-center justify-center`}>
+                <Video className="w-4 h-4 text-gray-600" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Step Status Grid */}
+        <div className="flex-1 grid grid-cols-2 gap-1.5 min-w-0">
+          {/* Step 1: Analysis */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('analyze') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('analyze') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('analyze'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Analyze</p>
+          </div>
+
+          {/* Step 2: Generate Images */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('generate-images-parallel') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('generate-images-parallel') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('generate-images-parallel'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Images</p>
+          </div>
+
+          {/* Step 3: Deep Analysis */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('deep-analysis') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('deep-analysis') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('deep-analysis'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Analysis</p>
+          </div>
+
+          {/* Step 4: Generate Video */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('generate-video') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('generate-video') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('generate-video'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Video</p>
+          </div>
+
+          {/* Step 5: Voiceover */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('generate-voiceover') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('generate-voiceover') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('generate-voiceover'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Voice</p>
+          </div>
+
+          {/* Finalize */}
+          <div className={`text-center p-2 rounded-lg border ${getStepStatus('finalize') === 'completed' ? 'border-green-700/50 bg-green-900/20' : 'border-gray-700/50 bg-gray-800/30'} ${loadingClass && getStepStatus('finalize') === 'inProgress' ? 'animate-pulse border-amber-600/50 bg-amber-900/20' : ''}`}>
+            <div className="flex justify-center mb-1">{getStepIcon(getStepStatus('finalize'))}</div>
+            <p className="text-[10px] text-gray-400 font-medium">Finalize</p>
+          </div>
+        </div>
       </div>
 
-      {/* View Session Log Button */}
-      <div className="flex gap-2 border-t border-gray-700 pt-2.5">
+      {/* Expandable Details */}
+      {(session.step1Prompts || session.analysis || sessionVideos.length > 0 || getSessionFrameLibrary(session).length > 0) && (
+        <div className="border-t border-gray-700/50">
+          {/* Prompts Section */}
+          {session.step1Prompts && (
+            <>
+              <button
+                onClick={() => setExpandedPrompts(!expandedPrompts)}
+                className="w-full px-3 py-2 text-left text-xs text-gray-400 hover:text-gray-300 font-medium flex items-center justify-between hover:bg-gray-800/30 transition-colors"
+              >
+                <span>📝 Prompts & Script</span>
+                {expandedPrompts ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+              {expandedPrompts && (
+                <div className="px-3 py-2 space-y-2 bg-gray-900/20 max-h-48 overflow-y-auto text-[10px]">
+                  {session.step1Prompts?.wearing && (
+                    <details className="bg-gray-800/50 rounded p-2 border border-gray-700/30">
+                      <summary className="text-gray-400 cursor-pointer font-medium mb-1">Wearing Prompt</summary>
+                      <p className="text-gray-500 whitespace-pre-wrap">{session.step1Prompts.wearing}</p>
+                    </details>
+                  )}
+                  {session.step1Prompts?.holding && (
+                    <details className="bg-gray-800/50 rounded p-2 border border-gray-700/30">
+                      <summary className="text-gray-400 cursor-pointer font-medium mb-1">Holding Prompt</summary>
+                      <p className="text-gray-500 whitespace-pre-wrap">{session.step1Prompts.holding}</p>
+                    </details>
+                  )}
+                  {sessionSegmentScripts.length > 0 && (
+                    <details className="bg-gray-800/50 rounded p-2 border border-gray-700/30">
+                      <summary className="text-gray-400 cursor-pointer font-medium mb-1">Video Scripts</summary>
+                      <div className="space-y-1">
+                        {sessionSegmentScripts.map((seg, idx) => (
+                          <p key={idx} className="text-gray-500"><span className="text-amber-400">[{seg.duration}s]</span> {seg.script}</p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Hashtags */}
+          {session.analysis?.hashtags?.length > 0 && (
+            <div className="px-3 py-2 border-t border-gray-700/50 flex flex-wrap gap-1">
+              {session.analysis.hashtags.map((tag, idx) => (
+                <span key={idx} className="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded border border-green-700/50">
+                  #{String(tag).replace('#', '')}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Footer Actions */}
+      <div className="border-t border-gray-700/50 bg-gray-900/50 px-3 py-2 flex gap-1 items-center">
         <button
           onClick={() => onViewLog && onViewLog(session.flowId)}
-          className="flex flex-1 items-center justify-center gap-2 rounded bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+          className="flex-1 flex items-center justify-center gap-1 rounded px-2 py-1 text-xs font-medium bg-blue-600/40 text-blue-300 border border-blue-700/50 hover:bg-blue-600/60 transition-colors"
         >
-          <Database className="w-4 h-4" />
-          {t('oneClickCreator.viewSessionLog')}
+          <Database className="w-3 h-3" />
+          Details
         </button>
         <button
-          onClick={() => setExpandedLogs(false)}
-          className="rounded bg-gray-700 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-600"
+          onClick={() => setExpandedLogs(!expandedLogs)}
+          className="flex-1 flex items-center justify-center gap-1 rounded px-2 py-1 text-xs font-medium bg-gray-700/40 text-gray-300 border border-gray-600/50 hover:bg-gray-700/60 transition-colors"
         >
-          {t('oneClickCreator.collapseAll')}
+          <FileText className="w-3 h-3" />
+          Logs ({session.logs?.length || 0})
         </button>
       </div>
+
+      {/* Logs View */}
+      {expandedLogs && (
+        <div className="max-h-32 overflow-y-auto text-[9px] bg-black/30 border-t border-gray-700/50 px-3 py-2 space-y-0.5 font-mono">
+          {session.logs?.length > 0 ? (
+            session.logs.map((log, idx) => (
+              <div key={idx} className="text-gray-500">
+                <span className="text-gray-700">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-600 italic">No logs yet</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -567,35 +645,41 @@ function SessionRow({ session, isGenerating, onCancel, onViewLog, t }) {
 export default function OneClickCreatorPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { containerRef: workspaceRef, isCompactLayout } = useAdaptiveOneClickLayout();
 
-  const sidebarCardClass = 'rounded-xl border border-slate-700/70 bg-gradient-to-br from-slate-900 via-[#10182d] to-[#0b1326] p-3 shadow-[0_10px_35px_rgba(2,6,23,0.35)]';
-  const accentCardClass = 'rounded-xl border border-violet-700/50 bg-gradient-to-br from-violet-950/55 via-slate-900 to-[#101a34] p-3 shadow-[0_12px_36px_rgba(76,29,149,0.22)]';
-  const optionButtonBaseClass = 'w-full rounded-xl border px-3 py-2 text-xs font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
-  const providerButtonClass = 'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
-  const optionButtonIdleClass = 'border-slate-600/70 bg-slate-800/75 text-slate-200 hover:border-slate-400 hover:bg-slate-700/90 hover:text-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.32)]';
+  const sidebarCardClass = 'studio-card-shell rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
+  const accentCardClass = 'studio-card-shell rounded-[1.25rem] bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
+  const stepUploadSectionClass = 'studio-card-shell rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_34px_rgba(100,156,198,0.10)]';
+  const stepUploadCardClass = 'studio-card-shell flex h-full min-h-[344px] flex-col gap-2 rounded-[1.25rem] p-3 lg:min-h-[356px]';
+  const stepUploadDropzoneClass = 'studio-dropzone group relative flex min-h-[220px] flex-1 items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/40 p-3 text-center transition lg:min-h-[232px]';
+  const stepUploadActionClass = 'apple-option-chip inline-flex items-center justify-center gap-2 rounded-[0.95rem] px-3 py-2 text-xs font-semibold text-slate-700 transition disabled:opacity-50';
+  const sessionShellClass = 'studio-card-shell rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(100,156,198,0.10)]';
+  const optionButtonBaseClass = 'apple-option-chip w-full rounded-[1rem] px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const providerButtonClass = 'apple-option-chip flex w-full items-center gap-2 rounded-[1rem] px-2.5 py-1.5 text-left text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const optionButtonIdleClass = 'text-slate-300';
   const selectedOptionClass = {
-    amber: 'border-amber-400/80 bg-amber-500/16 text-amber-50 shadow-[0_0_0_1px_rgba(251,191,36,0.30),0_8px_22px_rgba(245,158,11,0.16)]',
-    cyan: 'border-cyan-400/80 bg-cyan-500/14 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.26),0_8px_22px_rgba(8,145,178,0.14)]',
-    violet: 'border-violet-400/80 bg-violet-500/16 text-violet-50 shadow-[0_0_0_1px_rgba(167,139,250,0.28),0_8px_22px_rgba(139,92,246,0.16)]',
-    emerald: 'border-emerald-400/80 bg-emerald-500/16 text-emerald-50 shadow-[0_0_0_1px_rgba(52,211,153,0.26),0_8px_22px_rgba(16,185,129,0.14)]',
-    sky: 'border-sky-400/80 bg-sky-500/16 text-sky-50 shadow-[0_0_0_1px_rgba(56,189,248,0.26),0_8px_22px_rgba(59,130,246,0.14)]',
-    pink: 'border-pink-400/80 bg-pink-500/16 text-pink-50 shadow-[0_0_0_1px_rgba(244,114,182,0.26),0_8px_22px_rgba(236,72,153,0.14)]',
+    amber: 'apple-option-chip-warm apple-option-chip-selected',
+    cyan: 'apple-option-chip-cool apple-option-chip-selected',
+    violet: 'apple-option-chip-violet apple-option-chip-selected',
+    emerald: 'apple-option-chip-cool apple-option-chip-selected',
+    sky: 'apple-option-chip-cool apple-option-chip-selected',
+    pink: 'apple-option-chip-violet apple-option-chip-selected',
   };
 
   const getOptionButtonClass = (isSelected, selectedClass) =>
-    `${optionButtonBaseClass} ${isSelected ? `ring-1 ring-white/20 ${selectedClass}` : optionButtonIdleClass}`;
+    `${optionButtonBaseClass} ${isSelected ? selectedClass : optionButtonIdleClass}`;
 
   const getProviderButtonClass = (isSelected, selectedClass) =>
-    `${providerButtonClass} ${isSelected ? `ring-1 ring-white/20 ${selectedClass}` : optionButtonIdleClass}`;
+    `${providerButtonClass} ${isSelected ? selectedClass : optionButtonIdleClass}`;
 
   const getSelectCardClass = (isActive, accent = 'amber') => {
     const activeClass = accent === 'cyan'
-      ? 'border-cyan-400/80 bg-gradient-to-br from-cyan-500/12 via-slate-900 to-[#0b1326] shadow-[0_0_0_1px_rgba(34,211,238,0.24),0_12px_28px_rgba(8,145,178,0.12)]'
-      : 'border-amber-400/80 bg-gradient-to-br from-amber-500/12 via-slate-900 to-[#0b1326] shadow-[0_0_0_1px_rgba(251,191,36,0.24),0_12px_28px_rgba(245,158,11,0.12)]';
-    return `${sidebarCardClass} transition-all duration-300 ${isActive ? activeClass : 'hover:border-slate-500/80 hover:shadow-[0_8px_24px_rgba(51,65,85,0.15)]'}`;
+      ? 'shadow-[0_0_0_1px_rgba(59,130,246,0.16),0_12px_28px_rgba(59,130,246,0.10)]'
+      : 'shadow-[0_0_0_1px_rgba(245,158,11,0.16),0_12px_28px_rgba(245,158,11,0.10)]';
+    return `${sidebarCardClass} transition-all duration-300 ${isActive ? activeClass : 'hover:shadow-[0_8px_24px_rgba(51,65,85,0.10)]'}`;
   };
 
-  const selectInputClass = 'w-full appearance-none rounded-xl border border-slate-500/80 bg-slate-900/90 px-3 py-2.5 pr-10 text-xs font-semibold text-white shadow-inner outline-none transition-all duration-200 hover:border-slate-300 hover:bg-slate-800/95 focus:border-amber-400/90 focus:ring-3 focus:ring-amber-500/30 focus:shadow-[0_0_0_3px_rgba(251,191,36,0.15)] disabled:cursor-not-allowed disabled:opacity-50';
+  const selectInputClass = 'w-full appearance-none rounded-[1rem] border border-white/40 bg-white/10 px-3 py-2.5 pr-10 text-xs font-semibold text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_8px_18px_rgba(100,156,198,0.08)] outline-none transition-all duration-200 hover:bg-white/15 focus:border-sky-300/60 disabled:cursor-not-allowed disabled:opacity-50';
 
   const getUseCaseLabel = (value) => {
     const option = USE_CASES.find((item) => item.value === value);
@@ -681,11 +765,32 @@ export default function OneClickCreatorPage() {
   // Workflow state
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
   const [sceneOptions, setSceneOptions] = useState([]);
   const [selectedScene, setSelectedScene] = useState(DEFAULT_SCENE_VALUE);
   const [selectedScenePrompt, setSelectedScenePrompt] = useState('');
   const [sceneImageMode, setSceneImageMode] = useState('auto'); // auto | custom
   const [showScenePicker, setShowScenePicker] = useState(false);
+
+  const isSessionWorkspaceMode = useCase === 'affiliate-video-tiktok' && (isGenerating || sessions.length > 0);
+  const shouldUseCompactRailLayout = isCompactLayout || isSessionWorkspaceMode;
+
+  const workspaceGridClass = 'one-click-main-grid relative grid min-h-0 flex-1 gap-4 overflow-hidden';
+  const workspaceGridStyle = shouldUseCompactRailLayout
+    ? { gridTemplateColumns: `${ONE_CLICK_COMPACT_SETTINGS_WIDTH}px minmax(0, 1fr)` }
+    : { gridTemplateColumns: `${ONE_CLICK_DESKTOP_SETTINGS_WIDTH}px minmax(0, 1fr)` };
+  const settingsPanelClass = shouldUseCompactRailLayout
+    ? 'one-click-settings-panel one-click-settings-panel-compact grid grid-cols-1 content-start gap-2 overflow-y-auto pr-1 transition-all duration-200'
+    : 'one-click-settings-panel grid grid-cols-2 content-start gap-2 overflow-y-auto pr-1 transition-all duration-200';
+  const mainPanelClass = 'flex min-w-0 flex-col overflow-hidden transition-all duration-200';
+  const imageProviderCardClass = sidebarCardClass;
+  const hashtagsCardClass = shouldUseCompactRailLayout
+    ? 'rounded-lg border border-green-700/50 bg-green-900/30 p-3'
+    : 'col-span-2 rounded-lg border border-green-700/50 bg-green-900/30 p-3';
+
+
+  
+  
 
 
 
@@ -826,7 +931,7 @@ export default function OneClickCreatorPage() {
   };
 
   // Initialize session
-  const initSession = (id) => {
+  const initSession = (id, inputImages = {}) => {
     // Calculate video count based on provider and total duration (120s = 2 minutes)
     const maxDuration = getMaxDurationForProvider(videoProvider);
     const videosCount = calculateVideoCount(videoProvider, 120);
@@ -842,7 +947,14 @@ export default function OneClickCreatorPage() {
       videos: [],
       videosCount,
       completed: false,
-      error: null
+      error: null,
+      inputImages,
+      preview: {},
+      step2Items: [],
+      step2Progress: { total: 0, completed: 0 },
+      step4Items: [],
+      step4Progress: { total: 0, completed: 0 },
+      analysis: { videoScripts: [], hashtags: [], voiceoverScript: '' }
     };
   };
 
@@ -918,22 +1030,40 @@ export default function OneClickCreatorPage() {
         setSessions(prev => prev.map(s => {
           if (s.id !== sessionId) return s;
 
-          const nextSession = { ...s };
+          const nextSession = { ...s, preview };
+          const step2Items = preview.step2?.items || [];
+          const step4Items = preview.step4?.videos || [];
+
+          if (preview.status === 'action_required' || preview.actionRequired) {
+            nextSession.manualAction = preview.actionRequired || { message: 'Manual action required in browser' };
+            nextSession.error = null;
+          } else if (nextSession.manualAction) {
+            nextSession.manualAction = null;
+          }
 
           if (preview.step1) {
             nextSession.step1Prompts = {
-              wearing: preview.step1.wearingPrompt,
-              holding: preview.step1.holdingPrompt
+              wearing: preview.step1.wearingPrompt || nextSession.step1Prompts?.wearing || "",
+              holding: preview.step1.holdingPrompt || nextSession.step1Prompts?.holding || ""
             };
             nextSession.steps = (nextSession.steps || []).map(step => step.id === 'analyze' ? { ...step, completed: true, inProgress: false } : step);
           }
 
           if (preview.step2) {
             nextSession.step2Images = {
-              wearing: preview.step2.wearingImagePath,
-              holding: preview.step2.holdingImagePath
+              wearing: preview.step2.images?.wearing || preview.step2.wearingImagePath || nextSession.step2Images?.wearing || null,
+              holding: preview.step2.images?.holding || preview.step2.holdingImagePath || nextSession.step2Images?.holding || null
             };
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-images-parallel' ? { ...step, completed: true, inProgress: false } : step);
+            nextSession.step2Items = step2Items;
+            nextSession.step2Progress = {
+              total: preview.step2.imageCount || step2Items.length || nextSession.step2Progress?.total || 0,
+              completed: preview.step2.completedCount || step2Items.filter(item => item?.status === "completed").length || 0
+            };
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === "generate-images-parallel" ? {
+              ...step,
+              completed: preview.status === "step2-complete" || preview.status === "completed",
+              inProgress: preview.status === "step2-generating"
+            } : step);
           }
 
           if (preview.step3) {
@@ -941,14 +1071,23 @@ export default function OneClickCreatorPage() {
               ...(nextSession.analysis || {}),
               videoScripts: preview.step3.videoScripts || [],
               hashtags: preview.step3.hashtags || [],
-              voiceoverScript: preview.step3.voiceoverScript || ''
+              voiceoverScript: preview.step3.voiceoverScript || ""
             };
             nextSession.steps = (nextSession.steps || []).map(step => step.id === 'deep-analysis' ? { ...step, completed: true, inProgress: false } : step);
           }
 
           if (preview.step4) {
-            nextSession.videos = (preview.step4.videos || []).map(v => v.path || v.url).filter(Boolean);
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-video' ? { ...step, completed: true, inProgress: false } : step);
+            nextSession.step4Items = step4Items;
+            nextSession.step4Progress = {
+              total: preview.step4.totalCount || step4Items.length || nextSession.step4Progress?.total || 0,
+              completed: preview.step4.completedCount || step4Items.filter(item => item?.status === "completed").length || 0
+            };
+            nextSession.videos = step4Items.map(item => item?.path || item?.href || item?.url).filter(Boolean);
+            nextSession.steps = (nextSession.steps || []).map(step => step.id === "generate-video" ? {
+              ...step,
+              completed: preview.status === "step4-complete" || preview.status === "completed",
+              inProgress: preview.status === "step4-generating"
+            } : step);
           }
 
           if (preview.step5) {
@@ -963,6 +1102,7 @@ export default function OneClickCreatorPage() {
 
           if (preview.status === 'failed') {
             nextSession.error = nextSession.error || 'Flow failed';
+            nextSession.manualAction = null;
             nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, inProgress: false }));
           }
 
@@ -1109,11 +1249,13 @@ export default function OneClickCreatorPage() {
           throw new Error(mainFlowData.error || mainFlowData.message || 'Main flow failed');
         }
 
+        const step3Result = mainFlowData.data?.step3?.analysis || mainFlowData.data?.step3 || null;
+        const step4Videos = mainFlowData.data?.step4?.segmentVideos || mainFlowData.data?.step4?.videos || [];
         setTiktokFlowId(mainFlowData.flowId || mainFlowData.data?.flowId || flowId);
-        setDeepAnalysisResult(mainFlowData.data?.step3?.analysis || null);
-        setSuggestedHashtags(mainFlowData.data?.step3?.analysis?.hashtags || []);
-        setGeneratedVideo(mainFlowData.data?.step4?.videos?.[0] || null);
-        setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || mainFlowData.data?.step3?.analysis?.voiceoverScript || null);
+        setDeepAnalysisResult(step3Result);
+        setSuggestedHashtags(step3Result?.hashtags || mainFlowData.final_package?.metadata?.hashtags || []);
+        setGeneratedVideo(step4Videos[0] || mainFlowData.data?.step4?.video || null);
+        setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || step3Result?.voiceoverScript || null);
 
         return mainFlowData;
       } finally {
@@ -1265,8 +1407,10 @@ export default function OneClickCreatorPage() {
     }
 
     // Create sessions for each quantity
-    const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1));
+    const sharedInputImages = { character: charImageData, product: prodImageData, scene: finalSceneImageData };
+    const newSessions = Array.from({ length: quantity }).map((_, idx) => initSession(idx + 1, sharedInputImages));
     setSessions(newSessions);
+    setActiveSessionId(newSessions[0]?.id || null);
 
     // Process each session sequentially
     for (let s of newSessions) {
@@ -1653,9 +1797,56 @@ export default function OneClickCreatorPage() {
     setIsGenerating(false);
   }
 };
+  const readImageFile = (file, onLoad) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => onLoad(evt.target?.result || null);
+    reader.readAsDataURL(file);
+  };
+
+  const openInlineImagePicker = (onFile) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (file) onFile(file);
+    };
+    input.click();
+  };
+
+  const handleCharacterImageFile = (file) => {
+    readImageFile(file, (result) => {
+      if (!result) return;
+      setCharacterImage(result);
+      setImageSource((prev) => ({ ...prev, character: 'upload' }));
+    });
+  };
+
+  const handleProductImageFile = (file) => {
+    readImageFile(file, (result) => {
+      if (!result) return;
+      setProductImage(result);
+      setImageSource((prev) => ({ ...prev, product: 'upload' }));
+    });
+  };
+
+  const handleSceneImageFile = (file) => {
+    readImageFile(file, (result) => {
+      if (!result) return;
+      setSceneImage(result);
+      setSceneImageMode('custom');
+    });
+  };
+
+  const openGalleryTarget = (target) => {
+    setGalleryPickerFor(target);
+    setShowGalleryPicker(true);
+  };
+
 
   return (
-    <div className="-mx-5 -mt-5 min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-[13px] text-white lg:-mx-6 lg:-mt-6">
+    <div className="one-click-shell relative -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
       <PageHeaderBar
         icon={<Sparkles className="h-4 w-4 text-amber-400" />}
         title={t('oneClickCreator.title')}
@@ -1663,11 +1854,67 @@ export default function OneClickCreatorPage() {
         meta={`${getUseCaseLabel(useCase)} / ${getFocusLabel(productFocus)} / ${quantity} sessions`}
       />
 
-      <div className="h-[calc(100vh-56px)] w-full px-5 py-4">
+      <div ref={workspaceRef} className="one-click-main-shell grid min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden px-5 py-3">
 
-        <div className="grid h-full grid-cols-12 gap-4">
+        <div className={`${workspaceGridClass} min-h-0 flex-1`} style={workspaceGridStyle}>
           {/* LEFT SIDEBAR - Settings */}
-          <div className="col-span-4 grid grid-cols-2 content-start gap-3 overflow-y-auto pr-1">
+          <div className={settingsPanelClass}>
+            {isSessionWorkspaceMode && (
+              <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-slate-900 via-[#10182d] to-[#0b1326] p-2.5 shadow-[0_10px_30px_rgba(2,6,23,0.28)]">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">Inputs</p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">Edit during run</p>
+                  </div>
+                  <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold text-amber-100">Live</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">Character</span>
+                      <Upload className="h-3 w-3 text-amber-300" />
+                    </div>
+                    <button type="button" onClick={() => openInlineImagePicker(handleCharacterImageFile)} className="flex h-16 w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-600/70 bg-slate-900/70 transition hover:border-amber-400/80">
+                      {characterImage ? <img src={characterImage} alt="Character" className="h-full w-full object-cover" /> : <Upload className="h-4 w-4 text-slate-500" />}
+                    </button>
+                    <div className="mt-2 grid grid-cols-3 gap-1">
+                      <button type="button" onClick={() => openInlineImagePicker(handleCharacterImageFile)} className="rounded-md border border-slate-600/70 bg-slate-900/80 px-1.5 py-1 text-[9px] font-semibold text-slate-200 hover:border-slate-400">Upload</button>
+                      <button type="button" onClick={() => setShowCharacterSelector(true)} className="rounded-md border border-fuchsia-500/40 bg-fuchsia-500/10 px-1.5 py-1 text-[9px] font-semibold text-fuchsia-100 hover:border-fuchsia-300">Profile</button>
+                      <button type="button" onClick={() => openGalleryTarget('character')} className="rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-1 text-[9px] font-semibold text-blue-100 hover:border-blue-300">Gallery</button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">Product</span>
+                      <Package className="h-3 w-3 text-cyan-300" />
+                    </div>
+                    <button type="button" onClick={() => openInlineImagePicker(handleProductImageFile)} className="flex h-16 w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-600/70 bg-slate-900/70 transition hover:border-cyan-400/80">
+                      {productImage ? <img src={productImage} alt="Product" className="h-full w-full object-cover" /> : <Upload className="h-4 w-4 text-slate-500" />}
+                    </button>
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      <button type="button" onClick={() => openInlineImagePicker(handleProductImageFile)} className="rounded-md border border-slate-600/70 bg-slate-900/80 px-1.5 py-1 text-[9px] font-semibold text-slate-200 hover:border-slate-400">Upload</button>
+                      <button type="button" onClick={() => openGalleryTarget('product')} className="rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-1 text-[9px] font-semibold text-blue-100 hover:border-blue-300">Gallery</button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">Scene</span>
+                      <Wand2 className="h-3 w-3 text-violet-300" />
+                    </div>
+                    <button type="button" onClick={() => openInlineImagePicker(handleSceneImageFile)} className="flex h-16 w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-600/70 bg-slate-900/70 transition hover:border-violet-400/80">
+                      {sceneImage ? <img src={sceneImage} alt="Scene" className="h-full w-full object-cover" /> : <Target className="h-4 w-4 text-slate-500" />}
+                    </button>
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      <button type="button" onClick={() => openInlineImagePicker(handleSceneImageFile)} className="rounded-md border border-slate-600/70 bg-slate-900/80 px-1.5 py-1 text-[9px] font-semibold text-slate-200 hover:border-slate-400">Upload</button>
+                      <button type="button" onClick={() => setShowScenePicker(true)} className="rounded-md border border-violet-500/40 bg-violet-500/10 px-1.5 py-1 text-[9px] font-semibold text-violet-100 hover:border-violet-300">Picker</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Use Case */}
             <div className={getSelectCardClass(Boolean(useCase), 'amber')}>
               <div className="mb-2 flex items-start gap-2">
@@ -1682,6 +1929,7 @@ export default function OneClickCreatorPage() {
                   onChange={(e) => setUseCase(e.target.value)}
                   disabled={isGenerating}
                   className={selectInputClass}
+                  title={getUseCaseLabel(useCase)}
                 >
                   {USE_CASES.map(uc => (
                     <option key={uc.value} value={uc.value}>{t(uc.labelKey)}</option>
@@ -1693,7 +1941,7 @@ export default function OneClickCreatorPage() {
 
             {/* Product Focus */}
             <div className={getSelectCardClass(Boolean(productFocus), 'cyan')}>
-              <div className="mb-2 flex items-start gap-2">
+              <div className="mb-2 flex items-center gap-2">
                 <h3 className="flex items-center gap-2 text-xs font-semibold text-gray-100">
                   <FileText className="w-4 h-4 text-cyan-300" />
                   {t('oneClickCreator.productFocus')}
@@ -1716,12 +1964,12 @@ export default function OneClickCreatorPage() {
 
 
             {/* Image Provider */}
-            <div className={sidebarCardClass}>
+            <div className={imageProviderCardClass}>
               <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-gray-100">
                 <ImageIcon className="w-4 h-4 text-amber-300" />
                 {t('oneClickCreator.imageProvider')}
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {IMAGE_PROVIDERS.map(p => (
                   <button
                     key={p.id}
@@ -1740,21 +1988,62 @@ export default function OneClickCreatorPage() {
             </div>
 
 
-            {/* Prompt Mode */}
-            <div className={sidebarCardClass}>
-              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.useShortPrompt')}</h3>
-              <button
-                type="button"
-                onClick={() => setUseShortPrompt(prev => !prev)}
-                disabled={isGenerating}
-                className={getOptionButtonClass(
-                  useShortPrompt,
-                  selectedOptionClass.amber
-                )}
-              >
-                {useShortPrompt ? t('oneClickCreator.enabled') : t('oneClickCreator.disabled')}
-              </button>
-              <p className="mt-2 text-[11px] leading-4 text-gray-400">{t('oneClickCreator.shortPromptHint')}</p>
+            <div className={`${sidebarCardClass} one-click-settings-full`}>
+              <h3 className="mb-2 text-xs font-semibold text-gray-100">Output Setup</h3>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Short Prompt</p>
+                  <button
+                    type="button"
+                    onClick={() => setUseShortPrompt(prev => !prev)}
+                    disabled={isGenerating}
+                    className={getOptionButtonClass(
+                      useShortPrompt,
+                      selectedOptionClass.amber
+                    )}
+                  >
+                    {useShortPrompt ? t('oneClickCreator.enabled') : t('oneClickCreator.disabled')}
+                  </button>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Quantity</p>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[1, 2, 3, 4].map(q => (
+                      <button
+                        key={q}
+                        onClick={() => setQuantity(q)}
+                        disabled={isGenerating}
+                        className={getOptionButtonClass(
+                          quantity === q,
+                          selectedOptionClass.emerald
+                        )}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Aspect</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {ASPECT_RATIOS.map(ar => (
+                      <button
+                        key={ar.id}
+                        onClick={() => setAspectRatio(ar.id)}
+                        disabled={isGenerating}
+                        className={getOptionButtonClass(
+                          aspectRatio === ar.id,
+                          selectedOptionClass.sky
+                        )}
+                      >
+                        {ar.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Video Provider */}
@@ -1763,7 +2052,7 @@ export default function OneClickCreatorPage() {
                 <Video className="w-4 h-4 text-violet-300" />
                 {t('oneClickCreator.videoProvider')}
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {VIDEO_PROVIDERS.map(p => (
                   <button
                     key={p.id}
@@ -1781,70 +2070,18 @@ export default function OneClickCreatorPage() {
               </div>
             </div>
 
-            {/* Quantity */}
-            <div className={sidebarCardClass}>
-              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.quantity')}</h3>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[1, 2, 3, 4].map(q => (
-                  <button
-                    key={q}
-                    onClick={() => setQuantity(q)}
-                    disabled={isGenerating}
-                    className={getOptionButtonClass(
-                      quantity === q,
-                      selectedOptionClass.emerald
-                    )}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Aspect Ratio */}
-            <div className={sidebarCardClass}>
-              <h3 className="mb-2 text-xs font-semibold text-gray-100">{t('oneClickCreator.aspectRatio')}</h3>
-              <div className="space-y-2">
-                {ASPECT_RATIOS.map(ar => (
-                  <button
-                    key={ar.id}
-                    onClick={() => setAspectRatio(ar.id)}
-                    disabled={isGenerating}
-                    className={getOptionButtonClass(
-                      aspectRatio === ar.id,
-                      selectedOptionClass.sky
-                    )}
-                  >
-                    {ar.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Video Settings Info (Collapsed by default) */}
-            <div className={accentCardClass}>
-              <h3 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-violet-200">
-                <Video className="w-4 h-4" />
-                {t('oneClickCreator.videoGenerationAuto')}
-              </h3>
-              <p className="mb-1.5 text-[11px] leading-4 text-violet-100/90">
-                {videoDuration}s video with scenario: <span className="font-bold text-white">{VIDEO_SCENARIOS.find(s => s.value === videoScenario)?.label}</span>
-              </p>
-              <p className="text-[11px] leading-4 text-violet-100/90">
-                {calculateVideoCount(videoProvider, videoDuration)} clips via <span className="font-bold text-white">{VIDEO_PROVIDERS.find(p => p.id === videoProvider)?.label}</span>
-              </p>
-            </div>
+            
 
             {/* TikTok-Specific Settings */}
             {useCase === 'affiliate-video-tiktok' && (
               <>
-                {/* Video Duration Selector */}
-                <div className={accentCardClass}>
+                {/* Video Duration & Voice Selector - Consolidated */}
+                <div className={`${accentCardClass} one-click-settings-full`}>
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-sky-200">
                     <Clock className="w-4 h-4" />
-                    {t('oneClickCreator.videoDuration')}
+                    {t('oneClickCreator.videoDuration')} {tiktokVideoDuration}s
                   </h3>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 mb-3">
                     {TIKTOK_DURATIONS.map(duration => (
                       <button
                         key={duration}
@@ -1859,15 +2096,12 @@ export default function OneClickCreatorPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-
-                {/* Voice Options Selector */}
-                <div className={accentCardClass}>
+                  
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-pink-200">
-                    <Volume2 className="w-4 h-4" />
+                    <Volume2 className="w-3 h-3" />
                     {t('oneClickCreator.narratorVoice')}
                   </h3>
-                  <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1">
                     {VOICE_OPTIONS.map(option => (
                       <button
                         key={option.value}
@@ -1876,7 +2110,7 @@ export default function OneClickCreatorPage() {
                         className={`${getOptionButtonClass(
                           voiceOption === option.value,
                           selectedOptionClass.pink
-                        )} text-left`}
+                        )} text-left text-xs py-1.5`}
                       >
                         {t(option.labelKey)}
                       </button>
@@ -1886,7 +2120,7 @@ export default function OneClickCreatorPage() {
 
                 {/* TikTok Info */}
                 {suggestedHashtags.length > 0 && (
-                  <div className="col-span-2 rounded-lg border border-green-700/50 bg-green-900/30 p-3">
+                  <div className={`${hashtagsCardClass} one-click-settings-full`}>
                     <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-green-300">
                       <CheckCircle className="w-4 h-4" />
                       {t('oneClickCreator.suggestedHashtags')}
@@ -1904,35 +2138,38 @@ export default function OneClickCreatorPage() {
             )}
           </div>
 
-          {/* CENTER - Main Content */}
-          <div className="col-span-8 flex flex-col overflow-hidden">
+          {/* Toggle Compact Button removed from outer grid; placed inside main content for precise positioning */}
+
+
+                    {/* CENTER - Main Content */}
+          <div className={`${mainPanelClass} one-click-main-panel`}>
             {/* Scrollable Content Container */}
-            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-              {/* Upload Section */}
-              <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+            <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto pb-3 pr-1">
+              {!isSessionWorkspaceMode && (
+              <div className={stepUploadSectionClass}>
               <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="flex items-center gap-2 text-xs font-semibold text-gray-200">
-                    <Upload className="w-4 h-4" />
+                  <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                    <Upload className="w-4 h-4 text-sky-600" />
                     {t('oneClickCreator.uploadImagesStep')}
                   </h3>
-                  <p className="mt-1 text-[11px] text-gray-500">Keep inputs compact: character, product, then optional scene reference.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Keep inputs compact: character, product, then optional scene reference.</p>
                 </div>
               </div>
 
-              <div className="mb-3 rounded-lg border border-purple-700/60 bg-purple-950/30 p-3">
+              <div className="studio-accent-panel mb-3 rounded-[1.1rem] p-3">
                 <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-300">Scene Locked</p>
-                      <p className="truncate text-sm font-medium text-white">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-600">Scene Locked</p>
+                      <p className="truncate text-sm font-medium text-slate-900">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-[11px] text-gray-300">{selectedScenePrompt || 'No locked prompt'}</p>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">{selectedScenePrompt || 'No locked prompt'}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowScenePicker(true)}
-                    className="rounded bg-purple-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-purple-500"
+                    className="studio-accent-button rounded-[0.95rem] px-3 py-1.5 text-[11px] font-medium"
                   >
                     Pick Scene
                   </button>
@@ -1940,30 +2177,30 @@ export default function OneClickCreatorPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-stretch">
-                <div className="flex h-full flex-col gap-2">
-                  <div className="flex h-[286px] flex-col rounded-lg border border-gray-700 bg-gray-900/35 p-3">
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">
-                    <Upload className="h-3.5 w-3.5 text-amber-300" />
+                <div className="flex h-full min-h-0 flex-col gap-2">
+                  <div className={stepUploadCardClass}>
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
+                    <Upload className="h-3.5 w-3.5 text-amber-500" />
                     Character Image
                   </div>
                   <div
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
-                    className="relative flex-1 overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-amber-500 disabled:opacity-50 group"
+                    className={stepUploadDropzoneClass}
                   >
                     {characterImage ? (
                       <>
-                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
+                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
                           <img src={characterImage} alt="Character" className="max-h-full max-w-full rounded object-contain" />
                         </div>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                        <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
                           <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center">
-                        <Upload className="mx-auto mb-2 h-7 w-7 text-gray-500" />
-                        <p className="text-xs text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
-                        <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
+                        <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
+                        <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
+                        <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
                     <input
@@ -1992,7 +2229,7 @@ export default function OneClickCreatorPage() {
                         }
                       }}
                       disabled={isGenerating}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-fuchsia-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-fuchsia-500 disabled:bg-gray-600"
+                      className={stepUploadActionClass}
                     >
                       Select Profile
                     </button>
@@ -2004,7 +2241,7 @@ export default function OneClickCreatorPage() {
                         }
                       }}
                       disabled={isGenerating}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-gray-600"
+                      className={stepUploadActionClass}
                     >
                       <ImageIcon className="w-4 h-4" />
                       {t('oneClickCreator.chooseFromGallery')}
@@ -2012,10 +2249,10 @@ export default function OneClickCreatorPage() {
                   </div>
                 </div>
 
-                <div className="flex h-full flex-col gap-2">
-                  <div className="flex h-[286px] flex-col rounded-lg border border-gray-700 bg-gray-900/35 p-3">
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">
-                    <Upload className="h-3.5 w-3.5 text-cyan-300" />
+                <div className="flex h-full min-h-0 flex-col gap-2">
+                  <div className={stepUploadCardClass}>
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-600">
+                    <Upload className="h-3.5 w-3.5 text-cyan-600" />
                     Product Image
                   </div>
                   <div
@@ -2035,22 +2272,22 @@ export default function OneClickCreatorPage() {
                       };
                       input.click();
                     }}
-                    className="relative flex-1 overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-amber-500 disabled:opacity-50 group"
+                    className={stepUploadDropzoneClass}
                   >
                     {productImage ? (
                       <>
-                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
+                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
                           <img src={productImage} alt="Product" className="max-h-full max-w-full rounded object-contain" />
                         </div>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                        <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
                           <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                         </div>
                       </>
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center">
-                        <Upload className="mx-auto mb-2 h-7 w-7 text-gray-500" />
-                        <p className="text-xs text-gray-400">{t('oneClickCreator.dragToUpload')}</p>
-                        <p className="text-xs text-gray-500 mt-1">{t('oneClickCreator.orClickBelow')}</p>
+                        <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
+                        <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
+                        <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
                   </div>
@@ -2063,28 +2300,28 @@ export default function OneClickCreatorPage() {
                       }
                     }}
                     disabled={isGenerating}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-gray-600"
+                    className={stepUploadActionClass}
                   >
                     <ImageIcon className="w-4 h-4" />
                     {t('oneClickCreator.chooseFromGallery')}
                   </button>
                 </div>
 
-                <div className="flex h-full flex-col gap-2">
-                  <div className="flex h-[286px] flex-col rounded-lg border border-dashed border-gray-600 bg-gray-900/50 p-3">
-                    <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-200/90">
-                      <Wand2 className="w-3 h-3 text-violet-300" /> Scene Reference
+                <div className="flex h-full min-h-0 flex-col gap-2">
+                  <div className={stepUploadCardClass}>
+                    <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
+                      <Wand2 className="w-3 h-3 text-violet-600" /> Scene Reference
                     </p>
-                    <p className="mb-2 text-[11px] leading-4 text-gray-500">Optional image to keep background and lighting consistent across generations.</p>
-                    <div className="flex flex-1">
+                    <p className="mb-2 text-[11px] leading-4 text-slate-500">Optional image to keep background and lighting consistent across generations.</p>
+                    <div className="flex flex-1 min-w-0 overflow-hidden">
                       <div
                         onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                        className="relative flex flex-1 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-600 p-3 text-center transition-colors hover:border-blue-500 disabled:opacity-50 group"
+                        className={`${stepUploadDropzoneClass} p-0`}
                       >
                         {sceneImage ? (
                           <>
-                            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded bg-gray-950/30">
-                              <img src={sceneImage} alt="Scene" className="max-h-full max-w-full rounded object-contain" />
+                            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
+                              <img src={sceneImage} alt="Scene" className="h-full w-full object-cover" />
                             </div>
                             <button
                               type="button"
@@ -2101,14 +2338,14 @@ export default function OneClickCreatorPage() {
                             >
                               <X className="h-4.5 w-4.5" />
                             </button>
-                            <div className="absolute inset-0 z-10 bg-black/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center transition-opacity">
+                            <div className="absolute inset-0 z-10 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
                               <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
                             </div>
                           </>
                         ) : (
                           <div className="flex h-full flex-col items-center justify-center">
-                            <ImageIcon className="mx-auto mb-1 h-5 w-5 text-gray-500" />
-                            <p className="text-xs text-gray-400">Click to add scene image</p>
+                            <ImageIcon className="mx-auto mb-1 h-5 w-5 text-slate-500" />
+                            <p className="text-xs text-slate-500">Click to add scene image</p>
                           </div>
                         )}
                       </div>
@@ -2137,55 +2374,111 @@ export default function OneClickCreatorPage() {
               </div>
               </div>
 
-            {/* Sessions Display (now inside scrollable container) */}
-              <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-200">
-                  <Clock className="w-4 h-4" />
-                  {t('oneClickCreator.generationSessions')} ({sessions.length})
-                </h3>
-                
-                {sessions.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-gray-500">{t('oneClickCreator.sessionsWillAppear')}</p>
-                ) : (
-                  <div className="space-y-3">
-                    {sessions.map((session) => (
-                      <SessionRow
-                        key={session.id}
-                        session={session}
-                        isGenerating={isGenerating}
-                        t={t}
-                        onViewLog={(flowId) => {
-                          setSelectedFlowId(flowId);
-                          setShowSessionLogModal(true);
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Sticky Action Button */}
-            <button
-              onClick={handleOneClickGeneration}
-              disabled={!characterImage || !productImage || isGenerating}
-              className="sticky bottom-0 z-10 mt-3 flex w-full flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 py-3 text-sm font-semibold transition-all hover:from-amber-500 hover:to-orange-500 disabled:cursor-not-allowed disabled:from-gray-700 disabled:to-gray-700"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {t('oneClickCreator.generating')} ({sessions.filter(s => s.completed).length}/{quantity})
-                </>
-              ) : (
-                <>
-                  <Rocket className="w-5 h-5" />
-                  {t('oneClickCreator.oneClickGeneration')}
-                </>
               )}
-            </button>
+
+            {sessions.length > 0 && (
+              <div className={sessionShellClass}>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
+                    <Clock className="h-4 w-4 text-sky-600" />
+                    {t('oneClickCreator.generationSessions')} ({sessions.length})
+                  </h3>
+                  <span className="apple-option-chip rounded-full px-2 py-1 text-[10px] font-semibold text-slate-700">
+                    {sessions.filter(s => s.completed).length}/{sessions.length} done
+                  </span>
+                </div>
+
+                {(() => {
+                  const activeSession = sessions.find(session => session.id === (activeSessionId || sessions[0]?.id)) || sessions[0];
+                  const activeFlowId = activeSession?.flowId || activeSession?.preview?.flowId || null;
+                  return (
+                    <div className="grid gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 overflow-hidden">
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {sessions.map((session) => {
+                            const isActive = activeSession?.id === session.id;
+                            const statusClass = session.error
+                              ? "border-rose-500/40 text-rose-200"
+                              : session.completed
+                                ? "border-emerald-500/40 text-emerald-200"
+                                : session.steps?.some(step => step.inProgress)
+                                  ? "border-amber-500/40 text-amber-100"
+                                  : "border-slate-600/70 text-slate-300";
+                            return (
+                              <button
+                                key={session.id}
+                                type="button"
+                                onClick={() => setActiveSessionId(session.id)}
+                                className={`rounded-2xl border px-3 py-2 text-left text-[11px] font-semibold transition ${isActive ? "apple-option-chip apple-option-chip-cool apple-option-chip-selected text-slate-900" : `studio-card-shell ${statusClass} hover:border-slate-300 hover:text-slate-900`}`}
+                              >
+                                <span className="block">Session #{session.id}</span>
+                                <span className={`mt-1 block text-[10px] font-medium ${isActive ? "text-slate-500" : "text-current/80"}`}>
+                                  {session.error ? "Needs attention" : session.completed ? "Completed" : session.steps?.some(step => step.inProgress) ? "Generating" : "Queued"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {activeSession ? (
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <SessionStatusPill status={getAffiliateSessionRunningStatus(activeSession)} label={activeSession.error ? 'Error' : activeSession.completed ? 'Done' : activeSession.steps?.some(step => step.inProgress) ? 'Running' : 'Ready'} />
+                            <SessionStatusPill status={getAffiliateSessionStepStatus(activeSession, 'analyze')} label="Step 1" />
+                            <SessionStatusPill status={getAffiliateSessionStepStatus(activeSession, 'generate-images-parallel')} label="Step 2" />
+                            <SessionStatusPill status={getAffiliateSessionStepStatus(activeSession, 'deep-analysis')} label="Step 3" />
+                            <SessionStatusPill status={getAffiliateSessionStepStatus(activeSession, 'generate-video')} label="Step 4" />
+                            <SessionStatusPill status={getAffiliateSessionStepStatus(activeSession, 'generate-voiceover')} label="Step 5" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeFlowId) {
+                                  setSelectedFlowId(activeFlowId);
+                                  setShowSessionLogModal(true);
+                                }
+                              }}
+                              disabled={!activeFlowId}
+                              className="apple-option-chip inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Session Info
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {activeSession ? <AffiliateSessionWorkspace session={activeSession} /> : null}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
           </div>
         </div>
       </div>
+
+      <div className="apple-footer-bar one-click-footer-bar z-20 flex h-[60px] flex-shrink-0 items-center px-4">
+        <div className="flex h-full w-full items-center justify-end gap-3">
+          <button
+            onClick={handleOneClickGeneration}
+            disabled={!characterImage || !productImage || isGenerating}
+            className="apple-cta-primary inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold leading-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>{t('oneClickCreator.generating')} ({sessions.filter(s => s.completed).length}/{quantity})</span>
+              </>
+            ) : (
+              <>
+                <Rocket className="h-5 w-5" />
+                <span>{t('oneClickCreator.oneClickGeneration')}</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+    </div>
 
       {/* Gallery Picker Modal */}
       <CharacterSelectorModal
@@ -2262,3 +2555,5 @@ export default function OneClickCreatorPage() {
     </div>
   );
 }
+
+

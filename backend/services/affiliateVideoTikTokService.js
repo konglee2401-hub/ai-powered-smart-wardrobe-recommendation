@@ -118,8 +118,11 @@ function getProviderClipDuration(provider = 'grok') {
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
+import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse } from './affiliateStoryboardService.js';
+import { extractLastFrame, concatenateVideos, isFfmpegAvailable } from './videoContinuityService.js';
 import SessionLogService from './sessionLogService.js';
 import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
+import { renderAssignedPromptTemplate } from './promptTemplateResolver.js';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -213,7 +216,40 @@ function updateFlowPreview(flowId, updates) {
   const updated = { ...current, ...updates, flowId, updatedAt: Date.now() };
   flowPreviewStore.set(flowId, updated);
 }
+function pickLegacyFrameKeys(frameLibrary = []) {
+  const hookStart = frameLibrary.find((frame) => frame.frameKey === 'seg1_start') || frameLibrary[0] || null;
+  const showcaseEnd = frameLibrary.find((frame) => frame.segmentName === 'showcase' && frame.role === 'end')
+    || frameLibrary.find((frame) => frame.frameKey === 'seg2_end')
+    || frameLibrary[1]
+    || hookStart;
 
+  return { hookStart, showcaseEnd };
+}
+
+function resolveFramePath(frameLibrary = [], frameKey) {
+  return frameLibrary.find((frame) => frame.frameKey === frameKey)?.imagePath || null;
+}
+
+function buildStoryboardMetadata(analysis, options = {}) {
+  return buildStoryboardBlueprint(analysis, {
+    productFocus: options.productFocus || 'full-outfit',
+    videoDuration: Number(options.videoDuration) || 20,
+    clipDuration: Number(options.clipDuration) || 8
+  });
+}
+
+function buildManualActionPayload(step, error) {
+  const manual = error?.manualIntervention || {};
+  return {
+    step,
+    source: manual.source || 'unknown',
+    actionType: manual.actionType || 'manual-action',
+    message: manual.message || error?.message || 'Manual action required in browser',
+    context: manual.context || null,
+    retryable: true,
+    detectedAt: Date.now()
+  };
+}
 export async function executeAffiliateVideoTikTokFlow(req, res) {
   const startTime = Date.now();
   // 🔴 FIX: Accept flowId from request body if provided (for session continuity)
@@ -494,6 +530,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     
     let analysis = null;
     let analysisError = null;
+    let rawResponse = null;
 
     try {
       // Use ChatGPT Browser Automation (not OpenAI API, not Gemini)
@@ -806,7 +843,30 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         ? `Scene lock: ${sceneLockedPromptForAnalysis}`
         : `Scene key: ${selectedSceneForAnalysis}`;
 
-      if ((language || 'en').split('-')[0].split('_')[0].toLowerCase() === 'vi') {
+      const assignedAnalysisTemplate = await renderAssignedPromptTemplate({
+        criteria: {
+          page: 'AffiliateVideoTikTokFlow',
+          context: 'chatgpt-analysis',
+          field: 'analysisPrompt',
+          useCase: 'affiliate-video-tiktok-analysis',
+          templateType: 'text',
+        },
+        runtimeValues: {
+          language: normalizedLanguage,
+          productFocus,
+          selectedScene: selectedSceneForAnalysis,
+          sceneContextLine,
+          hasSceneReference,
+          videoDuration,
+          imageProvider: finalImageProvider,
+          videoProvider: finalVideoProvider,
+          aspectRatio: options?.aspectRatio || '9:16',
+        },
+      });
+
+      if (assignedAnalysisTemplate?.rendered?.prompt) {
+        analysisPrompt = assignedAnalysisTemplate.rendered.prompt;
+      } else if ((language || 'en').split('-')[0].split('_')[0].toLowerCase() === 'vi') {
         analysisPrompt += `
 
 ===== PHÂN TÍCH SCENE REFERENCE (BẮT BUỘC) =====
@@ -838,20 +898,50 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
       // 🔴 CRITICAL: Use try-finally to GUARANTEE browser cleanup
       let chatGPTService = null;
-      let rawResponse = null;  // 🔴 Declare outside try so it's accessible after finally
       try {
         // 🔐 STEP 1: Isolate with flowId to prevent parallel profile conflicts
-        chatGPTService = new ChatGPTService({ headless: true, flowId });
-        await chatGPTService.initialize();
-        
+        chatGPTService = new ChatGPTService({ headless: false, flowId });
+
         const analysisImages = hasSceneReference
           ? [characterFilePath, productFilePath, finalSceneImagePath]
           : [characterFilePath, productFilePath];
 
-        rawResponse = await chatGPTService.analyzeMultipleImages(
-          analysisImages,
-          analysisPrompt
-        );
+        let chatgptAttempt = 0;
+        while (chatgptAttempt < 2) {
+          try {
+            await chatGPTService.initialize();
+            rawResponse = await chatGPTService.analyzeMultipleImages(
+              analysisImages,
+              analysisPrompt
+            );
+            break;
+          } catch (chatgptError) {
+            if (chatgptError?.code !== 'CHATGPT_MANUAL_INTERVENTION_REQUIRED' || chatgptAttempt >= 1) {
+              throw chatgptError;
+            }
+
+            const actionRequired = buildManualActionPayload('step1', chatgptError);
+            updateFlowPreview(flowId, {
+              status: 'action_required',
+              actionRequired,
+              step1: { waitingForManualAction: true, actionRequired }
+            });
+            await logger.warn(actionRequired.message, 'step-1-manual-action', actionRequired);
+
+            const resolved = await chatGPTService.waitForManualResolution({ timeoutMs: 5 * 60 * 1000, pollMs: 2000 });
+            if (!resolved) {
+              throw new Error('Timed out waiting for manual ChatGPT verification');
+            }
+
+            updateFlowPreview(flowId, {
+              status: 'resuming',
+              actionRequired: null,
+              step1: { waitingForManualAction: false, resumedAfterManualAction: true }
+            });
+            await logger.info('Manual ChatGPT verification resolved. Resuming Step 1.', 'step-1-manual-resolved');
+            chatgptAttempt += 1;
+          }
+        }
         
         // Save rawResponse to use in fallback if parsing fails
         if (!rawResponse || rawResponse.length === 0) {
@@ -1224,7 +1314,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // ============================================================
 
     if (!analysis) {
-      console.log(`\n⚙️  Using default analysis object since real analysis failed`);
+      console.log(`
+??  Using default analysis object since real analysis failed`);
       analysis = {
         character: {
           name: 'Model',
@@ -1242,24 +1333,38 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         hashtags: ['FashionTrend', 'StyleInspo', 'ProductReview'],
         vibes: ['professional', 'modern', 'elegant']
       };
-      console.log(`✅ Default analysis ready for image generation`);
+      console.log(`? Default analysis ready for image generation`);
     }
 
+    const storyboardBlueprint = buildStoryboardMetadata(analysis, {
+      productFocus,
+      videoDuration,
+      clipDuration: providerClipDuration
+    });
+    analysis.storyboardBlueprint = storyboardBlueprint;
+
+    updateFlowPreview(flowId, {
+      status: 'step1-complete',
+      step1: {
+        analysis,
+        storyboardBlueprint,
+        summaryPrompt: rawResponse || null,
+        wearingPrompt: null,
+        holdingPrompt: null
+      }
+    });
+
     // ============================================================
-    // STEP 2: PARALLEL IMAGE GENERATION
+    // STEP 2: FRAME LIBRARY GENERATION
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('🎨 STEP 2: Parallel Image Generation');
-    console.log('─'.repeat(80));
-    console.log('  ├─ Image 1: change-clothes (character wearing product)');
-    console.log('  └─ Image 2: character-holding-product (holding in hand)');
+    console.log('\n' + '?'.repeat(80));
+    console.log('?? STEP 2: Frame Library Generation');
+    console.log('?'.repeat(80));
 
     await logger.startStage('image-generation');
     const step2Start = Date.now();
 
-    // Build options for both use cases
-    // Priority: UI options > Analysis recommendations > Defaults
     const baseOptions = {
       scene: options.scene || 'linhphap-tryon-room',
       lighting: options.lighting || analysis?.recommendations?.lighting?.choice || 'soft-diffused',
@@ -1271,279 +1376,229 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       holdingPresentation: options.holdingPresentation || analysis?.recommendations?.holdingPresentation || {},
       poseGuidance: options.poseGuidance || analysis?.recommendations?.poseGuidance || '',
       poseForScene: options.poseForScene || analysis?.recommendations?.poseForScene || {},
-      aspectRatio: '9:16', // TikTok format
+      aspectRatio: '9:16',
       ...options
     };
 
-    console.log(`\n📋 OPTIONS APPLIED:`);
-    console.log(`  Scene: ${baseOptions.scene}`);
-    console.log(`  Lighting: ${baseOptions.lighting}`);
-    console.log(`  Mood: ${baseOptions.mood}`);
-    console.log(`  Style: ${baseOptions.style}`);
-    console.log(`  Color Palette: ${baseOptions.colorPalette}`);
-    console.log(`  Camera Angle: ${baseOptions.cameraAngle}`);
-    if (baseOptions.cameraLock?.lens || baseOptions.cameraLock?.framing) {
-      console.log(`  Camera Lock: lens=${baseOptions.cameraLock?.lens || 'n/a'}, framing=${baseOptions.cameraLock?.framing || 'n/a'}`);
-    }
-    if (baseOptions.holdingPresentation?.method) {
-      console.log(`  Holding Method: ${baseOptions.holdingPresentation.method}`);
-    }
-    if (baseOptions.poseForScene?.wearing || baseOptions.poseForScene?.holding || baseOptions.poseGuidance) {
-      console.log(`  Pose guidance: wearing=${baseOptions.poseForScene?.wearing || 'n/a'} | holding=${baseOptions.poseForScene?.holding || 'n/a'}`);
-    }
-    console.log(`  Aspect Ratio: ${baseOptions.aspectRatio} (TikTok)`);
-    
-    // Log analysis recommendations if available (for debugging)
-    if (analysis?.recommendations) {
-      console.log(`\n💡 ANALYSIS RECOMMENDATIONS USED:`);
-      Object.entries(analysis.recommendations).forEach(([key, value]) => {
-        if (value?.choice) {
-          console.log(`  ${key}: ${value.choice} (${value.reason?.substring(0, 50) || ''}...)`);
-        }
-      });
-    }
-
-    // 🔥 IMAGE GENERATION STRATEGY: Generate 2 images (wearing + holding) for video segments
-    // These are core images needed for the video script
-    console.log(`\n🎬 IMAGE GENERATION STRATEGY:`);
-    console.log(`  ✅ Generating 2 images: WEARING + HOLDING`);
-    console.log(`  ✅ Used for intro, wearing, holding, product segments`);
-    console.log(`  ✅ Character consistency across video`);
-
-    // Build 2 prompts: wearing + holding
-    // Use correct useCase values: 'change-clothes' for wearing, 'character-holding-product' for holding
-    const generatePrompt1 = buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'change-clothes',  // Image 1: Character wearing the product
-      productFocus,
-      language,
-      { useShortPrompt: shouldUseShortPrompt }
-    ).then(promptData => ({
-      useCase: 'wearing',
-      prompts: promptData
-    }));
-
-    const generatePrompt2 = buildDetailedPrompt(
-      analysis,
-      baseOptions,
-      'character-holding-product',  // Image 2: Character holding the product
-      productFocus,
-      language,
-      { useShortPrompt: shouldUseShortPrompt }
-    ).then(promptData => ({
-      useCase: 'holding',
-      prompts: promptData
-    }));
-
-    // Wait for both prompts
-    const [promptData1, promptData2] = await Promise.all([
-      generatePrompt1,
-      generatePrompt2
-    ]);
-
-    console.log(`\n✅ PROMPTS BUILT (2 images):`);
-    try {
-      const prompt1Text = promptData1?.prompts?.prompt || '';
-      const prompt2Text = promptData2?.prompts?.prompt || '';
-      
-      // Check for proper structure in prompts
-      console.log(`  Image 1 (wearing):`);
-      console.log(`    Length: ${prompt1Text.length} chars`);
-      console.log(`    Has MODE SWITCH: ${prompt1Text.includes('MODE SWITCH') ? '✓' : '✗'}`);
-      console.log(`    Has IDENTITY LOCK: ${prompt1Text.includes('IDENTITY LOCK') ? '✓' : '✗'}`);
-      console.log(`    Preview: ${prompt1Text.substring(0, 60)}...`);
-      
-      console.log(`  Image 2 (holding):`);
-      console.log(`    Length: ${prompt2Text.length} chars`);
-      console.log(`    Has MODE SWITCH: ${prompt2Text.includes('MODE SWITCH') ? '✓' : '✗'}`);
-      console.log(`    Has IDENTITY LOCK: ${prompt2Text.includes('IDENTITY LOCK') ? '✓' : '✗'}`);
-      console.log(`    Preview: ${prompt2Text.substring(0, 60)}...`);
-      
-      if (!prompt1Text.includes('MODE SWITCH') || !prompt2Text.includes('MODE SWITCH')) {
-        console.warn(`\n⚠️  WARNING: Prompts may not have proper IMAGE REFERENCE MAPPING structure!`);
-      }
-    } catch (logErr) {
-      console.log(`  ⚠️ Could not display prompt preview:`, logErr.message);
-    }
-
-    // ============================================================
-    // STEP 2: GENERATE 2 IMAGES (wearing + holding)
-    // ============================================================
-    
-    console.log('\n🌐 STEP 2: Generate 2 Images (Wearing + Holding)');
-    console.log('─'.repeat(80));
+    const normalizedPromptLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
+    const framePlan = buildFrameGenerationPlan(analysis, storyboardBlueprint, {
+      scene: baseOptions.scene,
+      lighting: baseOptions.lighting,
+      mood: baseOptions.mood,
+      language: normalizedPromptLanguage,
+      characterName: analysis?.character?.name || '',
+      characterDisplayName: analysis?.character?.name || '',
+      productFocus
+    });
 
     let imageResults = [];
-    
+    let frameLibrary = [];
+    let step2PreviewItems = framePlan.frames.map((frame) => ({
+      key: frame.key,
+      label: `${frame.segmentName} ${frame.role}`,
+      status: 'queued',
+      prompt: frame.prompt,
+      frameKey: frame.key,
+      segmentIndex: frame.segmentIndex,
+      segmentName: frame.segmentName,
+      role: frame.role,
+      focus: frame.focus,
+      purpose: frame.purpose,
+      path: null,
+      href: null,
+      driveId: null,
+      driveUrl: null,
+      error: null
+    }));
+
+    updateFlowPreview(flowId, {
+      status: 'step1-complete',
+      step1: {
+        analysis,
+        storyboardBlueprint,
+        summaryPrompt: rawResponse || null,
+        promptSummary: framePlan.frames.map((frame) => `[${frame.key}] ${frame.prompt}`).join('\n\n'),
+        wearingPrompt: framePlan.frames[0]?.prompt || null,
+        holdingPrompt: framePlan.frames[1]?.prompt || null
+      }
+    });
+
+    updateFlowPreview(flowId, {
+      status: 'step2-generating',
+      step2: {
+        storyboardBlueprint,
+        framePlan: framePlan.frames,
+        imagePaths: [],
+        imageCount: step2PreviewItems.length,
+        completedCount: 0,
+        duration: null,
+        items: [...step2PreviewItems],
+        images: {}
+      }
+    });
+
     try {
-      // ✅ Use GoogleFlowAutomationService - 2 images
       const imageGen = new GoogleFlowAutomationService({
         type: 'image',
-        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // ✅ CORRECT PROJECT ID
-        imageCount: 1,  // Generate 1 image per prompt
+        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
+        imageCount: 1,
         headless: false,
-        debugMode: false  // ✅ PRODUCTION MODE
+        debugMode: false
       });
-      
-      console.log('🚀 Initializing image generation service...');
-      
-      // Validate prompts
-      const prompt1 = promptData1?.prompts?.prompt || '';
-      const prompt2 = promptData2?.prompts?.prompt || '';
-      
-      if (!prompt1 || !prompt2) {
-        throw new Error(`Invalid prompts: ${prompt1?.length || 0}, ${prompt2?.length || 0}`);
-      }
-      
-      console.log(`📝 Prompt validation passed (both prompts ready)`);
-      
-      // 💫 SAVE STEP 1 ANALYSIS TO PREVIEW STORE (for frontend polling)
-      updateFlowPreview(flowId, {
-        status: 'step1-complete',
-        step1: {
-          wearingPrompt: prompt1,
-          holdingPrompt: prompt2
-        }
-      });
-      console.log(`📝 Step 1 analysis saved to preview store`);
-      
-      // Generate 2 images in single browser session using generateMultiple
-      let multiGenResult;
-      try {
-        // Generate wearing + holding images
-        // Use character image as the base, product image as reference (not worn directly)
-        multiGenResult = await imageGen.generateMultiple(
-          characterFilePath,
-          productFilePath,  // ✅ Use actual product reference image (for context, not worn)
-          [prompt1, prompt2],  // 2 prompts: wearing + holding
-          {
-            outputCount: 2, // request x2 from Google Flow for reliability
-            ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
+
+      console.log('?? Initializing frame generation service...');
+      console.log(`?? Storyboard template: ${storyboardBlueprint.templateKey}`);
+      console.log(`?? Required frames: ${framePlan.frames.length}`);
+
+      const multiGenResult = await imageGen.generateMultiple(
+        characterFilePath,
+        productFilePath,
+        framePlan.frames.map((frame) => frame.prompt),
+        {
+          outputCount: 1,
+          ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {}),
+          onPromptStart: async ({ index }) => {
+            if (!step2PreviewItems[index]) return;
+            step2PreviewItems[index] = { ...step2PreviewItems[index], status: 'generating' };
+            updateFlowPreview(flowId, {
+              status: 'step2-generating',
+              step2: {
+                storyboardBlueprint,
+                framePlan: framePlan.frames,
+                imagePaths: step2PreviewItems.filter((item) => item.path).map((item) => item.path),
+                imageCount: step2PreviewItems.length,
+                completedCount: step2PreviewItems.filter((item) => item.status === 'completed').length,
+                duration: null,
+                items: [...step2PreviewItems],
+                images: {}
+              }
+            });
+          },
+          onPromptComplete: async ({ index, result }) => {
+            if (!step2PreviewItems[index]) return;
+            step2PreviewItems[index] = {
+              ...step2PreviewItems[index],
+              status: result?.success ? 'completed' : 'failed',
+              path: result?.downloadedFile || null,
+              href: result?.href || null,
+              error: result?.success ? null : (result?.error || 'Generation failed')
+            };
+            updateFlowPreview(flowId, {
+              status: 'step2-generating',
+              step2: {
+                storyboardBlueprint,
+                framePlan: framePlan.frames,
+                imagePaths: step2PreviewItems.filter((item) => item.path).map((item) => item.path),
+                imageCount: step2PreviewItems.length,
+                completedCount: step2PreviewItems.filter((item) => item.status === 'completed').length,
+                duration: null,
+                items: [...step2PreviewItems],
+                images: {}
+              }
+            });
           }
-        );
-      } catch (genMultiError) {
-        console.error('❌ generateMultiple threw error:', genMultiError.message);
-        multiGenResult = {
-          success: false,
-          error: genMultiError.message,
-          results: []
-        };
-      }
-
-      console.log(`📊 Multi-generation result:`, {
-        success: multiGenResult?.success,
-        resultsLength: multiGenResult?.results?.length,
-        error: multiGenResult?.error
-      });
-
-      if (!multiGenResult || !multiGenResult.success || multiGenResult.results.length < 2) {
-        throw new Error(`Failed to generate 2 images: ${multiGenResult?.error || 'Unknown error'}`);
-      }
-
-      // Extract both results
-      imageResults = multiGenResult.results.map((result, idx) => {
-        if (!result.success) {
-          throw new Error(`Image ${idx + 1} generation failed: ${result.error}`);
         }
-        const imageType = idx === 0 ? 'wearing' : 'holding';
+      );
+
+      if (!multiGenResult?.success && !(multiGenResult?.results || []).some((result) => result?.success)) {
+        throw new Error(multiGenResult?.error || 'Frame library generation failed');
+      }
+
+      frameLibrary = framePlan.frames.map((frame, index) => {
+        const result = multiGenResult.results?.[index];
+        if (!result?.success || !result?.downloadedFile) {
+          throw new Error(`Frame generation failed for ${frame.key}: ${result?.error || 'missing file'}`);
+        }
+
         return {
-          imageUrl: result.downloadedFile || result.href,
-          screenshotPath: result.downloadedFile,
+          frameKey: frame.key,
+          segmentIndex: frame.segmentIndex,
+          segmentName: frame.segmentName,
+          role: frame.role,
+          focus: frame.focus,
+          purpose: frame.purpose,
+          prompt: frame.prompt,
+          imagePath: result.downloadedFile,
+          href: result.href || null,
           downloadedAt: new Date().toISOString(),
-          href: result.href,
-          type: imageType  // wearing or holding
+          type: frame.key
         };
       });
 
-      console.log(`✅ Generated 2 images:`);
-      console.log(`   Google Flow requested outputCount=2 per prompt, downloading best single image per prompt.`);
-      imageResults.forEach((img, idx) => {
-        console.log(`   Variation ${idx + 1}: ${img.screenshotPath?.substring(0, 60) || img.href}...`);
-      });
-
-      // 🔍 DEBUG: Show detailed imageResults structure
-      console.log(`\n🔥 DEBUG: imageResults structure after generateMultiple():`);
-      imageResults.forEach((img, idx) => {
-        console.log(`\n  [${idx}] Type: ${img.type}`);
-        console.log(`      screenshotPath: ${img.screenshotPath}`);
-        console.log(`      href: ${img.href?.substring(0, 80) || 'N/A'}...`);
-        console.log(`      downloadedAt: ${img.downloadedAt}`);
-      });
-
-      // 🔥 VALIDATION: Check if files are identical (duplicate detection)
-      if (imageResults.length === 2 && imageResults[0].screenshotPath && imageResults[1].screenshotPath) {
-        try {
-          const hash1 = crypto
-            .createHash('sha256')
-            .update(fs.readFileSync(imageResults[0].screenshotPath))
-            .digest('hex');
-          
-          const hash2 = crypto
-            .createHash('sha256')
-            .update(fs.readFileSync(imageResults[1].screenshotPath))
-            .digest('hex');
-          
-          console.log(`\n🔥 FILE HASH COMPARISON:`);
-          console.log(`      hash1 (wearing): ${hash1}`);
-          console.log(`      hash2 (holding): ${hash2}`);
-          
-          if (hash1 === hash2) {
-            console.warn(`\n⚠️  WARNING: Both files are IDENTICAL! (same content)`);
-            console.warn(`      Path1: ${imageResults[0].screenshotPath}`);
-            console.warn(`      Path2: ${imageResults[1].screenshotPath}`);
-            console.warn(`      This indicates generateMultiple() may have generated the same image twice!`);
-          } else {
-            console.log(`\n✅ File hashes are DIFFERENT (images are unique)`);
-          }
-        } catch (hashErr) {
-          console.log(`\n⚠️  Could not compute file hashes: ${hashErr.message}`);
-        }
-      }
-        
+      imageResults = frameLibrary.map((frame) => ({
+        imageUrl: frame.imagePath,
+        screenshotPath: frame.imagePath,
+        downloadedAt: frame.downloadedAt,
+        href: frame.href,
+        type: frame.frameKey,
+        frameKey: frame.frameKey,
+        segmentIndex: frame.segmentIndex,
+        segmentName: frame.segmentName,
+        role: frame.role,
+        focus: frame.focus,
+        purpose: frame.purpose,
+        prompt: frame.prompt
+      }));
     } catch (imageGenError) {
-      console.error('❌ Image generation failed:', imageGenError.message);
-      throw new Error(`Image generation failed: ${imageGenError.message}`);
+      console.error('? Frame library generation failed:', imageGenError.message);
+      throw new Error(`Frame library generation failed: ${imageGenError.message}`);
     }
 
-    if (!imageResults || imageResults.length < 2) {
-      throw new Error(`Image generation failed - expected 2 images (wearing + holding), got ${imageResults?.length || 0}`);
+    if (!imageResults || imageResults.length === 0) {
+      throw new Error('Frame library generation failed - no images returned');
     }
 
+    const { hookStart, showcaseEnd } = pickLegacyFrameKeys(frameLibrary);
     const step2Duration = ((Date.now() - step2Start) / 1000).toFixed(2);
 
     await logger.endStage('image-generation', true);
-    await logger.info('2 images generated successfully (wearing + holding)', 'image-generation-complete', {
+    await logger.info('Frame library generated successfully', 'image-generation-complete', {
       duration: step2Duration,
-      imageCount: 2,
-      images: imageResults.map(img => img.screenshotPath)
+      imageCount: imageResults.length,
+      storyboardTemplate: storyboardBlueprint.templateKey,
+      images: imageResults.map((img) => img.screenshotPath)
     });
     await logger.storeArtifacts({
       images: {
-        wearing: imageResults[0]?.screenshotPath,
-        holding: imageResults[1]?.screenshotPath
+        wearing: hookStart?.imagePath || null,
+        holding: showcaseEnd?.imagePath || null,
+        frameLibrary: imageResults.map((img) => img.screenshotPath)
       }
     });
 
-    console.log(`\n✅ STEP 2 COMPLETE: 2 images generated in ${step2Duration}s`);
-    console.log(`  📸 Image 1 (wearing): ${imageResults[0]?.type || 'wearing'}`);
-    console.log(`  📸 Image 2 (holding): ${imageResults[1]?.type || 'holding'}`);
-
-    // 💫 SAVE STEP 2 IMAGES TO PREVIEW STORE (for frontend polling)
     updateFlowPreview(flowId, {
       status: 'step2-complete',
       step2: {
-        imagePaths: imageResults.map(img => img.screenshotPath),
-        imageCount: 2,
+        storyboardBlueprint,
+        framePlan: framePlan.frames,
+        frameLibrary,
+        imagePaths: imageResults.map((img) => img.screenshotPath),
+        imageCount: imageResults.length,
+        completedCount: imageResults.length,
         duration: step2Duration,
+        items: imageResults.map((img) => ({
+          key: img.frameKey,
+          label: `${img.segmentName} ${img.role}`,
+          status: 'completed',
+          prompt: img.prompt,
+          frameKey: img.frameKey,
+          segmentIndex: img.segmentIndex,
+          segmentName: img.segmentName,
+          role: img.role,
+          focus: img.focus,
+          purpose: img.purpose,
+          path: img.screenshotPath,
+          href: img.href || null,
+          driveId: img.googleDriveId || null,
+          driveUrl: img.googleDriveWebViewLink || null,
+          error: null
+        })),
         images: {
-          wearing: imageResults[0]?.screenshotPath,
-          holding: imageResults[1]?.screenshotPath
+          wearing: hookStart?.imagePath || null,
+          holding: showcaseEnd?.imagePath || null
         }
       }
     });
-    console.log(`📸 Step 2 images saved to preview store`);
-
     // ============================================================
     // STEP 2.5: UPLOAD GENERATED IMAGES TO GOOGLE DRIVE
     // ============================================================
@@ -1612,8 +1667,32 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               if (imageResults[originalIdx]) {
                 imageResults[originalIdx].googleDriveId = result.id;
                 imageResults[originalIdx].googleDriveWebViewLink = result.webViewLink;
-                console.log(`   ✅ Image ${originalIdx}: Stored Drive ID = ${result.id}`);
+                if (step2PreviewItems[originalIdx]) {
+                  step2PreviewItems[originalIdx] = {
+                    ...step2PreviewItems[originalIdx],
+                    driveId: result.id,
+                    driveUrl: result.webViewLink || null
+                  };
+                }
+                console.log(`   ??? Image ${originalIdx}: Stored Drive ID = ${result.id}`);
                 console.log(`      Drive Link: ${result.webViewLink}`);
+              }
+            }
+          });
+          updateFlowPreview(flowId, {
+            status: 'step2-generating',
+            step2: {
+              storyboardBlueprint,
+              framePlan: framePlan.frames,
+              frameLibrary,
+              imagePaths: step2PreviewItems.filter(item => item.path).map(item => item.path),
+              imageCount: step2PreviewItems.length,
+              completedCount: step2PreviewItems.filter(item => item.status === 'completed').length,
+              duration: null,
+              items: [...step2PreviewItems],
+              images: {
+                wearing: hookStart?.imagePath || null,
+                holding: showcaseEnd?.imagePath || null
               }
             }
           });
@@ -1654,202 +1733,307 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`✅ STEP 3 BARRIER: Safe to open new ChatGPT instance\n`);
 
     // ============================================================
-    // STEP 3: DEEP CHATGPT ANALYSIS
+    // STEP 3: STORYBOARD SEGMENT PLANNING
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('🤖 STEP 3: Deep ChatGPT Analysis');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('STEP 3: Storyboard Segment Planning');
+    console.log('-'.repeat(80));
     const step3Start = Date.now();
 
-    console.log(`📝 ANALYSIS INPUTS:`);
+    console.log(`ANALYSIS INPUTS:`);
     console.log(`  Duration: ${videoDuration}s`);
     console.log(`  Voice: ${voiceGender} (${voicePace} pace)`);
     console.log(`  Focus: ${productFocus}`);
-    console.log(`  Character images: 2 (wearing + holding)`);
+    console.log(`  Frame library: ${frameLibrary.length} frames`);
 
-    const deepAnalysis = await performDeepChatGPTAnalysis(
+    const plannerPrompt = buildSegmentPlanningPrompt({
       analysis,
-      {
-        characterImages: imageResults.map(img => img.screenshotPath),  // ✅ Wearing + holding images
-        productImage: productFilePath
-      },
-      {
-        videoDuration,
-        voiceGender,
-        voicePace,
-        productFocus,
-        language,  // 💫 Add language to config
-        videoProvider: finalVideoProvider,  // 🔧 FIX: Pass video provider
-        clipDuration: providerClipDuration,  // 🔧 FIX: Pass clip duration
-        flowId     // 🔴 CRITICAL: Pass flowId for ChatGPT browser session isolation
-      }
-    );
+      blueprint: storyboardBlueprint,
+      frameLibrary,
+      productFocus,
+      language: normalizedPromptLanguage
+    });
 
-    // Even if ChatGPT analysis fails, we should have fallback structured data
-    if (!deepAnalysis || !deepAnalysis.data) {
-      throw new Error('Deep analysis failed: no data returned');
+    let plannerResult = '';
+    let plannerService = null;
+    try {
+      plannerService = new ChatGPTService({ headless: false, flowId });
+      let plannerAttempt = 0;
+      while (plannerAttempt < 2) {
+        try {
+          await plannerService.initialize();
+          plannerResult = await plannerService.analyzeMultipleImages(
+            [...frameLibrary.map((frame) => frame.imagePath), productFilePath],
+            plannerPrompt
+          );
+          break;
+        } catch (plannerError) {
+          if (plannerError?.code !== 'CHATGPT_MANUAL_INTERVENTION_REQUIRED' || plannerAttempt >= 1) {
+            throw plannerError;
+          }
+
+          const actionRequired = buildManualActionPayload('step3', plannerError);
+          updateFlowPreview(flowId, {
+            status: 'action_required',
+            actionRequired,
+            step3: { waitingForManualAction: true, actionRequired }
+          });
+          await logger.warn(actionRequired.message, 'step-3-manual-action', actionRequired);
+
+          const resolved = await plannerService.waitForManualResolution({ timeoutMs: 5 * 60 * 1000, pollMs: 2000 });
+          if (!resolved) {
+            throw new Error('Timed out waiting for manual ChatGPT verification');
+          }
+
+          updateFlowPreview(flowId, {
+            status: 'resuming',
+            actionRequired: null,
+            step3: { waitingForManualAction: false, resumedAfterManualAction: true }
+          });
+          await logger.info('Manual ChatGPT verification resolved. Resuming Step 3.', 'step-3-manual-resolved');
+          plannerAttempt += 1;
+        }
+      }
+    } finally {
+      if (plannerService) {
+        try {
+          await plannerService.close();
+        } catch (plannerCloseError) {
+          console.warn(`Failed to close Step 3 ChatGPT browser: ${plannerCloseError.message}`);
+        }
+      }
     }
+
+    const parsedPlan = parseSegmentPlanningResponse(plannerResult, {
+      analysis,
+      blueprint: storyboardBlueprint,
+      frameLibrary,
+      productFocus,
+      language: normalizedPromptLanguage
+    });
+
+    const segmentPlan = (parsedPlan.segments || []).map((segment, index) => ({
+      segmentIndex: segment.segmentIndex || index + 1,
+      segmentName: segment.segmentName || storyboardBlueprint.segments?.[index]?.segmentName || ('segment-' + (index + 1)),
+      segment: segment.segmentName || storyboardBlueprint.segments?.[index]?.segmentName || ('segment-' + (index + 1)),
+      durationSec: Number(segment.durationSec) || storyboardBlueprint.segments?.[index]?.durationSec || providerClipDuration,
+      duration: Number(segment.durationSec) || storyboardBlueprint.segments?.[index]?.durationSec || providerClipDuration,
+      startFrameKey: segment.startFrameKey || storyboardBlueprint.segments?.[index]?.startFrameKey,
+      endFrameKey: segment.endFrameKey || storyboardBlueprint.segments?.[index]?.endFrameKey,
+      videoPrompt: segment.videoPrompt || segment.script || '',
+      script: segment.videoPrompt || segment.script || '',
+      voiceoverText: segment.voiceoverText || '',
+      continuityTargetForNextSegment: segment.continuityTargetForNextSegment || null
+    }));
+
+    const voiceoverScript = parsedPlan.voiceoverScript || segmentPlan.map((segment) => segment.voiceoverText).join(' ');
+    const hashtags = Array.isArray(parsedPlan.hashtags) ? parsedPlan.hashtags : [];
+    const deepAnalysis = {
+      success: true,
+      data: {
+        storyboardBlueprint,
+        frameLibrary,
+        segmentPlan,
+        videoScripts: segmentPlan,
+        voiceoverScript,
+        hashtags,
+        metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
+        deepAnalysisPrompt: plannerPrompt,
+        rawPlannerResponse: plannerResult
+      }
+    };
 
     const step3Duration = ((Date.now() - step3Start) / 1000).toFixed(2);
     await logger.endStage('deep-analysis', true);
     await logger.storeAnalysis({
       videoScripts: deepAnalysis.data.videoScripts?.length || 0,
-      voiceoverScript: deepAnalysis.data.voiceoverScript ? deepAnalysis.data.voiceoverScript.substring(0, 500) : '',
-      hashtags: deepAnalysis.data.hashtags || [],
+      voiceoverScript: voiceoverScript.substring(0, 500),
+      hashtags,
+      storyboardTemplate: storyboardBlueprint.templateKey,
       duration: step3Duration
     });
-    console.log(`\n✅ Deep analysis complete in ${step3Duration}s`);
-    console.log(`📊 ANALYSIS OUTPUT:`);
-    console.log(`  Video scripts: ${deepAnalysis.data.videoScripts?.length || 0} segments`);
-    console.log(`  Voiceover script: ${deepAnalysis.data.voiceoverScript?.split('\n').length || 0} lines / ${deepAnalysis.data.voiceoverScript?.length || 0} chars`);
-    console.log(`  Hashtags: ${deepAnalysis.data.hashtags?.length || 0} suggested: ${deepAnalysis.data.hashtags?.slice(0, 5).join(', ')}${deepAnalysis.data.hashtags?.length > 5 ? '...' : ''}`);
 
-    // 💫 SAVE STEP 3 ANALYSIS TO PREVIEW STORE (for frontend polling)
     updateFlowPreview(flowId, {
       status: 'step3-complete',
       step3: {
-        videoScripts: deepAnalysis.data.videoScripts || [],
-        hashtags: deepAnalysis.data.hashtags || [],
-        voiceoverScript: deepAnalysis.data.voiceoverScript || ''
+        storyboardBlueprint,
+        deepAnalysisPrompt: plannerPrompt,
+        videoScripts: segmentPlan,
+        segmentPlan,
+        hashtags,
+        voiceoverScript
       }
     });
-    console.log(`📊 Step 3 analysis saved to preview store`);
-
     // ============================================================
-    // STEP 4: VIDEO GENERATION (Using GoogleFlowAutomationService)
-    // 💫 OPTIMIZED: Single browser session for multiple segments (if needed)
+    // STEP 4: SEQUENTIAL FRAMES VIDEO GENERATION
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('🎬 STEP 4: Video Generation');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('STEP 4: Sequential Frames Video Generation');
+    console.log('-'.repeat(80));
     await logger.startStage('video-generation');
     const step4Start = Date.now();
 
     let videoGenerationResult = null;
     let allGeneratedVideos = [];
-    
+    const plannedSegments = deepAnalysis.data.segmentPlan || deepAnalysis.data.videoScripts || [];
+    const segmentPrompts = plannedSegments.map((segment) => segment.videoPrompt || segment.script || '');
+
     try {
-      // Detect if we have multiple video segments
-      const videoSegments = deepAnalysis.data.videoScripts || [];
-      const hasMultipleSegments = videoSegments.length > 1;
-
-      console.log(`\n📊 VIDEO SEGMENTS DETECTED: ${videoSegments.length}`);
-      if (hasMultipleSegments) {
-        console.log(`   💡 MODE: Will generate ${videoSegments.length} videos sequentially`);
-        console.log(`   Segments: ${videoSegments.map(s => s.segment).join(', ')}`);
-      } else {
-        console.log(`   📹 MODE: Generating single video`);
+      if (!Array.isArray(plannedSegments) || plannedSegments.length === 0) {
+        throw new Error('No segment plan available from Step 3');
       }
 
-      // ========== USE GOOGLE FLOW AUTOMATION MULTI-VIDEO METHOD ==========
-      console.log(`\n📝 VIDEO GENERATION:`);
-      console.log(`  Duration: ${videoDuration}s`);
-      console.log(`  Aspect ratio: 9:16 (TikTok)`);
-      console.log(`  Images: wearing, holding`);
-      console.log(`  Segments: ${videoSegments.length}\n`);
+      const tempVideoDir = path.join(tempDir, 'segment-videos');
+      if (!fs.existsSync(tempVideoDir)) {
+        fs.mkdirSync(tempVideoDir, { recursive: true });
+      }
 
-      const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
-      const characterIdentity = analysis?.character || {};
-      const characterDescription = `${characterIdentity.age || ''} ${characterIdentity.gender || ''} with ${characterIdentity.hair?.color || ''} ${characterIdentity.hair?.style || ''} hair, ${characterIdentity.facialFeatures || ''}, ${characterIdentity.bodyType || ''}`;
+      const ffmpegReady = await isFfmpegAvailable();
+      const step4PreviewItems = plannedSegments.map((segment, idx) => ({
+        key: `segment-${segment.segmentIndex || idx + 1}`,
+        label: segment.segmentName || segment.segment || `Segment ${idx + 1}`,
+        status: 'queued',
+        duration: segment.durationSec || segment.duration || providerClipDuration,
+        prompt: segment.videoPrompt || segment.script || '',
+        path: null,
+        href: null,
+        error: null
+      }));
 
-      const segmentPrompts = videoSegments.map((segment, segIdx) => {
-        let segmentPrompt;
-
-        if (normalizedLanguage === 'vi') {
-          const baseTemplate = VietnamesePromptBuilder.buildVideoGenerationPrompt(
-            segment.segment,
-            productFocus,
-            { name: analysis.product?.garment_type, details: analysis.product?.key_details }
-          );
-          const identityLock = `\n\n🔒 KHÓA NHÂN VẬT: ${characterDescription}\n`;
-          const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')]
-            ? `\nCHỈ CHUYỂN ĐỘNG: ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
-            : '';
-          segmentPrompt = baseTemplate + identityLock + motionGuide;
-        } else {
-          const identityLock = `\n\n[CHARACTER IDENTITY LOCK - CRITICAL]\nMaintain exactly this character: ${characterDescription}\n`;
-          const motionGuide = analysis?.motionDescriptions?.[segment.segment.toLowerCase().replace(/\s+/g, '')]
-            ? `[MOTION DIRECTION] ${analysis.motionDescriptions[segment.segment.toLowerCase().replace(/\s+/g, '')]}`
-            : '';
-          segmentPrompt = segment.script + identityLock + motionGuide;
-        }
-
-        console.log(`\n${'─'.repeat(80)}`);
-        console.log(`📍 SEGMENT ${segIdx + 1}/${videoSegments.length}: ${segment.segment.toUpperCase()}`);
-        console.log(`${'─'.repeat(80)}`);
-        console.log(`   Duration: ${segment.duration}s`);
-        console.log(`   Prompt length: ${segmentPrompt.length} chars`);
-
-        return segmentPrompt;
-      });
-
-      const videoGen = new GoogleFlowAutomationService({
-        type: 'video',
-        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
-        videoCount: 1,
-        headless: false,
-        outputDir: tempDir,
-        debugMode: false,
-        timeouts: {
-          pageLoad: 30000,
-          generation: Math.max(300000, (videoDuration + 60) * 1000)
+      updateFlowPreview(flowId, {
+        status: 'step4-generating',
+        step4: {
+          videos: [...step4PreviewItems],
+          totalCount: step4PreviewItems.length,
+          completedCount: 0,
+          error: null
         }
       });
 
-      const multiVideoResult = await videoGen.generateMultiple(
-        imageResults[0].screenshotPath,
-        imageResults[1].screenshotPath,
-        segmentPrompts,
-        {
-          ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
+      const segmentVideos = [];
+      let chainedStartFramePath = null;
+
+      for (const [segmentIndex, segment] of plannedSegments.entries()) {
+        const startFramePath = chainedStartFramePath || resolveFramePath(frameLibrary, segment.startFrameKey);
+        const endFramePath = resolveFramePath(frameLibrary, segment.endFrameKey);
+
+        if (!startFramePath || !endFramePath) {
+          throw new Error(`Missing frame path for segment ${segment.segmentIndex}: start=${segment.startFrameKey}, end=${segment.endFrameKey}`);
         }
-      );
 
-      if (!multiVideoResult?.success && !(multiVideoResult?.results || []).some(r => r?.success)) {
-        throw new Error(`Video multi-generation failed: ${multiVideoResult?.error || 'unknown error'}`);
-      }
-
-      allGeneratedVideos = (multiVideoResult?.results || [])
-        .map((result, idx) => {
-          if (!result?.success || !result.downloadedFile) {
-            console.warn(`   ⚠️  SEGMENT ${idx + 1} failed: ${result?.error || 'unknown error'}`);
-            return null;
+        step4PreviewItems[segmentIndex] = {
+          ...step4PreviewItems[segmentIndex],
+          status: 'generating'
+        };
+        updateFlowPreview(flowId, {
+          status: 'step4-generating',
+          step4: {
+            videos: [...step4PreviewItems],
+            totalCount: step4PreviewItems.length,
+            completedCount: step4PreviewItems.filter((item) => item.status === 'completed').length,
+            error: null
           }
+        });
 
-          const videoPath = result.downloadedFile;
-          const videoSize = fs.existsSync(videoPath) ? fs.statSync(videoPath).size : 0;
-          return {
-            segment: videoSegments[idx]?.segment || `segment-${idx + 1}`,
-            duration: videoSegments[idx]?.duration || providerClipDuration,
-            path: videoPath,
-            size: videoSize,
-            href: result.href,
-            sequenceNum: idx
-          };
-        })
-        .filter(Boolean);
+        const videoGenService = new GoogleFlowAutomationService({
+          type: 'video',
+          aspectRatio: '9:16',
+          videoCount: 1,
+          headless: false,
+          outputDir: tempVideoDir,
+          debugMode: false,
+          videoReferenceType: 'frames',
+          timeouts: {
+            pageLoad: 30000,
+            generation: Math.max(300000, (videoDuration + 60) * 1000)
+          }
+        });
 
-      if (allGeneratedVideos.length === 0) {
-        throw new Error('No videos generated from multi-video workflow');
+        const videoResult = await videoGenService.generateVideo(
+          segment.videoPrompt || segment.script || '',
+          startFramePath,
+          endFramePath,
+          {
+            download: true,
+            reloadAfter: false,
+            ...(finalSceneImagePath ? { sceneImagePath: finalSceneImagePath } : {})
+          }
+        );
+
+        if (!videoResult?.success || !videoResult?.path) {
+          throw new Error(`Segment ${segment.segmentIndex} generation failed: ${videoResult?.error || 'unknown error'}`);
+        }
+
+        const extractedFramePath = await extractLastFrame(
+          videoResult.path,
+          path.join(tempVideoDir, `segment-${segment.segmentIndex}-last-frame.jpg`)
+        );
+
+        const segmentVideo = {
+          segmentIndex: segment.segmentIndex,
+          segment: segment.segmentName || segment.segment || `segment-${segment.segmentIndex}`,
+          segmentName: segment.segmentName || segment.segment || `segment-${segment.segmentIndex}`,
+          duration: segment.durationSec || segment.duration || providerClipDuration,
+          startFrameKey: segment.startFrameKey,
+          endFrameKey: segment.endFrameKey,
+          startFramePath,
+          endFramePath,
+          chainedStartFrameUsed: Boolean(chainedStartFramePath),
+          continuityFrameExtracted: extractedFramePath,
+          ffmpegFrameExtractionAvailable: ffmpegReady,
+          path: videoResult.path,
+          href: videoResult.href || null,
+          metadata: videoResult
+        };
+
+        segmentVideos.push(segmentVideo);
+        allGeneratedVideos.push(segmentVideo);
+        chainedStartFramePath = extractedFramePath || endFramePath;
+
+        step4PreviewItems[segmentIndex] = {
+          ...step4PreviewItems[segmentIndex],
+          status: 'completed',
+          path: videoResult.path,
+          href: videoResult.href || null,
+          error: null
+        };
+        updateFlowPreview(flowId, {
+          status: 'step4-generating',
+          step4: {
+            videos: [...step4PreviewItems],
+            totalCount: step4PreviewItems.length,
+            completedCount: step4PreviewItems.filter((item) => item.status === 'completed').length,
+            error: null
+          }
+        });
       }
 
+      const stitchedVideoPath = await concatenateVideos(
+        segmentVideos.map((segment) => segment.path),
+        path.join(tempVideoDir, `stitched-${flowId}.mp4`)
+      );
+      const assemblyStatus = stitchedVideoPath
+        ? 'stitched'
+        : segmentVideos.length > 1
+          ? 'segments-only'
+          : 'single-segment';
+      const primaryVideoPath = stitchedVideoPath || segmentVideos[0]?.path || null;
 
-      // Store result
       videoGenerationResult = {
-        success: allGeneratedVideos.length > 0,
-        videos: allGeneratedVideos,
-        totalCount: allGeneratedVideos.length,
-        status: allGeneratedVideos.length > 0 ? 'success' : 'no-videos'
+        success: segmentVideos.length > 0,
+        videos: segmentVideos,
+        totalCount: segmentVideos.length,
+        status: segmentVideos.length > 0 ? 'success' : 'no-videos',
+        videoPath: primaryVideoPath,
+        stitchedVideoPath: stitchedVideoPath || null,
+        assemblyStatus,
+        requiresAssembly: assemblyStatus === 'segments-only',
+        ffmpegFrameExtractionAvailable: ffmpegReady
       };
-
-      console.log(`\n${'═'.repeat(80)}`);
-      console.log(`✅ VIDEO GENERATION COMPLETE: ${allGeneratedVideos.length}/${videoSegments.length} segments`);
-      console.log(`${'═'.repeat(80)}\n`);
-
     } catch (error) {
-      console.error(`❌ VIDEO GENERATION ERROR: ${error.message}`);
+      console.error(`STEP 4 generation error: ${error.message}`);
       videoGenerationResult = {
         success: false,
         videos: [],
@@ -1857,36 +2041,40 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         status: 'failed',
         error: error.message
       };
-
-      // Don't fail the entire flow if video generation fails
-      // Images have been generated successfully already
       await logger.error(error.message, 'video-generation-error');
     }
 
-    // 🔴 NOTE: No finally block needed here!
-    // Each segment's generateVideo() closes its own browser in its finally block
-    // So all cleanup is already handled per-segment
-
     const step4Duration = ((Date.now() - step4Start) / 1000).toFixed(2);
     await logger.endStage('video-generation', allGeneratedVideos.length > 0);
-    await logger.info(`Video generation completed`, 'video-generation-complete', {
+    await logger.info('Video generation completed', 'video-generation-complete', {
       generatedCount: allGeneratedVideos.length,
-      duration: step4Duration
+      duration: step4Duration,
+      assemblyStatus: videoGenerationResult?.assemblyStatus || null
     });
     await logger.storeArtifacts({
-      videos: allGeneratedVideos.map(v => ({ segment: v.segment, path: v.path, size: v.size }))
+      videos: allGeneratedVideos.map((v) => ({ segment: v.segment, path: v.path, size: v.size || 0 }))
     });
-    console.log(`\n✅ STEP 4 COMPLETE: Generated ${allGeneratedVideos.length} video(s) in ${step4Duration}s`);
 
     updateFlowPreview(flowId, {
       status: videoGenerationResult?.success ? 'step4-complete' : 'step4-failed',
       step4: {
-        videos: videoGenerationResult?.videos || [],
+        videos: (videoGenerationResult?.videos || []).map((video, idx) => ({
+          key: `segment-${video.segmentIndex || idx + 1}`,
+          label: video.segmentName || video.segment || `Segment ${idx + 1}`,
+          status: 'completed',
+          duration: video.duration,
+          prompt: segmentPrompts?.[idx] || '',
+          path: video.path || null,
+          href: video.href || null,
+          error: null
+        })),
         totalCount: videoGenerationResult?.totalCount || 0,
+        completedCount: videoGenerationResult?.totalCount || 0,
+        assemblyStatus: videoGenerationResult?.assemblyStatus || null,
+        stitchedVideoPath: videoGenerationResult?.stitchedVideoPath || null,
         error: videoGenerationResult?.error || null
       }
     });
-
     // ============================================================
     // STEP 5: 💫 AUTO-SAVE GENERATED ASSETS TO DATABASE
     // ============================================================
@@ -2006,11 +2194,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           step1: {
             status: 'completed',
             duration: `${step1Duration}s`,
-            analysis: {
-              character: analysis?.character || 'N/A',
-              product: analysis?.product || 'N/A',
-              compatibility: analysis?.compatibility || 'N/A'
-            },
+            analysis,
+            storyboardBlueprint,
             driveUrls: {
               character: characterDriveUrl || null,
               product: productDriveUrl || null
@@ -2019,15 +2204,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           step2: {
             status: 'completed',
             duration: `${step2Duration}s`,
+            storyboardBlueprint,
+            framePlan: framePlan.frames,
+            frameLibrary,
             images: {
-              variation1: imageResults[0]?.screenshotPath || 'N/A',
-              variation2: imageResults[1]?.screenshotPath || 'N/A',
-              variation3: imageResults[2]?.screenshotPath || 'N/A'
-            }
+              wearing: hookStart?.imagePath || null,
+              holding: showcaseEnd?.imagePath || null
+            },
+            imageCount: imageResults.length
           },
           step3: {
             status: 'completed',
             duration: `${step3Duration}s`,
+            storyboardBlueprint,
+            deepAnalysisPrompt: plannerPrompt,
+            segmentPlan: deepAnalysis?.data?.segmentPlan || [],
             analysis: {
               videoScripts: deepAnalysis?.data?.videoScripts || [],
               voiceoverScript: deepAnalysis?.data?.voiceoverScript || '',
@@ -2039,11 +2230,19 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: videoGenerationResult?.error && videoGenerationResult?.totalCount === 0 ? 'failed' : 'completed',
             duration: `${step4Duration}s`,
             totalVideos: videoGenerationResult?.totalCount || 0,
+            videoPath: videoGenerationResult?.videoPath || null,
+            stitchedVideoPath: videoGenerationResult?.stitchedVideoPath || null,
+            assemblyStatus: videoGenerationResult?.assemblyStatus || null,
+            requiresAssembly: Boolean(videoGenerationResult?.requiresAssembly),
             videos: (videoGenerationResult?.videos || []).map(v => ({
+              segmentIndex: v.segmentIndex,
+              segmentName: v.segmentName || v.segment,
               path: v.path,
-              url: v.url,
+              href: v.href || null,
               duration: v.duration,
-              resolution: v.resolution
+              startFrameKey: v.startFrameKey,
+              endFrameKey: v.endFrameKey,
+              continuityFrameExtracted: v.continuityFrameExtracted || null
             })),
             error: videoGenerationResult?.error || null
           },
@@ -2062,8 +2261,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           videoDuration,
           voiceGender,
           voicePace,
-          voiceName: voiceName || 'aoede',  // 💫 NEW: Include actual voice name
+          voiceName: voiceName || 'aoede',
           productFocus,
+          storyboardTemplate: storyboardBlueprint?.templateKey || null,
           timestamp: new Date().toISOString(),
           savedAssets: {
             images: savedAssets.images.length,
@@ -2181,16 +2381,15 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     // 🔴 CRITICAL: Initialize BEFORE attempting image analysis
     console.log(`   🚀 Initializing ChatGPT Browser Automation...`);
     // 🔐 STEP 3: Isolate with flowId to prevent parallel profile conflicts
-    chatGPTService = new ChatGPTService({ headless: true, flowId });
-    await chatGPTService.initialize();
+    chatGPTService = new ChatGPTService({ headless: false, flowId });
     
-    // 💫 NEW: Log the 2 character images being uploaded to ChatGPT
-    console.log(`\n📸 STEP 3: Uploading character images for ChatGPT segment analysis:`);
+    // ???? NEW: Log the 2 character images being uploaded to ChatGPT
+    console.log(`\n???? STEP 3: Uploading character images for ChatGPT segment analysis:`);
     characterImages.forEach((img, idx) => {
       const type = idx === 0 ? 'wearing' : 'holding';
-      console.log(`   ├─ Character ${type}: ${img}`);
+      console.log(`   ?????? Character ${type}: ${img}`);
     });
-    console.log(`   └─ Product image: ${productImage} (for reference)`);
+    console.log(`   ?????? Product image: ${productImage} (for reference)`);
     
     // Verify all images exist
     const allImages = [...characterImages, productImage];
@@ -2198,13 +2397,49 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
     if (missingImages.length > 0) {
       throw new Error(`Missing images for ChatGPT analysis: ${missingImages.length} image(s) not found or undefined`);
     }
-    console.log(`   ✅ All ${allImages.length} images verified to exist`);
+    console.log(`   ??? All ${allImages.length} images verified to exist`);
 
-    // Call ChatGPT for video script generation with 2 character images (wearing + holding)
-    const rawChatGPTResponse = await chatGPTService.analyzeMultipleImages(
-      allImages,  // ✅ Pass 2 character images + product image
-      deepAnalysisPrompt
-    );
+    let rawChatGPTResponse = null;
+    let chatgptAttempt = 0;
+    while (chatgptAttempt < 2) {
+      try {
+        await chatGPTService.initialize();
+        rawChatGPTResponse = await chatGPTService.analyzeMultipleImages(
+          allImages,  // ??? Pass 2 character images + product image
+          deepAnalysisPrompt
+        );
+        break;
+      } catch (chatgptError) {
+        if (chatgptError?.code !== 'CHATGPT_MANUAL_INTERVENTION_REQUIRED' || chatgptAttempt >= 1) {
+          throw chatgptError;
+        }
+
+        const actionRequired = buildManualActionPayload('step3', chatgptError);
+        updateFlowPreview(flowId, {
+          status: 'action_required',
+          actionRequired,
+          step3: { waitingForManualAction: true, actionRequired }
+        });
+        if (config.logger?.warn) {
+          await config.logger.warn(actionRequired.message, 'step-3-manual-action', actionRequired);
+        }
+
+        const resolved = await chatGPTService.waitForManualResolution({ timeoutMs: 5 * 60 * 1000, pollMs: 2000 });
+        if (!resolved) {
+          throw new Error('Timed out waiting for manual ChatGPT verification');
+        }
+
+        updateFlowPreview(flowId, {
+          status: 'resuming',
+          actionRequired: null,
+          step3: { waitingForManualAction: false, resumedAfterManualAction: true }
+        });
+        if (config.logger?.info) {
+          await config.logger.info('Manual ChatGPT verification resolved. Resuming Step 3.', 'step-3-manual-resolved');
+        }
+        chatgptAttempt += 1;
+      }
+    }
 
     // 💫 NEW: Log the raw response received from ChatGPT (not the long prompt)
     console.log(`\n📥 CHATGPT RAW RESPONSE RECEIVED:`);
@@ -3159,3 +3394,4 @@ Return as JSON with:
     `;
   }
 };
+

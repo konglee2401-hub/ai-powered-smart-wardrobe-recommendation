@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 // CONFIGURATION
 // ============================================================
 
-const STEP3_RESULTS_FILE = path.join(__dirname, 'test-affiliate', 'step3-real-test-2026-03-06.json');
+const STEP3_RESULTS_FILE = process.env.STEP3_RESULTS_FILE || path.join(__dirname, 'test-affiliate', 'step3-real-test-2026-03-06.json');
 const OUTPUT_DIR = path.join(__dirname, 'test-affiliate');
 
 // Vietnamese Gemini TTS Voice Mapping (lowercase names, per API requirements)
@@ -51,8 +51,12 @@ function loadStep3Results() {
   
   const results = JSON.parse(fs.readFileSync(STEP3_RESULTS_FILE, 'utf8'));
   console.log(`✅ Loaded Step 3 results`);
-  console.log(`   Segments: ${results.visualSegments?.length || 0}`);
-  console.log(`   Voiceover length: ${results.voiceoverScript?.content?.length || 0} characters`);
+  const segments = results.visualSegments || results.videoScripts || [];
+  const voiceoverText = typeof results.voiceoverScript === 'string'
+    ? results.voiceoverScript
+    : results.voiceoverScript?.content || '';
+  console.log(`   Segments: ${segments.length || 0}`);
+  console.log(`   Voiceover length: ${voiceoverText.length || 0} characters`);
   
   return results;
 }
@@ -165,10 +169,10 @@ function saveMetadata(audioBuffer, voiceConfig, audioPath, voiceoverScript, resu
       estimatedDuration: TTSService.estimateAudioDuration(voiceoverScript)
     },
     videoMetadata: {
-      segments: results.visualSegments?.length || 0,
-      videoDuration: (results.visualSegments?.[results.visualSegments.length - 1]?.duration_seconds || 0) * results.visualSegments.length + 's',
+      segments: (results.visualSegments || results.videoScripts || []).length || 0,
+      videoDuration: `${(results.visualSegments || results.videoScripts || []).reduce((total, segment) => total + (segment.duration_seconds || segment.duration || 0), 0)}s`,
       hashtags: results.hashtags || [],
-      hasVisualDirections: !!results.visualSegments
+      hasVisualDirections: !!(results.visualSegments || results.videoScripts)
     },
     generatedAt: new Date().toISOString(),
     status: 'success'
@@ -196,8 +200,10 @@ async function main() {
     const step3Results = loadStep3Results();
 
     // Step 2: Extract voiceover and voice config
-    const voiceoverData = step3Results.voiceoverScript;
-    const voiceoverText = voiceoverData.content;
+    const voiceoverData = typeof step3Results.voiceoverScript === 'string'
+      ? { content: step3Results.voiceoverScript, gender: 'female', pace: 'fast' }
+      : (step3Results.voiceoverScript || {});
+    const voiceoverText = voiceoverData.content || '';
     
     if (!voiceoverText || voiceoverText.trim().length === 0) {
       throw new Error('Voiceover script not found in Step 3 results');

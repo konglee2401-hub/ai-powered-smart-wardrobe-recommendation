@@ -10,27 +10,32 @@
 
 :root {
   color-scheme: dark;
-  --apple-bg: #060a14;
-  --apple-surface: rgba(15, 23, 42, 0.58);
-  --apple-surface-strong: rgba(15, 23, 42, 0.84);
-  --apple-border: rgba(255, 255, 255, 0.11);
-  --apple-border-strong: rgba(148, 163, 184, 0.28);
-  --apple-text: #e2e8f0;
-  --apple-muted: #94a3b8;
-  --apple-shadow: 0 24px 56px rgba(2, 6, 23, 0.45);
+  --apple-bg: #070b12;
+  --apple-bg-secondary: #0b1017;
+  --apple-surface: rgba(20, 26, 36, 0.78);
+  --apple-surface-subtle: rgba(255, 255, 255, 0.035);
+  --apple-surface-raised: rgba(24, 31, 43, 0.92);
+  --apple-surface-strong: rgba(29, 37, 50, 0.96);
+  --apple-surface-interactive: rgba(255, 255, 255, 0.07);
+  --apple-border: rgba(255, 255, 255, 0.055);
+  --apple-border-strong: rgba(255, 255, 255, 0.11);
+  --apple-divider: rgba(255, 255, 255, 0.075);
+  --apple-text: #eff4fb;
+  --apple-muted: #93a1b7;
+  --apple-shadow: 0 24px 56px rgba(2, 6, 23, 0.34);
   --apple-accent: #0a84ff;
   --apple-accent-soft: rgba(10, 132, 255, 0.2);
-  --apple-accent-violet: #bf5af2;
-  --apple-indigo: #5e5ce6;
+  --apple-accent-violet: #8b9dff;
+  --apple-indigo: #5e7cff;
   --apple-teal: #64d2ff;
   --apple-success: #30d158;
   --apple-warning: #ffd60a;
   --apple-orange: #ff9f0a;
   --apple-danger: #ff453a;
-  --apple-selected-text: #ffe082;
-  --apple-selected-border: rgba(255, 214, 10, 0.72);
-  --apple-selected-bg: linear-gradient(180deg, rgba(255, 214, 10, 0.16) 0%, rgba(255, 159, 10, 0.12) 100%);
-  --apple-selected-shadow: 0 0 0 1px rgba(255, 214, 10, 0.22), 0 14px 28px rgba(120, 80, 0, 0.28);
+  --apple-selected-text: #f5f9ff;
+  --apple-selected-border: rgba(125, 211, 252, 0.34);
+  --apple-selected-bg: linear-gradient(180deg, rgba(10, 132, 255, 0.22) 0%, rgba(56, 189, 248, 0.12) 100%);
+  --apple-selected-shadow: 0 0 0 1px rgba(125, 211, 252, 0.16), 0 16px 34px rgba(9, 24, 53, 0.28);
   --semantic-info: #64d2ff;
   --semantic-info-soft: rgba(100, 210, 255, 0.14);
   --semantic-success: #30d158;
@@ -58,9 +63,10 @@ body,
 body {
   font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background:
-    radial-gradient(circle at 10% -10%, rgba(99, 102, 241, 0.2) 0%, transparent 32%),
-    radial-gradient(circle at 85% -5%, rgba(59, 130, 246, 0.18) 0%, transparent 30%),
-    linear-gradient(155deg, #04070f 0%, #070e1d 46%, #060a14 100%);
+    radial-gradient(circle at 12% -12%, rgba(96, 165, 250, 0.16) 0%, transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 26%),
+    radial-gradient(circle at 50% 110%, rgba(15, 23, 42, 0.55) 0%, transparent 44%),
+    linear-gradient(180deg, #060910 0%, #090d15 42%, #060a11 100%);
   color: var(--apple-text);
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
@@ -68,33 +74,156 @@ body {
 }
 
 .app-shell {
+  position: relative;
   background: transparent;
 }
 
+.app-shell-stage {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
 .app-sidebar {
-  border-right: 1px solid var(--apple-border);
-  background: linear-gradient(180deg, rgba(13, 20, 37, 0.94) 0%, rgba(7, 11, 21, 0.98) 100%);
-  backdrop-filter: blur(10px) saturate(112%);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04), 14px 0 28px rgba(1, 5, 16, 0.3);
+  background:
+    radial-gradient(circle at top, rgba(96, 165, 250, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(11, 16, 24, 0.98) 0%, rgba(9, 13, 20, 0.99) 100%);
+  backdrop-filter: blur(12px) saturate(108%);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.03), 18px 0 40px rgba(1, 5, 16, 0.24);
+}
+
+.apple-nav-nest {
+  position: relative;
+  background: transparent;
+  box-shadow: none;
+}
+
+.apple-nav-nest-trigger {
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.apple-nav-subitem-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.apple-nav-subitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.52rem 0.68rem 0.52rem 0.78rem;
+  border-radius: 0.82rem;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.apple-nav-subitem:hover {
+  transform: translateY(-1px);
+}
+
+.apple-nav-subitem-icon {
+  height: 1.45rem;
+  width: 1.45rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.apple-nav-subtree {
+  position: relative;
+  margin-left: 1rem;
+  padding-left: 0.95rem;
+}
+
+.apple-nav-subtree::before {
+  content: '';
+  position: absolute;
+  left: 0.12rem;
+  top: 0.1rem;
+  bottom: 0.4rem;
+  width: 1px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.apple-nav-subtree .apple-nav-subitem::before {
+  content: '';
+  position: absolute;
+  left: -0.82rem;
+  top: 50%;
+  width: 0.68rem;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.apple-nav-subitem-active {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 20px rgba(2, 6, 23, 0.16);
+}
+
+.apple-nav-nest-trigger-root {
+  position: relative;
+}
+
+.apple-nav-nest-inline-icon {
+  display: inline-flex;
+  height: 1.7rem;
+  width: 1.7rem;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.apple-nav-nest-trigger-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+}
+
+.apple-nav-subitem-red.apple-nav-subitem-active .apple-nav-subitem-icon {
+  background: linear-gradient(180deg, rgba(255, 122, 136, 0.24), rgba(255, 122, 136, 0.16));
+}
+
+.apple-nav-subitem-sky.apple-nav-subitem-active .apple-nav-subitem-icon {
+  background: linear-gradient(180deg, rgba(114, 210, 255, 0.24), rgba(114, 210, 255, 0.16));
+}
+
+.apple-nav-subitem-navy.apple-nav-subitem-active .apple-nav-subitem-icon {
+  background: linear-gradient(180deg, rgba(77, 119, 255, 0.24), rgba(77, 119, 255, 0.16));
+}
+
+.apple-nav-subitem-violet.apple-nav-subitem-active .apple-nav-subitem-icon {
+  background: linear-gradient(180deg, rgba(179, 106, 245, 0.24), rgba(179, 106, 245, 0.16));
 }
 
 .apple-logo-chip {
-  background: linear-gradient(145deg, #8b5cf6 0%, #7c3aed 45%, #3b82f6 100%);
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  background: linear-gradient(145deg, #0f1728 0%, #12233a 42%, #15426a 100%);
+  box-shadow: 0 10px 26px rgba(8, 18, 34, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .apple-sidebar-link-active {
-  background: linear-gradient(135deg, rgba(255, 214, 10, 0.24), rgba(255, 159, 10, 0.18));
-  color: #fff4bf;
-  box-shadow: inset 0 0 0 1px rgba(255, 214, 10, 0.22), 0 12px 26px rgba(120, 80, 0, 0.2);
+  background:
+    radial-gradient(circle at left, rgba(96, 165, 250, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  color: var(--apple-selected-text);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.14), 0 12px 28px rgba(6, 18, 37, 0.24);
 }
 
 .app-main {
   position: relative;
+  min-height: 100vh;
   background:
-    radial-gradient(circle at 75% -30%, rgba(110, 51, 235, 0.22) 0%, transparent 45%),
-    radial-gradient(circle at 20% 110%, rgba(14, 165, 233, 0.17) 0%, transparent 38%),
-    linear-gradient(180deg, rgba(7, 11, 22, 0.88) 0%, rgba(5, 10, 20, 0.98) 100%);
+    radial-gradient(circle at 78% -28%, rgba(59, 130, 246, 0.18) 0%, transparent 40%),
+    radial-gradient(circle at 18% 112%, rgba(30, 64, 175, 0.12) 0%, transparent 36%),
+    linear-gradient(180deg, rgba(8, 12, 19, 0.9) 0%, rgba(6, 10, 17, 0.98) 100%);
 }
 
 .app-main-glow {
@@ -123,17 +252,77 @@ body {
   position: relative;
   z-index: 1;
   min-height: 100%;
-  background: linear-gradient(145deg, rgba(15, 22, 38, 0.62), rgba(11, 16, 29, 0.34));
+  background: linear-gradient(180deg, rgba(9, 13, 20, 0.7), rgba(9, 13, 20, 0.48));
 }
 
 .apple-content-frame {
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.44) 0%, rgba(15, 23, 42, 0.24) 100%),
-    radial-gradient(circle at 100% 0%, rgba(129, 140, 248, 0.1) 0%, transparent 40%);
+    linear-gradient(180deg, rgba(12, 17, 25, 0.3) 0%, rgba(12, 17, 25, 0.12) 100%),
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.08) 0%, transparent 36%);
+}
+
+.apple-required-pill {
+  color: #ef4444 !important;
+}
+
+.image-generation-shell {
+  background: linear-gradient(180deg, rgb(3 7 18) 0%, rgb(17 24 39) 55%, rgb(3 7 18) 100%);
+  color: rgb(248 250 252);
+  height: calc(100% + 2.5rem);
+}
+
+.one-click-shell {
+  background: linear-gradient(180deg, rgb(3 7 18) 0%, rgb(17 24 39) 55%, rgb(3 7 18) 100%);
+  color: rgb(248 250 252);
+  height: calc(100% + 2.5rem) !important;
+  min-height: 0 !important;
+}
+
+.one-click-settings-panel {
+  min-height: 0;
+  align-content: start;
+  grid-auto-rows: min-content;
+}
+
+.one-click-main-shell,
+.one-click-main-grid,
+.one-click-main-panel,
+.one-click-main-panel > .flex {
+  min-height: 0 !important;
+}
+
+.one-click-main-grid {
+  height: 100%;
+}
+
+.one-click-main-panel {
+  height: 100%;
+}
+
+.one-click-settings-panel,
+.one-click-main-panel > .flex {
+  overscroll-behavior: contain;
 }
 
 .apple-page-content {
   min-height: 100%;
+}
+
+.app-main.overflow-hidden > .apple-page,
+.app-main.overflow-hidden > .apple-page > .apple-content-frame,
+.app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content,
+.app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > * {
+  height: 100%;
+  min-height: 0;
+}
+
+.app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > .image-generation-shell {
+  height: calc(100% + 2.5rem);
+}
+
+.app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > .one-click-shell {
+  height: calc(100% + 2.5rem) !important;
+  min-height: 0 !important;
 }
 
 .apple-page-content > * {
@@ -141,8 +330,38 @@ body {
 }
 
 @media (min-width: 968px) {
+  .image-generation-shell {
+    height: calc(100% + 3rem);
+  }
+
+  .one-click-shell {
+    height: calc(100% + 3rem) !important;
+  }
+
+  .app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > .image-generation-shell {
+    height: calc(100% + 3rem);
+  }
+
+  .app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > .one-click-shell {
+    height: calc(100% + 3rem) !important;
+  }
+
   .apple-page-content > * {
     padding: 1.5rem;
+  }
+
+  .one-click-footer-bar {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    margin-bottom: -1.5rem;
+  }
+}
+
+@media (max-width: 967.98px) {
+  .one-click-footer-bar {
+    margin-left: -1.25rem;
+    margin-right: -1.25rem;
+    margin-bottom: -1.25rem;
   }
 }
 
@@ -169,10 +388,11 @@ body {
 .apple-typography select,
 .apple-typography textarea {
   border-radius: 0.9rem;
-  border: 1px solid var(--apple-border-strong);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.72) 100%);
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.03) 100%);
   color: #f1f5f9;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 .apple-typography input::placeholder,
@@ -194,26 +414,31 @@ body {
 .apple-typography select:focus,
 .apple-typography textarea:focus {
   outline: none;
-  border-color: rgba(139, 92, 246, 0.62);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2), 0 12px 22px rgba(15, 23, 42, 0.35);
+  border-color: rgba(125, 211, 252, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0.04) 100%);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16), 0 12px 22px rgba(7, 13, 24, 0.24);
 }
 
 .apple-typography button {
   border-radius: 0.95rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid transparent;
   font-weight: 600;
   letter-spacing: 0.01em;
-  background: linear-gradient(180deg, rgba(51, 65, 85, 0.5) 0%, rgba(30, 41, 59, 0.6) 100%);
-  transition: box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.035) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .apple-typography button:hover {
-  border-color: rgba(196, 181, 253, 0.52);
-  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.16);
+  transform: translateY(-1px);
 }
 
 .apple-typography button:active {
-  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.16);
+  box-shadow: 0 4px 10px rgba(2, 6, 23, 0.12);
+  transform: translateY(0);
 }
 
 
@@ -248,7 +473,7 @@ body {
   background: var(--apple-selected-bg) !important;
   border-color: var(--apple-selected-border) !important;
   color: var(--apple-selected-text) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 244, 191, 0.16), var(--apple-selected-shadow) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--apple-selected-shadow) !important;
 }
 
 .apple-typography .hover\:text-gray-900:hover,
@@ -308,10 +533,10 @@ body {
 
 .flat-panel {
   background: var(--apple-surface);
-  border: 1px solid var(--apple-border);
+  border: 1px solid transparent;
   border-radius: 16px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.24);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 10px 24px rgba(2, 6, 23, 0.18);
 }
 
 
@@ -334,20 +559,249 @@ body {
 .apple-typography .time-range-selector,
 .apple-typography [class*="tabs"] {
   backdrop-filter: blur(8px) saturate(110%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .apple-typography button,
 .apple-typography .tab-button,
 .apple-typography .tab-btn {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(148, 163, 184, 0.12));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.03));
   color: var(--apple-label-primary);
 }
 
 .apple-typography button:hover,
 .apple-typography .tab-button:hover,
 .apple-typography .tab-btn:hover {
-  background: linear-gradient(180deg, rgba(125, 211, 252, 0.2), rgba(148, 163, 184, 0.18));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(125, 211, 252, 0.05));
+}
+
+.apple-typography .apple-cta-primary {
+  background: linear-gradient(135deg, rgba(22, 105, 211, 0.96) 0%, rgba(10, 132, 255, 0.92) 52%, rgba(56, 189, 248, 0.88) 100%) !important;
+  border: none !important;
+  color: #f8fbff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 16px 34px rgba(8, 42, 95, 0.22) !important;
+}
+
+.apple-typography .apple-cta-primary:hover {
+  background: linear-gradient(135deg, rgba(37, 125, 237, 0.98) 0%, rgba(40, 156, 255, 0.94) 52%, rgba(103, 232, 249, 0.9) 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 18px 38px rgba(8, 42, 95, 0.28) !important;
+}
+
+.apple-typography .apple-cta-primary:disabled {
+  background: linear-gradient(180deg, rgba(71, 85, 105, 0.82), rgba(51, 65, 85, 0.88)) !important;
+  border: none !important;
+  color: rgba(226, 232, 240, 0.68) !important;
+  box-shadow: none !important;
+}
+
+.apple-typography .apple-chip-browser-active {
+  background: linear-gradient(135deg, rgba(192, 132, 252, 0.32), rgba(129, 140, 248, 0.26)) !important;
+  border-color: rgba(196, 181, 253, 0.38) !important;
+  color: #f5f3ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 24px rgba(76, 29, 149, 0.24) !important;
+}
+
+.apple-typography .apple-chip-upload-active {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.3), rgba(45, 212, 191, 0.24)) !important;
+  border-color: rgba(110, 231, 183, 0.36) !important;
+  color: #ecfdf5 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 24px rgba(6, 95, 70, 0.22) !important;
+}
+
+.apple-typography .apple-chip-step-active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.26), rgba(34, 211, 238, 0.2)) !important;
+  border-color: rgba(125, 211, 252, 0.38) !important;
+  color: #ecfeff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 24px rgba(14, 116, 144, 0.22) !important;
+}
+
+.apple-typography .apple-chip-usecase-selected {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.34), rgba(249, 115, 22, 0.26)) !important;
+  border-color: rgba(252, 211, 77, 0.42) !important;
+  color: #fff7d6 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 12px 28px rgba(120, 80, 0, 0.24) !important;
+}
+
+.apple-typography .apple-chip-focus-selected {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.3), rgba(59, 130, 246, 0.24)) !important;
+  border-color: rgba(103, 232, 249, 0.38) !important;
+  color: #ecfeff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 12px 28px rgba(8, 47, 73, 0.22) !important;
+}
+
+.apple-typography .apple-footer-bar {
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(59, 130, 246, 0.1), transparent 24%),
+    radial-gradient(circle at 84% 0%, rgba(96, 165, 250, 0.08), transparent 22%),
+    linear-gradient(180deg, rgba(11, 16, 24, 0.94), rgba(9, 13, 21, 0.92)) !important;
+  border: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 -18px 36px rgba(2, 6, 23, 0.18) !important;
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
+.apple-surface-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.028) 100%);
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 18px 38px rgba(2, 6, 23, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.apple-surface-panel-raised {
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.035) 100%);
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 22px 46px rgba(2, 6, 23, 0.18);
+}
+
+.apple-surface-subtle {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid transparent;
+}
+
+.apple-surface-panel,
+.apple-surface-panel-raised,
+.flat-panel,
+.apple-header-bar,
+.studio-card-shell,
+.studio-dropzone,
+.studio-accent-panel {
+  overflow: hidden;
+}
+
+.apple-header-bar {
+  border-radius: 1.75rem;
+}
+
+.apple-secondary-button {
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.03) 100%);
+  color: var(--apple-label-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.apple-secondary-button:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.045) 100%);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.apple-option-chip {
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
+  color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.apple-option-chip:hover {
+  background:
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.038) 100%);
+  color: #f8fafc;
+}
+
+.apple-option-chip-selected {
+  color: #f8fafc !important;
+  transform: translateY(-1px);
+}
+
+.apple-option-chip-warm.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(251, 191, 36, 0.18) 0%, rgba(249, 115, 22, 0.12) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, 0.24), 0 10px 20px rgba(120, 80, 0, 0.18) !important;
+}
+
+.apple-option-chip-cool.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(56, 189, 248, 0.16) 0%, rgba(14, 165, 233, 0.11) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.22), 0 10px 20px rgba(8, 47, 73, 0.18) !important;
+}
+
+.apple-option-chip-violet.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(168, 85, 247, 0.16) 0%, rgba(124, 58, 237, 0.11) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.2), 0 10px 20px rgba(59, 7, 100, 0.18) !important;
+}
+
+.apple-option-chip-selected:hover,
+.apple-option-chip-selected:focus-visible,
+.apple-option-chip-selected:active {
+  color: #f8fafc !important;
+}
+
+.apple-option-chip-warm.apple-option-chip-selected:hover,
+.apple-option-chip-warm.apple-option-chip-selected:focus-visible,
+.apple-option-chip-warm.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(251, 191, 36, 0.18) 0%, rgba(249, 115, 22, 0.12) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, 0.24), 0 10px 20px rgba(120, 80, 0, 0.18) !important;
+}
+
+.apple-option-chip-cool.apple-option-chip-selected:hover,
+.apple-option-chip-cool.apple-option-chip-selected:focus-visible,
+.apple-option-chip-cool.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(56, 189, 248, 0.16) 0%, rgba(14, 165, 233, 0.11) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.22), 0 10px 20px rgba(8, 47, 73, 0.18) !important;
+}
+
+.apple-option-chip-violet.apple-option-chip-selected:hover,
+.apple-option-chip-violet.apple-option-chip-selected:focus-visible,
+.apple-option-chip-violet.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(168, 85, 247, 0.16) 0%, rgba(124, 58, 237, 0.11) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.2), 0 10px 20px rgba(59, 7, 100, 0.18) !important;
+}
+
+.apple-option-chip-indicator {
+  background: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.apple-option-chip-selected .apple-option-chip-indicator {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(248, 250, 252, 0.95);
+}
+
+.apple-prompt-text {
+  font-family: "SF Mono", "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: -0.015em;
+}
+
+.studio-media-overlay {
+  background:
+    linear-gradient(180deg, rgba(10, 12, 18, 0.12), rgba(10, 12, 18, 0.62)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent 36%);
+}
+
+.studio-media-overlay-title,
+.studio-media-overlay-meta {
+  color: #f8fafc !important;
+}
+
+.studio-media-overlay-meta {
+  color: rgba(226, 232, 240, 0.9) !important;
+}
+
+.apple-typography .surface-interactive:hover,
+.apple-typography .apple-surface-panel:hover,
+.apple-typography .apple-surface-panel-raised:hover {
+  border-color: rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.04) 100%);
 }
 
 .apple-typography .tab-button.active,
@@ -406,6 +860,91 @@ body {
   backdrop-filter: blur(10px) saturate(110%);
 }
 
+.apple-typography .border,
+.apple-typography .border-t,
+.apple-typography .border-r,
+.apple-typography .border-b,
+.apple-typography .border-l,
+.apple-typography .border-2 {
+  border-color: transparent !important;
+}
+
+.apple-typography .border-dashed,
+.apple-typography .border-2.border-dashed {
+  border-color: var(--apple-divider) !important;
+}
+
+.apple-typography [class*="bg-white"],
+.apple-typography [class*="bg-gray-50"],
+.apple-typography [class*="bg-gray-100"],
+.apple-typography [class*="bg-slate-50"],
+.apple-typography [class*="bg-slate-100"],
+.apple-typography [class*="bg-gray-700"],
+.apple-typography [class*="bg-gray-800"],
+.apple-typography [class*="bg-gray-900"],
+.apple-typography [class*="bg-slate-700"],
+.apple-typography [class*="bg-slate-800"],
+.apple-typography [class*="bg-slate-900"] {
+  background-color: transparent;
+}
+
+.apple-typography .bg-white,
+.apple-typography .bg-gray-50,
+.apple-typography .bg-gray-100,
+.apple-typography .bg-slate-50,
+.apple-typography .bg-slate-100,
+.apple-typography .bg-gray-700,
+.apple-typography .bg-gray-800,
+.apple-typography .bg-gray-900,
+.apple-typography .bg-slate-700,
+.apple-typography .bg-slate-800,
+.apple-typography .bg-slate-900 {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.03)) !important;
+  color: #eaf0f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.apple-typography table {
+  border-collapse: separate;
+  border-spacing: 0 0.6rem;
+}
+
+.apple-typography thead tr,
+.apple-typography thead th {
+  background: transparent !important;
+  border: none !important;
+}
+
+.apple-typography tbody tr {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.028));
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.apple-typography tbody tr:hover {
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.05), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.038));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.apple-typography tbody td,
+.apple-typography tbody th,
+.apple-typography thead th {
+  border: none !important;
+}
+
+.apple-typography tbody td:first-child,
+.apple-typography tbody th:first-child {
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+}
+
+.apple-typography tbody td:last-child,
+.apple-typography tbody th:last-child {
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
 .apple-typography .status-success,
 .apple-typography .text-success,
 .apple-typography .result-stat.success {
@@ -433,23 +972,31 @@ body {
   }
 }
 
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(35, 44, 58, 0.95) rgba(8, 12, 19, 0);
+}
+
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 2px;
+  height: 2px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a1020;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #31425f;
+  background: rgba(35, 44, 58, 0.95);
   border-radius: 999px;
-  border: 2px solid #0a1020;
+  border-left: 0.5px solid transparent;
+  border-right: 0.5px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #465d86;
+  background: rgba(58, 70, 88, 0.98);
+  background-clip: padding-box;
 }
 
 
@@ -461,9 +1008,9 @@ body {
 .apple-typography .bg-slate-100,
 .apple-typography .bg-blue-50,
 .apple-typography .bg-purple-50 {
-  background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74)) !important;
-  color: #e2e8f0 !important;
-  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03)) !important;
+  color: #eaf0f7 !important;
+  border-color: transparent !important;
 }
 
 .apple-typography .text-gray-900,
@@ -489,7 +1036,7 @@ body {
 .apple-typography .border-slate-300,
 .apple-typography .border-purple-100,
 .apple-typography .border-purple-200 {
-  border-color: rgba(148, 163, 184, 0.24) !important;
+  border-color: transparent !important;
 }
 
 .apple-typography .shadow,
@@ -498,7 +1045,7 @@ body {
 .apple-typography .shadow-lg,
 .apple-typography .shadow-xl,
 .apple-typography .shadow-2xl {
-  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.38) !important;
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.18) !important;
 }
 
 .apple-typography .hover\:bg-gray-100:hover,
@@ -512,4 +1059,1534 @@ body {
 .apple-typography .to-purple-700,
 .apple-typography .to-blue-600 {
   filter: saturate(1.1);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  scrollbar-color: rgba(148, 163, 184, 0.72) rgba(255, 255, 255, 0);
+}
+
+html[data-theme="light"] {
+  --apple-bg: #eaf6ff;
+  --apple-bg-secondary: #dff2ff;
+  --apple-surface: rgba(239, 248, 255, 0.48);
+  --apple-surface-subtle: rgba(245, 250, 255, 0.34);
+  --apple-surface-raised: rgba(246, 251, 255, 0.62);
+  --apple-surface-strong: rgba(250, 253, 255, 0.78);
+  --apple-surface-interactive: rgba(255, 255, 255, 0.42);
+  --apple-border: rgba(255, 255, 255, 0.42);
+  --apple-border-strong: rgba(196, 225, 255, 0.52);
+  --apple-divider: rgba(180, 214, 245, 0.32);
+  --apple-text: #21344d;
+  --apple-muted: #6e87a6;
+  --apple-shadow: 0 22px 46px rgba(78, 124, 168, 0.12);
+  --tone-red: #ff4d5f;
+  --tone-red-soft: rgba(255, 77, 95, 0.22);
+  --tone-sky: #72d2ff;
+  --tone-sky-soft: rgba(114, 210, 255, 0.2);
+  --tone-navy: #4d77ff;
+  --tone-navy-soft: rgba(77, 119, 255, 0.2);
+  --tone-violet: #b36af5;
+  --tone-violet-soft: rgba(179, 106, 245, 0.18);
+  --tone-yellow: #f4c85d;
+  --tone-yellow-soft: rgba(244, 200, 93, 0.2);
+  --apple-accent-soft: rgba(59, 130, 246, 0.14);
+  --apple-selected-text: #183a62;
+  --apple-selected-border: rgba(147, 197, 253, 0.44);
+  --apple-selected-bg: linear-gradient(180deg, rgba(242, 249, 255, 0.82) 0%, rgba(224, 241, 255, 0.66) 100%);
+  --apple-selected-shadow: 0 0 0 1px rgba(147, 197, 253, 0.22), 0 16px 32px rgba(123, 171, 217, 0.16);
+  --light-glow-cool: rgba(114, 210, 255, 0.22);
+  --light-glow-violet: rgba(179, 106, 245, 0.18);
+  --light-glow-warm: rgba(244, 200, 93, 0.18);
+  --light-edge: rgba(255, 255, 255, 0.48);
+}
+
+html[data-theme="light"] body {
+  background: url('./assets/132956.jpg') center/cover no-repeat fixed;
+  color: #21344d;
+}
+
+html[data-theme="light"] .app-shell {
+  padding: 16px;
+}
+
+html[data-theme="light"] .app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 16px;
+  border-radius: 28px;
+  pointer-events: none;
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 30px 90px rgba(94, 149, 195, 0.16);
+}
+
+@media (min-width: 968px) and (max-width: 1150px) {
+  .one-click-settings-panel {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .one-click-settings-panel .one-click-settings-full {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .step1-main-shell {
+    min-height: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .step1-main-row {
+    gap: 12px !important;
+  }
+
+  .step1-option-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .step1-responsive-sidebar {
+    width: 184px !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+  }
+
+  .step1-sidebar-panel {
+    min-width: 0 !important;
+  }
+}
+
+@media (min-width: 968px) {
+  .one-click-settings-panel .one-click-settings-full {
+    grid-column: span 1 / span 1;
+  }
+
+  .step1-main-shell {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+  }
+
+  .step1-main-row {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    align-items: stretch !important;
+  }
+
+  .step1-responsive-sidebar,
+  .step1-sidebar-panel {
+    min-height: 0 !important;
+    height: 100% !important;
+    align-self: stretch !important;
+  }
+
+  .step1-sidebar-scroll {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+  }
+
+  .step1-work-area,
+  .step1-work-row,
+  .step1-center-panel {
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+
+  .step1-work-area {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+  }
+
+  .step1-work-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .step1-center-scroll {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .step1-center-shell {
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .step1-upload-stage {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+
+  .step1-upload-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+  }
+
+  .step1-upload-grid > .step1-upload-card {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    align-self: stretch !important;
+  }
+
+  .step1-upload-grid > .step1-upload-card .step1-upload-dropzone {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .step1-upload-grid > .step1-upload-card .step1-scene-dropzone {
+    min-height: 128px !important;
+  }
+}
+
+html[data-theme="light"] .app-shell-stage {
+  z-index: 1;
+  height: calc(100vh - 32px);
+  min-height: calc(100vh - 32px);
+  border-radius: 28px;
+  background: linear-gradient(90deg, rgba(235, 244, 250, 0.28), rgba(246, 250, 255, 0.12));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 32px 80px rgba(95, 149, 195, 0.14);
+  backdrop-filter: none;
+  overflow: hidden;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.72);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.82);
+}
+
+html[data-theme="light"] .app-sidebar {
+  position: relative;
+  height: 100%;
+  background: rgba(207, 223, 237, 0.68);
+  border-radius: 24px 0 0 24px;
+  box-shadow:
+    18px 0 40px rgba(83, 134, 173, 0.08);
+  backdrop-filter: none;
+  overflow: hidden;
+}
+
+html[data-theme="light"] .apple-logo-chip {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.86), transparent 26%),
+    linear-gradient(145deg, rgba(244, 250, 255, 0.82) 0%, rgba(223, 240, 255, 0.62) 100%);
+  box-shadow: 0 10px 22px rgba(82, 146, 194, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  border-radius: 12px !important;
+}
+
+html[data-theme="light"] .apple-nav-nest {
+  margin-top: 0.95rem;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 16px !important;
+}
+
+html[data-theme="light"] .apple-nav-nest-trigger {
+  color: #29415f;
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(245, 250, 255, 0.62), rgba(232, 243, 252, 0.44));
+  box-shadow: none;
+  border-radius: 13px !important;
+}
+
+html[data-theme="light"] .apple-nav-nest-inline-icon {
+  color: #3b82f6;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    linear-gradient(180deg, rgba(244, 249, 255, 0.92), rgba(230, 242, 255, 0.78));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 6px 12px rgba(59, 130, 246, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-nest-trigger-active {
+  background:
+    linear-gradient(180deg, rgba(238, 247, 255, 0.92), rgba(225, 239, 251, 0.76));
+  box-shadow: 0 10px 20px rgba(104, 165, 212, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-subtree::before,
+html[data-theme="light"] .apple-nav-subtree .apple-nav-subitem::before {
+  background: linear-gradient(180deg, rgba(130, 169, 208, 0.6), rgba(100, 150, 200, 0.9), rgba(130, 169, 208, 0.6));
+}
+
+html[data-theme="light"] .apple-nav-subitem {
+  color: #4b6788;
+  border-radius: 11px !important;
+}
+
+html[data-theme="light"] .apple-nav-subitem-icon {
+  color: #5f7695;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.84), transparent 24%),
+    linear-gradient(180deg, rgba(245, 251, 255, 0.74), rgba(232, 245, 255, 0.56));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+html[data-theme="light"] .apple-nav-subitem:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.94), transparent 24%),
+    linear-gradient(180deg, rgba(247, 251, 255, 0.7), rgba(233, 246, 255, 0.48));
+}
+
+html[data-theme="light"] .apple-nav-subitem-active {
+  color: #1f3550;
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(239, 247, 253, 0.96), rgba(227, 240, 251, 0.84));
+  box-shadow: 0 8px 16px rgba(115, 160, 196, 0.1);
+}
+
+html[data-theme="light"] .apple-nav-subitem-red.apple-nav-subitem-active {
+  box-shadow: 0 10px 18px rgba(255, 122, 136, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-subitem-red.apple-nav-subitem-active .apple-nav-subitem-icon {
+  color: #c84555;
+}
+
+html[data-theme="light"] .apple-nav-subitem-sky.apple-nav-subitem-active {
+  box-shadow: 0 10px 18px rgba(114, 210, 255, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-subitem-sky.apple-nav-subitem-active .apple-nav-subitem-icon {
+  color: #1f88c3;
+}
+
+html[data-theme="light"] .apple-nav-subitem-navy.apple-nav-subitem-active {
+  box-shadow: 0 10px 18px rgba(77, 119, 255, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-subitem-navy.apple-nav-subitem-active .apple-nav-subitem-icon {
+  color: #3550cf;
+}
+
+html[data-theme="light"] .apple-nav-subitem-violet.apple-nav-subitem-active {
+  box-shadow: 0 10px 18px rgba(59, 130, 246, 0.12);
+}
+
+html[data-theme="light"] .apple-nav-subitem-violet.apple-nav-subitem-active .apple-nav-subitem-icon {
+  color: #2563eb;
+}
+
+html[data-theme="light"] .apple-sidebar-link-active {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.88), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(114, 210, 255, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(244, 250, 255, 0.76), rgba(231, 244, 255, 0.58));
+  color: #29415f;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 14px 26px rgba(104, 165, 212, 0.16);
+}
+
+html[data-theme="light"] .app-main {
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+  border-radius: 0 24px 24px 0;
+}
+
+html[data-theme="light"] .app-main-glow {
+  display: none;
+}
+
+html[data-theme="light"] .apple-page {
+  background: transparent;
+}
+
+html[data-theme="light"] .apple-content-frame {
+  background: transparent;
+}
+
+html[data-theme="light"] .apple-header-bar {
+  background: rgba(207, 223, 237, 0.68) !important;
+  border: none !important;
+  border-radius: 0 15px 15px 0 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 10px 18px rgba(83, 134, 173, 0.04) !important;
+  backdrop-filter: blur(14px) saturate(108%) !important;
+}
+
+html[data-theme="light"] .apple-header-icon {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.42), transparent 34%),
+    linear-gradient(180deg, rgba(229, 240, 249, 0.62), rgba(217, 232, 244, 0.42)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 8px 16px rgba(100, 156, 198, 0.05) !important;
+}
+
+html[data-theme="light"] .apple-header-title,
+html[data-theme="light"] .apple-header-subtitle,
+html[data-theme="light"] .apple-header-meta {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .apple-header-subtitle,
+html[data-theme="light"] .apple-header-meta {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .apple-typography :is(h1, h2, h3, h4),
+html[data-theme="light"] .apple-typography .text-white,
+html[data-theme="light"] .apple-typography .text-slate-100,
+html[data-theme="light"] .apple-typography .text-slate-50,
+html[data-theme="light"] .apple-typography .text-gray-900,
+html[data-theme="light"] .apple-typography .text-gray-800,
+html[data-theme="light"] .apple-typography .text-slate-900,
+html[data-theme="light"] .apple-typography .text-slate-800,
+html[data-theme="light"] .apple-typography .text-black {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .apple-typography p,
+html[data-theme="light"] .apple-typography label,
+html[data-theme="light"] .apple-typography span,
+html[data-theme="light"] .apple-typography small {
+  color: #334155;
+}
+
+html[data-theme="light"] .apple-typography .text-slate-400,
+html[data-theme="light"] .apple-typography .text-gray-400,
+html[data-theme="light"] .apple-typography .text-slate-500,
+html[data-theme="light"] .apple-typography .text-gray-500,
+html[data-theme="light"] .apple-typography .text-slate-300,
+html[data-theme="light"] .apple-typography .text-gray-300,
+html[data-theme="light"] .apple-typography .text-gray-600,
+html[data-theme="light"] .apple-typography .text-slate-600,
+html[data-theme="light"] .apple-typography .text-slate-700,
+html[data-theme="light"] .apple-typography .text-gray-700 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .apple-typography input,
+html[data-theme="light"] .apple-typography select,
+html[data-theme="light"] .apple-typography textarea {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.74) 0%, rgba(236, 247, 255, 0.52) 100%);
+  color: #21344d;
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 10px 18px rgba(104, 165, 212, 0.08);
+}
+
+html[data-theme="light"] .apple-typography input::placeholder,
+html[data-theme="light"] .apple-typography textarea::placeholder {
+  color: #94a3b8;
+}
+
+html[data-theme="light"] .apple-typography select option,
+html[data-theme="light"] .apple-typography select optgroup {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .apple-typography input:focus,
+html[data-theme="light"] .apple-typography select:focus,
+html[data-theme="light"] .apple-typography textarea:focus {
+  border-color: rgba(147, 197, 253, 0.5);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 24%),
+    linear-gradient(180deg, rgba(250, 253, 255, 0.82) 0%, rgba(234, 247, 255, 0.62) 100%);
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.12), 0 12px 24px rgba(103, 168, 217, 0.12);
+}
+
+html[data-theme="light"] .apple-typography button,
+html[data-theme="light"] .apple-secondary-button {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.82), transparent 32%),
+    radial-gradient(circle at 100% 100%, rgba(114, 210, 255, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.68) 0%, rgba(231, 244, 255, 0.46) 100%);
+  color: #29415f;
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 8px 18px rgba(104, 165, 212, 0.08);
+  backdrop-filter: none;
+}
+
+html[data-theme="light"] .apple-typography button:hover,
+html[data-theme="light"] .apple-secondary-button:hover {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.94), transparent 32%),
+    radial-gradient(circle at 100% 100%, var(--tone-sky-soft), transparent 42%),
+    linear-gradient(180deg, rgba(250, 253, 255, 0.78) 0%, rgba(233, 247, 255, 0.58) 100%);
+  border-color: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 12px 22px rgba(104, 165, 212, 0.1);
+}
+
+html[data-theme="light"] .apple-typography a {
+  color: #2563eb;
+}
+
+html[data-theme="light"] .apple-typography a:hover {
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .apple-typography .bg-red-500,
+html[data-theme="light"] .apple-typography .bg-rose-500,
+html[data-theme="light"] .apple-typography .bg-red-600,
+html[data-theme="light"] .apple-typography .bg-rose-600 {
+  background: linear-gradient(165deg, rgba(255, 88, 102, 0.98), rgba(236, 43, 67, 0.94)) !important;
+  color: #fff8f8 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 14px 28px rgba(220, 38, 38, 0.24) !important;
+}
+
+html[data-theme="light"] .apple-typography .hover\:bg-red-400\/10:hover,
+html[data-theme="light"] .apple-typography .hover\:bg-red-500\/10:hover,
+html[data-theme="light"] .apple-typography .hover\:bg-red-500\/15:hover {
+  background-color: rgba(255, 77, 95, 0.14) !important;
+}
+
+html[data-theme="light"] .apple-typography .text-red-200,
+html[data-theme="light"] .apple-typography .text-red-300,
+html[data-theme="light"] .apple-typography .text-red-400 {
+  color: #d72d43 !important;
+}
+
+html[data-theme="light"] .apple-typography .border-red-700\/50,
+html[data-theme="light"] .apple-typography .border-red-600\/40,
+html[data-theme="light"] .apple-typography .border-red-500\/40 {
+  border-color: rgba(255, 77, 95, 0.34) !important;
+}
+
+html[data-theme="light"] .apple-typography .bg-red-900\/20,
+html[data-theme="light"] .apple-typography .bg-red-800\/20,
+html[data-theme="light"] .apple-typography .bg-rose-900\/20 {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.66), transparent 20%),
+    linear-gradient(180deg, rgba(255, 236, 239, 0.92), rgba(255, 220, 225, 0.78)) !important;
+}
+
+html[data-theme="light"] .apple-typography .hover\:text-red-200:hover,
+html[data-theme="light"] .apple-typography .hover\:text-red-300:hover {
+  color: #c71f37 !important;
+}
+
+html[data-theme="light"] .apple-typography button[aria-pressed="true"],
+html[data-theme="light"] .apple-typography [aria-selected="true"],
+html[data-theme="light"] .apple-typography .selected,
+html[data-theme="light"] .apple-typography .active,
+html[data-theme="light"] .apple-typography .tab-button.active,
+html[data-theme="light"] .apple-typography .tab-btn.active,
+html[data-theme="light"] .apple-typography .time-range-selector button.active {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 26%),
+    radial-gradient(circle at 100% 100%, var(--tone-sky-soft), transparent 40%),
+    linear-gradient(180deg, rgba(244, 250, 255, 0.94), rgba(228, 241, 255, 0.76)) !important;
+  color: #29415f !important;
+  border-color: rgba(114, 210, 255, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 10px 24px rgba(104, 165, 212, 0.14) !important;
+}
+
+html[data-theme="light"] .apple-typography .apple-cta-primary {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(96, 165, 250, 0.18), transparent 38%),
+    linear-gradient(180deg, rgba(241, 248, 255, 0.96), rgba(224, 239, 255, 0.86)) !important;
+  color: #1f4ed8 !important;
+  border: 1px solid rgba(147, 197, 253, 0.3) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 10px 20px rgba(96, 154, 198, 0.12) !important;
+}
+
+html[data-theme="light"] .apple-typography .apple-cta-primary:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.96), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(96, 165, 250, 0.24), transparent 38%),
+    linear-gradient(180deg, rgba(246, 251, 255, 0.98), rgba(229, 242, 255, 0.9)) !important;
+  color: #1d4ed8 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 12px 24px rgba(96, 154, 198, 0.16) !important;
+}
+
+html[data-theme="light"] .apple-typography .apple-chip-browser-active,
+html[data-theme="light"] .apple-typography .apple-chip-upload-active,
+html[data-theme="light"] .apple-typography .apple-chip-step-active {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.96), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.22), transparent 40%),
+    linear-gradient(180deg, rgba(242, 248, 255, 0.98), rgba(222, 236, 255, 0.84)) !important;
+  color: #1f4f94 !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 12px 24px rgba(77, 119, 255, 0.14) !important;
+}
+
+html[data-theme="light"] .apple-surface-panel,
+html[data-theme="light"] .apple-surface-panel-raised,
+html[data-theme="light"] .apple-surface-subtle,
+html[data-theme="light"] .flat-panel,
+html[data-theme="light"] .overview-card,
+html[data-theme="light"] .chart-card,
+html[data-theme="light"] .customization-content,
+html[data-theme="light"] .page-content {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%),
+    radial-gradient(circle at 90% 100%, rgba(183, 219, 255, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(244, 251, 255, 0.54) 0%, rgba(229, 244, 255, 0.34) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.44) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98), 0 18px 34px rgba(100, 156, 198, 0.1) !important;
+  backdrop-filter: blur(12px) saturate(112%);
+}
+
+html[data-theme="light"] .studio-card-shell {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.9), transparent 24%),
+    radial-gradient(circle at 18% 18%, rgba(114, 210, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(231, 244, 255, 0.36)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 18px 36px rgba(96, 154, 198, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.42) !important;
+  backdrop-filter: blur(10px) saturate(110%);
+}
+
+html[data-theme="light"] .studio-dropzone {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.82), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.62), rgba(235, 247, 255, 0.38)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+    0 0 24px rgba(255, 255, 255, 0.22),
+    0 12px 24px rgba(100, 156, 198, 0.08) !important;
+}
+
+html[data-theme="light"] .studio-accent-panel {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.48), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(255, 255, 255, 0.18), transparent 42%),
+    radial-gradient(circle at 14% 18%, rgba(114, 210, 255, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(240, 248, 255, 0.58), rgba(226, 239, 250, 0.42)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.54),
+    0 14px 26px rgba(100, 156, 198, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.34) !important;
+  backdrop-filter: blur(8px) saturate(108%);
+}
+
+html[data-theme="light"] .studio-accent-title {
+  color: #1f3550 !important;
+}
+
+html[data-theme="light"] .studio-accent-copy {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .studio-accent-button {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.64), transparent 26%),
+    linear-gradient(180deg, rgba(244, 250, 255, 0.68), rgba(231, 243, 252, 0.48)) !important;
+  color: #29415f !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 16px rgba(100, 156, 198, 0.08) !important;
+}
+
+html[data-theme="light"] .studio-media-overlay {
+  background:
+    linear-gradient(180deg, rgba(7, 12, 22, 0.04), rgba(7, 12, 22, 0.72)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 42%) !important;
+}
+
+html[data-theme="light"] .studio-media-overlay-title,
+html[data-theme="light"] .studio-media-overlay-meta {
+  color: #fffdfa !important;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.8), 0 6px 18px rgba(2, 6, 23, 0.42) !important;
+}
+
+html[data-theme="light"] .studio-media-overlay-meta {
+  color: rgba(241, 245, 249, 0.96) !important;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.78), 0 5px 16px rgba(2, 6, 23, 0.4) !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.03]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.04]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.05]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.06]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.07]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/[0.08]"],
+html[data-theme="light"] .apple-typography [class*="bg-white/5"],
+html[data-theme="light"] .apple-typography [class*="bg-white/6"],
+html[data-theme="light"] .apple-typography [class*="bg-white/10"],
+html[data-theme="light"] .apple-typography [class*="bg-slate-950"],
+html[data-theme="light"] .apple-typography [class*="bg-slate-900"],
+html[data-theme="light"] .apple-typography [class*="bg-slate-800"],
+html[data-theme="light"] .apple-typography [class*="bg-gray-900"],
+html[data-theme="light"] .apple-typography [class*="bg-gray-800"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.1), transparent 40%),
+    linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(230, 244, 255, 0.34)) !important;
+  color: #21344d !important;
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.99), 0 12px 22px rgba(100, 156, 198, 0.08);
+  backdrop-filter: blur(8px) saturate(108%);
+}
+
+html[data-theme="light"] .apple-typography [class*="border-white/"],
+html[data-theme="light"] .apple-typography [class*="border-slate-"],
+html[data-theme="light"] .apple-typography [class*="border-gray-"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="text-white"],
+html[data-theme="light"] .apple-typography [class*="text-slate-100"],
+html[data-theme="light"] .apple-typography [class*="text-slate-200"] {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="text-slate-300"],
+html[data-theme="light"] .apple-typography [class*="text-slate-400"],
+html[data-theme="light"] .apple-typography [class*="text-slate-500"],
+html[data-theme="light"] .apple-typography [class*="text-gray-300"],
+html[data-theme="light"] .apple-typography [class*="text-gray-400"],
+html[data-theme="light"] .apple-typography [class*="text-gray-500"],
+html[data-theme="light"] .apple-typography [class*="text-gray-600"] {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="shadow-[0_18px_50px_rgba(2,6,23,0.35)]"],
+html[data-theme="light"] .apple-typography [class*="shadow-[0_18px_50px_rgba(2,6,23,0.28)]"],
+html[data-theme="light"] .apple-typography [class*="shadow-[0_12px_28px_rgba(8,18,34,0.24)]"] {
+  box-shadow: 0 18px 34px rgba(100, 156, 198, 0.1) !important;
+}
+
+html[data-theme="light"] .apple-typography .surface-interactive:hover,
+html[data-theme="light"] .apple-typography .apple-surface-panel:hover,
+html[data-theme="light"] .apple-typography .apple-surface-panel-raised:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 22%),
+    radial-gradient(circle at 100% 100%, var(--light-glow-cool), transparent 34%),
+    linear-gradient(180deg, rgba(247, 252, 255, 0.62) 0%, rgba(233, 247, 255, 0.42) 100%) !important;
+}
+
+html[data-theme="light"] .apple-typography .apple-footer-bar {
+  background: rgba(207, 223, 237, 0.68) !important;
+  border-radius: 0 1rem 1rem 0 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 -10px 18px rgba(83, 134, 173, 0.04) !important;
+  border-top: none !important;
+  backdrop-filter: blur(14px) saturate(108%) !important;
+}
+
+html[data-theme="light"] .one-click-footer-bar {
+  border-radius: 0 0 24px 24px !important;
+}
+
+html[data-theme="light"] [data-main-body] {
+  background: transparent !important;
+}
+
+html[data-theme="light"] .image-generation-shell {
+  background: transparent !important;
+  color: #1d2738;
+}
+
+html[data-theme="light"] .apple-option-chip {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.82), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(114, 210, 255, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(246, 251, 255, 0.62) 0%, rgba(232, 245, 255, 0.42) 100%);
+  color: #4b6788;
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.99), 0 8px 18px rgba(104, 165, 212, 0.08), 0 0 24px rgba(255, 255, 255, 0.14);
+  backdrop-filter: none;
+}
+
+html[data-theme="light"] .apple-option-chip:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.94), transparent 24%),
+    radial-gradient(circle at 100% 100%, var(--tone-sky-soft), transparent 42%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.72) 0%, rgba(233, 247, 255, 0.52) 100%);
+  color: #21344d;
+}
+
+html[data-theme="light"] .apple-option-chip-selected {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .apple-option-chip-warm.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(251, 191, 36, 0.22), transparent 40%),
+    linear-gradient(180deg, rgba(255, 249, 233, 0.99) 0%, rgba(255, 237, 194, 0.94) 100%) !important;
+  color: #8a4b00 !important;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.24), 0 10px 20px rgba(245, 158, 11, 0.16) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-cool.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(56, 189, 248, 0.2), transparent 42%),
+    linear-gradient(180deg, rgba(232, 246, 255, 0.99) 0%, rgba(193, 226, 255, 0.96) 100%) !important;
+  color: #10457f !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.28), 0 10px 22px rgba(59, 130, 246, 0.2) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-violet.apple-option-chip-selected {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    linear-gradient(180deg, rgba(243, 251, 255, 0.98) 0%, rgba(223, 243, 255, 0.94) 100%) !important;
+  color: #10457f !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2), 0 10px 20px rgba(59, 130, 246, 0.14) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-selected:hover,
+html[data-theme="light"] .apple-option-chip-selected:focus-visible,
+html[data-theme="light"] .apple-option-chip-selected:active {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .apple-option-chip-warm.apple-option-chip-selected:hover,
+html[data-theme="light"] .apple-option-chip-warm.apple-option-chip-selected:focus-visible,
+html[data-theme="light"] .apple-option-chip-warm.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(251, 191, 36, 0.24), transparent 40%),
+    linear-gradient(180deg, rgba(255, 249, 233, 0.99) 0%, rgba(255, 237, 194, 0.95) 100%) !important;
+  color: #8a4b00 !important;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.26), 0 10px 20px rgba(245, 158, 11, 0.18) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-cool.apple-option-chip-selected:hover,
+html[data-theme="light"] .apple-option-chip-cool.apple-option-chip-selected:focus-visible,
+html[data-theme="light"] .apple-option-chip-cool.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(56, 189, 248, 0.22), transparent 42%),
+    linear-gradient(180deg, rgba(232, 246, 255, 0.99) 0%, rgba(193, 226, 255, 0.97) 100%) !important;
+  color: #10457f !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.28), 0 10px 22px rgba(59, 130, 246, 0.2) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-violet.apple-option-chip-selected:hover,
+html[data-theme="light"] .apple-option-chip-violet.apple-option-chip-selected:focus-visible,
+html[data-theme="light"] .apple-option-chip-violet.apple-option-chip-selected:active {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    linear-gradient(180deg, rgba(243, 251, 255, 0.98) 0%, rgba(223, 243, 255, 0.94) 100%) !important;
+  color: #10457f !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2), 0 10px 20px rgba(59, 130, 246, 0.14) !important;
+}
+
+html[data-theme="light"] .apple-option-chip-indicator {
+  background: rgba(203, 213, 225, 0.8);
+  color: #475569;
+}
+
+html[data-theme="light"] .apple-option-chip-selected .apple-option-chip-indicator {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
+
+html[data-theme="light"] .apple-typography tbody tr {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 246, 248, 0.92));
+}
+
+html[data-theme="light"] .apple-typography tbody tr:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(244, 244, 246, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(210, 210, 215, 0.5);
+}
+
+html[data-theme="light"] .apple-typography .bg-white,
+html[data-theme="light"] .apple-typography .bg-gray-50,
+html[data-theme="light"] .apple-typography .bg-gray-100,
+html[data-theme="light"] .apple-typography .bg-slate-50,
+html[data-theme="light"] .apple-typography .bg-slate-100,
+html[data-theme="light"] .apple-typography .bg-blue-50,
+html[data-theme="light"] .apple-typography .bg-purple-50,
+html[data-theme="light"] .apple-typography .bg-gray-700,
+html[data-theme="light"] .apple-typography .bg-gray-800,
+html[data-theme="light"] .apple-typography .bg-gray-900,
+html[data-theme="light"] .apple-typography .bg-slate-700,
+html[data-theme="light"] .apple-typography .bg-slate-800,
+html[data-theme="light"] .apple-typography .bg-slate-900 {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 246, 248, 0.92)) !important;
+  color: #1d1d1f !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.99);
+}
+
+html[data-theme="light"] .apple-typography .from-purple-600,
+html[data-theme="light"] .apple-typography .from-purple-500,
+html[data-theme="light"] .apple-typography .to-purple-700,
+html[data-theme="light"] .apple-typography .to-blue-600 {
+  filter: saturate(0.6) brightness(1.08);
+}
+
+html[data-theme="light"] .apple-typography .hover\:bg-gray-100:hover,
+html[data-theme="light"] .apple-typography .hover\:bg-gray-200:hover,
+html[data-theme="light"] .apple-typography .hover\:bg-slate-100:hover {
+  background: rgba(226, 232, 240, 0.72) !important;
+}
+
+html[data-theme="light"] .apple-typography .shadow,
+html[data-theme="light"] .apple-typography .shadow-sm,
+html[data-theme="light"] .apple-typography .shadow-md,
+html[data-theme="light"] .apple-typography .shadow-lg,
+html[data-theme="light"] .apple-typography .shadow-xl,
+html[data-theme="light"] .apple-typography .shadow-2xl {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="bg-gradient-to-b"],
+html[data-theme="light"] .apple-typography [class*="bg-gradient-to-br"],
+html[data-theme="light"] .apple-typography [class*="bg-gradient-to-r"],
+html[data-theme="light"] .apple-typography [class*="from-slate-"],
+html[data-theme="light"] .apple-typography [class*="via-slate-"],
+html[data-theme="light"] .apple-typography [class*="to-slate-"],
+html[data-theme="light"] .apple-typography [class*="from-gray-"],
+html[data-theme="light"] .apple-typography [class*="to-gray-"],
+html[data-theme="light"] .apple-typography [class*="via-[#0"],
+html[data-theme="light"] .apple-typography [class*="to-[#0"],
+html[data-theme="light"] .apple-typography [class*="from-violet-950"],
+html[data-theme="light"] .apple-typography [class*="from-violet-"],
+html[data-theme="light"] .apple-typography [class*="from-amber-500/12"],
+html[data-theme="light"] .apple-typography [class*="from-cyan-500/12"] {
+  background-image: none !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="rounded-[2rem]"] {
+  border-radius: 16px !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="rounded-[1.8rem]"],
+html[data-theme="light"] .apple-typography [class*="rounded-[1.75rem]"] {
+  border-radius: 15px !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="rounded-[1.5rem]"],
+html[data-theme="light"] .apple-typography [class*="rounded-[1.45rem]"],
+html[data-theme="light"] .apple-typography [class*="rounded-[1.4rem]"],
+html[data-theme="light"] .apple-typography [class*="rounded-[1.35rem]"] {
+  border-radius: 13px !important;
+}
+
+html[data-theme="light"] .apple-typography [class*="rounded-[1.25rem]"],
+html[data-theme="light"] .apple-typography [class*="rounded-[1.2rem]"],
+html[data-theme="light"] .apple-typography .rounded-3xl {
+  border-radius: 11px !important;
+}
+
+html[data-theme="light"] .apple-typography .rounded-2xl {
+  border-radius: 10px !important;
+}
+
+html[data-theme="light"] .apple-typography .rounded-xl,
+html[data-theme="light"] .apple-typography .rounded-lg {
+  border-radius: 8px !important;
+}
+
+html[data-theme="light"] .apple-typography .rounded-md {
+  border-radius: 7px !important;
+}
+
+html[data-theme="light"] .apple-typography .rounded-full {
+  border-radius: 999px !important;
+}
+
+/* ==================== Apple-Inspired Light Mode for GenerationHistory ==================== */
+
+/* Light mode base colors & hierarchy */
+html[data-theme="light"] .generation-history-shell .text-white {
+  color: #1d1d1f !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-slate-300,
+html[data-theme="light"] .generation-history-shell .text-slate-400 {
+  color: #6f767e !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-slate-500 {
+  color: #808080 !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-slate-600 {
+  color: #a1a1a6 !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-[11px],
+html[data-theme="light"] .generation-history-shell .text-[12px] {
+  color: #6f767e !important;
+}
+
+html[data-theme="light"] .generation-history-shell .uppercase {
+  color: #86868b !important;
+}
+
+/* Summary cards - Light glass morphism */
+html[data-theme="light"] .generation-history-shell [class*="border-sky-400"],
+html[data-theme="light"] .generation-history-shell [class*="border-emerald-400"],
+html[data-theme="light"] .generation-history-shell [class*="border-rose-500"],
+html[data-theme="light"] .generation-history-shell [class*="border-amber-400"],
+html[data-theme="light"] .generation-history-shell [class*="border-violet-400"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.95), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.15), transparent 42%),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.6), rgba(235, 244, 252, 0.4)) !important;
+  border-color: rgba(180, 200, 225, 0.35) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 12px 28px rgba(100, 140, 180, 0.1),
+    0 0 0 1px rgba(200, 220, 245, 0.3) !important;
+  backdrop-filter: blur(10px) saturate(110%);
+}
+
+/* Surface card styling */
+html[data-theme="light"] .generation-history-shell [class*="rounded-[28px"]  {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(245, 250, 255, 0.55), rgba(230, 242, 252, 0.35)) !important;
+  border-color: rgba(180, 200, 225, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 16px 36px rgba(100, 140, 180, 0.08),
+    0 0 0 1px rgba(200, 220, 245, 0.28) !important;
+  backdrop-filter: blur(10px) saturate(110%);
+}
+
+/* Session feed card */
+html[data-theme="light"] .generation-history-shell [class*="min-h-0"][class*="max-h-[540px"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(245, 250, 255, 0.55), rgba(230, 242, 252, 0.35)) !important;
+}
+
+/* Detail section cards */
+html[data-theme="light"] .generation-history-shell .px-3\.5 {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(245, 250, 255, 0.55), rgba(230, 242, 252, 0.35)) !important;
+}
+
+/* Input fields & search bars */
+html[data-theme="light"] .generation-history-shell input,
+html[data-theme="light"] .generation-history-shell [class*="border-slate-800/80"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.85), transparent 28%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.5), rgba(239, 246, 252, 0.3)) !important;
+  border-color: rgba(200, 220, 245, 0.35) !important;
+  color: #1d1d1f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px rgba(100, 140, 180, 0.06) !important;
+}
+
+html[data-theme="light"] .generation-history-shell input::placeholder {
+  color: #a1a1a6 !important;
+}
+
+html[data-theme="light"] .generation-history-shell input:focus {
+  border-color: #0a84ff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 16px rgba(10, 132, 255, 0.2) !important;
+}
+
+/* Button styling - Light mode variants */
+html[data-theme="light"] .generation-history-shell [class*="rounded-2xl"][class*="border"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.52), rgba(240, 247, 252, 0.32)) !important;
+  border-color: rgba(200, 220, 245, 0.32) !important;
+  color: #1d1d1f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 6px 16px rgba(100, 140, 180, 0.08) !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="rounded-2xl"][class*="border"]:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 28%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.6), rgba(240, 247, 252, 0.4)) !important;
+  border-color: rgba(180, 200, 225, 0.45) !important;
+}
+
+/* Semantic button colors (Apple style) */
+html[data-theme="light"] .generation-history-shell [class*="border-amber-"],
+html[data-theme="light"] .generation-history-shell [class*="border-sky-"] {
+  border-color: rgba(200, 220, 245, 0.32) !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="border-amber-"][class*="bg-"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(255, 230, 200, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(255, 252, 240, 0.52), rgba(252, 245, 230, 0.32)) !important;
+  border-color: rgba(255, 180, 120, 0.28) !important;
+  color: #92400e !important;
+}
+
+/* Status badge/pill colors */
+html[data-theme="light"] .generation-history-shell [class*="text-cyan-200"],
+html[data-theme="light"] .generation-history-shell [class*="text-sky-50"],
+html[data-theme="light"] .generation-history-shell [class*="text-slate-100"] {
+  color: #0a84ff !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="text-emerald-50"],
+html[data-theme="light"] .generation-history-shell [class*="text-emerald-100"] {
+  color: #34c759 !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="text-rose-100"],
+html[data-theme="light"] .generation-history-shell [class*="text-red-100"] {
+  color: #ff3b30 !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="text-violet-50"],
+html[data-theme="light"] .generation-history-shell [class*="text-violet-100"] {
+  color: #af52de !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="text-amber-100"],
+html[data-theme="light"] .generation-history-shell [class*="text-yellow-100"] {
+  color: #ff9500 !important;
+}
+
+/* Scrollable area styling */
+html[data-theme="light"] .generation-history-shell [class*="overflow-y-auto"] {
+  scrollbar-color: rgba(180, 200, 225, 0.4) rgba(245, 250, 255, 0.8);
+}
+
+/* Border/divider styling */
+html[data-theme="light"] .generation-history-shell [class*="border-slate-800"] {
+  border-color: rgba(200, 220, 245, 0.28) !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="border-t"][class*="border-slate-"] {
+  border-color: rgba(200, 220, 245, 0.28) !important;
+}
+
+/* Metric pills - specialized styling */
+html[data-theme="light"] .generation-history-shell [class*="rounded-2xl"][class*="px-4"][class*="py-3"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 26%),
+    radial-gradient(circle at 100% 100%, rgba(220, 235, 255, 0.1), transparent 40%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.48), rgba(235, 246, 252, 0.28)) !important;
+  border-color: rgba(200, 220, 245, 0.3) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 18px rgba(100, 140, 180, 0.06) !important;
+}
+
+/* Pre/code blocks in light mode */
+html[data-theme="light"] .generation-history-shell pre {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.85), transparent 28%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.4), rgba(235, 246, 252, 0.2)) !important;
+  border-color: rgba(200, 220, 245, 0.28) !important;
+  color: #1d1d1f !important;
+}
+
+/* Icon colors - colorful for light mode */
+html[data-theme="light"] .generation-history-shell .text-cyan-200 {
+  color: #0a84ff !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-emerald-100 {
+  color: #34c759 !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-red-100 {
+  color: #ff3b30 !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-amber-100 {
+  color: #ff9500 !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-violet-50 {
+  color: #af52de !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-fuchsia-50 {
+  color: #ff2d55 !important;
+}
+
+/* Section titles and headers */
+html[data-theme="light"] .generation-history-shell .text-base,
+html[data-theme="light"] .generation-history-shell .text-lg {
+  color: #1d1d1f !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-sm {
+  color: #3a3a3c !important;
+}
+
+html[data-theme="light"] .generation-history-shell .text-xs {
+  color: #6f767e !important;
+}
+
+/* Meta/description text */
+html[data-theme="light"] .generation-history-shell .mt-1 {
+  color: #6f767e !important;
+}
+
+/* Specialized sections background */
+html[data-theme="light"] .generation-history-shell [class*="hex-cyan"],
+html[data-theme="light"] .generation-history-shell [class*="hex-pink"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.48), rgba(235, 246, 252, 0.28)) !important;
+  border-color: rgba(200, 220, 245, 0.28) !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="border-cyan-400"] {
+  border-color: rgba(10, 132, 255, 0.25) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(200, 220, 245, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(240, 250, 255, 0.48), rgba(230, 245, 255, 0.28)) !important;
+}
+
+html[data-theme="light"] .generation-history-shell [class*="border-pink-400"] {
+  border-color: rgba(255, 45, 85, 0.25) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.88), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(255, 200, 220, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 245, 250, 0.48), rgba(255, 235, 245, 0.28)) !important;
+}
+
+/* ==================== Light Mode Overrides for OptionsManagement & GenerationHistory ==================== */
+
+html[data-theme="light"] .options-shell,
+html[data-theme="light"] .generation-history-shell {
+  background: url('./assets/132956.jpg') center/cover no-repeat fixed !important;
+}
+
+/* Text colors */
+html[data-theme="light"] .options-shell .text-white,
+html[data-theme="light"] .generation-history-shell .text-white {
+  color: #21344d !important;
+}
+
+html[data-theme="light"] .options-shell .text-slate-300,
+html[data-theme="light"] .generation-history-shell .text-slate-300 {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .options-shell .text-slate-400,
+html[data-theme="light"] .generation-history-shell .text-slate-400 {
+  color: #78909c !important;
+}
+
+html[data-theme="light"] .options-shell .text-slate-500,
+html[data-theme="light"] .generation-history-shell .text-slate-500 {
+  color: #90a4ae !important;
+}
+
+html[data-theme="light"] .options-shell .text-slate-600,
+html[data-theme="light"] .generation-history-shell .text-slate-600 {
+  color: #b0bec5 !important;
+}
+
+html[data-theme="light"] .options-shell .text-indigo-100,
+html[data-theme="light"] .generation-history-shell .text-indigo-100 {
+  color: #4c63d2 !important;
+}
+
+html[data-theme="light"] .options-shell .text-indigo-200,
+html[data-theme="light"] .generation-history-shell .text-indigo-200 {
+  color: #4c63d2 !important;
+}
+
+html[data-theme="light"] .options-shell .text-indigo-400,
+html[data-theme="light"] .generation-history-shell .text-indigo-400 {
+  color: #3b5bdb !important;
+}
+
+html[data-theme="light"] .options-shell .text-emerald-200,
+html[data-theme="light"] .generation-history-shell .text-emerald-200 {
+  color: #10b981 !important;
+}
+
+html[data-theme="light"] .options-shell .text-emerald-400,
+html[data-theme="light"] .generation-history-shell .text-emerald-400 {
+  color: #059669 !important;
+}
+
+html[data-theme="light"] .options-shell .text-red-200,
+html[data-theme="light"] .generation-history-shell .text-red-200 {
+  color: #dc2626 !important;
+}
+
+html[data-theme="light"] .options-shell .text-red-400,
+html[data-theme="light"] .generation-history-shell .text-red-400 {
+  color: #b91c1c !important;
+}
+
+html[data-theme="light"] .options-shell .text-cyan-200,
+html[data-theme="light"] .generation-history-shell .text-cyan-200 {
+  color: #0891b2 !important;
+}
+
+html[data-theme="light"] .options-shell .text-pink-200,
+html[data-theme="light"] .generation-history-shell .text-pink-200 {
+  color: #ec4899 !important;
+}
+
+html[data-theme="light"] .options-shell .text-sky-200,
+html[data-theme="light"] .generation-history-shell .text-sky-200 {
+  color: #0284c7 !important;
+}
+
+html[data-theme="light"] .options-shell .text-sky-300,
+html[data-theme="light"] .generation-history-shell .text-sky-300 {
+  color: #0284c7 !important;
+}
+
+/* Background colors - overlay with light panel styles */
+html[data-theme="light"] .options-shell [class*="bg-slate-950"],
+html[data-theme="light"] .generation-history-shell [class*="bg-slate-950"],
+html[data-theme="light"] .options-shell [class*="bg-slate-900"],
+html[data-theme="light"] .generation-history-shell [class*="bg-slate-900"],
+html[data-theme="light"] .options-shell [class*="bg-slate-800"],
+html[data-theme="light"] .generation-history-shell [class*="bg-slate-800"],
+html[data-theme="light"] .options-shell [class*="bg-white/[0.03"],
+html[data-theme="light"] .generation-history-shell [class*="bg-white/[0.03"],
+html[data-theme="light"] .options-shell [class*="bg-white/[0.04"],
+html[data-theme="light"] .generation-history-shell [class*="bg-white/[0.04"],
+html[data-theme="light"] .options-shell [class*="bg-white/[0.05"],
+html[data-theme="light"] .generation-history-shell [class*="bg-white/[0.05"] {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.1), transparent 40%),
+    linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(230, 244, 255, 0.34)) !important;
+  color: #21344d !important;
+}
+
+/* Border colors */
+html[data-theme="light"] .options-shell [class*="border-white/"],
+html[data-theme="light"] .generation-history-shell [class*="border-white/"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+html[data-theme="light"] .options-shell [class*="border-indigo-"],
+html[data-theme="light"] .generation-history-shell [class*="border-indigo-"] {
+  border-color: rgba(77, 99, 210, 0.3) !important;
+}
+
+html[data-theme="light"] .options-shell [class*="border-emerald-"],
+html[data-theme="light"] .generation-history-shell [class*="border-emerald-"] {
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+/* PromptTemplateManager Light Theme */
+html[data-theme="light"] .prompt-template-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .prompt-template-shell input,
+html[data-theme="light"] .prompt-template-shell textarea,
+html[data-theme="light"] .prompt-template-shell select {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell input::placeholder,
+html[data-theme="light"] .prompt-template-shell textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell label {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell h1,
+html[data-theme="light"] .prompt-template-shell h2,
+html[data-theme="light"] .prompt-template-shell h3 {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .prompt-template-shell .studio-card-shell {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell button {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell button:hover {
+  background: #f1f5f9 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell .apple-option-chip {
+  background: white !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell .apple-option-chip.selected {
+  background: #e0f2fe !important;
+  border-color: #0284c7 !important;
+  color: #0c4a6e !important;
+}
+
+/* AnalyticsPage Light Theme */
+html[data-theme="light"] .analytics-page-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .analytics-page-shell h1,
+html[data-theme="light"] .analytics-page-shell h2,
+html[data-theme="light"] .analytics-page-shell h3 {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .analytics-page-shell p,
+html[data-theme="light"] .analytics-page-shell span,
+html[data-theme="light"] .analytics-page-shell div:not([class*="bg-"]) {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell .studio-card-shell {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell table {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell table th {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell table td {
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell table tbody tr:hover {
+  background: #f8fafc !important;
+}
+
+html[data-theme="light"] .analytics-page-shell button {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell button:hover {
+  background: #f1f5f9 !important;
+}
+
+html[data-theme="light"] .analytics-page-shell [class*="bg-slate-900"],
+html[data-theme="light"] .analytics-page-shell [class*="bg-slate-800"],
+html[data-theme="light"] .analytics-page-shell [class*="bg-white/[0.0"] {
+  background: #f8fafc !important;
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .options-shell [class*="border-red-"],
+html[data-theme="light"] .generation-history-shell [class*="border-red-"] {
+  border-color: rgba(220, 38, 38, 0.3) !important;
+}
+
+html[data-theme="light"] .options-shell [class*="border-slate-"],
+html[data-theme="light"] .generation-history-shell [class*="border-slate-"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+/* Placeholder text */
+html[data-theme="light"] .options-shell [class*="placeholder-slate-"],
+html[data-theme="light"] .generation-history-shell [class*="placeholder-slate-"] {
+  color: #a5adb8 !important;
+}
+
+/* Icon colors - emerald */
+html[data-theme="light"] .options-shell .text-emerald-400,
+html[data-theme="light"] .generation-history-shell .text-emerald-400 {
+  color: #059669 !important;
+}
+
+/* Ring/focus colors for inputs */
+html[data-theme="light"] .options-shell [class*="focus:border-indigo"],
+html[data-theme="light"] .generation-history-shell [class*="focus:border-indigo"] {
+  border-color: rgba(77, 99, 210, 0.4) !important;
+}
+
+html[data-theme="light"] .options-shell input::placeholder,
+html[data-theme="light"] .generation-history-shell input::placeholder {
+  color: #cbd5e1 !important;
+}
+
+/* ==================== Responsive Breakpoint at 968px for GenerationHistory ==================== */
+
+@media (max-width: 967px) {
+  .generation-history-shell .grid.gap-3.grid-cols-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .generation-history-shell .grid.gap-3.grid-cols-5 > div:nth-child(3) {
+    grid-column: 1 / -1 !important;
+  }
+
+  .generation-history-shell .flex.flex-row.gap-3.items-center.justify-between {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+  }
+
+  .generation-history-shell .flex.flex-1.flex-row.gap-3 {
+    flex-direction: column !important;
+  }
+
+  .generation-history-shell .grid.min-h-0.flex-1.gap-4.overflow-x-hidden.grid-cols-\\[280px_minmax\\(0\\,1fr\\)\\] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .generation-history-shell .grid.gap-4.grid-cols-2.min-w-0 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .generation-history-shell .flex.flex-wrap.items-start.gap-4 {
+    flex-direction: column !important;
+  }
+
+  .generation-history-shell .grid.flex-1.gap-2.sm\\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .generation-history-shell .grid.min-w-0.gap-3.overflow-x-hidden {
+    grid-template-columns: 1fr !important;
+  }
+
+  .generation-history-shell .max-h-\\[920px\\] {
+    max-height: 500px !important;
+  }
+
+  .generation-history-shell .max-h-\\[840px\\] {
+    max-height: 400px !important;
+  }
 }

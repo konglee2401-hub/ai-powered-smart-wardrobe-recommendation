@@ -1,0 +1,62 @@
+.ai-box {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #111827;
+}
+
+.ai-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.ai-img.show {
+  opacity: 1;
+}
+
+.ai-loader {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ai-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, #111827 20%, #1f2937 40%, #111827 60%);
+  background-size: 200% 100%;
+  animation: ai-shimmer 2s linear infinite;
+}
+
+@keyframes ai-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.ai-particles span {
+  position: absolute;
+  bottom: -10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.45);
+  animation: ai-float 5s linear infinite;
+}
+
+@keyframes ai-float {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: translateY(-420px) scale(1.4);
+    opacity: 0;
+  }
+}

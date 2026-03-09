@@ -166,6 +166,89 @@ router.post('/run-delete-orphaned-assets', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/run-batch-upload-orphaned-assets
+ * Try to repair pending/failed assets by uploading any recoverable local files to Drive.
+ */
+router.post('/run-batch-upload-orphaned-assets', async (req, res) => {
+  try {
+    const { dryRun = false, limit } = req.body || {};
+    const args = [];
+    if (dryRun) args.push('--dry-run');
+    if (limit) args.push(`--limit=${limit}`);
+
+    const scriptPath = path.join(__dirname, '../scripts/fix/batch-upload-orphaned-assets.js');
+    const result = await executeScript(scriptPath, args, 900000);
+
+    res.json({
+      success: true,
+      message: 'Batch upload orphaned assets executed successfully',
+      output: result.output
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/admin/run-asset-integrity-cleanup
+ * Scan local references and soft-delete assets that no longer have any valid local/cloud storage.
+ */
+router.post('/run-asset-integrity-cleanup', async (req, res) => {
+  try {
+    const { dryRun = true, fixBrokenAssets = false, noDeleteOrphans = false } = req.body || {};
+    const args = [];
+    if (dryRun) args.push('--dry-run');
+    if (fixBrokenAssets) args.push('--fix-broken-assets');
+    if (noDeleteOrphans) args.push('--no-delete-orphans');
+
+    const scriptPath = path.join(__dirname, '../scripts/maintenance/06-asset-integrity-cleanup.js');
+    const result = await executeScript(scriptPath, args, 900000);
+
+    res.json({
+      success: true,
+      message: 'Asset integrity cleanup executed successfully',
+      output: result.output,
+      isDryRun: dryRun
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/admin/run-gallery-availability-repair
+ * Re-verify local files, promote legacy Drive metadata, and remove unrecoverable assets from gallery.
+ */
+router.post('/run-gallery-availability-repair', async (req, res) => {
+  try {
+    const { dryRun = false } = req.body || {};
+    const args = [];
+    if (dryRun) args.push('--dry-run');
+
+    const scriptPath = path.join(__dirname, '../scripts/maintenance/07-repair-gallery-availability.js');
+    const result = await executeScript(scriptPath, args, 900000);
+
+    res.json({
+      success: true,
+      message: 'Gallery availability repair executed successfully',
+      output: result.output,
+      isDryRun: dryRun
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/admin/stats/assets
  * Get comprehensive asset statistics
  */

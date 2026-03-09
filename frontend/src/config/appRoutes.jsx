@@ -98,13 +98,11 @@ export const navGroups = [
     items: [
       { path: '/gallery', labelKey: 'navbar.gallery', icon: Image },
       { path: '/history', labelKey: 'navbar.history', icon: Clock },
-      { path: '/batch', labelKey: 'navbar.batchProcessing', icon: Layers },
     ],
   },
   {
     titleKey: 'navbar.analytics',
     items: [
-      { path: '/dashboard', labelKey: 'navbar.dashboard', icon: LayoutDashboard },
       { path: '/stats', labelKey: 'navbar.statistics', icon: BarChart3 },
       { path: '/analytics', labelKey: 'navbar.analytics', icon: TrendingUp },
     ],
@@ -113,14 +111,12 @@ export const navGroups = [
     titleKey: 'navbar.tools',
     items: [
       { path: '/prompt-templates', labelKey: 'navbar.promptTemplates', icon: BookOpen },
-      { path: '/performance', labelKey: 'navbar.performance', icon: Gauge },
     ],
   },
   {
     titleKey: 'navbar.settings',
     items: [
       { path: '/options', labelKey: 'navbar.options', icon: Settings },
-      { path: '/customization', labelKey: 'navbar.customization', icon: Sparkles },
       { path: '/setup-authentication', labelKey: 'navbar.setupAuthentication', icon: Gauge },
       { path: '/admin/providers', labelKey: 'navbar.aiProviders', icon: Zap },
     ],

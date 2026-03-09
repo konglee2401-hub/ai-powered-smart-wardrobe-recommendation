@@ -5,8 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import {
-  Wand2, FileText, Image, Copy, Check, ChevronDown, ChevronUp,
-  Loader2, Zap, RotateCcw, Upload, Shuffle, X
+  Wand2, Copy, Check, Zap, Shuffle, X
 } from 'lucide-react';
 import { unifiedFlowAPI } from '../services/api';
 import SessionHistoryService from '../services/sessionHistoryService';
@@ -17,7 +16,48 @@ import {
 } from '../utils/advancedPromptEngineering';
 import PromptLayeringDialog from './PromptLayeringDialog';
 import { generateAdvancedPrompt } from '../utils/advancedPromptBuilder';
-import { STYLE_CATEGORIES } from './Step3Enhanced';
+
+const getStep3SmartDefaults = (useCase, scene = 'studio') => {
+  switch (useCase) {
+    case 'creator-thumbnail':
+      return {
+        scene,
+        lighting: 'high-key',
+        mood: 'energetic',
+        style: 'commercial',
+        cameraAngle: 'eye-level',
+        colorPalette: 'vibrant',
+        framing: 'shoulders-up',
+        expression: 'excited',
+        gesture: 'reaction-hands',
+        textOverlayZone: 'right-negative-space',
+        productPresence: 'secondary-prop'
+      };
+    case 'story-character':
+      return {
+        scene,
+        lighting: 'dramatic-rembrandt',
+        mood: 'mysterious',
+        style: 'editorial',
+        cameraAngle: 'three-quarter',
+        colorPalette: 'earth-tones',
+        storyRole: 'narrator',
+        expression: 'serious-focus',
+        pose: 'explaining',
+        sceneDepth: 'cinematic-depth',
+        propCue: 'not-needed'
+      };
+    default:
+      return {
+        scene,
+        lighting: 'soft',
+        mood: 'elegant',
+        style: 'fashion-editorial',
+        cameraAngle: 'three-quarter',
+        colorPalette: 'neutral'
+      };
+  }
+};
 
 const Step3EnhancedWithSessionComponent = ({
   characterImage,
@@ -41,7 +81,6 @@ const Step3EnhancedWithSessionComponent = ({
   const [showLayeringDialog, setShowLayeringDialog] = useState(false);
 
   // UI State
-  const [expandedCategories, setExpandedCategories] = useState({});
   const [copiedText, setCopiedText] = useState(null);
   const [showOptimizerModal, setShowOptimizerModal] = useState(false);
   const [optimizedPrompt, setOptimizedPrompt] = useState('');
@@ -144,19 +183,18 @@ const Step3EnhancedWithSessionComponent = ({
         if (analysis?.recommendations) {
           const rec = analysis.recommendations;
           
-          // Map analysis recommendations to options
-          if (rec.scene?.choice) optionsToUse.scene = rec.scene.choice;
-          if (rec.lighting?.choice) optionsToUse.lighting = rec.lighting.choice;
-          if (rec.mood?.choice) optionsToUse.mood = rec.mood.choice;
-          if (rec.cameraAngle?.choice) optionsToUse.cameraAngle = rec.cameraAngle.choice;
-          if (rec.hairstyle?.choice) optionsToUse.hairstyle = rec.hairstyle.choice;
-          if (rec.makeup?.choice) optionsToUse.makeup = rec.makeup.choice;
-          if (rec.style?.choice) optionsToUse.style = rec.style.choice;
-          if (rec.colorPalette?.choice) optionsToUse.colorPalette = rec.colorPalette.choice;
-          if (rec.bottoms?.choice) optionsToUse.bottoms = rec.bottoms.choice;
-          if (rec.shoes?.choice) optionsToUse.shoes = rec.shoes.choice;
-          if (rec.accessories?.choice) optionsToUse.accessories = rec.accessories.choice;
-          if (rec.outerwear?.choice) optionsToUse.outerwear = rec.outerwear.choice;
+          Object.keys(rec).forEach((key) => {
+            if (['analysis', 'newOptions', 'characterProfile', 'productDetails'].includes(key)) {
+              return;
+            }
+
+            const rawChoice = rec[key]?.choiceArray?.length ? rec[key].choiceArray : rec[key]?.choice;
+            if (rawChoice == null || rawChoice === '') {
+              return;
+            }
+
+            optionsToUse[key] = rawChoice;
+          });
           
           console.log('✅ Extracted defaults from analysis:', optionsToUse);
         }
@@ -164,14 +202,7 @@ const Step3EnhancedWithSessionComponent = ({
         // If still empty after analysis, use sensible defaults
         if (Object.keys(optionsToUse).length === 0) {
           console.log('⚠️ No analysis recommendations, using sensible defaults...');
-          optionsToUse = {
-            scene: 'studio',
-            lighting: 'soft',
-            mood: 'elegant',
-            style: 'fashion-editorial',
-            cameraAngle: 'three-quarter',
-            colorPalette: 'neutral'
-          };
+          optionsToUse = getStep3SmartDefaults(useCase, selectedOptions?.scene || 'studio');
         }
       }
 
@@ -272,16 +303,9 @@ ${finalPositive}`;
     generatePrompt();
   }, [selectedOptions, useCase, analysis, sessionHistory, userId, onPromptChange, characterDescription, productFocus]);
 
-  const toggleCategory = useCallback((key) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  }, []);
-
   const handleCopyPrompt = useCallback((text) => {
     navigator.clipboard.writeText(text);
-    setCopiedText(true);
+    setCopiedText(text);
     setTimeout(() => setCopiedText(null), 2000);
   }, []);
 
@@ -319,10 +343,13 @@ ${finalPositive}`;
 
   const handleApplyOptimized = useCallback(() => {
     if (optimizedPrompt) {
-      onPromptChange(optimizedPrompt);
+      onPromptChange({
+        positive: optimizedPrompt,
+        negative: promptLayering?.negativePrompt || generatedPrompt?.negative || ''
+      });
       setShowOptimizerModal(false);
     }
-  }, [optimizedPrompt, onPromptChange]);
+  }, [optimizedPrompt, onPromptChange, promptLayering, generatedPrompt]);
 
   const handleGenerateVariations = useCallback(() => {
     if (!promptLayering) return;
@@ -332,87 +359,104 @@ ${finalPositive}`;
   }, [promptLayering]);
 
   return (
-    <div className="w-full space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <Wand2 className="w-5 h-5 text-yellow-400" />
-          Generated Prompt
-        </h3>
-      </div>
-
-      {/* Main Content - Prompt Preview */}
-      {promptLayering ? (
-        <div className="space-y-3">
-          {/* Main Prompt */}
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500 space-y-2">
-            <p className="text-sm text-blue-400 font-bold">Main Prompt</p>
-            <div className="bg-gray-900 rounded p-3 min-h-24 max-h-32 overflow-y-auto">
-              <p className="text-sm text-white leading-relaxed">
-                {promptLayering.mainPrompt}
-              </p>
-            </div>
-            <button
-              onClick={() => handleCopyPrompt(promptLayering.mainPrompt)}
-              className="w-full text-sm px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded flex items-center justify-center gap-2 transition"
-            >
-              {copiedText ? (
-                <>
-                  <Check className="w-4 h-4 text-green-400" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  Copy Main Prompt
-                </>
-              )}
-            </button>
+    <div className="w-full">
+      <section className="apple-surface-panel flex min-h-[640px] min-w-0 flex-col rounded-[2rem] p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+              <Wand2 className="h-5 w-5 text-amber-300" />
+              Generated Prompt
+            </h3>
+            {promptLayering ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleGenerateVariations}
+                  className="apple-secondary-button inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs"
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                  Variations
+                </button>
+                <button
+                  onClick={() => setShowOptimizerModal(true)}
+                  className="apple-secondary-button inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs"
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  Optimize
+                </button>
+              </div>
+            ) : null}
           </div>
 
-          {/* Refiner */}
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500 space-y-2">
-            <p className="text-sm text-green-400 font-bold">Quality Refiner</p>
-            <div className="bg-gray-900 rounded p-3 max-h-16 overflow-y-auto">
-              <p className="text-sm text-white leading-relaxed">
-                {promptLayering.refinerPrompt}
-              </p>
-            </div>
-            <button
-              onClick={() => handleCopyPrompt(promptLayering.refinerPrompt)}
-              className="w-full text-sm px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded flex items-center justify-center gap-2 transition"
-            >
-              <Copy className="w-4 h-4" />
-              Copy Refiner
-            </button>
-          </div>
+          {promptLayering ? (
+            <div className="grid min-h-0 flex-1 gap-3 lg:grid-rows-[minmax(0,1.3fr)_auto_auto]">
+              <div className="rounded-[1.35rem] bg-white/[0.03] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-base font-semibold text-white">Main Prompt</p>
+                  <button
+                    onClick={() => handleCopyPrompt(promptLayering.mainPrompt)}
+                    className="apple-secondary-button inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs"
+                  >
+                    {copiedText === promptLayering.mainPrompt ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-300" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Main Prompt
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="h-full min-h-[220px] overflow-y-auto">
+                  <p className="apple-prompt-text text-[14px] leading-8 text-slate-200/96">{promptLayering.mainPrompt}</p>
+                </div>
+              </div>
 
-          {/* Negative */}
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-red-500 space-y-2">
-            <p className="text-sm text-red-400 font-bold">Avoid (Negative)</p>
-            <div className="bg-gray-900 rounded p-3 max-h-16 overflow-y-auto">
-              <p className="text-sm text-white leading-relaxed">
-                {promptLayering.negativePrompt}
-              </p>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-[1.25rem] bg-white/[0.03] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-white">Quality Refiner</p>
+                    <button
+                      onClick={() => handleCopyPrompt(promptLayering.refinerPrompt)}
+                      className="apple-secondary-button inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px]"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                  <div>
+                    <p className="apple-prompt-text text-[13px] leading-7 text-slate-300">{promptLayering.refinerPrompt}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.25rem] bg-white/[0.03] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-white">Avoid</p>
+                    <button
+                      onClick={() => handleCopyPrompt(promptLayering.negativePrompt)}
+                      className="apple-secondary-button inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px]"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                  <div>
+                    <p className="apple-prompt-text text-[13px] leading-7 text-slate-300">{promptLayering.negativePrompt}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => handleCopyPrompt(promptLayering.negativePrompt)}
-              className="w-full text-sm px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded flex items-center justify-center gap-2 transition"
-            >
-              <Copy className="w-4 h-4" />
-              Copy Negative
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-gray-800 rounded-lg p-8 border border-dashed border-gray-600 flex items-center justify-center min-h-48">
-          <div className="text-center">
-            <Wand2 className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-            <p className="text-gray-400 font-medium">Select style options on the left</p>
-            <p className="text-gray-500 text-sm mt-1">to generate prompts</p>
-          </div>
-        </div>
-      )}
+          ) : (
+            <div className="flex min-h-[420px] items-center justify-center rounded-[1.8rem] bg-white/[0.03]">
+              <div className="text-center">
+                <Wand2 className="mx-auto mb-3 h-12 w-12 text-slate-500" />
+                <p className="font-medium text-slate-300">Select style options on the left</p>
+                <p className="mt-1 text-sm text-slate-500">The prompt preview will update automatically.</p>
+              </div>
+            </div>
+          )}
+      </section>
 
       {/* Dialogs */}
       <PromptLayeringDialog
@@ -431,8 +475,8 @@ ${finalPositive}`;
       />
 
       {showOptimizerModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-5 max-w-sm border border-gray-700 w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="apple-surface-panel w-full max-w-sm rounded-[1.75rem] p-5 mx-4">
             <h3 className="text-lg font-bold text-white mb-4">Optimize Prompt</h3>
 
             {!optimizedPrompt ? (
@@ -444,7 +488,7 @@ ${finalPositive}`;
               </button>
             ) : (
               <>
-                <div className="bg-gray-800 rounded-lg p-4 mb-4 border border-gray-700">
+                <div className="mb-4 rounded-[1.25rem] bg-white/[0.04] p-4">
                   <p className="text-sm text-gray-400 mb-2 font-semibold">Result</p>
                   <p className="text-sm text-white mb-2 max-h-24 overflow-y-auto">{optimizedPrompt}</p>
                   <p className="text-sm text-green-400">

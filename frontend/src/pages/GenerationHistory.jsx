@@ -426,12 +426,15 @@ export default function GenerationHistory() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.16),transparent_24%),radial-gradient(circle_at_78%_32%,rgba(217,70,239,0.12),transparent_22%),radial-gradient(circle_at_12%_78%,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#020817_0%,#030b1f_46%,#020617_100%)]">
+    <div className="generation-history-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.16),transparent_24%),radial-gradient(circle_at_78%_32%,rgba(217,70,239,0.12),transparent_22%),radial-gradient(circle_at_12%_78%,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#020817_0%,#030b1f_46%,#020617_100%)]">
+      {/* ==================== HEADER ==================== */}
       <PageHeaderBar
         icon={<Clock3 className="h-5 w-5 text-cyan-200" />}
         title="Generation History"
         subtitle="Session-first review workspace"
         meta="Trace inputs, outputs, options, runtime signals, and failures across image, video, voice, and 1-click flows."
+        className="h-16"
+        contentClassName="px-5 lg:px-6"
         actions={
           <button
             type="button"
@@ -447,10 +450,11 @@ export default function GenerationHistory() {
         }
       />
 
-      <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-[1720px] flex-col gap-4 overflow-x-hidden px-3 py-3 lg:px-4">
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      {/* ==================== MAIN BODY ==================== */}
+      <div className="flex min-h-0 flex-1 overflow-hidden flex-col gap-4 overflow-x-hidden px-3 py-3 lg:px-4">
+        <section className="grid gap-3 grid-cols-5">
           {loading ? (
-            <div className="md:col-span-2 xl:col-span-5">
+            <div className="col-span-5">
               <SkeletonCards count={5} />
             </div>
           ) : (
@@ -459,8 +463,8 @@ export default function GenerationHistory() {
         </section>
 
         <section className={`${SURFACE_CARD_CLASS} shrink-0 p-3 shadow-[0_30px_90px_rgba(14,165,233,0.08)]`}>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-1 flex-col gap-3 lg:flex-row">
+          <div className="flex flex-row gap-3 items-center justify-between">
+            <div className="flex flex-1 flex-row gap-3">
               <label className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input
@@ -557,21 +561,21 @@ export default function GenerationHistory() {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-x-hidden xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-          <section className={`${SURFACE_CARD_CLASS} min-h-0 max-h-[540px] overflow-hidden shadow-[0_30px_100px_rgba(139,92,246,0.12)]`}>
+        <div className="grid min-h-0 flex-1 gap-4 overflow-x-hidden grid-cols-[280px_minmax(0,1fr)]">
+          <section className={`${SURFACE_CARD_CLASS} min-h-0 max-h-[920px] overflow-hidden shadow-[0_30px_100px_rgba(139,92,246,0.12)]`}>
             <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3.5">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-base font-semibold text-white">Session feed</h2>
                 <p className="mt-1 text-xs text-slate-400">
                   Browse captured runs and jump into the exact input, output, and failure context.
                 </p>
               </div>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500 flex-shrink-0">
                 {sessions.length} shown / {pagination.total || 0} total
               </p>
             </div>
 
-            <div className="min-h-0 max-h-[430px] space-y-1.5 overflow-y-auto px-2.5 py-2.5">
+            <div className="min-h-0 max-h-[840px] space-y-1.5 overflow-y-auto px-2.5 py-2.5">
               {loading ? (
                 <div className="space-y-2">
                   <SkeletonCards count={4} />
@@ -610,12 +614,12 @@ export default function GenerationHistory() {
                 </div>
               </div>
             ) : selectedSession ? (
-              <div className="grid min-w-0 gap-3 overflow-x-hidden">
+              <div className="grid min-w-0 gap-3 overflow-hidden scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
                 <DetailSection
                   title="Session overview"
                   subtitle="Quick read on flow type, runtime health, and last known state."
                   actions={
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => copySessionId(selectedSession.sessionId)}
@@ -664,13 +668,13 @@ export default function GenerationHistory() {
                   title="Inputs and outputs"
                   subtitle="Stored artifacts captured from the run. Inputs stay separate from generated outputs to keep review fast."
                 >
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-3">
+                  <div className="grid gap-4 grid-cols-2 min-w-0">
+                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-3 min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Inputs</p>
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 space-y-2 min-w-0">
                         {inputArtifacts.length ? (
                           inputArtifacts.map((item) => (
-                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200">
+                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 min-w-0">
                               {item}
                             </div>
                           ))
@@ -679,12 +683,12 @@ export default function GenerationHistory() {
                         )}
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-pink-400/20 bg-pink-500/8 p-3">
+                    <div className="rounded-2xl border border-pink-400/20 bg-pink-500/8 p-3 min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-pink-200/80">Outputs</p>
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 space-y-2 min-w-0">
                         {outputArtifacts.length ? (
                           outputArtifacts.map((item) => (
-                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200">
+                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 min-w-0">
                               {item}
                             </div>
                           ))
@@ -751,7 +755,7 @@ export default function GenerationHistory() {
                   subtitle="The latest debug and error messages captured for this run."
                 >
                   {selectedLogs.length ? (
-                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
                       {selectedLogs
                         .slice()
                         .reverse()

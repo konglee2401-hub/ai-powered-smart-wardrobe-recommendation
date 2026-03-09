@@ -1,202 +1,384 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Save, Pencil, Trash2, Database, Search } from 'lucide-react';
+import { CheckCircle2, Copy, Database, Pencil, Plus, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
 import promptTemplateService from '../services/promptTemplateService';
 
 const EMPTY_FORM = {
   name: '',
+  nameVi: '',
   description: '',
   purpose: '',
   useCase: 'generic',
   style: 'realistic',
   templateType: 'text',
   sourceType: 'manual',
-  content: {
-    mainPrompt: '',
-    negativePrompt: '',
-  },
-  tags: [],
+  content: { mainPrompt: '', negativePrompt: '' },
+  tagsText: '',
+  fields: [],
   usedInPages: [],
+  assignmentTargets: [],
 };
 
-function PromptTemplateForm({ initialData, onSubmit, onCancel, saving }) {
-  const [form, setForm] = useState(initialData || EMPTY_FORM);
+const EMPTY_FIELD = {
+  id: '',
+  label: '',
+  source: 'manual',
+  type: 'text',
+  optionCategory: '',
+  editable: true,
+  allowCustomValue: true,
+  runtimeKey: '',
+  placeholder: '',
+  defaultValue: '',
+  optionsText: '',
+};
 
-  const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+const EMPTY_LOCATION = { page: '', step: '', context: '', field: '' };
+
+const toForm = (template) => ({
+  name: template?.name || '',
+  nameVi: template?.nameVi || '',
+  description: template?.description || '',
+  purpose: template?.purpose || '',
+  useCase: template?.useCase || 'generic',
+  style: template?.style || 'realistic',
+  templateType: template?.templateType || 'text',
+  sourceType: template?.sourceType || 'manual',
+  content: {
+    mainPrompt: template?.content?.mainPrompt || '',
+    negativePrompt: template?.content?.negativePrompt || '',
+  },
+  tagsText: (template?.tags || []).join(', '),
+  fields: (template?.fields || []).map((field) => ({
+    ...EMPTY_FIELD,
+    ...field,
+    editable: field.editable !== false,
+    allowCustomValue: field.allowCustomValue !== false,
+    optionsText: (field.options || []).map((option) => `${option.value}${option.label && option.label !== option.value ? ` | ${option.label}` : ''}`).join('\n'),
+  })),
+  usedInPages: template?.usedInPages?.length ? template.usedInPages : [],
+  assignmentTargets: template?.assignmentTargets?.length ? template.assignmentTargets : [],
+});
+
+const toPayload = (form) => ({
+  ...form,
+  tags: form.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean),
+  fields: form.fields
+    .filter((field) => field.id.trim())
+    .map((field) => ({
+      ...field,
+      id: field.id.trim(),
+      label: field.label.trim() || field.id.trim(),
+      optionCategory: field.optionCategory.trim(),
+      runtimeKey: field.runtimeKey.trim(),
+      options: String(field.optionsText || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [value, label] = line.split('|');
+          return { value: value.trim(), label: (label || value).trim(), description: '' };
+        }),
+    })),
+  usedInPages: form.usedInPages.filter((item) => item.page || item.context || item.field).map((item) => ({ ...item, step: item.step === '' ? null : Number(item.step) })),
+  assignmentTargets: form.assignmentTargets.filter((item) => item.page || item.context || item.field).map((item) => ({ ...item, step: item.step === '' ? null : Number(item.step) })),
+});
+
+function Chip({ children, tone = 'slate' }) {
+  const styles = {
+    slate: 'border-slate-700 bg-slate-900 text-slate-300',
+    blue: 'border-sky-700/60 bg-sky-950/30 text-sky-300',
+    green: 'border-emerald-700/60 bg-emerald-950/30 text-emerald-300',
+    amber: 'border-amber-700/60 bg-amber-950/30 text-amber-300',
+  };
+  return <span className={`rounded border px-2 py-1 text-[11px] ${styles[tone]}`}>{children}</span>;
+}
+
+function MiniLocationEditor({ title, value, onChange, suggestions = [] }) {
+  const update = (index, key, nextValue) => onChange(value.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: nextValue } : item));
+  const add = (preset = EMPTY_LOCATION) => onChange([...(value || []), { ...preset }]);
+  const remove = (index) => onChange(value.filter((_, itemIndex) => itemIndex !== index));
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-      <div className="grid md:grid-cols-2 gap-3">
-        <input className="bg-gray-900 border border-gray-700 rounded px-3 py-2" placeholder="Template name" value={form.name} onChange={(e) => update('name', e.target.value)} />
-        <select className="bg-gray-900 border border-gray-700 rounded px-3 py-2" value={form.useCase} onChange={(e) => update('useCase', e.target.value)}>
-          <option value="generic">Generic</option>
-          <option value="outfit-change">Outfit change</option>
-          <option value="product-showcase">Product showcase</option>
-          <option value="video-script">Video script</option>
-          <option value="ecommerce">Ecommerce</option>
-        </select>
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-slate-500">
+        <span>{title}</span>
+        <button type="button" onClick={() => add()} className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300">Add</button>
       </div>
-
-      <input className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2" placeholder="Purpose (mục đích)" value={form.purpose || ''} onChange={(e) => update('purpose', e.target.value)} />
-      <textarea className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2" rows={2} placeholder="Description" value={form.description} onChange={(e) => update('description', e.target.value)} />
-      <textarea className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 font-mono text-sm" rows={8} placeholder="Main prompt" value={form.content?.mainPrompt || ''} onChange={(e) => update('content', { ...form.content, mainPrompt: e.target.value })} />
-      <textarea className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 font-mono text-sm" rows={4} placeholder="Negative prompt (optional)" value={form.content?.negativePrompt || ''} onChange={(e) => update('content', { ...form.content, negativePrompt: e.target.value })} />
-
-      <div className="flex gap-2">
-        <button disabled={saving} onClick={() => onSubmit(form)} className="px-4 py-2 bg-green-600 rounded flex items-center gap-2 disabled:opacity-50"><Save size={16} />Save</button>
-        <button onClick={onCancel} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
-      </div>
+      {(value || []).map((item, index) => (
+        <div key={`${title}-${index}`} className="grid gap-2 md:grid-cols-[1fr_70px_1fr_1fr_36px]">
+          <input value={item.page || ''} onChange={(event) => update(index, 'page', event.target.value)} placeholder="page" className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100" />
+          <input value={item.step ?? ''} onChange={(event) => update(index, 'step', event.target.value)} placeholder="step" className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100" />
+          <input value={item.context || ''} onChange={(event) => update(index, 'context', event.target.value)} placeholder="context" className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100" />
+          <input value={item.field || ''} onChange={(event) => update(index, 'field', event.target.value)} placeholder="field" className="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100" />
+          <button type="button" onClick={() => remove(index)} className="rounded border border-rose-700/60 bg-rose-950/30 text-rose-300"><Trash2 size={13} className="mx-auto" /></button>
+        </div>
+      ))}
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {suggestions.slice(0, 6).map((item) => (
+            <button key={`${title}-${item.page}-${item.context}-${item.field}`} type="button" onClick={() => add(item)} className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-400">
+              {item.page}/{item.context || 'default'}/{item.field || 'mainPrompt'}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function PromptTemplateManager() {
   const [templates, setTemplates] = useState([]);
-  const [search, setSearch] = useState('');
+  const [metadata, setMetadata] = useState({ optionCategories: [], templateTypes: [], locations: [] });
+  const [selectedId, setSelectedId] = useState(null);
+  const [mode, setMode] = useState('view');
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [filters, setFilters] = useState({ search: '', useCase: '', type: '', state: 'all' });
+  const [preview, setPreview] = useState(null);
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
 
-  const loadTemplates = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const result = await promptTemplateService.getAllTemplates({ isActive: true });
-      setTemplates(result.data || []);
+      const [templateResult, metadataResult] = await Promise.all([
+        promptTemplateService.getAllTemplates({ isActive: true }),
+        promptTemplateService.getTemplateMetadata(),
+      ]);
+      const nextTemplates = templateResult.data || [];
+      setTemplates(nextTemplates);
+      setMetadata(metadataResult.data || { optionCategories: [], templateTypes: [], locations: [] });
+      if (!selectedId && nextTemplates.length) setSelectedId(nextTemplates[0]._id);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { load(); }, []);
+
+  const selected = useMemo(() => templates.find((item) => item._id === selectedId) || null, [templates, selectedId]);
+
   useEffect(() => {
-    loadTemplates();
-  }, []);
+    if (selected && mode !== 'create') setForm(toForm(selected));
+  }, [selected, mode]);
 
-  const filteredTemplates = useMemo(() => {
-    const keyword = search.toLowerCase().trim();
-    if (!keyword) return templates;
-    return templates.filter((template) =>
-      [template.name, template.description, template.purpose, template.useCase, template.sourceType]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(keyword)
-    );
-  }, [templates, search]);
+  const filtered = useMemo(() => templates.filter((item) => {
+    if (filters.useCase && item.useCase !== filters.useCase) return false;
+    if (filters.type && item.templateType !== filters.type) return false;
+    if (filters.state === 'assigned' && !(item.assignmentTargets || []).length) return false;
+    if (filters.state === 'unassigned' && (item.assignmentTargets || []).length) return false;
+    if (!filters.search.trim()) return true;
+    return [item.name, item.description, item.purpose, item.useCase, item.sourceKey].filter(Boolean).join(' ').toLowerCase().includes(filters.search.trim().toLowerCase());
+  }), [templates, filters]);
 
-  const handleCreate = async (payload) => {
+  const stats = useMemo(() => ({
+    total: templates.length,
+    core: templates.filter((item) => item.isCore).length,
+    assigned: templates.filter((item) => (item.assignmentTargets || []).length).length,
+  }), [templates]);
+
+  const setFormValue = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setContentValue = (key, value) => setForm((prev) => ({ ...prev, content: { ...prev.content, [key]: value } }));
+
+  const save = async () => {
     setSaving(true);
     try {
-      await promptTemplateService.createTemplate(payload);
-      setMessage('Đã tạo template thành công');
-      setShowCreate(false);
-      await loadTemplates();
+      const payload = toPayload(form);
+      if (mode === 'create') {
+        const result = await promptTemplateService.createTemplate(payload);
+        setSelectedId(result.data?._id || null);
+        setMessage(`Created: ${payload.name}`);
+      } else if (selected?._id) {
+        await promptTemplateService.updateTemplate(selected._id, payload);
+        setMessage(`Updated: ${payload.name}`);
+      }
+      setMode('view');
+      await load();
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpdate = async (payload) => {
-    if (!editingTemplate?._id) return;
-    setSaving(true);
-    try {
-      await promptTemplateService.updateTemplate(editingTemplate._id, payload);
-      setMessage('Đã cập nhật template thành công');
-      setEditingTemplate(null);
-      await loadTemplates();
-    } finally {
-      setSaving(false);
-    }
+  const remove = async () => {
+    if (!selected?._id || !window.confirm(`Delete "${selected.name}"?`)) return;
+    await promptTemplateService.deleteTemplate(selected._id);
+    setSelectedId(null);
+    setMessage(`Deleted: ${selected.name}`);
+    await load();
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Xóa template "${name}"?`)) return;
-    await promptTemplateService.deleteTemplate(id);
-    setMessage('Đã xóa template');
-    await loadTemplates();
+  const clone = async () => {
+    if (!selected?._id) return;
+    const result = await promptTemplateService.cloneTemplate(selected._id, `${selected.name} (Custom)`);
+    setSelectedId(result.data?._id || null);
+    setMode('edit');
+    setMessage(`Cloned: ${result.data?.name || selected.name}`);
+    await load();
   };
 
-  const handleSyncHardcoded = async () => {
-    setSaving(true);
-    try {
-      const result = await promptTemplateService.syncHardcodedPrompts();
-      setMessage(`Đã sync ${result.count || 0} hardcoded prompts vào DB`);
-      await loadTemplates();
-    } finally {
-      setSaving(false);
-    }
+  const activate = async () => {
+    if (!selected?._id) return;
+    await promptTemplateService.assignTemplate(selected._id, toPayload(form).assignmentTargets);
+    setMessage(`Activated assignments for: ${selected.name}`);
+    await load();
   };
+
+  const previewRender = async () => {
+    if (!selected?._id) return;
+    const sampleValues = Object.fromEntries((form.fields || []).map((field) => [field.id, field.defaultValue || '']));
+    const result = await promptTemplateService.renderTemplate(selected._id, sampleValues);
+    setPreview(result.data);
+  };
+
+  const addField = () => setFormValue('fields', [...form.fields, { ...EMPTY_FIELD }]);
+  const updateField = (index, key, value) => setFormValue('fields', form.fields.map((field, fieldIndex) => fieldIndex === index ? { ...field, [key]: value } : field));
+  const removeField = (index) => setFormValue('fields', form.fields.filter((_, fieldIndex) => fieldIndex !== index));
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex flex-wrap gap-2 items-center justify-between">
+    <div className="prompt-template-shell min-h-screen bg-[#060816] p-5 text-slate-100">
+      <div className="mx-auto max-w-[1650px] rounded-[28px] border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_30%),linear-gradient(180deg,#0a1221_0%,#060816_100%)] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Prompt Template Manager</h1>
-            <p className="text-sm text-gray-400">Scan hardcoded prompts trong project, lưu mục đích + chỗ sử dụng, và CRUD template.</p>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-sky-300">Prompt Template Console</div>
+            <h1 className="mt-2 text-3xl font-semibold">Manage every system prompt</h1>
+            <p className="mt-2 max-w-4xl text-sm text-slate-400">Catalog prompt đang dùng, vị trí sử dụng, mục đích sử dụng, CRUD template tùy biến, khóa placeholder theo option category, và gán template active cho flow thật.</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowCreate((v) => !v)} className="px-3 py-2 bg-amber-600 rounded flex items-center gap-2"><Plus size={16} />New Template</button>
-            <button onClick={handleSyncHardcoded} disabled={saving} className="px-3 py-2 bg-indigo-600 rounded flex items-center gap-2 disabled:opacity-50"><Database size={16} />Scan & Sync Hardcoded</button>
-            <button onClick={loadTemplates} className="px-3 py-2 bg-gray-700 rounded flex items-center gap-2"><RefreshCw size={16} />Refresh</button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => { setMode('create'); setSelectedId(null); setForm(EMPTY_FORM); }} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"><Plus size={14} className="mr-2 inline" />New</button>
+            <button onClick={async () => { setSaving(true); try { const result = await promptTemplateService.syncHardcodedPrompts(); setMessage(`Synced ${result.count || 0} hardcoded prompts`); await load(); } finally { setSaving(false); } }} className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300"><Database size={14} className="mr-2 inline" />Scan & Sync</button>
+            <button onClick={load} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"><RefreshCw size={14} className={`mr-2 inline ${loading ? 'animate-spin' : ''}`} />Refresh</button>
           </div>
         </div>
 
-        {message && <div className="px-3 py-2 bg-green-900/40 border border-green-700 rounded text-sm">{message}</div>}
+        {message && <div className="mt-4 rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">{message}</div>}
 
-        {showCreate && <PromptTemplateForm initialData={EMPTY_FORM} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} saving={saving} />}
-
-        {editingTemplate && (
-          <PromptTemplateForm
-            initialData={editingTemplate}
-            onSubmit={handleUpdate}
-            onCancel={() => setEditingTemplate(null)}
-            saving={saving}
-          />
-        )}
-
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-3 text-gray-400" />
-          <input className="w-full bg-gray-800 border border-gray-700 rounded px-9 py-2" placeholder="Tìm theo tên, purpose, useCase, source..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">All</div><div className="mt-2 text-2xl font-semibold">{stats.total}</div></div>
+          <div className="rounded-xl border border-sky-800/50 bg-sky-950/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Core</div><div className="mt-2 text-2xl font-semibold">{stats.core}</div></div>
+          <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Assigned</div><div className="mt-2 text-2xl font-semibold">{stats.assigned}</div></div>
         </div>
 
-        {loading ? (
-          <div className="text-gray-400">Loading templates...</div>
-        ) : (
-          <div className="space-y-3">
-            {filteredTemplates.map((template) => (
-              <div key={template._id} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-lg">{template.name}</h3>
-                    <p className="text-sm text-gray-300">{template.description || 'No description'}</p>
-                    <p className="text-sm text-indigo-300">🎯 {template.purpose || 'Chưa có purpose'}</p>
-                    <div className="text-xs text-gray-400 flex flex-wrap gap-2">
-                      <span className="px-2 py-1 bg-gray-700 rounded">useCase: {template.useCase}</span>
-                      <span className="px-2 py-1 bg-gray-700 rounded">source: {template.sourceType || 'manual'}</span>
-                      {template.sourceKey && <span className="px-2 py-1 bg-gray-700 rounded">{template.sourceKey}</span>}
-                    </div>
-                    {template.usedInPages?.length > 0 && (
-                      <div className="text-xs text-gray-400">
-                        Used in: {template.usedInPages.map((item) => `${item.page}${item.field ? `.${item.field}` : ''}`).join(' | ')}
-                      </div>
-                    )}
+        <div className="mt-5 grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+          <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+              <input value={filters.search} onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))} placeholder="Search prompt, purpose, source" className="w-full rounded-xl border border-slate-700 bg-slate-900 py-2 pl-9 pr-3 text-xs text-slate-100" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <input value={filters.useCase} onChange={(event) => setFilters((prev) => ({ ...prev, useCase: event.target.value }))} placeholder="Use case" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100" />
+              <select value={filters.type} onChange={(event) => setFilters((prev) => ({ ...prev, type: event.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"><option value="">All types</option>{(metadata.templateTypes || []).map((type) => <option key={type} value={type}>{type}</option>)}</select>
+              <select value={filters.state} onChange={(event) => setFilters((prev) => ({ ...prev, state: event.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"><option value="all">All</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned</option></select>
+            </div>
+            <div className="max-h-[calc(100vh-310px)] space-y-3 overflow-y-auto pr-1">
+              {filtered.map((item) => (
+                <button key={item._id} type="button" onClick={() => { setSelectedId(item._id); setMode('view'); }} className={`w-full rounded-2xl border p-4 text-left ${selectedId === item._id && mode !== 'create' ? 'border-sky-500 bg-sky-950/20' : 'border-slate-800 bg-slate-950/70'}`}>
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{item.name}</span>{item.isCore && <Chip tone="blue">core</Chip>}{(item.assignmentTargets || []).length > 0 && <Chip tone="green">active</Chip>}{item.sourceType === 'hardcoded-scan' && <Chip tone="amber">scanned</Chip>}</div>
+                  <div className="mt-2 text-xs text-slate-400">{item.purpose || item.description || 'No purpose specified.'}</div>
+                  <div className="mt-3 flex flex-wrap gap-2"><Chip>{item.useCase}</Chip><Chip>{item.templateType}</Chip><Chip>{item.fields?.length || 0} tokens</Chip></div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            {(!selected && mode !== 'create') ? (
+              <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-10 text-center text-sm text-slate-500">Select a template or create a new one.</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{mode === 'create' ? 'Create Template' : mode === 'edit' ? 'Edit Template' : 'Inspect Template'}</div>
+                    <h2 className="mt-2 text-2xl font-semibold">{mode === 'create' ? 'New Prompt Template' : selected?.name}</h2>
+                    <div className="mt-2 flex flex-wrap gap-2">{selected?.isCore && <Chip tone="blue">core</Chip>}{(selected?.assignmentTargets || []).length > 0 && <Chip tone="green">currently assigned</Chip>}</div>
                   </div>
-
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingTemplate(template)} className="px-2 py-2 bg-blue-600 rounded"><Pencil size={16} /></button>
-                    <button onClick={() => handleDelete(template._id, template.name)} className="px-2 py-2 bg-red-600 rounded"><Trash2 size={16} /></button>
+                  <div className="flex flex-wrap gap-2">
+                    {selected && <button onClick={clone} className="rounded-xl border border-sky-700/60 bg-sky-950/30 px-3 py-2 text-xs text-sky-300"><Copy size={14} className="mr-2 inline" />Clone</button>}
+                    {selected && !selected.isCore && mode === 'view' && <button onClick={() => setMode('edit')} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"><Pencil size={14} className="mr-2 inline" />Edit</button>}
+                    {selected && !selected.isCore && <button onClick={remove} className="rounded-xl border border-rose-700/60 bg-rose-950/30 px-3 py-2 text-xs text-rose-300"><Trash2 size={14} className="mr-2 inline" />Delete</button>}
                   </div>
                 </div>
 
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm text-gray-400">Show prompt content</summary>
-                  <pre className="mt-2 bg-gray-900 border border-gray-700 rounded p-3 text-xs whitespace-pre-wrap">{template.content?.mainPrompt}</pre>
-                </details>
-              </div>
-            ))}
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_360px]">
+                  <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input value={form.name} onChange={(event) => setFormValue('name', event.target.value)} placeholder="Name" disabled={selected?.isCore && mode !== 'create'} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60" />
+                      <input value={form.nameVi} onChange={(event) => setFormValue('nameVi', event.target.value)} placeholder="Vietnamese name" disabled={selected?.isCore && mode !== 'create'} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60" />
+                      <input value={form.useCase} onChange={(event) => setFormValue('useCase', event.target.value)} placeholder="Use case" disabled={selected?.isCore && mode !== 'create'} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60" />
+                      <select value={form.templateType} onChange={(event) => setFormValue('templateType', event.target.value)} disabled={selected?.isCore && mode !== 'create'} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60"><option value="text">text</option><option value="image">image</option><option value="video">video</option><option value="hybrid">hybrid</option></select>
+                      <input value={form.purpose} onChange={(event) => setFormValue('purpose', event.target.value)} placeholder="Purpose" disabled={selected?.isCore && mode !== 'create'} className="md:col-span-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60" />
+                      <textarea value={form.description} onChange={(event) => setFormValue('description', event.target.value)} rows={2} placeholder="Description" disabled={selected?.isCore && mode !== 'create'} className="md:col-span-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-60" />
+                    </div>
+
+                    <textarea value={form.content.mainPrompt} onChange={(event) => setContentValue('mainPrompt', event.target.value)} rows={14} disabled={selected?.isCore && mode !== 'create'} placeholder="Main prompt. Example: Character wearing {product_type} in {scene}" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 font-mono text-xs leading-6 text-slate-100 disabled:opacity-60" />
+                    <textarea value={form.content.negativePrompt} onChange={(event) => setContentValue('negativePrompt', event.target.value)} rows={5} disabled={selected?.isCore && mode !== 'create'} placeholder="Negative prompt" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 font-mono text-xs leading-6 text-slate-100 disabled:opacity-60" />
+
+                    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-slate-500"><span>Placeholders</span><button type="button" onClick={addField} className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300">Add</button></div>
+                      {form.fields.map((field, index) => (
+                        <div key={`field-${index}`} className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                          <div className="grid gap-2 md:grid-cols-4">
+                            <input value={field.id} onChange={(event) => updateField(index, 'id', event.target.value)} placeholder="token_id" className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100" />
+                            <input value={field.label} onChange={(event) => updateField(index, 'label', event.target.value)} placeholder="label" className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100" />
+                            <select value={field.source} onChange={(event) => updateField(index, 'source', event.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100"><option value="manual">manual</option><option value="option">option</option><option value="system">system</option></select>
+                            <select value={field.type} onChange={(event) => updateField(index, 'type', event.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100"><option value="text">text</option><option value="textarea">textarea</option><option value="select">select</option><option value="radio">radio</option></select>
+                          </div>
+                          <div className="grid gap-2 md:grid-cols-4">
+                            <select value={field.optionCategory} onChange={(event) => updateField(index, 'optionCategory', event.target.value)} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100"><option value="">option category</option>{(metadata.optionCategories || []).map((item) => <option key={item} value={item}>{item}</option>)}</select>
+                            <input value={field.runtimeKey} onChange={(event) => updateField(index, 'runtimeKey', event.target.value)} placeholder="runtime path" className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100" />
+                            <input value={field.defaultValue} onChange={(event) => updateField(index, 'defaultValue', event.target.value)} placeholder="default" className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100" />
+                            <button type="button" onClick={() => removeField(index)} className="rounded border border-rose-700/60 bg-rose-950/30 px-2 py-1.5 text-xs text-rose-300">Remove</button>
+                          </div>
+                          {(field.type === 'select' || field.type === 'radio') && <textarea value={field.optionsText || ''} onChange={(event) => updateField(index, 'optionsText', event.target.value)} rows={3} placeholder="value | Label" className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 font-mono text-[11px] text-slate-100" />}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <MiniLocationEditor title="Catalog Usage" value={form.usedInPages} onChange={(value) => setFormValue('usedInPages', value)} suggestions={metadata.locations || []} />
+                      <MiniLocationEditor title="Active Assignment" value={form.assignmentTargets} onChange={(value) => setFormValue('assignmentTargets', value)} suggestions={metadata.locations || []} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {selected && (
+                      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-400">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Status</div>
+                        <div className="flex flex-wrap gap-2">{selected.isCore && <Chip tone="blue">cannot delete</Chip>}{(selected.assignmentTargets || []).length > 0 && <Chip tone="green">system is using this template</Chip>}</div>
+                        <div>Version: <span className="text-slate-200">{selected.version || 1}</span></div>
+                        <div>Usage count: <span className="text-slate-200">{selected.usageCount || 0}</span></div>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={activate} className="rounded-xl border border-emerald-700/60 bg-emerald-950/30 px-3 py-2 text-[11px] text-emerald-300"><CheckCircle2 size={14} className="mr-2 inline" />Activate</button>
+                          <button onClick={previewRender} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-300">Preview</button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Preview</div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                        <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">Positive Prompt</div>
+                        <pre className="whitespace-pre-wrap text-xs leading-6 text-slate-200">{preview?.prompt || 'Save and preview to inspect final render.'}</pre>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                        <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-slate-500">Negative Prompt</div>
+                        <pre className="whitespace-pre-wrap text-xs leading-6 text-slate-300">{preview?.negativePrompt || 'No negative prompt.'}</pre>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-800/40 bg-sky-950/20 p-3 text-xs leading-6 text-sky-100/80">
+                      Core template không xóa được. Muốn đổi wording từng câu, hãy clone rồi gán lại ở phần <span className="font-semibold text-sky-200">Active Assignment</span>. Với placeholder source = <span className="font-mono text-sky-200">option</span>, nên để hệ thống bơm từ option hiện có thay vì nhập tay.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-slate-800 pt-4">
+                  {(mode === 'create' || mode === 'edit') && <button onClick={save} disabled={saving || (selected?.isCore && mode !== 'create')} className="rounded-xl border border-sky-700/60 bg-sky-950/30 px-4 py-2 text-sm text-sky-300 disabled:opacity-50"><Save size={15} className="mr-2 inline" />{saving ? 'Saving...' : mode === 'create' ? 'Create' : 'Save'}</button>}
+                  {(mode === 'edit' || mode === 'create') && <button onClick={() => { setMode(selected ? 'view' : 'create'); if (selected) setForm(toForm(selected)); }} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-300">Cancel</button>}
+                </div>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -188,11 +188,7 @@ function extractChoiceArray(choice, category = '') {
   return [normalized];
 }
 
-/**
- * Build comprehensive analysis prompt with all VTO style options
- * RETURNS JSON FORMAT for clean parsing
- */
-export function buildAnalysisPrompt(options = {}) {
+function buildSharedAnalysisPromptContext(options = {}) {
   const {
     scene = 'studio',
     lighting = 'soft-diffused',
@@ -207,7 +203,9 @@ export function buildAnalysisPrompt(options = {}) {
     useCase = 'change-clothes',
     productFocus = 'full-outfit',
     selectedCharacter = null,
-    optionsLibrary = {}
+    optionsLibrary = {},
+    hasCharacterImage = true,
+    hasProductImage = true
   } = options;
 
   const normalizedLibrary = normalizeOptionLibrary(optionsLibrary);
@@ -222,7 +220,6 @@ export function buildAnalysisPrompt(options = {}) {
 
   const characterContext = buildCharacterAnalysisContext(selectedCharacter);
   const choiceList = (category) => (choiceSets[category] || normalizedLibrary[category] || []).join(', ');
-
   const currentSelectionContext = [
     '- scene preference: ' + scene,
     '- lighting preference: ' + lighting,
@@ -242,6 +239,8 @@ export function buildAnalysisPrompt(options = {}) {
 CAMPAIGN OBJECTIVE:
 - Use case: ${useCase}
 - Product focus: ${productFocus}
+- Character image provided: ${hasCharacterImage ? 'yes' : 'no'}
+- Product image provided: ${hasProductImage ? 'yes' : 'no'}
 - If promoting full outfit: prefer 3/4 front or full-body reference.
 - If promoting top only: prefer closer torso reference.
 - If promoting bottom/shoes: prefer lower-body/full-body reference with leg clarity.
@@ -251,7 +250,46 @@ ${currentSelectionContext}
 ${buildOptionLibraryContext(normalizedLibrary)}
 `;
 
-  const promptText = `You are a professional fashion analyst for virtual try-on. Analyze the images and respond with ONLY valid JSON.
+  const standardRules = `
+Rules:
+1. Return JSON only.
+2. Prefer values from the AVAILABLE OPTION LIBRARY whenever they are a good fit.
+3. If none of the existing options fit, create a short lowercase kebab-case token, set choiceType to "new", and repeat it in newOptionCandidates.
+4. If a category is effectively fixed by the character profile, set choiceType to "keep_locked" and lockedByCharacter to true.
+5. Accessories may contain up to 3 tokens as an array.
+6. Use "keep-current", "not-applicable", or "not-needed" when appropriate.
+7. Keep reasons short and concrete.
+8. Scene choices should prioritize this list: ${choiceList('scene')}.
+9. Lighting choices should prioritize this list: ${choiceList('lighting')}.
+10. Mood choices should prioritize this list: ${choiceList('mood')}.
+11. Style choices should prioritize this list: ${choiceList('style')}.
+12. Color palette choices should prioritize this list: ${choiceList('colorPalette')}.
+13. Camera angle choices should prioritize this list: ${choiceList('cameraAngle')}.`;
+
+  const inputRules = `
+INPUT RULES:
+- If only a product image is provided, treat this as a product-first analysis.
+- In product-first analysis, keep "character" fields minimal or inferred only when necessary, and make product/recommendation quality the priority.
+- If only a character image is provided, treat this as a character-first analysis.
+- In character-first analysis, keep "product" fields minimal or empty when appropriate, and focus recommendations on persona, framing, styling, and scene direction.
+- For use case "${useCase}", do not invent a character narrative when no character image exists.`;
+
+  return {
+    useCase,
+    productFocus,
+    hasCharacterImage,
+    hasProductImage,
+    normalizedLibrary,
+    choiceList,
+    characterCtx,
+    campaignCtx,
+    standardRules,
+    inputRules
+  };
+}
+
+function buildDefaultAnalysisPrompt(context) {
+  return `You are a professional fashion analyst for virtual try-on. Analyze the images and respond with ONLY valid JSON.
 
 {
   "character": {
@@ -298,25 +336,174 @@ ${buildOptionLibraryContext(normalizedLibrary)}
   }
 }
 
+${context.standardRules}
+${context.characterCtx}
+
+${context.campaignCtx}
+
+${context.inputRules}`;
+}
+
+function buildCreatorThumbnailAnalysisPrompt(context) {
+  return `You are a creative strategist for creator thumbnails and short-form cover art. Analyze the reference images and respond with ONLY valid JSON.
+
+{
+  "character": {
+    "gender": "string",
+    "age_range": "string",
+    "body_type": "string",
+    "body_type_short": "slim|athletic|curvy|petite|tall|average",
+    "skin_tone": "string",
+    "hair_color": "string",
+    "hair_length": "short|medium|long",
+    "hair_texture": "straight|wavy|curly",
+    "hair_style": "string",
+    "face_shape": "oval|square|round|heart|oblong"
+  },
+  "product": {
+    "garment_type": "string",
+    "style_category": "string",
+    "primary_color": "string",
+    "secondary_color": "string or null",
+    "pattern": "solid|striped|floral|geometric|printed|plaid|other",
+    "fabric_type": "string",
+    "fit_type": "tight|fitted|regular|loose|oversized",
+    "key_details": "string"
+  },
+  "analysis": {
+    "compatibility_score": 1-10,
+    "fit_assessment": "How well the character/image can support a clickable thumbnail composition",
+    "color_harmony": "How the palette can be made scroll-stopping",
+    "styling_notes": "Short note covering hook, visual hierarchy, and creator energy"
+  },
+  "recommendations": {
+    "scene": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "lighting": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "mood": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "style": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "colorPalette": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "cameraAngle": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "framing": { "choice": "tight-headshot|shoulders-up|half-body|waist-up", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "expression": { "choice": "string", "choiceType": "existing|new|keep-current|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "gesture": { "choice": "string", "choiceType": "existing|new|not-needed", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "textOverlayZone": { "choice": "left-negative-space|right-negative-space|top-band|bottom-band|minimal-text", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "productPresence": { "choice": "hero-prop|secondary-prop|not-needed", "choiceType": "existing|new|not-needed", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" }
+  }
+}
+
 Rules:
 1. Return JSON only.
-2. Prefer values from the AVAILABLE OPTION LIBRARY whenever they are a good fit.
-3. If none of the existing options fit, create a short lowercase kebab-case token, set choiceType to "new", and repeat it in newOptionCandidates.
-4. If a category is effectively fixed by the character profile, set choiceType to "keep_locked" and lockedByCharacter to true.
-5. Accessories may contain up to 3 tokens as an array.
-6. Use "keep-current", "not-applicable", or "not-needed" when appropriate.
-7. Keep reasons short and concrete.
-8. Scene choices should prioritize this list: ${choiceList('scene')}.
-9. Lighting choices should prioritize this list: ${choiceList('lighting')}.
-10. Mood choices should prioritize this list: ${choiceList('mood')}.
-11. Style choices should prioritize this list: ${choiceList('style')}.
-12. Color palette choices should prioritize this list: ${choiceList('colorPalette')}.
-13. Camera angle choices should prioritize this list: ${choiceList('cameraAngle')}.
-${characterCtx}
+2. Optimize for scroll-stopping thumbnail performance, clear face readability, high emotional signal, and safe text space.
+3. Keep identity consistent with the character image and selected library character if provided.
+4. Prefer bold framing, readable silhouette, and one dominant hook rather than complex fashion styling.
+5. If no product image exists, keep product fields minimal and set productPresence to "not-needed" unless a prop is clearly useful.
+6. Reasons must stay short and concrete.
+7. Scene choices should prioritize this list: ${context.choiceList('scene')}.
+8. Lighting choices should prioritize this list: ${context.choiceList('lighting')}.
+9. Mood choices should prioritize this list: ${context.choiceList('mood')}.
+10. Style choices should prioritize this list: ${context.choiceList('style')}.
+11. Color palette choices should prioritize this list: ${context.choiceList('colorPalette')}.
+12. Camera angle choices should prioritize this list: ${context.choiceList('cameraAngle')}.
+${context.characterCtx}
 
-${campaignCtx}`;
+${context.campaignCtx}
 
-  return promptText;
+THUMBNAIL-SPECIFIC INPUT RULES:
+- Prioritize face clarity, eye contact, expression intensity, and simple composition.
+- Recommend framing based on what will survive mobile-scale viewing.
+- Use textOverlayZone to protect a clear area for thumbnail headline text.
+- If only a character image is provided, build the recommendation around persona, hook, expression, and framing instead of product styling.
+- If a product image is provided, use it only if it strengthens click-through instead of cluttering the cover.`;
+}
+
+function buildStoryCharacterAnalysisPrompt(context) {
+  return `You are a visual development strategist for recurring story characters used in shorts, reels, and narrative video pipelines. Analyze the reference images and respond with ONLY valid JSON.
+
+{
+  "character": {
+    "gender": "string",
+    "age_range": "string",
+    "body_type": "string",
+    "body_type_short": "slim|athletic|curvy|petite|tall|average",
+    "skin_tone": "string",
+    "hair_color": "string",
+    "hair_length": "short|medium|long",
+    "hair_texture": "straight|wavy|curly",
+    "hair_style": "string",
+    "face_shape": "oval|square|round|heart|oblong"
+  },
+  "product": {
+    "garment_type": "string",
+    "style_category": "string",
+    "primary_color": "string",
+    "secondary_color": "string or null",
+    "pattern": "solid|striped|floral|geometric|printed|plaid|other",
+    "fabric_type": "string",
+    "fit_type": "tight|fitted|regular|loose|oversized",
+    "key_details": "string"
+  },
+  "analysis": {
+    "compatibility_score": 1-10,
+    "fit_assessment": "How usable the input is for a repeatable story-character setup",
+    "color_harmony": "How the palette supports world-building and character recall",
+    "styling_notes": "Short note covering role, emotional tone, and repeatability across scenes"
+  },
+  "recommendations": {
+    "scene": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "lighting": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "mood": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "style": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "colorPalette": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "cameraAngle": { "choice": "string", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "storyRole": { "choice": "hero|friend|mentor|rival|narrator|comic-relief|mysterious-lead", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "expression": { "choice": "string", "choiceType": "existing|new|keep-current|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "pose": { "choice": "string", "choiceType": "existing|new|keep-current|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "sceneDepth": { "choice": "clean-backdrop|mid-depth|cinematic-depth|layered-world", "choiceType": "existing|new|keep_locked", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" },
+    "propCue": { "choice": "string", "choiceType": "existing|new|not-needed", "newOptionCandidates": ["string"], "lockedByCharacter": false, "reason": "string" }
+  }
+}
+
+Rules:
+1. Return JSON only.
+2. Optimize for repeatable character identity, strong narrative readability, and consistency across future scenes.
+3. Keep the character recognizable first; world-building and styling come second.
+4. Recommend a storyRole that is visually legible from one frame.
+5. Use pose and expression to support narrative clarity, not just fashion posing.
+6. If no product image exists, keep product fields minimal and use propCue only when it improves storytelling.
+7. Reasons must stay short and concrete.
+8. Scene choices should prioritize this list: ${context.choiceList('scene')}.
+9. Lighting choices should prioritize this list: ${context.choiceList('lighting')}.
+10. Mood choices should prioritize this list: ${context.choiceList('mood')}.
+11. Style choices should prioritize this list: ${context.choiceList('style')}.
+12. Color palette choices should prioritize this list: ${context.choiceList('colorPalette')}.
+13. Camera angle choices should prioritize this list: ${context.choiceList('cameraAngle')}.
+${context.characterCtx}
+
+${context.campaignCtx}
+
+STORY-CHARACTER INPUT RULES:
+- Prioritize identity persistence, memorable silhouette, and scene-to-scene consistency.
+- Recommend sceneDepth based on whether the frame should feel like a recurring world or a clean isolated portrait.
+- Use storyRole, expression, and pose to encode what the character does in the narrative.
+- If only a character image is provided, focus analysis on persona, role, emotion, and repeatable visual language instead of product styling.`;
+}
+
+/**
+ * Build comprehensive analysis prompt with all VTO style options
+ * RETURNS JSON FORMAT for clean parsing
+ */
+export function buildAnalysisPrompt(options = {}) {
+  const context = buildSharedAnalysisPromptContext(options);
+
+  if (context.useCase === 'creator-thumbnail') {
+    return buildCreatorThumbnailAnalysisPrompt(context);
+  }
+
+  if (context.useCase === 'story-character') {
+    return buildStoryCharacterAnalysisPrompt(context);
+  }
+
+  return buildDefaultAnalysisPrompt(context);
 }
 
 
@@ -927,9 +1114,15 @@ export async function analyzeWithBrowser(req, res) {
     const characterImage = req.files?.characterImage?.[0];
     const productImage = req.files?.productImage?.[0];
 
-    if (!characterImage || !productImage) {
+    const allowProductOnlyAnalysis = useCase === 'ecommerce-product';
+    const allowCharacterOnlyAnalysis = ['creator-thumbnail', 'story-character'].includes(useCase);
+    if ((!characterImage && !allowProductOnlyAnalysis) || (!productImage && !allowCharacterOnlyAnalysis)) {
       return res.status(400).json({ 
-        error: 'Both character and product images are required',
+        error: allowProductOnlyAnalysis
+          ? 'Product image is required'
+          : allowCharacterOnlyAnalysis
+            ? 'Character image is required'
+            : 'Both character and product images are required',
         success: false 
       });
     }
@@ -949,7 +1142,9 @@ export async function analyzeWithBrowser(req, res) {
       useCase,
       productFocus,
       selectedCharacter: selectedCharacterResolved,
-      optionsLibrary: optionLibraryParsed
+      optionsLibrary: optionLibraryParsed,
+      hasCharacterImage: Boolean(characterImage),
+      hasProductImage: Boolean(productImage)
     };
 
     // ====================================
@@ -960,15 +1155,24 @@ export async function analyzeWithBrowser(req, res) {
     console.log(`${'='.repeat(80)}\n`);
 
     console.log(`💾 Saving uploaded images to temp...`);
-    const charImagePath = path.join(tempDir, `char-${Date.now()}-${characterImage.originalname}`);
-    const prodImagePath = path.join(tempDir, `prod-${Date.now()}-${productImage.originalname}`);
+    const prodImagePath = productImage
+      ? path.join(tempDir, `prod-${Date.now()}-${productImage.originalname}`)
+      : null;
+    const charImagePath = characterImage
+      ? path.join(tempDir, `char-${Date.now()}-${characterImage.originalname}`)
+      : null;
+
+    if (charImagePath) {
+      fs.writeFileSync(charImagePath, characterImage.buffer);
+      tempFiles.push(charImagePath);
+    }
+    if (prodImagePath) {
+      fs.writeFileSync(prodImagePath, productImage.buffer);
+      tempFiles.push(prodImagePath);
+    }
     
-    fs.writeFileSync(charImagePath, characterImage.buffer);
-    fs.writeFileSync(prodImagePath, productImage.buffer);
-    tempFiles.push(charImagePath, prodImagePath);
-    
-    console.log(`   ✅ Character: ${path.basename(charImagePath)}`);
-    console.log(`   ✅ Product: ${path.basename(prodImagePath)}`);
+    console.log(`   ✅ Character: ${charImagePath ? path.basename(charImagePath) : 'not provided'}`);
+    console.log(`   ✅ Product: ${prodImagePath ? path.basename(prodImagePath) : 'not provided'}`);
 
     // ====================================
     // STEP 2: Initialize browser service for analysis
@@ -1004,8 +1208,12 @@ export async function analyzeWithBrowser(req, res) {
     // ====================================
     console.log(`\n🤖 Analyzing images (no generation)...`);
     
-    const analysisReferencePaths = [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath];
-    console.log(`   📚 Analysis references: ${analysisReferencePaths.length} images (character + extra refs + product)`);
+    const analysisReferencePaths = [
+      ...(charImagePath ? [charImagePath] : []),
+      ...(characterAssets.referencePaths || []).slice(0, 6),
+      ...(prodImagePath ? [prodImagePath] : [])
+    ];
+    console.log(`   📚 Analysis references: ${analysisReferencePaths.length} images`);
 
     const analysisResult = await browserService.analyzeMultipleImages(
       analysisReferencePaths,
@@ -1033,7 +1241,7 @@ export async function analyzeWithBrowser(req, res) {
         await fallbackService.initialize();
         
         const fallbackResult = await fallbackService.analyzeMultipleImages(
-          [charImagePath, prodImagePath],
+          [...(charImagePath ? [charImagePath] : []), ...(prodImagePath ? [prodImagePath] : [])],
           analysisPrompt
         );
         
@@ -1117,7 +1325,7 @@ export async function analyzeWithBrowser(req, res) {
         providers: {
           analysis: analysisProvider
         },
-        analysisReferenceCount: [charImagePath, ...(characterAssets.referencePaths || []).slice(0, 6), prodImagePath].length,
+                analysisReferenceCount: [...(charImagePath ? [charImagePath] : []), ...(characterAssets.referencePaths || []).slice(0, 6), ...(prodImagePath ? [prodImagePath] : [])].length,
         // Return empty images array - this is ANALYSIS ONLY
         generatedImages: []
       },
@@ -1170,6 +1378,7 @@ export async function generateWithBrowser(req, res) {
       productImageBase64,
       characterImagePath,
       productImagePath,
+      useCase = 'change-clothes',
       language = 'en',  // 💫 Accept language parameter for Vietnamese support
       selectedCharacter = null
     } = req.body;
@@ -1192,27 +1401,37 @@ export async function generateWithBrowser(req, res) {
     let prodImagePath = productImagePath;
     
     // If base64 provided, save to temp
-    if (characterImageBase64 && productImageBase64) {
+    if (characterImageBase64) {
       console.log(`\n💾 Converting base64 images to temp files...`);
-      
-      // Character image
       const charBuffer = Buffer.from(characterImageBase64, 'base64');
       charImagePath = path.join(tempDir, `char-gen-${Date.now()}.png`);
       fs.writeFileSync(charImagePath, charBuffer);
       tempFiles.push(charImagePath);
-      
-      // Product image
+    }
+
+    if (productImageBase64) {
+      if (!characterImageBase64) {
+        console.log(`\n💾 Converting base64 images to temp files...`);
+      }
       const prodBuffer = Buffer.from(productImageBase64, 'base64');
       prodImagePath = path.join(tempDir, `prod-gen-${Date.now()}.png`);
       fs.writeFileSync(prodImagePath, prodBuffer);
       tempFiles.push(prodImagePath);
-      
+    }
+
+    if (characterImageBase64 || productImageBase64) {
       console.log(`   ✅ Images saved to temp`);
     }
     
-    if (!charImagePath || !prodImagePath) {
+    const allowProductOnlyGeneration = useCase === 'ecommerce-product';
+    const allowCharacterOnlyGeneration = ['creator-thumbnail', 'story-character'].includes(useCase);
+    if ((!charImagePath && !allowProductOnlyGeneration) || (!prodImagePath && !allowCharacterOnlyGeneration)) {
       return res.status(400).json({ 
-        error: 'Image paths or base64 required',
+        error: allowProductOnlyGeneration
+          ? 'Product image path or base64 is required'
+          : allowCharacterOnlyGeneration
+            ? 'Character image path or base64 is required'
+            : 'Image paths or base64 required',
         success: false 
       });
     }

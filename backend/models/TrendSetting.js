@@ -1,5 +1,118 @@
 import mongoose from 'mongoose';
 
+const TemplateLibrarySchema = new mongoose.Schema({
+  favorites: [{ type: String }],
+  pinned: [{ type: String }],
+  recent: [{ type: String }],
+}, { _id: false });
+
+const SubVideoLibrarySourceSchema = new mongoose.Schema({
+  key: { type: String, default: '' },
+  name: { type: String, default: '' },
+  sourceType: { type: String, default: 'public-drive-folder' },
+  url: { type: String, default: '' },
+  folderId: { type: String, default: '' },
+  enabled: { type: Boolean, default: true },
+  isDefault: { type: Boolean, default: false },
+  maxDepth: { type: Number, default: 3 },
+  visibility: { type: String, default: 'public-web' },
+  themeHints: [{ type: String }],
+  recommendedTemplateGroups: [{ type: String }],
+  notes: { type: String, default: '' },
+}, { _id: false });
+
+const TemplateBrowserPreferencesSchema = new mongoose.Schema({
+  search: { type: String, default: '' },
+  groupKey: { type: String, default: 'all' },
+  showOnlySuggested: { type: Boolean, default: false },
+  suggestionLimit: { type: Number, default: 6 },
+}, { _id: false });
+
+const ComposerDefaultsSchema = new mongoose.Schema({
+  recipe: { type: String, default: 'mashup' },
+  platform: { type: String, default: 'youtube' },
+  duration: { type: Number, default: 30 },
+  aspectRatio: { type: String, default: '9:16' },
+  layout: { type: String, default: '2-3-1-3' },
+  templateName: { type: String, default: 'reaction' },
+  templateStrategy: { type: String, default: 'weighted' },
+  quality: { type: String, default: 'high' },
+  audioSource: { type: String, default: 'main' },
+  subtitleMode: { type: String, default: 'auto' },
+  backgroundAudioVolume: { type: Number, default: 0.18 },
+  youtubePublishType: { type: String, default: 'shorts' },
+  watermarkEnabled: { type: Boolean, default: true },
+  voiceoverEnabled: { type: Boolean, default: false },
+  highlightEnabled: { type: Boolean, default: false },
+  highlightSource: { type: String, default: 'sub' },
+  highlightClipDuration: { type: Number, default: 6 },
+  highlightMaxHighlights: { type: Number, default: 3 },
+  clipExtractionEnabled: { type: Boolean, default: false },
+  clipSegmentDuration: { type: Number, default: 20 },
+  clipMaxClips: { type: Number, default: 24 },
+}, { _id: false });
+
+const VideoPipelinePreferencesSchema = new mongoose.Schema({
+  production: {
+    templateLibrary: {
+      type: TemplateLibrarySchema,
+      default: () => ({ favorites: [], pinned: [], recent: [] }),
+    },
+    subVideoLibrarySources: {
+      type: [SubVideoLibrarySourceSchema],
+      default: () => ([{
+        key: 'public-video-reels',
+        name: 'Public Video Reels Library',
+        sourceType: 'public-drive-folder',
+        url: 'https://drive.google.com/drive/folders/1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A',
+        folderId: '1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A',
+        enabled: true,
+        isDefault: true,
+        maxDepth: 3,
+        visibility: 'public-web',
+        themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'],
+        recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'],
+        notes: 'Default public sub-video library source for mashup and shorts automation.',
+      }]),
+    },
+    composerDefaults: {
+      type: ComposerDefaultsSchema,
+      default: () => ({
+        recipe: 'mashup',
+        platform: 'youtube',
+        duration: 30,
+        aspectRatio: '9:16',
+        layout: '2-3-1-3',
+        templateName: 'reaction',
+        templateStrategy: 'weighted',
+        quality: 'high',
+        audioSource: 'main',
+        subtitleMode: 'auto',
+        backgroundAudioVolume: 0.18,
+        youtubePublishType: 'shorts',
+        watermarkEnabled: true,
+        voiceoverEnabled: false,
+        highlightEnabled: false,
+        highlightSource: 'sub',
+        highlightClipDuration: 6,
+        highlightMaxHighlights: 3,
+        clipExtractionEnabled: false,
+        clipSegmentDuration: 20,
+        clipMaxClips: 24,
+      }),
+    },
+    templateBrowserPreferences: {
+      type: TemplateBrowserPreferencesSchema,
+      default: () => ({
+        search: '',
+        groupKey: 'all',
+        showOnlySuggested: false,
+        suggestionLimit: 6,
+      }),
+    },
+  },
+}, { _id: false });
+
 const PlayboardConfigSchema = new mongoose.Schema({
   dimension: {
     type: String,
@@ -67,6 +180,10 @@ const TrendSettingSchema = new mongoose.Schema({
     default: true,
   },
   playboardConfigs: [PlayboardConfigSchema],
+  videoPipelinePreferences: {
+    type: VideoPipelinePreferencesSchema,
+    default: () => ({ production: { templateLibrary: { favorites: [], pinned: [], recent: [] }, subVideoLibrarySources: [{ key: 'public-video-reels', name: 'Public Video Reels Library', sourceType: 'public-drive-folder', url: 'https://drive.google.com/drive/folders/1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', folderId: '1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', enabled: true, isDefault: true, maxDepth: 3, visibility: 'public-web', themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'], recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'], notes: 'Default public sub-video library source for mashup and shorts automation.' }] } }),
+  },
 }, { timestamps: true });
 
 const PLAYBOARD_CATEGORIES = [
@@ -128,6 +245,7 @@ TrendSettingSchema.statics.getOrCreateDefault = async function getOrCreateDefaul
       cooking: ['cooking', 'nấu ăn', 'recipe', 'món ngon'],
     },
     playboardConfigs: DEFAULT_PLAYBOARD_CONFIGS,
+    videoPipelinePreferences: { production: { templateLibrary: { favorites: [], pinned: [], recent: [] }, composerDefaults: { recipe: 'mashup', platform: 'youtube', duration: 30, aspectRatio: '9:16', layout: '2-3-1-3', templateName: 'reaction', templateStrategy: 'weighted', quality: 'high', audioSource: 'main', subtitleMode: 'auto', backgroundAudioVolume: 0.18, youtubePublishType: 'shorts', watermarkEnabled: true, voiceoverEnabled: false, highlightEnabled: false, highlightSource: 'sub', highlightClipDuration: 6, highlightMaxHighlights: 3, clipExtractionEnabled: false, clipSegmentDuration: 20, clipMaxClips: 24 }, templateBrowserPreferences: { search: '', groupKey: 'all', showOnlySuggested: false, suggestionLimit: 6 } } },
   };
 
   const setting = await this.findOneAndUpdate(

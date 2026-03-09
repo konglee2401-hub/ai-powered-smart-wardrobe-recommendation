@@ -41,7 +41,11 @@
     "utils:drive:check": "node scripts/utils/drive/check-config.js",
     "utils:drive:share": "node scripts/utils/drive/share-assets.js",
     "fix:assets": "node scripts/fix/comprehensive-asset-fix.js",
-    "fix:gallery": "node scripts/fix/gallery-assets.js"
+    "fix:gallery": "node scripts/fix/gallery-assets.js",
+    "seed:prompt-templates": "node scripts/seed/08-seed-prompt-templates.js",
+    "test:affiliate:tiktok-flow:step3-5": "node scripts/test-affiliate-flow.js --start-step 3 --end-step 5",
+    "test:affiliate:step3-5-flow": "node scripts/test-affiliate-step3-5-flow.js",
+    "seed:video-pipeline-settings": "node scripts/seed/09-seed-video-pipeline-settings.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
@@ -75,6 +79,7 @@
   "devDependencies": {
     "bcryptjs": "^3.0.3",
     "canvas": "^3.2.1",
+    "jest": "^30.2.0",
     "nodemon": "^3.0.1",
     "playwright": "^1.58.2",
     "puppeteer-extra": "^3.3.6",

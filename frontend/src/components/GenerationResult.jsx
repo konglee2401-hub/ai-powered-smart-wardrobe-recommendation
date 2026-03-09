@@ -1,11 +1,43 @@
-/**
- * Generation Result Component
- * Display generated images with preview and actions
- */
-
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Copy, Share2, Loader2, RefreshCw, Eye, Video, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  Eye,
+  Loader2,
+  RefreshCw,
+  Rocket,
+  Video,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+
+function toImageItem(image, index) {
+  if (typeof image === 'string') {
+    return {
+      id: `generated-${index}`,
+      url: image,
+      filename: `generated-${index + 1}.png`,
+    };
+  }
+
+  return {
+    id: image.assetId || image.id || `generated-${index}`,
+    url: image.url,
+    filename: image.filename || `generated-${index + 1}.png`,
+    ...image,
+  };
+}
+
+function formatLabel(key = '') {
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 export default function GenerationResult({
   images = [],
@@ -16,31 +48,63 @@ export default function GenerationResult({
   styleOptions,
   isRegenerating = false,
   characterImage = null,
-  productImage = null
+  productImage = null,
+  useCase = null,
+  productFocus = null,
+  generationProvider = null,
+  uploadToDrive = false,
+  driveUploadStatus = null,
 }) {
-  const [selectedImage, setSelectedImage] = useState(0);
+  const navigate = useNavigate();
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [downloadingIndex, setDownloadingIndex] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
-  const navigate = useNavigate();
+  const [promptExpanded, setPromptExpanded] = useState(false);
 
-  console.log('🎨 GenerationResult rendered with images:', images.length, images);
+  const normalizedImages = useMemo(
+    () => images.map((image, index) => toImageItem(image, index)).filter((image) => !!image.url),
+    [images]
+  );
 
-  const currentImage = images[selectedImage];
+  const currentImage = normalizedImages[selectedImageIndex] || normalizedImages[0] || null;
+  const activeStyleOptions = Object.entries(styleOptions || {}).filter(([, value]) => !!value);
+
+  const promptPreview = useMemo(() => {
+    if (!generationPrompt) return '';
+    return generationPrompt.length > 180 ? `${generationPrompt.slice(0, 180)}...` : generationPrompt;
+  }, [generationPrompt]);
+
+  const slugify = (value = '') =>
+    String(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 24);
+
+  const getDownloadFilename = (image, index) => {
+    const extMatch = image?.url?.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+    const ext = extMatch?.[1] ? `.${extMatch[1].toLowerCase()}` : '.png';
+    const date = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+    const useCaseSlug = slugify(useCase || 'image');
+    const focusSlug = slugify(productFocus || 'focus');
+    const providerSlug = slugify(generationProvider || 'browser');
+    return `sw-${useCaseSlug}-${focusSlug}-${providerSlug}-${index + 1}-${date}${ext}`;
+  };
 
   const downloadImage = async (imageUrl, index) => {
     setDownloadingIndex(index);
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `generated-${index + 1}-${Date.now()}.png`;
+      link.href = objectUrl;
+      link.download = getDownloadFilename(normalizedImages[index], index);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
     } catch (error) {
       console.error('Download failed:', error);
     } finally {
@@ -48,237 +112,363 @@ export default function GenerationResult({
     }
   };
 
-  const copyImageUrl = (imageUrl) => {
-    navigator.clipboard.writeText(imageUrl);
-    alert('Image URL copied!');
+  const copyImageUrl = async (imageUrl) => {
+    try {
+      await navigator.clipboard.writeText(imageUrl);
+    } catch (error) {
+      console.error('Copy failed:', error);
+    }
   };
 
-  const handleStartVideoGeneration = () => {
+  const handleStartVideoGeneration = (image) => {
+    if (!image?.url) return;
+
     navigate('/video-generation', {
       state: {
-        image: currentImage?.url,
+        image: image.url,
+        imageAsset: image,
         characterImage,
-        productImage
-      }
+        productImage,
+      },
     });
   };
 
   if (isGenerating) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-16">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Generating {images.length > 0 ? 'more ' : ''}images...</p>
-          <p className="text-gray-600 text-xs mt-1">This may take a moment</p>
+          <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-violet-300" />
+          <p className="text-sm text-slate-300">Generating images...</p>
+          <p className="mt-1 text-xs text-slate-500">This may take a moment</p>
         </div>
       </div>
     );
   }
 
-  if (images.length === 0) {
+  if (normalizedImages.length === 0) {
     return null;
   }
 
   return (
-    <div className="space-y-4">
-      {/* 💫 NEW: Thumbnail Grid - Click to View Full */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-gray-300">Generated Images ({images.length})</h3>
-          <span className="text-xs text-gray-500">(Click to view full size)</span>
-        </div>
-        
-        {/* Responsive Grid - 2-4 columns based on count */}
-        <div className={`grid gap-2 ${
-          images.length === 1 ? 'grid-cols-1' :
-          images.length === 2 ? 'grid-cols-2' :
-          images.length <= 4 ? 'grid-cols-4' :
-          'grid-cols-4'
-        }`}>
-          {images.map((image, idx) => (
-            <div
-              key={idx}
-              onClick={() => {
-                setModalImageIndex(idx);
-                setShowModal(true);
-              }}
-              className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-700 hover:border-purple-500 cursor-pointer bg-gray-900 group transition-all"
+    <div className="grid gap-5 xl:grid-cols-[minmax(240px,0.58fr),minmax(620px,1.42fr)]">
+      <div className="space-y-4">
+        <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_40px_rgba(2,6,23,0.2)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Generation Summary</p>
+          <h3 className="mt-2 text-lg font-semibold text-white">Outputs ready for review</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-white/[0.05] px-3 py-1 text-xs text-slate-200">
+              {normalizedImages.length} image{normalizedImages.length > 1 ? 's' : ''}
+            </span>
+            {generationProvider && (
+              <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
+                Provider: {formatLabel(generationProvider)}
+              </span>
+            )}
+            {aspectRatio && (
+              <span className="rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-100">
+                Ratio: {aspectRatio}
+              </span>
+            )}
+            {useCase && (
+              <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
+                {formatLabel(useCase)}
+              </span>
+            )}
+            {productFocus && (
+              <span className="rounded-full bg-sky-400/10 px-3 py-1 text-xs text-sky-100">
+                Focus: {formatLabel(productFocus)}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={() => currentImage && downloadImage(currentImage.url, selectedImageIndex)}
+              disabled={downloadingIndex !== null || !currentImage}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/14 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
             >
-              <img
-                src={image.url}
-                alt={`Generated ${idx + 1}`}
-                className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-              />
-              {/* Hover Overlay */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              {/* Image Counter */}
-              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-xs text-white">
-                {idx + 1}/{images.length}
+              {downloadingIndex !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              <span>Download Selected</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => currentImage && copyImageUrl(currentImage.url)}
+              disabled={!currentImage}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              <Copy className="h-4 w-4" />
+              <span>Copy Image URL</span>
+            </button>
+          </div>
+        </section>
+
+        {(characterImage || productImage) && (
+          <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Source Inputs</p>
+            <div className="mt-3 grid gap-2">
+              {characterImage && (
+                <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
+                  <p className="mb-2 text-xs font-medium text-slate-300">Character</p>
+                  <div className="aspect-[4/5] overflow-hidden rounded-[1rem] bg-slate-950/60">
+                    <img src={characterImage} alt="Character input" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
+              {productImage && (
+                <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
+                  <p className="mb-2 text-xs font-medium text-slate-300">Product</p>
+                  <div className="aspect-[4/5] overflow-hidden rounded-[1rem] bg-slate-950/60">
+                    <img src={productImage} alt="Product input" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeStyleOptions.length > 0 && (
+          <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Style Choices</p>
+            <div className="mt-3 grid gap-2">
+              {activeStyleOptions.map(([key, value]) => (
+                <div key={key} className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">{formatLabel(key)}</p>
+                  <p className="mt-1 text-sm font-medium text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {generationPrompt && (
+          <section className="rounded-[1.6rem] bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.14),transparent_46%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Prompt Snapshot</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyImageUrl(generationPrompt)}
+                  className="rounded-full bg-white/[0.05] p-2 text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
+                  title="Copy prompt"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromptExpanded((value) => !value)}
+                  className="rounded-full bg-white/[0.05] p-2 text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
+                  title={promptExpanded ? 'Collapse prompt' : 'Expand prompt'}
+                >
+                  {promptExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              {promptExpanded ? generationPrompt : promptPreview}
+            </p>
+          </section>
+        )}
+
+        <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Output Handling</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-300">
+            <div className="rounded-2xl bg-white/[0.04] px-3 py-2.5">
+              <span className="font-medium text-white">Drive upload:</span> {uploadToDrive ? 'Enabled' : 'Disabled'}
+            </div>
+            {driveUploadStatus && (
+              <div className="rounded-2xl bg-cyan-400/10 px-3 py-2.5 text-cyan-100">
+                {driveUploadStatus}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
-      {/* Quick Action Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => downloadImage(images[modalImageIndex || 0].url, modalImageIndex || 0)}
-          disabled={downloadingIndex !== null}
-          className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-green-600 hover:bg-green-700 rounded transition-colors disabled:opacity-50 font-medium text-white"
-        >
-          {downloadingIndex !== null ? (
+      <div className="xl:sticky xl:top-4 xl:self-start">
+        <section className="rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.12),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_24px_64px_rgba(2,6,23,0.28)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</p>
+              <h3 className="mt-1 text-lg font-semibold text-white">Selected output</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => currentImage && window.open(currentImage.url, '_blank')}
+              className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08]"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span>Open full</span>
+            </button>
+          </div>
+
+          {currentImage && (
             <>
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Downloading...</span>
-            </>
-          ) : (
-            <>
-              <Download className="w-3 h-3" />
-              <span>Download All</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalImageIndex(selectedImageIndex);
+                  setShowModal(true);
+                }}
+                className="group block w-full overflow-hidden rounded-[1.4rem] bg-slate-950/60"
+              >
+                <div className="aspect-[4/5] overflow-hidden">
+                  <img
+                    src={currentImage.url}
+                    alt={currentImage.filename}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                </div>
+              </button>
+
+              <div className="mt-3 rounded-[1.25rem] bg-white/[0.04] p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-white">{currentImage.filename}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Preview {selectedImageIndex + 1} of {normalizedImages.length}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleStartVideoGeneration(currentImage)}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-violet-500/18 px-3 py-2 text-sm font-medium text-violet-100 transition hover:bg-violet-500/24"
+                  >
+                    <Video className="h-4 w-4" />
+                    <span>Create video</span>
+                  </button>
+                </div>
+              </div>
             </>
           )}
-        </button>
-        <button
-          onClick={handleStartVideoGeneration}
-          className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-blue-600 hover:bg-blue-700 rounded transition-colors font-medium text-white"
-        >
-          <Video className="w-3 h-3" />
-          <span>Generate Video</span>
-        </button>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {normalizedImages.map((image, index) => (
+              <div
+                key={image.id}
+                className={`rounded-[1.2rem] p-2 transition ${
+                  selectedImageIndex === index
+                    ? 'bg-violet-500/12 shadow-[0_12px_28px_rgba(76,29,149,0.22)]'
+                    : 'bg-white/[0.03]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedImageIndex(index)}
+                  className="block w-full overflow-hidden rounded-[1rem] bg-slate-950/60"
+                >
+                  <div className="aspect-[4/5] overflow-hidden">
+                    <img src={image.url} alt={image.filename} className="h-full w-full object-cover" />
+                  </div>
+                </button>
+                <div className="mt-2 flex items-start justify-between gap-2">
+                  <p className="min-w-0 flex-1 truncate text-xs font-medium text-slate-200">{image.filename}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalImageIndex(index);
+                      setShowModal(true);
+                    }}
+                    className="rounded-full bg-white/[0.05] p-1.5 text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
+                    title="Preview"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleStartVideoGeneration(image)}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-500/16 px-3 py-2 text-sm font-medium text-sky-100 transition hover:bg-sky-500/22"
+                >
+                  <Video className="h-4 w-4" />
+                  <span>Create video</span>
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/[0.05] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span>Regenerate with same settings</span>
+            </button>
+          </div>
+        </section>
       </div>
 
-      {/* ✨ Modal for Full-Size Image Viewing */}
-      {showModal && images.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-          {/* Modal Container */}
-          <div className="relative w-full h-full max-w-4xl max-h-screen flex flex-col p-4">
-            {/* Close Button */}
+      {showModal && normalizedImages.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="relative flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-[1.6rem] bg-slate-950/95 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.6)]">
             <button
+              type="button"
               onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-lg text-gray-300 hover:text-white transition-colors z-10"
+              className="absolute right-4 top-4 z-10 rounded-full bg-black/45 p-2 text-slate-300 transition hover:bg-black/70 hover:text-white"
             >
-              <X className="w-6 h-6" />
+              <X className="h-5 w-5" />
             </button>
 
-            {/* Main Image */}
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex min-h-0 flex-1 items-center justify-center">
               <img
-                src={images[modalImageIndex]?.url}
-                alt={`Generated ${modalImageIndex + 1}`}
-                className="max-w-full max-h-full object-contain"
+                src={normalizedImages[modalImageIndex]?.url}
+                alt={normalizedImages[modalImageIndex]?.filename}
+                className="max-h-full max-w-full object-contain"
               />
             </div>
 
-            {/* Navigation & Info */}
-            <div className="flex items-center justify-between mt-4 px-4 py-3 bg-gray-900/80 rounded-lg border border-gray-700">
-              {/* Left Navigation */}
+            <div className="mt-4 flex items-center justify-between rounded-[1.25rem] bg-white/[0.04] px-4 py-3">
               <button
-                onClick={() => setModalImageIndex((prev) => (prev - 1 + images.length) % images.length)}
-                className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-300 hover:text-white"
+                type="button"
+                onClick={() => setModalImageIndex((prev) => (prev - 1 + normalizedImages.length) % normalizedImages.length)}
+                className="rounded-full bg-white/[0.05] p-2 text-slate-200 transition hover:bg-white/[0.08]"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
-
-              {/* Image Counter & Info */}
-              <div className="flex-1 text-center">
-                <p className="text-sm font-semibold text-gray-300">
-                  {modalImageIndex + 1} / {images.length}
+              <div className="text-center">
+                <p className="text-sm font-semibold text-white">
+                  {modalImageIndex + 1} / {normalizedImages.length}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {images[modalImageIndex]?.filename || `Image ${modalImageIndex + 1}`}
-                </p>
+                <p className="mt-1 text-xs text-slate-400">{normalizedImages[modalImageIndex]?.filename}</p>
               </div>
-
-              {/* Right Navigation */}
               <button
-                onClick={() => setModalImageIndex((prev) => (prev + 1) % images.length)}
-                className="p-2 hover:bg-gray-800 rounded transition-colors text-gray-300 hover:text-white"
+                type="button"
+                onClick={() => setModalImageIndex((prev) => (prev + 1) % normalizedImages.length)}
+                className="rounded-full bg-white/[0.05] p-2 text-slate-200 transition hover:bg-white/[0.08]"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex gap-2 mt-4">
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
               <button
-                onClick={() => downloadImage(images[modalImageIndex].url, modalImageIndex)}
+                type="button"
+                onClick={() => downloadImage(normalizedImages[modalImageIndex].url, modalImageIndex)}
                 disabled={downloadingIndex === modalImageIndex}
-                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-green-600 hover:bg-green-700 rounded transition-colors disabled:opacity-50 font-medium text-white"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/18 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/24 disabled:opacity-50"
               >
-                {downloadingIndex === modalImageIndex ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Downloading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3 h-3" />
-                    <span>Download</span>
-                  </>
-                )}
+                {downloadingIndex === modalImageIndex ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                <span>Download</span>
               </button>
               <button
-                onClick={() => copyImageUrl(images[modalImageIndex].url)}
-                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors font-medium text-white"
+                type="button"
+                onClick={() => copyImageUrl(normalizedImages[modalImageIndex].url)}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08]"
               >
-                <Copy className="w-3 h-3" />
+                <Copy className="h-4 w-4" />
                 <span>Copy URL</span>
               </button>
               <button
-                onClick={() => window.open(images[modalImageIndex].url, '_blank')}
-                className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors font-medium text-white"
+                type="button"
+                onClick={() => handleStartVideoGeneration(normalizedImages[modalImageIndex])}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-violet-500/20 px-4 py-2.5 text-sm font-medium text-violet-100 transition hover:bg-violet-500/26"
               >
-                <Eye className="w-3 h-3" />
-                <span>View Full</span>
+                <Rocket className="h-4 w-4" />
+                <span>Create video</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Regenerate Button */}
-      <button
-        onClick={onRegenerate}
-        disabled={isRegenerating}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors"
-      >
-        {isRegenerating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm font-medium">Regenerating...</span>
-          </>
-        ) : (
-          <>
-            <RefreshCw className="w-4 h-4" />
-            <span className="text-sm font-medium">Regenerate with Same Settings</span>
-          </>
-        )}
-      </button>
-
-      {/* Generation Info */}
-      {generationPrompt && (
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-          <h4 className="text-xs font-semibold text-gray-400 mb-2">📝 Used Prompt</h4>
-          <p className="text-xs text-gray-400 line-clamp-3">{generationPrompt}</p>
-        </div>
-      )}
-
-      {/* Style Info */}
-      {styleOptions && Object.keys(styleOptions).length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 space-y-1 max-h-32 overflow-y-auto">
-          <h4 className="text-xs font-semibold text-gray-400 mb-2">🎨 Style Options Used</h4>
-          <div className="space-y-1">
-            {Object.entries(styleOptions).map(([key, value]) => (
-              value && (
-                <div key={key} className="flex justify-between text-xs">
-                  <span className="text-gray-500">{key}:</span>
-                  <span className="text-purple-400">{value}</span>
-                </div>
-              )
-            ))}
           </div>
         </div>
       )}

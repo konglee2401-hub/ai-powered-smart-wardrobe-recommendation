@@ -226,10 +226,10 @@ export default function AudioGenerationStep({
       <button
         onClick={handleGenerateAudio}
         disabled={isGenerating || !script.trim()}
-        className={`w-full px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-white ${
+        className={`w-full px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all ${
           isGenerating || !script.trim()
             ? 'bg-gray-600 cursor-not-allowed'
-            : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'
+            : 'apple-cta-primary'
         }`}
       >
         {isGenerating ? (

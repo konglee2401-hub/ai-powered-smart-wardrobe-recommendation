@@ -4,17 +4,13 @@ import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
   Settings, Loader2, AlertCircle, ImagePlus, Layers, ChevronRight, ChevronLeft, X, Trash2
 } from 'lucide-react';
+import PageHeaderBar from '../components/PageHeaderBar';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-/**
- * Convert local file path to API URL for image serving
- */
 function getImageUrl(url) {
   if (!url) return null;
-
   const appHost = API_BASE_URL.replace('/api', '');
-
   if (url.startsWith('http://') || url.startsWith('https://')) {
     if (url.includes('/api/v1/browser-automation/generated-image/')) {
       const filename = decodeURIComponent(url.split('/api/v1/browser-automation/generated-image/').pop() || '');
@@ -22,40 +18,31 @@ function getImageUrl(url) {
     }
     return url;
   }
-
   if (url.startsWith('/api/')) {
     return `${appHost}${url}`;
   }
-
   const tempMatch = url.match(/[\/\\]temp[\/\\](.+)/i);
   if (tempMatch) {
     return `${appHost}/temp/${tempMatch[1].replace(/\\/g, '/')}`;
   }
-
   if (/[.](png|jpe?g|webp|gif)$/i.test(url) && !url.includes('/')) {
     return `${appHost}/api/v1/browser-automation/generated-image/${encodeURIComponent(url)}`;
   }
-
   return url;
 }
-
 
 const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];
 
 function normalizeSceneLockedImageUrls(scene = {}) {
   const fromScene = scene?.sceneLockedImageUrls || {};
   const history = Array.isArray(scene?.sceneLockedImageHistory) ? scene.sceneLockedImageHistory : [];
-
   const first16 = history.find((item) => item && item.aspectRatio === '16:9');
   const first9 = history.find((item) => item && item.aspectRatio === '9:16');
-
   return {
     '16:9': fromScene['16:9'] || first16?.url || null,
     '9:16': fromScene['9:16'] || scene.sceneLockedImageUrl || first9?.url || null
   };
 }
-
-
 
 function normalizeSceneLockedImageHistory(scene = {}) {
   const history = Array.isArray(scene?.sceneLockedImageHistory) ? scene.sceneLockedImageHistory : [];
@@ -69,14 +56,13 @@ function normalizeSceneLockedImageHistory(scene = {}) {
 }
 
 /**
- * Compact Scene Card for Sidebar
+ * Scene Card for Sidebar
  */
 function SceneSidebarCard({ scene, isSelected, onClick }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const lockedImageUrls = normalizeSceneLockedImageUrls(scene);
   const latestHistoryUrl = Array.isArray(scene?.sceneLockedImageHistory)
-    ? (scene.sceneLockedImageHistory[0]?.url || null)
-    : null;
+    ? (scene.sceneLockedImageHistory[0]?.url || null) : null;
   const lockedImageUrl = getImageUrl(lockedImageUrls['9:16'] || lockedImageUrls['16:9'] || latestHistoryUrl);
   const lockedThumbUrl = lockedImageUrl
     ? `${lockedImageUrl}${lockedImageUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(scene.updatedAt || '')}`
@@ -85,118 +71,60 @@ function SceneSidebarCard({ scene, isSelected, onClick }) {
   const sampleCount = (scene.sceneLockSamples || []).length;
 
   return (
-    <div
+    <button
       onClick={onClick}
-      style={{
-        padding: '0.75rem',
-        background: isSelected 
-          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15))'
-          : 'rgba(30, 41, 59, 0.5)',
-        borderRadius: '10px',
-        border: isSelected ? '1px solid #6366f1' : '1px solid #334155',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        marginBottom: '0.5rem'
-      }}
+      className={`group flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
+        isSelected 
+          ? 'bg-indigo-500/20 ring-1 ring-indigo-400/40' 
+          : 'bg-white/[0.03] hover:bg-white/[0.05]'
+      }`}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-        {/* Thumbnail */}
-        <div style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          flexShrink: 0,
-          background: '#1e293b',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          {lockedThumbUrl ? (
-            <img 
-              src={lockedThumbUrl} 
-              alt={scene.label}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <Layers size={20} style={{ color: '#475569' }} />
+      <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-slate-800">
+        {lockedThumbUrl ? (
+          <img 
+            src={lockedThumbUrl} 
+            alt={scene.label}
+            className="h-full w-full object-cover"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-slate-900">
+            <Layers size={20} className="text-slate-500" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className={`text-xs font-semibold truncate ${isSelected ? 'text-indigo-100' : 'text-slate-300'}`}>
+            {scene.label}
+          </span>
+          {scene.useSceneLock !== false && (
+            <Lock size={11} className="flex-shrink-0 text-emerald-400" />
           )}
         </div>
-
-        {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            marginBottom: '0.25rem'
-          }}>
-            <span style={{
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              color: isSelected ? '#c7d2fe' : '#e2e8f0',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              {scene.label}
+        <span className="text-[0.7rem] text-slate-500 font-mono block truncate">
+          {scene.value}
+        </span>
+        <div className="flex gap-1 mt-1.5">
+          {hasPrompt && (
+            <span className="inline-block rounded px-1.5 py-0.5 bg-indigo-500/20 text-[0.65rem] text-indigo-200 font-medium">
+              {t('optionsManagement.hasPrompt', 'Prompt')}
             </span>
-            {scene.useSceneLock !== false && (
-              <Lock size={10} style={{ color: '#22c55e', flexShrink: 0 }} />
-            )}
-          </div>
-          <span style={{
-            fontSize: '0.7rem',
-            color: '#64748b',
-            fontFamily: 'monospace'
-          }}>
-            {scene.value}
-          </span>
-
-          {/* Status indicators */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem' }}>
-            {hasPrompt && (
-              <span style={{
-                padding: '0.1rem 0.4rem',
-                background: 'rgba(99, 102, 241, 0.2)',
-                borderRadius: '4px',
-                fontSize: '0.65rem',
-                color: '#a5b4fc'
-              }}>
-                {t('optionsManagement.hasPrompt', 'Prompt')}
-              </span>
-            )}
-            {sampleCount > 0 && (
-              <span style={{
-                padding: '0.1rem 0.4rem',
-                background: 'rgba(34, 197, 94, 0.15)',
-                borderRadius: '4px',
-                fontSize: '0.65rem',
-                color: '#86efac'
-              }}>
-                {sampleCount} {t('optionsManagement.images', sampleCount === 1 ? 'image' : 'images')}
-              </span>
-            )}
-          </div>
+          )}
+          {sampleCount > 0 && (
+            <span className="inline-block rounded px-1.5 py-0.5 bg-emerald-500/15 text-[0.65rem] text-emerald-200 font-medium">
+              {sampleCount} {t('optionsManagement.images', sampleCount === 1 ? 'image' : 'images')}
+            </span>
+          )}
         </div>
-
-        {/* Arrow */}
-        <ChevronRight 
-          size={16} 
-          style={{ 
-            color: isSelected ? '#6366f1' : '#475569',
-            flexShrink: 0,
-            marginTop: '0.25rem'
-          }} 
-        />
       </div>
-    </div>
+      <ChevronRight size={16} className={`flex-shrink-0 mt-0.5 ${isSelected ? 'text-indigo-400' : 'text-slate-600'}`} />
+    </button>
   );
 }
 
 /**
- * Full Scene Detail Editor
+ * Scene Detail Editor
  */
 function SceneDetailEditor({ scene, onRefresh }) {
   const { t, i18n } = useTranslation();
@@ -218,14 +146,6 @@ function SceneDetailEditor({ scene, onRefresh }) {
   const [previewRenderKey, setPreviewRenderKey] = useState(0);
   const [modalImageUrl, setModalImageUrl] = useState(null);
 
-  const aspectGridStyle = {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
-    gap: '0.75rem'
-  };
-
-
-  // Sync local state when scene changes
   useEffect(() => {
     setPromptSuggestion(scene.promptSuggestion || '');
     setSceneLockedPrompt(scene.sceneLockedPrompt || '');
@@ -312,7 +232,6 @@ function SceneDetailEditor({ scene, onRefresh }) {
       } catch {
         throw new Error(t('optionsManagement.invalidJson', 'Technical Details must be valid JSON'));
       }
-
       const response = await fetch(`${API_BASE_URL}/prompt-options/${scene.category}/${scene.value}/prompt-assets`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -323,7 +242,6 @@ function SceneDetailEditor({ scene, onRefresh }) {
           technicalDetails: technical
         })
       });
-
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Save failed');
       showSuccess(t('optionsManagement.saved', 'Saved successfully'));
@@ -392,212 +310,100 @@ function SceneDetailEditor({ scene, onRefresh }) {
   const activeAspect = SCENE_LOCK_ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16';
 
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-      borderRadius: '12px',
-      border: '1px solid #334155',
-      overflow: 'hidden',
-      transition: 'all 0.3s ease'
-    }}>
+    <div className="studio-card-shell flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-white/10 p-5 shadow-xl overflow-hidden">
       {/* Header */}
-      <div style={{
-        padding: '1.25rem 1.5rem',
-        borderBottom: '1px solid #334155',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem'
-      }}>
-        <div>
-          <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#f1f5f9' }}>
-            {scene.label}
-          </h3>
-          <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-            {scene.value}
-          </span>
+      <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-white/10">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-bold text-white mb-1">{scene.label}</h2>
+          <p className="text-xs text-slate-400 font-mono mb-2">{scene.value}</p>
           {scene.description && (
-            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem', color: '#94a3b8' }}>
-              {scene.description}
-            </p>
+            <p className="text-sm text-slate-400">{scene.description}</p>
           )}
         </div>
-        
-        <label style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          padding: '0.5rem 1rem',
-          background: useSceneLock ? 'rgba(34, 197, 94, 0.15)' : 'rgba(100, 116, 139, 0.15)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease'
-        }}>
+        <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition flex-shrink-0 ${
+          useSceneLock ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/30' : 'bg-slate-500/15 text-slate-300'
+        }`}>
           <input 
             type="checkbox" 
             checked={useSceneLock} 
             onChange={(e) => setUseSceneLock(e.target.checked)}
-            style={{ accentColor: '#22c55e', width: '16px', height: '16px' }}
+            className="accent-emerald-500"
           />
-          <Lock size={16} style={{ color: useSceneLock ? '#22c55e' : '#64748b' }} />
-          <span style={{ fontSize: '0.85rem', color: useSceneLock ? '#22c55e' : '#94a3b8', fontWeight: '500' }}>
-            {t('optionsManagement.useSceneLock', 'Use Scene Lock')}
-          </span>
+          <Lock size={16} />
+          {t('optionsManagement.useSceneLock', 'Use Scene Lock')}
         </label>
       </div>
 
-      {/* Status Messages */}
+      {/* Messages */}
       {error && (
-        <div style={{ 
-          padding: '0.75rem 1.5rem', 
-          background: 'rgba(239, 68, 68, 0.1)', 
-          borderBottom: '1px solid rgba(239, 68, 68, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          color: '#fca5a5',
-          fontSize: '0.85rem'
-        }}>
-          <AlertCircle size={16} />
-          {error}
+        <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-3 flex items-start gap-3">
+          <AlertCircle size={18} className="flex-shrink-0 text-red-400 mt-0.5" />
+          <p className="text-sm text-red-200">{error}</p>
         </div>
       )}
-      
       {success && (
-        <div style={{ 
-          padding: '0.75rem 1.5rem', 
-          background: 'rgba(34, 197, 94, 0.1)', 
-          borderBottom: '1px solid rgba(34, 197, 94, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          color: '#86efac',
-          fontSize: '0.85rem'
-        }}>
-          <Check size={16} />
-          {success}
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 flex items-start gap-3">
+          <Check size={18} className="flex-shrink-0 text-emerald-400 mt-0.5" />
+          <p className="text-sm text-emerald-200">{success}</p>
         </div>
       )}
 
       {/* Content */}
-      <div style={{ padding: '1.5rem' }}>
-        {/* Prompt Fields */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '500', color: '#94a3b8' }}>
-              {t('optionsManagement.promptSuggestion', 'Prompt Suggestion (fallback)')}
-            </label>
-            <textarea 
-              style={{
-                width: '100%',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                padding: '0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem',
-                resize: 'vertical',
-                minHeight: '80px'
-              }}
-              rows={3} 
-              value={promptSuggestion} 
-              onChange={(e) => setPromptSuggestion(e.target.value)}
-              placeholder={t('optionsManagement.promptPlaceholder', 'Enter fallback prompt...')}
-            />
-          </div>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '500', color: '#94a3b8' }}>
-              {t('optionsManagement.sceneLockedPrompt', 'Scene Locked Prompt (canonical)')}
-            </label>
-            <textarea 
-              style={{
-                width: '100%',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                padding: '0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem',
-                resize: 'vertical',
-                minHeight: '120px'
-              }}
-              rows={5} 
-              value={sceneLockedPrompt} 
-              onChange={(e) => setSceneLockedPrompt(e.target.value)}
-              placeholder={t('optionsManagement.lockedPromptPlaceholder', 'Enter canonical scene prompt...')}
-            />
+      <div className="flex-1 overflow-y-auto space-y-5 pr-2">
+        {/* Prompt Section */}
+        <div className="studio-accent-panel rounded-xl border border-white/10 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-white">{t('optionsManagement.prompts', 'Prompts')}</h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">
+                {t('optionsManagement.promptSuggestion', 'Fallback')}
+              </label>
+              <textarea 
+                className="w-full h-24 bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-400/50 focus:outline-none resize-none"
+                value={promptSuggestion} 
+                onChange={(e) => setPromptSuggestion(e.target.value)}
+                placeholder={t('optionsManagement.promptPlaceholder', 'Enter fallback prompt...')}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">
+                {t('optionsManagement.sceneLockedPrompt', 'Canonical')}
+              </label>
+              <textarea 
+                className="w-full h-24 bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-400/50 focus:outline-none resize-none"
+                value={sceneLockedPrompt} 
+                onChange={(e) => setSceneLockedPrompt(e.target.value)}
+                placeholder={t('optionsManagement.lockedPromptPlaceholder', 'Enter canonical scene prompt...')}
+              />
+            </div>
           </div>
         </div>
 
         {/* Technical Details */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: '500', color: '#94a3b8' }}>
-            {t('optionsManagement.technicalDetails', 'Technical Details (JSON)')}
+        <div className="studio-accent-panel rounded-xl border border-white/10 p-4 space-y-2">
+          <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide">
+            {t('optionsManagement.technicalDetails', 'Technical Details')}
           </label>
           <textarea 
-            style={{
-              width: '100%',
-              background: '#0f172a',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              padding: '0.75rem',
-              color: '#a5b4fc',
-              fontSize: '0.8rem',
-              fontFamily: 'monospace',
-              resize: 'vertical',
-              minHeight: '100px'
-            }}
-            rows={6} 
+            className="w-full h-24 bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-indigo-200 font-mono placeholder-slate-600 focus:border-indigo-400/50 focus:outline-none resize-none"
             value={technicalDetails} 
             onChange={(e) => setTechnicalDetails(e.target.value)}
           />
         </div>
 
-        {/* Enhancement Options */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: '1rem', 
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          background: 'rgba(15, 23, 42, 0.5)',
-          borderRadius: '8px'
-        }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-              {t('optionsManagement.styleDirection', 'Style Direction')}
-            </label>
+        {/* Enhancement */}
+        <div className="studio-accent-panel rounded-xl border border-white/10 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-white">{t('optionsManagement.enhancement', 'Enhancement')}</h3>
+          <div className="grid gap-2 md:grid-cols-2">
             <input 
-              style={{
-                width: '100%',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                padding: '0.6rem 0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem'
-              }}
-              placeholder={t('optionsManagement.stylePlaceholder', 'e.g., cinematic, realistic...')}
+              className="bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-400/50 focus:outline-none"
+              placeholder={t('optionsManagement.stylePlaceholder', 'Style direction...')}
               value={styleDirection} 
               onChange={(e) => setStyleDirection(e.target.value)} 
             />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-              {t('optionsManagement.improvementNotes', 'Improvement Notes')}
-            </label>
             <input 
-              style={{
-                width: '100%',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                padding: '0.6rem 0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem'
-              }}
-              placeholder={t('optionsManagement.notesPlaceholder', 'e.g., add more lighting...')}
+              className="bg-slate-950/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-indigo-400/50 focus:outline-none"
+              placeholder={t('optionsManagement.notesPlaceholder', 'Improvement notes...')}
               value={improvementNotes} 
               onChange={(e) => setImprovementNotes(e.target.value)} 
             />
@@ -605,189 +411,87 @@ function SceneDetailEditor({ scene, onRefresh }) {
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <div className="flex flex-wrap gap-2">
           <button 
             disabled={generatingPrompt} 
             onClick={() => callGeneratePrompt('create')} 
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.6rem 1rem',
-              background: generatingPrompt ? '#374151' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: '500',
-              cursor: generatingPrompt ? 'not-allowed' : 'pointer',
-              opacity: generatingPrompt ? 0.7 : 1
-            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm disabled:opacity-50 transition"
           >
             {generatingPrompt ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-            {generatingPrompt 
-              ? t('optionsManagement.generating', 'Generating...') 
-              : t('optionsManagement.generatePrompt', 'Generate Prompt (ChatGPT)')
-            }
+            {generatingPrompt ? t('optionsManagement.generating', 'Generating...') : t('optionsManagement.generatePrompt', 'Generate')}
           </button>
-          
           <button 
             disabled={generatingPrompt} 
             onClick={() => callGeneratePrompt('enhance')} 
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.6rem 1rem',
-              background: generatingPrompt ? '#374151' : 'linear-gradient(135deg, #a855f7, #ec4899)',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: '500',
-              cursor: generatingPrompt ? 'not-allowed' : 'pointer',
-              opacity: generatingPrompt ? 0.7 : 1
-            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm disabled:opacity-50 transition"
           >
             {generatingPrompt ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generatingPrompt 
-              ? t('optionsManagement.enhancing', 'Enhancing...') 
-              : t('optionsManagement.enhancePrompt', 'Enhance / Change')
-            }
+            {generatingPrompt ? t('optionsManagement.enhancing', 'Enhancing...') : t('optionsManagement.enhancePrompt', 'Enhance')}
           </button>
-          
           <button 
             disabled={saving} 
             onClick={saveAssets} 
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.6rem 1rem',
-              background: saving ? '#374151' : 'linear-gradient(135deg, #22c55e, #16a34a)',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: '500',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1
-            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm disabled:opacity-50 transition ml-auto"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving 
-              ? t('optionsManagement.saving', 'Saving...') 
-              : t('optionsManagement.saveSettings', 'Save Settings')
-            }
+            {saving ? t('optionsManagement.saving', 'Saving...') : t('optionsManagement.saveSettings', 'Save')}
           </button>
         </div>
 
-        {/* Image Generation Section */}
-        <div style={{ 
-          padding: '1rem',
-          background: 'rgba(99, 102, 241, 0.05)',
-          borderRadius: '8px',
-          border: '1px solid rgba(99, 102, 241, 0.2)',
-          marginBottom: '1.5rem'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            alignItems: 'center', 
-            gap: '0.75rem' 
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Image size={18} style={{ color: '#a5b4fc' }} />
-              <span style={{ fontSize: '0.9rem', fontWeight: '500', color: '#c7d2fe' }}>
-                {t('optionsManagement.generatePreviews', 'Generate Previews')}
-              </span>
-            </div>
-            
+        {/* Image Generation */}
+        <div className="studio-accent-panel rounded-xl border border-white/10 p-4 space-y-3">
+          <div className="flex items-center flex-wrap gap-3">
+            <span className="text-sm font-semibold text-white">{t('optionsManagement.generatePreviews', 'Generate Previews')}</span>
             <select 
               value={imageCount} 
               onChange={(e) => setImageCount(Number(e.target.value))} 
-              style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                padding: '0.5rem 0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem'
-              }}
+              className="bg-slate-950/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-300"
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>{n} {t('optionsManagement.images', n === 1 ? 'image' : 'images')}</option>
               ))}
             </select>
-            
             <select 
               value={aspectRatio} 
               onChange={(e) => setAspectRatio(e.target.value)} 
-              style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                padding: '0.5rem 0.75rem',
-                color: '#e2e8f0',
-                fontSize: '0.85rem'
-              }}
+              className="bg-slate-950/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-300"
             >
               {SCENE_LOCK_ASPECTS.map((ratio) => (
                 <option key={ratio} value={ratio}>{ratio}</option>
               ))}
             </select>
-            
             <button 
               disabled={generatingImages} 
               onClick={callGenerateImages} 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.5rem 1rem',
-                background: generatingImages ? '#374151' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#fff',
-                fontSize: '0.85rem',
-                fontWeight: '500',
-                cursor: generatingImages ? 'not-allowed' : 'pointer',
-                opacity: generatingImages ? 0.7 : 1
-              }}
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs disabled:opacity-50 transition ml-auto"
             >
-              {generatingImages ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
-              {generatingImages 
-                ? t('optionsManagement.generatingImages', 'Generating...') 
-                : t('optionsManagement.generate', 'Generate')
-              }
+              {generatingImages ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+              {generatingImages ? t('optionsManagement.generating', 'Generating...') : t('optionsManagement.generate', 'Generate')}
             </button>
           </div>
         </div>
 
-        {/* Locked Image Preview by Aspect */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
-            <Lock size={14} style={{ marginRight: '0.5rem', color: '#22c55e' }} />
-            {t('optionsManagement.currentLockedImage', 'Current Locked Image')}
-          </p>
-          <div style={aspectGridStyle}>
-
+        {/* Locked Images Preview */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+            <Lock size={14} className="text-emerald-400" />
+            {t('optionsManagement.currentLockedImage', 'Locked Images')}
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2">
             {SCENE_LOCK_ASPECTS.map((ratio) => {
               const ratioImageUrl = getImageUrl(lockedImageUrls[ratio]);
               return (
-                <div key={ratio} style={{ padding: '0.75rem', background: '#0f172a', borderRadius: '10px', border: '1px solid #334155' }}>
-                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 600 }}>
-                    {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
-                  </p>
+                <div key={ratio} className="studio-accent-panel rounded-lg border border-white/10 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-300">{ratio}</p>
                   {ratioImageUrl ? (
                     <img
                       src={ratioImageUrl}
-                      alt={`Locked scene ${ratio}`}
+                      alt={`Locked ${ratio}`}
                       onClick={() => setModalImageUrl(ratioImageUrl)}
-                      style={{ width: '100%', height: ratio === '16:9' ? '120px' : '220px', objectFit: 'contain', borderRadius: '6px', display: 'block', cursor: 'zoom-in', background: '#020617' }}
+                      className="w-full h-40 object-contain rounded-lg cursor-zoom-in bg-slate-950"
                     />
                   ) : (
-                    <div style={{ width: '100%', height: ratio === '16:9' ? '100px' : '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.8rem', background: '#1e293b', borderRadius: '6px' }}>
+                    <div className="w-full h-40 flex items-center justify-center bg-slate-950/50 rounded-lg text-xs text-slate-500">
                       {t('optionsManagement.noLockedImage', 'No locked image')}
                     </div>
                   )}
@@ -797,62 +501,57 @@ function SceneDetailEditor({ scene, onRefresh }) {
           </div>
         </div>
 
-        {/* Saved Locked Images (max 10) */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
-            {t('optionsManagement.savedLockedImages', 'Saved Scene Locked Images (max 10)')}
-          </p>
-          <div style={aspectGridStyle}>
-
+        {/* Saved History */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300">
+            {t('optionsManagement.savedLockedImages', 'History')}
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2">
             {SCENE_LOCK_ASPECTS.map((ratio) => {
               const ratioHistory = historyGroups[ratio] || [];
               const idx = Math.min(lockedHistoryIndexByAspect[ratio] || 0, Math.max(ratioHistory.length - 1, 0));
               const current = ratioHistory[idx];
               const currentUrl = current ? getImageUrl(current.url) : null;
-
               return (
-                <div key={`saved-${ratio}`} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
-                    <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
-                      {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
-                    </p>
-                    <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{ratioHistory.length}</span>
+                <div key={`saved-${ratio}`} className="studio-accent-panel rounded-lg border border-white/10 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-300">{ratio}</p>
+                    <span className="text-xs text-slate-500">{ratioHistory.length}</span>
                   </div>
-
                   {currentUrl ? (
-                    <div>
+                    <div className="space-y-2">
                       <img
                         src={currentUrl}
-                        alt={`Saved locked ${ratio}`}
+                        alt={`Saved ${ratio}`}
                         onClick={() => setModalImageUrl(currentUrl)}
-                        style={{ width: '100%', height: ratio === '16:9' ? '140px' : '240px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
+                        className="w-full h-40 object-contain rounded-lg cursor-zoom-in bg-slate-950"
                       />
-                      <div style={{ marginTop: '0.6rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <div className="flex items-center justify-between gap-1">
                         <button
                           onClick={() => moveSlider(setLockedHistoryIndexByAspect, ratio, ratioHistory.length, -1)}
                           disabled={ratioHistory.length <= 1}
-                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioHistory.length > 1 ? 'pointer' : 'not-allowed' }}
+                          className="p-1 rounded bg-slate-700/50 hover:bg-slate-600 disabled:opacity-50 text-slate-300"
                         >
                           <ChevronLeft size={14} />
                         </button>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8', alignSelf: 'center' }}>{idx + 1}/{ratioHistory.length}</span>
+                        <span className="text-xs text-slate-400 flex-1 text-center">{idx + 1}/{ratioHistory.length}</span>
                         <button
                           onClick={() => moveSlider(setLockedHistoryIndexByAspect, ratio, ratioHistory.length, 1)}
                           disabled={ratioHistory.length <= 1}
-                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioHistory.length > 1 ? 'pointer' : 'not-allowed' }}
+                          className="p-1 rounded bg-slate-700/50 hover:bg-slate-600 disabled:opacity-50 text-slate-300"
                         >
                           <ChevronRight size={14} />
                         </button>
                         <button
                           onClick={() => deleteLockedImage(current.url)}
-                          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.6rem', background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '6px', color: '#fca5a5', cursor: 'pointer' }}
+                          className="p-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300"
                         >
-                          <Trash2 size={14} /> {t('optionsManagement.delete', 'Delete')}
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noLockedHistoryForAspect', 'No saved locked images for this aspect yet')}</p>
+                    <p className="text-xs text-slate-500 text-center py-4">{t('optionsManagement.noLockedHistoryForAspect', 'No history')}</p>
                   )}
                 </div>
               );
@@ -860,12 +559,12 @@ function SceneDetailEditor({ scene, onRefresh }) {
           </div>
         </div>
 
-        {/* Preview Candidates Slider */}
-        <div>
-          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#94a3b8' }}>
+        {/* Preview Candidates */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-300">
             {t('optionsManagement.previewCandidates', 'Preview Candidates')}
-          </p>
-          <div key={`preview-${activeAspect}-${previewRenderKey}`} style={{ padding: '0.75rem', background: '#0b1220', borderRadius: '10px', border: '1px solid #334155' }}>
+          </h3>
+          <div key={`preview-${activeAspect}-${previewRenderKey}`} className="studio-accent-panel rounded-lg border border-white/10 p-3 space-y-2">
             {(() => {
               const ratio = activeAspect;
               const ratioSamples = sampleGroups[ratio] || [];
@@ -873,43 +572,44 @@ function SceneDetailEditor({ scene, onRefresh }) {
               const sample = ratioSamples[idx];
               const sampleUrl = sample ? getImageUrl(sample.url) : null;
               const isAspectLocked = sample ? lockedImageUrls[ratio] === sample.url : false;
-
               return (
                 <>
-                  <p style={{ margin: '0 0 0.6rem 0', color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>
-                    {t('optionsManagement.aspectRatio', 'Aspect Ratio')}: {ratio}
-                  </p>
+                  <p className="text-xs font-semibold text-slate-300">{ratio}</p>
                   {!sampleUrl ? (
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>{t('optionsManagement.noSamplesForAspect', 'No preview samples for this aspect yet')}</p>
+                    <p className="text-xs text-slate-500 text-center py-4">{t('optionsManagement.noSamplesForAspect', 'No samples')}</p>
                   ) : (
-                    <div>
+                    <div className="space-y-2">
                       <img
                         src={sampleUrl}
-                        alt={`Scene sample ${ratio}`}
+                        alt={`Preview ${ratio}`}
                         onClick={() => setModalImageUrl(sampleUrl)}
-                        style={{ width: '100%', height: ratio === '16:9' ? '160px' : '260px', objectFit: 'contain', borderRadius: '6px', cursor: 'zoom-in', background: '#020617' }}
+                        className="w-full h-40 object-contain rounded-lg cursor-zoom-in bg-slate-950"
                       />
-                      <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div className="flex items-center justify-between gap-2">
                         <button
                           onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, -1)}
                           disabled={ratioSamples.length <= 1}
-                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                          className="p-1 rounded bg-slate-700/50 hover:bg-slate-600 disabled:opacity-50 text-slate-300"
                         >
                           <ChevronLeft size={14} />
                         </button>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{idx + 1}/{ratioSamples.length}</span>
+                        <span className="text-xs text-slate-400">{idx + 1}/{ratioSamples.length}</span>
                         <button
                           onClick={() => moveSlider(setPreviewIndexByAspect, ratio, ratioSamples.length, 1)}
                           disabled={ratioSamples.length <= 1}
-                          style={{ padding: '0.35rem 0.6rem', background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#cbd5e1', cursor: ratioSamples.length > 1 ? 'pointer' : 'not-allowed' }}
+                          className="p-1 rounded bg-slate-700/50 hover:bg-slate-600 disabled:opacity-50 text-slate-300"
                         >
                           <ChevronRight size={14} />
                         </button>
                         <button
                           onClick={() => chooseDefaultImage(sample.url, ratio)}
-                          style={{ marginLeft: 'auto', padding: '0.4rem 0.7rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
+                          className={`ml-auto px-3 py-1 rounded text-xs font-medium transition ${
+                            isAspectLocked 
+                              ? 'bg-emerald-500/20 text-emerald-200' 
+                              : 'bg-slate-700/50 hover:bg-slate-600 text-slate-300'
+                          }`}
                         >
-                          {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
+                          {isAspectLocked ? '✓ Locked' : 'Select'}
                         </button>
                       </div>
                     </div>
@@ -919,28 +619,32 @@ function SceneDetailEditor({ scene, onRefresh }) {
             })()}
           </div>
         </div>
-
-        {modalImageUrl && (
-          <div
-            onClick={() => setModalImageUrl(null)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-          >
-            <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
-              <button
-                onClick={() => setModalImageUrl(null)}
-                style={{ position: 'absolute', top: '-2.2rem', right: 0, background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#e2e8f0', cursor: 'pointer', padding: '0.35rem 0.5rem' }}
-              >
-                <X size={16} />
-              </button>
-              <img src={modalImageUrl} alt="Scene preview full size" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px', border: '1px solid #334155' }} onClick={(e) => e.stopPropagation()} />
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Image Modal */}
+      {modalImageUrl && (
+        <div
+          onClick={() => setModalImageUrl(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <button
+              onClick={() => setModalImageUrl(null)}
+              className="absolute top-4 right-4 p-2 rounded-lg bg-slate-900/75 hover:bg-slate-800 text-white"
+            >
+              <X size={20} />
+            </button>
+            <img src={modalImageUrl} alt="Preview fullscreen" className="max-w-full max-h-[90vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+/**
+ * Main Export
+ */
 export default function OptionsManagement() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -956,7 +660,6 @@ export default function OptionsManagement() {
       if (!data.success) throw new Error(data.message || 'Failed to load scenes');
       const loadedScenes = data.data || [];
       setScenes(loadedScenes);
-      // Auto-select first scene if none selected
       if (!selectedSceneValue && loadedScenes.length > 0) {
         setSelectedSceneValue(loadedScenes[0].value);
       }
@@ -976,16 +679,10 @@ export default function OptionsManagement() {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader2 size={48} className="animate-spin" style={{ color: '#6366f1', marginBottom: '1rem' }} />
-          <p style={{ color: '#94a3b8', fontSize: '1rem' }}>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="text-center">
+          <Loader2 size={48} className="mx-auto mb-4 animate-spin text-indigo-500" />
+          <p className="text-slate-300 text-lg">
             {t('optionsManagement.loading', 'Loading Scene Lock Manager...')}
           </p>
         </div>
@@ -994,154 +691,70 @@ export default function OptionsManagement() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-      color: '#f1f5f9'
-    }}>
-      <div style={{
-        maxWidth: '1600px',
-        margin: '0 auto',
-        padding: '2rem',
-        position: 'relative'
-      }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '1rem'
-        }}>
-          <div>
-            <h1 style={{
-              margin: '0 0 0.5rem 0',
-              fontSize: '2rem',
-              fontWeight: '700',
-              color: '#f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem'
-            }}>
-              <Settings size={28} style={{ color: '#8b5cf6' }} />
-              {t('optionsManagement.title', 'Scene Lock Manager')}
-            </h1>
-            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.95rem' }}>
-              {t('optionsManagement.subtitle', 'Manage scene prompts and lock previews for consistent image generation')}
-            </p>
-          </div>
-          
+    <div className="options-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6">
+      {/* ==================== HEADER ==================== */}
+      <PageHeaderBar
+        icon={<Settings className="h-5 w-5 text-indigo-400" />}
+        title={t('optionsManagement.title', 'Scene Lock Manager')}
+        subtitle={t('optionsManagement.subtitle', 'Manage scene prompts and lock previews for consistent image generation')}
+        className="h-16"
+        contentClassName="px-5 lg:px-6"
+        actions={
           <button 
             onClick={loadScenes}
             disabled={refreshing}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.6rem 1rem',
-              background: 'rgba(99, 102, 241, 0.1)',
-              border: '1px solid rgba(99, 102, 241, 0.3)',
-              borderRadius: '8px',
-              color: '#a5b4fc',
-              fontSize: '0.85rem',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-200 transition hover:bg-indigo-500/15 disabled:opacity-50"
           >
-            <RefreshCw size={16} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
             {t('optionsManagement.refresh', 'Refresh')}
           </button>
-        </div>
+        }
+      />
 
-        {/* Workflow Guide */}
-        <div style={{
-          padding: '1rem 1.5rem',
-          background: 'rgba(99, 102, 241, 0.08)',
-          borderRadius: '10px',
-          border: '1px solid rgba(99, 102, 241, 0.2)',
-          marginBottom: '1.5rem'
-        }}>
-          <p style={{ margin: 0, color: '#c7d2fe', fontSize: '0.9rem' }}>
-            <strong style={{ color: '#a5b4fc' }}>{t('optionsManagement.workflow', 'Workflow')}:</strong>{' '}
-            {t('optionsManagement.workflowDesc', 'Load scenes → Generate canonical prompt via ChatGPT browser → Generate 1-4 previews via Google Flow → Pick default image and lock')}
-          </p>
-        </div>
-
-        {/* Main Layout: Sidebar + Content */}
-        <div style={{ display: 'flex', gap: '1.5rem' }}>
-          {/* Left Sidebar */}
-          <div style={{
-            width: '280px',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div style={{
-              padding: '0.75rem',
-              background: 'rgba(30, 41, 59, 0.5)',
-              borderRadius: '12px',
-              border: '1px solid #334155',
-              maxHeight: 'calc(100vh - 180px)',
-              overflowY: 'auto'
-            }}>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '0.75rem',
-                paddingBottom: '0.75rem',
-                borderBottom: '1px solid #334155'
-              }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#94a3b8' }}>
-                  {t('optionsManagement.sceneList', 'Scenes')} ({scenes.length})
-                </span>
+      {/* ==================== MAIN BODY ==================== */}
+      <div className="flex min-h-0 flex-1 overflow-hidden px-5 py-3 gap-4">
+        {/* ==================== LEFT SIDEBAR ==================== */}
+        <div className="w-80 min-h-0 flex-shrink-0 overflow-hidden rounded-[1.75rem]">
+          <div className="studio-accent-panel rounded-2xl border border-white/10 px-3 py-3 shadow-lg h-full overflow-y-auto">
+            <div className="mb-3 border-b border-white/10 pb-3">
+              <span className="text-xs font-semibold uppercase tracking-widest text-sky-300">
+                {t('optionsManagement.sceneList', 'Scenes')} ({scenes.length})
+              </span>
+            </div>
+            {scenes.length === 0 ? (
+              <div className="py-6 text-center text-sm text-slate-400">
+                {t('optionsManagement.noScenes', 'No scenes found')}
               </div>
-
-              {scenes.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '1.5rem 0', color: '#64748b', fontSize: '0.85rem' }}>
-                  {t('optionsManagement.noScenes', 'No scenes found')}
-                </div>
-              ) : (
-                scenes.map((scene) => (
+            ) : (
+              <div className="space-y-1.5">
+                {scenes.map((scene) => (
                   <SceneSidebarCard
                     key={scene._id || scene.value}
                     scene={scene}
                     isSelected={selectedSceneValue === scene.value}
                     onClick={() => setSelectedSceneValue(scene.value)}
                   />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {selectedScene ? (
-              <SceneDetailEditor 
-                scene={selectedScene} 
-                onRefresh={loadScenes}
-              />
-            ) : (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4rem 2rem',
-                background: 'rgba(30, 41, 59, 0.3)',
-                borderRadius: '12px',
-                border: '1px dashed #334155'
-              }}>
-                <Layers size={48} style={{ color: '#475569', marginBottom: '1rem' }} />
-                <p style={{ color: '#64748b', margin: 0, fontSize: '1rem' }}>
-                  {t('optionsManagement.selectScene', 'Select a scene from the list')}
-                </p>
+                ))}
               </div>
             )}
           </div>
+        </div>
+
+        {/* ==================== CENTER + RIGHT CONTENT ==================== */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {selectedScene ? (
+            <SceneDetailEditor 
+              scene={selectedScene} 
+              onRefresh={loadScenes}
+            />
+          ) : (
+            <div className="studio-card-shell rounded-2xl border border-white/10 flex flex-col items-center justify-center px-6 py-20 text-center shadow-lg">
+              <Layers size={56} className="mb-4 text-slate-500" />
+              <p className="text-lg text-slate-400">
+                {t('optionsManagement.selectScene', 'Select a scene from the list')}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

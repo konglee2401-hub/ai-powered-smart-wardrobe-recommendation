@@ -28,6 +28,7 @@ backend/media/
 backend/test-images/
 backend/test-videos/
 backend/test-results/
+backend/test-affiliate/
 scraper_service/downloads
 .playwright-cli/
 

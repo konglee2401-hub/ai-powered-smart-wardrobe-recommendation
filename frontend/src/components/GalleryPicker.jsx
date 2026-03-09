@@ -16,10 +16,10 @@ const getApiBase = () => import.meta.env.VITE_API_URL || 'http://localhost:5000/
 const buildAssetSources = (asset) => {
   const apiUrl = getApiBase();
   const sources = [
-    asset.preview?.url,
     asset.assetId ? `${apiUrl}/assets/proxy/${asset.assetId}` : null,
-    asset.storage?.url,
+    asset.preview?.url && !String(asset.preview.url).startsWith('blob:') ? asset.preview.url : null,
     asset.cloudStorage?.thumbnailLink,
+    asset.storage?.url && !String(asset.storage.url).startsWith('blob:') ? asset.storage.url : null,
     asset.cloudStorage?.webViewLink,
   ].filter(Boolean);
 
@@ -103,6 +103,7 @@ const GalleryPicker = ({
   });
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLightTheme = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light';
   const scrollContainerRef = useRef(null);
   const observerTarget = React.useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -122,7 +123,7 @@ const GalleryPicker = ({
         const previewState = await resolveAssetPreview(item.assetId, item.sources, item.assetSignature);
         return {
           ...item,
-          url: previewState.resolvedUrl || item.url,
+          url: item.url,
           thumbnail: previewState.resolvedUrl || item.thumbnail,
           resolvedUrl: previewState.resolvedUrl || item.url,
           sourceIndex: previewState.sourceIndex >= 0 ? previewState.sourceIndex : item.sourceIndex,
@@ -232,7 +233,8 @@ const GalleryPicker = ({
           assetId: asset.assetId,
           id: asset._id,
           name: asset.filename,
-          url: primarySource,
+          url: asset.assetId ? `${apiUrl}/assets/proxy/${asset.assetId}` : primarySource,
+          selectUrl: asset.assetId ? `${apiUrl}/assets/proxy/${asset.assetId}` : primarySource,
           thumbnail: primarySource,
           type: asset.assetType,
           category: asset.assetCategory,
@@ -413,6 +415,60 @@ const GalleryPicker = ({
     return labels[category] || category;
   };
 
+  const theme = isLightTheme
+    ? {
+        overlay: 'rgba(145, 167, 193, 0.28)',
+        panelBg: 'linear-gradient(180deg, rgba(244, 251, 255, 0.88), rgba(231, 244, 255, 0.72))',
+        panelBorder: '1px solid rgba(255,255,255,0.5)',
+        panelShadow: '0 24px 64px rgba(74, 122, 168, 0.14)',
+        headerBg: 'rgba(234, 244, 252, 0.78)',
+        sectionBg: 'rgba(232, 243, 252, 0.72)',
+        inputBg: 'rgba(255,255,255,0.68)',
+        inputBorder: '1px solid rgba(255,255,255,0.48)',
+        textStrong: '#10233b',
+        textMuted: '#61748d',
+        textSoft: '#7d8ea6',
+        tileBg: 'linear-gradient(180deg, rgba(247, 252, 255, 0.72), rgba(231, 244, 255, 0.54))',
+        tileBorder: '1px solid rgba(255,255,255,0.44)',
+        tileHover: '#7cc2ff',
+        selectedBg: 'linear-gradient(180deg, rgba(232,246,255,0.98), rgba(193,226,255,0.94))',
+        selectedBorder: '2px solid rgba(59,130,246,0.3)',
+        accentBg: 'rgba(59,130,246,0.12)',
+        accentText: '#155a9c',
+        primaryButton: 'linear-gradient(180deg, rgba(56, 139, 253, 0.96), rgba(37, 99, 235, 0.92))',
+        primaryText: '#f8fbff',
+        primaryShadow: '0 14px 28px rgba(37,99,235,0.22)',
+        neutralButton: 'rgba(255,255,255,0.64)',
+        neutralBorder: '1px solid rgba(255,255,255,0.5)',
+        imageFallback: 'rgba(231, 243, 252, 0.9)',
+      }
+    : {
+        overlay: 'rgba(0, 0, 0, 0.7)',
+        panelBg: '#0f172a',
+        panelBorder: '1px solid #334155',
+        panelShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+        headerBg: '#1e293b',
+        sectionBg: '#1e293b',
+        inputBg: '#0f172a',
+        inputBorder: '1px solid #475569',
+        textStrong: '#f1f5f9',
+        textMuted: '#cbd5e1',
+        textSoft: '#94a3b8',
+        tileBg: '#1e293b',
+        tileBorder: '1px solid #334155',
+        tileHover: '#6366f1',
+        selectedBg: 'rgba(99, 102, 241, 0.3)',
+        selectedBorder: '2px solid #6366f1',
+        accentBg: 'rgba(99, 102, 241, 0.2)',
+        accentText: '#c4b5fd',
+        primaryButton: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+        primaryText: '#ffffff',
+        primaryShadow: '0 6px 20px rgba(99, 102, 241, 0.4)',
+        neutralButton: '#1e293b',
+        neutralBorder: '1px solid #475569',
+        imageFallback: '#0f172a',
+      };
+
   if (!isOpen) return null;
 
   return (
@@ -422,17 +478,18 @@ const GalleryPicker = ({
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
+      background: theme.overlay,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 9999
+      zIndex: 9999,
+      backdropFilter: isLightTheme ? 'blur(14px)' : 'none'
     }}>
       <div style={{
-        background: '#0f172a',
+        background: theme.panelBg,
         borderRadius: '12px',
-        border: '1px solid #334155',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+        border: theme.panelBorder,
+        boxShadow: theme.panelShadow,
         width: '90vw',
         maxWidth: '900px',
         maxHeight: '90vh',
@@ -446,13 +503,13 @@ const GalleryPicker = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '1.5rem',
-          borderBottom: '1px solid #334155',
-          background: '#1e293b'
+          borderBottom: theme.panelBorder,
+          background: theme.headerBg
         }}>
           <div>
             <h2 style={{ 
               margin: '0', 
-              color: '#f1f5f9',
+              color: theme.textStrong,
               fontSize: '1.3rem',
               fontWeight: '600'
             }}>
@@ -460,7 +517,7 @@ const GalleryPicker = ({
             </h2>
             <p style={{ 
               margin: '0.25rem 0 0 0', 
-              color: '#cbd5e1',
+              color: theme.textMuted,
               fontSize: '0.9rem'
             }}>
               {error ? error : multiSelect ? `${selectedItems.length} selected` : 'Select one item'}
@@ -471,7 +528,7 @@ const GalleryPicker = ({
             style={{
               background: 'none',
               border: 'none',
-              color: '#cbd5e1',
+              color: theme.textMuted,
               cursor: 'pointer',
               fontSize: '1.5rem',
               padding: '0.5rem',
@@ -481,12 +538,12 @@ const GalleryPicker = ({
               transition: 'all 0.3s'
             }}
             onMouseEnter={(e) => {
-              e.target.style.color = '#f1f5f9';
-              e.target.style.background = '#334155';
+              e.target.style.color = theme.textStrong;
+              e.target.style.background = isLightTheme ? 'rgba(255,255,255,0.54)' : '#334155';
               e.target.style.borderRadius = '6px';
             }}
             onMouseLeave={(e) => {
-              e.target.style.color = '#cbd5e1';
+              e.target.style.color = theme.textMuted;
               e.target.style.background = 'none';
             }}
           >
@@ -497,8 +554,8 @@ const GalleryPicker = ({
         {/* Filters & Controls */}
         <div style={{
           padding: '1rem 1.5rem',
-          borderBottom: '1px solid #334155',
-          background: '#1e293b',
+          borderBottom: theme.panelBorder,
+          background: theme.sectionBg,
           display: 'flex',
           gap: '1rem',
           flexWrap: 'wrap',
@@ -513,10 +570,10 @@ const GalleryPicker = ({
               style={{
                 flex: 1,
                 padding: '0.6rem 1rem',
-                background: '#0f172a',
-                border: '1px solid #475569',
+                background: theme.inputBg,
+                border: theme.inputBorder,
                 borderRadius: '6px',
-                color: '#f1f5f9',
+                color: theme.textStrong,
                 fontSize: '0.95rem'
               }}
             />
@@ -530,10 +587,10 @@ const GalleryPicker = ({
             }}
             style={{
               padding: '0.6rem 1rem',
-              background: '#0f172a',
-              border: '1px solid #475569',
+              background: theme.inputBg,
+              border: theme.inputBorder,
               borderRadius: '6px',
-              color: '#f1f5f9',
+              color: theme.textStrong,
               fontSize: '0.95rem',
               cursor: 'pointer'
             }}
@@ -552,10 +609,10 @@ const GalleryPicker = ({
             }}
             style={{
               padding: '0.6rem 1rem',
-              background: '#0f172a',
-              border: '1px solid #475569',
+              background: theme.inputBg,
+              border: theme.inputBorder,
               borderRadius: '6px',
-              color: '#f1f5f9',
+              color: theme.textStrong,
               fontSize: '0.95rem',
               cursor: 'pointer'
             }}
@@ -571,10 +628,10 @@ const GalleryPicker = ({
               onClick={() => setViewMode('grid')}
               style={{
                 padding: '0.6rem 0.8rem',
-                background: viewMode === 'grid' ? '#6366f1' : '#1e293b',
-                border: `1px solid ${viewMode === 'grid' ? '#6366f1' : '#475569'}`,
+                background: viewMode === 'grid' ? theme.selectedBg : theme.sectionBg,
+                border: viewMode === 'grid' ? theme.selectedBorder : theme.inputBorder,
                 borderRadius: '6px',
-                color: '#f1f5f9',
+                color: viewMode === 'grid' ? theme.accentText : theme.textStrong,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -587,10 +644,10 @@ const GalleryPicker = ({
               onClick={() => setViewMode('list')}
               style={{
                 padding: '0.6rem 0.8rem',
-                background: viewMode === 'list' ? '#6366f1' : '#1e293b',
-                border: `1px solid ${viewMode === 'list' ? '#6366f1' : '#475569'}`,
+                background: viewMode === 'list' ? theme.selectedBg : theme.sectionBg,
+                border: viewMode === 'list' ? theme.selectedBorder : theme.inputBorder,
                 borderRadius: '6px',
-                color: '#f1f5f9',
+                color: viewMode === 'list' ? theme.accentText : theme.textStrong,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -627,7 +684,7 @@ const GalleryPicker = ({
               alignItems: 'center',
               justifyContent: 'center',
               minHeight: '300px',
-              color: '#94a3b8'
+              color: theme.textSoft
             }}>
               <div>Loading gallery...</div>
             </div>
@@ -638,7 +695,7 @@ const GalleryPicker = ({
               alignItems: 'center',
               justifyContent: 'center',
               minHeight: '300px',
-              color: '#94a3b8'
+              color: theme.textSoft
             }}>
               <div>No items found in gallery</div>
             </div>
@@ -648,8 +705,8 @@ const GalleryPicker = ({
                 key={item.id}
                 onClick={() => handleItemSelect(item)}
                 style={{
-                  background: isSelected(item) ? 'rgba(99, 102, 241, 0.3)' : '#1e293b',
-                  border: isSelected(item) ? '2px solid #6366f1' : '1px solid #334155',
+                  background: isSelected(item) ? theme.selectedBg : theme.tileBg,
+                  border: isSelected(item) ? theme.selectedBorder : theme.tileBorder,
                   borderRadius: '8px',
                   overflow: 'hidden',
                   cursor: 'pointer',
@@ -663,13 +720,13 @@ const GalleryPicker = ({
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected(item)) {
-                    e.currentTarget.style.borderColor = '#6366f1';
-                    e.currentTarget.style.boxShadow = '0 0 12px rgba(99, 102, 241, 0.2)';
+                    e.currentTarget.style.borderColor = theme.tileHover;
+                    e.currentTarget.style.boxShadow = isLightTheme ? '0 0 18px rgba(96, 165, 250, 0.12)' : '0 0 12px rgba(99, 102, 241, 0.2)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isSelected(item)) {
-                    e.currentTarget.style.borderColor = '#334155';
+                    e.currentTarget.style.borderColor = isLightTheme ? 'rgba(255,255,255,0.44)' : '#334155';
                     e.currentTarget.style.boxShadow = 'none';
                   }
                 }}
@@ -684,9 +741,9 @@ const GalleryPicker = ({
                     objectFit: 'cover',
                     objectPosition: 'center',
                     flexShrink: 0,
-                    background: '#0f172a',
+                    background: theme.imageFallback,
                     display: 'block',
-                    backgroundColor: imageErrors[item.assetId] ? '#475569' : '#0f172a'
+                    backgroundColor: imageErrors[item.assetId] ? (isLightTheme ? 'rgba(203, 213, 225, 0.82)' : '#475569') : theme.imageFallback
                   }}
                   onError={(e) => {
                     console.warn(`Image failed to load: ${item.name}`);
@@ -701,7 +758,7 @@ const GalleryPicker = ({
                       }, item.assetSignature);
                       setItems(prev => prev.map((entry) => (
                         entry.id === item.id
-                          ? { ...entry, sourceIndex: nextIndex, url: nextSource, thumbnail: nextSource, resolvedUrl: nextSource }
+                          ? { ...entry, sourceIndex: nextIndex, thumbnail: nextSource, resolvedUrl: nextSource }
                           : entry
                       )));
                     } else {
@@ -719,8 +776,8 @@ const GalleryPicker = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: '#0f172a',
-                    color: '#94a3b8',
+                    background: theme.imageFallback,
+                    color: theme.textSoft,
                     fontSize: '0.8rem',
                     textAlign: 'center',
                     pointerEvents: 'none'
@@ -733,13 +790,13 @@ const GalleryPicker = ({
                 )}
                 {viewMode === 'list' && (
                   <div style={{ flex: 1, padding: '0.75rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <div style={{ color: '#f1f5f9', fontWeight: '500', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                    <div style={{ color: theme.textStrong, fontWeight: '500', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
                       {item.name}
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                    <div style={{ color: theme.textSoft, fontSize: '0.8rem', marginBottom: '0.5rem' }}>
                       <span style={{
-                        background: 'rgba(99, 102, 241, 0.2)',
-                        color: '#c4b5fd',
+                        background: theme.accentBg,
+                        color: theme.accentText,
                         padding: '0.2rem 0.6rem',
                         borderRadius: '4px',
                         fontSize: '0.75rem',
@@ -749,7 +806,7 @@ const GalleryPicker = ({
                         {getCategoryLabel(item.category)}
                       </span>
                     </div>
-                    <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                    <div style={{ color: theme.textSoft, fontSize: '0.75rem' }}>
                       {new Date(item.createdAt).toLocaleDateString()}
                     </div>
                   </div>
@@ -759,8 +816,8 @@ const GalleryPicker = ({
                     position: 'absolute',
                     top: '0.5rem',
                     right: '0.5rem',
-                    background: '#6366f1',
-                    color: 'white',
+                    background: isLightTheme ? '#3b82f6' : '#6366f1',
+                    color: '#ffffff',
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
@@ -792,7 +849,7 @@ const GalleryPicker = ({
               display: 'flex',
               justifyContent: 'center',
               padding: '1rem',
-              color: '#94a3b8'
+              color: theme.textSoft
             }}>
               <div>Loading more...</div>
             </div>
@@ -803,9 +860,9 @@ const GalleryPicker = ({
         <div style={{
           textAlign: 'center',
           padding: '0.75rem',
-          borderTop: '1px solid #334155',
-          background: '#1e293b',
-          color: '#94a3b8',
+          borderTop: theme.panelBorder,
+          background: theme.headerBg,
+          color: theme.textSoft,
           fontSize: '0.85rem'
         }}>
           Showing {items.length} of {pagination.total} items {hasMore && '(scroll to load more)'}
@@ -817,28 +874,28 @@ const GalleryPicker = ({
           justifyContent: 'flex-end',
           gap: '1rem',
           padding: '1.5rem',
-          borderTop: '1px solid #334155',
-          background: '#1e293b'
+          borderTop: theme.panelBorder,
+          background: theme.headerBg
         }}>
           <button
             onClick={onClose}
             style={{
               padding: '0.75rem 1.5rem',
-              background: '#1e293b',
-              border: '1px solid #475569',
+              background: theme.neutralButton,
+              border: theme.neutralBorder,
               borderRadius: '6px',
-              color: '#f1f5f9',
+              color: theme.textStrong,
               cursor: 'pointer',
               fontWeight: '600',
               transition: 'all 0.3s'
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = '#334155';
-              e.target.style.borderColor = '#64748b';
+              e.target.style.background = isLightTheme ? 'rgba(255,255,255,0.82)' : '#334155';
+              e.target.style.borderColor = isLightTheme ? 'rgba(147,197,253,0.42)' : '#64748b';
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = '#1e293b';
-              e.target.style.borderColor = '#475569';
+              e.target.style.background = theme.neutralButton;
+              e.target.style.borderColor = isLightTheme ? 'rgba(255,255,255,0.5)' : '#475569';
             }}
           >
             Cancel
@@ -849,11 +906,11 @@ const GalleryPicker = ({
             style={{
               padding: '0.75rem 1.5rem',
               background: (multiSelect ? selectedItems.length === 0 : !selectedItems)
-                ? '#475569'
-                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                ? (isLightTheme ? 'rgba(191, 219, 254, 0.6)' : '#475569')
+                : theme.primaryButton,
               border: 'none',
               borderRadius: '6px',
-              color: 'white',
+              color: theme.primaryText,
               cursor: (multiSelect ? selectedItems.length === 0 : !selectedItems) ? 'not-allowed' : 'pointer',
               fontWeight: '600',
               transition: 'all 0.3s',
@@ -862,7 +919,7 @@ const GalleryPicker = ({
             onMouseEnter={(e) => {
               if ((multiSelect ? selectedItems.length === 0 : !selectedItems)) return;
               e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 20px rgba(99, 102, 241, 0.4)';
+              e.target.style.boxShadow = theme.primaryShadow;
             }}
             onMouseLeave={(e) => {
               if ((multiSelect ? selectedItems.length === 0 : !selectedItems)) return;

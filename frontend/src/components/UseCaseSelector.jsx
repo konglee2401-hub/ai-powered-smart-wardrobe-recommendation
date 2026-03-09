@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Shirt, ShoppingBag, Share2, Camera, Home, GitCompare, Hand } from 'lucide-react';
+import { IMAGE_STUDIO_USE_CASES } from '../config/imageUseCaseMatrix';
 
 const USE_CASES = [
   {
@@ -58,6 +59,38 @@ const USE_CASES = [
   },
 ];
 
+const ICON_MAP = {
+  'change-clothes': Shirt,
+  'character-holding-product': Hand,
+  'affiliate-video-tiktok': Share2,
+  'ecommerce-product': ShoppingBag,
+  'social-media': Share2,
+  'fashion-editorial': Camera,
+  'lifestyle-scene': Home,
+  'before-after': GitCompare,
+};
+
+const COLOR_MAP = {
+  'change-clothes': 'bg-blue-500',
+  'character-holding-product': 'bg-indigo-500',
+  'affiliate-video-tiktok': 'bg-amber-500',
+  'ecommerce-product': 'bg-green-500',
+  'social-media': 'bg-pink-500',
+  'fashion-editorial': 'bg-purple-500',
+  'lifestyle-scene': 'bg-orange-500',
+  'before-after': 'bg-teal-500',
+};
+
+const ACTIVE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
+  ? IMAGE_STUDIO_USE_CASES.map((item) => ({
+      value: item.value,
+      label: item.label,
+      description: item.description,
+      icon: ICON_MAP[item.value] || Shirt,
+      color: COLOR_MAP[item.value] || 'bg-slate-500',
+    }))
+  : USE_CASES;
+
 export default function UseCaseSelector({ selectedUseCase, onUseCaseChange }) {
   return (
     <div className="use-case-selector">
@@ -69,7 +102,7 @@ export default function UseCaseSelector({ selectedUseCase, onUseCaseChange }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {USE_CASES.map((useCase) => {
+        {ACTIVE_USE_CASES.map((useCase) => {
           const Icon = useCase.icon;
           const isSelected = selectedUseCase === useCase.value;
 

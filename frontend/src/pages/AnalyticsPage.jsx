@@ -1,739 +1,450 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
-import { 
-  getAIInsights, 
-  getPredictions, 
-  getPersonalizedRecommendations,
-  getDashboard 
-} from '../services/analyticsService';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  ArrowUpRight,
+  BadgeCheck,
+  BarChart3,
+  Clapperboard,
+  Flame,
+  Globe2,
+  Radar,
+  RefreshCw,
+  TimerReset,
+  TrendingUp,
+} from 'lucide-react';
+import { getMarketingDashboard } from '../services/analyticsService';
 
-const AnalyticsPage = () => {
-  const { t } = useTranslation();
-  const [timeRange, setTimeRange] = useState('30d');
-  const [activeTab, setActiveTab] = useState('overview');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [aiInsights, setAiInsights] = useState(null);
-  const [predictions, setPredictions] = useState(null);
-  const [recommendations, setRecommendations] = useState(null);
-  const [loading, setLoading] = useState(false);
+const RANGE_OPTIONS = [
+  { value: '7d', label: '7D' },
+  { value: '30d', label: '30D' },
+  { value: '90d', label: '90D' },
+];
 
-  const tabs = [
-    { id: 'overview', label: `📊 ${t('analytics.overview')}`, icon: '📊' },
-    { id: 'ai-insights', label: `🤖 ${t('analytics.aiInsights')}`, icon: '🤖' },
-    { id: 'predictions', label: `🔮 ${t('analytics.predictions')}`, icon: '🔮' },
-    { id: 'recommendations', label: `💡 ${t('analytics.recommendations')}`, icon: '💡' },
-  ];
-
-  useEffect(() => {
-    if (activeTab !== 'overview') {
-      loadAnalyticsData();
-    }
-  }, [activeTab, timeRange]);
-
-  const loadAnalyticsData = async () => {
-    setLoading(true);
-    try {
-      switch (activeTab) {
-        case 'ai-insights':
-          const insightsRes = await getAIInsights(timeRange);
-          setAiInsights(insightsRes.data);
-          break;
-        case 'predictions':
-          const predictionsRes = await getPredictions(timeRange);
-          setPredictions(predictionsRes.data);
-          break;
-        case 'recommendations':
-          const recommendationsRes = await getPersonalizedRecommendations();
-          setRecommendations(recommendationsRes.data);
-          break;
-        default:
-          break;
-      }
-    } catch (error) {
-      console.error('Error loading analytics data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTimeRangeChange = (range) => {
-    setTimeRange(range);
-  };
-
-  const renderOverviewTab = () => (
-    <AnalyticsDashboard 
-      timeRange={timeRange}
-      onTimeRangeChange={handleTimeRangeChange}
-    />
-  );
-
-  const renderAIInsightsTab = () => {
-    if (loading) {
-      return (
-        <div className="loading-container">
-          <div className="loading-spinner">🤖</div>
-          <p>{t('analytics.analyzingData')}</p>
-        </div>
-      );
-    }
-
-    if (!aiInsights) {
-      return (
-        <div className="empty-state">
-          <p>{t('analytics.loadingInsights')}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="ai-insights-container">
-        {/* User Profile */}
-        <div className="profile-section">
-          <h3>👤 {t('analytics.yourAIProfile')}</h3>
-          <div className="profile-card">
-            <div className="profile-type">
-              {aiInsights.userProfile?.type || 'standard'}
-            </div>
-            <p>{aiInsights.userProfile?.description || 'Analyzing your usage patterns...'}</p>
-          </div>
-        </div>
-
-        {/* Key Insights */}
-        <div className="insights-section">
-          <h3>💡 {t('analytics.keyInsights')}</h3>
-          <div className="insights-grid">
-            {(aiInsights.insights || []).map((insight, index) => (
-              <div key={index} className={`insight-card ${insight.priority}`}>
-                <div className="insight-header">
-                  <span className="insight-type">{insight.type}</span>
-                  <span className="insight-priority">{insight.priority}</span>
-                </div>
-                <h4>{insight.title}</h4>
-                <p>{insight.description}</p>
-                <div className="insight-impact">{insight.impact}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recommendations */}
-        <div className="recommendations-preview">
-          <h3>🎯 {t('analytics.topRecommendations')}</h3>
-          <div className="recommendations-list">
-            {(aiInsights.recommendations || []).slice(0, 3).map((rec, index) => (
-              <div key={index} className="recommendation-item">
-                <div className="rec-icon">💡</div>
-                <div className="rec-content">
-                  <h5>{rec.title}</h5>
-                  <p>{rec.description}</p>
-                  <span className="rec-impact">{rec.potentialSavings}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderPredictionsTab = () => {
-    if (loading) {
-      return (
-        <div className="loading-container">
-          <div className="loading-spinner">🔮</div>
-          <p>{t('analytics.generatingPredictions')}</p>
-        </div>
-      );
-    }
-
-    if (!predictions) {
-      return (
-        <div className="empty-state">
-          <p>{t('analytics.loadingInsights')}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="predictions-container">
-        <div className="predictions-header">
-          <h3>🔮 {t('analytics.usagePredictions')}</h3>
-          <p>{t('analytics.generatingPredictions')}</p>
-        </div>
-
-        {/* Usage Prediction */}
-        <div className="prediction-card highlight">
-          <div className="prediction-icon">📈</div>
-          <div className="prediction-content">
-            <h4>{t('analytics.nextMonthUsage')}</h4>
-            <div className="prediction-value">
-              {Math.round(predictions.nextMonthUsage || 0)} generations
-            </div>
-            <div className="prediction-trend">
-              Trend: {predictions.usageTrend || 'stable'}
-            </div>
-          </div>
-        </div>
-
-        {/* Cost Projection */}
-        <div className="prediction-card">
-          <div className="prediction-icon">💰</div>
-          <div className="prediction-content">
-            <h4>{t('analytics.costProjection')}</h4>
-            <div className="prediction-value">
-              ${Math.round(predictions.costProjection || 0)}
-            </div>
-            <div className="prediction-period">{t('analytics.next30Days')}</div>
-          </div>
-        </div>
-
-        {/* Recommendations */}
-        {(predictions.recommendations || []).length > 0 && (
-          <div className="predictions-recommendations">
-            <h4>Based on predictions:</h4>
-            {predictions.recommendations.map((rec, index) => (
-              <div key={index} className="prediction-rec">
-                <span>{rec.icon}</span>
-                <p>{rec.message}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderRecommendationsTab = () => {
-    if (loading) {
-      return (
-        <div className="loading-container">
-          <div className="loading-spinner">💡</div>
-          <p>{t('analytics.loadingRecommendations')}</p>
-        </div>
-      );
-    }
-
-    if (!recommendations) {
-      return (
-        <div className="empty-state">
-          <p>{t('analytics.loadingRecommendations')}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="recommendations-container">
-        <div className="rec-header">
-          <h3>🎯 {t('analytics.personalizedRecommendations')}</h3>
-          <p>{t('analytics.loadingRecommendations')}</p>
-        </div>
-
-        {/* Provider Recommendations */}
-        {recommendations.providers?.length > 0 && (
-          <div className="rec-section">
-            <h4>🚀 {t('analytics.recommendedProviders')}</h4>
-            <div className="providers-grid">
-              {recommendations.providers.map((provider, index) => (
-                <div key={index} className="provider-card">
-                  <h5>{provider.name}</h5>
-                  <p>{provider.reason}</p>
-                  <div className="provider-meta">
-                    <span>⚡ {provider.estimatedSpeed}</span>
-                    <span className="cost">{provider.cost}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Workflow Recommendations */}
-        {recommendations.workflows?.length > 0 && (
-          <div className="rec-section">
-            <h4>⚙️ {t('analytics.workflowOptimizations')}</h4>
-            <div className="workflows-grid">
-              {recommendations.workflows.map((workflow, index) => (
-                <div key={index} className="workflow-card">
-                  <h5>{workflow.name}</h5>
-                  <p>{workflow.description}</p>
-                  <div className="workflow-benefits">
-                    {workflow.benefits?.map((benefit, i) => (
-                      <span key={i} className="benefit-tag">{benefit}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Next Steps */}
-        {recommendations.nextSteps?.length > 0 && (
-          <div className="rec-section">
-            <h4>🎯 {t('analytics.nextSteps')}</h4>
-            <div className="next-steps-list">
-              {recommendations.nextSteps.map((step, index) => (
-                <div key={index} className={`next-step ${step.priority}`}>
-                  <div className="step-icon">
-                    {step.type === 'action' ? '▶️' : '🔍'}
-                  </div>
-                  <div className="step-content">
-                    <h5>{step.title}</h5>
-                    <p>{step.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1>📊 Analytics & AI Insights</h1>
-        <div className="time-range-selector">
-          <select 
-            value={timeRange} 
-            onChange={(e) => handleTimeRangeChange(e.target.value)}
-            className="range-select"
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-            <option value="1y">Last year</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="tabs-navigation">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <span className="tab-icon">{tab.icon}</span>
-            <span className="tab-label">{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="page-content">
-        {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'ai-insights' && renderAIInsightsTab()}
-        {activeTab === 'predictions' && renderPredictionsTab()}
-        {activeTab === 'recommendations' && renderRecommendationsTab()}
-      </div>
-
-      <style>{`
-        .page-container {
-          max-width: 1600px;
-          margin: 0 auto;
-          padding: 2rem;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-        }
-        
-        .page-header h1 {
-          margin: 0;
-          color: #f8fafc;
-        }
-        
-        .range-select {
-          padding: 0.5rem 1rem;
-          border: 1px solid rgba(148, 163, 184, 0.28);
-          border-radius: 8px;
-          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
-          font-size: 0.9rem;
-        }
-        
-        .tabs-navigation {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
-          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
-          padding: 0.5rem;
-          border-radius: 12px;
-          box-shadow: 0 14px 30px rgba(2, 6, 23, 0.3);
-        }
-        
-        .tab-button {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.25rem;
-          border: none;
-          background: transparent;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 0.9rem;
-          color: #cbd5e1;
-        }
-        
-        .tab-button:hover {
-          background: rgba(71, 85, 105, 0.42);
-        }
-        
-        .tab-button.active {
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          color: white;
-        }
-        
-        .page-content {
-          background: linear-gradient(165deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.74));
-          border-radius: 12px;
-          box-shadow: 0 16px 34px rgba(2, 6, 23, 0.38);
-          padding: 2rem;
-          min-height: 600px;
-        }
-        
-        /* AI Insights Styles */
-        .ai-insights-container {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        .profile-section h3, .insights-section h3, .recommendations-preview h3 {
-          margin: 0 0 1rem 0;
-          color: #f8fafc;
-        }
-        
-        .profile-card {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-        }
-        
-        .profile-type {
-          font-size: 1.5rem;
-          font-weight: bold;
-          text-transform: capitalize;
-        }
-        
-        .insights-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1rem;
-        }
-        
-        .insight-card {
-          padding: 1.5rem;
-          border-radius: 12px;
-          background: #f8fafc;
-          border-left: 4px solid #667eea;
-        }
-        
-        .insight-card.high {
-          border-left-color: #ef4444;
-        }
-        
-        .insight-card.medium {
-          border-left-color: #f59e0b;
-        }
-        
-        .insight-card.low {
-          border-left-color: #22c55e;
-        }
-        
-        .insight-header {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.5rem;
-        }
-        
-        .insight-type {
-          text-transform: capitalize;
-          font-size: 0.8rem;
-          color: #cbd5e1;
-        }
-        
-        .insight-priority {
-          font-size: 0.7rem;
-          padding: 0.2rem 0.5rem;
-          border-radius: 12px;
-          background: #e2e8f0;
-          text-transform: uppercase;
-        }
-        
-        .insight-card h4 {
-          margin: 0 0 0.5rem 0;
-          color: #f8fafc;
-        }
-        
-        .insight-card p {
-          margin: 0;
-          color: #cbd5e1;
-          font-size: 0.9rem;
-        }
-        
-        .insight-impact {
-          margin-top: 1rem;
-          padding-top: 0.5rem;
-          border-top: 1px solid #e2e8f0;
-          color: #22c55e;
-          font-weight: 600;
-          font-size: 0.85rem;
-        }
-        
-        .recommendations-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        
-        .recommendation-item {
-          display: flex;
-          gap: 1rem;
-          padding: 1rem;
-          background: #f8fafc;
-          border-radius: 8px;
-        }
-        
-        .rec-icon {
-          font-size: 1.5rem;
-        }
-        
-        .rec-content h5 {
-          margin: 0 0 0.25rem 0;
-          color: #f8fafc;
-        }
-        
-        .rec-content p {
-          margin: 0;
-          color: #cbd5e1;
-          font-size: 0.9rem;
-        }
-        
-        .rec-impact {
-          color: #22c55e;
-          font-weight: 600;
-          font-size: 0.85rem;
-        }
-        
-        /* Predictions Styles */
-        .predictions-container {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        .predictions-header {
-          text-align: center;
-        }
-        
-        .predictions-header h3 {
-          margin: 0;
-          color: #f8fafc;
-        }
-        
-        .predictions-header p {
-          color: #cbd5e1;
-        }
-        
-        .prediction-card {
-          display: flex;
-          gap: 1.5rem;
-          padding: 2rem;
-          background: #f8fafc;
-          border-radius: 12px;
-        }
-        
-        .prediction-card.highlight {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-        }
-        
-        .prediction-icon {
-          font-size: 3rem;
-        }
-        
-        .prediction-content h4 {
-          margin: 0 0 0.5rem 0;
-        }
-        
-        .prediction-value {
-          font-size: 2.5rem;
-          font-weight: bold;
-        }
-        
-        .prediction-trend, .prediction-period {
-          opacity: 0.8;
-          font-size: 0.9rem;
-        }
-        
-        .predictions-recommendations {
-          padding: 1.5rem;
-          background: #f0fdf4;
-          border-radius: 12px;
-        }
-        
-        .predictions-recommendations h4 {
-          margin: 0 0 1rem 0;
-          color: #166534;
-        }
-        
-        .prediction-rec {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-          padding: 0.5rem 0;
-        }
-        
-        /* Recommendations Styles */
-        .recommendations-container {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-        }
-        
-        .rec-header {
-          text-align: center;
-        }
-        
-        .rec-header h3 {
-          margin: 0;
-          color: #f8fafc;
-        }
-        
-        .rec-header p {
-          color: #cbd5e1;
-        }
-        
-        .rec-section {
-          margin-bottom: 1.5rem;
-        }
-        
-        .rec-section h4 {
-          margin: 0 0 1rem 0;
-          color: #f8fafc;
-        }
-        
-        .providers-grid, .workflows-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 1rem;
-        }
-        
-        .provider-card, .workflow-card {
-          padding: 1.5rem;
-          background: #f8fafc;
-          border-radius: 12px;
-        }
-        
-        .provider-card h5, .workflow-card h5 {
-          margin: 0 0 0.5rem 0;
-          color: #f8fafc;
-        }
-        
-        .provider-card p, .workflow-card p {
-          margin: 0 0 1rem 0;
-          color: #cbd5e1;
-          font-size: 0.9rem;
-        }
-        
-        .provider-meta {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.85rem;
-          color: #cbd5e1;
-        }
-        
-        .provider-meta .cost {
-          color: #22c55e;
-          font-weight: 600;
-        }
-        
-        .workflow-benefits {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-        }
-        
-        .benefit-tag {
-          background: #e0f2fe;
-          color: #0369a1;
-          padding: 0.25rem 0.5rem;
-          border-radius: 12px;
-          font-size: 0.75rem;
-        }
-        
-        .next-steps-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        
-        .next-step {
-          display: flex;
-          gap: 1rem;
-          padding: 1rem;
-          background: #f8fafc;
-          border-radius: 8px;
-          border-left: 4px solid #667eea;
-        }
-        
-        .next-step.high {
-          border-left-color: #ef4444;
-        }
-        
-        .next-step.medium {
-          border-left-color: #f59e0b;
-        }
-        
-        .step-icon {
-          font-size: 1.5rem;
-        }
-        
-        .step-content h5 {
-          margin: 0 0 0.25rem 0;
-          color: #f8fafc;
-        }
-        
-        .step-content p {
-          margin: 0;
-          color: #cbd5e1;
-          font-size: 0.9rem;
-        }
-        
-        .loading-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 400px;
-          gap: 1rem;
-        }
-        
-        .loading-spinner {
-          font-size: 3rem;
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.1); }
-        }
-        
-        .empty-state {
-          text-align: center;
-          padding: 3rem;
-          color: #cbd5e1;
-        }
-      `}</style>
-    </div>
-  );
+const toneMap = {
+  amber: 'from-amber-500/20 via-amber-500/10 to-transparent border-amber-400/20 text-amber-100',
+  sky: 'from-sky-500/20 via-sky-500/10 to-transparent border-sky-400/20 text-sky-100',
+  emerald: 'from-emerald-500/20 via-emerald-500/10 to-transparent border-emerald-400/20 text-emerald-100',
+  rose: 'from-rose-500/20 via-rose-500/10 to-transparent border-rose-400/20 text-rose-100',
 };
 
-export default AnalyticsPage;
+function formatCompact(value, unit = '') {
+  const numeric = Number(value || 0);
+  const formatted = new Intl.NumberFormat('en-US', {
+    notation: Math.abs(numeric) >= 1000 ? 'compact' : 'standard',
+    maximumFractionDigits: Math.abs(numeric) >= 1000 ? 1 : 1,
+  }).format(numeric);
+
+  return unit ? `${formatted}${unit === '%' ? '%' : ` ${unit}`}` : formatted;
+}
+
+function formatInteger(value) {
+  return new Intl.NumberFormat('en-US').format(Number(value || 0));
+}
+
+function getDeltaClass(change = 0) {
+  if (change > 0) return 'text-emerald-300';
+  if (change < 0) return 'text-rose-300';
+  return 'text-slate-300';
+}
+
+function SystemCard({ card }) {
+  return (
+    <div className={`rounded-[28px] border bg-gradient-to-br p-5 shadow-[0_22px_70px_rgba(15,23,42,0.35)] ${toneMap[card.tone] || toneMap.sky}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-300/80">{card.label}</p>
+          <div className="mt-3 text-3xl font-semibold text-white">{formatCompact(card.value, card.unit)}</div>
+        </div>
+        <div className={`rounded-full px-3 py-1 text-xs font-medium ${getDeltaClass(card.change)}`}>
+          {card.change >= 0 ? '+' : ''}{card.change}%
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-slate-300/85">{card.note}</p>
+    </div>
+  );
+}
+
+function MetricStrip({ items }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {items.map((item) => (
+        <div key={item.label} className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur">
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{item.label}</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{item.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MiniBars({ data = [], colorClass = 'bg-amber-400' }) {
+  const max = Math.max(...data.map((item) => item.value || 0), 1);
+
+  return (
+    <div className="flex h-36 items-end gap-2">
+      {data.map((item) => (
+        <div key={item.date} className="flex flex-1 flex-col items-center gap-2">
+          <div
+            className={`w-full rounded-t-2xl ${colorClass}`}
+            style={{ height: `${Math.max(8, ((item.value || 0) / max) * 100)}%` }}
+            title={`${item.date}: ${item.value}`}
+          />
+          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+            {item.date.slice(5)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DataTable({ title, subtitle, columns, rows, emptyText = 'No data yet.' }) {
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-[#0f172acc] p-5 shadow-[0_20px_70px_rgba(15,23,42,0.35)] backdrop-blur">
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white">{title}</h3>
+          {subtitle ? <p className="mt-1 text-sm text-slate-400">{subtitle}</p> : null}
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-slate-400">
+          {emptyText}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-xs uppercase tracking-[0.22em] text-slate-500">
+                {columns.map((column) => (
+                  <th key={column.key} className="pb-3 pr-4 font-medium">{column.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={`${row.id || row.platform || row.label || row.title}-${index}`} className="border-b border-white/5 text-slate-200">
+                  {columns.map((column) => (
+                    <td key={column.key} className="py-3 pr-4 align-top">
+                      {column.render ? column.render(row[column.key], row) : row[column.key]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OpportunityList({ items }) {
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <div key={`${item.title}-${index}`} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-amber-300">{item.platform} • {item.topic}</div>
+              <div className="mt-2 text-base font-medium text-white">{item.title}</div>
+              <div className="mt-2 text-sm text-slate-400">
+                {formatInteger(item.views)} views • {formatInteger(item.likes)} likes • published {item.publishingCount} time(s)
+              </div>
+            </div>
+            {item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-200 transition hover:border-amber-300/40 hover:text-white"
+              >
+                Source <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function AnalyticsPage() {
+  const [range, setRange] = useState('30d');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const response = await getMarketingDashboard(range);
+        if (!cancelled) {
+          setData(response.data);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError?.response?.data?.error || loadError.message || 'Failed to load analytics dashboard.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
+
+  const healthStrip = useMemo(() => {
+    if (!data?.system?.health) return [];
+    const { health } = data.system;
+    return [
+      { label: 'Success Rate', value: `${health.successRate}%` },
+      { label: 'Workflow Avg', value: `${health.avgWorkflowDurationSec}s` },
+      { label: 'Video Avg', value: `${health.avgVideoGenerationSec}s` },
+      { label: 'Tracked Cost', value: `$${formatCompact(health.totalTrackedCost)}` },
+      { label: 'Processing', value: formatInteger(health.activeProcessingSessions) },
+      { label: 'Queue Pressure', value: formatInteger(health.queuePressure) },
+    ];
+  }, [data]);
+
+  const socialStrip = useMemo(() => {
+    if (!data?.social?.summaryCards) return [];
+    return data.social.summaryCards.map((item) => ({
+      label: item.label,
+      value: formatCompact(item.value, item.unit),
+    }));
+  }, [data]);
+
+  return (
+    <div className="analytics-page-shell min-h-screen overflow-y-auto bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.12),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_24%),linear-gradient(180deg,#020617_0%,#0f172a_42%,#111827_100%)] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section className="rounded-[36px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.94),rgba(30,41,59,0.86))] p-6 shadow-[0_28px_100px_rgba(2,6,23,0.55)] lg:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs uppercase tracking-[0.24em] text-amber-200">
+                Marketing Intelligence Console
+              </div>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white md:text-5xl">
+                One dashboard for system throughput and social performance.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
+                Track production health, publishing quality, affiliate-ready reach, and source-video opportunities from one place.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRange(option.value)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    range === option.value
+                      ? 'bg-white text-slate-950'
+                      : 'border border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {loading ? (
+          <div className="rounded-[32px] border border-white/10 bg-[#0f172acc] px-6 py-16 text-center shadow-[0_24px_80px_rgba(15,23,42,0.38)]">
+            <RefreshCw className="mx-auto h-10 w-10 animate-spin text-amber-300" />
+            <div className="mt-4 text-lg font-medium text-white">Aggregating marketing analytics</div>
+            <div className="mt-2 text-sm text-slate-400">Collecting workflow, publishing, and channel signals.</div>
+          </div>
+        ) : error ? (
+          <div className="rounded-[32px] border border-rose-400/20 bg-rose-500/10 px-6 py-10 text-rose-100">
+            <div className="text-lg font-semibold">Analytics load failed</div>
+            <div className="mt-2 text-sm text-rose-100/80">{error}</div>
+          </div>
+        ) : (
+          <>
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Activity className="h-5 w-5 text-amber-300" />
+                <h2 className="text-xl font-semibold text-white">System Intelligence</h2>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-4">
+                {(data?.system?.overviewCards || []).map((card) => (
+                  <SystemCard key={card.id} card={card} />
+                ))}
+              </div>
+              <MetricStrip items={healthStrip} />
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <section className="rounded-[28px] border border-white/10 bg-[#0f172acc] p-5 shadow-[0_20px_70px_rgba(15,23,42,0.35)]">
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="h-5 w-5 text-sky-300" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Workflow Velocity</h3>
+                    <p className="text-sm text-slate-400">Daily completed and attempted sessions across the selected window.</p>
+                  </div>
+                </div>
+                <div className="mt-6">
+                  <MiniBars data={data?.system?.pipeline?.recentTrend || []} colorClass="bg-gradient-to-t from-amber-400 to-yellow-200" />
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/10 bg-[#0f172acc] p-5 shadow-[0_20px_70px_rgba(15,23,42,0.35)]">
+                <div className="flex items-center gap-3">
+                  <TimerReset className="h-5 w-5 text-emerald-300" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Pipeline Readiness</h3>
+                    <p className="text-sm text-slate-400">Trend-source supply moving into Drive and production queues.</p>
+                  </div>
+                </div>
+                <div className="mt-5 space-y-4">
+                  {Object.entries(data?.system?.pipeline?.assetReadiness || {}).map(([key, value]) => (
+                    <div key={key}>
+                      <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
+                        <span className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                        <span>{formatInteger(value)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/10">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-sky-400 via-amber-300 to-emerald-300"
+                          style={{ width: `${Math.min(100, ((value || 0) / Math.max(data?.system?.pipeline?.assetReadiness?.discovered || 1, 1)) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                  {data?.system?.insights?.map((insight) => (
+                    <div key={insight} className="flex items-start gap-2 py-1">
+                      <BadgeCheck className="mt-0.5 h-4 w-4 text-amber-300" />
+                      <span>{insight}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </section>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <DataTable
+                title="Stage Distribution"
+                subtitle="Average duration by workflow stage."
+                columns={[
+                  { key: 'stage', label: 'Stage' },
+                  { key: 'runs', label: 'Runs', render: (value) => formatInteger(value) },
+                  { key: 'avgDurationSec', label: 'Avg Duration', render: (value) => `${value}s` },
+                ]}
+                rows={data?.system?.pipeline?.stageDistribution || []}
+              />
+              <DataTable
+                title="Provider Leaderboard"
+                subtitle="Video generation providers ranked by usage."
+                columns={[
+                  { key: 'provider', label: 'Provider' },
+                  { key: 'videos', label: 'Videos', render: (value) => formatInteger(value) },
+                  { key: 'avgGenerationSec', label: 'Avg Time', render: (value) => `${value}s` },
+                  { key: 'avgRating', label: 'Rating', render: (value) => value ? `${value}/5` : 'n/a' },
+                ]}
+                rows={data?.system?.pipeline?.providerLeaderboard || []}
+              />
+            </div>
+
+            <section className="space-y-4 pt-2">
+              <div className="flex items-center gap-3">
+                <Globe2 className="h-5 w-5 text-sky-300" />
+                <h2 className="text-xl font-semibold text-white">Social Intelligence</h2>
+              </div>
+              <MetricStrip items={socialStrip} />
+            </section>
+
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <DataTable
+                title="Platform Performance"
+                subtitle="Cross-platform effectiveness for published videos."
+                columns={[
+                  { key: 'platform', label: 'Platform' },
+                  { key: 'posts', label: 'Posts', render: (value) => formatInteger(value) },
+                  { key: 'views', label: 'Views', render: (value) => formatInteger(value) },
+                  { key: 'engagementRate', label: 'Engagement', render: (value) => `${value}%` },
+                  { key: 'completionRate', label: 'Completion', render: (value) => `${value}%` },
+                  { key: 'successRate', label: 'Upload Success', render: (value) => `${value}%` },
+                ]}
+                rows={data?.social?.platformPerformance || []}
+              />
+              <DataTable
+                title="Account Health"
+                subtitle="Operational status of connected posting accounts."
+                columns={[
+                  { key: 'platform', label: 'Platform' },
+                  { key: 'connectedAccounts', label: 'Connected', render: (value) => formatInteger(value) },
+                  { key: 'activeAccounts', label: 'Active', render: (value) => formatInteger(value) },
+                  { key: 'errorAccounts', label: 'Errors', render: (value) => formatInteger(value) },
+                  { key: 'avgEngagementRate', label: 'Avg ER', render: (value) => `${value}%` },
+                ]}
+                rows={data?.social?.accountHealth || []}
+              />
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <DataTable
+                title="Best Performing Posts"
+                subtitle="Posts with the strongest reach and retention proxies."
+                columns={[
+                  { key: 'title', label: 'Post' },
+                  { key: 'platform', label: 'Platform' },
+                  { key: 'views', label: 'Views', render: (value) => formatInteger(value) },
+                  { key: 'engagementRate', label: 'Engagement', render: (value) => `${value}%` },
+                  { key: 'completionRate', label: 'Completion', render: (value) => `${value}%` },
+                ]}
+                rows={data?.social?.bestPosts || []}
+              />
+              <DataTable
+                title="Source Radar"
+                subtitle="Aggregated trend-source supply by upstream platform."
+                columns={[
+                  { key: 'platform', label: 'Source Platform' },
+                  { key: 'videos', label: 'Videos', render: (value) => formatInteger(value) },
+                  { key: 'totalViews', label: 'Views', render: (value) => formatInteger(value) },
+                  { key: 'totalLikes', label: 'Likes', render: (value) => formatInteger(value) },
+                ]}
+                rows={data?.social?.sourceRadar || []}
+              />
+            </div>
+
+            <section className="rounded-[28px] border border-white/10 bg-[#0f172acc] p-5 shadow-[0_20px_70px_rgba(15,23,42,0.35)]">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <Flame className="h-5 w-5 text-amber-300" />
+                    <h3 className="text-lg font-semibold text-white">Affiliate Opportunity Feed</h3>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-400">
+                    High-signal source videos and topics that already show audience demand.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 text-xs uppercase tracking-[0.18em] text-slate-500">
+                  <span className="inline-flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Reach signal</span>
+                  <span className="inline-flex items-center gap-2"><Radar className="h-4 w-4" /> Source fit</span>
+                  <span className="inline-flex items-center gap-2"><Clapperboard className="h-4 w-4" /> Repurpose ready</span>
+                </div>
+              </div>
+              <div className="mt-5">
+                <OpportunityList items={data?.social?.opportunityFeed || []} />
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

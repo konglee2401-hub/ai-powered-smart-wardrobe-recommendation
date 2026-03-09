@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Video Pipeline Controller
  *
  * Controller dedicated to the unified operator workspace. Each endpoint maps
@@ -15,6 +15,11 @@ const asyncHandler = (fn) => (req, res, next) => {
 class VideoPipelineController {
   static getDashboard = asyncHandler(async (_req, res) => {
     const result = await videoPipelineService.getDashboard();
+    res.json(result);
+  });
+
+  static listTemplates = asyncHandler(async (_req, res) => {
+    const result = await videoPipelineService.listFactoryTemplates();
     res.json(result);
   });
 
@@ -154,6 +159,14 @@ class VideoPipelineController {
     res.json(result);
   });
 
+  static analyzePublicSubVideoDriveFolder = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.analyzePublicSubVideoDriveFolder(req.body || req.query || {});
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
   static getSettings = asyncHandler(async (_req, res) => {
     const result = await videoPipelineService.getSettings();
     res.json(result);
@@ -166,3 +179,4 @@ class VideoPipelineController {
 }
 
 export default VideoPipelineController;
+

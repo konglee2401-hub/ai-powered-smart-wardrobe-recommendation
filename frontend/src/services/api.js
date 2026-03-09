@@ -423,12 +423,12 @@ export const browserAutomationAPI = {
       return new Blob([bytes], { type: 'image/jpeg' });
     };
     
-    const charBlob = base64ToBlob(characterImage);
-    const prodBlob = base64ToBlob(productImage);
+    const charBlob = characterImage ? base64ToBlob(characterImage) : null;
+    const prodBlob = productImage ? base64ToBlob(productImage) : null;
     
     // Append as files, not raw strings
-    formData.append('characterImage', charBlob, 'character.jpg');
-    formData.append('productImage', prodBlob, 'product.jpg');
+    if (charBlob) formData.append('characterImage', charBlob, 'character.jpg');
+    if (prodBlob) formData.append('productImage', prodBlob, 'product.jpg');
     formData.append('analysisProvider', options.provider || 'grok');
     
     // Add all style options
@@ -474,6 +474,7 @@ export const browserAutomationAPI = {
       productImageBase64: options.productImageBase64,
       characterImagePath: options.characterImagePath,
       productImagePath: options.productImagePath,
+      useCase: options.useCase || 'change-clothes',
       // 💫 NEW: Pass scene reference image
       sceneReferenceImage: options.sceneReferenceImage || null,
       // 💫 Pass conversation ID to reuse

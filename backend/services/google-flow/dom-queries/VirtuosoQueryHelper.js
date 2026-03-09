@@ -9,6 +9,15 @@
  */
 
 export class VirtuosoQueryHelper {
+  static normalizeTileText(text = '') {
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   /**
    * Get all hrefs from virtuoso list (generated items)
    * @param {Object} page - Puppeteer page object
@@ -169,6 +178,52 @@ export class VirtuosoQueryHelper {
       
       return tiles;
     });
+  }
+
+  /**
+   * Get a richer snapshot of visible virtuoso tiles.
+   * Useful for upload detection where href/img may appear at different times.
+   */
+  static async getVisibleTileSnapshots(page, options = {}) {
+    return page.evaluate((opts) => {
+      const limit = Number.isFinite(opts?.limit) ? opts.limit : 20;
+      const allTiles = Array.from(
+        document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]')
+      ).slice(0, limit);
+
+      const normalize = (value = '') =>
+        value
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      return allTiles.map((tile, idx) => {
+        const link = tile.querySelector('a[href]');
+        const img = tile.querySelector('img');
+        const video = tile.querySelector('video');
+        const text = normalize((tile.textContent || '').trim());
+        const href = link?.getAttribute('href') || null;
+        const tileId = tile.getAttribute('data-tile-id') || null;
+        const hasProgress = /\b\d{1,3}%\b/.test(text);
+        const hasErrorText = /khong thanh cong|failed|error|try again|warning/.test(text);
+
+        return {
+          idx,
+          tileId,
+          href,
+          hasLink: !!link,
+          hasImg: !!img,
+          hasVideo: !!video,
+          imgSrc: img?.getAttribute('src') || null,
+          videoSrc: video?.getAttribute('src') || null,
+          text,
+          isLoading: hasProgress,
+          hasError: hasErrorText && !hasProgress
+        };
+      });
+    }, options);
   }
 }
 

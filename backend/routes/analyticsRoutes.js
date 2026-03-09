@@ -4,12 +4,28 @@ import { protect } from '../middleware/auth.js';
 import * as AIAnalyticsService from '../services/aiAnalyticsService.js';
 import * as RecommendationEngine from '../services/recommendationEngine.js';
 import * as ContentAnalysisService from '../services/contentAnalysisService.js';
+import marketingAnalyticsService from '../services/marketingAnalyticsService.js';
 import User from '../models/User.js';
 import GenerationFlow from '../models/GenerationFlow.js';
 import PromptTemplate from '../models/PromptOption.js';
 
 // Apply authentication to all routes
 router.use(protect);
+
+router.get('/marketing-dashboard', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+    const dashboard = await marketingAnalyticsService.getDashboard({
+      userId: req.user?.id,
+      range,
+    });
+
+    res.json(dashboard);
+  } catch (error) {
+    console.error('Marketing dashboard error:', error);
+    res.status(500).json({ error: 'Failed to load marketing dashboard analytics' });
+  }
+});
 
 // AI Insights endpoint
 router.get('/ai-insights', async (req, res) => {
