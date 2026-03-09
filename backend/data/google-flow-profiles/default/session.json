@@ -1,19 +1,11 @@
 {
-  "timestamp": "2026-03-08T15:58:10.971Z",
-  "expiresAt": "2026-03-09T15:58:10.971Z",
-  "url": "https://labs.google/fx/vi/tools/flow",
-  "localStorage": {
-    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"LANDSCAPE\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":2}",
-    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1772985457}"
-  },
-  "sessionStorage": {},
   "cookies": [
     {
       "name": "__Secure-next-auth.session-token",
-      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..0Ab9kPHKhfxPLp9N.g0Xj2heNIIDT9fakK-HDtk9cysWn-qa60Pfdsqf8pYq1_y2BzLy02-owbw4UEFjtbx6l_viY1lnem5WG77_QPhoqFkKAOpkNvfeljj7vjDnrfJxWusIsLGGPjfW4TefpMjPRXom35_VscxIXe7Sn5EKu2U3Mkmnb_MC4AQNRfVVYjPEl-eMhpPMNnEEu0qBF8lUZv1UiaD1sMGz99hIsZkfqN5kHeXzL6ZLtHdH9YfX3I6nTQ5fQENw5j6YlAFAt8DFZabpNT3eyY2tPHMW5gL8qCyqwr_3Z8bafhMcMnyhSDgUI4tJ5QoAGjp-9WDSWQoMf7_Zfxonsl21xSKvOtJdF4jno5SIz0IVR-7WhsjO59q7wqP5i9TNMqUU-IzAgSdg-6wbNp0oePlA28AgjANH8wp-Kd938Kv1Zp3PKzBHdV_cZF_6ifOLtfQoEZ9xAOtDx6t0AP50z7zrrDGNj-Fx1ckS5ltsYSppVuPF52kjJW63UhCAg9LRZ2M6_ABhcbeTgMvmLzBY4j2cpxvhua8u4g9nu6qkWd1DG5pfZZSEDIhVNtLr0Bf8L8eM0rkhwtGOUwRaM4FNAWKMn9f9nTiNdDC2lo0HDnB39rGKhHvbkbRWV2RkZoTGbkzELGQbCpKlG364Lw2nuDSg5XSkGUu5S4WMnF3-37aIetYrQoVgwi95Dg_CYUy6esISqZtGrQJqS4BV1WZ2wzIC_tWhTDMh48obRlfP_jykttK3YhnjgGxnFQr8nhMDH6XlRzusvZ3ImDv_b5Swb8avpnKHF3qkuEgotlF_nHOAkO5y3uWFApZE_bkcnhHCUiez8-dDNWWty_kjHQeDBOGWRFF6aTkqrKEAe1IlX5tm9y49tTLpAtdiZubWknfd2P0GvqOzGLrr0TKAMDJ215zHKs5aYWGX8dm2f1es7ZZ-2ALWuIq8CkjJ-ob4rKbmTlikMCY2RJmHaBcf4DGgeQpyPz3DsfcwwCDvsyg.D1xb7J9dWVUvtwdSwaXOpQ",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..5vnjApB-rCtlrwO5.Vpnrh6BWN6ASc2fGJvu0O_p1DrY6HHVGJTmuVCUda5M7pm5p-o3tWSBuVAePF1AUua-iu2rDHBXjokYYRx9Xd9kfl4N44aUd-qnXXOafpjA0C5FegpoCzg86-cTiP_WIcAqFwwp86G1BhdAVpJsNkUOF_goE1QQFbYhX_obgtO6QY6g2INaMxX_GE1Odby0aKbc5_d7cMCvw4IJoz0eoPyev9y9Iah1xbSLERZYT5xzxoE1RxI0Jxg5kpLgThlYHV3OmpNsMJofzdGAtNZVBSWG8PpgjsHfZD-Vh58IoZWqfdSZ620j2no1ypKedganq0tNDB4mIF0e83TqdK8dDRdtI5fQO0KWxevuNX6zI11H2FPiQ-7nHdMYeC1TAxXwe_Wasm-hkYxcTu1YP0Uf0fouBW33t18w3mltD6ZPAXQll-BDeAn2UYThpzfr1R-IvrzXlqAL-9nrMPszegpdJw1e8nqpB_QGa62GCDghXiK3ydEBDkfxuc9Fx0Yw51KWVr_67IPlRCXX8o0RNJQ-d29bUAI61dwlbBqiBqKWVctffaadTR9cW0Y7ZlkW-HQLnxnbyP2D01fxz906WYE60j5ntlxwznuXUaM4R39uiR3S1FNKJIjWrdqUzhum7VpQ6NTUy4CL0bouK0cFXTxT6EgAG3rSa_7dx3jNclqZddIVp6fS9pHXeXyPHcCMTP7nn_WjHhJ-lhshgBsi715EcVsE-SRJtwgRDxHmSKHjPwGr8l4SdCMYnJtZ5hsahryTQJviUVaS-nmOL2IKjmBAFac8AGr8lUm50_LheDsV5O0Dd-FczAqBlYZwihLPEFZdxxXHgQx4tnLSY7Uue3tFYG9qY8DcfVVm54-c8oEW-DF5M1TkoFKFBR87MDhXm8FlvzjHOAv577rhvTSuW8PCMPXcVEM1TTBMxBNQG_oWuoFfE9f425VzinrSAKAl8G87fcS_zO8ipNMvWQeMbFFV179fh0b9QhA.NkVUMHhulL_l6yxwV5RSTg",
       "domain": "labs.google",
       "path": "/",
-      "expires": 1775577485.859107,
+      "expires": 1775610605.834082,
       "size": 1103,
       "httpOnly": true,
       "secure": true,
@@ -25,10 +17,10 @@
     },
     {
       "name": "_ga_X2GNH8R5NS",
-      "value": "GS2.1.s1772985421$o1$g1$t1772985450$j31$l0$h2136481078",
+      "value": "GS2.1.s1773018593$o2$g0$t1773018593$j60$l0$h1530140464",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807545450.207336,
+      "expires": 1807578593.750278,
       "size": 68,
       "httpOnly": false,
       "secure": false,
@@ -38,11 +30,25 @@
       "sourcePort": 443
     },
     {
+      "name": "email",
+      "value": "leecris241%40gmail.com",
+      "domain": "labs.google",
+      "path": "/",
+      "expires": -1,
+      "size": 27,
+      "httpOnly": true,
+      "secure": false,
+      "session": true,
+      "sameParty": false,
+      "sourceScheme": "Secure",
+      "sourcePort": 443
+    },
+    {
       "name": "_ga",
       "value": "GA1.1.299049408.1772985422",
       "domain": ".labs.google",
       "path": "/",
-      "expires": 1807545446.706362,
+      "expires": 1807578593.692423,
       "size": 29,
       "httpOnly": false,
       "secure": false,
@@ -66,15 +72,16 @@
       "sourcePort": 443
     },
     {
-      "name": "email",
-      "value": "leecris241%40gmail.com",
+      "name": "__Host-next-auth.csrf-token",
+      "value": "340302cb589194ca6fbdbe8a0f029b45c0a255b949ed99526863e26c5fec9dc4%7C75aa929c5ca73f31c74c60667161395906983a835971956f67c920a6c62d3238",
       "domain": "labs.google",
       "path": "/",
       "expires": -1,
-      "size": 27,
+      "size": 158,
       "httpOnly": true,
-      "secure": false,
+      "secure": true,
       "session": true,
+      "sameSite": "Lax",
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
@@ -93,47 +100,15 @@
       "sameParty": false,
       "sourceScheme": "Secure",
       "sourcePort": 443
-    },
-    {
-      "name": "__Host-next-auth.csrf-token",
-      "value": "340302cb589194ca6fbdbe8a0f029b45c0a255b949ed99526863e26c5fec9dc4%7C75aa929c5ca73f31c74c60667161395906983a835971956f67c920a6c62d3238",
-      "domain": "labs.google",
-      "path": "/",
-      "expires": -1,
-      "size": 158,
-      "httpOnly": true,
-      "secure": true,
-      "session": true,
-      "sameSite": "Lax",
-      "sameParty": false,
-      "sourceScheme": "Secure",
-      "sourcePort": 443
     }
   ],
-  "tokens": {
-    "recaptcha": {
-      "_grecaptcha": null,
-      "rc::a": null,
-      "rc::f": null
-    },
-    "capturedAt": "2026-03-08T15:58:10.971Z"
+  "localStorage": {
+    "_grecaptcha": "09AKhCRwiwGGWwCcJJoeTGUJpjilT7FZXwODbrr54sfVG0aFeCMFCM5_EhhgBpdvWuo9iv66LOhReZbon1D4FVPUeUf9e_bxsufSKUx7mgdEC1o6GthIR8eZ81XCMhDbva",
+    "FLOW_MAIN_PROMPT_BOX_STATE": "{\"aspectRatio\":\"PORTRAIT\",\"selectedImageModelFamily\":\"narwhal_display\",\"selectedVideoModelFamily\":\"veo_3_1_fast\",\"imageOrVideoMode\":\"IMAGE\",\"outputsPerPrompt\":1}",
+    "nextauth.message": "{\"event\":\"session\",\"data\":{\"trigger\":\"getSession\"},\"timestamp\":1773018598}"
   },
-  "flowConfig": {},
-  "metadata": {
-    "currentUrl": "https://labs.google/fx/vi/tools/flow",
-    "title": "Flow - Affiliate AI",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "timezone": "Asia/Saigon",
-    "language": "en-US",
-    "cookieEnabled": true,
-    "onLine": true
-  },
-  "auth": {},
-  "diagnostics": {
-    "recaptchaAvailable": true,
-    "recaptchaConfigured": false,
-    "authTokensPresent": true,
-    "recaptchaTokensPresent": false,
-    "capturedRequests": 0
-  }
+  "sessionStorage": {},
+  "timestamp": "2026-03-09T01:13:26.488Z",
+  "url": "https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0",
+  "isAuthenticated": true
 }

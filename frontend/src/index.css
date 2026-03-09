@@ -2510,7 +2510,7 @@ html[data-theme="light"] .analytics-page-shell [class*="bg-white/[0.0"] {
 
 /* SetupAuthentication Light Theme */
 html[data-theme="light"] .setup-authentication-shell {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%) !important;
+  background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%), radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.1), transparent 40%), linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(230, 244, 255, 0.34)) !important;
   color: #1e293b !important;
 }
 
@@ -2527,33 +2527,42 @@ html[data-theme="light"] .setup-authentication-shell div:not([class*="bg-"]) {
   color: #475569 !important;
 }
 
+html[data-theme="light"] .setup-authentication-shell .studio-card-shell {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(10px) !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
+  color: #334155 !important;
+}
+
 html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-900"],
 html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-800"],
 html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-700"] {
-  background: white !important;
-  border-color: #e2e8f0 !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(8px) !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell [class*="border-gray-700"] {
-  border-color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell button {
-  background: white !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
   color: #1e293b !important;
-  border-color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell button:hover {
-  background: #f1f5f9 !important;
+  background: rgba(255, 255, 255, 0.95) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell input,
 html[data-theme="light"] .setup-authentication-shell textarea,
 html[data-theme="light"] .setup-authentication-shell select {
-  background: white !important;
+  background: rgba(255, 255, 255, 0.9) !important;
   color: #1e293b !important;
-  border-color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell input::placeholder,
@@ -2562,21 +2571,30 @@ html[data-theme="light"] .setup-authentication-shell textarea::placeholder {
 }
 
 html[data-theme="light"] .setup-authentication-shell textarea {
-  background: white !important;
+  background: rgba(255, 255, 255, 0.9) !important;
   color: #1e293b !important;
-  border-color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell [class*="text-gray-"] {
   color: #475569 !important;
 }
 
-html[data-theme="light"] .setup-authentication-shell [class*="text-purple-"] {
+html[data-theme="light"] .setup-authentication-shell [class*="text-purple-400"] {
   color: #7c3aed !important;
 }
 
 html[data-theme="light"] .setup-authentication-shell label {
   color: #334155 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell .studio-card-shell {
+  background: 
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.1), transparent 40%),
+    linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(230, 244, 255, 0.34)) !important;
+  color: #21344d !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 html[data-theme="light"] .options-shell [class*="border-red-"],

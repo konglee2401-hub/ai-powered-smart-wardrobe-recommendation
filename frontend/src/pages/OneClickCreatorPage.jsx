@@ -653,7 +653,7 @@ export default function OneClickCreatorPage() {
   const stepUploadCardClass = 'studio-card-shell flex h-full flex-col rounded-[1.25rem] p-3';
   const stepUploadDropzoneClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/40 p-3 text-center transition';
   const stepUploadActionClass = 'apple-option-chip inline-flex items-center justify-center gap-2 rounded-[0.95rem] px-3 py-2 text-xs font-semibold text-slate-700 transition disabled:opacity-50';
-  const sessionShellClass = 'studio-card-shell rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(100,156,198,0.10)]';
+  const sessionShellClass = 'studio-card-shell flex min-h-0 flex-1 flex-col rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(100,156,198,0.10)]';
   const optionButtonBaseClass = 'apple-option-chip w-full rounded-[1rem] px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
   const providerButtonClass = 'apple-option-chip flex w-full items-center gap-2 rounded-[1rem] px-2.5 py-1.5 text-left text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
   const optionButtonIdleClass = 'text-slate-300';
@@ -2392,7 +2392,7 @@ export default function OneClickCreatorPage() {
                   const activeSession = sessions.find(session => session.id === (activeSessionId || sessions[0]?.id)) || sessions[0];
                   const activeFlowId = activeSession?.flowId || activeSession?.preview?.flowId || null;
                   return (
-                    <div className="grid gap-3">
+                    <div className="grid min-h-0 flex-1 grid-rows-[auto,minmax(0,1fr)] gap-3">
                       <div className="flex flex-wrap items-center justify-between gap-3 overflow-hidden">
                         <div className="flex gap-2 overflow-x-auto pb-1">
                           {sessions.map((session) => {
@@ -2445,7 +2445,11 @@ export default function OneClickCreatorPage() {
                         ) : null}
                       </div>
 
-                      {activeSession ? <AffiliateSessionWorkspace session={activeSession} /> : null}
+                      {activeSession ? (
+                        <div className="min-h-0 overflow-y-auto pr-1">
+                          <AffiliateSessionWorkspace session={activeSession} />
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })()}

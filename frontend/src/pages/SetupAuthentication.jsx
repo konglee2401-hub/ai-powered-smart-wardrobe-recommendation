@@ -7,13 +7,17 @@ import LogViewer from '../components/LogViewer';
 const SectionCard = ({ title, description, active, onClick }) => (
   <button
     onClick={onClick}
-    className={`w-full text-left p-4 rounded-lg border ${active ? 'border-purple-500 bg-gray-800' : 'border-gray-700 bg-gray-900'} hover:border-purple-400 hover:bg-gray-800 transition`}
+    className={`w-full text-left p-4 rounded-[1.2rem] border backdrop-blur-sm transition ${
+      active
+        ? 'border-cyan-300/20 bg-[linear-gradient(135deg,rgba(8,145,178,0.12),rgba(6,182,212,0.08))] shadow-[0_8px_32px_rgba(6,182,212,0.12)]'
+        : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
+    }`}
   >
     <div className="flex items-center gap-3">
-      <Shield className="w-5 h-5 text-purple-400" />
+      <Shield className="w-5 h-5 text-cyan-300" />
       <div>
         <div className="text-sm font-semibold text-white">{title}</div>
-        <div className="text-xs text-gray-400">{description}</div>
+        <div className="text-xs text-slate-400">{description}</div>
       </div>
     </div>
   </button>
@@ -198,8 +202,8 @@ export default function SetupAuthentication() {
   };
 
   return (
-    <div className="setup-authentication-shell h-full bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="setup-authentication-shell min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.12),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_24%),linear-gradient(180deg,#020617_0%,#0f172a_42%,#111827_100%)] px-4 py-6 text-slate-100 sm:px-6 lg:px-8 overflow-y-auto">
+      <div className="max-w-7xl mx-auto px-0 py-0">
         <div className="flex items-center gap-3 mb-6">
           <Settings className="w-6 h-6 text-purple-400" />
           <div className="text-2xl font-semibold">{t('authSetup.title')}</div>
@@ -246,7 +250,7 @@ export default function SetupAuthentication() {
           </div>
 
           <div className="col-span-12 md:col-span-9">
-            <div className="rounded-lg border border-gray-700 bg-gray-900 p-6">
+            <div className="studio-card-shell rounded-[1.35rem] p-4 md:p-5 border-white/10">
               {message && (
                 <div className="mb-4 flex items-center gap-2 text-sm">
                   <AlertCircle className="w-4 h-4 text-yellow-400" />
