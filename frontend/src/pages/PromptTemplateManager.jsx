@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, Database, Pencil, Plus, RefreshCw, Save, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, Database, Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2 } from 'lucide-react';
+import PageHeaderBar from '../components/PageHeaderBar';
 import promptTemplateService from '../services/promptTemplateService';
 
 const EMPTY_FORM = {
@@ -235,28 +236,36 @@ export default function PromptTemplateManager() {
   const removeField = (index) => setFormValue('fields', form.fields.filter((_, fieldIndex) => fieldIndex !== index));
 
   return (
-    <div className="prompt-template-shell min-h-screen bg-[#060816] p-5 text-slate-100">
-      <div className="mx-auto max-w-[1650px] rounded-[28px] border border-slate-800 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_30%),linear-gradient(180deg,#0a1221_0%,#060816_100%)] p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.24em] text-sky-300">Prompt Template Console</div>
-            <h1 className="mt-2 text-3xl font-semibold">Manage every system prompt</h1>
-            <p className="mt-2 max-w-4xl text-sm text-slate-400">Catalog prompt đang dùng, vị trí sử dụng, mục đích sử dụng, CRUD template tùy biến, khóa placeholder theo option category, và gán template active cho flow thật.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setMode('create'); setSelectedId(null); setForm(EMPTY_FORM); }} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"><Plus size={14} className="mr-2 inline" />New</button>
-            <button onClick={async () => { setSaving(true); try { const result = await promptTemplateService.syncHardcodedPrompts(); setMessage(`Synced ${result.count || 0} hardcoded prompts`); await load(); } finally { setSaving(false); } }} className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300"><Database size={14} className="mr-2 inline" />Scan & Sync</button>
-            <button onClick={load} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"><RefreshCw size={14} className={`mr-2 inline ${loading ? 'animate-spin' : ''}`} />Refresh</button>
-          </div>
-        </div>
+    <div className="prompt-template-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6">
+      <PageHeaderBar
+        icon={<Settings className="h-4 w-4 text-cyan-400" />}
+        title="Prompt Templates"
+        meta="Manage system prompts and templates"
+        className="h-16"
+      />
 
-        {message && <div className="mt-4 rounded-xl border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">{message}</div>}
+      <div className="min-h-0 overflow-y-auto px-5 py-4 lg:px-6">
+        <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-600">Prompt Template Console</div>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-900">Manage every system prompt</h2>
+              <p className="mt-2 max-w-4xl text-sm text-slate-600">Catalog prompt đang dùng, vị trí sử dụng, mục đích sử dụng, CRUD template tùy biến, khóa placeholder theo option category, và gán template active cho flow thật.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => { setMode('create'); setSelectedId(null); setForm(EMPTY_FORM); }} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-600 transition hover:bg-cyan-400/15"><Plus size={14} />New</button>
+              <button onClick={async () => { setSaving(true); try { const result = await promptTemplateService.syncHardcodedPrompts(); setMessage(`Synced ${result.count || 0} hardcoded prompts`); await load(); } finally { setSaving(false); } }} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-600 transition hover:bg-amber-400/15"><Database size={14} />Scan & Sync</button>
+              <button onClick={load} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-600 transition hover:text-slate-900"><RefreshCw size={14} className={`${loading ? 'animate-spin' : ''}`} />Refresh</button>
+            </div>
+          </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">All</div><div className="mt-2 text-2xl font-semibold">{stats.total}</div></div>
-          <div className="rounded-xl border border-sky-800/50 bg-sky-950/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Core</div><div className="mt-2 text-2xl font-semibold">{stats.core}</div></div>
-          <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/20 p-3"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Assigned</div><div className="mt-2 text-2xl font-semibold">{stats.assigned}</div></div>
-        </div>
+          {message && <div className="rounded-xl border border-emerald-300/30 bg-emerald-100/50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="studio-card-shell rounded-[1rem] p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">All</div><div className="mt-2 text-2xl font-semibold text-slate-900">{stats.total}</div></div>
+            <div className="studio-card-shell rounded-[1rem] p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Core</div><div className="mt-2 text-2xl font-semibold text-slate-900">{stats.core}</div></div>
+            <div className="studio-card-shell rounded-[1rem] p-4"><div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Assigned</div><div className="mt-2 text-2xl font-semibold text-slate-900">{stats.assigned}</div></div>
+          </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -378,6 +387,7 @@ export default function PromptTemplateManager() {
               </>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

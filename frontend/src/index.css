@@ -2391,12 +2391,75 @@ html[data-theme="light"] .generation-history-shell [class*="border-emerald-"] {
   border-color: rgba(16, 185, 129, 0.25) !important;
 }
 
-/* PromptTemplateManager Light Theme */
+/* PromptTemplateManager Light Theme - Comprehensive */
 html[data-theme="light"] .prompt-template-shell {
   background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.8), transparent 24%), radial-gradient(circle at 100% 100%, rgba(180, 219, 255, 0.1), transparent 40%), linear-gradient(180deg, rgba(245, 251, 255, 0.56), rgba(230, 244, 255, 0.34)) !important;
+}
+
+/* Text Colors */
+html[data-theme="light"] .prompt-template-shell,
+html[data-theme="light"] .prompt-template-shell p,
+html[data-theme="light"] .prompt-template-shell span,
+html[data-theme="light"] .prompt-template-shell div,
+html[data-theme="light"] .prompt-template-shell li {
   color: #1e293b !important;
 }
 
+html[data-theme="light"] .prompt-template-shell h1,
+html[data-theme="light"] .prompt-template-shell h2,
+html[data-theme="light"] .prompt-template-shell h3,
+html[data-theme="light"] .prompt-template-shell h4,
+html[data-theme="light"] .prompt-template-shell h5,
+html[data-theme="light"] .prompt-template-shell h6 {
+  color: #0f172a !important;
+}
+
+/* Override all dark text colors */
+html[data-theme="light"] .prompt-template-shell [class*="text-slate-100"],
+html[data-theme="light"] .prompt-template-shell [class*="text-slate-200"],
+html[data-theme="light"] .prompt-template-shell [class*="text-slate-300"],
+html[data-theme="light"] .prompt-template-shell [class*="text-slate-400"],
+html[data-theme="light"] .prompt-template-shell [class*="text-gray-100"],
+html[data-theme="light"] .prompt-template-shell [class*="text-gray-200"],
+html[data-theme="light"] .prompt-template-shell [class*="text-gray-300"],
+html[data-theme="light"] .prompt-template-shell [class*="text-gray-400"],
+html[data-theme="light"] .prompt-template-shell [class*="text-white"] {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .prompt-template-shell [class*="text-sky-300"],
+html[data-theme="light"] .prompt-template-shell [class*="text-purple-400"] {
+  color: #0284c7 !important;
+}
+
+/* Backgrounds */
+html[data-theme="light"] .prompt-template-shell [class*="bg-slate-900"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-slate-800"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-slate-950"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-gray-900"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-gray-800"] {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+html[data-theme="light"] .prompt-template-shell [class*="bg-slate-700"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-gray-700"],
+html[data-theme="light"] .prompt-template-shell [class*="bg-white/[0.0"] {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Borders */
+html[data-theme="light"] .prompt-template-shell [class*="border-slate-700"],
+html[data-theme="light"] .prompt-template-shell [class*="border-slate-800"],
+html[data-theme="light"] .prompt-template-shell [class*="border-gray-700"],
+html[data-theme="light"] .prompt-template-shell [class*="border-white/10"],
+html[data-theme="light"] .prompt-template-shell [class*="border-white/8"],
+html[data-theme="light"] .prompt-template-shell [class*="border-white/6"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+}
+
+/* Form Elements */
 html[data-theme="light"] .prompt-template-shell input,
 html[data-theme="light"] .prompt-template-shell textarea,
 html[data-theme="light"] .prompt-template-shell select {
@@ -2411,16 +2474,19 @@ html[data-theme="light"] .prompt-template-shell textarea::placeholder {
   color: #94a3b8 !important;
 }
 
+html[data-theme="light"] .prompt-template-shell input:focus,
+html[data-theme="light"] .prompt-template-shell textarea:focus,
+html[data-theme="light"] .prompt-template-shell select:focus {
+  border-color: rgba(2, 132, 199, 0.5) !important;
+  outline: none !important;
+}
+
+/* Labels */
 html[data-theme="light"] .prompt-template-shell label {
   color: #334155 !important;
 }
 
-html[data-theme="light"] .prompt-template-shell h1,
-html[data-theme="light"] .prompt-template-shell h2,
-html[data-theme="light"] .prompt-template-shell h3 {
-  color: #1e293b !important;
-}
-
+/* Cards and Shells */
 html[data-theme="light"] .prompt-template-shell .studio-card-shell {
   background: rgba(255, 255, 255, 0.8) !important;
   backdrop-filter: blur(10px) !important;
@@ -2428,6 +2494,7 @@ html[data-theme="light"] .prompt-template-shell .studio-card-shell {
   color: #334155 !important;
 }
 
+/* Buttons */
 html[data-theme="light"] .prompt-template-shell button {
   background: rgba(255, 255, 255, 0.8) !important;
   backdrop-filter: blur(8px) !important;
@@ -2439,6 +2506,11 @@ html[data-theme="light"] .prompt-template-shell button:hover {
   background: rgba(255, 255, 255, 0.95) !important;
 }
 
+html[data-theme="light"] .prompt-template-shell button:active {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Chips and Pills */
 html[data-theme="light"] .prompt-template-shell .apple-option-chip {
   background: rgba(255, 255, 255, 0.8) !important;
   backdrop-filter: blur(8px) !important;
@@ -2446,11 +2518,42 @@ html[data-theme="light"] .prompt-template-shell .apple-option-chip {
   color: #334155 !important;
 }
 
+html[data-theme="light"] .prompt-template-shell .apple-option-chip:hover {
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
 html[data-theme="light"] .prompt-template-shell .apple-option-chip.selected {
   background: rgba(224, 242, 254, 0.9) !important;
   backdrop-filter: blur(8px) !important;
   border-color: rgba(2, 132, 199, 0.5) !important;
   color: #0c4a6e !important;
+}
+
+/* Scrollbar */
+html[data-theme="light"] .prompt-template-shell::-webkit-scrollbar {
+  width: 8px;
+}
+
+html[data-theme="light"] .prompt-template-shell::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+html[data-theme="light"] .prompt-template-shell::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5) !important;
+  border-radius: 4px;
+}
+
+html[data-theme="light"] .prompt-template-shell::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7) !important;
+}
+
+/* Dividers and separators */
+html[data-theme="light"] .prompt-template-shell [class*="h-px"],
+html[data-theme="light"] .prompt-template-shell [class*="border-t"],
+html[data-theme="light"] .prompt-template-shell [class*="border-b"],
+html[data-theme="light"] .prompt-template-shell [class*="border-l"],
+html[data-theme="light"] .prompt-template-shell [class*="border-r"] {
+  border-color: rgba(255, 255, 255, 0.42) !important;
 }
 
 /* AnalyticsPage Light Theme */
@@ -2686,4 +2789,113 @@ html[data-theme="light"] .generation-history-shell input::placeholder {
   .generation-history-shell .max-h-\\[840px\\] {
     max-height: 400px !important;
   }
+}
+
+.video-pipeline-surface {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.88), rgba(15, 23, 42, 0.96));
+}
+
+.video-pipeline-subtle {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+}
+
+.video-pipeline-checkbox-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.42);
+  color: #cbd5e1;
+}
+
+.video-pipeline-inset {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.video-pipeline-log-surface {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.68);
+}
+
+.video-pipeline-input {
+  border-color: rgba(51, 65, 85, 0.82);
+  background: rgba(2, 6, 23, 0.8);
+  color: #ffffff;
+}
+
+.video-pipeline-input::placeholder {
+  color: #64748b;
+}
+
+.video-pipeline-input:focus {
+  border-color: rgba(125, 211, 252, 0.7);
+}
+
+.video-pipeline-shell {
+  overflow-x: hidden;
+}
+
+.video-pipeline-shell .border-white\/8,
+.video-pipeline-shell .border-white\/10,
+.video-pipeline-shell .border-white\/12 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-surface {
+  border-color: rgba(207, 226, 241, 0.92);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(114, 210, 255, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(250, 253, 255, 0.98) 0%, rgba(237, 245, 252, 0.96) 100%);
+  box-shadow: 0 24px 60px rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-subtle,
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-log-surface,
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-checkbox-card,
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-inset {
+  border-color: rgba(213, 225, 237, 0.96);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.96), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 249, 253, 0.96) 100%);
+  color: #475569;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-input {
+  border-color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e293b;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-input::placeholder {
+  color: #94a3b8;
+}
+
+html[data-theme="light"] .video-pipeline-shell .text-white,
+html[data-theme="light"] .video-pipeline-shell .text-slate-100,
+html[data-theme="light"] .video-pipeline-shell .text-slate-200,
+html[data-theme="light"] .video-pipeline-shell .text-slate-300 {
+  color: #243042 !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .text-slate-400 {
+  color: #5f7085 !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .text-slate-500 {
+  color: #7b8aa0 !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .text-white\/80 {
+  color: #4b6480 !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .text-rose-200\/80 {
+  color: #c2410c !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell .border-white\/8,
+html[data-theme="light"] .video-pipeline-shell .border-white\/10,
+html[data-theme="light"] .video-pipeline-shell .border-white\/12 {
+  border-color: rgba(203, 213, 225, 0.78) !important;
 }
