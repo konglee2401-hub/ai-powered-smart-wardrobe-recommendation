@@ -2026,14 +2026,14 @@ export default function ImageGenerationPage() {
             {/* Step 2: Image Previews */}
             {currentStep === 2 && (characterPreviewSrc || productImage) && (
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                <h3 className="text-xs font-semibold text-slate-600 uppercase mb-2 flex items-center gap-1">
                   <Image className="w-3 h-3" /> Uploaded Images
                 </h3>
                 <div className="space-y-2">
                   {characterPreviewSrc && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Character</p>
-                      <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                      <p className="text-xs text-slate-500 mb-1">Character</p>
+                      <div className="relative aspect-square rounded-lg overflow-hidden border border-slate-300 bg-white/50 backdrop-blur-sm">
                         <img 
                           src={characterPreviewSrc} 
                           alt="Character" 
@@ -2044,8 +2044,8 @@ export default function ImageGenerationPage() {
                   )}
                   {productImage?.preview && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Product</p>
-                      <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+                      <p className="text-xs text-slate-500 mb-1">Product</p>
+                      <div className="relative aspect-square rounded-lg overflow-hidden border border-slate-300 bg-white/50 backdrop-blur-sm">
                         <img 
                           src={productImage.preview} 
                           alt="Product" 
@@ -2061,7 +2061,7 @@ export default function ImageGenerationPage() {
             {/* Step 3: Style Options - Inline Expansion */}
             {currentStep === 3 && (
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-1">
+                <h3 className="text-xs font-semibold text-slate-600 uppercase mb-3 flex items-center gap-1">
                   <Wand2 className="w-3 h-3" /> Style Options
                 </h3>
                 <div className="mb-3 rounded-[1.45rem] bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
@@ -2084,7 +2084,7 @@ export default function ImageGenerationPage() {
                     {showSceneLockedPrompt ? 'Hide locked prompt' : 'Show locked prompt'}
                   </button>
                   {showSceneLockedPrompt && (
-                    <p className="mt-2 text-xs leading-6 text-gray-200 whitespace-pre-wrap">
+                    <p className="mt-2 text-xs leading-6 text-slate-600 whitespace-pre-wrap">
                       {(() => {
                         const currentScene = sceneOptions.find(s => s.value === selectedOptions.scene);
                         const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
@@ -2160,7 +2160,7 @@ export default function ImageGenerationPage() {
             {/* Step 4: Generation Options */}
             {currentStep === 4 && (
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center gap-1">
+                <h3 className="text-xs font-semibold text-slate-600 uppercase mb-2 flex items-center gap-1">
                   <Rocket className="w-3 h-3" /> Generation
                 </h3>
                 
