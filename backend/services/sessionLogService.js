@@ -18,7 +18,18 @@ class SessionLogService {
   async init() {
     try {
       console.log(`[LOGGER] Initializing session log for ${this.sessionId}...`);
-      this.sessionLog = await SessionLog.createSession(this.sessionId, this.flowType);
+      this.sessionLog = await SessionLog.findOne({ sessionId: this.sessionId })
+        .sort({ createdAt: -1 });
+
+      if (!this.sessionLog) {
+        this.sessionLog = await SessionLog.createSession(this.sessionId, this.flowType);
+      } else {
+        if (this.flowType && this.sessionLog.flowType !== this.flowType) {
+          this.sessionLog.flowType = this.flowType;
+        }
+        this.sessionLog.updatedAt = new Date();
+        await this.sessionLog.save();
+      }
       
       if (!this.sessionLog) {
         console.error(`[LOGGER] ❌ SessionLog.createSession returned null for ${this.sessionId}`);
@@ -152,6 +163,18 @@ class SessionLogService {
     await this.sessionLog.save();
   }
 
+  async storeWorkflowState(workflowState, { merge = true } = {}) {
+    if (!this.sessionLog) return;
+
+    const nextState = merge
+      ? { ...(this.sessionLog.workflowState || {}), ...(workflowState || {}) }
+      : (workflowState || null);
+
+    this.sessionLog.workflowState = nextState;
+    this.sessionLog.updatedAt = new Date();
+    await this.sessionLog.save();
+  }
+
   // Mark completion
   async markCompleted() {
     if (!this.sessionLog) return;
@@ -203,3 +226,5 @@ class SessionLogService {
 }
 
 export default SessionLogService;
+
+

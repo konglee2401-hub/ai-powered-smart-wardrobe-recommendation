@@ -2804,7 +2804,20 @@ export async function serveGeneratedImage(req, res) {
 
 export async function generateVideoBrowser(req, res) {
   try {
-    const { duration, scenario, segments, sourceImage, provider = 'grok', videoProvider = 'grok', aspectRatio = '16:9', language = 'en' } = req.body;
+    const {
+      duration,
+      scenario,
+      segments,
+      sourceImage,
+      startFrameImage,
+      endFrameImage,
+      sceneImage,
+      flowId = null,
+      provider = 'grok',
+      videoProvider = 'grok',
+      aspectRatio = '16:9',
+      language = 'en'
+    } = req.body;
     
     // Accept both provider and videoProvider for backward compatibility
     const selectedProvider = videoProvider || provider || 'grok';
@@ -2814,6 +2827,65 @@ export async function generateVideoBrowser(req, res) {
     // 💫 Validate aspect ratio
     const validAspectRatios = ['16:9', '9:16'];
     const selectedAspectRatio = validAspectRatios.includes(aspectRatio) ? aspectRatio : '16:9';
+
+    const resolveVideoInputPath = async (input, prefix = 'video-input') => {
+      if (!input || typeof input !== 'string') return null;
+
+      if (fs.existsSync(input)) {
+        return input;
+      }
+
+      if (input.startsWith('/api/')) {
+        const filename = path.basename(input.split('?')[0]);
+        const localPath = global.generatedImagePaths?.[filename];
+
+        if (localPath && fs.existsSync(localPath)) {
+          return localPath;
+        }
+
+        const possiblePaths = [
+          path.join(tempDir, 'google-flow-downloads', filename),
+          path.join(tempDir, filename),
+          path.join(process.cwd(), 'temp', filename),
+          path.join(process.cwd(), 'uploads', filename)
+        ];
+
+        return possiblePaths.find((candidate) => fs.existsSync(candidate)) || null;
+      }
+
+      if (input.startsWith('data:')) {
+        const base64Match = input.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (!base64Match) {
+          throw new Error(`Invalid image payload for ${prefix}`);
+        }
+
+        const imageFormat = base64Match[1] || 'png';
+        const imageBuffer = Buffer.from(base64Match[2], 'base64');
+        const filePath = path.join(tempDir, `${prefix}-${Date.now()}.${imageFormat}`);
+        fs.writeFileSync(filePath, imageBuffer);
+        return filePath;
+      }
+
+      if (input.startsWith('http://') || input.startsWith('https://')) {
+        const response = await fetch(input);
+        if (!response.ok) {
+          throw new Error(`Failed to download remote image for ${prefix}: ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        const extension = contentType.includes('jpeg')
+          ? 'jpg'
+          : contentType.includes('webp')
+            ? 'webp'
+            : 'png';
+        const filePath = path.join(tempDir, `${prefix}-${Date.now()}.${extension}`);
+        const arrayBuffer = await response.arrayBuffer();
+        fs.writeFileSync(filePath, Buffer.from(arrayBuffer));
+        return filePath;
+      }
+
+      return null;
+    };
 
     // 💫 DEBUG: Log provider selection
     console.log('\n🎬 [Backend] generateVideoBrowser received:', {
@@ -2899,47 +2971,21 @@ export async function generateVideoBrowser(req, res) {
           fs.mkdirSync(outputDir, { recursive: true });
         }
 
-        // 💫 CONVERT IMAGE TO FILE PATH (handle base64, API URLs, or local paths)
-        let imagePath = sourceImage;
-        
-        // Handle API URLs like /api/v1/browser-automation/generated-image/...
-        if (sourceImage && sourceImage.startsWith('/api/')) {
-          console.log('   📋 Resolving API image URL to file path...');
-          const filename = path.basename(sourceImage);
-          const localPath = global.generatedImagePaths?.[filename];
-          
-          if (localPath && fs.existsSync(localPath)) {
-            imagePath = localPath;
-            console.log(`   ✅ Resolved API URL to local file: ${imagePath}`);
-          } else {
-            console.warn(`   ⚠️  API image URL not found in cache, searching downloads folder...`);
-            // Try common locations
-            const possiblePaths = [
-              path.join(tempDir, 'google-flow-downloads', filename),
-              path.join(tempDir, filename),
-              path.join(process.cwd(), 'temp', filename)
-            ];
-            
-            const foundPath = possiblePaths.find(p => fs.existsSync(p));
-            if (foundPath) {
-              imagePath = foundPath;
-              console.log(`   ✅ Found image at: ${imagePath}`);
-            } else {
-              console.warn(`   ⚠️  Could not resolve API URL: ${sourceImage}`);
-            }
-          }
+        const primaryImagePath = await resolveVideoInputPath(startFrameImage || sourceImage, 'video-start');
+        const secondaryImagePath = await resolveVideoInputPath(endFrameImage || startFrameImage || sourceImage, 'video-end');
+        const sceneImagePath = await resolveVideoInputPath(sceneImage, 'video-scene');
+
+        if (!primaryImagePath || !secondaryImagePath) {
+          return res.status(400).json({
+            success: false,
+            error: 'Google Flow video generation requires both startFrameImage and endFrameImage'
+          });
         }
-        // Handle base64 images
-        else if (sourceImage && sourceImage.startsWith('data:')) {
-          console.log('   📋 Converting base64 image to file...');
-          const base64Match = sourceImage.match(/^data:image\/(\w+);base64,(.+)$/);
-          if (base64Match) {
-            const imageFormat = base64Match[1] || 'jpeg';
-            const imageBuffer = Buffer.from(base64Match[2], 'base64');
-            imagePath = path.join(tempDir, `video-source-${Date.now()}.${imageFormat}`);
-            fs.writeFileSync(imagePath, imageBuffer);
-            console.log(`   ✅ Image saved to: ${imagePath}`);
-          }
+
+        console.log(`   🖼️ Start frame: ${primaryImagePath}`);
+        console.log(`   🖼️ End frame: ${secondaryImagePath}`);
+        if (sceneImagePath) {
+          console.log(`   🖼️ Scene reference: ${sceneImagePath}`);
         }
 
         // 💫 LOOP: Generate video for EACH segment
@@ -2950,22 +2996,31 @@ export async function generateVideoBrowser(req, res) {
           console.log(`\n📹 [VIDEO ${segmentNum}/${finalSegments.length}] Generating...`);
           console.log(`    Prompt: "${segmentPrompt.substring(0, 100)}..."`);
 
+          let flowService = null;
           try {
-            const result = await runVideoGeneration({
-              imagePath: imagePath,  // 💫 USE CONVERTED IMAGE PATH
-              prompt: segmentPrompt,
-              duration: SECONDS_PER_VIDEO,  // Each video is 8s
-              quality: 'high',
-              aspectRatio: selectedAspectRatio,  // 💫 USE SELECTED ASPECT RATIO (16:9 or 9:16)
-              outputDir: outputDir,
-              headless: false
+            flowService = new GoogleFlowAutomationService({
+              type: 'video',
+              aspectRatio: selectedAspectRatio,
+              flowId: flowId || `video-flow-${Date.now()}-${segmentNum}`,
+              headless: false,
+              outputDir
             });
 
-            if (result.success && result.videoPath) {
+            const result = await flowService.generateVideo(
+              segmentPrompt,
+              primaryImagePath,
+              secondaryImagePath,
+              {
+                sceneImagePath,
+                outputPath: path.join(outputDir, `segment-${segmentNum}-video.mp4`),
+                reloadAfter: false
+              }
+            );
+            if (result.success && result.path) {
               console.log(`    ✅ Video ${segmentNum} generated successfully`);
               
               // 💫 GET PATH FROM RESULT AND RENAME
-              const srcFile = result.videoPath;
+              const srcFile = result.path;
               const destFile = path.join(outputDir, `segment-${segmentNum}-video.mp4`);
               
               // Rename file: segment-${segmentNum}-video.mp4
@@ -2985,6 +3040,10 @@ export async function generateVideoBrowser(req, res) {
             }
           } catch (segmentError) {
             console.error(`    ❌ Error generating video ${segmentNum}:`, segmentError.message);
+          } finally {
+            if (flowService?.browser) {
+              await flowService.close();
+            }
           }
         }
 

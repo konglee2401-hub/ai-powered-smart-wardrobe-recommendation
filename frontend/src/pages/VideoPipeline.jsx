@@ -31,6 +31,11 @@ import {
   SourcePill,
   StatusPill,
   SURFACE_CARD_CLASS,
+  SUBTLE_PANEL_CLASS,
+  CHECKBOX_PANEL_CLASS,
+  LOG_PANEL_CLASS,
+  INSET_PANEL_CLASS,
+  TABLE_SHELL_CLASS,
   TEXTAREA_CLASS,
   toneFromStatus,
 } from './video-pipeline/theme.jsx';
@@ -152,23 +157,23 @@ function ScheduleEditor({ title, subtitle, value, onChange }) {
   const schedule = value || { enabled: false, mode: 'manual', everyHours: 1, dailyTime: '09:00', label: 'Manual only' };
 
   return (
-    <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
+    <div className={`${SUBTLE_PANEL_CLASS} rounded-[26px]`}>
       <div>
         <p className="text-sm font-semibold text-white">{title}</p>
         {subtitle ? <p className="mt-1 text-xs text-slate-400">{subtitle}</p> : null}
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <label className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+        <label className={`${CHECKBOX_PANEL_CLASS} block`}>
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{tr('Bật', 'Enabled')}</span>
           <input
             type="checkbox"
             checked={Boolean(schedule.enabled)}
             onChange={(event) => onChange({ ...schedule, enabled: event.target.checked, mode: event.target.checked ? schedule.mode : 'manual' })}
-            className="h-4 w-4 rounded border-slate-600 bg-slate-950"
+            className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
           />
         </label>
-        <label className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+        <label className={`${CHECKBOX_PANEL_CLASS} block`}>
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{tr('Chế độ', 'Mode')}</span>
           <select value={schedule.mode} onChange={(event) => onChange({ ...schedule, mode: event.target.value })} className={INPUT_CLASS}>
             <option value="manual">{tr('Chỉ chạy thủ công', 'Manual only')}</option>
@@ -223,6 +228,7 @@ export default function VideoPipeline() {
   const [jobStatusFilter, setJobStatusFilter] = useState('');
   const [channelFilters, setChannelFilters] = useState({ source: '', status: '', search: '' });
   const [videoFilters, setVideoFilters] = useState({ source: '', downloadStatus: '', driveStatus: '', search: '' });
+  const [videoPagination, setVideoPagination] = useState({ page: 1, limit: 25, total: 0 });
   const [composer, setComposer] = useState(DEFAULT_COMPOSER);
   const [connectionForm, setConnectionForm] = useState(DEFAULT_CONNECTION);
   const [manualSelections, setManualSelections] = useState(DEFAULT_MANUAL_SELECTIONS);
@@ -301,7 +307,12 @@ export default function VideoPipeline() {
   const loadDashboard = async () => setDashboard(await videoPipelineApi.getDashboard());
   const loadSources = async () => setSources((await videoPipelineApi.getSources()).items || []);
   const loadChannels = async () => setChannels((await videoPipelineApi.getChannels({ ...channelFilters, limit: 150 })).items || []);
-  const loadVideos = async () => setVideos((await videoPipelineApi.getVideos({ ...videoFilters, limit: 150 })).items || []);
+  const loadVideos = async (page = 1) => {
+    const offset = (page - 1) * videoPagination.limit;
+    const response = await videoPipelineApi.getVideos({ ...videoFilters, offset, limit: videoPagination.limit });
+    setVideos(response.items || []);
+    setVideoPagination((prev) => ({ ...prev, page, total: response.count }));
+  };
   const loadJobs = async () => {
     const result = await videoPipelineApi.getJobs({ status: jobStatusFilter, limit: 150 });
     setJobs(result.items || []);
@@ -328,7 +339,7 @@ export default function VideoPipeline() {
   }, [channelFilters.source, channelFilters.status, channelFilters.search]);
 
   useEffect(() => {
-    loadVideos().catch((error) => toast.error(`Cannot load videos: ${error.message}`));
+    loadVideos(1).catch((error) => toast.error(`Cannot load videos: ${error.message}`));
   }, [videoFilters.source, videoFilters.downloadStatus, videoFilters.driveStatus, videoFilters.search]);
 
   useEffect(() => {
@@ -678,8 +689,8 @@ export default function VideoPipeline() {
                 <input type="number" value={sourceForm.sortOrder || 50} onChange={(e) => setSourceForm((prev) => ({ ...prev, sortOrder: Number(e.target.value) || 50 }))} className={INPUT_CLASS} placeholder="Sort order" />
               </div>
               <textarea value={sourceForm.description} onChange={(e) => setSourceForm((prev) => ({ ...prev, description: e.target.value }))} className={TEXTAREA_CLASS} placeholder="Describe how this source should be used." />
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                <input type="checkbox" checked={Boolean(sourceForm.enabled)} onChange={(e) => setSourceForm((prev) => ({ ...prev, enabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-600 bg-slate-950" />
+              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                <input type="checkbox" checked={Boolean(sourceForm.enabled)} onChange={(e) => setSourceForm((prev) => ({ ...prev, enabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />
                 Source enabled
               </label>
               <div className="flex flex-wrap gap-2">
@@ -696,7 +707,7 @@ export default function VideoPipeline() {
             <SectionHeader title="Configured sources" subtitle="These settings are stored in Mongo and drive the scraper inputs." />
             <div className="mt-4 space-y-3">
               {sources.map((item) => (
-                <div key={item.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                <div key={item.id} className={SUBTLE_PANEL_CLASS}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -704,7 +715,7 @@ export default function VideoPipeline() {
                         <SourcePill source={item.key} />
                         <StatusPill tone={item.enabled ? 'emerald' : 'amber'}>{item.enabled ? 'enabled' : 'disabled'}</StatusPill>
                       </div>
-                      <p className="mt-2 text-xs text-slate-400">{item.defaultUrl || 'No default URL configured'}</p>
+                      <p className="mt-2 break-all text-xs text-slate-400">{item.defaultUrl || 'No default URL configured'}</p>
                       <p className="mt-2 text-xs text-slate-500">{item.description || 'No description'}</p>
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                         <span>Videos: {formatNumber(item.stats?.totalVideos || 0)}</span>
@@ -735,13 +746,13 @@ export default function VideoPipeline() {
               <input value={channelFilters.search} onChange={(e) => setChannelFilters((prev) => ({ ...prev, search: e.target.value }))} className={INPUT_CLASS} placeholder="Search channel name or id" />
             </div>
           </section>
-          <section className={`${SURFACE_CARD_CLASS} overflow-x-auto`}>
+          <section className={TABLE_SHELL_CLASS}>
             <table className="min-w-full text-left text-sm">
               <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-slate-500"><tr><th className="px-4 py-3">Channel</th><th className="px-4 py-3">Source</th><th className="px-4 py-3">Subscribers</th><th className="px-4 py-3">Videos</th><th className="px-4 py-3">Drive Ready</th><th className="px-4 py-3">Last Scanned</th><th className="px-4 py-3">Status</th></tr></thead>
               <tbody>
                 {channels.map((item) => (
                   <tr key={item.id} className="border-t border-white/8">
-                    <td className="px-4 py-3"><p className="font-medium text-white">{item.name || item.channelId}</p><p className="mt-1 text-xs text-slate-500">{item.channelId}</p></td>
+                    <td className="px-4 py-3"><p className="font-medium text-white">{item.name || item.channelId}</p><p className="mt-1 break-all text-xs text-slate-500">{item.channelId}</p></td>
                     <td className="px-4 py-3"><SourcePill source={item.sourceKey || item.platform} /></td>
                     <td className="px-4 py-3 text-slate-200">{formatNumber(item.subscriberCount || 0)}</td>
                     <td className="px-4 py-3 text-slate-200">{formatNumber(item.stats?.totalVideos || 0)}</td>
@@ -768,23 +779,55 @@ export default function VideoPipeline() {
               <input value={videoFilters.search} onChange={(e) => setVideoFilters((prev) => ({ ...prev, search: e.target.value }))} className={INPUT_CLASS} placeholder="Search title or URL" />
             </div>
           </section>
-          <section className={`${SURFACE_CARD_CLASS} overflow-x-auto`}>
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-slate-500"><tr><th className="px-4 py-3">Pick</th><th className="px-4 py-3">Video</th><th className="px-4 py-3">Source</th><th className="px-4 py-3">Views</th><th className="px-4 py-3">Download</th><th className="px-4 py-3">Drive</th><th className="px-4 py-3">Actions</th></tr></thead>
-              <tbody>
-                {videos.map((item) => (
-                  <tr key={item.id} className="border-t border-white/8">
-                    <td className="px-4 py-3"><input type="checkbox" checked={selectedVideoIds.includes(item.id)} onChange={() => toggleVideoSelection(item.id)} className="h-4 w-4 rounded border-slate-600 bg-slate-950" /></td>
-                    <td className="px-4 py-3"><p className="font-medium text-white">{item.title || item.videoId}</p><p className="mt-1 text-xs text-slate-500">{item.channelName || item.videoId}</p></td>
-                    <td className="px-4 py-3"><SourcePill source={item.sourceKey} /></td>
-                    <td className="px-4 py-3 text-slate-200">{formatNumber(item.views || 0)}</td>
-                    <td className="px-4 py-3"><StatusPill tone={toneFromStatus(item.downloadStatus)}>{item.downloadStatus}</StatusPill></td>
-                    <td className="px-4 py-3"><StatusPill tone={toneFromStatus(item.driveSync?.status)}>{item.driveSync?.status || 'pending'}</StatusPill></td>
-                    <td className="px-4 py-3"><div className="flex flex-wrap gap-2"><button onClick={() => uploadVideo(item.id)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}><Upload className="h-3.5 w-3.5" />Sync</button><button onClick={() => { toggleVideoSelection(item.id); goToSection('production'); }} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')}>Queue</button></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between px-5 py-3">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <span>Page {videoPagination.page} of {Math.ceil(videoPagination.total / videoPagination.limit) || 1}</span>
+                <span>•</span>
+                <span>Total {videoPagination.total} videos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadVideos(Math.max(1, videoPagination.page - 1))}
+                  disabled={videoPagination.page === 1}
+                  className={getActionButtonClass('slate', 'px-3 text-xs h-[38px]')}
+                >
+                  ← Previous
+                </button>
+                <select value={videoPagination.limit} onChange={(e) => { setVideoPagination((prev) => ({ ...prev, limit: Number(e.target.value), page: 1 })); loadVideos(1); }} className={INPUT_CLASS + ' w-20 text-xs'}>
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <button
+                  onClick={() => loadVideos(videoPagination.page + 1)}
+                  disabled={videoPagination.page * videoPagination.limit >= videoPagination.total}
+                  className={getActionButtonClass('slate', 'px-3 text-xs h-[38px]')}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+            <section className={TABLE_SHELL_CLASS}>
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-white/[0.03] text-xs uppercase tracking-[0.14em] text-slate-500"><tr><th className="px-4 py-3 w-10">Pick</th><th className="px-4 py-3 w-16">Thumb</th><th className="px-4 py-3">Video</th><th className="px-4 py-3">Source</th><th className="px-4 py-3 w-20">Views</th><th className="px-4 py-3">Download</th><th className="px-4 py-3">Drive</th><th className="px-4 py-3">Actions</th></tr></thead>
+                <tbody>
+                  {videos.map((item) => (
+                    <tr key={item.id} className="border-t border-white/8">
+                      <td className="px-4 py-3"><input type="checkbox" checked={selectedVideoIds.includes(item.id)} onChange={() => toggleVideoSelection(item.id)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" /></td>
+                      <td className="px-4 py-3"><div className="h-12 w-14 overflow-hidden rounded-lg border border-slate-600 bg-slate-800">{item.thumbnail ? <img src={item.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-500">N/A</div>}</div></td>
+                      <td className="px-4 py-3"><p className="font-medium text-white">{item.title || item.videoId}</p><p className="mt-1 break-all text-xs text-slate-500">{item.channelName || item.videoId}</p></td>
+                      <td className="px-4 py-3"><SourcePill source={item.sourceKey} /></td>
+                      <td className="px-4 py-3 text-slate-200">{formatNumber(item.views || 0)}</td>
+                      <td className="px-4 py-3"><StatusPill tone={toneFromStatus(item.downloadStatus)}>{item.downloadStatus}</StatusPill></td>
+                      <td className="px-4 py-3"><StatusPill tone={toneFromStatus(item.driveSync?.status)}>{item.driveSync?.status || 'pending'}</StatusPill></td>
+                      <td className="px-4 py-3"><div className="flex flex-wrap gap-2"><button onClick={() => uploadVideo(item.id)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}><Upload className="h-3.5 w-3.5" />Sync</button><button onClick={() => { toggleVideoSelection(item.id); goToSection('production'); }} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')}>Queue</button></div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           </section>
           {!videos.length ? <EmptyState label="No videos loaded from Mongo yet." /> : null}
         </section>
@@ -806,8 +849,8 @@ export default function VideoPipeline() {
               <select value={composer.subtitleMode} onChange={(e) => setComposer((prev) => ({ ...prev, subtitleMode: e.target.value }))} className={INPUT_CLASS}><option value="auto">{tr('Tự động', 'Auto subtitle')}</option><option value="none">{tr('Không dùng', 'No subtitle')}</option></select>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300"><input type="checkbox" checked={composer.watermarkEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, watermarkEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-600 bg-slate-950" />{tr('Watermark', 'Watermark')}</label>
-              <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300"><input type="checkbox" checked={composer.voiceoverEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, voiceoverEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-600 bg-slate-950" />{tr('Lồng tiếng', 'Voiceover')}</label>
+              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.watermarkEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, watermarkEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{tr('Watermark', 'Watermark')}</label>
+              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.voiceoverEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, voiceoverEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{tr('Lồng tiếng', 'Voiceover')}</label>
               <select value={composer.templateStrategy} onChange={(e) => setComposer((prev) => ({ ...prev, templateStrategy: e.target.value }))} className={INPUT_CLASS}><option value="random">{tr('Ngẫu nhiên', 'Random template')}</option><option value="weighted">{tr('Theo trọng số', 'Weighted template')}</option><option value="ai_suggested">{tr('AI đề xuất', 'AI suggested template')}</option></select>
             </div>
             <div className="mt-4">
@@ -839,7 +882,7 @@ export default function VideoPipeline() {
                 const selectedItem = manualSelections[slot];
 
                 return (
-                  <div key={slot} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div key={slot} className={SUBTLE_PANEL_CLASS}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-white">{slotCopy.title}</p>
@@ -847,7 +890,7 @@ export default function VideoPipeline() {
                       </div>
                       {selectedItem ? <StatusPill tone="emerald">{tr('Đã chọn', 'Selected')}</StatusPill> : <StatusPill tone="amber">{tr('Chưa có', 'Missing')}</StatusPill>}
                     </div>
-                    <div className="mt-4 rounded-2xl border border-dashed border-white/12 bg-slate-950/40 p-4">
+                    <div className={`${INSET_PANEL_CLASS} mt-4`}>
                       {selectedItem ? (
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-white">{selectedItem.name || selectedItem.assetId}</p>
@@ -888,7 +931,7 @@ export default function VideoPipeline() {
             </div>
             <div className="mt-5 space-y-3">
               {selectedVideos.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div key={item.id} className={`${SUBTLE_PANEL_CLASS} rounded-2xl`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-medium text-white">{item.title || item.videoId}</p>
@@ -935,7 +978,7 @@ export default function VideoPipeline() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-white">{job.sourceTitle || job.queueId}</p>
-                  <p className="mt-1 text-xs text-slate-500">{job.queueId}</p>
+                  <p className="mt-1 break-all text-xs text-slate-500">{job.queueId}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <SourcePill source={job.sourcePlatform || job.platform} />
                     <StatusPill tone={toneFromStatus(job.status)}>{job.status}</StatusPill>
@@ -943,7 +986,7 @@ export default function VideoPipeline() {
                     <StatusPill tone="sky">{job.contentType}</StatusPill>
                     {job.errorCount ? <StatusPill tone="amber">{tr('Retry', 'Retry')} {job.errorCount}/{job.maxRetries || 0}</StatusPill> : null}
                   </div>
-                  {job.queueControl?.lastFailureMessage ? <p className="mt-3 max-w-3xl text-xs text-rose-200/80">{job.queueControl.lastFailureMessage}</p> : null}
+                  {job.queueControl?.lastFailureMessage ? <p className="mt-3 max-w-3xl break-words text-xs text-rose-200/80">{job.queueControl.lastFailureMessage}</p> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => toggleLogs(job.queueId)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>{jobLogs[job.queueId] ? tr('Hide Logs', 'Hide Logs') : tr('View Logs', 'View Logs')}</button>
@@ -976,7 +1019,7 @@ export default function VideoPipeline() {
                 </div>
               ) : null}
               {jobLogs[job.queueId] ? (
-                <div className="mt-4 space-y-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-xs text-slate-300">
+                <div className={`${LOG_PANEL_CLASS} mt-4 space-y-2 text-slate-300`}>
                   {jobLogs[job.queueId].map((entry, index) => (
                     <div key={job.queueId + '-' + index} className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
                       <span className="font-medium text-white">{entry.stage}</span>
@@ -1004,11 +1047,11 @@ export default function VideoPipeline() {
             </div>
             <div className="mt-4 space-y-3">
               {(connections.accounts || []).map((account) => (
-                <div key={account.accountId} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div key={account.accountId} className={`${SUBTLE_PANEL_CLASS} rounded-2xl`}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p className="font-medium text-white">{account.displayName}</p>
-                      <p className="mt-1 text-xs text-slate-500">{account.platform}:{account.username}</p>
+                      <p className="mt-1 break-all text-xs text-slate-500">{account.platform}:{account.username}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <StatusPill tone={account.verified ? 'emerald' : 'amber'}>{account.verified ? 'verified' : 'unverified'}</StatusPill>
                         <StatusPill tone={account.active ? 'sky' : 'violet'}>{account.active ? 'active' : 'inactive'}</StatusPill>
@@ -1058,7 +1101,7 @@ export default function VideoPipeline() {
               <SectionHeader title="Production scheduler" subtitle="Queue scanning is configured in readable language but still stored with machine values." />
               <div className="mt-4 space-y-4">
                 <ScheduleEditor title="Queue runner" subtitle="How often the background worker should read queued production jobs." value={settings.production?.scheduler} onChange={(value) => updateSettings('production', 'scheduler', value)} />
-                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300"><input type="checkbox" checked={Boolean(settings.production?.autoPublish)} onChange={(e) => updateSettings('production', 'autoPublish', e.target.checked)} className="h-4 w-4 rounded border-slate-600 bg-slate-950" />Auto publish after completion</label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={Boolean(settings.production?.autoPublish)} onChange={(e) => updateSettings('production', 'autoPublish', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />Auto publish after completion</label>
                 <select value={settings.production?.defaultPlatform || 'youtube'} onChange={(e) => updateSettings('production', 'defaultPlatform', e.target.value)} className={INPUT_CLASS}><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="tiktok">TikTok</option></select>
                 <select value={settings.production?.youtubePublishType || 'shorts'} onChange={(e) => updateSettings('production', 'youtubePublishType', e.target.value)} className={INPUT_CLASS}><option value="shorts">YouTube Shorts</option><option value="video">YouTube Video</option></select>
               </div>
@@ -1069,14 +1112,14 @@ export default function VideoPipeline() {
             <SectionHeader title="Drive template folders" subtitle="Add folders to validate template sources and choose random, weighted, or AI suggested selection." actions={<button onClick={() => updateSettings('production', 'templateSources', [...(settings.production?.templateSources || []), { name: '', folderId: '', folderPath: '', enabled: true, selectionStrategy: 'random', notes: '' }])} className={getActionButtonClass('violet')}><Plus className="h-4 w-4" />Add Folder</button>} />
             <div className="mt-4 space-y-3">
               {(settings.production?.templateSources || []).map((item, index) => (
-                <div key={`${item.folderId || 'new'}-${index}`} className="grid grid-cols-1 gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_140px_auto]">
+                <div key={`${item.folderId || 'new'}-${index}`} className={`video-pipeline-template-grid ${SUBTLE_PANEL_CLASS} grid grid-cols-1 gap-3 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_140px_auto]`}>
                   <input value={item.name || ''} onChange={(e) => updateTemplateSource(index, 'name', e.target.value)} className={INPUT_CLASS} placeholder="Folder label" />
                   <input value={item.folderId || ''} onChange={(e) => updateTemplateSource(index, 'folderId', e.target.value)} className={INPUT_CLASS} placeholder="Drive folder ID" />
                   <input value={item.folderPath || ''} onChange={(e) => updateTemplateSource(index, 'folderPath', e.target.value)} className={INPUT_CLASS} placeholder="Folder path hint" />
                   <select value={item.selectionStrategy || 'random'} onChange={(e) => updateTemplateSource(index, 'selectionStrategy', e.target.value)} className={INPUT_CLASS}><option value="random">Random</option><option value="weighted">Weighted</option><option value="ai_suggested">AI suggested</option></select>
                   <button onClick={() => updateSettings('production', 'templateSources', (settings.production?.templateSources || []).filter((_, itemIndex) => itemIndex !== index))} type="button" className={getActionButtonClass('amber')}>Remove</button>
-                  <div className="xl:col-span-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={item.enabled !== false} onChange={(e) => updateTemplateSource(index, 'enabled', e.target.checked)} className="h-4 w-4 rounded border-slate-600 bg-slate-950" />Enabled</label>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400 2xl:col-span-5">
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" checked={item.enabled !== false} onChange={(e) => updateTemplateSource(index, 'enabled', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />Enabled</label>
                     <StatusPill tone={toneFromStatus(item.healthStatus || 'unknown')}>{item.healthStatus || 'unknown'}</StatusPill>
                     <span>{item.lastError || 'Health will refresh on save.'}</span>
                   </div>
@@ -1101,3 +1144,4 @@ export default function VideoPipeline() {
     </VideoPipelineLayout>
   );
 }
+

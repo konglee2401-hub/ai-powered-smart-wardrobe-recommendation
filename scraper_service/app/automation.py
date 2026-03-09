@@ -1265,7 +1265,7 @@ async def discover_douyin(topic: str):
                 'views': int(card.get('views', 100001) or 100001),
                 'url': card.get('url') or f'https://www.douyin.com/video/{video_id}',
                 'topic': topic,
-                'thumbnail': card.get('thumbnail', ''),
+                'thumbnail': card.get('thumbnail') or f'https://p3-dy.byteimg.com/obj/bytedance-obj/dybase/img/{video_id}',
                 'channelId': channel['_id'],
             }
         )
@@ -1361,7 +1361,7 @@ async def discover_youtube(topic: str):
                 'views': views,
                 'url': video_url,
                 'topic': topic,
-                'thumbnail': '',
+                'thumbnail': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
                 'channelId': ch['_id'],
             }
         )
@@ -1828,6 +1828,7 @@ async def process_playboard_cards(cards: List[Dict], topic: str):
             try:
                 video_payload = {
                     'platform': 'youtube',
+                    'source': 'playboard',
                     'videoId': video_id,
                     'title': title[:200],
                     'views': views,

@@ -38,13 +38,21 @@ lab-flow-auth.json
 backend/.sessions/
 backend/sessions/
 backend/data/chatgpt-session.json
+backend/data/google-flow-session.json
+backend/data/chatgpt-profiles/default/
+backend/data/google-flow-profiles/
+backend/data/sessions/chatgpt-session.json
+backend/data/sessions/google-flow-session.json
 backend/data/*.json
 backend/scripts/auth/data/**/session.json
 backend/scripts/auth/data/**/*.json
+backend/data/
 *-session.json
 *-sessions.json
 session.json
 sessions.json
+**/session.json
+**/sessions.json
 
 # Environment and config
 coverage/
@@ -68,3 +76,6 @@ Thumbs.db
 backend/test-affiliate/step1-affiliate-prompts-*.json
 backend/test-affiliate/affiliate-tiktok-flow-e2e-*.json
 backend/test-affiliate/generation-monitoring-test.log
+
+# Playwright
+output/playwright/

@@ -187,7 +187,7 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       }
     };
     
-    // 🔴 TIMEOUT PROTECTION: Ensure request completes or sends error within 12 minutes
+    // Soft timeout only: do not emit a fake failure while the persisted workflow may still be progressing.
     const flowTimeoutMs = 12 * 60 * 1000;  // 12 minutes
     let responseComplete = false;
     
@@ -200,15 +200,7 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
     
     const timeout = setTimeout(() => {
       if (!responseComplete) {
-        console.error(`🔴 TIMEOUT: Affiliate TikTok flow exceeded ${flowTimeoutMs/1000}s`);
-        responseComplete = true;  // Mark to prevent double-sending
-        res.status(504).json({
-          success: false,
-          error: `Backend flow timeout after ${flowTimeoutMs/1000}s. Please try again.`,
-          flowId: flowReq.body.flowId,
-          stage: 'unknown',
-          timestamp: new Date().toISOString()
-        });
+        console.error(`???? SOFT TIMEOUT: Affiliate TikTok flow exceeded ${flowTimeoutMs/1000}s; keep using flow status/resume from DB`);
       }
     }, flowTimeoutMs);
     

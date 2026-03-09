@@ -1,10 +1,24 @@
 import React from 'react';
 
 export const SURFACE_CARD_CLASS =
-  'overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(17,24,39,0.88),rgba(15,23,42,0.96))] shadow-[0_24px_80px_rgba(15,23,42,0.28)] backdrop-blur';
+  'video-pipeline-surface studio-card-shell overflow-hidden rounded-[30px] border shadow-[0_24px_80px_rgba(15,23,42,0.18)] backdrop-blur';
+
+export const SUBTLE_PANEL_CLASS =
+  'video-pipeline-subtle rounded-[24px] border p-4';
+
+export const CHECKBOX_PANEL_CLASS =
+  'video-pipeline-checkbox-card rounded-2xl border px-4 py-3 text-sm';
+
+export const LOG_PANEL_CLASS =
+  'video-pipeline-log-surface rounded-2xl border p-4 text-xs';
+
+export const INSET_PANEL_CLASS =
+  'video-pipeline-inset rounded-2xl border border-dashed p-4';
+
+export const TABLE_SHELL_CLASS = `${SURFACE_CARD_CLASS} video-pipeline-table-shell overflow-x-auto`;
 
 export const INPUT_CLASS =
-  'w-full rounded-2xl border border-slate-700/80 bg-slate-950/80 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/70 focus:ring-2 focus:ring-sky-400/10';
+  'video-pipeline-input w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-sky-400/10';
 
 export const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[108px] resize-y`;
 
@@ -48,6 +62,7 @@ export function StatusPill({ children, tone = 'sky' }) {
     amber: 'border-amber-300/30 bg-amber-300/12 text-amber-100',
     violet: 'border-violet-300/30 bg-violet-300/14 text-violet-100',
     slate: 'border-slate-600/70 bg-slate-700/40 text-slate-200',
+    rose: 'border-rose-300/30 bg-rose-300/12 text-rose-100',
   }[tone] || 'border-slate-600/70 bg-slate-700/40 text-slate-200';
 
   return (
@@ -95,7 +110,7 @@ export function MetricCard({ title, value, helper, icon: Icon, tone = 'sky' }) {
 export function SectionHeader({ title, subtitle, actions = null }) {
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-      <div>
+      <div className="min-w-0">
         <h3 className="text-base font-semibold text-white">{title}</h3>
         {subtitle ? <p className="mt-1 text-[13px] text-slate-400">{subtitle}</p> : null}
       </div>

@@ -66,14 +66,14 @@ export const pageRoutes = [
   { path: '/customization', Component: AdvancedCustomizationPage },
   { path: '/performance', Component: PerformanceOptimizerPage },
   { path: '/admin/providers', Component: AIProviderManager },
-  { path: '/video-pipeline', Component: VideoPipeline },
-  { path: '/video-pipeline/:section', Component: VideoPipeline },
-  { path: '/video-production', Component: VideoPipeline },
-  { path: '/shorts-reels/dashboard', Component: VideoPipeline },
-  { path: '/shorts-reels/channels', Component: VideoPipeline },
-  { path: '/shorts-reels/videos', Component: VideoPipeline },
-  { path: '/shorts-reels/logs', Component: VideoPipeline },
-  { path: '/shorts-reels/settings', Component: VideoPipeline },
+  { path: '/video-pipeline', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/video-pipeline/:section', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/video-production', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/shorts-reels/dashboard', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/shorts-reels/channels', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/shorts-reels/videos', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/shorts-reels/logs', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/shorts-reels/settings', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
 ];
 
 export const redirectRoutes = [

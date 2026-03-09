@@ -26,7 +26,7 @@ const baseLinkClass =
 export default function Navbar({ theme = 'light', onToggleTheme }) {
   const location = useLocation();
   const { t, i18n } = useTranslation();
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const [isGenerationMenuOpen, setIsGenerationMenuOpen] = useState(true);
@@ -308,3 +308,4 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
     </>
   );
 }
+

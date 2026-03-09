@@ -75,6 +75,8 @@ const sessionLogSchema = new mongoose.Schema({
     }]
   },
 
+  workflowState: mongoose.Schema.Types.Mixed,
+
   // Error tracking
   error: {
     stage: String,
@@ -160,3 +162,4 @@ sessionLogSchema.statics.getRecentSessions = async function(limit = 10) {
 };
 
 export default mongoose.model('SessionLog', sessionLogSchema);
+

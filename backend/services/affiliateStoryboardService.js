@@ -48,6 +48,8 @@ export function buildStoryboardBlueprint(analysis = {}, options = {}) {
     const frameEndKey = `seg${index + 1}_end`;
     const segmentName = segmentNames[index] || `segment-${index + 1}`;
     const focusLabel = index === 0 ? 'hook' : index === segmentCount - 1 ? 'cta' : productFocus;
+    // Text is ALLOWED only on hook (first) and cta (last) frames where it enhances engagement
+    const textRequired = segmentName === 'hook' || segmentName === 'cta';
 
     requiredFrames.push({
       key: frameStartKey,
@@ -57,7 +59,8 @@ export function buildStoryboardBlueprint(analysis = {}, options = {}) {
       focus: focusLabel,
       shotType: index === 0 ? 'mid-shot' : index === segmentCount - 1 ? 'hero-shot' : 'full-body',
       pose: index === 0 ? 'composed opening pose' : index === segmentCount - 1 ? 'confident CTA pose' : 'natural transition pose',
-      purpose: `${segmentName} start frame`
+      purpose: `${segmentName} start frame`,
+      textRequired
     });
 
     requiredFrames.push({
@@ -68,7 +71,8 @@ export function buildStoryboardBlueprint(analysis = {}, options = {}) {
       focus: focusLabel,
       shotType: index === 0 ? 'mid-shot' : index === segmentCount - 1 ? 'hero-shot' : 'full-body',
       pose: index === 0 ? 'slight turn to camera' : index === segmentCount - 1 ? 'final purchase CTA pose' : 'end transition pose',
-      purpose: `${segmentName} end frame`
+      purpose: `${segmentName} end frame`,
+      textRequired
     });
 
     segments.push({
@@ -112,25 +116,125 @@ export function buildFrameGenerationPlan(analysis = {}, blueprint = {}, options 
       ? 'The product must be clearly interacted with in the hands while the same character identity remains locked.'
       : 'The same uploaded character must visibly wear or present the product while preserving face, hair, body shape, and skin tone.';
 
-    const prompt = language === 'vi'
-      ? [
-          `Tao anh khoa hinh cho video TikTok, khung ${roleLabel} cua segment ${frame.segmentIndex}.`,
+    const textRequired = frame.textRequired || false;
+
+    let promptParts;
+    if (language === 'vi') {
+      if (textRequired) {
+        // Hook/CTA frames: ALLOW conditional text
+        promptParts = [
+          `===== CONTEXT (For AI Understanding Only) =====`,
+          `Video segment ${frame.segmentIndex} of ${blueprint.segmentCount}: ${frame.segmentName}`,
+          `Frame role: ${roleLabel}`,
+          `Purpose: ${frame.purpose}`,
+          `Pose guidance: ${frame.pose}`,
+          `Text overlay: CO THE co (optional)`,
+          ``,
+          `===== CHARACTER & PRODUCT =====`,
           `Nhan vat bat buoc la ${displayName}, giu nguyen khuon mat, toc, ti le co the, mau da va danh tinh goc.`,
           `San pham: ${garmentType}, mau ${primaryColor}, chat lieu ${material}.`,
-          `Canh quay ${frame.shotType}, muc dich ${frame.purpose}, tu the ${frame.pose}.`,
+          ``,
+          `===== PURE VISUAL GENERATION =====`,
+          `Tao anh khoa hinh cho video TikTok, khung ${roleLabel}.`,
+          `Canh quay ${frame.shotType}.`,
           `Boi canh ${scene}, anh sang ${lighting}, tam trang ${mood}.`,
           focusLine,
-          'Anh thoi trang thuc te, dong nhat nhan vat, khong doi nguoi, khong sai anatomy, bo cuc 9:16.'
-        ].join(' ')
-      : [
-          `Create a TikTok keyframe image for the ${roleLabel} of segment ${frame.segmentIndex}.`,
+          ``,
+          `===== TEXT OVERLAY (CO CHON) =====`,
+          `Neu segment nay can text nho (hook hoac cta): co the hien thi 1-2 tu nho (ej "LIMITED OFFER", "BUY NOW").`,
+          `Neu hien thi text: vi tri goc canh (khong lap character), mau trang/toi roi, contrast cao.`,
+          `Text DAY LA CHI GIAN CHUI - Video prompt se chi tiet dung text nao.`,
+          `Neu VIDEO PROMPT khong noi den text, thi KHONG VE text.`,
+          ``,
+          `Anh thoi trang thuc te, dong nhat nhan vat, khong sai anatomy, bo cuc 9:16.`
+        ];
+      } else {
+        // Showcase/Detail frames: STRICT no text
+        promptParts = [
+          `===== CONTEXT (For AI Understanding Only) =====`,
+          `Video segment ${frame.segmentIndex} of ${blueprint.segmentCount}: ${frame.segmentName}`,
+          `Frame role: ${roleLabel}`,
+          `Purpose: ${frame.purpose}`,
+          `Pose guidance: ${frame.pose}`,
+          `Text overlay: TUYET DOI khong co`,
+          ``,
+          `===== CHARACTER & PRODUCT =====`,
+          `Nhan vat bat buoc la ${displayName}, giu nguyen khuon mat, toc, ti le co the, mau da va danh tinh goc.`,
+          `San pham: ${garmentType}, mau ${primaryColor}, chat lieu ${material}.`,
+          ``,
+          `===== PURE VISUAL GENERATION (KHONG TEXT) =====`,
+          `Tao anh khoa hinh cho video TikTok, khung ${roleLabel}.`,
+          `Canh quay ${frame.shotType}.`,
+          `Boi canh ${scene}, anh sang ${lighting}, tam trang ${mood}.`,
+          focusLine,
+          ``,
+          `===== CRITICAL: KHONG TEXT TOAN BO =====`,
+          `TUYET DOI khong ghi text, so hieu, chu, label, metadata len anh.`,
+          `Khong co: "Segment 1", "Segment 2", "Segment 3", "CTA", tieu de, chu thich, hay logo, chu description.`,
+          `Chi la anh tay thuc te: nhan vat + san pham, KHONG CO CHI TIET VAN BAN.`,
+          `Anh thoi trang thuc te, dong nhat nhan vat, khong sai anatomy, bo cuc 9:16.`
+        ];
+      }
+    } else {
+      if (textRequired) {
+        // Hook/CTA frames: ALLOW conditional text
+        promptParts = [
+          `===== CONTEXT (For AI Understanding Only) =====`,
+          `Video segment ${frame.segmentIndex} of ${blueprint.segmentCount}: ${frame.segmentName}`,
+          `Frame role: ${roleLabel}`,
+          `Purpose: ${frame.purpose}`,
+          `Pose guidance: ${frame.pose}`,
+          `Text overlay: OPTIONAL`,
+          ``,
+          `===== CHARACTER & PRODUCT =====`,
           `The character must remain exactly ${displayName}, preserving face, hair, body proportions, skin tone, and identity.`,
           `Product: ${garmentType}, color ${primaryColor}, material ${material}.`,
-          `Shot type ${frame.shotType}, purpose ${frame.purpose}, pose ${frame.pose}.`,
+          ``,
+          `===== PURE VISUAL GENERATION =====`,
+          `Create a TikTok keyframe image for the ${roleLabel}.`,
+          `Shot type ${frame.shotType}.`,
           `Scene ${scene}, lighting ${lighting}, mood ${mood}.`,
           focusLine,
-          'Photorealistic vertical 9:16 fashion still, coherent anatomy, no character drift.'
-        ].join(' ');
+          ``,
+          `===== TEXT OVERLAY (OPTIONAL - Hook/CTA only) =====`,
+          `For hook (engagement) or CTA (call to action): may display small text (1-2 words max).`,
+          `Examples: "LIMITED OFFER", "BUY NOW", "EXCLUSIVE", "SHOP NOW".`,
+          `If displaying text: corner position (no overlap), white/bold color, high contrast.`,
+          `NOTE: This is guidance only. Video prompt will specify actual text to render.`,
+          `If video prompt does NOT mention text, then render NO text on this frame.`,
+          ``,
+          `Photorealistic vertical 9:16 fashion still, coherent anatomy, no character drift.`
+        ];
+      } else {
+        // Showcase/Detail frames: STRICT no text
+        promptParts = [
+          `===== CONTEXT (For AI Understanding Only) =====`,
+          `Video segment ${frame.segmentIndex} of ${blueprint.segmentCount}: ${frame.segmentName}`,
+          `Frame role: ${roleLabel}`,
+          `Purpose: ${frame.purpose}`,
+          `Pose guidance: ${frame.pose}`,
+          `Text overlay: NONE`,
+          ``,
+          `===== CHARACTER & PRODUCT =====`,
+          `The character must remain exactly ${displayName}, preserving face, hair, body proportions, skin tone, and identity.`,
+          `Product: ${garmentType}, color ${primaryColor}, material ${material}.`,
+          ``,
+          `===== PURE VISUAL GENERATION (NO TEXT) =====`,
+          `Create a TikTok keyframe image for the ${roleLabel}.`,
+          `Shot type ${frame.shotType}.`,
+          `Scene ${scene}, lighting ${lighting}, mood ${mood}.`,
+          focusLine,
+          ``,
+          `===== CRITICAL: NO TEXT ANYWHERE =====`,
+          `Do NOT render any text, numbers, labels, metadata, titles, captions, or overlays.`,
+          `Do NOT include: "Segment 1", "Segment 2", "Segment 3", "CTA", headings, descriptions, or any text.`,
+          `Only render: pure photorealistic image of character and product.`,
+          `Photorealistic vertical 9:16 fashion still, coherent anatomy, no character drift, NO TEXT ANYWHERE.`
+        ];
+      }
+    }
+
+    const prompt = promptParts.join('\n');
 
     return {
       ...frame,
@@ -152,7 +256,8 @@ export function buildSegmentPlanningPrompt({ analysis = {}, blueprint = {}, fram
     segmentIndex: frame.segmentIndex,
     role: frame.role,
     purpose: frame.purpose,
-    path: path.basename(frame.imagePath || '')
+    path: path.basename(frame.imagePath || ''),
+    textAllowed: frame.textRequired || false
   }));
 
   return `
@@ -169,7 +274,7 @@ CONTEXT
 - Segment Count: ${blueprint.segmentCount}
 - Frames Mode: each segment requires startFrameKey and endFrameKey
 
-AVAILABLE FRAME LIBRARY
+AVAILABLE FRAME LIBRARY (textAllowed = whether text overlay can appear on these frames)
 ${JSON.stringify(frameSummary, null, 2)}
 
 ANALYSIS
@@ -186,6 +291,8 @@ Return ONLY valid JSON:
       "startFrameKey": "seg1_start",
       "endFrameKey": "seg1_end",
       "videoPrompt": "full Google Flow prompt for this segment",
+      "textOverlayRequired": true,
+      "textOverlayContent": "if true, specify text (e.g., 'LIMITED OFFER', 'BUY NOW')",
       "voiceoverText": "voiceover for this segment",
       "continuityTargetForNextSegment": {
         "pose": "what the last frame should preserve",
@@ -198,12 +305,22 @@ Return ONLY valid JSON:
   "hashtags": ["tag1", "tag2"]
 }
 
-RULES
-- Every segment must use frame keys from the library.
-- Segment prompts must describe motion between the start and end frames.
-- Preserve the same character identity in all segments.
-- Make segment transitions natural and continuous.
-- Voiceover must align with the segment sequence.
+CRITICAL RULES FOR TEXT OVERLAYS
+- Check each frame's textAllowed field (from frame library)
+- Hook frames (hook segment): textAllowed=true, can suggest text overlay ("LIMITED OFFER", "SHOP NOW", etc.)
+- Showcase/Detail frames: textAllowed=false, MUST set textOverlayRequired=false
+- CTA frames (cta segment): textAllowed=true, MUST suggest text overlay ("BUY NOW", "EXCLUSIVE", etc.)
+- If textAllowed=false, set textOverlayRequired=false and textOverlayContent=null
+- If textAllowed=true AND segment type suggests text (hook/cta), set textOverlayRequired=true and specify exact text
+- Text should be 1-3 words maximum, high-impact, direct call to action for CTA
+- Include textOverlayContent in the videoPrompt IF textOverlayRequired=true
+
+OTHER RULES
+- Every segment must use frame keys from the library
+- Segment prompts must describe motion between start/end frames
+- Preserve character identity in all segments
+- Make transitions natural and continuous
+- Voiceover must align with segment sequence
 `.trim();
 }
 
@@ -220,6 +337,8 @@ export function buildFallbackSegmentPlan({ analysis = {}, blueprint = {}, langua
     videoPrompt: language === 'vi'
       ? `Tao video segment ${segment.segmentIndex} cho ${productName}. Bat dau tu frame ${segment.startFrameKey} va ket thuc o frame ${segment.endFrameKey}. Giu nguyen nhan vat, chuyen dong mem, lien mach, nhan manh ${segment.focus}.`
       : `Create segment ${segment.segmentIndex} for ${productName}, starting at frame ${segment.startFrameKey} and ending at frame ${segment.endFrameKey}. Preserve the same character and make the motion smooth and continuous while emphasizing ${segment.focus}.`,
+    textOverlayRequired: segment.segmentName === 'hook' || segment.segmentName === 'cta',
+    textOverlayContent: segment.segmentName === 'cta' ? 'BUY NOW' : segment.segmentName === 'hook' ? 'LIMITED OFFER' : null,
     voiceoverText: language === 'vi'
       ? `Segment ${segment.segmentIndex}: gioi thieu ${productName} theo huong ${segment.focus}.`
       : `Segment ${segment.segmentIndex}: showcase ${productName} with a ${segment.focus} angle.`,

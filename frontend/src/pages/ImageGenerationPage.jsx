@@ -1852,8 +1852,17 @@ export default function ImageGenerationPage() {
   const characterCardClass = `${uploadCardBaseClass} ${!isCharacterRequired ? 'opacity-80' : ''} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
   const productCardClass = `${uploadCardBaseClass} ${showOptionalProductAsSecondary ? 'min-h-[332px] opacity-75 saturate-[0.88]' : ''} bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
   const sceneCardClass = `${uploadCardBaseClass} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_40%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
-  const getSectionOptionChipClass = (isSelected, tone = 'cool') =>
-    `apple-option-chip ${tone ? `apple-option-chip-${tone}` : ''} ${isSelected ? 'apple-option-chip-selected' : ''} flex w-full items-center justify-between gap-2 rounded-[1rem] px-3 py-2.5 text-left text-[12px] font-medium leading-4 transition`;
+  const getSectionOptionChipClass = (isSelected, tone = 'cool') => {
+    const accentClass = isSelected
+      ? tone === 'warm'
+        ? 'apple-chip-usecase-selected'
+        : tone === 'cool'
+          ? 'apple-chip-focus-selected'
+          : ''
+      : '';
+    const selectedClass = isSelected ? 'apple-option-chip-selected selected' : '';
+    return `apple-option-chip ${tone ? `apple-option-chip-${tone}` : ''} ${selectedClass} ${accentClass} flex w-full items-center justify-between gap-2 rounded-[1rem] px-3 py-2.5 text-left text-[12px] font-medium leading-4 transition`;
+  };
 
   const handleImageFileSelection = (event, setter) => {
     const file = event.target.files?.[0];
@@ -1987,9 +1996,6 @@ export default function ImageGenerationPage() {
                           className={`${getSectionOptionChipClass(useCase === uc.value, 'warm')} min-h-[38px] px-1.5 py-1.5`}
                         >
                           <span className="block min-w-0 truncate">{getUseCaseDisplayLabel(uc.value)}</span>
-                          <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
-                            {useCase === uc.value ? 'ON' : ''}
-                          </span>
                         </button>
                       ))}
                     </div>
@@ -2013,9 +2019,6 @@ export default function ImageGenerationPage() {
                           className={`${getSectionOptionChipClass(productFocus === opt.value, 'cool')} min-h-[38px] px-1.5 py-1.5`}
                         >
                           <span className="block min-w-0 truncate">{getFocusDisplayLabel(opt.value)}</span>
-                          <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
-                            {productFocus === opt.value ? 'ON' : ''}
-                          </span>
                         </button>
                       ))}
                     </div>
@@ -2142,9 +2145,6 @@ export default function ImageGenerationPage() {
                                       </span>
                                     ) : null}
                                     <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
-                                    <span className="apple-option-chip-indicator inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1 text-[9px] font-semibold uppercase tracking-[0.08em]">
-                                      {selectedOptions[key] === opt.value ? 'ON' : ''}
-                                    </span>
                                   </span>
                                 </button>
                               ))}

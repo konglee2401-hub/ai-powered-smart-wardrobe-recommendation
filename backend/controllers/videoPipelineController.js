@@ -58,7 +58,9 @@ class VideoPipelineController {
   });
 
   static listVideos = asyncHandler(async (req, res) => {
+    console.log('[DEBUG] listVideos called with filters:', req.query);
     const result = await videoPipelineService.listSourceVideos(req.query || {});
+    console.log('[DEBUG] listVideos result count:', result.items?.length);
     res.json(result);
   });
 

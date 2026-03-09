@@ -125,6 +125,8 @@ TrendVideoSchema.index({ platform: 1, videoId: 1 }, { unique: true });
 TrendVideoSchema.index({ topic: 1, downloadStatus: 1, discoveredAt: -1 });
 TrendVideoSchema.index({ 'driveSync.status': 1, 'production.queueStatus': 1, discoveredAt: -1 });
 
-const TrendVideo = mongoose.models.TrendVideo || mongoose.model('TrendVideo', TrendVideoSchema);
+// Always register with explicit collection name
+// If already registered, mongoose will reuse the existing model
+const TrendVideo = mongoose.model('TrendVideo', TrendVideoSchema, 'trendvideos');
 
 export default TrendVideo;

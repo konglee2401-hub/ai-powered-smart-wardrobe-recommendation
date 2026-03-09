@@ -729,6 +729,7 @@ export default function OneClickCreatorPage() {
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [sceneImage, setSceneImage] = useState(null); // 💫 NEW: Optional scene reference image
   const fileInputRef = useRef(null);
+  const productFileInputRef = useRef(null);
   const sceneFileInputRef = useRef(null); // 💫 NEW: Ref for scene file input
 
   // Gallery Picker State
@@ -766,6 +767,10 @@ export default function OneClickCreatorPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const [resumingSessionId, setResumingSessionId] = useState(null);
+  const [recentAffiliateSessions, setRecentAffiliateSessions] = useState([]);
+  const [recentAffiliateSessionsLoading, setRecentAffiliateSessionsLoading] = useState(false);
+  const pollingStopsRef = useRef(new Map());
   const [sceneOptions, setSceneOptions] = useState([]);
   const [selectedScene, setSelectedScene] = useState(DEFAULT_SCENE_VALUE);
   const [selectedScenePrompt, setSelectedScenePrompt] = useState('');
@@ -816,6 +821,12 @@ export default function OneClickCreatorPage() {
     };
     loadSceneOptions();
   }, []);
+
+  useEffect(() => {
+    if (useCase === 'affiliate-video-tiktok') {
+      loadRecentAffiliateSessions();
+    }
+  }, [useCase]);
 
   // 💫 NEW: Auto-set aspect ratio based on use case
   useEffect(() => {
@@ -963,6 +974,123 @@ export default function OneClickCreatorPage() {
    * Steps: 1-Analyze, 2-Recommend, 3-Select Settings, 4-Generate 2 Images Parallel, 
    *        5-Deep Analysis, 6-Generate Video, 7-Generate Voiceover, 8-Finalize
    */
+  const hydrateAffiliateSessionFromStatus = (statusData, sessionIdOverride = null) => {
+    const flowId = statusData?.flowId;
+    const flowState = statusData?.flowState || {};
+    const sessionId = sessionIdOverride || flowId || Date.now();
+    const currentStatus = String(statusData?.status || flowState?.status || '').toLowerCase();
+    const frameItems = flowState.step2?.frameLibrary || [];
+    const videoItems = flowState.step4?.segmentVideos || [];
+
+    return {
+      ...initSession(sessionId, {
+        character: flowState.step1?.characterImage?.previewUrl || null,
+        product: flowState.step1?.productImage?.previewUrl || null
+      }),
+      id: sessionId,
+      flowId,
+      completed: currentStatus === 'completed',
+      error: currentStatus === 'failed' ? (flowState.step2?.error || statusData?.error?.message || 'Flow failed') : null,
+      preview: { flowId, status: statusData?.status, ...(flowState || {}) },
+      step1Prompts: {
+        summary: flowState.step1?.analysisText || '',
+        wearing: flowState.step2?.prompts?.wearing || '',
+        holding: flowState.step2?.prompts?.holding || ''
+      },
+      step2Images: {
+        wearing: flowState.step2?.images?.wearing?.previewUrl || flowState.step2?.images?.wearing?.path || null,
+        holding: flowState.step2?.images?.holding?.previewUrl || flowState.step2?.images?.holding?.path || null
+      },
+      step2Items: frameItems,
+      step2Progress: {
+        total: frameItems.length || flowState.step2?.framePlan?.length || 0,
+        completed: frameItems.length
+      },
+      step4Items: videoItems,
+      step4Progress: {
+        total: videoItems.length || 0,
+        completed: videoItems.length
+      },
+      videos: videoItems.map((item) => item?.previewUrl || item?.path || item?.href).filter(Boolean),
+      audioUrl: flowState.step5?.audio?.previewUrl || flowState.step5?.audio?.path || null,
+      ttsText: flowState.step5?.voiceoverText || '',
+      analysis: {
+        videoScripts: flowState.step3?.scripts || [],
+        hashtags: flowState.step3?.hashtags || [],
+        voiceoverScript: flowState.step3?.voiceoverScript || ''
+      },
+      steps: [
+        { id: 'analyze', completed: Boolean(flowState.step1?.completed), error: null, inProgress: !flowState.step1?.completed && currentStatus.includes('step1') },
+        { id: 'apply-recommendations', completed: Boolean(flowState.step1?.completed), error: null, inProgress: false },
+        { id: 'tiktok-options', completed: true, error: null, inProgress: false },
+        { id: 'generate-images-parallel', completed: Boolean(flowState.step2?.completed), error: flowState.step2?.error || null, inProgress: currentStatus.includes('step2') || flowState.step2?.status === 'processing' },
+        { id: 'deep-analysis', completed: Boolean(flowState.step3?.completed), error: null, inProgress: currentStatus.includes('step3') },
+        { id: 'generate-video', completed: Boolean(flowState.step4?.completed), error: null, inProgress: currentStatus.includes('step4') },
+        { id: 'generate-voiceover', completed: Boolean(flowState.step5?.completed), error: null, inProgress: currentStatus.includes('step5') },
+        { id: 'finalize', completed: Boolean(flowState.step6?.completed) || currentStatus === 'completed', error: null, inProgress: currentStatus.includes('step6') }
+      ]
+    };
+  };
+
+  const fetchAffiliateFlowStatus = async (flowId) => {
+    const response = await fetch('/api/ai/affiliate-video-tiktok/status/' + flowId);
+    if (!response.ok) {
+      throw new Error('Failed to load affiliate flow status (' + response.status + ')');
+    }
+    return response.json();
+  };
+
+  const loadRecentAffiliateSessions = async () => {
+    setRecentAffiliateSessionsLoading(true);
+    try {
+      const data = await api.get('/debug-sessions', { limit: 8 });
+      const items = (data?.data || [])
+        .filter((session) => ['affiliate-tiktok', 'one-click'].includes(session.flowType))
+        .filter((session) => String(session.sessionId || '').startsWith('flow-'));
+      setRecentAffiliateSessions(items);
+    } catch (error) {
+      console.warn('Failed to load recent affiliate sessions:', error.message);
+      setRecentAffiliateSessions([]);
+    } finally {
+      setRecentAffiliateSessionsLoading(false);
+    }
+  };
+
+  const resumeAffiliateSession = async (flowId, sessionIdOverride = null) => {
+    if (!flowId) return null;
+
+    setResumingSessionId(flowId);
+    try {
+      const resumeResponse = await fetch('/api/ai/affiliate-video-tiktok/resume/' + flowId, { method: 'POST' });
+      if (!resumeResponse.ok) {
+        throw new Error('Resume failed (' + resumeResponse.status + ')');
+      }
+
+      await resumeResponse.json();
+      const statusData = await fetchAffiliateFlowStatus(flowId);
+      const nextSession = hydrateAffiliateSessionFromStatus(statusData, sessionIdOverride || flowId);
+
+      setSessions((prev) => {
+        const existing = prev.find((item) => item.flowId === flowId || item.id === sessionIdOverride || item.id === flowId);
+        if (existing) {
+          return prev.map((item) => (item.id === existing.id ? { ...item, ...nextSession, id: existing.id } : item));
+        }
+        return [nextSession, ...prev];
+      });
+      setActiveSessionId(sessionIdOverride || flowId);
+
+      const existingStop = pollingStopsRef.current.get(flowId);
+      if (typeof existingStop === 'function') existingStop();
+      const stopRef = { stop: false };
+      const stopPolling = startPreviewPolling(flowId, sessionIdOverride || flowId, stopRef);
+      pollingStopsRef.current.set(flowId, stopPolling);
+
+      return statusData;
+    } finally {
+      setResumingSessionId(null);
+    }
+  };
+
   const startPreviewPolling = (flowId, sessionId, stopRef = { stop: false }) => {
     const POLL_INTERVAL_MS = 1500;
     const NO_DATA_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -985,54 +1113,54 @@ export default function OneClickCreatorPage() {
     const pollPreview = async () => {
       const now = Date.now();
 
-      // Safety timeout if no successful response for too long
       if (now - lastSuccessfulFetchAt > NO_DATA_TIMEOUT_MS) {
         markSessionPollingStopped('Preview polling stopped: no successful response for over 5 minutes.');
         return true;
       }
 
       try {
-        const response = await fetch(`/api/ai/affiliate-video-tiktok/preview/${flowId}`);
+        const statusData = await fetchAffiliateFlowStatus(flowId);
+        lastSuccessfulFetchAt = Date.now();
+        const currentStatus = String(statusData?.status || '').toLowerCase();
 
-        if (!response.ok) {
-          // Stop immediately on backend 5xx to avoid infinite noisy polling
-          if (response.status >= 500) {
-            markSessionPollingStopped(`Preview polling stopped due to server error (${response.status}).`);
-            return true;
+        let preview = {};
+        try {
+          const previewResponse = await fetch('/api/ai/affiliate-video-tiktok/preview/' + flowId);
+          if (previewResponse.ok) {
+            const previewData = await previewResponse.json();
+            preview = previewData.preview || {};
           }
-
-          // For non-500 errors, stop if stale for too long
-          if (Date.now() - pollingStartedAt > NO_DATA_TIMEOUT_MS) {
-            markSessionPollingStopped('Preview polling stopped: no valid preview data within 5 minutes.');
-            return true;
-          }
-
-          return false;
+        } catch {
+          preview = {};
         }
 
-        lastSuccessfulFetchAt = Date.now();
-        const data = await response.json();
-        const preview = data.preview || {};
         const hasUsefulData = !!(
-          preview.status || preview.step1 || preview.step2 || preview.step3 || preview.step4 || preview.step5
+          statusData?.status || statusData?.flowState?.step1 || statusData?.flowState?.step2 || statusData?.flowState?.step3 || statusData?.flowState?.step4 || statusData?.flowState?.step5
         );
 
         if (hasUsefulData) {
           lastUsefulDataAt = Date.now();
         }
 
-        // Stop if API keeps responding but no meaningful data for 5 minutes
         if (!hasUsefulData && Date.now() - lastUsefulDataAt > NO_DATA_TIMEOUT_MS) {
-          markSessionPollingStopped('Preview polling stopped: no preview updates for over 5 minutes.');
+          markSessionPollingStopped('Preview polling stopped: no status updates for over 5 minutes.');
           return true;
         }
 
         setSessions(prev => prev.map(s => {
           if (s.id !== sessionId) return s;
 
-          const nextSession = { ...s, preview };
-          const step2Items = preview.step2?.items || [];
-          const step4Items = preview.step4?.videos || [];
+          const hydratedSession = hydrateAffiliateSessionFromStatus(statusData, sessionId);
+          const nextSession = {
+            ...s,
+            ...hydratedSession,
+            id: s.id,
+            flowId: hydratedSession.flowId || s.flowId || flowId,
+            preview: { ...(hydratedSession.preview || {}), ...(preview || {}) }
+          };
+
+          const step2Items = preview.step2?.items || hydratedSession.step2Items || [];
+          const step4Items = preview.step4?.videos || hydratedSession.step4Items || [];
 
           if (preview.status === 'action_required' || preview.actionRequired) {
             nextSession.manualAction = preview.actionRequired || { message: 'Manual action required in browser' };
@@ -1043,10 +1171,10 @@ export default function OneClickCreatorPage() {
 
           if (preview.step1) {
             nextSession.step1Prompts = {
-              wearing: preview.step1.wearingPrompt || nextSession.step1Prompts?.wearing || "",
-              holding: preview.step1.holdingPrompt || nextSession.step1Prompts?.holding || ""
+              summary: hydratedSession.step1Prompts?.summary || nextSession.step1Prompts?.summary || '',
+              wearing: preview.step1.wearingPrompt || nextSession.step1Prompts?.wearing || '',
+              holding: preview.step1.holdingPrompt || nextSession.step1Prompts?.holding || ''
             };
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'analyze' ? { ...step, completed: true, inProgress: false } : step);
           }
 
           if (preview.step2) {
@@ -1056,52 +1184,41 @@ export default function OneClickCreatorPage() {
             };
             nextSession.step2Items = step2Items;
             nextSession.step2Progress = {
-              total: preview.step2.imageCount || step2Items.length || nextSession.step2Progress?.total || 0,
-              completed: preview.step2.completedCount || step2Items.filter(item => item?.status === "completed").length || 0
+              total: hydratedSession.step2Progress?.total || preview.step2.imageCount || step2Items.length || 0,
+              completed: hydratedSession.step2Progress?.completed || preview.step2.completedCount || step2Items.filter(item => item?.status === 'completed').length || 0
             };
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === "generate-images-parallel" ? {
-              ...step,
-              completed: preview.status === "step2-complete" || preview.status === "completed",
-              inProgress: preview.status === "step2-generating"
-            } : step);
           }
 
           if (preview.step3) {
             nextSession.analysis = {
               ...(nextSession.analysis || {}),
-              videoScripts: preview.step3.videoScripts || [],
-              hashtags: preview.step3.hashtags || [],
-              voiceoverScript: preview.step3.voiceoverScript || ""
+              videoScripts: preview.step3.videoScripts || nextSession.analysis?.videoScripts || [],
+              hashtags: preview.step3.hashtags || nextSession.analysis?.hashtags || [],
+              voiceoverScript: preview.step3.voiceoverScript || nextSession.analysis?.voiceoverScript || ''
             };
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'deep-analysis' ? { ...step, completed: true, inProgress: false } : step);
           }
 
           if (preview.step4) {
             nextSession.step4Items = step4Items;
             nextSession.step4Progress = {
-              total: preview.step4.totalCount || step4Items.length || nextSession.step4Progress?.total || 0,
-              completed: preview.step4.completedCount || step4Items.filter(item => item?.status === "completed").length || 0
+              total: hydratedSession.step4Progress?.total || preview.step4.totalCount || step4Items.length || 0,
+              completed: hydratedSession.step4Progress?.completed || preview.step4.completedCount || step4Items.filter(item => item?.status === 'completed').length || 0
             };
             nextSession.videos = step4Items.map(item => item?.path || item?.href || item?.url).filter(Boolean);
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === "generate-video" ? {
-              ...step,
-              completed: preview.status === "step4-complete" || preview.status === "completed",
-              inProgress: preview.status === "step4-generating"
-            } : step);
           }
 
           if (preview.step5) {
-            nextSession.ttsText = preview.step5.ttsText || nextSession.ttsText;
-            nextSession.steps = (nextSession.steps || []).map(step => step.id === 'generate-voiceover' ? { ...step, completed: true, inProgress: false } : step);
+            nextSession.ttsText = preview.step5.ttsText || preview.step5.voiceoverText || nextSession.ttsText;
           }
 
-          if (preview.status === 'completed') {
+          if (currentStatus === 'completed') {
             nextSession.completed = true;
+            nextSession.error = null;
             nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, completed: true, inProgress: false }));
           }
 
-          if (preview.status === 'failed') {
-            nextSession.error = nextSession.error || 'Flow failed';
+          if (currentStatus === 'failed') {
+            nextSession.error = nextSession.error || preview.error || statusData?.error?.message || 'Flow failed';
             nextSession.manualAction = null;
             nextSession.steps = (nextSession.steps || []).map(step => ({ ...step, inProgress: false }));
           }
@@ -1109,11 +1226,10 @@ export default function OneClickCreatorPage() {
           return nextSession;
         }));
 
-        return preview.status === 'completed' || preview.status === 'failed' || stopRef.stop;
-      } catch (e) {
-        // Stop polling if no data can be fetched for too long
-        if (Date.now() - lastSuccessfulFetchAt > NO_DATA_TIMEOUT_MS) {
-          markSessionPollingStopped('Preview polling stopped: unable to fetch preview for over 5 minutes.');
+        return currentStatus === 'completed' || currentStatus === 'failed' || stopRef.stop;
+      } catch (error) {
+        if (Date.now() - lastSuccessfulFetchAt > NO_DATA_TIMEOUT_MS || Date.now() - pollingStartedAt > NO_DATA_TIMEOUT_MS) {
+          markSessionPollingStopped('Preview polling stopped: unable to fetch status for over 5 minutes.');
           return true;
         }
 
@@ -1122,7 +1238,7 @@ export default function OneClickCreatorPage() {
     };
 
     let pollCount = 0;
-    const maxPolls = Math.ceil(NO_DATA_TIMEOUT_MS / POLL_INTERVAL_MS) + 120; // keep hard cap with buffer
+    const maxPolls = Math.ceil(NO_DATA_TIMEOUT_MS / POLL_INTERVAL_MS) + 120;
 
     const pollInterval = setInterval(async () => {
       if (isPolling || stopRef.stop) return;
@@ -1222,6 +1338,8 @@ export default function OneClickCreatorPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20 * 60 * 1000);
 
+      let keepPollingAlive = false;
+
       try {
         const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
           method: 'POST',
@@ -1258,10 +1376,25 @@ export default function OneClickCreatorPage() {
         setGeneratedVoiceover(mainFlowData.data?.step5?.ttsText || step3Result?.voiceoverScript || null);
 
         return mainFlowData;
+      } catch (requestError) {
+        const recoveredStatus = flowId ? await resumeAffiliateSession(flowId, sessionId).catch(() => null) : null;
+        if (recoveredStatus?.flowState) {
+          keepPollingAlive = true;
+          addLog(sessionId, 'Recovered session from persisted workflow state. UI will continue polling.');
+          return {
+            success: true,
+            flowId,
+            recovered: true,
+            data: recoveredStatus.flowState
+          };
+        }
+        throw requestError;
       } finally {
         clearTimeout(timeoutId);
-        stopRef.stop = true;
-        if (typeof stopPolling === 'function') stopPolling();
+        if (!keepPollingAlive) {
+          stopRef.stop = true;
+          if (typeof stopPolling === 'function') stopPolling();
+        }
       }
     } catch (error) {
       console.error('❌ TikTok flow error:', error);
@@ -1530,6 +1663,11 @@ export default function OneClickCreatorPage() {
               sceneBase64,
               sessionId
             );
+
+            if (tiktokResult?.recovered) {
+              addLog(sessionId, 'Recovered from interrupted request. Session is now running from persisted state.');
+              continue;
+            }
 
             // Update session with results
             setSessions(prev => prev.map(sess => {
@@ -2147,33 +2285,11 @@ export default function OneClickCreatorPage() {
             <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto pb-3 pr-1">
               {!isSessionWorkspaceMode && (
               <div className={stepUploadSectionClass}>
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
-                    <Upload className="w-4 h-4 text-sky-600" />
-                    {t('oneClickCreator.uploadImagesStep')}
-                  </h3>
-                  <p className="mt-1 text-[11px] text-slate-500">Keep inputs compact: character, product, then optional scene reference.</p>
-                </div>
-              </div>
-
-              <div className="studio-accent-panel mb-3 rounded-[1.1rem] p-3">
-                <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-600">Scene Locked</p>
-                      <p className="truncate text-sm font-medium text-slate-900">{sceneOptions.find(s => s.value === selectedScene)?.label || selectedScene || 'Not selected'}</p>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">{selectedScenePrompt || 'No locked prompt'}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowScenePicker(true)}
-                    className="studio-accent-button rounded-[0.95rem] px-3 py-1.5 text-[11px] font-medium"
-                  >
-                    Pick Scene
-                  </button>
-                </div>
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                  <Upload className="w-4 h-4 text-sky-600" />
+                  {t('oneClickCreator.uploadImagesStep')}
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -2185,6 +2301,7 @@ export default function OneClickCreatorPage() {
                   </div>
                   <div
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
+                    data-testid="character-upload-dropzone"
                     className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
                   >
                     {characterImage ? (
@@ -2223,6 +2340,7 @@ export default function OneClickCreatorPage() {
                   </div>
                   <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
                     <button
+                      data-testid="select-profile-button"
                       onClick={() => {
                         if (!isGenerating) {
                           setShowCharacterSelector(true);
@@ -2256,22 +2374,8 @@ export default function OneClickCreatorPage() {
                     Product Image
                   </div>
                   <div
-                    onClick={() => {
-                      if (isGenerating) return;
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/*';
-                      input.onchange = (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => setProductImage(evt.target?.result);
-                          reader.readAsDataURL(file);
-                          setImageSource(prev => ({ ...prev, product: 'upload' }));
-                        }
-                      };
-                      input.click();
-                    }}
+                    onClick={() => !isGenerating && productFileInputRef.current?.click()}
+                    data-testid="product-upload-dropzone"
                     className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
                   >
                     {productImage ? (
@@ -2290,6 +2394,22 @@ export default function OneClickCreatorPage() {
                         <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
                       </div>
                     )}
+                    <input
+                      ref={productFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isGenerating}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => setProductImage(evt.target?.result);
+                          reader.readAsDataURL(file);
+                          setImageSource(prev => ({ ...prev, product: 'upload' }));
+                        }
+                      }}
+                    />
                   </div>
                   </div>
                   <button
@@ -2309,15 +2429,20 @@ export default function OneClickCreatorPage() {
 
                 <div className="flex h-full min-h-0 flex-col gap-2">
                   <div className={stepUploadCardClass}>
-                    <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
-                      <Wand2 className="w-3 h-3 text-violet-600" /> Scene Reference
-                    </p>
-                    <p className="mb-2 text-[11px] leading-4 text-slate-500">Optional image to keep background and lighting consistent across generations.</p>
-                    <div className="mt-1 flex min-w-0 overflow-hidden">
-                      <div
-                        onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                        className={`${stepUploadDropzoneClass} mt-3 h-[128px] p-0 hover:bg-white/[0.03]`}
-                      >
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
+                        <Wand2 className="w-3 h-3 text-violet-600" /> Scene
+                      </p>
+                      {sceneImage && (
+                        <p className="text-[10px] font-medium text-violet-500">
+                          {sceneOptions.find(s => s.value === selectedScene)?.label || 'Custom'}
+                        </p>
+                      )}
+                    </div>
+                    <div
+                      onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
+                      className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
+                    >
                         {sceneImage ? (
                           <>
                             <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
@@ -2349,7 +2474,6 @@ export default function OneClickCreatorPage() {
                           </div>
                         )}
                       </div>
-                    </div>
                     <input
                       ref={sceneFileInputRef}
                       type="file"
@@ -2369,7 +2493,24 @@ export default function OneClickCreatorPage() {
                       }}
                     />
                   </div>
-                  <div className="mt-3 min-h-[40px]" />
+                  <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
+                    <button
+                      onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
+                      disabled={isGenerating}
+                      className={stepUploadActionClass}
+                    >
+                      <Upload className="w-4 h-4" />
+                      Upload
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setShowScenePicker(true)}
+                      disabled={isGenerating}
+                      className={stepUploadActionClass}
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Picker
+                    </button>
+                  </div>
                 </div>
               </div>
               </div>
@@ -2456,6 +2597,46 @@ export default function OneClickCreatorPage() {
               </div>
             )}
 
+            {useCase === 'affiliate-video-tiktok' && recentAffiliateSessions.length > 0 && (
+              <div className={sessionShellClass}>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">
+                    <Database className="h-4 w-4 text-sky-600" />
+                    Recent DB Sessions
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={loadRecentAffiliateSessions}
+                    disabled={recentAffiliateSessionsLoading}
+                    className="apple-option-chip inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {recentAffiliateSessionsLoading ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
+
+                <div className="grid gap-2">
+                  {recentAffiliateSessions.map((session) => (
+                    <div key={session.sessionId} className="studio-card-shell flex items-center justify-between gap-3 rounded-2xl border px-3 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[12px] font-semibold text-slate-800">{session.sessionId}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {session.flowType} � {session.status} � {session.updatedAt ? new Date(session.updatedAt).toLocaleString() : ''}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => resumeAffiliateSession(session.sessionId)}
+                        disabled={resumingSessionId === session.sessionId}
+                        className="apple-option-chip inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {resumingSessionId === session.sessionId ? 'Resuming...' : 'Resume'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -2465,6 +2646,7 @@ export default function OneClickCreatorPage() {
           <button
             onClick={handleOneClickGeneration}
             disabled={!characterImage || !productImage || isGenerating}
+            data-testid="one-click-generate-button"
             className="apple-cta-primary inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold leading-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isGenerating ? (
@@ -2559,5 +2741,12 @@ export default function OneClickCreatorPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
 
 

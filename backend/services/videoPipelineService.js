@@ -432,10 +432,22 @@ function resolveUploadCategory(assetType, requestedCategory = '') {
   return categoryMap[assetType]?.has(normalizedCategory) ? normalizedCategory : fallbackMap[assetType];
 }
 
+function resolveBackendPath(candidate = '') {
+  const normalized = String(candidate || '').trim().replace(/[\\/]+/g, path.sep);
+  if (!normalized) return '';
+  if (path.isAbsolute(normalized)) return normalized;
+
+  if (normalized === 'backend' || normalized.startsWith(`backend${path.sep}`)) {
+    return path.join(path.dirname(BACKEND_ROOT), normalized);
+  }
+
+  return path.join(BACKEND_ROOT, normalized);
+}
+
 function resolveAssetLocalPath(asset = {}) {
   const candidate = asset?.localStorage?.path || asset?.storage?.localPath || '';
   if (!candidate) return '';
-  return path.isAbsolute(candidate) ? candidate : path.join(process.cwd(), candidate);
+  return resolveBackendPath(candidate);
 }
 
 async function resolveVideoSelection(selection = null) {
@@ -444,9 +456,7 @@ async function resolveVideoSelection(selection = null) {
   if (selection.localPath) {
     return {
       ...selection,
-      localPath: path.isAbsolute(selection.localPath)
-        ? selection.localPath
-        : path.join(process.cwd(), selection.localPath),
+      localPath: resolveBackendPath(selection.localPath),
     };
   }
 
@@ -783,16 +793,25 @@ class VideoPipelineService {
       driveStatus = '',
       productionStatus = '',
       search = '',
-      limit = 100,
+      limit = 25,
+      offset = 0,
     } = filters;
 
     const query = {};
     if (platform) query.platform = platform;
     if (source) {
-      query.$or = [
-        { source },
-        { platform: source },
-      ];
+      if (source.toLowerCase() === 'playboard') {
+        // Special case for Playboard: look for source='playboard' OR platform='youtube' with playboard topic
+        query.$or = [
+          { source: 'playboard' },
+          { platform: 'youtube', topics: { $regex: 'playboard', $options: 'i' } },
+        ];
+      } else {
+        query.$or = [
+          { source },
+          { platform: source },
+        ];
+      }
     }
     if (downloadStatus) query.downloadStatus = downloadStatus;
     if (driveStatus) query['driveSync.status'] = driveStatus;
@@ -810,11 +829,17 @@ class VideoPipelineService {
       ];
     }
 
-    const items = await TrendVideo.find(query)
-      .populate('channel', 'name channelId platform sourceKey subscriberCount')
-      .sort({ discoveredAt: -1, createdAt: -1 })
-      .limit(Math.min(Number(limit) || 100, 250))
-      .lean();
+    // Get total count for pagination
+    const totalCount = await TrendVideo.countDocuments(query);
+
+    const cursor = TrendVideo.find(query);
+    const withPopulate = cursor.populate('channel', 'name channelId platform sourceKey subscriberCount');
+    const withSort = withPopulate.sort({ discoveredAt: -1, createdAt: -1 });
+    const withSkip = withSort.skip(Math.max(0, Number(offset) || 0));
+    const withLimit = withSkip.limit(Math.min(Number(limit) || 25, 250));
+    const withLean = withLimit.lean();
+    
+    const items = await withLean;
 
     return {
       success: true,
@@ -826,7 +851,7 @@ class VideoPipelineService {
         driveReady: item.driveSync?.status === 'uploaded',
         channelName: item.channel?.name || '',
       })),
-      count: items.length,
+      count: totalCount,
     };
   }
 
@@ -1499,8 +1524,8 @@ class VideoPipelineService {
 
     const mainVideo = await resolveVideoSelection(queueItem.videoConfig?.mainVideo || queueItem.videoConfig?.productionConfig?.manualMainVideo || null);
     let subVideo = await resolveVideoSelection(queueItem.videoConfig?.subVideo || queueItem.videoConfig?.productionConfig?.manualSubVideo || null);
-    const mainVideoPath = mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '';
-    let subVideoPath = subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '';
+    const mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
+    let subVideoPath = resolveBackendPath(subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '');
 
     if (!mainVideoPath) {
       const error = new Error('Mashup jobs require a main video input before manual start');

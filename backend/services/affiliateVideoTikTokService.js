@@ -31,7 +31,7 @@ import GoogleDriveOAuthService from './googleDriveOAuth.js';
 function getImageGenerationService(provider, options = {}) {
   const { outputDir, headless = false, debugMode = false } = options;
   
-  console.log(`🔌 Selecting image generation provider: ${provider}`);
+  console.log(`?? Selecting image generation provider: ${provider}`);
   
   switch (provider) {
     case 'bfl':
@@ -59,7 +59,7 @@ function getImageGenerationService(provider, options = {}) {
         ...options
       });
     default:
-      console.warn(`⚠️ Unknown provider '${provider}', defaulting to Grok`);
+      console.warn(`?? Unknown provider '${provider}', defaulting to Grok`);
       return new GrokServiceV2({
         outputDir,
         headless,
@@ -77,7 +77,7 @@ function getImageGenerationService(provider, options = {}) {
 function getVideoGenerationService(provider, options = {}) {
   const { outputDir, headless = false, debugMode = false } = options;
   
-  console.log(`🔌 Selecting video generation provider: ${provider}`);
+  console.log(`?? Selecting video generation provider: ${provider}`);
   
   switch (provider) {
     case 'grok':
@@ -96,7 +96,7 @@ function getVideoGenerationService(provider, options = {}) {
         ...options
       });
     default:
-      console.warn(`⚠️ Unknown video provider '${provider}', defaulting to Grok`);
+      console.warn(`?? Unknown video provider '${provider}', defaulting to Grok`);
       return new GrokServiceV2({
         outputDir,
         headless,
@@ -146,7 +146,7 @@ import crypto from 'crypto';
  * 4. Video generation
  * 5. TTS voiceover generation
  */
-// 💫 Global store for tracking flow preview data (for intermediate image display)
+// ?? Global store for tracking flow preview data (for intermediate image display)
 const flowPreviewStore = new Map();
 
 /**
@@ -252,7 +252,7 @@ function buildManualActionPayload(step, error) {
 }
 export async function executeAffiliateVideoTikTokFlow(req, res) {
   const startTime = Date.now();
-  // 🔴 FIX: Accept flowId from request body if provided (for session continuity)
+  // ?? FIX: Accept flowId from request body if provided (for session continuity)
   // If not provided, generate new flowId
   const flowId = req.body.flowId || `flow-${Date.now()}`;
   const tempDir = path.join(process.cwd(), 'temp', 'tiktok-flows', flowId);
@@ -271,17 +271,17 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     step5: null
   });
 
-  // 💫 NEW: Track when STEP 1 ChatGPT browser completely closes
+  // ?? NEW: Track when STEP 1 ChatGPT browser completely closes
   // Prevents STEP 3 from opening ChatGPT while STEP 1 browser still exists
   let step1ChatGPTServiceClosed = false;
 
   try {
     await logger.startStage('initialization');
     await logger.info(`Starting affiliate video TikTok flow`, 'flow-init', {flowId});
-    console.log(`\n🎬 Affiliate TikTok Flow [${flowId}]`);
+    console.log(`\n?? Affiliate TikTok Flow [${flowId}]`);
 
-    // 💫 LOG: Detailed req.files structure
-    console.log(`📊 req.files structure:`, {
+    // ?? LOG: Detailed req.files structure
+    console.log(`?? req.files structure:`, {
       hasCharacterImage: !!req.files?.characterImage,
       characterImageLength: req.files?.characterImage?.length,
       characterImageKeys: req.files?.characterImage?.[0] ? Object.keys(req.files.characterImage[0]) : 'N/A',
@@ -293,15 +293,15 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     // Create temp directory
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
-      console.log(`📁 Created temp directory: ${tempDir}`);
+      console.log(`?? Created temp directory: ${tempDir}`);
     }
 
-    // 💫 Process images: file upload OR base64 from JSON
+    // ?? Process images: file upload OR base64 from JSON
     let characterFilePath, productFilePath, sceneImagePath = null;
     
     if (req.files?.characterImage && req.files?.productImage) {
-      // ✅ Traditional file upload - use Multer uploaded files
-      console.log(`📁 Using file uploads from Multer`);
+      // ? Traditional file upload - use Multer uploaded files
+      console.log(`?? Using file uploads from Multer`);
       const characterFile = req.files.characterImage[0];
       const productFile = req.files.productImage[0];
       const sceneFile = req.files.sceneImage?.[0] || null;
@@ -310,39 +310,39 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       productFilePath = productFile.path;
       sceneImagePath = sceneFile?.path || null;
       
-      console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size} bytes)`);
-      console.log(`📦 Product: ${productFile.originalname} (${productFile.size} bytes)`);
+      console.log(`?? Character: ${characterFile.originalname} (${characterFile.size} bytes)`);
+      console.log(`?? Product: ${productFile.originalname} (${productFile.size} bytes)`);
       if (sceneFile) {
-        console.log(`🎭 Scene: ${sceneFile.originalname} (${sceneFile.size} bytes)`);
+        console.log(`?? Scene: ${sceneFile.originalname} (${sceneFile.size} bytes)`);
       }
     } else {
-      // 💫 NEW: Accept base64-encoded images from JSON payload
-      console.log(`📄 Using base64 images from JSON payload`);
+      // ?? NEW: Accept base64-encoded images from JSON payload
+      console.log(`?? Using base64 images from JSON payload`);
     }
 
     // Extract parameters from request body
     const {
-      characterImage: characterImageBase64 = null,  // 💫 NEW: Base64 from JSON payload
-      productImage: productImageBase64 = null,      // 💫 NEW: Base64 from JSON payload
-      sceneImage: sceneImageBase64 = null,         // 💫 NEW: Optional base64 scene image
+      characterImage: characterImageBase64 = null,  // ?? NEW: Base64 from JSON payload
+      productImage: productImageBase64 = null,      // ?? NEW: Base64 from JSON payload
+      sceneImage: sceneImageBase64 = null,         // ?? NEW: Optional base64 scene image
       videoDuration = 20,
       videoDurationUnit = 'seconds',
       voiceGender = 'female',
       voicePace = 'fast',
-      voiceName,  // 💫 NEW: Direct voice name from frontend
+      voiceName,  // ?? NEW: Direct voice name from frontend
       productFocus = 'full-outfit',
-      language = 'en',  // 💫 Support language selection: 'en' or 'vi'
-      imageProvider = 'bfl',  // 💫 Default to BFL Playground
-      videoProvider = 'grok',  // 💫 Default to Grok for video
+      language = 'en',  // ?? Support language selection: 'en' or 'vi'
+      imageProvider = 'bfl',  // ?? Default to BFL Playground
+      videoProvider = 'grok',  // ?? Default to Grok for video
       options = {},
       disableSceneReferenceTransfer = false,  // default false: allow auto scene locked image fallback
-      imageSource = { character: 'upload', product: 'upload' },  // 🎯 Track image source from frontend
+      imageSource = { character: 'upload', product: 'upload' },  // ?? Track image source from frontend
       useShortPrompt = false
     } = req.body;
     
-    // 💫 FIX: Convert base64 images to files if not already provided by Multer
+    // ?? FIX: Convert base64 images to files if not already provided by Multer
     if (!characterFilePath && characterImageBase64) {
-      console.log(`🔄 Converting base64 character image to file...`);
+      console.log(`?? Converting base64 character image to file...`);
       try {
         const cleanB64 = characterImageBase64.includes(',') 
           ? characterImageBase64.split(',')[1] 
@@ -350,15 +350,15 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
         const charBuffer = Buffer.from(cleanB64, 'base64');
         characterFilePath = path.join(tempDir, `character-${Date.now()}.jpg`);
         fs.writeFileSync(characterFilePath, charBuffer);
-        console.log(`✅ Saved character image from base64: ${characterFilePath} (${charBuffer.length} bytes)`);
+        console.log(`? Saved character image from base64: ${characterFilePath} (${charBuffer.length} bytes)`);
       } catch (charError) {
-        console.error(`❌ Failed to process character image:`, charError.message);
+        console.error(`? Failed to process character image:`, charError.message);
         throw new Error(`Failed to process character image: ${charError.message}`);
       }
     }
     
     if (!productFilePath && productImageBase64) {
-      console.log(`🔄 Converting base64 product image to file...`);
+      console.log(`?? Converting base64 product image to file...`);
       try {
         const cleanB64 = productImageBase64.includes(',')
           ? productImageBase64.split(',')[1]
@@ -366,26 +366,26 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
         const prodBuffer = Buffer.from(cleanB64, 'base64');
         productFilePath = path.join(tempDir, `product-${Date.now()}.jpg`);
         fs.writeFileSync(productFilePath, prodBuffer);
-        console.log(`✅ Saved product image from base64: ${productFilePath} (${prodBuffer.length} bytes)`);
+        console.log(`? Saved product image from base64: ${productFilePath} (${prodBuffer.length} bytes)`);
       } catch (prodError) {
-        console.error(`❌ Failed to process product image:`, prodError.message);
+        console.error(`? Failed to process product image:`, prodError.message);
         throw new Error(`Failed to process product image: ${prodError.message}`);
       }
     }
     
-    // 🚨 VALIDATE: Ensure both paths exist
+    // ?? VALIDATE: Ensure both paths exist
     if (!characterFilePath) {
-      throw new Error(`❌ Character image not provided (no file upload or base64)`);
+      throw new Error(`? Character image not provided (no file upload or base64)`);
     }
     if (!productFilePath) {
-      throw new Error(`❌ Product image not provided (no file upload or base64)`);
+      throw new Error(`? Product image not provided (no file upload or base64)`);
     }
     
-    console.log(`✅ Both images ready: character=${characterFilePath}, product=${productFilePath}`);
+    console.log(`? Both images ready: character=${characterFilePath}, product=${productFilePath}`);
     
     // Process scene image if provided
     if (sceneImageBase64 && !sceneImagePath) {
-      console.log(`🔄 Converting base64 scene image to file...`);
+      console.log(`?? Converting base64 scene image to file...`);
       try {
         const cleanB64 = sceneImageBase64.includes(',')
           ? sceneImageBase64.split(',')[1]
@@ -393,20 +393,20 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
         const sceneBuffer = Buffer.from(cleanB64, 'base64');
         sceneImagePath = path.join(tempDir, `scene-${Date.now()}.jpg`);
         fs.writeFileSync(sceneImagePath, sceneBuffer);
-        console.log(`✅ Saved scene image from base64: ${sceneImagePath} (${sceneBuffer.length} bytes)`);
+        console.log(`? Saved scene image from base64: ${sceneImagePath} (${sceneBuffer.length} bytes)`);
       } catch (sceneError) {
-        console.warn(`⚠️ Failed to process scene image:`, sceneError.message);
+        console.warn(`?? Failed to process scene image:`, sceneError.message);
       }
     }
 
-    // 💫 NEW: Normalize image source and determine skip policies
+    // ?? NEW: Normalize image source and determine skip policies
     if (!productFilePath) {
-      throw new Error(`❌ Product image not provided (no file upload or base64)`);
+      throw new Error(`? Product image not provided (no file upload or base64)`);
     }
     
-    console.log(`✅ Both images ready: character=${characterFilePath}, product=${productFilePath}`);
+    console.log(`? Both images ready: character=${characterFilePath}, product=${productFilePath}`);
 
-    // 💫 NEW: Normalize image source and determine skip policies
+    // ?? NEW: Normalize image source and determine skip policies
     const normalizedImageSource = {
       character: String(imageSource?.character || 'upload').toLowerCase(),
       product: String(imageSource?.product || 'upload').toLowerCase()
@@ -426,7 +426,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       ? String(options?.useShortPrompt ?? useShortPrompt).toLowerCase() === 'true'
       : Boolean(options?.useShortPrompt ?? useShortPrompt);
     
-    console.log(`\n🔌 PROVIDER CONFIGURATION:`);
+    console.log(`\n?? PROVIDER CONFIGURATION:`);
     console.log(`  Image Provider: ${finalImageProvider}`);
     console.log(`  Video Provider: ${finalVideoProvider}`);
     console.log(`  Video clip duration/provider: ${providerClipDuration}s per video`);
@@ -452,16 +452,16 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
         if (sceneBuffer.length > 0) {
           finalSceneImagePath = path.join(tempDir, `scene-base64-${Date.now()}.jpg`);
           fs.writeFileSync(finalSceneImagePath, sceneBuffer);
-          console.log(`💾 Saved scene image from base64: ${finalSceneImagePath}`);
+          console.log(`?? Saved scene image from base64: ${finalSceneImagePath}`);
         }
       } catch (sceneDecodeError) {
-        console.warn(`⚠️ Failed to decode sceneImage base64: ${sceneDecodeError.message}`);
+        console.warn(`?? Failed to decode sceneImage base64: ${sceneDecodeError.message}`);
       }
     }
 
     if (!finalSceneImagePath) {
       if (skipSceneReferenceNetworkTransfer) {
-        console.log('↩️  Skipping scene locked image download (network transfer disabled for affiliate flow)');
+        console.log('??  Skipping scene locked image download (network transfer disabled for affiliate flow)');
       } else {
         try {
           const selectedAspectRatio = String(options?.aspectRatio || '9:16');
@@ -505,11 +505,11 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
             }
 
             if (finalSceneImagePath) {
-              console.log(`🎭 Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
+              console.log(`?? Using scene locked image (${options.scene || 'default'}): ${finalSceneImagePath}`);
             }
           }
         } catch (sceneLockedError) {
-          console.warn(`⚠️ Could not load scene locked image: ${sceneLockedError.message}`);
+          console.warn(`?? Could not load scene locked image: ${sceneLockedError.message}`);
         }
       }
     }
@@ -519,11 +519,11 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     // STEP 1: CHATGPT BROWSER AUTOMATION ANALYSIS (Non-blocking)
     // ============================================================
 
-    console.log('\n🔍 STEP 1: ChatGPT Browser Automation Analysis...');
+    console.log('\n?? STEP 1: ChatGPT Browser Automation Analysis...');
     const step1Start = Date.now();
     let step1Duration = '0';  // Will be calculated later
 
-    console.log(`📋 STEP 1 DETAILS: Analysis using ChatGPT Browser Automation`);
+    console.log(`?? STEP 1 DETAILS: Analysis using ChatGPT Browser Automation`);
     console.log(`  Provider: ChatGPT (Browser Automation)`);
     console.log(`  Input 1: ${characterFilePath}`);
     console.log(`  Input 2: ${productFilePath}`);
@@ -534,16 +534,16 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
 
     try {
       // Use ChatGPT Browser Automation (not OpenAI API, not Gemini)
-      // 💫 Get appropriate prompt based on language
-      // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+      // ?? Get appropriate prompt based on language
+      // Normalize language code: 'vi-VN' or 'vi_VN' ? 'vi'
       const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
       let analysisPrompt;
       
       if (normalizedLanguage === 'vi') {
-        console.log(`\n📝 Using VIETNAMESE analysis prompt`);
+        console.log(`\n?? Using VIETNAMESE analysis prompt`);
         analysisPrompt = VietnamesePromptBuilder.buildCharacterAnalysisPrompt();
       } else {
-        console.log(`\n📝 Using ENGLISH analysis prompt`);
+        console.log(`\n?? Using ENGLISH analysis prompt`);
         analysisPrompt = `
 You are an expert fashion stylist and virtual try-on specialist. Analyze these two images extensively to provide detailed styling recommendations.
 
@@ -629,7 +629,7 @@ Garment Compatibility:
 - Skill level: Easy to wear, needs styling, professional fit
 
 ===== RECOMMENDATION GENERATION =====
-Based on character × product compatibility, recommend:
+Based on character � product compatibility, recommend:
 
 1. SCENE/SETTING (JSON):
    - Best environment: studio, outdoor, urban, nature, luxury, casual, etc.
@@ -725,7 +725,7 @@ CTA segment (16-20 seconds):
 
 ===== LIP SYNC GUIDANCE (IF VOICEOVER EXISTS) =====
 If Vietnamese voiceover is present, sync character mouth movements with audio:
-- Mouth naturally open during vowels (ả, ơ, ư sounds)
+- Mouth naturally open during vowels (?, o, u sounds)
 - Lips together during consonants (m, b, p, d, t)
 - Keep mouth movements subtle and natural - no exaggerated lip-popping
 - Maintain consistent speaking style throughout all segments
@@ -869,16 +869,16 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       } else if ((language || 'en').split('-')[0].split('_')[0].toLowerCase() === 'vi') {
         analysisPrompt += `
 
-===== PHÂN TÍCH SCENE REFERENCE (BẮT BUỘC) =====
+===== PH�N T�CH SCENE REFERENCE (B?T BU?C) =====
 `;
         analysisPrompt += `${sceneContextLine}
 `;
         analysisPrompt += hasSceneReference
-          ? `Image 3 = SCENE REFERENCE. Bắt buộc dùng scene này để tư vấn pose tự nhiên cho nhân vật.
+          ? `Image 3 = SCENE REFERENCE. B?t bu?c d�ng scene n�y d? tu v?n pose t? nhi�n cho nh�n v?t.
 `
-          : `Không có Image 3, hãy dựa trên Scene lock/Scene key để tư vấn pose tự nhiên.
+          : `Kh�ng c� Image 3, h�y d?a tr�n Scene lock/Scene key d? tu v?n pose t? nhi�n.
 `;
-        analysisPrompt += `Hãy tư vấn pose cụ thể cho cả WEARING và HOLDING để nhân vật hòa hợp với phối cảnh scene (hướng người, vị trí chân tay, trọng tâm cơ thể, khoảng cách camera). Tránh giữ cứng pose từ ảnh nhân vật gốc.
+        analysisPrompt += `H�y tu v?n pose c? th? cho c? WEARING v� HOLDING d? nh�n v?t h�a h?p v?i ph?i c?nh scene (hu?ng ngu?i, v? tr� ch�n tay, tr?ng t�m co th?, kho?ng c�ch camera). Tr�nh gi? c?ng pose t? ?nh nh�n v?t g?c.
 `;
       } else {
         analysisPrompt += `
@@ -896,10 +896,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 `;
       }
 
-      // 🔴 CRITICAL: Use try-finally to GUARANTEE browser cleanup
+      // ?? CRITICAL: Use try-finally to GUARANTEE browser cleanup
       let chatGPTService = null;
       try {
-        // 🔐 STEP 1: Isolate with flowId to prevent parallel profile conflicts
+        // ?? STEP 1: Isolate with flowId to prevent parallel profile conflicts
         chatGPTService = new ChatGPTService({ headless: false, flowId });
 
         const analysisImages = hasSceneReference
@@ -946,27 +946,27 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         // Save rawResponse to use in fallback if parsing fails
         if (!rawResponse || rawResponse.length === 0) {
           analysisError = 'ChatGPT analysis returned empty response';
-          console.warn(`⚠️  Analysis failed (non-blocking): ${analysisError}`);
+          console.warn(`??  Analysis failed (non-blocking): ${analysisError}`);
           console.warn(`   Continuing with default recommendations...`);
           analysis = null;
         } else {
           // Parse response with intelligent JSON extraction
           try {
-            console.log(`📝 Parsing ChatGPT JSON response...`);
+            console.log(`?? Parsing ChatGPT JSON response...`);
             console.log(`   Response length: ${rawResponse.length} characters`);
             
             analysis = extractJsonFromResponse(rawResponse);
             
             if (analysis) {
-              console.log(`✅ JSON parsed successfully`);
+              console.log(`? JSON parsed successfully`);
               
               if (!analysis.character || !analysis.product || !analysis.recommendations) {
-                console.warn(`⚠️  Incomplete analysis structure, but processing anyway`);
+                console.warn(`??  Incomplete analysis structure, but processing anyway`);
               }
               
               step1Duration = ((Date.now() - step1Start) / 1000).toFixed(2);
-              console.log(`✅ Analysis complete in ${step1Duration}s`);
-              console.log(`\n📊 ANALYSIS RESULTS:`);
+              console.log(`? Analysis complete in ${step1Duration}s`);
+              console.log(`\n?? ANALYSIS RESULTS:`);
               console.log(`  Character profile: ${analysis.character?.age || 'N/A'}`);
               console.log(`  Product type: ${analysis.product?.garment_type || 'N/A'}`);
               console.log(`  Key recommendations: ${Object.keys(analysis.recommendations || {}).join(', ')}`);
@@ -975,34 +975,34 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             }
           } catch (parseError) {
             analysisError = `JSON parse error: ${parseError.message}`;
-            console.warn(`⚠️  Failed to parse ChatGPT JSON (non-blocking): ${analysisError}`);
+            console.warn(`??  Failed to parse ChatGPT JSON (non-blocking): ${analysisError}`);
             console.warn(`   Raw response preview: ${rawResponse.substring(0, 300)}...`);
             analysis = null;
           }
         }
       } finally {
-        // 🔴 GUARANTEE: Always close ChatGPT browser
+        // ?? GUARANTEE: Always close ChatGPT browser
         if (chatGPTService) {
           try {
-            console.log(`\n🔒 Closing ChatGPT browser (STEP 1)...`);
+            console.log(`\n?? Closing ChatGPT browser (STEP 1)...`);
             await chatGPTService.close();
-            console.log(`✅ ChatGPT browser closed`);
+            console.log(`? ChatGPT browser closed`);
           } catch (closeError) {
-            console.error(`⚠️  Error closing ChatGPT browser: ${closeError.message}`);
+            console.error(`??  Error closing ChatGPT browser: ${closeError.message}`);
           }
         }
-        // 💫 NEW: Mark STEP 1 ChatGPT cleanup complete
+        // ?? NEW: Mark STEP 1 ChatGPT cleanup complete
         step1ChatGPTServiceClosed = true;
-        console.log(`✅ STEP 1: ChatGPT cleanup tracking - MARKED COMPLETE`);
+        console.log(`? STEP 1: ChatGPT cleanup tracking - MARKED COMPLETE`);
       }
 
       if (!rawResponse || rawResponse.length === 0) {
         analysisError = 'ChatGPT analysis returned empty response';
-        console.warn(`⚠️  Analysis failed (non-blocking): ${analysisError}`);
+        console.warn(`??  Analysis failed (non-blocking): ${analysisError}`);
         console.warn(`   Continuing with default recommendations...`);
       } else {
         try {
-          console.log(`📝 Parsing ChatGPT JSON response...`);
+          console.log(`?? Parsing ChatGPT JSON response...`);
           console.log(`   Response length: ${rawResponse.length} characters`);
           
           analysis = extractJsonFromResponse(rawResponse);
@@ -1011,22 +1011,22 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             throw new Error(`Could not extract valid JSON from response`);
           }
           
-          console.log(`✅ JSON parsed successfully`);
+          console.log(`? JSON parsed successfully`);
           
           // Validate structure
           if (!analysis.character || !analysis.product || !analysis.recommendations) {
-            console.warn(`⚠️  Incomplete analysis structure, but processing anyway`);
+            console.warn(`??  Incomplete analysis structure, but processing anyway`);
           }
           
           step1Duration = ((Date.now() - step1Start) / 1000).toFixed(2);
-          console.log(`✅ Analysis complete in ${step1Duration}s`);
-          console.log(`\n📊 ANALYSIS RESULTS:`);
+          console.log(`? Analysis complete in ${step1Duration}s`);
+          console.log(`\n?? ANALYSIS RESULTS:`);
           console.log(`  Character profile: ${analysis.character?.age || 'N/A'}`);
           console.log(`  Product type: ${analysis.product?.garment_type || 'N/A'}`);
           console.log(`  Key recommendations: ${Object.keys(analysis.recommendations || {}).join(', ')}`);
         } catch (parseError) {
           analysisError = `JSON parse error: ${parseError.message}`;
-          console.warn(`⚠️  Failed to parse ChatGPT JSON (non-blocking): ${analysisError}`);
+          console.warn(`??  Failed to parse ChatGPT JSON (non-blocking): ${analysisError}`);
           console.warn(`   Raw response preview: ${rawResponse.substring(0, 300)}...`);
           console.warn(`   Continuing with fallback analysis...`);
           analysis = null;
@@ -1034,7 +1034,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       }
     } catch (step1Error) {
       analysisError = step1Error.message;
-      console.warn(`⚠️  Analysis error (non-blocking): ${analysisError}`);
+      console.warn(`??  Analysis error (non-blocking): ${analysisError}`);
       console.warn(`   Proceeding to image generation with fallback analysis...`);
     }
 
@@ -1042,15 +1042,15 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // STEP 1.5: UPLOAD ORIGINAL IMAGES TO GOOGLE DRIVE (OAuth)
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('📤 STEP 1.5: Upload Original Images to Google Drive');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('?? STEP 1.5: Upload Original Images to Google Drive');
+    console.log('-'.repeat(80));
 
     let characterDriveUrl = null;
     let productDriveUrl = null;
     let driveService = null;
 
-    // 💫 Helper function: Check if asset with same filename already exists
+    // ?? Helper function: Check if asset with same filename already exists
     const checkExistingAsset = async (originalFilename, assetCategory) => {
       try {
         const existingAsset = await Asset.findOne({
@@ -1060,34 +1060,34 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         });
         return existingAsset;
       } catch (err) {
-        console.warn(`⚠️ Error checking existing asset: ${err.message}`);
+        console.warn(`?? Error checking existing asset: ${err.message}`);
         return null;
       }
     };
 
     try {
       if (skipCharacterDriveUpload && skipProductDriveUpload) {
-        console.log('↩️  Skipping Step 1.5 Google Drive upload for original images (both selected from gallery)');
+        console.log('??  Skipping Step 1.5 Google Drive upload for original images (both selected from gallery)');
       } else {
         // GoogleDriveOAuthService is a singleton instance, not a class constructor
         driveService = GoogleDriveOAuthService;
 
         // Authenticate with Google Drive using OAuth
-        console.log(`🔐 Authenticating with Google Drive (OAuth)...`);
+        console.log(`?? Authenticating with Google Drive (OAuth)...`);
         const authResult = await driveService.authenticate();
 
         if (!authResult.authenticated && !authResult.configured) {
-          console.log(`⚠️  Google Drive OAuth not configured, skipping upload`);
+          console.log(`??  Google Drive OAuth not configured, skipping upload`);
           console.log(`   To enable: Add OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET to .env`);
         } else {
-          console.log(`✅ Google Drive authenticated`);
+          console.log(`? Google Drive authenticated`);
 
-          // 💫 CHECK: Character image - skip if already exists
+          // ?? CHECK: Character image - skip if already exists
           let characterAssetExists = null;
           if (fs.existsSync(characterFilePath)) {
             characterAssetExists = await checkExistingAsset(characterFile.originalname, 'character-image');
             if (characterAssetExists) {
-              console.log(`\n⏭️  Character image already exists (skipping upload & asset creation)`);
+              console.log(`\n??  Character image already exists (skipping upload & asset creation)`);
               console.log(`   Existing Asset ID: ${characterAssetExists.assetId}`);
               if (characterAssetExists.storage?.googleDriveId) {
                 characterDriveUrl = characterAssetExists.storage.googleDriveId;
@@ -1098,10 +1098,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           // Upload character image only if it doesn't exist
           if (!characterAssetExists && fs.existsSync(characterFilePath)) {
             if (skipCharacterDriveUpload) {
-              console.log(`\n↩️  Skipping character original upload (gallery source)`);
+              console.log(`\n??  Skipping character original upload (gallery source)`);
             } else {
               try {
-                console.log(`\n📤 Uploading character image...`);
+                console.log(`\n?? Uploading character image...`);
                 console.log(`   Path: ${characterFilePath}`);
 
                 const charBuffer = fs.readFileSync(characterFilePath);
@@ -1114,30 +1114,30 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
                   }
                 );
 
-                // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
+                // ?? FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
                 if (charUploadResult?.webViewLink) {
-                  characterDriveUrl = charUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
-                  console.log(`  ✅ Character image uploaded to Drive`);
+                  characterDriveUrl = charUploadResult.id;  // ?? FIX: Store FILE ID, not full URL
+                  console.log(`  ? Character image uploaded to Drive`);
                   console.log(`     File ID: ${charUploadResult.id}`);
                   console.log(`     Drive Link: ${charUploadResult.webViewLink}`);
                 } else if (charUploadResult?.source === 'local-storage') {
-                  console.warn(`  ⚠️ Character image fallback to local (not on Drive)`);
+                  console.warn(`  ?? Character image fallback to local (not on Drive)`);
                   console.warn(`     Error: ${charUploadResult.error}`);
                 } else {
-                  console.warn(`  ⚠️ Character upload returned unexpected result: ${JSON.stringify(charUploadResult)}`);
+                  console.warn(`  ?? Character upload returned unexpected result: ${JSON.stringify(charUploadResult)}`);
                 }
               } catch (charUploadError) {
-                console.warn(`  ❌ Character upload failed: ${charUploadError.message}`);
+                console.warn(`  ? Character upload failed: ${charUploadError.message}`);
               }
             }
           }
 
-          // 💫 CHECK: Product image - skip if already exists
+          // ?? CHECK: Product image - skip if already exists
           let productAssetExists = null;
           if (fs.existsSync(productFilePath)) {
             productAssetExists = await checkExistingAsset(productFile.originalname, 'product-image');
             if (productAssetExists) {
-              console.log(`\n⏭️  Product image already exists (skipping upload & asset creation)`);
+              console.log(`\n??  Product image already exists (skipping upload & asset creation)`);
               console.log(`   Existing Asset ID: ${productAssetExists.assetId}`);
               if (productAssetExists.storage?.googleDriveId) {
                 productDriveUrl = productAssetExists.storage.googleDriveId;
@@ -1148,10 +1148,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           // Upload product image only if it doesn't exist
           if (!productAssetExists && fs.existsSync(productFilePath)) {
             if (skipProductDriveUpload) {
-              console.log(`\n↩️  Skipping product original upload (gallery source)`);
+              console.log(`\n??  Skipping product original upload (gallery source)`);
             } else {
               try {
-                console.log(`\n📤 Uploading product image...`);
+                console.log(`\n?? Uploading product image...`);
                 console.log(`   Path: ${productFilePath}`);
 
                 const prodBuffer = fs.readFileSync(productFilePath);
@@ -1164,45 +1164,45 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
                   }
                 );
 
-                // 💫 FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
+                // ?? FIX: Check if it was actual Drive upload (has webViewLink) NOT just local fallback
                 if (prodUploadResult?.webViewLink) {
-                  productDriveUrl = prodUploadResult.id;  // 🔴 FIX: Store FILE ID, not full URL
-                  console.log(`  ✅ Product image uploaded to Drive`);
+                  productDriveUrl = prodUploadResult.id;  // ?? FIX: Store FILE ID, not full URL
+                  console.log(`  ? Product image uploaded to Drive`);
                   console.log(`     File ID: ${prodUploadResult.id}`);
                   console.log(`     Drive Link: ${prodUploadResult.webViewLink}`);
                 } else if (prodUploadResult?.source === 'local-storage') {
-                  console.warn(`  ⚠️ Product image fallback to local (not on Drive)`);
+                  console.warn(`  ?? Product image fallback to local (not on Drive)`);
                   console.warn(`     Error: ${prodUploadResult.error}`);
                 } else {
-                  console.warn(`  ⚠️ Product upload returned unexpected result: ${JSON.stringify(prodUploadResult)}`);
+                  console.warn(`  ?? Product upload returned unexpected result: ${JSON.stringify(prodUploadResult)}`);
                 }
               } catch (prodUploadError) {
-                console.warn(`  ❌ Product upload failed: ${prodUploadError.message}`);
+                console.warn(`  ? Product upload failed: ${prodUploadError.message}`);
               }
             }
           }
 
-          console.log(`\n📊 Original images upload status:`);
-          console.log(`   Character: ${skipCharacterDriveUpload ? '↩️  Skipped (gallery source)' : (characterDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive')}`);
-          console.log(`   Product: ${skipProductDriveUpload ? '↩️  Skipped (gallery source)' : (productDriveUrl ? '✅ On Google Drive' : '❌ NOT on Drive')}`);
+          console.log(`\n?? Original images upload status:`);
+          console.log(`   Character: ${skipCharacterDriveUpload ? '??  Skipped (gallery source)' : (characterDriveUrl ? '? On Google Drive' : '? NOT on Drive')}`);
+          console.log(`   Product: ${skipProductDriveUpload ? '??  Skipped (gallery source)' : (productDriveUrl ? '? On Google Drive' : '? NOT on Drive')}`);
         }
       }
     } catch (driveError) {
-      console.warn(`⚠️ Google Drive upload error: ${driveError.message}`);
+      console.warn(`?? Google Drive upload error: ${driveError.message}`);
     }
 
     // ============================================================
     // STEP 1.6: CREATE ASSET RECORDS FOR CHARACTER & PRODUCT IMAGES
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('💾 STEP 1.6: Create Asset Records for Original Images');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('?? STEP 1.6: Create Asset Records for Original Images');
+    console.log('-'.repeat(80));
 
     // Create Asset record for Character image
     if (fs.existsSync(characterFilePath)) {
       try {
-        console.log(`\n📝 Creating Asset for character image...`);
+        console.log(`\n?? Creating Asset for character image...`);
         
         const characterAssetResult = await AssetManager.saveAsset({
           filename: `Character-${flowId}.jpg`,
@@ -1212,7 +1212,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           fileSize: fs.statSync(characterFilePath).size,
           userId: 'system',
           sessionId: flowId,
-          // 🔴 FIX: Add BOTH storage objects
+          // ?? FIX: Add BOTH storage objects
           storage: {
             location: characterDriveUrl ? 'google-drive' : 'local',
             filePath: characterFilePath,
@@ -1220,7 +1220,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               googleDriveId: characterDriveUrl
             })
           },
-          // 💫 NEW: Populate cloudStorage for gallery/sync
+          // ?? NEW: Populate cloudStorage for gallery/sync
           cloudStorage: characterDriveUrl ? {
             location: 'google-drive',
             googleDriveId: characterDriveUrl,
@@ -1229,7 +1229,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: 'synced',  // Already uploaded
             syncedAt: new Date()
           } : undefined,
-          // 💫 NEW: Populate localStorage for offline access
+          // ?? NEW: Populate localStorage for offline access
           localStorage: {
             location: 'local',
             path: characterFilePath,
@@ -1244,19 +1244,19 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         });
 
         if (characterAssetResult?.asset?.assetId) {
-          console.log(`  ✅ Character Asset created: ${characterAssetResult.asset.assetId}`);
+          console.log(`  ? Character Asset created: ${characterAssetResult.asset.assetId}`);
         } else {
-          console.warn(`  ⚠️ Character Asset creation returned: ${JSON.stringify(characterAssetResult)}`);
+          console.warn(`  ?? Character Asset creation returned: ${JSON.stringify(characterAssetResult)}`);
         }
       } catch (charAssetError) {
-        console.warn(`  ⚠️ Character Asset creation failed: ${charAssetError.message}`);
+        console.warn(`  ?? Character Asset creation failed: ${charAssetError.message}`);
       }
     }
 
     // Create Asset record for Product image
     if (fs.existsSync(productFilePath)) {
       try {
-        console.log(`\n📝 Creating Asset for product image...`);
+        console.log(`\n?? Creating Asset for product image...`);
         
         const productAssetResult = await AssetManager.saveAsset({
           filename: `Product-${flowId}.jpg`,
@@ -1266,7 +1266,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           fileSize: fs.statSync(productFilePath).size,
           userId: 'system',
           sessionId: flowId,
-          // 🔴 FIX: Add BOTH storage objects
+          // ?? FIX: Add BOTH storage objects
           storage: {
             location: productDriveUrl ? 'google-drive' : 'local',
             filePath: productFilePath,
@@ -1274,7 +1274,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               googleDriveId: productDriveUrl
             })
           },
-          // 💫 NEW: Populate cloudStorage for gallery/sync
+          // ?? NEW: Populate cloudStorage for gallery/sync
           cloudStorage: productDriveUrl ? {
             location: 'google-drive',
             googleDriveId: productDriveUrl,
@@ -1283,7 +1283,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
             status: 'synced',  // Already uploaded
             syncedAt: new Date()
           } : undefined,
-          // 💫 NEW: Populate localStorage for offline access
+          // ?? NEW: Populate localStorage for offline access
           localStorage: {
             location: 'local',
             path: productFilePath,
@@ -1298,16 +1298,16 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         });
 
         if (productAssetResult?.asset?.assetId) {
-          console.log(`  ✅ Product Asset created: ${productAssetResult.asset.assetId}`);
+          console.log(`  ? Product Asset created: ${productAssetResult.asset.assetId}`);
         } else {
-          console.warn(`  ⚠️ Product Asset creation returned: ${JSON.stringify(productAssetResult)}`);
+          console.warn(`  ?? Product Asset creation returned: ${JSON.stringify(productAssetResult)}`);
         }
       } catch (prodAssetError) {
-        console.warn(`  ⚠️ Product Asset creation failed: ${prodAssetError.message}`);
+        console.warn(`  ?? Product Asset creation failed: ${prodAssetError.message}`);
       }
     }
 
-    console.log(`\n✅ Asset records created for original images`);
+    console.log(`\n? Asset records created for original images`);
 
 // ============================================================
     // CREATE FALLBACK ANALYSIS if real analysis failed
@@ -1603,18 +1603,18 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     // STEP 2.5: UPLOAD GENERATED IMAGES TO GOOGLE DRIVE
     // ============================================================
     
-    console.log('\n' + '─'.repeat(80));
-    console.log('📤 STEP 2.5: Upload Generated Images to Google Drive (2 images)');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('?? STEP 2.5: Upload Generated Images to Google Drive (2 images)');
+    console.log('-'.repeat(80));
 
-    console.log(`📁 Image paths from Google Flow:`);
+    console.log(`?? Image paths from Google Flow:`);
     imageResults.forEach((img, idx) => {
       console.log(`   ${img.type || (idx === 0 ? 'wearing' : 'holding')}: ${img.screenshotPath}`);
     });
-    console.log(`\n⚡ Uploading 2 images in parallel...`);
-    console.log(`🎯 Image sources: character=${imageSource.character}, product=${imageSource.product}`);
+    console.log(`\n? Uploading 2 images in parallel...`);
+    console.log(`?? Image sources: character=${imageSource.character}, product=${imageSource.product}`);
 
-    // 🛑 BARRIER CHECKPOINT: Ensure STEP 2.5 completes before STEP 3
+    // ?? BARRIER CHECKPOINT: Ensure STEP 2.5 completes before STEP 3
     try {
       // Upload generated images in parallel (always upload Step 2 outputs)
       if (driveService) {
@@ -1623,8 +1623,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           const imgType = img.type || (idx === 0 ? 'wearing' : 'holding');
           const uploadFileName = `Generated-${imgType}-${flowId}.jpg`;
           
-          // 🔍 DEBUG: Log upload details before execution
-          console.log(`\n🔥 DEBUG: Preparing upload [${idx}]:`);
+          // ?? DEBUG: Log upload details before execution
+          console.log(`\n?? DEBUG: Preparing upload [${idx}]:`);
           console.log(`   imgType: ${imgType}`);
           console.log(`   screenshotPath: ${img.screenshotPath}`);
           console.log(`   uploadFileName: ${uploadFileName}`);
@@ -1644,22 +1644,22 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
               timestamp: new Date().toISOString()
             }
           ).then(result => {
-            console.log(`  ✅ ${imgType.toUpperCase()} uploaded to Drive (ID: ${result.id})`);
+            console.log(`  ? ${imgType.toUpperCase()} uploaded to Drive (ID: ${result.id})`);
             return result;
           }).catch(error => {
-            console.warn(`  ⚠️ ${imgType.toUpperCase()} upload failed: ${error.message}`);
+            console.warn(`  ?? ${imgType.toUpperCase()} upload failed: ${error.message}`);
             return null;
           });
-        });  // ← End of map()
+        });  // ? End of map()
 
         if (uploadPromises.length > 0) {
-          console.log(`\n⏳ Waiting for ${uploadPromises.length} uploads to complete...`);
+          console.log(`\n? Waiting for ${uploadPromises.length} uploads to complete...`);
           const uploadResults = await Promise.all(uploadPromises);
           const successCount = uploadResults.filter(r => r).length;
-          console.log(`✅ Step 2.5 Complete: ${successCount}/${uploadPromises.length} uploads successful`);
+          console.log(`? Step 2.5 Complete: ${successCount}/${uploadPromises.length} uploads successful`);
           
-          // 💫 CRITICAL FIX: Capture Google Drive metadata from upload results
-          console.log(`\n📌 CAPTURING DRIVE METADATA`);
+          // ?? CRITICAL FIX: Capture Google Drive metadata from upload results
+          console.log(`\n?? CAPTURING DRIVE METADATA`);
           uploadResults.forEach((result, idx) => {
             if (result && result.id) {
               // Find the corresponding image in imageResults
@@ -1698,23 +1698,23 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           });
         }
       } else {
-        console.log(`⚠️ Skipping uploads (Drive service not available)`);
+        console.log(`?? Skipping uploads (Drive service not available)`);
       }
     } catch (uploadError) {
-      console.warn(`⚠️ Step 2.5 upload error (non-blocking): ${uploadError.message}`);
+      console.warn(`?? Step 2.5 upload error (non-blocking): ${uploadError.message}`);
       console.warn(`   Proceeding to Step 3 anyway...`);
     }
 
-    // 🔴 BARRIER: Explicit checkpoint to ensure STEP 2.5 is complete
-    console.log(`\n🔄 [BARRIER CHECKPOINT] Step 2 pipeline complete`);
-    console.log(`   ✅ Step 2: Image generation - DONE`);
-    console.log(`   ✅ Step 2.5: Image uploads - DONE`);
-    console.log(`   🔄 Proceeding to Step 3...\n`);
+    // ?? BARRIER: Explicit checkpoint to ensure STEP 2.5 is complete
+    console.log(`\n?? [BARRIER CHECKPOINT] Step 2 pipeline complete`);
+    console.log(`   ? Step 2: Image generation - DONE`);
+    console.log(`   ? Step 2.5: Image uploads - DONE`);
+    console.log(`   ?? Proceeding to Step 3...\n`);
 
-    // 💫 NEW: CRITICAL - Wait for STEP 1 ChatGPT to fully close before STEP 3 opens
-    console.log(`🔒 STEP 3 BARRIER: Ensuring STEP 1 ChatGPT browser fully closed...`);
+    // ?? NEW: CRITICAL - Wait for STEP 1 ChatGPT to fully close before STEP 3 opens
+    console.log(`?? STEP 3 BARRIER: Ensuring STEP 1 ChatGPT browser fully closed...`);
     if (!step1ChatGPTServiceClosed) {
-      console.warn(`⚠️  STEP 1 ChatGPT service not marked as closed yet`);
+      console.warn(`??  STEP 1 ChatGPT service not marked as closed yet`);
       // Wait up to 10 seconds for STEP 1 to complete its cleanup
       let waitCount = 0;
       while (!step1ChatGPTServiceClosed && waitCount < 20) {
@@ -1723,14 +1723,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       }
       
       if (!step1ChatGPTServiceClosed) {
-        console.warn(`⚠️  STEP 1 ChatGPT didn't close after 10s, proceeding anyway (risk of parallel browsers)`);
+        console.warn(`??  STEP 1 ChatGPT didn't close after 10s, proceeding anyway (risk of parallel browsers)`);
       } else {
-        console.log(`✅ STEP 1 ChatGPT confirmed closed`);
+        console.log(`? STEP 1 ChatGPT confirmed closed`);
       }
     } else {
-      console.log(`✅ STEP 1 ChatGPT already closed`);
+      console.log(`? STEP 1 ChatGPT already closed`);
     }
-    console.log(`✅ STEP 3 BARRIER: Safe to open new ChatGPT instance\n`);
+    console.log(`? STEP 3 BARRIER: Safe to open new ChatGPT instance\n`);
 
     // ============================================================
     // STEP 3: STORYBOARD SEGMENT PLANNING
@@ -2076,12 +2076,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       }
     });
     // ============================================================
-    // STEP 5: 💫 AUTO-SAVE GENERATED ASSETS TO DATABASE
+    // STEP 5: ?? AUTO-SAVE GENERATED ASSETS TO DATABASE
     // ============================================================
 
-    console.log('\n' + '─'.repeat(80));
-    console.log('💾 STEP 5: Auto-saving assets to database');
-    console.log('─'.repeat(80));
+    console.log('\n' + '-'.repeat(80));
+    console.log('?? STEP 5: Auto-saving assets to database');
+    console.log('-'.repeat(80));
 
     const savedAssets = {
       images: [],
@@ -2097,7 +2097,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         const mimeType = normalizedExt === '.png' ? 'image/png' : 'image/jpeg';
         const uniqueFilename = `Generated-${flowId}-variation-${String(variationNumber).padStart(2, '0')}${normalizedExt}`;
 
-        console.log(`\n📸 Saving image variation ${variationNumber} to database...`);
+        console.log(`\n?? Saving image variation ${variationNumber} to database...`);
         const imgAssetResult = await AssetManager.saveAsset({
           filename: uniqueFilename,
           mimeType,
@@ -2132,11 +2132,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         }, { verbose: true });
 
         if (imgAssetResult.success) {
-          console.log(`   ✅ Image variation ${variationNumber} saved`);
+          console.log(`   ? Image variation ${variationNumber} saved`);
           savedAssets.images.push(imgAssetResult.asset);
         }
       } catch (assetError) {
-        console.warn(`   ⚠️  Failed to save image variation ${varIdx + 1}: ${assetError.message}`);
+        console.warn(`   ??  Failed to save image variation ${varIdx + 1}: ${assetError.message}`);
       }
     }
 
@@ -2144,7 +2144,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     for (const videoData of allGeneratedVideos) {
       try {
-        console.log(`\n🎬 Saving video (${videoData.segment}) to database...`);
+        console.log(`\n?? Saving video (${videoData.segment}) to database...`);
         const videoAssetResult = await AssetManager.saveAsset({
           filename: path.basename(videoData.path),
           mimeType: 'video/mp4',
@@ -2171,11 +2171,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           savedAssets.videos.push(videoAssetResult.asset);
         }
       } catch (assetError) {
-        console.warn(`   ⚠️  Failed to save video ${videoData.segment}: ${assetError.message}`);
+        console.warn(`   ??  Failed to save video ${videoData.segment}: ${assetError.message}`);
       }
     }
 
-    console.log(`\n✅ Asset saving complete: ${savedAssets.images.length} images, ${savedAssets.videos.length} videos`);
+    console.log(`\n? Asset saving complete: ${savedAssets.images.length} images, ${savedAssets.videos.length} videos`);
 
     // ============================================================
     // FINAL RESULTS COMPILATION
@@ -2183,9 +2183,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     const totalDuration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // 💫 Build response with error handling
+    // ?? Build response with error handling
     try {
-      console.log(`\n📋 Building response object...`);
+      console.log(`\n?? Building response object...`);
       
       const responseData = {
         success: true,
@@ -2288,7 +2288,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       const generatedImagePaths = [];
       imageResults.forEach((img, idx) => {
         if (img?.screenshotPath) {
-          console.log(`   📸 Image variation ${idx + 1}: ${img.screenshotPath}`);
+          console.log(`   ?? Image variation ${idx + 1}: ${img.screenshotPath}`);
           generatedImagePaths.push(img.screenshotPath);
         }
       });
@@ -2301,12 +2301,12 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       });
       await logger.markCompleted();
       
-      console.log(`✅ Flow completed [${flowId}]`);
+      console.log(`? Flow completed [${flowId}]`);
       
       // Send response
       res.json(responseData);
     } catch (responseError) {
-      console.error(`💥 ERROR building/sending response: ${responseError.message}`);
+      console.error(`?? ERROR building/sending response: ${responseError.message}`);
       console.error(`Stack: ${responseError.stack}`);
       
       // Send error response
@@ -2319,7 +2319,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     }
 
   } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.error('? Error:', error.message);
     await logger.markFailed(error.message);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -2342,25 +2342,25 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
  * Perform deep ChatGPT analysis with all 3 images
  * Returns: video scripts, voiceover script, hashtags
  * 
- * 🔴 CRITICAL: Ensures ChatGPT browser is always closed, even on errors
+ * ?? CRITICAL: Ensures ChatGPT browser is always closed, even on errors
  * Uses flowId to isolate browser session (prevent profile conflicts)
  */
 async function performDeepChatGPTAnalysis(analysis, images, config) {
-  let chatGPTService = null;  // 🔴 Declare outside try so finally can access it
+  let chatGPTService = null;  // ?? Declare outside try so finally can access it
   
   try {
-    const { characterImages, productImage } = images;  // ✅ Updated: 2 character images (wearing + holding)
+    const { characterImages, productImage } = images;  // ? Updated: 2 character images (wearing + holding)
     const { videoDuration, voiceGender, voicePace, productFocus, language = 'en', videoProvider = 'grok', clipDuration = 10, flowId } = config;
 
-    console.log('\n🧠 STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
+    console.log('\n?? STEP 3: Deep ChatGPT Analysis for Video Segment Scripts');
     console.log(`   Character images: 2 (wearing + holding)`);
     console.log(`   Voice: ${voiceGender} (${voicePace} pace)`);
     console.log(`   Duration target: ${videoDuration}s`);
     console.log(`   Provider clip: ${clipDuration || getProviderClipDuration(videoProvider)}s (${videoProvider})`);
 
     // Build detailed prompt for ChatGPT video analysis
-    // 💫 Use Vietnamese prompts if language='vi'
-    // Normalize language code: 'vi-VN' or 'vi_VN' → 'vi'
+    // ?? Use Vietnamese prompts if language='vi'
+    // Normalize language code: 'vi-VN' or 'vi_VN' ? 'vi'
     const normalizedLanguage = (language || 'en').split('-')[0].split('_')[0].toLowerCase();
     let deepAnalysisPrompt;
     if (normalizedLanguage === 'vi') {
@@ -2372,15 +2372,15 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       deepAnalysisPrompt = buildDeepAnalysisPrompt(
         analysis,
         {
-          images: characterImages  // ✅ Pass 2 character images (wearing + holding)
+          images: characterImages  // ? Pass 2 character images (wearing + holding)
         },
         { videoDuration, voiceGender, voicePace, productFocus, videoProvider, clipDuration: clipDuration || getProviderClipDuration(videoProvider) }
       );
     }
 
-    // 🔴 CRITICAL: Initialize BEFORE attempting image analysis
-    console.log(`   🚀 Initializing ChatGPT Browser Automation...`);
-    // 🔐 STEP 3: Isolate with flowId to prevent parallel profile conflicts
+    // ?? CRITICAL: Initialize BEFORE attempting image analysis
+    console.log(`   ?? Initializing ChatGPT Browser Automation...`);
+    // ?? STEP 3: Isolate with flowId to prevent parallel profile conflicts
     chatGPTService = new ChatGPTService({ headless: false, flowId });
     
     // ???? NEW: Log the 2 character images being uploaded to ChatGPT
@@ -2441,32 +2441,32 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       }
     }
 
-    // 💫 NEW: Log the raw response received from ChatGPT (not the long prompt)
-    console.log(`\n📥 CHATGPT RAW RESPONSE RECEIVED:`);
-    console.log(`${'─'.repeat(80)}`);
+    // ?? NEW: Log the raw response received from ChatGPT (not the long prompt)
+    console.log(`\n?? CHATGPT RAW RESPONSE RECEIVED:`);
+    console.log(`${'-'.repeat(80)}`);
     console.log(rawChatGPTResponse);
-    console.log(`${'─'.repeat(80)}\n`);
+    console.log(`${'-'.repeat(80)}\n`);
 
-    // 💫 PARSE the raw text response into structured data
+    // ?? PARSE the raw text response into structured data
     let analysisData = null;
     try {
       analysisData = parseDeepAnalysisResponse(rawChatGPTResponse, analysis, videoDuration);
     } catch (parseError) {
-      console.warn(`⚠️  Failed to parse ChatGPT response: ${parseError.message}`);
+      console.warn(`??  Failed to parse ChatGPT response: ${parseError.message}`);
       console.log('   Using fallback structured generation...');
     }
 
     // If parsing failed or returned no data, use fallback
     if (!analysisData || !analysisData.videoScripts || analysisData.videoScripts.length === 0) {
-      console.warn(`⚠️  Deep analysis returned no valid scripts, using structured generation...`);
+      console.warn(`??  Deep analysis returned no valid scripts, using structured generation...`);
       // Fall back to structured generation if ChatGPT analysis fails
       const fallbackData = generateStructuredVideoContent(analysis, { videoDuration, voiceGender, voicePace, productFocus });
       
-      // 💫 NEW: Log the fallback data being used
-      console.log(`\n⚠️  USING FALLBACK STRUCTURED DATA:`);
-      console.log(`${'─'.repeat(80)}`);
+      // ?? NEW: Log the fallback data being used
+      console.log(`\n??  USING FALLBACK STRUCTURED DATA:`);
+      console.log(`${'-'.repeat(80)}`);
       console.log(JSON.stringify(fallbackData, null, 2));
-      console.log(`${'─'.repeat(80)}\n`);
+      console.log(`${'-'.repeat(80)}\n`);
       
       return {
         success: true,  // Still return success since we have fallback data
@@ -2475,7 +2475,7 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       };
     }
     
-    console.log(`✅ Deep analysis complete:`);
+    console.log(`? Deep analysis complete:`);
     console.log(`   Video segments: ${analysisData.videoScripts?.length || 4}`);
     console.log(`   Voiceover length: ${analysisData.voiceoverScript?.length || 0} chars`);
     console.log(`   Hashtags: ${analysisData.hashtags?.length || 0}`);
@@ -2486,19 +2486,19 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       source: 'chatgpt-analysis'
     };
   } catch (error) {
-    console.error('⚠️  Deep ChatGPT Browser analysis error:', error.message);
+    console.error('??  Deep ChatGPT Browser analysis error:', error.message);
     console.warn(`   Falling back to structured video generation...`);
     
     // Always return success with fallback data instead of failing
     const fallbackData = generateStructuredVideoContent(analysis, config);
     
-    // 💫 NEW: Log the error and fallback data
-    console.log(`\n❌ CHATGPT ANALYSIS ERROR - USING FALLBACK:`);
-    console.log(`${'─'.repeat(80)}`);
+    // ?? NEW: Log the error and fallback data
+    console.log(`\n? CHATGPT ANALYSIS ERROR - USING FALLBACK:`);
+    console.log(`${'-'.repeat(80)}`);
     console.log(`Error: ${error.message}`);
     console.log(`\nFallback Data:`);
     console.log(JSON.stringify(fallbackData, null, 2));
-    console.log(`${'─'.repeat(80)}\n`);
+    console.log(`${'-'.repeat(80)}\n`);
     
     return {
       success: true,  // Return success so main flow continues
@@ -2507,14 +2507,14 @@ async function performDeepChatGPTAnalysis(analysis, images, config) {
       error: error.message  // Include error for debugging
     };
   } finally {
-    // 🔴 CRITICAL: ALWAYS close ChatGPT browser, even if error occurred
+    // ?? CRITICAL: ALWAYS close ChatGPT browser, even if error occurred
     if (chatGPTService) {
       try {
-        console.log(`\n🔒 Closing ChatGPT browser...`);
+        console.log(`\n?? Closing ChatGPT browser...`);
         await chatGPTService.close();
-        console.log(`✅ ChatGPT browser closed successfully`);
+        console.log(`? ChatGPT browser closed successfully`);
       } catch (closeError) {
-        console.error(`⚠️  Error closing ChatGPT browser: ${closeError.message}`);
+        console.error(`??  Error closing ChatGPT browser: ${closeError.message}`);
       }
     }
   }
@@ -2545,13 +2545,13 @@ function generateStructuredVideoContent(analysis, config) {
       {
         segment: 'wearing',
         duration: segmentDurations.wearing,
-        script: `See how flawlessly it looks when worn – perfect fit, amazing style, incredibly comfortable. This ${productType} is a must-have!`,
+        script: `See how flawlessly it looks when worn � perfect fit, amazing style, incredibly comfortable. This ${productType} is a must-have!`,
         imageComposition: ['wearing']  // Single image
       },
       {
         segment: 'holding',
         duration: segmentDurations.holding,
-        script: `Check out the exquisite details – the quality is insane! Made with premium ${productMaterial}, designed for durability and elegance.`,
+        script: `Check out the exquisite details � the quality is insane! Made with premium ${productMaterial}, designed for durability and elegance.`,
         imageComposition: ['holding', 'product']  // Multi-image composition
       },
       {
@@ -2656,25 +2656,25 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
     throw new Error('Invalid response - expected string');
   }
 
-  // 🔥 NEW: Calculate optimal number of segments based on video duration
+  // ?? NEW: Calculate optimal number of segments based on video duration
   // Google Flow generates ~8s per video, so for 20s duration we need at least 3 segments
   // (20s / 8s = 2.5, rounded up to 3)
   const generationTimePerVideo = 8;  // Google Flow generation time in seconds
   const minSegmentsForDuration = Math.max(2, Math.ceil(videoDuration / generationTimePerVideo));
   
-  console.log(`\n🔍 PARSING CHATGPT RESPONSE`);
+  console.log(`\n?? PARSING CHATGPT RESPONSE`);
   console.log(`   Raw text length: ${rawText.length} characters`);
-  console.log(`   📊 Video duration: ${videoDuration}s / Gen time: ${generationTimePerVideo}s → Need ${minSegmentsForDuration} segments`);
+  console.log(`   ?? Video duration: ${videoDuration}s / Gen time: ${generationTimePerVideo}s ? Need ${minSegmentsForDuration} segments`);
 
   // METHOD 1: Try to extract JSON if it exists
-  console.log(`   📍 METHOD 1: Checking for embedded JSON...`);
+  console.log(`   ?? METHOD 1: Checking for embedded JSON...`);
   try {
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed.videoScripts || parsed.segments) {
-          console.log(`   ✅ Found valid JSON structure`);
+          console.log(`   ? Found valid JSON structure`);
           return {
             videoScripts: parsed.videoScripts || parsed.segments || [],
             voiceoverScript: parsed.voiceoverScript || parsed.voiceover || '',
@@ -2682,7 +2682,7 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
           };
         }
       } catch (jsonErr) {
-        console.log(`   ⚠️  JSON parsing failed: ${jsonErr.message}`);
+        console.log(`   ??  JSON parsing failed: ${jsonErr.message}`);
       }
     }
   } catch (e) {
@@ -2690,7 +2690,7 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
   }
 
   // METHOD 2: Extract sections by markers ([SEGMENT_1], [SEGMENT_2], etc.)
-  console.log(`   📍 METHOD 2: Extracting by markers [SEGMENT_N]...`);
+  console.log(`   ?? METHOD 2: Extracting by markers [SEGMENT_N]...`);
   
   const sections = {
     videoScripts: [],
@@ -2700,16 +2700,16 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
 
   // Extract [SEGMENT_N] blocks - each segment can span multiple lines
   // Pattern: [SEGMENT_N] ... [CHARACTER IMAGE: ...] ... "script text" ... or narrative text
-  const segmentBlockPattern = /\[SEGMENT_(\d+)\]([\s\S]*?)(?=\[SEGMENT_|\[VOICEOVER|🎙️|#️⃣HASHTAG|#[A-Za-z]|$)/gi;
+  const segmentBlockPattern = /\[SEGMENT_(\d+)\]([\s\S]*?)(?=\[SEGMENT_|\[VOICEOVER|VOICEOVER|HASHTAG|#[A-Za-z]|$)/gi;
   
   let segmentMatch;
   let foundCount = 0;
   
   while ((segmentMatch = segmentBlockPattern.exec(rawText)) !== null) {
-    // 🔥 FIX: Stop after extracting expected number of segments
+    // ?? FIX: Stop after extracting expected number of segments
     // ChatGPT sometimes provides duplicate versions - only take the first set
     if (foundCount >= minSegmentsForDuration) {
-      console.log(`   ℹ️  Stopping segment extraction (found ${foundCount}, expected ${minSegmentsForDuration})`);
+      console.log(`   ??  Stopping segment extraction (found ${foundCount}, expected ${minSegmentsForDuration})`);
       break;
     }
     
@@ -2757,13 +2757,13 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
   }
   
   if (foundCount > 0) {
-    console.log(`   ✅ Found ${foundCount} video segments with [SEGMENT_N] markers`);
+    console.log(`   ? Found ${foundCount} video segments with [SEGMENT_N] markers`);
   }
 
-  // Extract VOICEOVER section (🎙️ VOICEOVER, VOICEOVER:, etc.)
-  console.log(`   📍 METHOD 2b: Extracting VOICEOVER section...`);
+  // Extract VOICEOVER section (??? VOICEOVER, VOICEOVER:, etc.)
+  console.log(`   ?? METHOD 2b: Extracting VOICEOVER section...`);
   const voiceoverMatch = rawText.match(
-    /(?:🎙️\s*VOICEOVER|VOICEOVER\s*:)[\s\n]*([\s\S]*?)(?=(?:#️⃣|HASHTAG|#[A-Za-z]|$))/i
+    /(?:VOICEOVER\s*:?\s*)([\s\S]*?)(?=(?:HASHTAG|#[A-Za-z]|$))/i
   );
   
   if (voiceoverMatch) {
@@ -2778,21 +2778,21 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
     
     if (voiceText && voiceText.length > 10) {
       sections.voiceoverScript = voiceText;
-      console.log(`   ✅ Found VOICEOVER (${voiceText.length}ch)`);
+      console.log(`   ? Found VOICEOVER (${voiceText.length}ch)`);
     }
   }
 
-  // Extract HASHTAGS section (#️⃣ HASHTAGS or just #hashtags)
-  console.log(`   📍 METHOD 2c: Extracting HASHTAGS...`);
+  // Extract HASHTAGS section (#?? HASHTAGS or just #hashtags)
+  console.log(`   ?? METHOD 2c: Extracting HASHTAGS...`);
   const allTags = (rawText.match(/#[A-Za-z0-9]+/g) || []).map(tag => tag.substring(1));
   if (allTags.length > 0) {
     sections.hashtags = allTags;
-    console.log(`   ✅ Found ${allTags.length} hashtags`);
+    console.log(`   ? Found ${allTags.length} hashtags`);
   }
 
   // METHOD 3: If no segments found, try intelligent extraction from unstructured text
   if (sections.videoScripts.length === 0) {
-    console.log(`   📍 METHOD 3: No markers found, attempting intelligent extraction...`);
+    console.log(`   ?? METHOD 3: No markers found, attempting intelligent extraction...`);
     
     // If response was a long paragraph without structure, try to break it intelligently
     const paragraphs = rawText.split('\n\n').filter(p => p.trim().length > 20);
@@ -2802,7 +2802,7 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
     const segmentCount = Math.min(minSegmentsForDuration, allSegmentNames.length, paragraphs.length);
     const segmentNames = allSegmentNames.slice(0, segmentCount);
     
-    console.log(`   📊 Attempting to extract ${segmentCount} segments from ${paragraphs.length} paragraphs`);
+    console.log(`   ?? Attempting to extract ${segmentCount} segments from ${paragraphs.length} paragraphs`);
     
     paragraphs.slice(0, segmentCount).forEach((para, idx) => {
       const segName = segmentNames[idx] || 'segment';
@@ -2821,7 +2821,7 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
     });
     
     if (sections.videoScripts.length > 0) {
-      console.log(`   ✅ Extracted ${sections.videoScripts.length} segments from paragraphs`);
+      console.log(`   ? Extracted ${sections.videoScripts.length} segments from paragraphs`);
     }
   }
     
@@ -2835,18 +2835,18 @@ function parseDeepAnalysisResponse(rawText, analysis, videoDuration = 20) {
       
       if (voiceText.length > 20) {
         sections.voiceoverScript = voiceText;
-        console.log(`   ✅ Extracted voiceover from remaining text (${voiceText.length}ch)`);
+        console.log(`   ? Extracted voiceover from remaining text (${voiceText.length}ch)`);
       }
     }
 
-  console.log(`   📊 Parsing complete:`);
+  console.log(`   ?? Parsing complete:`);
   console.log(`      Video segments: ${sections.videoScripts.length}`);
   console.log(`      Voiceover length: ${sections.voiceoverScript.length}ch`);
   console.log(`      Hashtags: ${sections.hashtags.length}`);
 
   // Validate minimum requirements
   if (sections.videoScripts.length < 2) {
-    console.warn(`⚠️  PARSING WARNING: Got ${sections.videoScripts.length} segments, need at least 2`);
+    console.warn(`??  PARSING WARNING: Got ${sections.videoScripts.length} segments, need at least 2`);
   }
 
   return sections;
@@ -2940,12 +2940,12 @@ function parseHashtags(text) {
 }
 
 function buildDeepAnalysisPrompt(analysis, images, config) {
-  const { images: characterImages = [] } = images;  // ✅ Updated: 2 character images (wearing + holding)
+  const { images: characterImages = [] } = images;  // ? Updated: 2 character images (wearing + holding)
   const { videoDuration, voiceGender, voicePace, productFocus, videoProvider = 'grok' } = config;
 
-  // 🔥 FIX: Calculate segment count based on VIDEO PROVIDER clip duration
-  // Google Flow: 8s/clip → 20s = 3 segments, 30s = 4 segments
-  // Grok: 10s/clip → 20s = 2 segments, 30s = 3 segments
+  // ?? FIX: Calculate segment count based on VIDEO PROVIDER clip duration
+  // Google Flow: 8s/clip ? 20s = 3 segments, 30s = 4 segments
+  // Grok: 10s/clip ? 20s = 2 segments, 30s = 3 segments
   const generateTimePerVideo = getProviderClipDuration(videoProvider);
   const segmentCount = Math.max(2, Math.ceil(videoDuration / generateTimePerVideo));
 
@@ -2965,7 +2965,7 @@ CHARACTER INFORMATION:
 - Hair: ${analysis.character?.hair?.color} ${analysis.character?.hair?.style}
 
 AVAILABLE CHARACTER IMAGES:
-🔒 CHARACTER CONSISTENCY: Both images show THE SAME CHARACTER:
+?? CHARACTER CONSISTENCY: Both images show THE SAME CHARACTER:
 1. "Wearing" - Character WEARING the product (showing fit on body)
 2. "Holding" - Character HOLDING/DISPLAYING the product (close-up showcase)
 
@@ -2979,7 +2979,7 @@ YOUR TASK:
 Create ${segmentCount} connected video segments with COMPLETE VISUAL DIRECTIONS + SCRIPTS.
 Each segment flows naturally into the next (NOT disconnected pieces).
 
-⚠️ CRITICAL FORMAT - FOLLOW EXACTLY:
+?? CRITICAL FORMAT - FOLLOW EXACTLY:
 
 [SEGMENT_#] [TIME RANGE: Xs-Ys] [START_FRAME: wearing/holding/product]
 **VISUAL DIRECTION:**
@@ -3020,21 +3020,21 @@ ${(() => {
 
 VISUAL DIRECTION EXAMPLES:
 
-🎬 WEARING IMAGE SEGMENT:
+?? WEARING IMAGE SEGMENT:
 - Camera: Slow zoom-in from full-body to torso (2 seconds)
 - Character Pose: Standing, turning slowly to show product fit from different angles
-- Movement: Natural 90° turn, slight hand gestures to emphasize fit
+- Movement: Natural 90� turn, slight hand gestures to emphasize fit
 - Product Focus: Showing how product fits on body, flattering angle
 - Lip-sync: [Smiling while describing product quality - seconds 0-2]
 
-🎬 HOLDING IMAGE SEGMENT:
+?? HOLDING IMAGE SEGMENT:
 - Camera: Fixed close-up on hands and product
 - Character Pose: Holding product up slightly, fingers pointing to details
 - Movement: Slight hand rotation to show product from multiple angles
 - Product Focus: Close-up of material, color, quality details
 - Lip-sync: [Animated, excited expressions while highlighting features - seconds X-Y]
 
-🎬 PRODUCT SHOT SEGMENT:
+?? PRODUCT SHOT SEGMENT:
 - Camera Layer product shot over background (zoom to fill frame)
 - Character Pose: N/A for product-only shots, OR character partially visible
 - Movement: Subtle fade-in/fade-out, or gentle rotation
@@ -3043,7 +3043,7 @@ VISUAL DIRECTION EXAMPLES:
 
 ---
 
-📝 COMPLETE RESPONSE FORMAT:
+?? COMPLETE RESPONSE FORMAT:
 
 [SEGMENT_1] [TIME RANGE: 0-Xs] [START_FRAME: wearing]
 **VISUAL DIRECTION:**
@@ -3062,7 +3062,7 @@ VISUAL DIRECTION EXAMPLES:
 
 ---
 
-🎙️ VOICEOVER SCRIPT (VIETNAMESE ONLY):
+??? VOICEOVER SCRIPT (VIETNAMESE ONLY):
 Write complete ${voiceGender} narrator script (${voicePace} pace) for entire ${videoDuration}s video.
 - Must be 100% VIETNAMESE (NO ENGLISH)
 - Hook: 0-3s critical period - grab attention immediately
@@ -3071,27 +3071,27 @@ Write complete ${voiceGender} narrator script (${voicePace} pace) for entire ${v
 - Format: One flowing paragraph, conversational tone
 - Character will lip-sync parts of this narrator voiceover
 
-⚠️ VOICEOVER RULES:
-✓ EXCLUSIVELY in VIETNAMESE - not English
-✓ Natural Vietnamese expressions and slang
-✓ Synchronized with segment timing
-✓ One continuous script (not multiple versions)
-✓ Make segments about 250-300 total words for natural pacing
+?? VOICEOVER RULES:
+? EXCLUSIVELY in VIETNAMESE - not English
+? Natural Vietnamese expressions and slang
+? Synchronized with segment timing
+? One continuous script (not multiple versions)
+? Make segments about 250-300 total words for natural pacing
 
-#️⃣ HASHTAGS:
+#?? HASHTAGS:
 8-10 trending tags: #Fashion #Affiliate #MustHave #[5-7 more viral tags]
 Format all on one line.
 
 ---
 
-✅ RESPONSE VALIDATION:
-✓ Exactly ${segmentCount} segments (not more, not less)
-✓ Total time = ${videoDuration}s (no gaps, no overlaps)
-✓ Each segment has [START_FRAME], camera direction, pose, movement, script, lip-sync
-✓ Voiceover is 100% VIETNAMESE
-✓ Scripts are conversational and TikTok-paced
-✓ Only ONE version per segment
-✓ Character is THE SAME across all segments
+? RESPONSE VALIDATION:
+? Exactly ${segmentCount} segments (not more, not less)
+? Total time = ${videoDuration}s (no gaps, no overlaps)
+? Each segment has [START_FRAME], camera direction, pose, movement, script, lip-sync
+? Voiceover is 100% VIETNAMESE
+? Scripts are conversational and TikTok-paced
+? Only ONE version per segment
+? Character is THE SAME across all segments
 `;
 }
 
@@ -3151,7 +3151,7 @@ function buildSegmentVideoPrompt(segment, characterAnalysis, config) {
 
   const direction = segmentDirections[segment.segment] || 'Create an engaging video segment';
 
-  // 🔴 IMPROVED: Simpler, more concise prompt that Veo can handle better
+  // ?? IMPROVED: Simpler, more concise prompt that Veo can handle better
   return `VIDEO: ${segment.segment.toUpperCase()}
 Duration: ${videoDuration}s
 Script: "${segment.script}"
@@ -3173,11 +3173,11 @@ function buildVideoPromptFromAnalysis(deepAnalysis, characterAnalysis, config) {
   const productColor = product.primary_color || product.color || 'beautiful';
   
   // Build prompt from video scripts and voiceover
-  let prompt = `📺 VIDEO GENERATION PROMPT\n\n`;
+  let prompt = `?? VIDEO GENERATION PROMPT\n\n`;
   
   // Add video scripts with timing
   if (deepAnalysis.videoScripts && Array.isArray(deepAnalysis.videoScripts)) {
-    prompt += `🎬 VIDEO SEGMENTS:\n`;
+    prompt += `?? VIDEO SEGMENTS:\n`;
     deepAnalysis.videoScripts.forEach((script, idx) => {
       prompt += `\n[${script.segment.toUpperCase()}] (${script.duration}s)\n`;
       prompt += `${script.script}\n`;
@@ -3187,12 +3187,12 @@ function buildVideoPromptFromAnalysis(deepAnalysis, characterAnalysis, config) {
   
   // Add voiceover script
   if (deepAnalysis.voiceoverScript) {
-    prompt += `🎙️ VOICEOVER:\n`;
+    prompt += `??? VOICEOVER:\n`;
     prompt += `${deepAnalysis.voiceoverScript}\n\n`;
   }
   
   // Add visual directions
-  prompt += `👁️ VISUAL DIRECTION:\n`;
+  prompt += `??? VISUAL DIRECTION:\n`;
   prompt += `- Duration: ${videoDuration}s\n`;
   prompt += `- Format: TikTok vertical (9:16)\n`;
   prompt += `- Style: Professional, trendy, engaging\n`;
@@ -3203,13 +3203,13 @@ function buildVideoPromptFromAnalysis(deepAnalysis, characterAnalysis, config) {
   
   // Add hashtags
   if (deepAnalysis.hashtags && Array.isArray(deepAnalysis.hashtags)) {
-    prompt += `\n#️⃣ HASHTAGS:\n`;
+    prompt += `\n#?? HASHTAGS:\n`;
     prompt += deepAnalysis.hashtags.slice(0, 10).join(' ');
     prompt += `\n`;
   }
   
   // Add technical specifications
-  prompt += `\n⚙️ TECHNICAL SPECS:\n`;
+  prompt += `\n?? TECHNICAL SPECS:\n`;
   prompt += `- Resolution: 1080p preferred\n`;
   prompt += `- Frame rate: 24fps\n`;
   prompt += `- Transitions: Smooth, quick cuts for TikTok\n`;
@@ -3225,7 +3225,7 @@ export default {
   buildVideoPromptFromAnalysis,
   getFlowPreview,
   
-  // 💫 NEW: Helper functions for modular step endpoints
+  // ?? NEW: Helper functions for modular step endpoints
   /**
    * Build analysis prompt for Step 1
    */
@@ -3292,7 +3292,7 @@ Design Details:
 - Key features
 
 ===== RECOMMENDATION GENERATION =====
-Based on character × product compatibility, recommend:
+Based on character � product compatibility, recommend:
 
 1. SCENE/SETTING
 2. LIGHTING  
@@ -3394,4 +3394,5 @@ Return as JSON with:
     `;
   }
 };
+
 

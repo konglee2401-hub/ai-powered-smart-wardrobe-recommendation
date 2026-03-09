@@ -32,6 +32,14 @@ function PageLayout({ theme, onToggleTheme }) {
     return matchedRoute?.contentClassName || 'overflow-y-auto';
   }, [location.pathname]);
 
+  useEffect(() => {
+    const mainScroller = document.querySelector('.app-main');
+    if (mainScroller instanceof HTMLElement) {
+      mainScroller.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
   return (
     <div className={`app-shell theme-${theme} h-screen ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>
       <PageTitle />

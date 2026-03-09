@@ -24,8 +24,8 @@ class TrendYoutubeUploadService {
       process.env.YOUTUBE_OAUTH_TOKEN_PATH || 'config/youtube-token.json'
     );
 
-    this.trendMongoUri = process.env.TREND_AUTOMATION_MONGO_URI || 'mongodb://localhost:27017/smart_wardrobe';
-    this.trendDbName = process.env.TREND_AUTOMATION_DB_NAME || 'smart_wardrobe';
+    this.trendMongoUri = process.env.TREND_AUTOMATION_MONGO_URI || 'mongodb://localhost:27017/smart-wardrobe';
+    this.trendDbName = process.env.TREND_AUTOMATION_DB_NAME || 'smart-wardrobe';
     this.defaultPrivacy = process.env.YOUTUBE_UPLOAD_PRIVACY || 'private';
     this.defaultCategoryId = process.env.YOUTUBE_UPLOAD_CATEGORY_ID || '24';
   }

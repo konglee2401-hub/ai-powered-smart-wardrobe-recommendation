@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BACKEND_ROOT = path.join(__dirname, '..');
 
 // Google Drive folder IDs
 const FOLDERS = {
@@ -26,7 +27,7 @@ class GoogleDriveIntegration {
   constructor() {
     // NOTE: In production, integrate with googleapis client
     // For now, we simulate with local file system
-    this.localMediaDir = path.join(__dirname, '../../../backend/media');
+    this.localMediaDir = path.join(BACKEND_ROOT, 'media');
     this.ensureDirectories();
   }
 

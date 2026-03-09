@@ -12,7 +12,7 @@ export default function VideoPipelineLayout({
   children,
 }) {
   return (
-    <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden text-slate-100 min-[968px]:-mx-6 min-[968px]:-mb-6 min-[968px]:-mt-6" data-main-body>
+    <div className="video-pipeline-shell image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 min-w-0 grid-rows-[auto,minmax(0,1fr)] overflow-x-hidden overflow-y-hidden text-slate-100 min-[968px]:-mx-6 min-[968px]:-mb-6 min-[968px]:-mt-6" data-main-body>
       <PageHeaderBar
         icon={<Workflow className="h-4 w-4 text-sky-400" />}
         title={title}
@@ -24,8 +24,8 @@ export default function VideoPipelineLayout({
         iconClassName=""
       />
 
-      <div className="mx-auto grid min-h-0 max-w-[1720px] grid-cols-1 gap-4 px-2.5 py-3 min-[968px]:grid-cols-[244px_minmax(0,1fr)] min-[968px]:px-3.5">
-        <aside className="studio-card-shell h-fit rounded-[24px] p-3 min-[968px]:sticky min-[968px]:top-[84px]">
+      <div className="mx-auto grid h-full min-h-0 min-w-0 max-w-[1720px] grid-cols-1 gap-4 overflow-x-hidden px-2.5 pb-3 pt-0 min-[968px]:grid-cols-[192px_minmax(0,1fr)] min-[968px]:px-3.5 min-[968px]:pb-3.5">
+        <aside className="studio-card-shell h-fit self-start rounded-[22px] p-2.5 min-[968px]:sticky min-[968px]:top-0">
           <nav className="space-y-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -35,9 +35,9 @@ export default function VideoPipelineLayout({
                   to={item.to}
                   end={item.to === '/video-pipeline'}
                   className={({ isActive }) =>
-                    `group flex items-center gap-3 rounded-[22px] border px-3 py-3 text-[13px] transition ${
+                    `group flex items-center gap-2.5 rounded-[18px] border px-2.5 py-2 text-[12px] font-medium leading-4 transition ${
                       isActive
-                        ? 'apple-option-chip apple-option-chip-selected apple-option-chip-cool text-slate-900'
+                        ? 'apple-option-chip selected apple-option-chip-selected apple-option-chip-cool border-sky-300/45 bg-sky-100/90 text-sky-950 shadow-[0_10px_24px_rgba(14,165,233,0.18)]'
                         : 'apple-option-chip text-slate-700 hover:text-slate-900'
                     }`
                   }
@@ -45,15 +45,15 @@ export default function VideoPipelineLayout({
                   {({ isActive }) => (
                     <>
                       <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[14px] border transition ${
                           isActive
-                            ? 'border-sky-300/35 bg-white/50 text-sky-700 shadow-[0_12px_26px_rgba(96,165,250,0.18)]'
+                            ? 'border-sky-300/55 bg-white/75 text-sky-700 shadow-[0_8px_18px_rgba(96,165,250,0.2)]'
                             : 'border-white/20 bg-white/30 text-slate-500 group-hover:text-slate-700'
                         }`}
                       >
-                        <Icon className={`h-4 w-4 ${isActive ? 'stroke-[2.4] text-sky-700' : ''}`} />
+                        <Icon className={`h-[15px] w-[15px] ${isActive ? 'stroke-[2.4] text-sky-700' : ''}`} />
                       </span>
-                      <span className="truncate">{item.label}</span>
+                      <span className="min-w-0 truncate">{item.label}</span>
                     </>
                   )}
                 </NavLink>
@@ -62,7 +62,7 @@ export default function VideoPipelineLayout({
           </nav>
         </aside>
 
-        <main className="min-w-0 space-y-4 overflow-hidden">{children}</main>
+        <main className="min-h-0 min-w-0 space-y-4 overflow-x-hidden overflow-y-auto">{children}</main>
       </div>
     </div>
   );

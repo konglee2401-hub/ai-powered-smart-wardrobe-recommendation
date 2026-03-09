@@ -6,12 +6,17 @@
  * - Coordinate between all services
  */
 
+import path from 'path';
+import { fileURLToPath } from 'url';
 import VideoMashupService from './videoMashupService.js';
 import MediaLibraryService from './mediaLibraryService.js';
 import VideoQueueService from './videoQueueService.js';
 import CronJobService from './cronJobService.js';
 import MultiAccountService from './multiAccountService.js';
 import AutoUploadService from './autoUploadService.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BACKEND_ROOT = path.join(__dirname, '..');
 
 class ProcessOrchestratorService {
   constructor() {
@@ -160,7 +165,7 @@ class ProcessOrchestratorService {
         video1Path: video1,
         video2Path: video2,
         layout: config.layout || 'side-by-side', // side-by-side or pip
-        outputPath: config.outputPath || `backend/media/mashups/mashup-${Date.now()}.mp4`,
+        outputPath: config.outputPath || path.join(BACKEND_ROOT, 'media', 'mashups', `mashup-${Date.now()}.mp4`),
         audioPath: audioTrack,
         audioVolume: config.audioVolume || 0.8,
         transition: config.transition || 'fade',

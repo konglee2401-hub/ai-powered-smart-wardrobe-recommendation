@@ -78,6 +78,8 @@ const TrendChannelSchema = new mongoose.Schema({
 TrendChannelSchema.index({ platform: 1, channelId: 1 }, { unique: true });
 TrendChannelSchema.index({ isActive: 1, priority: -1, subscriberCount: -1 });
 
-const TrendChannel = mongoose.models.TrendChannel || mongoose.model('TrendChannel', TrendChannelSchema);
+// Always register with explicit collection name
+// If already registered, mongoose will reuse the existing model
+const TrendChannel = mongoose.model('TrendChannel', TrendChannelSchema, 'trendchannels');
 
 export default TrendChannel;
