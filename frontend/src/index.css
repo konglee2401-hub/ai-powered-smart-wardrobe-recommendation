@@ -2508,6 +2508,77 @@ html[data-theme="light"] .analytics-page-shell [class*="bg-white/[0.0"] {
   color: #475569 !important;
 }
 
+/* SetupAuthentication Light Theme */
+html[data-theme="light"] .setup-authentication-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%) !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell h1,
+html[data-theme="light"] .setup-authentication-shell h2,
+html[data-theme="light"] .setup-authentication-shell h3,
+html[data-theme="light"] .setup-authentication-shell .text-2xl {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell p,
+html[data-theme="light"] .setup-authentication-shell span,
+html[data-theme="light"] .setup-authentication-shell div:not([class*="bg-"]) {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-900"],
+html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-800"],
+html[data-theme="light"] .setup-authentication-shell [class*="bg-gray-700"] {
+  background: white !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell [class*="border-gray-700"] {
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell button {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell button:hover {
+  background: #f1f5f9 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell input,
+html[data-theme="light"] .setup-authentication-shell textarea,
+html[data-theme="light"] .setup-authentication-shell select {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell input::placeholder,
+html[data-theme="light"] .setup-authentication-shell textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell textarea {
+  background: white !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell [class*="text-gray-"] {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell [class*="text-purple-"] {
+  color: #7c3aed !important;
+}
+
+html[data-theme="light"] .setup-authentication-shell label {
+  color: #334155 !important;
+}
+
 html[data-theme="light"] .options-shell [class*="border-red-"],
 html[data-theme="light"] .generation-history-shell [class*="border-red-"] {
   border-color: rgba(220, 38, 38, 0.3) !important;

@@ -650,8 +650,8 @@ export default function OneClickCreatorPage() {
   const sidebarCardClass = 'studio-card-shell rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
   const accentCardClass = 'studio-card-shell rounded-[1.25rem] bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
   const stepUploadSectionClass = 'studio-card-shell rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_34px_rgba(100,156,198,0.10)]';
-  const stepUploadCardClass = 'studio-card-shell flex h-full min-h-[344px] flex-col gap-2 rounded-[1.25rem] p-3 lg:min-h-[356px]';
-  const stepUploadDropzoneClass = 'studio-dropzone group relative flex min-h-[220px] flex-1 items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/40 p-3 text-center transition lg:min-h-[232px]';
+  const stepUploadCardClass = 'studio-card-shell flex h-full flex-col rounded-[1.25rem] p-3';
+  const stepUploadDropzoneClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/40 p-3 text-center transition';
   const stepUploadActionClass = 'apple-option-chip inline-flex items-center justify-center gap-2 rounded-[0.95rem] px-3 py-2 text-xs font-semibold text-slate-700 transition disabled:opacity-50';
   const sessionShellClass = 'studio-card-shell rounded-[1.35rem] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_36px_rgba(100,156,198,0.10)]';
   const optionButtonBaseClass = 'apple-option-chip w-full rounded-[1rem] px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -2176,16 +2176,16 @@ export default function OneClickCreatorPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-stretch">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <div className="flex h-full min-h-0 flex-col gap-2">
                   <div className={stepUploadCardClass}>
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
+                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
                     <Upload className="h-3.5 w-3.5 text-amber-500" />
                     Character Image
                   </div>
                   <div
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
-                    className={stepUploadDropzoneClass}
+                    className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
                   >
                     {characterImage ? (
                       <>
@@ -2221,7 +2221,7 @@ export default function OneClickCreatorPage() {
                     />
                   </div>
                   </div>
-                  <div className="grid min-h-[40px] grid-cols-2 gap-2">
+                  <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
                     <button
                       onClick={() => {
                         if (!isGenerating) {
@@ -2251,7 +2251,7 @@ export default function OneClickCreatorPage() {
 
                 <div className="flex h-full min-h-0 flex-col gap-2">
                   <div className={stepUploadCardClass}>
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-600">
+                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-600">
                     <Upload className="h-3.5 w-3.5 text-cyan-600" />
                     Product Image
                   </div>
@@ -2272,7 +2272,7 @@ export default function OneClickCreatorPage() {
                       };
                       input.click();
                     }}
-                    className={stepUploadDropzoneClass}
+                    className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
                   >
                     {productImage ? (
                       <>
@@ -2300,7 +2300,7 @@ export default function OneClickCreatorPage() {
                       }
                     }}
                     disabled={isGenerating}
-                    className={stepUploadActionClass}
+                    className={`${stepUploadActionClass} mt-3`}
                   >
                     <ImageIcon className="w-4 h-4" />
                     {t('oneClickCreator.chooseFromGallery')}
@@ -2313,10 +2313,10 @@ export default function OneClickCreatorPage() {
                       <Wand2 className="w-3 h-3 text-violet-600" /> Scene Reference
                     </p>
                     <p className="mb-2 text-[11px] leading-4 text-slate-500">Optional image to keep background and lighting consistent across generations.</p>
-                    <div className="flex flex-1 min-w-0 overflow-hidden">
+                    <div className="mt-1 flex min-w-0 overflow-hidden">
                       <div
                         onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                        className={`${stepUploadDropzoneClass} p-0`}
+                        className={`${stepUploadDropzoneClass} mt-3 h-[128px] p-0 hover:bg-white/[0.03]`}
                       >
                         {sceneImage ? (
                           <>
@@ -2369,7 +2369,7 @@ export default function OneClickCreatorPage() {
                       }}
                     />
                   </div>
-                  <div className="min-h-[40px]" />
+                  <div className="mt-3 min-h-[40px]" />
                 </div>
               </div>
               </div>

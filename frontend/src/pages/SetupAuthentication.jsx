@@ -198,7 +198,7 @@ export default function SetupAuthentication() {
   };
 
   return (
-    <div className="h-full bg-gray-900 text-white">
+    <div className="setup-authentication-shell h-full bg-gray-900 text-white">
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="flex items-center gap-3 mb-6">
           <Settings className="w-6 h-6 text-purple-400" />
