@@ -1,5 +1,6 @@
 ﻿import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ModalPortal from './ModalPortal';
 import {
   Copy,
@@ -147,6 +148,7 @@ export default function GenerationResult({
   driveUploadStatus = null,
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [downloadingIndex, setDownloadingIndex] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -272,7 +274,7 @@ export default function GenerationResult({
               className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/14 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
             >
               {downloadingIndex !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              <span>Download Selected</span>
+              <span>{t('imageGeneration.downloadSelected')}</span>
             </button>
             <button
               type="button"
@@ -281,7 +283,7 @@ export default function GenerationResult({
               className="flex items-center justify-center gap-2 rounded-2xl bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
             >
               <Copy className="h-4 w-4" />
-              <span>Copy Image URL</span>
+              <span>{t('imageGeneration.copyImageUrl')}</span>
             </button>
           </div>
         </section>
@@ -333,7 +335,7 @@ export default function GenerationResult({
                   type="button"
                   onClick={() => copyImageUrl(generationPrompt)}
                   className="rounded-full bg-white/[0.05] p-2 text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
-                  title="Copy prompt"
+                  title={t('imageGeneration.copyPrompt')}
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </button>
@@ -534,7 +536,7 @@ export default function GenerationResult({
                 className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/18 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/24 disabled:opacity-50"
               >
                 {downloadingIndex === modalImageIndex ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                <span>Download</span>
+                <span>{t('imageGeneration.downloadImage')}</span>
               </button>
               <button
                 type="button"
@@ -542,7 +544,7 @@ export default function GenerationResult({
                 className="flex items-center justify-center gap-2 rounded-2xl bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08]"
               >
                 <Copy className="h-4 w-4" />
-                <span>Copy URL</span>
+                <span>{t('imageGeneration.copyImageUrl')}</span>
               </button>
               <button
                 type="button"

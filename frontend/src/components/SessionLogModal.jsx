@@ -22,6 +22,7 @@ import {
   HardDrive,
   Check,
 } from 'lucide-react';
+import { VIDEO_SCRIPT_TEMPLATES } from '../constants/videoScriptTemplates';
 
 const formatErrorMessage = (value) => {
   if (!value) return null;
@@ -67,6 +68,9 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   const [error, setError] = useState(null);
   const [activeStep, setActiveStep] = useState('step1');
   const [copiedId, setCopiedId] = useState(null);
+  const [step3TemplateId, setStep3TemplateId] = useState('auto');
+  const [step3RerunLoading, setStep3RerunLoading] = useState(false);
+  const [step3RerunError, setStep3RerunError] = useState(null);
   const isLightTheme = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light';
 
   const effectiveFlowId = flowId || sessionId;
@@ -81,6 +85,8 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
     const completedSteps = AFFILIATE_STEPS.filter(({ key }) => affiliateStatus.flowState?.[key]?.completed);
     const inferredStep = inferAffiliateStepKey(affiliateStatus.flowState, affiliateStatus.sessionStatus || affiliateStatus.status);
     setActiveStep(completedSteps[completedSteps.length - 1]?.key || inferredStep || 'step1');
+    const currentTemplateId = affiliateStatus.flowState?.step3?.metadata?.scriptTemplate?.id || 'auto';
+    setStep3TemplateId(currentTemplateId);
   }, [affiliateStatus]);
 
   const loadSessionPreview = async () => {
@@ -128,6 +134,34 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
       window.setTimeout(() => setCopiedId(null), 1500);
     } catch (err) {
       console.error('Copy failed:', err);
+    }
+  };
+
+  const rerunStep3 = async () => {
+    if (!effectiveFlowId) return;
+    setStep3RerunLoading(true);
+    setStep3RerunError(null);
+    try {
+      const response = await fetch('/api/ai/affiliate-video-tiktok/step-3-deep-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flowId: effectiveFlowId,
+          scriptTemplateId: step3TemplateId || 'auto'
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to re-run step 3');
+      }
+
+      await loadSessionPreview();
+      setActiveStep('step3');
+    } catch (err) {
+      setStep3RerunError(err.message || 'Failed to re-run step 3');
+    } finally {
+      setStep3RerunLoading(false);
     }
   };
 
@@ -347,14 +381,60 @@ function renderAffiliateStep({ activeStep, stepData, flowState, copyToClipboard,
         <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
           <div className="space-y-4">
             <PromptPanel title="Deep Analysis Prompt" value={stepData?.deepAnalysisPrompt} copyId="step3-prompt" copyToClipboard={copyToClipboard} copiedId={copiedId} minHeight="min-h-[200px]" />
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Template Selector</div>
+                  <div className="mt-1 text-xs text-slate-400">Chọn lại kịch bản và chạy lại Step 3.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={rerunStep3}
+                  disabled={step3RerunLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/15 px-3 py-2 text-[11px] font-semibold text-amber-100 transition hover:border-amber-300/60 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {step3RerunLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Re-run Step 3
+                </button>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {VIDEO_SCRIPT_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => setStep3TemplateId(template.id)}
+                    className={`rounded-xl border px-3 py-2 text-left text-[11px] transition ${
+                      step3TemplateId === template.id
+                        ? 'border-sky-400/60 bg-sky-400/10 text-sky-100'
+                        : 'border-white/10 bg-white/5 text-slate-200 hover:border-slate-500/60'
+                    }`}
+                  >
+                    <div className="font-semibold">{template.title}</div>
+                    <div className="mt-1 text-[10px] text-slate-400">{template.description}</div>
+                  </button>
+                ))}
+              </div>
+              {step3RerunError ? (
+                <div className="mt-3 rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
+                  {step3RerunError}
+                </div>
+              ) : null}
+            </div>
             <InfoList
               title="Metadata"
               items={[
                 ['Language', stepData?.language],
                 ['Scripts', String(stepData?.scripts?.length || 0)],
                 ['Duration', formatSeconds(stepData?.duration)],
+                ['Script Template', stepData?.metadata?.scriptTemplate?.name || stepData?.metadata?.scriptTemplate?.id || ''],
+                ['Template Reason', stepData?.metadata?.scriptTemplate?.reason || ''],
                 ['Hashtags', Array.isArray(stepData?.hashtags) ? stepData.hashtags.join(', ') : ''],
               ]}
+            />
+            <TemplateScoringPanel
+              items={stepData?.metadata?.scriptTemplateScoring || []}
+              copyToClipboard={copyToClipboard}
+              copiedId={copiedId}
             />
             <JsonPanel title="Step Metadata" value={stepData?.metadata} copyId="step3-metadata" copyToClipboard={copyToClipboard} copiedId={copiedId} />
           </div>
@@ -527,6 +607,47 @@ function JsonPanel({ title, value, copyId, copyToClipboard, copiedId }) {
           <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-slate-300">{JSON.stringify(value, null, 2)}</pre>
         ) : (
           <EmptyState label="No data available" compact />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TemplateScoringPanel({ items = [], copyToClipboard, copiedId }) {
+  const scoringItems = Array.isArray(items) ? items : [];
+  const maxScore = scoringItems.reduce((max, item) => Math.max(max, Number(item?.score || 0)), 0) || 1;
+  const jsonValue = scoringItems.length ? scoringItems : [];
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div className="text-sm font-semibold text-white">Template Scoring</div>
+        <CopyButton text={JSON.stringify(jsonValue, null, 2)} copyId="step3-template-scoring" copyToClipboard={copyToClipboard} copiedId={copiedId} />
+      </div>
+      <div className="space-y-3 p-4">
+        {scoringItems.length ? scoringItems.map((item) => {
+          const score = Number(item?.score || 0);
+          const width = Math.min(100, Math.round((score / maxScore) * 100));
+          return (
+            <div key={item.id} className="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span className="font-semibold text-slate-100">{item.name || item.id}</span>
+                <span>Score: {score}</span>
+              </div>
+              <div className="mt-2 h-2 w-full rounded-full bg-slate-800">
+                <div className="h-2 rounded-full bg-gradient-to-r from-sky-500 to-emerald-400" style={{ width: `${width}%` }} />
+              </div>
+              {item.matches ? (
+                <div className="mt-2 text-[10px] text-slate-400">
+                  {item.matches.keywordHits ? `keywords: ${item.matches.keywordHits}` : null}
+                  {item.matches.tagHits ? ` • tags: ${item.matches.tagHits}` : null}
+                  {Array.isArray(item.matches.boosts) && item.matches.boosts.length ? ` • boosts: ${item.matches.boosts.map((b) => b.id).join(', ')}` : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        }) : (
+          <EmptyState label="No scoring data available" compact />
         )}
       </div>
     </div>

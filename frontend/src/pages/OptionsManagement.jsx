@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
@@ -183,7 +183,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
         body: JSON.stringify({ mode, styleDirection, improvementNotes })
       });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to generate scene lock prompt');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.promptGenerateFailed', 'Failed to generate prompt'));
       setPromptSuggestion(data.data.promptSuggestion || '');
       setSceneLockedPrompt(data.data.sceneLockedPrompt || '');
       setTechnicalDetails(JSON.stringify(data.data.technicalDetails || {}, null, 2));
@@ -211,7 +211,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
         })
       });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to generate images');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.imageGenerateFailed', 'Failed to generate images'));
       showSuccess(t('optionsManagement.imagesGenerated', 'Images generated successfully'));
       setPreviewIndexByAspect((prev) => ({ ...prev, [aspectRatio]: 0 }));
       await onRefresh();
@@ -244,7 +244,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
         })
       });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Save failed');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.saveFailed', 'Failed to save settings'));
       showSuccess(t('optionsManagement.saved', 'Saved successfully'));
       await onRefresh();
     } catch (err) {
@@ -263,7 +263,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
         body: JSON.stringify({ imageUrl, aspectRatio })
       });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to lock image');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.lockFailed', 'Failed to lock image'));
       showSuccess(t('optionsManagement.imageLocked', 'Image locked as default'));
       await onRefresh();
     } catch (err) {
@@ -280,7 +280,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
         body: JSON.stringify({ imageUrl })
       });
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to delete locked image');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.deleteLockedFailed', 'Failed to delete locked image'));
       showSuccess(t('optionsManagement.imageDeleted', 'Deleted locked image'));
       await onRefresh();
     } catch (err) {
@@ -487,7 +487,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                   {ratioImageUrl ? (
                     <img
                       src={ratioImageUrl}
-                      alt={`Locked ${ratio}`}
+                      alt={t('optionsManagement.lockedAlt', `Locked ${ratio}`)}
                       onClick={() => setModalImageUrl(ratioImageUrl)}
                       className="w-full h-40 object-contain rounded-lg cursor-zoom-in bg-slate-950"
                     />
@@ -635,7 +635,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
             >
               <X size={20} />
             </button>
-            <img src={modalImageUrl} alt="Preview fullscreen" className="max-w-full max-h-[90vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
+            <img src={modalImageUrl} alt={t('optionsManagement.previewFullscreen', 'Preview fullscreen')} className="max-w-full max-h-[90vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
           </div>
         </div>
       )}
@@ -658,7 +658,7 @@ export default function OptionsManagement() {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`);
       const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to load scenes');
+      if (!data.success) throw new Error(data.message || t('optionsManagement.loadScenesFailed', 'Failed to load scenes'));
       const loadedScenes = data.data || [];
       setScenes(loadedScenes);
       if (!selectedSceneValue && loadedScenes.length > 0) {

@@ -118,11 +118,12 @@ function getProviderClipDuration(provider = 'grok') {
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import AssetManager from '../utils/assetManager.js';
-import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse } from './affiliateStoryboardService.js';
+import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse, selectVideoScriptTemplate } from './affiliateStoryboardService.js';
 import { extractLastFrame, concatenateVideos, isFfmpegAvailable } from './videoContinuityService.js';
 import SessionLogService from './sessionLogService.js';
 import VietnamesePromptBuilder from './vietnamesePromptBuilder.js';
 import { renderAssignedPromptTemplate } from './promptTemplateResolver.js';
+import { getVideoScriptTemplateById } from '../constants/videoScriptTemplates.js';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -363,6 +364,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       language = 'en',  // ?? Support language selection: 'en' or 'vi'
       imageProvider = 'bfl',  // ?? Default to BFL Playground
       videoProvider = 'grok',  // ?? Default to Grok for video
+      scriptTemplateId = 'auto',
       options = {},
       disableSceneReferenceTransfer = false,  // default false: allow auto scene locked image fallback
       imageSource = { character: 'upload', product: 'upload' },  // ?? Track image source from frontend
@@ -1776,12 +1778,38 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     console.log(`  Focus: ${productFocus}`);
     console.log(`  Frame library: ${frameLibrary.length} frames`);
 
+    const autoTemplate = scriptTemplateId === 'auto'
+      ? await selectVideoScriptTemplate({ analysis, productFocus })
+      : null;
+    const resolvedScriptTemplateId = scriptTemplateId === 'auto'
+      ? (autoTemplate?.template?.id || 'auto')
+      : scriptTemplateId;
+
+    if (autoTemplate?.template) {
+      await logger.info(
+        `Auto-matched script template: ${autoTemplate.template.name}`,
+        'step-3-template',
+        {
+          templateId: autoTemplate.template.id,
+          reason: autoTemplate.reason,
+          topCandidates: (autoTemplate.scored || []).slice(0, autoTemplate.config?.topCandidates || 3).map((item) => ({
+            id: item.template.id,
+            name: item.template.name,
+            score: item.score,
+            matches: item.matches
+          }))
+        }
+      );
+    }
+
     const plannerPrompt = buildSegmentPlanningPrompt({
       analysis,
       blueprint: storyboardBlueprint,
       frameLibrary,
       productFocus,
-      language: normalizedPromptLanguage
+      language: normalizedPromptLanguage,
+      scriptTemplateId: resolvedScriptTemplateId,
+      autoSelection: autoTemplate
     });
 
     let plannerResult = '';
@@ -1858,6 +1886,21 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
 
     const voiceoverScript = parsedPlan.voiceoverScript || segmentPlan.map((segment) => segment.voiceoverText).join(' ');
     const hashtags = Array.isArray(parsedPlan.hashtags) ? parsedPlan.hashtags : [];
+    const resolvedTemplateId = parsedPlan.templateId || (resolvedScriptTemplateId !== 'auto' ? resolvedScriptTemplateId : null);
+    const resolvedTemplate = resolvedTemplateId ? getVideoScriptTemplateById(resolvedTemplateId) : null;
+    const scriptTemplateMeta = {
+      id: resolvedTemplateId,
+      name: parsedPlan.templateName || resolvedTemplate?.name || null,
+      reason: parsedPlan.templateReason || autoTemplate?.reason || null
+    };
+    const scoringSummary = autoTemplate
+      ? (autoTemplate.scored || []).slice(0, autoTemplate.config?.topCandidates || 3).map((item) => ({
+        id: item.template.id,
+        name: item.template.name,
+        score: item.score,
+        matches: item.matches
+      }))
+      : [];
     const deepAnalysis = {
       success: true,
       data: {
@@ -1867,7 +1910,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         videoScripts: segmentPlan,
         voiceoverScript,
         hashtags,
-        metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
+        metadata: {
+          storyboardTemplate: storyboardBlueprint.templateKey,
+          scriptTemplate: scriptTemplateMeta,
+          scriptTemplateScoring: scoringSummary
+        },
         deepAnalysisPrompt: plannerPrompt,
         rawPlannerResponse: plannerResult
       }
@@ -1880,6 +1927,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       voiceoverScript: voiceoverScript.substring(0, 500),
       hashtags,
       storyboardTemplate: storyboardBlueprint.templateKey,
+      scriptTemplateId: scriptTemplateMeta.id,
+      scriptTemplateName: scriptTemplateMeta.name,
+      scriptTemplateScoring: scoringSummary,
       duration: step3Duration
     });
 
@@ -1891,7 +1941,8 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         videoScripts: segmentPlan,
         segmentPlan,
         hashtags,
-        voiceoverScript
+        voiceoverScript,
+        metadata: deepAnalysis.data.metadata
       }
     });
     // ============================================================

@@ -1,4 +1,6 @@
 import path from 'path';
+import VIDEO_SCRIPT_TEMPLATES, { getVideoScriptTemplateById } from '../constants/videoScriptTemplates.js';
+import { getVideoScriptScoringConfig } from './videoScriptScoringService.js';
 
 function sanitizeText(value, fallback = '') {
   return String(value || fallback).replace(/\s+/g, ' ').trim();
@@ -13,6 +15,100 @@ function inferTemplateKey(productFocus = 'full-outfit') {
     return 'tiktok_shoe_focus_3seg';
   }
   return 'tiktok_full_outfit_3seg';
+}
+
+function normalizeMatchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u00c0-\u1ef9\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMatchCorpus(analysis = {}, productFocus = '') {
+  const product = analysis.product || {};
+  const character = analysis.character || {};
+  const recs = analysis.recommendations || {};
+  return normalizeMatchText([
+    product.garment_type,
+    product.name,
+    product.category,
+    product.primary_color,
+    product.fabric_type,
+    product.key_details,
+    product.style_category,
+    productFocus,
+    character.gender,
+    character.age,
+    recs.scene?.choice || recs.scene,
+    recs.mood?.choice || recs.mood,
+    recs.lighting?.choice || recs.lighting
+  ].filter(Boolean).join(' '));
+}
+
+export async function selectVideoScriptTemplate({ analysis = {}, productFocus = 'full-outfit' } = {}) {
+  const corpus = buildMatchCorpus(analysis, productFocus);
+  const scoringConfig = await getVideoScriptScoringConfig();
+
+  const boostMatchers = {
+    kol: (text) => text.includes('kol') || text.includes('persona') || text.includes('influencer'),
+    'ai-tool': (text) => text.includes('tool') || text.includes('saas') || text.includes('automation'),
+    'fashion-movement': (text) => text.includes('outfit') || text.includes('fashion') || text.includes('dress'),
+    'deal-urgency': (text) => text.includes('deal') || text.includes('sale') || text.includes('discount')
+  };
+
+  const scored = VIDEO_SCRIPT_TEMPLATES.map((template) => {
+    const keywords = (template.keywords || []).map((k) => normalizeMatchText(k));
+    const tagHits = (template.tags || []).filter((tag) => corpus.includes(normalizeMatchText(tag))).length;
+    const keywordHits = keywords.filter((k) => k && corpus.includes(k)).length;
+    const baseScore = tagHits * (scoringConfig.weights?.tag || 2)
+      + keywordHits * (scoringConfig.weights?.keyword || 3);
+
+    const boostResults = (scoringConfig.boosts || [])
+      .map((boost) => ({
+        id: boost.id,
+        score: boost.score || 0,
+        matched: (() => {
+          if (typeof boost.match === 'function') {
+            return Boolean(boost.match(corpus, template, analysis));
+          }
+          if (Array.isArray(boost.keywords)) {
+            const normalized = boost.keywords.map((k) => normalizeMatchText(k)).filter(Boolean);
+            if (normalized.some((k) => corpus.includes(k))) return true;
+          }
+          if (Array.isArray(boost.tags)) {
+            const normalizedTags = boost.tags.map((t) => normalizeMatchText(t)).filter(Boolean);
+            if (normalizedTags.some((t) => corpus.includes(t))) return true;
+          }
+          return boostMatchers[boost.id] ? Boolean(boostMatchers[boost.id](corpus, template, analysis)) : false;
+        })()
+      }))
+      .filter((boost) => boost.matched);
+
+    const boostScore = boostResults.reduce((sum, boost) => sum + boost.score, 0);
+
+    return {
+      template,
+      score: baseScore + boostScore,
+      matches: {
+        tagHits,
+        keywordHits,
+        boosts: boostResults
+      }
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  const winner = scored[0]?.template || VIDEO_SCRIPT_TEMPLATES[0];
+  const reason = scored[0]
+    ? `Matched ${scored[0].matches.keywordHits} keywords, ${scored[0].matches.tagHits} tags, boosts: ${scored[0].matches.boosts.map((b) => b.id).join(', ') || 'none'}.`
+    : 'Default template selection.';
+
+  return {
+    template: winner,
+    reason,
+    scored,
+    config: scoringConfig
+  };
 }
 
 export function getStoryboardSegmentCount(videoDuration = 20, clipDuration = 8) {
@@ -249,7 +345,7 @@ export function buildFrameGenerationPlan(analysis = {}, blueprint = {}, options 
   };
 }
 
-export function buildSegmentPlanningPrompt({ analysis = {}, blueprint = {}, frameLibrary = [], productFocus = 'full-outfit', language = 'vi' } = {}) {
+export function buildSegmentPlanningPrompt({ analysis = {}, blueprint = {}, frameLibrary = [], productFocus = 'full-outfit', language = 'vi', scriptTemplateId = 'auto', autoSelection = null } = {}) {
   const product = analysis.product || {};
   const frameSummary = frameLibrary.map((frame) => ({
     key: frame.frameKey,
@@ -260,6 +356,16 @@ export function buildSegmentPlanningPrompt({ analysis = {}, blueprint = {}, fram
     textAllowed: frame.textRequired || false
   }));
 
+  const templateList = VIDEO_SCRIPT_TEMPLATES
+    .map((template) => ({
+      id: template.id,
+      name: template.name,
+      summary: template.summary,
+      bestFor: template.bestFor
+    }));
+  const requestedTemplate = scriptTemplateId && scriptTemplateId !== 'auto'
+    ? getVideoScriptTemplateById(scriptTemplateId)
+    : null;
   return `
 You are a senior TikTok affiliate video director planning Google Flow video clips in FRAMES mode.
 
@@ -280,9 +386,30 @@ ${JSON.stringify(frameSummary, null, 2)}
 ANALYSIS
 ${JSON.stringify(analysis, null, 2)}
 
+SCRIPT TEMPLATE LIBRARY (choose ONE best template, or follow requested template if provided)
+${JSON.stringify(templateList, null, 2)}
+
+TEMPLATE SELECTION RULES
+- If a requested template is provided, use it strictly.
+- If not provided (auto), choose the best template based on product type, target context, and hook potential.
+- You must output templateId, templateName, and templateReason in the response JSON.
+
+REQUESTED TEMPLATE
+${requestedTemplate ? JSON.stringify(requestedTemplate, null, 2) : 'AUTO'}
+
+AUTO-MATCH RECOMMENDATION
+${autoSelection ? JSON.stringify({
+  recommendedTemplateId: autoSelection.template.id,
+  recommendedTemplateName: autoSelection.template.name,
+  reason: autoSelection.reason
+}, null, 2) : 'N/A'}
+
 RESPONSE FORMAT
 Return ONLY valid JSON:
 {
+  "templateId": "selected-template-id",
+  "templateName": "Selected Template Name",
+  "templateReason": "Why this template fits the product and audience",
   "segments": [
     {
       "segmentIndex": 1,

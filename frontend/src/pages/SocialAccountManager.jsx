@@ -186,10 +186,10 @@ export default function SocialAccountManager() {
 
   const getStatusPillClasses = (tone) => {
     const toneMap = {
-      emerald: 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200',
-      amber: 'bg-amber-500/20 border-amber-500/50 text-amber-200',
-      violet: 'bg-violet-500/20 border-violet-500/50 text-violet-200',
-      sky: 'bg-sky-500/20 border-sky-500/50 text-sky-200',
+      emerald: 'bg-emerald-100/60 border-emerald-300/50 text-emerald-700',
+      amber: 'bg-amber-100/60 border-amber-300/50 text-amber-700',
+      violet: 'bg-violet-100/60 border-violet-300/50 text-violet-700',
+      sky: 'bg-sky-100/60 border-sky-300/50 text-sky-700',
     };
     return toneMap[tone] || toneMap.sky;
   };
@@ -198,7 +198,7 @@ export default function SocialAccountManager() {
     <div className="page-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6">
       {/* Header */}
       <PageHeaderBar 
-        icon={<Globe className="h-4 w-4 text-sky-400" />}
+        icon={<Globe className="h-4 w-4 text-sky-500" />}
         title="Social Media Accounts"
         meta="Connect and manage your social media accounts for automated publishing"
         className="h-16"
@@ -212,20 +212,20 @@ export default function SocialAccountManager() {
           {message && (
             <div className={`rounded-2xl border px-4 py-3 text-sm transition ${
               message.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+                ? 'border-emerald-300/40 bg-emerald-100/40 text-emerald-900'
+                : 'border-amber-300/40 bg-amber-100/40 text-amber-900'
             }`}>
-              {message.type === 'success' ? 'âœ…' : 'âŒ'} {message.text}
+              {message.type === 'success' ? '✅' : '⚠️'} {message.text}
             </div>
           )}
 
           {/* Error Alert */}
           {error && (
-            <div className="flex items-start gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4">
-              <AlertCircle className="h-5 w-5 flex-shrink-0 text-violet-400 mt-0.5" />
+            <div className="flex items-start gap-3 rounded-2xl border border-rose-300/40 bg-rose-100/40 p-4">
+              <AlertCircle className="h-5 w-5 flex-shrink-0 text-rose-600 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-violet-200">Error loading accounts</p>
-                <p className="text-xs text-violet-200/70 mt-1">{error}</p>
+                <p className="text-sm font-semibold text-rose-900">Error loading accounts</p>
+                <p className="text-xs text-rose-700 mt-1">{error}</p>
               </div>
             </div>
           )}
@@ -236,17 +236,17 @@ export default function SocialAccountManager() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-rose-500/20 p-2">
-                  <Youtube className="h-5 w-5 text-rose-400" />
+                  <Youtube className="h-5 w-5 text-rose-500" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-100">YouTube Channels</h2>
-                  <p className="mt-1 text-xs text-slate-400">Connect your YouTube channels for video publishing</p>
+                  <h2 className="text-lg font-semibold text-slate-900">YouTube Channels</h2>
+                  <p className="mt-1 text-xs text-slate-500">Connect your YouTube channels for video publishing</p>
                 </div>
               </div>
               <button
                 onClick={handleConnectYoutube}
                 disabled={connectingPlatform === 'youtube'}
-                className="flex items-center gap-2 rounded-xl border border-sky-500/50 bg-sky-500/20 px-4 py-2 text-sm font-medium text-sky-200 transition hover:bg-sky-500/30 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-2xl border border-sky-300/50 bg-sky-100/50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-200/50 disabled:opacity-50"
               >
                 {connectingPlatform === 'youtube' ? (
                   <>
@@ -262,31 +262,33 @@ export default function SocialAccountManager() {
               </button>
             </div>
 
-            {/* Accounts List */}
-            <div className="space-y-3">
+            {/* Accounts Grid */}
+            <div className="video-pipeline-shell">
               {isLoading ? (
-                <div className="flex items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 py-12">
+                <div className="video-pipeline-surface rounded-3xl border flex items-center justify-center py-16">
                   <div className="text-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-sky-400 mx-auto mb-2" />
-                    <p className="text-xs text-slate-400">Loading YouTube channels...</p>
+                    <Loader2 className="h-6 w-6 animate-spin text-sky-500 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-600">Loading YouTube channels...</p>
                   </div>
                 </div>
               ) : youtubeAccounts.length === 0 ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-6 py-12 text-center">
-                  <Users className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-                  <p className="text-sm text-slate-300">No YouTube accounts connected yet</p>
-                  <p className="mt-1 text-xs text-slate-400">Click "Connect Channel" to link your first YouTube account</p>
+                <div className="video-pipeline-surface rounded-3xl border px-6 py-12 text-center">
+                  <Users className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-slate-700">No YouTube accounts connected yet</p>
+                  <p className="mt-1 text-xs text-slate-500">Click "Connect Channel" to link your first YouTube account</p>
                 </div>
               ) : (
-                youtubeAccounts.map(account => (
-                  <AccountCard
-                    key={account._id}
-                    account={account}
-                    onDelete={() => setSelectedForDelete(account._id)}
-                    statusPill={getStatusPill(account)}
-                    getStatusPillClasses={getStatusPillClasses}
-                  />
-                ))
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {youtubeAccounts.map(account => (
+                    <AccountCard
+                      key={account._id}
+                      account={account}
+                      onDelete={() => setSelectedForDelete(account._id)}
+                      statusPill={getStatusPill(account)}
+                      getStatusPillClasses={getStatusPillClasses}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -311,62 +313,84 @@ export default function SocialAccountManager() {
  */
 function AccountCard({ account, onDelete, statusPill, getStatusPillClasses }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-6 transition hover:border-slate-700">
+    <div className="video-pipeline-surface rounded-3xl border p-5 transition hover:border-opacity-80 flex flex-col h-full">
       <div className="space-y-4">
         
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 rounded-2xl bg-rose-500/20 p-2">
-              <Youtube className="h-5 w-5 text-rose-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold text-slate-100">
-                {account.displayName || account.username}
-              </h3>
-              <p className="mt-0.5 text-xs text-slate-400">@{account.username}</p>
-            </div>
+        {/* Header with Icon and Status */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-shrink-0 rounded-2xl bg-rose-500/20 p-2">
+            <Youtube className="h-5 w-5 text-rose-500" />
           </div>
-          <div className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${getStatusPillClasses(statusPill.tone)}`}>
+          <div className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold uppercase tracking-wider ${getStatusPillClasses(statusPill.tone)}`}>
             {statusPill.icon}
-            {statusPill.label}
+            <span>{statusPill.label}</span>
           </div>
         </div>
 
-        {/* Channel Info Grid */}
-        {account.platformData?.channelInfo && (
-          <div className="grid grid-cols-3 gap-3 rounded-xl border border-slate-800/50 bg-slate-900/30 p-3">
-            <div>
-              <div className="text-[0.65rem] uppercase tracking-[0.15em] text-slate-500 font-medium">Channel</div>
-              <div className="mt-1.5 text-sm font-medium text-slate-100">
-                {account.platformData.channelInfo.title || 'Unknown'}
+        {/* Channel Name */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">
+            {account.accountName || account.channelTitle || 'Unknown Channel'}
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {account.accountHandle && `@${account.accountHandle}`}
+            {!account.accountHandle && account.email && account.email}
+          </p>
+        </div>
+
+        {/* Channel Info Compact Grid */}
+        {account.credentials?.platformData && (
+          <div className="space-y-2 rounded-xl bg-white/40 p-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[0.65rem] uppercase tracking-[0.1em] text-slate-600 font-semibold">Subscribers</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {account.credentials.platformData?.subscribers
+                    ? new Intl.NumberFormat('en-US', {
+                        notation: 'compact',
+                        compactDisplay: 'short',
+                      }).format(Number(account.credentials.platformData.subscribers))
+                    : 'Private'}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-[0.65rem] uppercase tracking-[0.15em] text-slate-500 font-medium">Subscribers</div>
-              <div className="mt-1.5 text-sm font-medium text-slate-100">
-                {account.platformData.channelInfo.subscriberCount
-                  ? new Intl.NumberFormat('en-US', {
-                      notation: 'compact',
-                      compactDisplay: 'short',
-                    }).format(account.platformData.channelInfo.subscriberCount)
-                  : 'Private'}
+              <div>
+                <div className="text-[0.65rem] uppercase tracking-[0.1em] text-slate-600 font-semibold">Views</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {account.credentials.platformData?.totalViews
+                    ? new Intl.NumberFormat('en-US', {
+                        notation: 'compact',
+                        compactDisplay: 'short',
+                      }).format(Number(account.credentials.platformData.totalViews))
+                    : '0'}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-[0.65rem] uppercase tracking-[0.15em] text-slate-500 font-medium">Videos</div>
-              <div className="mt-1.5 text-sm font-medium text-slate-100">
-                {account.platformData.channelInfo.videoCount || '0'}
+              <div>
+                <div className="text-[0.65rem] uppercase tracking-[0.1em] text-slate-600 font-semibold">Videos</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {account.credentials.platformData?.videoCount || '0'}
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Stats */}
-        <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+        <div className="flex flex-col gap-2.5 text-xs text-slate-600">
+          {account.email && (
+            <div className="flex items-center gap-2">
+              <div className="h-3.5 w-3.5 rounded-full bg-sky-500" />
+              <span className="font-medium">{account.email}</span>
+            </div>
+          )}
+          {account.channelId && (
+            <div className="flex items-center gap-2">
+              <div className="h-3.5 w-3.5 rounded-full bg-purple-500" />
+              <span>ID: {account.channelId}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <Play className="h-3.5 w-3.5" />
-            <span>{account.totalUploads || 0} uploads</span>
+            <span>{account.credentials?.platformData?.videoCount || account.totalUploads || 0} videos</span>
           </div>
           {account.lastPostTime && (
             <div className="flex items-center gap-1.5">
@@ -378,21 +402,21 @@ function AccountCard({ account, onDelete, statusPill, getStatusPillClasses }) {
 
         {/* Error Message */}
         {account.consecutiveErrors > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 text-xs text-violet-200">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <div className="flex items-start gap-2 rounded-lg border border-amber-300/40 bg-amber-100/40 p-2.5 text-xs text-amber-900">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
             <span>{account.lastErrorMessage || `${account.consecutiveErrors} consecutive errors`}</span>
           </div>
         )}
 
         {/* Bottom Actions */}
-        <div className="border-t border-slate-800 pt-4 flex justify-end">
+        <div className="mt-auto pt-3 border-t border-slate-200 flex justify-end">
           <button
             onClick={onDelete}
             disabled={!account.isActive}
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100/60 transition disabled:opacity-50 disabled:cursor-not-allowed"
             title="Disconnect account"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
             Disconnect
           </button>
         </div>
@@ -407,17 +431,17 @@ function AccountCard({ account, onDelete, statusPill, getStatusPillClasses }) {
 function DeleteConfirmationModal({ accountId, isDeleting, onConfirm, onCancel }) {
   return (
     <ModalPortal>
-    <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-slate-800 bg-slate-950/90 p-6 bg-backdrop-blur">
+    <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm space-y-4 rounded-3xl border border-slate-200 bg-white/95 p-6">
         
         {/* Header */}
-        <div className="flex items-start gap-3 border-b border-slate-800 pb-4">
-          <div className="flex-shrink-0 rounded-lg bg-violet-500/20 p-2">
-            <AlertCircle className="h-6 w-6 text-violet-400" />
+        <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+          <div className="flex-shrink-0 rounded-xl bg-rose-100/60 p-2.5">
+            <AlertCircle className="h-6 w-6 text-rose-600" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-100">Disconnect Account?</h3>
-            <p className="mt-1 text-xs text-slate-400">
+            <h3 className="text-sm font-semibold text-slate-900">Disconnect Account?</h3>
+            <p className="mt-1 text-xs text-slate-600">
               This will revoke access to this YouTube account. You can reconnect it later if needed.
             </p>
           </div>
@@ -428,14 +452,14 @@ function DeleteConfirmationModal({ accountId, isDeleting, onConfirm, onCancel })
           <button
             onClick={onCancel}
             disabled={isDeleting}
-            className="flex-1 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-slate-900 disabled:opacity-50"
+            className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isDeleting}
-            className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-rose-500/50 bg-rose-500/20 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-rose-300/40 bg-rose-100/50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-200/50 disabled:opacity-50"
           >
             {isDeleting ? (
               <>

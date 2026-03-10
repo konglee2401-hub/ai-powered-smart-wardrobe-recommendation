@@ -31,6 +31,7 @@ import {
   getScenarioByValue
 } from '../constants/videoGeneration';
 import { GOOGLE_VOICES } from '../constants/voiceOverOptions';
+import { VIDEO_SCRIPT_TEMPLATES } from '../constants/videoScriptTemplates';
 
 /**
  * Map voice gender and pace to actual Gemini TTS voice name
@@ -649,13 +650,12 @@ export default function OneClickCreatorPage() {
 
   const sidebarCardClass = 'studio-card-shell rounded-[0.75rem] p-2.5';
   const accentCardClass = 'studio-card-shell rounded-[0.75rem] p-2.5';
-  const stepUploadSectionClass = 'studio-card-shell rounded-[0.875rem] p-3';
   const stepUploadCardClass = 'studio-card-shell flex h-full flex-col rounded-[0.75rem] p-2.5';
   const stepUploadDropzoneClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[0.75rem] border p-2.5 text-center transition';
   const stepUploadActionClass = 'apple-option-chip inline-flex items-center justify-center gap-2 rounded-[0.625rem] px-2.5 py-2 text-xs font-semibold text-slate-700 transition disabled:opacity-50';
   const sessionShellClass = 'studio-card-shell flex min-h-0 flex-1 flex-col rounded-[0.875rem] p-3';
   const optionButtonBaseClass = 'apple-option-chip w-full rounded-[0.65rem] px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
-  const providerButtonClass = 'apple-option-chip flex w-full items-center gap-2 rounded-[0.65rem] px-2.5 py-1.5 text-left text-[11px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const providerButtonClass = 'apple-option-chip flex w-full items-center gap-2 rounded-[0.6rem] px-2 py-1 text-left text-[10px] font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
   const optionButtonIdleClass = 'text-slate-300';
   const selectedOptionClass = {
     amber: 'apple-option-chip-warm apple-option-chip-selected',
@@ -759,6 +759,7 @@ export default function OneClickCreatorPage() {
   const [generatedVoiceover, setGeneratedVoiceover] = useState(null);
   const [suggestedHashtags, setSuggestedHashtags] = useState([]);
   const [tiktokFlowId, setTiktokFlowId] = useState(null);
+  const [tiktokScriptTemplate, setTiktokScriptTemplate] = useState('auto');
 
   // Workflow state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -784,7 +785,7 @@ export default function OneClickCreatorPage() {
   const settingsPanelClass = shouldUseCompactRailLayout
       ? 'one-click-settings-panel one-click-settings-panel-compact grid grid-cols-1 content-start gap-1.5 overflow-y-auto pr-0.5 transition-all duration-200'
       : 'one-click-settings-panel grid grid-cols-2 content-start gap-1.5 overflow-y-auto pr-0.5 transition-all duration-200';
-  const mainPanelClass = 'generation-content-plain flex min-w-0 flex-col overflow-hidden transition-all duration-200';
+  const mainPanelClass = 'generation-content-plain flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-all duration-200';
   const imageProviderCardClass = sidebarCardClass;
   const hashtagsCardClass = 'studio-card-shell rounded-[0.75rem] p-2.5';
 
@@ -1020,10 +1021,11 @@ export default function OneClickCreatorPage() {
       audioUrl: flowState.step5?.audio?.previewUrl || flowState.step5?.audio?.path || null,
       ttsText: flowState.step5?.voiceoverText || '',
       analysis: {
-          step1: flowState.step1?.analysis || null,
+        step1: flowState.step1?.analysis || null,
         videoScripts: flowState.step3?.scripts || [],
         hashtags: flowState.step3?.hashtags || [],
-        voiceoverScript: flowState.step3?.voiceoverScript || ''
+        voiceoverScript: flowState.step3?.voiceoverScript || '',
+        metadata: flowState.step3?.metadata || null
       },
       steps: [
         { id: 'analyze', completed: Boolean(flowState.step1?.completed), error: null, inProgress: !isFailed && !flowState.step1?.completed && currentStatus.includes('step1') },
@@ -1096,6 +1098,23 @@ export default function OneClickCreatorPage() {
       return statusData;
     } finally {
       setResumingSessionId(null);
+    }
+  };
+
+  const rerunAffiliateStep3 = async (session, templateId = 'auto') => {
+    if (!session?.flowId) return;
+    const flowId = session.flowId;
+    try {
+      await api.post('/ai/affiliate-video-tiktok/step-3-deep-analysis', {
+        flowId,
+        scriptTemplateId: templateId
+      });
+      const statusData = await fetchAffiliateFlowStatus(flowId);
+      const refreshed = hydrateAffiliateSessionFromStatus(statusData, session.id);
+      setSessions((prev) => prev.map((item) => (item.id === session.id ? refreshed : item)));
+    } catch (error) {
+      console.error('Failed to rerun step 3:', error.message);
+      throw error;
     }
   };
 
@@ -1315,6 +1334,7 @@ export default function OneClickCreatorPage() {
         productFocus: productFocus || 'full-outfit',
         imageProvider: imageProvider || 'google-flow',
         videoProvider: videoProvider || 'google-flow',
+        scriptTemplateId: tiktokScriptTemplate || 'auto',
         generateVideo: true,
         generateVoiceover: true,
         flowId,  // ðŸ’« Pass flowId in payload to maintain session
@@ -1996,7 +2016,7 @@ export default function OneClickCreatorPage() {
         meta={`${getUseCaseLabel(useCase)} / ${getFocusLabel(productFocus)} / ${quantity} sessions`}
       />
 
-      <div ref={workspaceRef} className="one-click-main-shell grid min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden px-4 pr-0 py-2.5">
+      <div ref={workspaceRef} className="one-click-main-shell grid h-full min-h-0 w-full flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden px-4 pr-0 py-2.5">
 
         <div className={`${workspaceGridClass} min-h-0 flex-1`} style={workspaceGridStyle}>
           {/* LEFT SIDEBAR - Settings */}
@@ -2105,27 +2125,54 @@ export default function OneClickCreatorPage() {
             </div>
 
 
-            {/* Image Provider */}
+            {/* Media Providers */}
             <div className={imageProviderCardClass}>
-              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-gray-100">
-                <ImageIcon className="w-4 h-4 text-amber-300" />
-                {t('oneClickCreator.imageProvider')}
-              </h3>
-              <div className="space-y-1.5">
-                {IMAGE_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setImageProvider(p.id)}
-                    disabled={isGenerating}
-                    className={getProviderButtonClass(
-                      imageProvider === p.id,
-                      selectedOptionClass.amber
-                    )}
-                  >
-                    <ProviderIcon providerId={p.id} />
-                    <span className="leading-none">{p.label}</span>
-                  </button>
-                ))}
+              <div className="space-y-3">
+                <div>
+                  <h3 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-gray-100">
+                    <ImageIcon className="h-4 w-4 text-amber-300" />
+                    {t('oneClickCreator.imageProvider')}
+                  </h3>
+                  <div className="space-y-1">
+                    {IMAGE_PROVIDERS.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setImageProvider(p.id)}
+                        disabled={isGenerating}
+                        className={getProviderButtonClass(
+                          imageProvider === p.id,
+                          selectedOptionClass.amber
+                        )}
+                      >
+                        <ProviderIcon providerId={p.id} />
+                        <span className="leading-none">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-white/6 pt-2.5">
+                  <h3 className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-gray-100">
+                    <Video className="h-4 w-4 text-violet-300" />
+                    {t('oneClickCreator.videoProvider')}
+                  </h3>
+                  <div className="space-y-1">
+                    {VIDEO_PROVIDERS.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setVideoProvider(p.id)}
+                        disabled={isGenerating}
+                        className={getProviderButtonClass(
+                          videoProvider === p.id,
+                          selectedOptionClass.violet
+                        )}
+                      >
+                        <ProviderIcon providerId={p.id} />
+                        <span className="leading-none">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2188,36 +2235,10 @@ export default function OneClickCreatorPage() {
               </div>
             </div>
 
-            {/* Video Provider */}
-            <div className={sidebarCardClass}>
-              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-gray-100">
-                <Video className="w-4 h-4 text-violet-300" />
-                {t('oneClickCreator.videoProvider')}
-              </h3>
-              <div className="space-y-1.5">
-                {VIDEO_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setVideoProvider(p.id)}
-                    disabled={isGenerating}
-                    className={getProviderButtonClass(
-                      videoProvider === p.id,
-                      selectedOptionClass.violet
-                    )}
-                  >
-                    <ProviderIcon providerId={p.id} />
-                    <span className="leading-none">{p.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            
-
             {/* TikTok-Specific Settings */}
             {useCase === 'affiliate-video-tiktok' && (
               <>
-                {/* Video Duration & Voice Selector - Consolidated */}
+                {/* Video Duration & Voice Selector */}
                 <div className={`${accentCardClass} one-click-settings-full`}>
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-sky-200">
                     <Clock className="w-4 h-4" />
@@ -2258,6 +2279,35 @@ export default function OneClickCreatorPage() {
                       </button>
                     ))}
                   </div>
+
+                </div>
+
+                {/* Suggested Script Templates */}
+                <div className={`${sidebarCardClass} one-click-settings-full`}>
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-200">
+                    <FileText className="w-3 h-3" />
+                    {t('oneClickCreator.suggestedScripts')}
+                  </h3>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {VIDEO_SCRIPT_TEMPLATES.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => setTiktokScriptTemplate(template.id)}
+                        disabled={isGenerating}
+                        className={`group rounded-xl border px-3 py-2 text-left text-[11px] transition ${
+                          tiktokScriptTemplate === template.id
+                            ? 'border-amber-400/70 bg-amber-400/15 text-amber-100'
+                            : 'border-white/10 bg-white/5 text-slate-200 hover:border-amber-300/50'
+                        }`}
+                      >
+                        <div className="font-semibold">{template.title}</div>
+                        <div className="mt-1 text-[10px] text-slate-400 group-hover:text-slate-300">
+                          {template.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* TikTok Info */}
@@ -2286,152 +2336,140 @@ export default function OneClickCreatorPage() {
                     {/* CENTER - Main Content */}
           <div className={`${mainPanelClass} one-click-main-panel`}>
             {/* Scrollable Content Container */}
-            <div className="flex min-h-0 flex-1 flex-col space-y-2.5 overflow-y-auto pb-2.5 pr-0.5">
+            <div className="flex h-full min-h-0 flex-1 flex-col space-y-2.5 overflow-y-auto pb-2.5 pr-0.5">
               {!isSessionWorkspaceMode && (
-              <div className={stepUploadSectionClass}>
-              <div className="mb-3 flex items-center gap-2">
-                <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-900">
-                  <Upload className="w-4 h-4 text-sky-600" />
-                  {t('oneClickCreator.uploadImagesStep')}
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                <div className="flex h-full min-h-0 flex-col gap-2">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                   <div className={stepUploadCardClass}>
-                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
-                    <Upload className="h-3.5 w-3.5 text-amber-500" />
-                    Character Image
-                  </div>
-                  <div
-                    onClick={() => !isGenerating && fileInputRef.current?.click()}
-                    data-testid="character-upload-dropzone"
-                    className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
-                  >
-                    {characterImage ? (
-                      <>
-                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
-                          <img src={characterImage} alt="Character" className="max-h-full max-w-full rounded object-contain" />
-                        </div>
-                        <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center">
-                        <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
-                        <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
-                        <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
-                      </div>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={isGenerating}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => setCharacterImage(evt.target?.result);
-                          reader.readAsDataURL(file);
-                          setImageSource(prev => ({ ...prev, character: 'upload' }));
-                        }
-                      }}
-                    />
-                  </div>
-                  </div>
-                  <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
-                    <button
-                      data-testid="select-profile-button"
-                      onClick={() => {
-                        if (!isGenerating) {
-                          setShowCharacterSelector(true);
-                        }
-                      }}
-                      disabled={isGenerating}
-                      className={stepUploadActionClass}
+                    <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
+                      <Upload className="h-3.5 w-3.5 text-amber-500" />
+                      Character Image
+                    </div>
+                    <div
+                      onClick={() => !isGenerating && fileInputRef.current?.click()}
+                      data-testid="character-upload-dropzone"
+                      className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
                     >
-                      Select Profile
-                    </button>
+                      {characterImage ? (
+                        <>
+                          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
+                            <img src={characterImage} alt="Character" className="max-h-full max-w-full rounded object-contain" />
+                          </div>
+                          <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
+                            <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center">
+                          <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
+                          <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
+                          <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isGenerating}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => setCharacterImage(evt.target?.result);
+                            reader.readAsDataURL(file);
+                            setImageSource(prev => ({ ...prev, character: 'upload' }));
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
+                      <button
+                        data-testid="select-profile-button"
+                        onClick={() => {
+                          if (!isGenerating) {
+                            setShowCharacterSelector(true);
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className={stepUploadActionClass}
+                      >
+                        Select Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) {
+                            setGalleryPickerFor('character');
+                            setShowGalleryPicker(true);
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className={stepUploadActionClass}
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                        {t('oneClickCreator.chooseFromGallery')}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={stepUploadCardClass}>
+                    <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-600">
+                      <Upload className="h-3.5 w-3.5 text-cyan-600" />
+                      Product Image
+                    </div>
+                    <div
+                      onClick={() => !isGenerating && productFileInputRef.current?.click()}
+                      data-testid="product-upload-dropzone"
+                      className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
+                    >
+                      {productImage ? (
+                        <>
+                          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
+                            <img src={productImage} alt="Product" className="max-h-full max-w-full rounded object-contain" />
+                          </div>
+                          <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
+                            <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center">
+                          <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
+                          <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
+                          <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
+                        </div>
+                      )}
+                      <input
+                        ref={productFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isGenerating}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => setProductImage(evt.target?.result);
+                            reader.readAsDataURL(file);
+                            setImageSource(prev => ({ ...prev, product: 'upload' }));
+                          }
+                        }}
+                      />
+                    </div>
                     <button
                       onClick={() => {
                         if (!isGenerating) {
-                          setGalleryPickerFor('character');
+                          setGalleryPickerFor('product');
                           setShowGalleryPicker(true);
                         }
                       }}
                       disabled={isGenerating}
-                      className={stepUploadActionClass}
+                      className={`${stepUploadActionClass} mt-3`}
                     >
                       <ImageIcon className="w-4 h-4" />
                       {t('oneClickCreator.chooseFromGallery')}
                     </button>
                   </div>
-                </div>
 
-                <div className="flex h-full min-h-0 flex-col gap-2">
-                  <div className={stepUploadCardClass}>
-                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-cyan-600">
-                    <Upload className="h-3.5 w-3.5 text-cyan-600" />
-                    Product Image
-                  </div>
-                  <div
-                    onClick={() => !isGenerating && productFileInputRef.current?.click()}
-                    data-testid="product-upload-dropzone"
-                    className={`${stepUploadDropzoneClass} h-[188px] hover:bg-white/[0.03]`}
-                  >
-                    {productImage ? (
-                      <>
-                        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[0.95rem] bg-white/20">
-                          <img src={productImage} alt="Product" className="max-h-full max-w-full rounded object-contain" />
-                        </div>
-                        <div className="absolute inset-0 rounded-[1.1rem] bg-[rgba(15,23,42,0.42)] opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                          <p className="text-white text-xs">{t('oneClickCreator.clickToChange')}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center">
-                        <Upload className="mx-auto mb-2 h-7 w-7 text-slate-500" />
-                        <p className="text-xs text-slate-500">{t('oneClickCreator.dragToUpload')}</p>
-                        <p className="mt-1 text-xs text-slate-400">{t('oneClickCreator.orClickBelow')}</p>
-                      </div>
-                    )}
-                    <input
-                      ref={productFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={isGenerating}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => setProductImage(evt.target?.result);
-                          reader.readAsDataURL(file);
-                          setImageSource(prev => ({ ...prev, product: 'upload' }));
-                        }
-                      }}
-                    />
-                  </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (!isGenerating) {
-                        setGalleryPickerFor('product');
-                        setShowGalleryPicker(true);
-                      }
-                    }}
-                    disabled={isGenerating}
-                    className={`${stepUploadActionClass} mt-3`}
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    {t('oneClickCreator.chooseFromGallery')}
-                  </button>
-                </div>
-
-                <div className="flex h-full min-h-0 flex-col gap-2">
                   <div className={stepUploadCardClass}>
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
@@ -2496,27 +2534,26 @@ export default function OneClickCreatorPage() {
                         }
                       }}
                     />
-                  </div>
-                  <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
-                    <button
-                      onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
-                      disabled={isGenerating}
-                      className={stepUploadActionClass}
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload
-                    </button>
-                    <button
-                      onClick={() => !isGenerating && setShowScenePicker(true)}
-                      disabled={isGenerating}
-                      className={stepUploadActionClass}
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      Picker
-                    </button>
+                    <div className="mt-3 grid min-h-[40px] grid-cols-2 gap-2">
+                      <button
+                        onClick={() => !isGenerating && sceneFileInputRef.current?.click()}
+                        disabled={isGenerating}
+                        className={stepUploadActionClass}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload
+                      </button>
+                      <button
+                        onClick={() => !isGenerating && setShowScenePicker(true)}
+                        disabled={isGenerating}
+                        className={stepUploadActionClass}
+                      >
+                        <Wand2 className="w-4 h-4" />
+                        Picker
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
 
               )}
@@ -2592,7 +2629,7 @@ export default function OneClickCreatorPage() {
 
                       {activeSession ? (
                         <div className="min-h-0 overflow-y-auto pr-1">
-                          <AffiliateSessionWorkspace session={activeSession} />
+                          <AffiliateSessionWorkspace session={activeSession} onRerunStep3={rerunAffiliateStep3} />
                         </div>
                       ) : null}
                     </div>

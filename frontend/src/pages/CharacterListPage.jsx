@@ -46,7 +46,6 @@ export default function CharacterListPage() {
   };
 
   return (
-    <ModalPortal>
     <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
       <PageHeaderBar
         icon={<Users className="h-4 w-4 text-sky-400" />}
@@ -186,33 +185,34 @@ export default function CharacterListPage() {
       </div>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="studio-card-shell max-w-sm rounded-[1.2rem] p-6">
-            <h3 className="mb-2 text-lg font-semibold">Delete Character?</h3>
-            <p className="mb-6 text-sm text-slate-400">
-              This action cannot be undone. All associated data will be permanently deleted.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                disabled={deleting}
-                className="apple-option-chip flex-1 rounded-lg px-4 py-2 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm)}
-                disabled={deleting}
-                className="flex-1 rounded-lg border border-red-500/30 bg-red-900/20 px-4 py-2 font-medium text-red-500 transition-colors hover:bg-red-900/30"
-              >
-                {deleting ? 'Deleting...' : 'Delete'}
-              </button>
+        <ModalPortal>
+          <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="studio-card-shell max-w-sm rounded-[1.2rem] p-6">
+              <h3 className="mb-2 text-lg font-semibold">Delete Character?</h3>
+              <p className="mb-6 text-sm text-slate-400">
+                This action cannot be undone. All associated data will be permanently deleted.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  className="apple-option-chip flex-1 rounded-lg px-4 py-2 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(deleteConfirm)}
+                  disabled={deleting}
+                  className="flex-1 rounded-lg border border-red-500/30 bg-red-900/20 px-4 py-2 font-medium text-red-500 transition-colors hover:bg-red-900/30"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
-    </ModalPortal>
   );
 }
 

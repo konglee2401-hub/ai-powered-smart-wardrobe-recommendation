@@ -1,4 +1,5 @@
 ﻿import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, X } from 'lucide-react';
 import AdvancedGenerationSettings from './AdvancedGenerationSettings';
 
@@ -23,6 +24,7 @@ export default function GenerationOptions({
   randomSeed = true,
   onRandomSeedChange,
 }) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
 
   const handleDrop = (event) => {
@@ -50,7 +52,7 @@ export default function GenerationOptions({
   return (
     <div className="space-y-3">
       <section className="rounded-[1.2rem] bg-white/[0.03] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Count</p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t('imageGeneration.count')}</p>
         <div className="grid grid-cols-3 gap-1.5">
           {IMAGE_COUNTS.map((count) => (
             <button
@@ -70,7 +72,7 @@ export default function GenerationOptions({
       </section>
 
       <section className="rounded-[1.2rem] bg-white/[0.03] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Ratio</p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t('imageGeneration.ratio')}</p>
         <div className="grid grid-cols-2 gap-1.5">
           {IMAGE_GEN_ASPECT_RATIOS.map((ratio) => (
             <button
@@ -90,7 +92,7 @@ export default function GenerationOptions({
       </section>
 
       <section className="rounded-[1.2rem] bg-white/[0.03] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reference</p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t('imageGeneration.reference')}</p>
         {referenceImage?.preview ? (
           <div className="relative overflow-hidden rounded-xl bg-slate-950/60">
             <div className="h-20">
@@ -119,7 +121,7 @@ export default function GenerationOptions({
             }`}
           >
             <Upload className="mb-1.5 h-4 w-4 text-slate-500" />
-            <span className="text-[11px] text-slate-400">Add reference</span>
+            <span className="text-[11px] text-slate-400">{t('imageGeneration.addReference')}</span>
             <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
           </label>
         )}

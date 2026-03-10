@@ -46,36 +46,36 @@ const DURATIONS = {
 };
 
 const ASPECTS = [
-  { id: '16:9', label: '16:9', meta: 'Landscape' },
-  { id: '9:16', label: '9:16', meta: 'Vertical' },
+  { id: '16:9', label: '16:9', metaKey: 'videoGeneration.aspect.landscape' },
+  { id: '9:16', label: '9:16', metaKey: 'videoGeneration.aspect.vertical' },
 ];
 
 const USE_CASES = [
   {
     id: 'motion-showcase',
-    label: 'Motion Showcase',
-    summary: 'Clean reveal with readable movement.',
+    labelKey: 'videoGeneration.useCases.motionShowcase.label',
+    summaryKey: 'videoGeneration.useCases.motionShowcase.summary',
     prompt:
       'Start from the first frame, move with controlled camera motion, preserve the subject identity, and land naturally on the end frame with a polished commercial finish.',
   },
   {
     id: 'fashion-beat',
-    label: 'Fashion Beat',
-    summary: 'Editorial movement with confident pose changes.',
+    labelKey: 'videoGeneration.useCases.fashionBeat.label',
+    summaryKey: 'videoGeneration.useCases.fashionBeat.summary',
     prompt:
       'Create a premium fashion micro-scene with subtle pose variation, elegant camera motion, and a strong visual payoff that matches the ending frame.',
   },
   {
     id: 'product-demo',
-    label: 'Product Demo',
-    summary: 'Feature-led motion focused on the product.',
+    labelKey: 'videoGeneration.useCases.productDemo.label',
+    summaryKey: 'videoGeneration.useCases.productDemo.summary',
     prompt:
       'Highlight the product clearly while keeping the action believable. Emphasize interaction, readable composition, and a final frame that feels like a strong product hero shot.',
   },
   {
     id: 'scene-transition',
-    label: 'Scene Transition',
-    summary: 'Use the scene reference to stabilize lighting and composition.',
+    labelKey: 'videoGeneration.useCases.sceneTransition.label',
+    summaryKey: 'videoGeneration.useCases.sceneTransition.summary',
     prompt:
       'Keep the environment stable and production-ready. Use the scene reference as the anchor for lighting, geometry, and atmosphere while moving smoothly from start to end frame.',
   },
@@ -108,25 +108,27 @@ function getScenePreviewUrl(scene, aspectRatio = '16:9') {
   return normalizeAssetUrl(scene.sceneLockedImageUrl || scene.previewImage);
 }
 
-function formatDate(value) {
-  if (!value) return 'Unknown';
+function formatDate(value, locale, t) {
+  const unknown = t ? t('videoGeneration.unknown') : 'Unknown';
+  if (!value) return unknown;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? unknown : date.toLocaleString(locale || undefined);
 }
 
-function formatRelativeTime(value) {
-  if (!value) return 'Unknown';
+function formatRelativeTime(value, t) {
+  const unknown = t ? t('videoGeneration.unknown') : 'Unknown';
+  if (!value) return unknown;
   const time = new Date(value).getTime();
-  if (Number.isNaN(time)) return 'Unknown';
+  if (Number.isNaN(time)) return unknown;
   const diffMs = Math.max(0, Date.now() - time);
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1) return t ? t('videoGeneration.time.just_now') : 'just now';
+  if (diffMin < 60) return t ? t('videoGeneration.time.minutes_ago', { count: diffMin }) : `${diffMin}m ago`;
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffHour < 24) return t ? t('videoGeneration.time.hours_ago', { count: diffHour }) : `${diffHour}h ago`;
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return formatDate(value);
+  if (diffDay < 7) return t ? t('videoGeneration.time.days_ago', { count: diffDay }) : `${diffDay}d ago`;
+  return formatDate(value, undefined, t);
 }
 
 function buildPreviewVideoUrl(filePath) {
@@ -179,13 +181,14 @@ function MediaCard({
   galleryLabel = 'Gallery',
   emptyLabel = 'Upload',
 }) {
+  const { t } = useTranslation();
   return (
     <div className={`${SUB_PANEL_CLASS} video-media-card space-y-3`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-slate-100">{title}</p>
         {headerAction || (
           <span className={`apple-field-pill ${required ? 'apple-field-pill-required' : 'apple-field-pill-optional'}`}>
-            {required ? 'Required' : 'Optional'}
+            {required ? t('common.required') : t('common.optional')}
           </span>
         )}
       </div>
@@ -235,7 +238,7 @@ function MediaCard({
 }
 
 export default function VideoGenerationPage() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const startInputRef = useRef(null);
@@ -270,6 +273,7 @@ export default function VideoGenerationPage() {
   const durationOptions = useMemo(() => DURATIONS[videoProvider] || DURATIONS['google-flow'], [videoProvider]);
   const currentScene = useMemo(() => sceneOptions.find((scene) => scene.value === selectedScene) || null, [sceneOptions, selectedScene]);
   const currentUseCase = useMemo(() => USE_CASES.find((item) => item.id === selectedUseCase) || USE_CASES[0], [selectedUseCase]);
+  const currentUseCaseSummary = currentUseCase ? t(currentUseCase.summaryKey) : '';
   const lockedScenePreview = useMemo(() => getScenePreviewUrl(currentScene, selectedAspectRatio), [currentScene, selectedAspectRatio]);
   const effectiveScenePreview = customSceneImage?.preview || lockedScenePreview || null;
   const finalPrompt = useMemo(() => [
@@ -332,7 +336,7 @@ export default function VideoGenerationPage() {
         const preview = String(routeImage).startsWith('data:')
           ? routeImage
           : await fetchImageAsDataUrl(normalizeAssetUrl(routeImage));
-        if (!ignore && preview) setStartFrame((current) => current || mediaState(preview, 'Start frame'));
+        if (!ignore && preview) setStartFrame((current) => current || mediaState(preview, t('videoGeneration.start_frame_label')));
       } catch (error) {
         console.warn('Could not hydrate initial image:', error.message);
       }
@@ -368,7 +372,7 @@ export default function VideoGenerationPage() {
       setGenerated(false);
       setGeneratedVideos([]);
     } catch (error) {
-      toast.error(error.message || 'Could not read image file.');
+      toast.error(error.message || t('videoGeneration.errors.read_file'));
     }
   };
 
@@ -376,12 +380,12 @@ export default function VideoGenerationPage() {
     const item = Array.isArray(selectedItem) ? selectedItem[0] : selectedItem;
     const selectedUrl = item?.selectUrl || item?.url;
     if (!selectedUrl) {
-      toast.error('Selected gallery item is missing an image URL.');
+      toast.error(t('videoGeneration.errors.gallery_missing_url'));
       return;
     }
     try {
       const preview = await fetchImageAsDataUrl(normalizeAssetUrl(selectedUrl));
-      const payload = mediaState(preview, item?.name || 'Gallery image');
+      const payload = mediaState(preview, item?.name || t('videoGeneration.gallery_image'));
       if (galleryTarget === 'start') setStartFrame(payload);
       if (galleryTarget === 'end') setEndFrame(payload);
       if (galleryTarget === 'scene') setCustomSceneImage(payload);
@@ -389,7 +393,7 @@ export default function VideoGenerationPage() {
       setGeneratedVideos([]);
       setShowGalleryPicker(false);
     } catch (error) {
-      toast.error(error.message || 'Could not load gallery image.');
+      toast.error(error.message || t('videoGeneration.errors.gallery_load'));
     }
   };
 
@@ -399,7 +403,7 @@ export default function VideoGenerationPage() {
       const response = await getGenerationSessionDetail(sessionId);
       const session = response.data || null;
       const request = session?.analysis?.videoRequest || {};
-      if (!session) throw new Error('Session detail not found.');
+      if (!session) throw new Error(t('videoGeneration.errors.session_not_found'));
 
       setVideoProvider(request.provider || request.videoProvider || 'google-flow');
       setSelectedDuration(request.duration || 8);
@@ -408,9 +412,9 @@ export default function VideoGenerationPage() {
       setPromptDraft(request.promptDraft || request.prompt || USE_CASES[0].prompt);
       setScenePrompt(request.scenePrompt || request.sceneNotes || '');
       setSelectedScene(request.sceneId || DEFAULT_SCENE_VALUE);
-      setStartFrame(mediaState(request.startFrame || request.sourceImage, 'Session start frame'));
-      setEndFrame(mediaState(request.endFrame, 'Session end frame'));
-      setCustomSceneImage(mediaState(request.sceneImage, 'Session scene'));
+      setStartFrame(mediaState(request.startFrame || request.sourceImage, t('videoGeneration.session_start_frame')));
+      setEndFrame(mediaState(request.endFrame, t('videoGeneration.session_end_frame')));
+      setCustomSceneImage(mediaState(request.sceneImage, t('videoGeneration.session_scene')));
       setSelectedFlowId(session.sessionId || sessionId);
       setVideoUploadStatuses({});
       setDriveUploadStatus('');
@@ -425,22 +429,22 @@ export default function VideoGenerationPage() {
       }));
       setGeneratedVideos(restoredVideos);
       setGenerated(restoredVideos.length > 0);
-      toast.success(`Loaded session ${sessionId}`);
+      toast.success(t('videoGeneration.loaded_session', { id: sessionId }));
     } catch (error) {
-      toast.error(error.message || 'Could not load session.');
+      toast.error(error.message || t('videoGeneration.errors.load_session'));
     }
   };
 
   const uploadSingleVideo = async (video) => {
     setVideoUploadStatuses((current) => ({ ...current, [video.filename]: { status: 'uploading' } }));
     const videoUrl = video.url || buildDownloadVideoUrl(video.path);
-    if (!videoUrl) throw new Error(`Missing download URL for ${video.filename}`);
+    if (!videoUrl) throw new Error(t('videoGeneration.errors.missing_download_url', { filename: video.filename }));
     const response = await fetch(videoUrl);
-    if (!response.ok) throw new Error(`Failed to fetch ${video.filename}`);
+    if (!response.ok) throw new Error(t('videoGeneration.errors.fetch_failed', { filename: video.filename }));
     const blob = await response.blob();
     const file = new File([blob], video.filename, { type: 'video/mp4' });
     const uploadResponse = await driveAPI.uploadFile(file, {
-      description: 'Generated video from Smart Wardrobe',
+      description: t('videoGeneration.drive_description'),
       metadata: { provider: videoProvider, duration: selectedDuration, sessionId: selectedFlowId || '' },
     });
 
@@ -454,21 +458,21 @@ export default function VideoGenerationPage() {
 
   const uploadAllVideos = async (videos = generatedVideos) => {
     if (!videos.length) return;
-    setDriveUploadStatus('Uploading to Google Drive...');
+    setDriveUploadStatus(t('videoGeneration.drive_uploading'));
     try {
       for (const video of videos) {
         await uploadSingleVideo(video);
       }
-      setDriveUploadStatus('All generated videos uploaded.');
+      setDriveUploadStatus(t('videoGeneration.drive_uploaded_all'));
     } catch (error) {
-      setDriveUploadStatus(error.message || 'Upload failed.');
-      toast.error(error.message || 'Upload failed.');
+      setDriveUploadStatus(error.message || t('videoGeneration.errors.upload_failed'));
+      toast.error(error.message || t('videoGeneration.errors.upload_failed'));
     }
   };
 
   const handleGenerateVideo = async () => {
     if (!isReadyToGenerate) {
-      toast.error('Upload both frames and finish the motion prompt first.');
+      toast.error(t('videoGeneration.errors.missing_inputs'));
       return;
     }
 
@@ -540,7 +544,7 @@ export default function VideoGenerationPage() {
               prompt: finalPrompt,
             }))
           : [];
-      if (!nextVideos.length) throw new Error('No playable video output was returned.');
+      if (!nextVideos.length) throw new Error(t('videoGeneration.errors.no_output'));
 
       setGeneratedVideos(nextVideos);
       setGenerated(true);
@@ -556,17 +560,19 @@ export default function VideoGenerationPage() {
 
       if (uploadToDrive) await uploadAllVideos(nextVideos);
       await loadRecentSessions();
-      toast.success(`Generated ${nextVideos.length} video output(s).`);
+      toast.success(t('videoGeneration.generated_count', { count: nextVideos.length }));
     } catch (error) {
+      const fallbackMessage = t('videoGeneration.errors.generation_failed');
+      const errorMessage = error.message || fallbackMessage;
       if (flowId) {
         await captureGenerationSession(flowId, {
           flowType: 'video-generation',
           useCase: selectedUseCase,
-          error: { stage: 'video-generation', message: error.message || 'Video generation failed' },
-          log: { level: 'error', category: 'video-generation', message: error.message || 'Video generation failed' },
+          error: { stage: 'video-generation', message: errorMessage },
+          log: { level: 'error', category: 'video-generation', message: errorMessage },
         });
       }
-      toast.error(error.message || 'Video generation failed.');
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -594,16 +600,18 @@ export default function VideoGenerationPage() {
     <div className="image-generation-shell video-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
       <PageHeaderBar
         icon={<Film className="h-4 w-4 text-sky-300" />}
-        title="Video Generation"
-        subtitle="Single-video workspace"
+        title={t('videoGeneration.title')}
+        subtitle={t('videoGeneration.subtitle')}
         meta={`${PROVIDERS.find((item) => item.id === videoProvider)?.label || videoProvider} | ${selectedDuration}s | ${selectedAspectRatio}`}
         className="h-16"
         actions={(
           <>
             <div className="video-generation-header-note hidden items-center text-xs text-slate-400 xl:flex">
-              Upload 2 frames, pick an optional scene reference, or click a recent session to reload it.
+              {t('videoGeneration.header_hint')}
             </div>
-            <button type="button" onClick={handleReset} className="apple-option-chip rounded-xl px-3 py-1.5 text-xs font-medium transition">Reset</button>
+            <button type="button" onClick={handleReset} className="apple-option-chip rounded-xl px-3 py-1.5 text-xs font-medium transition">
+              {t('videoGeneration.reset')}
+            </button>
           </>
         )}
       />
@@ -613,7 +621,7 @@ export default function VideoGenerationPage() {
           <aside className="video-generation-sidebar min-h-0 overflow-y-auto space-y-2.5">
             <section className={`${PANEL_CLASS} video-control-strip`}>
               <div className="video-control-row">
-                <span className="video-control-label" title="Provider">AI</span>
+                <span className="video-control-label" title={t('videoGeneration.provider')}>AI</span>
                 <div className="video-control-options video-control-options-dual">
                   {PROVIDERS.map((provider) => (
                     <button
@@ -630,7 +638,7 @@ export default function VideoGenerationPage() {
               </div>
 
               <div className="video-control-row">
-                <span className="video-control-label" title="Duration">Sec</span>
+                <span className="video-control-label" title={t('videoGeneration.duration')}>{t('videoGeneration.seconds_short')}</span>
                 <div className="video-control-options video-control-options-dual">
                   {durationOptions.map((duration) => (
                     <button
@@ -645,13 +653,13 @@ export default function VideoGenerationPage() {
                 </div>
               </div>
 
-              <div className="video-control-row video-control-row-aspect" title="Aspect ratio">
+              <div className="video-control-row video-control-row-aspect" title={t('videoGeneration.aspect_ratio')}>
                 <div className="video-control-options video-control-options-dual">
                   {ASPECTS.map((aspect) => (
                     <button
                       key={aspect.id}
                       type="button"
-                      title={aspect.meta}
+                      title={t(aspect.metaKey)}
                       onClick={() => setSelectedAspectRatio(aspect.id)}
                       className={`${CONTROL_CHIP_CLASS} apple-option-chip-violet ${selectedAspectRatio === aspect.id ? 'apple-option-chip-selected' : 'text-slate-300'}`}
                     >
@@ -664,7 +672,7 @@ export default function VideoGenerationPage() {
 
             <section className={`${PANEL_CLASS} space-y-2`}>
               <div className="video-panel-head">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Template</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.template')}</p>
                 <span className="apple-field-pill apple-field-pill-optional">4</span>
               </div>
 
@@ -673,7 +681,7 @@ export default function VideoGenerationPage() {
                   <button
                     key={useCase.id}
                     type="button"
-                    title={useCase.summary}
+                    title={t(useCase.summaryKey)}
                     onClick={() => {
                       setSelectedUseCase(useCase.id);
                       setPromptDraft(useCase.prompt);
@@ -681,7 +689,7 @@ export default function VideoGenerationPage() {
                     className={`video-template-chip apple-option-chip apple-option-chip-warm w-full rounded-[1.05rem] border px-3 py-3 text-left transition ${selectedUseCase === useCase.id ? 'apple-option-chip-selected' : 'text-slate-300'}`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-semibold">{useCase.label}</p>
+                      <p className="truncate text-sm font-semibold">{t(useCase.labelKey)}</p>
                       <Wand2 className="h-4 w-4 text-amber-300" />
                     </div>
                   </button>
@@ -697,26 +705,28 @@ export default function VideoGenerationPage() {
             <div className="video-generation-main-scroll flex h-full min-h-0 flex-col overflow-y-auto">
               <div className="video-generation-top-grid grid gap-3">
                 <MediaCard
-                  title="Start Frame"
+                  title={t('videoGeneration.start_frame')}
                   value={startFrame}
                   required
                   onBrowse={() => startInputRef.current?.click()}
                   onGallery={() => { setGalleryTarget('start'); setShowGalleryPicker(true); }}
                   onClear={() => setStartFrame(null)}
-                  emptyLabel="Start"
+                  galleryLabel={t('videoGeneration.gallery')}
+                  emptyLabel={t('videoGeneration.start')}
                 />
                 <MediaCard
-                  title="End Frame"
+                  title={t('videoGeneration.end_frame')}
                   value={endFrame}
                   required
                   onBrowse={() => endInputRef.current?.click()}
                   onGallery={() => { setGalleryTarget('end'); setShowGalleryPicker(true); }}
                   onClear={() => setEndFrame(null)}
-                  emptyLabel="End"
+                  galleryLabel={t('videoGeneration.gallery')}
+                  emptyLabel={t('videoGeneration.end')}
                 />
-                <div className={`${SUB_PANEL_CLASS} video-media-card space-y-3`} title={getSceneLockedPrompt(currentScene, i18n.language || 'en') || 'Optional scene reference'}>
+                <div className={`${SUB_PANEL_CLASS} video-media-card space-y-3`} title={getSceneLockedPrompt(currentScene, i18n.language || 'en') || t('videoGeneration.scene_optional')}>
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-100">Scene</p>
+                    <p className="text-sm font-semibold text-slate-100">{t('videoGeneration.scene')}</p>
                   </div>
                   <button
                     type="button"
@@ -725,29 +735,29 @@ export default function VideoGenerationPage() {
                   >
                     {effectiveScenePreview ? (
                       <div className="absolute inset-0 p-3">
-                        <img src={effectiveScenePreview} alt="Scene reference" className="h-full w-full rounded-[0.95rem] object-contain" />
+                        <img src={effectiveScenePreview} alt={t('videoGeneration.scene_reference_alt')} className="h-full w-full rounded-[0.95rem] object-contain" />
                       </div>
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center px-5 text-center">
                         <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/6 text-slate-200">
                           <Upload className="h-4 w-4" />
                         </div>
-                        <p className="text-sm font-medium text-slate-100">Scene</p>
-                        <p className="mt-1 text-xs text-slate-500">Optional</p>
+                        <p className="text-sm font-medium text-slate-100">{t('videoGeneration.scene')}</p>
+                        <p className="mt-1 text-xs text-slate-500">{t('common.optional')}</p>
                       </div>
                     )}
                   </button>
                   <div className="grid grid-cols-[minmax(0,1fr),minmax(0,1.35fr)] gap-2">
                     <button type="button" onClick={() => { setGalleryTarget('scene'); setShowGalleryPicker(true); }} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
-                      Gallery
+                      {t('videoGeneration.gallery')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowScenePicker(true)}
-                      title={currentScene?.label || 'Pick scene'}
+                      title={currentScene?.label || t('videoGeneration.pick_scene')}
                       className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition"
                     >
-                      <span className="block truncate">{currentScene?.label || 'Pick scene'}</span>
+                      <span className="block truncate">{currentScene?.label || t('videoGeneration.pick_scene')}</span>
                     </button>
                   </div>
                 </div>
@@ -757,14 +767,14 @@ export default function VideoGenerationPage() {
                 <div className="video-generation-prompt-stack grid min-h-0 gap-3">
                   <section className={`${PANEL_CLASS} space-y-3`}>
                     <div className="video-panel-head">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Prompt</p>
-                      <span className="apple-field-pill apple-field-pill-required">Required</span>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.prompt')}</p>
+                      <span className="apple-field-pill apple-field-pill-required">{t('common.required')}</span>
                     </div>
 
                     <textarea
                       value={promptDraft}
                       onChange={(event) => setPromptDraft(event.target.value)}
-                      placeholder="Motion, pacing, camera, landing frame."
+                      placeholder={t('videoGeneration.prompt_placeholder')}
                       className={`${TEXTAREA_CLASS} apple-prompt-text min-h-[148px]`}
                       rows={6}
                     />
@@ -772,15 +782,15 @@ export default function VideoGenerationPage() {
 
                   <section className={`${PANEL_CLASS} space-y-3`}>
                     <div className="video-panel-head">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Final Prompt</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.final_prompt')}</p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          title="Copy final prompt"
-                          aria-label="Copy final prompt"
+                          title={t('videoGeneration.copy_final_prompt')}
+                          aria-label={t('videoGeneration.copy_final_prompt')}
                           onClick={async () => {
                             await navigator.clipboard.writeText(finalPrompt);
-                            toast.success('Final prompt copied.');
+                            toast.success(t('videoGeneration.final_prompt_copied'));
                           }}
                           className="video-icon-button apple-option-chip rounded-xl px-2.5 py-2 text-xs font-medium transition"
                         >
@@ -788,8 +798,8 @@ export default function VideoGenerationPage() {
                         </button>
                         <button
                           type="button"
-                          title={showFinalPrompt ? 'Hide final prompt' : 'Show final prompt'}
-                          aria-label={showFinalPrompt ? 'Hide final prompt' : 'Show final prompt'}
+                          title={showFinalPrompt ? t('videoGeneration.hide_final_prompt') : t('videoGeneration.show_final_prompt')}
+                          aria-label={showFinalPrompt ? t('videoGeneration.hide_final_prompt') : t('videoGeneration.show_final_prompt')}
                           onClick={() => setShowFinalPrompt((current) => !current)}
                           className="video-icon-button apple-option-chip rounded-xl px-2.5 py-2 text-xs font-medium transition"
                         >
@@ -808,15 +818,15 @@ export default function VideoGenerationPage() {
 
                 <section className={`${PANEL_CLASS} space-y-3`}>
                   <div className="video-panel-head">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Output</p>
-                    {generated ? <span className="apple-field-pill apple-field-pill-optional">Latest Ready</span> : null}
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.output')}</p>
+                    {generated ? <span className="apple-field-pill apple-field-pill-optional">{t('videoGeneration.latest_ready')}</span> : null}
                   </div>
 
                   {!generatedVideos.length ? (
                     <div className="studio-card-shell video-result-panel flex min-h-[220px] flex-col items-center justify-center rounded-[1.2rem] border border-dashed border-white/10 px-6 text-center">
                       <Film className="h-8 w-8 text-slate-500" />
-                      <p className="mt-3 text-sm font-semibold text-slate-200">No video yet</p>
-                      <p className="mt-1 text-xs text-slate-500">Generate or open a recent session.</p>
+                      <p className="mt-3 text-sm font-semibold text-slate-200">{t('videoGeneration.no_video_yet')}</p>
+                      <p className="mt-1 text-xs text-slate-500">{t('videoGeneration.no_video_hint')}</p>
                     </div>
                   ) : (
                     <div className="grid gap-3 xl:grid-cols-2">
@@ -831,14 +841,14 @@ export default function VideoGenerationPage() {
                               {previewUrl ? (
                                 <video src={previewUrl} controls className="h-full w-full object-cover" />
                               ) : (
-                                <div className="flex h-full items-center justify-center text-xs text-slate-500">Preview unavailable</div>
+                                <div className="flex h-full items-center justify-center text-xs text-slate-500">{t('videoGeneration.preview_unavailable')}</div>
                               )}
                             </div>
                             <div className="space-y-3 p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="truncate text-sm font-semibold text-slate-100">{video.filename || `video-${index + 1}.mp4`}</p>
-                                  <p className="mt-1 text-xs text-slate-400">{video.prompt || currentUseCase.summary}</p>
+                                  <p className="mt-1 text-xs text-slate-400">{video.prompt || currentUseCaseSummary}</p>
                                 </div>
                                 {uploadState ? (
                                   <span className={`apple-field-pill ${uploadState === 'success' || uploadState === 'exists' ? 'apple-field-pill-optional' : 'apple-field-pill-required'}`}>
@@ -851,7 +861,7 @@ export default function VideoGenerationPage() {
                                   <a href={downloadUrl} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
                                     <span className="inline-flex items-center gap-2">
                                       <Download className="h-3.5 w-3.5" />
-                                      Download
+                                      {t('videoGeneration.download')}
                                     </span>
                                   </a>
                                 ) : null}
@@ -862,7 +872,7 @@ export default function VideoGenerationPage() {
                                 >
                                   <span className="inline-flex items-center gap-2">
                                     <Upload className="h-3.5 w-3.5" />
-                                    Drive
+                                    {t('videoGeneration.drive')}
                                   </span>
                                 </button>
                               </div>
@@ -880,15 +890,15 @@ export default function VideoGenerationPage() {
           <aside className="video-generation-recent min-h-0 overflow-y-auto pr-2">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2 pr-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Recent</p>
-                <button type="button" onClick={loadRecentSessions} className="apple-option-chip rounded-xl px-2.5 py-2 text-xs font-medium transition" title="Refresh recent videos">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.recent')}</p>
+                <button type="button" onClick={loadRecentSessions} className="apple-option-chip rounded-xl px-2.5 py-2 text-xs font-medium transition" title={t('videoGeneration.refresh_recent')}>
                   <RefreshCw className={`h-3.5 w-3.5 ${recentLoading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
 
               {!recentSessions.length ? (
                 <div className="px-1 text-[11px] text-slate-500">
-                  {recentLoading ? 'Loading...' : 'No sessions'}
+                  {recentLoading ? t('videoGeneration.loading') : t('videoGeneration.no_sessions')}
                 </div>
               ) : (
                 recentSessions.map((session) => {
@@ -905,18 +915,18 @@ export default function VideoGenerationPage() {
                       type="button"
                       onClick={() => hydrateFromSession(sessionId)}
                       className={`video-recent-item w-full text-left transition ${isActive ? 'video-recent-item-active' : ''}`}
-                      title={`${USE_CASES.find((item) => item.id === request.useCase)?.label || 'Video Session'} â€¢ ${formatDate(session.updatedAt || session.createdAt)}`}
+                      title={`${USE_CASES.find((item) => item.id === request.useCase) ? t(USE_CASES.find((item) => item.id === request.useCase).labelKey) : t('videoGeneration.session')} • ${formatDate(session.updatedAt || session.createdAt, i18n.language || undefined, t)}`}
                     >
                       <div className="video-recent-thumb overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/45">
                         {previewUrl ? (
                           <video src={previewUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                         ) : previewImage ? (
-                          <img src={previewImage} alt="Recent session" className="h-full w-full object-cover" />
+                          <img src={previewImage} alt={t('videoGeneration.recent_session_alt')} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-[10px] text-slate-500">Empty</div>
+                          <div className="flex h-full items-center justify-center text-[10px] text-slate-500">{t('videoGeneration.empty')}</div>
                         )}
                       </div>
-                      <p className="mt-1.5 px-1 text-[11px] text-slate-400">{formatRelativeTime(session.updatedAt || session.createdAt)}</p>
+                      <p className="mt-1.5 px-1 text-[11px] text-slate-400">{formatRelativeTime(session.updatedAt || session.createdAt, t)}</p>
                     </button>
                   );
                 })
@@ -931,7 +941,7 @@ export default function VideoGenerationPage() {
           <div className="grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className={`${STATUS_BANNER_CLASS} video-status-banner ${isReadyToGenerate ? 'video-status-banner-success text-emerald-200' : 'video-status-banner-warning text-amber-200'}`}>
-                {isReadyToGenerate ? 'Ready' : 'Frames + prompt needed'}
+                {isReadyToGenerate ? t('videoGeneration.ready') : t('videoGeneration.frames_prompt_needed')}
               </div>
               {driveUploadStatus ? (
                 <div className={`${STATUS_BANNER_CLASS} video-status-banner text-slate-200`}>
@@ -945,7 +955,7 @@ export default function VideoGenerationPage() {
                   onChange={(event) => setUploadToDrive(event.target.checked)}
                   className="h-3.5 w-3.5 rounded border-white/20 bg-transparent"
                 />
-                Drive auto-upload
+                {t('videoGeneration.drive_auto_upload')}
               </label>
             </div>
 
@@ -957,7 +967,7 @@ export default function VideoGenerationPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-[1rem] border border-sky-300/28 bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(14,165,233,0.16))] px-4 py-3 text-sm font-semibold text-sky-50 shadow-[0_14px_30px_rgba(8,47,73,0.24)] transition hover:border-sky-200/36 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.3),rgba(14,165,233,0.2))] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                {isGenerating ? 'Generating...' : 'Generate'}
+                {isGenerating ? t('videoGeneration.generating') : t('videoGeneration.generate')}
               </button>
             </div>
             <div />
@@ -973,7 +983,7 @@ export default function VideoGenerationPage() {
         }}
         onSelect={handleGallerySelect}
         assetType="image"
-        title={galleryTarget === 'scene' ? 'Select Scene Image' : galleryTarget === 'end' ? 'Select End Frame' : 'Select Start Frame'}
+        title={galleryTarget === 'scene' ? t('videoGeneration.select_scene_image') : galleryTarget === 'end' ? t('videoGeneration.select_end_frame') : t('videoGeneration.select_start_frame')}
       />
 
       <ScenePickerModal

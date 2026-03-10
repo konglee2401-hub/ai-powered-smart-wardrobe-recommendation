@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronDown, ChevronUp, Copy, Download, Database, AlertCircle
 } from 'lucide-react';
@@ -35,7 +36,7 @@ function Tooltip({ children, content }) {
   );
 }
 
-function AnalysisSection({ section, data, isExpanded, onToggle, newOptions, onSaveSection }) {
+function AnalysisSection({ section, data, isExpanded, onToggle, newOptions, onSaveSection, t }) {
   const rec = data[section.key];
   const value = rec?.choice || rec; // Handle both nested {choice, reason, alternatives} and flat string
   const reason = rec?.reason || '';
@@ -53,7 +54,7 @@ function AnalysisSection({ section, data, isExpanded, onToggle, newOptions, onSa
       >
         <div className="flex items-center gap-2">
           <span className="text-lg">{section.icon}</span>
-          <span className="text-sm font-medium">{section.label}</span>
+          <span className="text-sm font-medium">{t(`imageGeneration.analysisSection_${section.key}`)}</span>
           {isNew && (
             <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full border border-green-500/50">
               New
@@ -136,6 +137,21 @@ export default function AnalysisBreakdown({
   isSaving = false,
   metadata = null
 }) {
+  const { t } = useTranslation();
+  
+  // Create ANALYSIS_SECTIONS with translated labels
+  const ANALYSIS_SECTIONS = [
+    { key: 'scene', label: t('imageGeneration.analysisSection_scene'), icon: '🎬' },
+    { key: 'lighting', label: t('imageGeneration.analysisSection_lighting'), icon: '💡' },
+    { key: 'mood', label: t('imageGeneration.analysisSection_mood'), icon: '😊' },
+    { key: 'cameraangle', label: t('imageGeneration.analysisSection_cameraangle'), icon: '📹' },
+    { key: 'makeup', label: t('imageGeneration.analysisSection_makeup'), icon: '✨' },
+    { key: 'hairstyle', label: t('imageGeneration.analysisSection_hairstyle'), icon: '💇' },
+    { key: 'bottoms', label: t('imageGeneration.analysisSection_bottoms'), icon: '👖' },
+    { key: 'shoes', label: t('imageGeneration.analysisSection_shoes'), icon: '👞' },
+    { key: 'accessories', label: t('imageGeneration.analysisSection_accessories'), icon: '👜' },
+    { key: 'outerwear', label: t('imageGeneration.analysisSection_outerwear'), icon: '🧥' },
+  ];
   const [expandedSections, setExpandedSections] = useState(
     ANALYSIS_SECTIONS.reduce((acc, section) => ({ ...acc, [section.key]: true }), {})
   );
@@ -199,6 +215,7 @@ export default function AnalysisBreakdown({
               onToggle={toggleSection}
               newOptions={newOptions}
               onSaveSection={onSaveOption}
+              t={t}
             />
           ))}
         </div>

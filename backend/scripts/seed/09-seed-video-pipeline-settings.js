@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import connectDB from '../../config/db.js';
 import TrendSetting from '../../models/TrendSetting.js';
 import QueueScannerSettings from '../../models/QueueScannerSettings.js';
+import DEFAULT_SCORING_CONFIG from '../../constants/videoScriptScoring.js';
 
 dotenv.config();
 
@@ -98,6 +99,9 @@ async function run() {
       templateBrowserPreferences: SEEDED_TEMPLATE_BROWSER_PREFERENCES,
     },
   };
+  if (!trendSetting.videoScriptScoringConfig) {
+    trendSetting.videoScriptScoringConfig = DEFAULT_SCORING_CONFIG;
+  }
   await trendSetting.save();
 
   const queueSettings = await QueueScannerSettings.findOneAndUpdate(
@@ -118,6 +122,7 @@ async function run() {
       platform: queueSettings.platform,
       youtubePublishType: queueSettings.youtubePublishType,
     },
+    videoScriptScoringConfig: trendSetting.videoScriptScoringConfig
   }, null, 2));
 
   process.exit(0);

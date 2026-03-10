@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Info } from 'lucide-react';
 
 const SAMPLING_METHODS = [
@@ -47,9 +48,27 @@ export default function AdvancedGenerationSettings({
   randomSeed = true,
   onRandomSeedChange
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
-  const qualityPreset = QUALITY_PRESETS.find(
+  // Create quality presets with translated labels
+  const qualityPresets = [
+    { value: 'draft', labelKey: 'imageGeneration.draft', descKey: 'imageGeneration.draftDesc', steps: 20, cfg: 7 },
+    { value: 'normal', labelKey: 'imageGeneration.normal', descKey: 'imageGeneration.normalDesc', steps: 30, cfg: 7.5 },
+    { value: 'high', labelKey: 'imageGeneration.high', descKey: 'imageGeneration.highDesc', steps: 50, cfg: 8 },
+    { value: 'ultra', labelKey: 'imageGeneration.ultra', descKey: 'imageGeneration.ultraDesc', steps: 75, cfg: 8.5 },
+  ];
+
+  // Create sampling methods with translated labels
+  const samplingMethods = [
+    { value: 'euler', labelKey: 'imageGeneration.euler', descKey: 'imageGeneration.eulerDesc' },
+    { value: 'euler_ancestral', labelKey: 'imageGeneration.eulerAncestral', descKey: 'imageGeneration.eulerAncestralDesc' },
+    { value: 'heun', labelKey: 'imageGeneration.heun', descKey: 'imageGeneration.heunDesc' },
+    { value: 'dpm++', labelKey: 'imageGeneration.dpmpp', descKey: 'imageGeneration.dpmppDesc' },
+    { value: 'lms', labelKey: 'imageGeneration.lms', descKey: 'imageGeneration.lmsDesc' },
+  ];
+
+  const qualityPreset = qualityPresets.find(
     p => p.steps === steps && p.cfg === cfgScale
   );
 
@@ -65,7 +84,7 @@ export default function AdvancedGenerationSettings({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-3 hover:bg-gray-750 transition-colors"
       >
-        <span className="text-sm font-semibold">âš™ï¸ Advanced Settings</span>
+        <span className="text-sm font-semibold">⚙️ {t('imageGeneration.advancedSettings')}</span>
         {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
@@ -74,12 +93,12 @@ export default function AdvancedGenerationSettings({
           {/* Quality Presets */}
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block">
-              <Tooltip content="Preset combinations of steps and CFG scale">
-                Quality Preset
+              <Tooltip content={t('imageGeneration.qualityPresetTooltip')}>
+                {t('imageGeneration.qualityPreset')}
               </Tooltip>
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {QUALITY_PRESETS.map(preset => (
+              {qualityPresets.map(preset => (
                 <button
                   key={preset.value}
                   onClick={() => handlePresetSelect(preset)}
@@ -89,8 +108,8 @@ export default function AdvancedGenerationSettings({
                       : 'bg-gray-700/30 border-gray-700/50 hover:border-purple-600/30'
                   }`}
                 >
-                  <div className="font-medium">{preset.label}</div>
-                  <div className="text-xs text-gray-500">{preset.description}</div>
+                  <div className="font-medium">{t(preset.labelKey)}</div>
+                  <div className="text-xs text-gray-500">{t(preset.descKey)}</div>
                 </button>
               ))}
             </div>
@@ -99,8 +118,8 @@ export default function AdvancedGenerationSettings({
           {/* Steps */}
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block flex items-center gap-1">
-              <Tooltip content="Number of denoising steps. More = better quality but slower">
-                ðŸ“Š Steps: {steps}
+              <Tooltip content={t('imageGeneration.stepsTooltip')}>
+                📊 {t('imageGeneration.steps')}: {steps}
               </Tooltip>
             </label>
             <input
@@ -113,17 +132,17 @@ export default function AdvancedGenerationSettings({
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
             />
             <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Fast (10)</span>
-              <span>Balanced (30)</span>
-              <span>Quality (150)</span>
+              <span>{t('imageGeneration.fast')} (10)</span>
+              <span>{t('imageGeneration.balanced')} (30)</span>
+              <span>{t('imageGeneration.quality')} (150)</span>
             </div>
           </div>
 
           {/* CFG Scale */}
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block flex items-center gap-1">
-              <Tooltip content="Classifier-Free Guidance. Higher = follow prompt more strictly">
-                ðŸŽ¯ CFG Scale: {cfgScale.toFixed(1)}
+              <Tooltip content={t('imageGeneration.cfgScaleTooltip')}>
+                🎯 {t('imageGeneration.cfgScale')}: {cfgScale.toFixed(1)}
               </Tooltip>
             </label>
             <input
@@ -136,21 +155,21 @@ export default function AdvancedGenerationSettings({
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
             />
             <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Flexible (1)</span>
-              <span>Balanced (7.5)</span>
-              <span>Strict (20)</span>
+              <span>{t('imageGeneration.flexible')} (1)</span>
+              <span>{t('imageGeneration.balanced')} (7.5)</span>
+              <span>{t('imageGeneration.strict')} (20)</span>
             </div>
           </div>
 
           {/* Sampling Method */}
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block">
-              <Tooltip content="Algorithm used for image generation">
-                ðŸ”„ Sampling Method
+              <Tooltip content={t('imageGeneration.samplingMethodTooltip')}>
+                🔄 {t('imageGeneration.samplingMethod')}
               </Tooltip>
             </label>
             <div className="grid grid-cols-2 gap-1">
-              {SAMPLING_METHODS.map(method => (
+              {samplingMethods.map(method => (
                 <button
                   key={method.value}
                   onClick={() => onSamplingMethodChange(method.value)}
@@ -160,8 +179,8 @@ export default function AdvancedGenerationSettings({
                       : 'bg-gray-700/30 border-gray-700/50 hover:border-blue-600/30'
                   }`}
                 >
-                  <div className="font-medium">{method.label}</div>
-                  <div className="text-xs text-gray-500">{method.description}</div>
+                  <div className="font-medium">{t(method.labelKey)}</div>
+                  <div className="text-xs text-gray-500">{t(method.descKey)}</div>
                 </button>
               ))}
             </div>
@@ -171,8 +190,8 @@ export default function AdvancedGenerationSettings({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-gray-400 flex items-center gap-1">
-                <Tooltip content="Seed for reproducible results. Leave random for variation">
-                  ðŸŒ± Seed
+                <Tooltip content={t('imageGeneration.seedTooltip')}>
+                  🌱 {t('imageGeneration.seed')}
                 </Tooltip>
               </label>
               <label className="flex items-center gap-2 text-xs text-gray-400">
@@ -182,7 +201,7 @@ export default function AdvancedGenerationSettings({
                   onChange={(e) => onRandomSeedChange(e.target.checked)}
                   className="rounded"
                 />
-                <span>Random</span>
+                <span>{t('imageGeneration.randomSeed')}</span>
               </label>
             </div>
             {!randomSeed && (
@@ -190,7 +209,7 @@ export default function AdvancedGenerationSettings({
                 type="number"
                 value={seed || ''}
                 onChange={(e) => onSeedChange(e.target.value ? Number(e.target.value) : null)}
-                placeholder="Leave blank for random seed"
+                placeholder={t('imageGeneration.enterSeed')}
                 className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
               />
             )}

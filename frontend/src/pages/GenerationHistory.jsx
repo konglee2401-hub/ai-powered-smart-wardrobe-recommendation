@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,21 +27,21 @@ import {
   getGenerationSessions,
 } from '../services/generationSessionsService';
 
-const FLOW_OPTIONS = [
-  { value: 'all', label: 'All flows', icon: Clock3, tone: 'neutral' },
-  { value: 'one-click', label: '1-Click', icon: Sparkles, tone: 'accent' },
-  { value: 'image-generation', label: 'Image', icon: ImageIcon, tone: 'info' },
-  { value: 'video-generation', label: 'Video', icon: Video, tone: 'pink' },
-  { value: 'voice-generation', label: 'Voice', icon: Mic2, tone: 'success' },
-];
+const getFlowOptions = (t) => ([
+  { value: 'all', label: t('generationHistory.all_flows'), icon: Clock3, tone: 'neutral' },
+  { value: 'one-click', label: t('generationHistory.flow.oneClick'), icon: Sparkles, tone: 'accent' },
+  { value: 'image-generation', label: t('generationHistory.image'), icon: ImageIcon, tone: 'info' },
+  { value: 'video-generation', label: t('generationHistory.flow.video'), icon: Video, tone: 'pink' },
+  { value: 'voice-generation', label: t('generationHistory.voice'), icon: Mic2, tone: 'success' },
+]);
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All status' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'in-progress', label: 'In progress' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+const getStatusOptions = (t) => ([
+  { value: 'all', label: t('generationHistory.all_status') },
+  { value: 'completed', label: t('generationHistory.completed') },
+  { value: 'in-progress', label: t('generationHistory.in_progress') },
+  { value: 'failed', label: t('generationHistory.failed') },
+  { value: 'cancelled', label: t('generationHistory.cancelled') },
+]);
 
 const PAGE_SIZE = 20;
 
@@ -75,11 +76,11 @@ function getFilterButtonClass(active, tone = 'neutral') {
   return 'border-slate-700/80 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(15,23,42,0.58))] text-slate-300 hover:border-slate-600/90 hover:bg-slate-900/90';
 }
 
-function getFlowMeta(flowType) {
+function getFlowMeta(flowType, flowOptions, t) {
   return (
-    FLOW_OPTIONS.find((option) => option.value === flowType) || {
+    flowOptions.find((option) => option.value === flowType) || {
       value: flowType,
-      label: flowType || 'Unknown',
+      label: flowType || t('generationHistory.unknown'),
       icon: Wand2,
       tone: 'neutral',
     }
@@ -94,10 +95,10 @@ function getStatusTone(status) {
   return 'neutral';
 }
 
-function formatDateTime(value) {
-  if (!value) return 'Unknown';
+function formatDateTime(value, t) {
+  if (!value) return t('generationHistory.unknown_2');
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
+  if (Number.isNaN(date.getTime())) return t('generationHistory.unknown_3');
   return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -106,8 +107,8 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function formatDuration(duration) {
-  if (!duration || Number.isNaN(duration)) return 'Pending';
+function formatDuration(duration, t) {
+  if (!duration || Number.isNaN(duration)) return t('generationHistory.pending');
   if (duration < 1000) return `${duration} ms`;
   const seconds = Math.round(duration / 100) / 10;
   if (seconds < 60) return `${seconds}s`;
@@ -222,11 +223,13 @@ function MetricPill({ label, value }) {
   );
 }
 
-function JsonPreview({ data, emptyLabel = 'No structured data captured yet.' }) {
+function JsonPreview({ data, emptyLabel }) {
+  const { t } = useTranslation();
+  const resolvedEmptyLabel = emptyLabel || t('generationHistory.no_structured_data_captured_yet');
   const entries = summarizeJson(data);
 
   if (!entries.length) {
-    return <p className="text-xs text-slate-500">{emptyLabel}</p>;
+    return <p className="text-xs text-slate-500">{resolvedEmptyLabel}</p>;
   }
 
   return (
@@ -242,7 +245,6 @@ function JsonPreview({ data, emptyLabel = 'No structured data captured yet.' }) 
     </div>
   );
 }
-
 
 function MediaPreviewCard({ item, compact = false }) {
   const kind = item?.kind || getMediaKind(item?.path || item?.url);
@@ -275,19 +277,19 @@ function MediaPreviewCard({ item, compact = false }) {
           ) : kind === 'image' ? (
             <img src={previewUrl} alt={label} className="h-full w-full object-contain" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">No preview</div>
+            <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">{t('generationHistory.no_preview')}</div>
           )
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No preview</div>
+          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">{t('generationHistory.no_preview_2')}</div>
         )}
       </div>
-      <p className="mt-2 break-all text-[11px] text-slate-500">{item?.path || item?.url || 'No file path'}</p>
+      <p className="mt-2 break-all text-[11px] text-slate-500">{item?.path || item?.url || t('generationHistory.no_file_path')}</p>
     </div>
   );
 }
 
-function SessionCard({ session, selected, onSelect }) {
-  const flow = getFlowMeta(session.flowType);
+function SessionCard({ session, selected, onSelect, tr, flowOptions }) {
+  const flow = getFlowMeta(session.flowType, flowOptions, tr);
   const FlowIcon = flow.icon;
 
   return (
@@ -306,24 +308,24 @@ function SessionCard({ session, selected, onSelect }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="truncate text-[12px] font-semibold text-white">{flow.label}</h3>
-              <StatusPill tone={getStatusTone(session.status)}>{session.status || 'unknown'}</StatusPill>
+              <StatusPill tone={getStatusTone(session.status)}>{session.status || t('generationHistory.unknown_4')}</StatusPill>
             </div>
             <p className="mt-0.5 truncate text-[11px] text-slate-400">{session.useCase || session.sessionId}</p>
           </div>
         </div>
-        <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(session.createdAt)}</p>
+        <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(session.createdAt, t)}</p>
       </div>
 
       <div className="mt-2 grid grid-cols-4 gap-1">
-        <MetricPill label="In" value={session.inputCount || 0} />
-        <MetricPill label="Out" value={session.outputCount || 0} />
-        <MetricPill label="Stages" value={session.stageCount || 0} />
-        <MetricPill label="Time" value={formatDuration(session.totalDuration)} />
+        <MetricPill label={t('generationHistory.in')} value={session.inputCount || 0} />
+        <MetricPill label={t('generationHistory.metric.out')} value={session.outputCount || 0} />
+        <MetricPill label={t('generationHistory.stages')} value={session.stageCount || 0} />
+        <MetricPill label={t('generationHistory.time')} value={formatDuration(session.totalDuration, t)} />
       </div>
 
       <div className="mt-1.5 rounded-xl border border-slate-800/80 bg-slate-950/60 px-2 py-1.5">
         <p className={`line-clamp-1 text-[10px] leading-4 ${session.error?.message ? 'text-rose-200' : 'text-slate-300'}`}>
-          {session.error?.message || session.latestLog?.message || 'No detailed event captured yet.'}
+          {session.error?.message || session.latestLog?.message || t('generationHistory.no_detailed_event_captured_yet')}
         </p>
       </div>
     </button>
@@ -381,7 +383,7 @@ export default function GenerationHistory() {
           return hasCurrent ? current : nextSessions[0].sessionId;
         });
       } catch (loadError) {
-        if (!ignore) setError(loadError.message || 'Failed to load session history.');
+        if (!ignore) setError(loadError.message || t('generationHistory.failed_to_load_session_history'));
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -408,7 +410,7 @@ export default function GenerationHistory() {
       } catch (detailError) {
         if (!ignore) {
           setSelectedSession(null);
-          setError(detailError.message || 'Failed to load session detail.');
+          setError(detailError.message || t('generationHistory.failed_to_load_session_detail'));
         }
       } finally {
         if (!ignore) setDetailLoading(false);
@@ -431,44 +433,44 @@ export default function GenerationHistory() {
 
     return [
       {
-        title: 'Sessions',
+        title: t('generationHistory.sessions'),
         value: total,
-        helper: 'All captured runs across generation flows.',
+        helper: t('generationHistory.all_captured_runs_across_generation_flows'),
         tone: 'info',
         icon: Clock3,
       },
       {
-        title: 'Completed',
+        title: t('generationHistory.completed_2'),
         value: completed,
         helper: `${total ? Math.round((completed / total) * 100) : 0}% finished cleanly.`,
         tone: 'success',
         icon: CheckCircle2,
       },
       {
-        title: 'Failed',
+        title: t('generationHistory.failed_2'),
         value: failed,
-        helper: 'Sessions needing inspection or rerun.',
+        helper: t('generationHistory.sessions_needing_inspection_or_rerun'),
         tone: 'danger',
         icon: XCircle,
       },
       {
-        title: 'Live / Queue',
+        title: t('generationHistory.live_queue'),
         value: inProgress,
-        helper: 'Still running or waiting for downstream work.',
+        helper: t('generationHistory.still_running_or_waiting_for_downstream_work'),
         tone: 'warning',
         icon: Loader2,
       },
       {
-        title: '1-Click',
+        title: t('generationHistory.summary.oneClick'),
         value: oneClick,
-        helper: 'Cross-stage flows combining multiple generation steps.',
+        helper: t('generationHistory.cross_stage_flows_combining_multiple_generation_steps'),
         tone: 'accent',
         icon: Sparkles,
       },
     ];
   }, [summary]);
 
-  const selectedFlow = selectedSession ? getFlowMeta(selectedSession.flowType) : null;
+  const selectedFlow = selectedSession ? getFlowMeta(selectedSession.flowType, flowOptions, tr) : null;
   const selectedLogs = selectedSession?.logs || [];
   const selectedStages = selectedSession?.metrics?.stages || [];
   const selectedArtifacts = selectedSession?.artifacts || {};
@@ -502,7 +504,7 @@ export default function GenerationHistory() {
     .map((item) => ({ path: item, url: getPublicUrl(item), kind: getMediaKind(item) }));
 
   async function handleDeleteSession(sessionId) {
-    const confirmed = window.confirm(`Delete session ${sessionId}?`);
+    const confirmed = window.confirm(t('generationHistory.delete_session', { id: sessionId }));
     if (!confirmed) return;
 
     setDeletingId(sessionId);
@@ -515,7 +517,7 @@ export default function GenerationHistory() {
       }
       setPage(1);
     } catch (deleteError) {
-      setError(deleteError.message || 'Failed to delete session.');
+      setError(deleteError.message || t('generationHistory.failed_to_delete_session'));
     } finally {
       setDeletingId('');
     }
@@ -530,9 +532,9 @@ export default function GenerationHistory() {
       {/* ==================== HEADER ==================== */}
       <PageHeaderBar
         icon={<Clock3 className="h-5 w-5 text-cyan-200" />}
-        title="Generation History"
-        subtitle="Session-first review workspace"
-        meta="Trace inputs, outputs, options, runtime signals, and failures across image, video, voice, and 1-click flows."
+        title={t('generationHistory.generation_history')}
+        subtitle={t('generationHistory.session_first_review_workspace')}
+        meta={t('generationHistory.trace_inputs_outputs_options_runtime_signals_and_failures_ac')}
         className="h-16"
         contentClassName="px-5 lg:px-6"
         actions={
@@ -573,13 +575,13 @@ export default function GenerationHistory() {
                     setPage(1);
                     setFilters((current) => ({ ...current, search: event.target.value }));
                   }}
-                  placeholder="Search session id, flow, error, or log text"
+                  placeholder={t('generationHistory.search_session_id_flow_error_or_log_text')}
                   className="h-11 w-full rounded-2xl border border-slate-800/80 bg-slate-950/70 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40"
                 />
               </label>
 
               <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map((option) => (
+                {statusOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -602,7 +604,7 @@ export default function GenerationHistory() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {FLOW_OPTIONS.map((option) => {
+              {flowOptions.map((option) => {
                 const FlowIcon = option.icon;
                 return (
                   <button
@@ -625,13 +627,13 @@ export default function GenerationHistory() {
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span className="rounded-2xl border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-slate-300">
-                {PAGE_SIZE} sessions / page
+                {t('generationHistory.sessions_page', { count: PAGE_SIZE })}
               </span>
               <span>
-                Page {pagination.page || 1} of {pagination.totalPages || 1}
+                {t('generationHistory.pagination.pageOf', { page: pagination.page || 1, total: pagination.totalPages || 1 })}
               </span>
               <span className="text-slate-500">
-                Showing {sessions.length} on this page / {pagination.total || 0} total
+                {t('generationHistory.showing_on_page', { count: sessions.length, total: pagination.total || 0 })}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -665,13 +667,13 @@ export default function GenerationHistory() {
           <section className={`${SURFACE_CARD_CLASS} min-h-0 max-h-[920px] overflow-hidden shadow-[0_30px_100px_rgba(139,92,246,0.12)]`}>
             <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3.5">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-white">Session feed</h2>
+                <h2 className="text-base font-semibold text-white">{t('generationHistory.session_feed')}</h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  Browse captured runs and jump into the exact input, output, and failure context.
+                  {t('generationHistory.browse_captured_runs_and_jump_into_the_exact_input_output_an')}
                 </p>
               </div>
               <p className="text-[11px] text-slate-500 flex-shrink-0">
-                {sessions.length} shown / {pagination.total || 0} total
+                {t('generationHistory.shown_total', { count: sessions.length, total: pagination.total || 0 })}
               </p>
             </div>
 
@@ -692,8 +694,8 @@ export default function GenerationHistory() {
               ) : (
                 <EmptyState
                   icon={Clock3}
-                  title="No sessions match these filters"
-                  description="Try widening the flow type or status filter, or clear your search to bring back older runs."
+                  title={t('generationHistory.no_sessions_match_these_filters')}
+                  description={t('generationHistory.try_widening_the_flow_type_or_status_filter_or_clear_your_se')}
                   className="border-none bg-transparent shadow-none"
                 />
               )}
@@ -716,8 +718,8 @@ export default function GenerationHistory() {
             ) : selectedSession ? (
               <div className="grid min-w-0 gap-3 overflow-hidden scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
                 <DetailSection
-                  title="Session overview"
-                  subtitle="Quick read on flow type, runtime health, and last known state."
+                  title={t('generationHistory.session_overview')}
+                  subtitle={t('generationHistory.quick_read_on_flow_type_runtime_health_and_last_known_state')}
                   actions={
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
@@ -749,47 +751,47 @@ export default function GenerationHistory() {
                       <SemanticIconBadge icon={selectedFlow?.icon || Wand2} tone={selectedFlow?.tone || 'neutral'} className="h-12 w-12" />
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-lg font-semibold text-white">{selectedFlow?.label || 'Unknown flow'}</h2>
-                          <StatusPill tone={getStatusTone(selectedSession.status)}>{selectedSession.status || 'unknown'}</StatusPill>
+                          <h2 className="text-lg font-semibold text-white">{selectedFlow?.label || t('generationHistory.unknown_flow')}</h2>
+                          <StatusPill tone={getStatusTone(selectedSession.status)}>{selectedSession.status || t('generationHistory.unknown_5')}</StatusPill>
                         </div>
                         <p className="mt-1 text-xs text-slate-400">{selectedSession.useCase || selectedSession.sessionId}</p>
                       </div>
                     </div>
                     <div className="grid flex-1 gap-2 sm:grid-cols-2">
-                      <MetricPill label="Created" value={formatDateTime(selectedSession.createdAt)} />
-                      <MetricPill label="Updated" value={formatDateTime(selectedSession.updatedAt)} />
-                      <MetricPill label="Duration" value={formatDuration(selectedSession.metrics?.totalDuration)} />
-                      <MetricPill label="Logs" value={selectedLogs.length} />
+                      <MetricPill label={t('generationHistory.created')} value={formatDateTime(selectedSession.createdAt, t)} />
+                      <MetricPill label={t('generationHistory.updated')} value={formatDateTime(selectedSession.updatedAt, t)} />
+                      <MetricPill label={t('generationHistory.duration')} value={formatDuration(selectedSession.metrics?.totalDuration, t)} />
+                      <MetricPill label={t('generationHistory.detail.logs')} value={selectedLogs.length} />
                     </div>
                   </div>
                 </DetailSection>
 
                 <DetailSection
-                  title="Inputs and outputs"
-                  subtitle="Stored artifacts captured from the run. Inputs stay separate from generated outputs to keep review fast."
+                  title={t('generationHistory.inputs_and_outputs')}
+                  subtitle={t('generationHistory.stored_artifacts_captured_from_the_run_inputs_stay_separate_')}
                 >
                   <div className="grid gap-4 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] min-w-0">
                     <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-3 min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Inputs</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">{t('generationHistory.inputs')}</p>
                       <div className="mt-3 flex flex-col gap-3">
                         {inputItems.length ? (
                           inputItems.map((item, index) => (
                             <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} compact />
                           ))
                         ) : (
-                          <p className="text-xs text-slate-500">No persisted input artifact path was recorded.</p>
+                          <p className="text-xs text-slate-500">{t('generationHistory.no_persisted_input_artifact_path_was_recorded')}</p>
                         )}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-pink-400/20 bg-pink-500/8 p-3 min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-pink-200/80">Outputs</p>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-pink-200/80">{t('generationHistory.outputs')}</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         {outputItems.length ? (
                           outputItems.map((item, index) => (
                             <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} />
                           ))
                         ) : (
-                          <p className="text-xs text-slate-500">No generated output artifact was stored on this session.</p>
+                          <p className="text-xs text-slate-500">{t('generationHistory.no_generated_output_artifact_was_stored_on_this_session')}</p>
                         )}
                       </div>
                     </div>
@@ -797,24 +799,24 @@ export default function GenerationHistory() {
                 </DetailSection>
 
                 <DetailSection
-                  title="Options and analysis"
-                  subtitle="Structured values captured during the run. This is where provider choices and analysis payloads become visible."
+                  title={t('generationHistory.options_and_analysis')}
+                  subtitle={t('generationHistory.structured_values_captured_during_the_run_this_is_where_prov')}
                 >
                   <div className="grid gap-4">
                     <div>
-                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">Analysis payload</p>
+                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">{t('generationHistory.analysis_payload')}</p>
                       <JsonPreview data={selectedSession.analysis} />
                     </div>
                     <div>
-                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">Error payload</p>
-                      <JsonPreview data={selectedSession.error} emptyLabel="No error payload captured for this session." />
+                      <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">{t('generationHistory.error_payload')}</p>
+                      <JsonPreview data={selectedSession.error} emptyLabel={t('generationHistory.no_error_payload_captured_for_this_session')} />
                     </div>
                   </div>
                 </DetailSection>
 
                 <DetailSection
-                  title="Stage timeline"
-                  subtitle="Step-by-step timing and state changes captured during the session."
+                  title={t('generationHistory.stage_timeline')}
+                  subtitle={t('generationHistory.step_by_step_timing_and_state_changes_captured_during_the_se')}
                 >
                   {selectedStages.length ? (
                     <div className="space-y-3">
@@ -823,15 +825,15 @@ export default function GenerationHistory() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <StatusPill tone={stage.status === 'completed' ? 'success' : stage.status === 'failed' ? 'danger' : 'info'}>
-                                {stage.status || 'unknown'}
+                                {stage.status || t('generationHistory.unknown_6')}
                               </StatusPill>
-                              <p className="text-sm font-medium text-white">{stage.stage || `Stage ${index + 1}`}</p>
+                              <p className="text-sm font-medium text-white">{stage.stage || t('generationHistory.stage_number', { index: index + 1 })}</p>
                             </div>
-                            <p className="text-xs text-slate-400">{formatDuration(stage.duration)}</p>
+                            <p className="text-xs text-slate-400">{formatDuration(stage.duration, t)}</p>
                           </div>
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                            <MetricPill label="Started" value={formatDateTime(stage.startTime)} />
-                            <MetricPill label="Finished" value={formatDateTime(stage.endTime)} />
+                            <MetricPill label={t('generationHistory.started')} value={formatDateTime(stage.startTime, t)} />
+                            <MetricPill label={t('generationHistory.finished')} value={formatDateTime(stage.endTime, t)} />
                           </div>
                         </div>
                       ))}
@@ -839,16 +841,16 @@ export default function GenerationHistory() {
                   ) : (
                     <EmptyState
                       icon={Loader2}
-                      title="No stage timing recorded"
-                      description="This run either finished too early or the pipeline did not persist stage-level metrics."
+                      title={t('generationHistory.no_stage_timing_recorded')}
+                      description={t('generationHistory.this_run_either_finished_too_early_or_the_pipeline_did_not_p')}
                       compact
                     />
                   )}
                 </DetailSection>
 
                 <DetailSection
-                  title="Runtime log stream"
-                  subtitle="The latest debug and error messages captured for this run."
+                  title={t('generationHistory.runtime_log_stream')}
+                  subtitle={t('generationHistory.the_latest_debug_and_error_messages_captured_for_this_run')}
                 >
                   {selectedLogs.length ? (
                     <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
@@ -870,12 +872,12 @@ export default function GenerationHistory() {
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <StatusPill tone={log.level === 'error' ? 'danger' : log.level === 'warn' ? 'warning' : log.level === 'info' ? 'info' : 'neutral'}>
-                                {log.level || 'debug'}
+                                {log.level || t('generationHistory.logs.debug')}
                               </StatusPill>
-                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{log.category || 'general'}</p>
-                              <p className="ml-auto text-[11px] text-slate-500">{formatDateTime(log.timestamp)}</p>
+                              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{log.category || t('generationHistory.logs.general')}</p>
+                              <p className="ml-auto text-[11px] text-slate-500">{formatDateTime(log.timestamp, t)}</p>
                             </div>
-                            <p className="mt-2 text-xs leading-5 text-slate-200">{log.message || 'No message'}</p>
+                            <p className="mt-2 text-xs leading-5 text-slate-200">{log.message || t('generationHistory.no_message')}</p>
                             {log.details ? (
                               <pre className="mt-3 overflow-x-auto rounded-2xl border border-slate-800/80 bg-slate-950/80 p-3 text-[11px] leading-5 text-slate-300">
                                 {JSON.stringify(log.details, null, 2)}
@@ -887,8 +889,8 @@ export default function GenerationHistory() {
                   ) : (
                     <EmptyState
                       icon={AlertTriangle}
-                      title="No logs were persisted"
-                      description="The session exists, but no log entries were written to the central logger for this run."
+                      title={t('generationHistory.no_logs_were_persisted')}
+                      description={t('generationHistory.the_session_exists_but_no_log_entries_were_written_to_the_ce')}
                       compact
                     />
                   )}
@@ -897,8 +899,8 @@ export default function GenerationHistory() {
             ) : (
               <EmptyState
                 icon={Clock3}
-                title="Choose a session"
-                description="Select a run from the left to inspect its inputs, outputs, runtime stages, and log trail."
+                title={t('generationHistory.choose_a_session')}
+                description={t('generationHistory.select_a_run_from_the_left_to_inspect_its_inputs_outputs_run')}
               />
             )}
           </section>

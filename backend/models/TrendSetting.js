@@ -154,6 +154,10 @@ const TrendSettingSchema = new mongoose.Schema({
     unique: true,
     default: 'default',
   },
+  videoScriptScoringConfig: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
   keywords: {
     hai: [{ type: String }],
     dance: [{ type: String }],
@@ -239,6 +243,7 @@ const DEFAULT_PLAYBOARD_CONFIGS = [
 TrendSettingSchema.statics.getOrCreateDefault = async function getOrCreateDefault() {
   const defaults = {
     key: 'default',
+    videoScriptScoringConfig: null,
     keywords: {
       hai: ['hài', 'funny', 'comedy', 'skit'],
       dance: ['dance', 'nhảy', 'vũ đạo', 'choreography'],

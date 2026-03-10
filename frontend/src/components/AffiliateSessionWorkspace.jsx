@@ -1,6 +1,7 @@
 ﻿import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, FileText, Video } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileText, Video, RefreshCw } from 'lucide-react';
 import AIImage from './AIImage';
+import { VIDEO_SCRIPT_TEMPLATES } from '../constants/videoScriptTemplates';
 
 const normalizeHashtag = (tag) => `#${String(tag || '').replace(/^#+/, '').trim()}`;
 const resolveMediaSrc = (item) => item?.href || item?.url || item?.path || item?.driveUrl || null;
@@ -198,7 +199,16 @@ export function getAffiliateSessionRunningStatus(session) {
 
 export { SessionStatusPill };
 
-export default function AffiliateSessionWorkspace({ session }) {
+export default function AffiliateSessionWorkspace({ session, onRerunStep3 }) {
+  const [selectedTemplateId, setSelectedTemplateId] = useState(
+    session?.analysis?.metadata?.scriptTemplate?.id || 'auto'
+  );
+  const [rerunLoading, setRerunLoading] = useState(false);
+  const [rerunError, setRerunError] = useState(null);
+
+  React.useEffect(() => {
+    setSelectedTemplateId(session?.analysis?.metadata?.scriptTemplate?.id || 'auto');
+  }, [session?.analysis?.metadata?.scriptTemplate?.id]);
   const frameItems = getSessionFrameLibrary(session);
   const videoItems = getSessionVideoLibrary(session);
   const promptText = session.step1Prompts?.summary || [session.step1Prompts?.wearing, session.step1Prompts?.holding].filter(Boolean).join('\n\n');
@@ -233,6 +243,53 @@ export default function AffiliateSessionWorkspace({ session }) {
         <div className="grid content-start gap-3">
           <CollapsibleTextCard title="Step 1 Prompt" text={promptText} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'analyze')} label={getAffiliateSessionStepStatus(session, 'analyze')} />} rightAction={<CopyInlineButton value={promptText} />} minHeight="min-h-[190px]" />
           <CollapsibleTextCard title="Step 1 Analysis" text={analysisText} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'analyze')} label={getAffiliateSessionStepStatus(session, 'analyze')} />} rightAction={<CopyInlineButton value={analysisText} />} minHeight="min-h-[190px]" />
+          <div className="studio-card-shell rounded-2xl p-3 shadow-[0_14px_34px_rgba(100,156,198,0.10)]">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-700">Step 3 Template</h4>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!onRerunStep3) return;
+                  setRerunLoading(true);
+                  setRerunError(null);
+                  try {
+                    await onRerunStep3(session, selectedTemplateId);
+                  } catch (error) {
+                    setRerunError(error.message || 'Failed to rerun step 3');
+                  } finally {
+                    setRerunLoading(false);
+                  }
+                }}
+                disabled={rerunLoading || !onRerunStep3}
+                className="apple-option-chip inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${rerunLoading ? 'animate-spin' : ''}`} />
+                Re-run Step 3
+              </button>
+            </div>
+            <div className="grid gap-2">
+              {VIDEO_SCRIPT_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => setSelectedTemplateId(template.id)}
+                  className={`rounded-xl border px-3 py-2 text-left text-[11px] transition ${
+                    selectedTemplateId === template.id
+                      ? 'border-sky-400/60 bg-sky-400/10 text-sky-100'
+                      : 'border-white/10 bg-white/5 text-slate-200 hover:border-slate-500/60'
+                  }`}
+                >
+                  <div className="font-semibold">{template.title}</div>
+                  <div className="mt-1 text-[10px] text-slate-400">{template.description}</div>
+                </button>
+              ))}
+            </div>
+            {rerunError ? (
+              <div className="mt-3 rounded-lg border border-rose-300/70 bg-rose-100/60 px-3 py-2 text-[11px] text-rose-700">
+                {rerunError}
+              </div>
+            ) : null}
+          </div>
           <CollapsibleTextCard title="Step 3 Script" text={scriptValue} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'deep-analysis')} label={getAffiliateSessionStepStatus(session, 'deep-analysis')} />} rightAction={<CopyInlineButton value={scriptValue} />} minHeight="min-h-[220px]" />
           <CollapsibleTextCard title="Hashtags" text={hashtagText} rightAction={<CopyInlineButton value={hashtagText} />} minHeight="min-h-[140px]" />
         </div>

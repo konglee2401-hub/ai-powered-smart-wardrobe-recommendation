@@ -23,9 +23,10 @@ import { buildAnalysisPrompt, normalizeOptionLibrary, parseRecommendations, auto
 import upload from '../middleware/upload.js';
 import fs from 'fs';
 import path from 'path';
-import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse } from '../services/affiliateStoryboardService.js';
+import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlanningPrompt, parseSegmentPlanningResponse, selectVideoScriptTemplate } from '../services/affiliateStoryboardService.js';
 import { extractLastFrame, concatenateVideos, isFfmpegAvailable } from '../services/videoContinuityService.js';
 import SessionLog from '../models/SessionLog.js';
+import { getVideoScriptTemplateById } from '../constants/videoScriptTemplates.js';
 
 const router = express.Router();
 
@@ -745,11 +746,35 @@ router.post('/step-3-deep-analysis', async (req, res) => {
 
     const { analysis, storyboardBlueprint } = flowState.step1;
     const { frameLibrary, productImagePath, promptLanguage } = flowState.step2;
-    const { productFocus = 'full-outfit', language = promptLanguage || 'vi' } = req.body;
+    const { productFocus = 'full-outfit', language = promptLanguage || 'vi', scriptTemplateId = 'auto' } = req.body;
     const normalizedLanguage = (language || promptLanguage || 'vi').split('-')[0].split('_')[0].toLowerCase();
 
     if (!Array.isArray(frameLibrary) || frameLibrary.length === 0) {
       throw new Error('Frame library is missing from Step 2.');
+    }
+
+    const autoTemplate = scriptTemplateId === 'auto'
+      ? await selectVideoScriptTemplate({ analysis, productFocus })
+      : null;
+    const resolvedScriptTemplateId = scriptTemplateId === 'auto'
+      ? (autoTemplate?.template?.id || 'auto')
+      : scriptTemplateId;
+
+    if (autoTemplate?.template) {
+      await logger.info(
+        `Auto-matched script template: ${autoTemplate.template.name}`,
+        'step-3-template',
+        {
+          templateId: autoTemplate.template.id,
+          reason: autoTemplate.reason,
+          topCandidates: (autoTemplate.scored || []).slice(0, autoTemplate.config?.topCandidates || 3).map((item) => ({
+            id: item.template.id,
+            name: item.template.name,
+            score: item.score,
+            matches: item.matches
+          }))
+        }
+      );
     }
 
     const plannerPrompt = buildSegmentPlanningPrompt({
@@ -757,7 +782,9 @@ router.post('/step-3-deep-analysis', async (req, res) => {
       blueprint: storyboardBlueprint,
       frameLibrary,
       productFocus,
-      language: normalizedLanguage
+      language: normalizedLanguage,
+      scriptTemplateId: resolvedScriptTemplateId,
+      autoSelection: autoTemplate
     });
 
     const chatGPTService = new ChatGPTService({ debug: false });
@@ -795,6 +822,21 @@ router.post('/step-3-deep-analysis', async (req, res) => {
     const step3Duration = ((Date.now() - startTime) / 1000).toFixed(2);
     const voiceoverScript = parsedPlan.voiceoverScript || segmentPlan.map((segment) => segment.voiceoverText).join(' ');
     const hashtags = Array.isArray(parsedPlan.hashtags) ? parsedPlan.hashtags : [];
+    const resolvedTemplateId = parsedPlan.templateId || (resolvedScriptTemplateId !== 'auto' ? resolvedScriptTemplateId : null);
+    const resolvedTemplate = resolvedTemplateId ? getVideoScriptTemplateById(resolvedTemplateId) : null;
+    const scriptTemplateMeta = {
+      id: resolvedTemplateId,
+      name: parsedPlan.templateName || resolvedTemplate?.name || null,
+      reason: parsedPlan.templateReason || autoTemplate?.reason || null
+    };
+    const scoringSummary = autoTemplate
+      ? (autoTemplate.scored || []).slice(0, autoTemplate.config?.topCandidates || 3).map((item) => ({
+        id: item.template.id,
+        name: item.template.name,
+        score: item.score,
+        matches: item.matches
+      }))
+      : [];
 
     flowStates.set(flowId, {
       ...flowState,
@@ -803,7 +845,11 @@ router.post('/step-3-deep-analysis', async (req, res) => {
         frameLibrary,
         segmentPlan,
         videoScripts: segmentPlan,
-        metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
+        metadata: {
+          storyboardTemplate: storyboardBlueprint.templateKey,
+          scriptTemplate: scriptTemplateMeta,
+          scriptTemplateScoring: scoringSummary
+        },
         hashtags,
         voiceoverScript,
         deepAnalysisPrompt: plannerPrompt,
@@ -812,6 +858,9 @@ router.post('/step-3-deep-analysis', async (req, res) => {
         language: normalizedLanguage,
         duration: parseFloat(step3Duration)
       },
+      step4: null,
+      step5: null,
+      step6: null,
       status: 'step3-complete'
     });
 
@@ -829,7 +878,11 @@ router.post('/step-3-deep-analysis', async (req, res) => {
       storyboardBlueprint,
       segmentPlan,
       videoScripts: segmentPlan,
-      metadata: { storyboardTemplate: storyboardBlueprint.templateKey },
+      metadata: {
+        storyboardTemplate: storyboardBlueprint.templateKey,
+        scriptTemplate: scriptTemplateMeta,
+        scriptTemplateScoring: scoringSummary
+      },
       voiceoverScript,
       hashtags,
       step_duration: parseFloat(step3Duration)
