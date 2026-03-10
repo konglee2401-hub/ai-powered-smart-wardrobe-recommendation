@@ -43,7 +43,9 @@ UA = [
 
 queue = asyncio.PriorityQueue()
 running_jobs = 0
-worker_task = None
+worker_tasks = []
+queued_video_ids = set()
+processing_video_ids = set()
 _proxy_index = 0
 FAIL_FAST_TIMEOUTS_MS = [18000, 30000, 50000]
 YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{11}$')
@@ -1641,24 +1643,79 @@ async def cleanup_invalid_youtube_records(limit: int = 1000) -> dict:
     return {'deleted': res.deleted_count, 'matched': len(invalid_docs)}
 
 
-async def enqueue(video_id, priority=5):
-    await queue.put((priority, str(video_id), 0))
+def _desired_worker_count() -> int:
+    setting = get_or_create_settings() or {}
+    configured = int(setting.get('maxConcurrentDownload') or 1)
+    return max(1, configured)
+
+
+async def reset_orphaned_downloads() -> dict:
+    result = videos.update_many(
+        {
+            '$or': [
+                {'downloadStatus': 'downloading'},
+                {'queueState': {'$in': ['queued', 'downloading', 'retry-pending']}},
+            ]
+        },
+        {
+            '$set': {
+                'downloadStatus': 'pending',
+                'queueState': 'pending',
+                'updatedAt': datetime.utcnow(),
+            }
+        },
+    )
+    queued_video_ids.clear()
+    processing_video_ids.clear()
+    return {'reset': result.modified_count}
+
+
+async def enqueue(video_id, priority=5, attempts=0, force=False):
+    video_id = str(video_id)
+    doc = videos.find_one({'_id': ObjectId(video_id)}, {'downloadStatus': 1})
+    if not doc:
+        return False
+
+    current_status = str(doc.get('downloadStatus') or '').lower()
+    if not force and current_status in {'done', 'downloading'}:
+        return False
+
+    if not force and (video_id in queued_video_ids or video_id in processing_video_ids):
+        return False
+
+    queued_video_ids.add(video_id)
+    videos.update_one(
+        {'_id': ObjectId(video_id)},
+        {
+            '$set': {
+                'queueState': 'queued',
+                'lastQueuedAt': datetime.utcnow(),
+                'updatedAt': datetime.utcnow(),
+            }
+        },
+    )
+    await queue.put((priority, video_id, attempts))
+    return True
 
 
 async def start_worker():
-    global worker_task
-    if worker_task is None:
-        worker_task = asyncio.create_task(_worker_loop())
+    target_count = _desired_worker_count()
+    while len(worker_tasks) < target_count:
+        worker_index = len(worker_tasks) + 1
+        worker_tasks.append(asyncio.create_task(_worker_loop(worker_index)))
 
 
-async def _worker_loop():
+async def _worker_loop(worker_index: int):
     global running_jobs
     while True:
         _, video_id, attempts = await queue.get()
+        queued_video_ids.discard(str(video_id))
+        processing_video_ids.add(str(video_id))
         running_jobs += 1
         try:
             await process_download(video_id, attempts)
         finally:
+            processing_video_ids.discard(str(video_id))
             running_jobs -= 1
             queue.task_done()
 
@@ -1674,7 +1731,7 @@ async def process_download(video_id, attempts):
         if not is_valid:
             videos.update_one(
                 {'_id': doc['_id']},
-                {'$set': {'downloadStatus': 'failed', 'failReason': invalid_reason, 'updatedAt': datetime.utcnow()}},
+                {'$set': {'downloadStatus': 'failed', 'queueState': 'failed', 'failReason': invalid_reason, 'updatedAt': datetime.utcnow()}},
             )
             log_job(
                 'download',
@@ -1686,50 +1743,84 @@ async def process_download(video_id, attempts):
             )
             return
 
-        videos.update_one({'_id': doc['_id']}, {'$set': {'downloadStatus': 'downloading', 'updatedAt': datetime.utcnow()}})
+        videos.update_one(
+            {'_id': doc['_id']},
+            {
+                '$set': {
+                    'downloadStatus': 'downloading',
+                    'queueState': 'downloading',
+                    'downloadAttempts': attempts + 1,
+                    'updatedAt': datetime.utcnow(),
+                }
+            },
+        )
         out = build_download_path(doc)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-
-        cmd = [
-            'yt-dlp',
-            doc['url'],
-            '-f',
-            'best[height<=1080]',
-            '-o',
-            out,
-            '--no-warnings',
-            '--no-playlist',
-            '--socket-timeout',
-            '20',
-            '--retries',
-            '1',
-            '--fragment-retries',
-            '1',
-            '--write-thumbnail',
-            '--write-description',
+        format_candidates = [
+            'bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]',
+            'bv*+ba/b/best',
+            'best',
         ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        last_reason = ''
 
-        try:
-            out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT_SEC)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.communicate()
-            raise RuntimeError(f'yt-dlp timeout after {YTDLP_TIMEOUT_SEC}s')
+        for format_selector in format_candidates:
+            cmd = [
+                'yt-dlp',
+                doc['url'],
+                '-f',
+                format_selector,
+                '-o',
+                out,
+                '--no-warnings',
+                '--no-playlist',
+                '--socket-timeout',
+                '20',
+                '--retries',
+                '1',
+                '--fragment-retries',
+                '1',
+                '--write-thumbnail',
+                '--write-description',
+            ]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
-        if proc.returncode != 0:
+            try:
+                out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT_SEC)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.communicate()
+                raise RuntimeError(f'yt-dlp timeout after {YTDLP_TIMEOUT_SEC}s')
+
+            if proc.returncode == 0:
+                last_reason = ''
+                break
+
             err_text = (err_bytes or b'').decode('utf-8', errors='ignore').strip()
             out_text = (out_bytes or b'').decode('utf-8', errors='ignore').strip()
-            reason = err_text or out_text or f'yt-dlp code {proc.returncode}'
-            raise RuntimeError(reason[-2000:])
+            last_reason = (err_text or out_text or f'yt-dlp code {proc.returncode}')[-2000:]
+            format_unavailable = 'Requested format is not available' in last_reason
+            if not format_unavailable:
+                break
+
+        if last_reason:
+            raise RuntimeError(last_reason)
 
         videos.update_one(
             {'_id': doc['_id']},
-            {'$set': {'downloadStatus': 'done', 'localPath': out, 'downloadedAt': datetime.utcnow(), 'failReason': ''}},
+            {
+                '$set': {
+                    'downloadStatus': 'done',
+                    'queueState': 'done',
+                    'localPath': out,
+                    'downloadedAt': datetime.utcnow(),
+                    'failReason': '',
+                    'updatedAt': datetime.utcnow(),
+                }
+            },
         )
         
         # 💾 Upload to Google Drive
@@ -1749,7 +1840,17 @@ async def process_download(video_id, attempts):
         )
     except Exception as ex:
         retry = attempts < 2
-        videos.update_one({'_id': doc['_id']}, {'$set': {'downloadStatus': 'pending' if retry else 'failed', 'failReason': str(ex)}})
+        videos.update_one(
+            {'_id': doc['_id']},
+            {
+                '$set': {
+                    'downloadStatus': 'pending' if retry else 'failed',
+                    'queueState': 'retry-pending' if retry else 'failed',
+                    'failReason': str(ex),
+                    'updatedAt': datetime.utcnow(),
+                }
+            },
+        )
         log_job(
             'download',
             'partial' if retry else 'failed',
@@ -1759,11 +1860,21 @@ async def process_download(video_id, attempts):
             error=str(ex),
         )
         if retry:
-            await queue.put((5, str(doc['_id']), attempts + 1))
+            await enqueue(str(doc['_id']), 5, attempts + 1, force=True)
 
 
 def queue_stats():
-    return {'queued': queue.qsize(), 'running': running_jobs, 'started': worker_task is not None, 'engine': SCRAPER_ENGINE}
+    return {
+        'queued': queue.qsize(),
+        'running': running_jobs,
+        'started': bool(worker_tasks),
+        'engine': SCRAPER_ENGINE,
+        'workers': len(worker_tasks),
+        'uniqueQueuedVideos': len(queued_video_ids),
+        'processingVideos': len(processing_video_ids),
+        'persistedQueued': videos.count_documents({'queueState': 'queued'}),
+        'persistedRunning': videos.count_documents({'queueState': 'downloading'}),
+    }
 
 
 async def process_playboard_cards(cards: List[Dict], topic: str):
@@ -1843,9 +1954,12 @@ async def process_playboard_cards(cards: List[Dict], topic: str):
                 # 3️⃣ Queue for download
                 if video:
                     video_id_str = str(video['_id'])
-                    await queue.put((0, video_id_str, 0))  # Priority 0 = high priority
-                    queued += 1
-                    print(f'[OK] Card {i}: Queued for download')
+                    accepted = await enqueue(video_id_str, 0)
+                    if accepted:
+                        queued += 1
+                        print(f'[OK] Card {i}: Queued for download')
+                    else:
+                        print(f'[OK] Card {i}: Already queued or processing')
                 
                 success += 1
                 

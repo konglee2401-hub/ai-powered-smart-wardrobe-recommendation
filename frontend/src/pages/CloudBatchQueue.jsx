@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cloud Batch Queue UI
  * Manage and monitor batch processing from Google Drive
  */
@@ -223,10 +223,10 @@ export function CloudBatchQueue() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Total Batches" value={stats.totalBatches} icon="📊" />
-          <StatCard label="Processing" value={stats.processingCount} icon="⏳" />
-          <StatCard label="Completed" value={stats.completedCount} icon="✅" />
-          <StatCard label="Queue Items" value={stats.queueSize} icon="📋" />
+          <StatCard label="Total Batches" value={stats.totalBatches} icon="ðŸ“Š" />
+          <StatCard label="Processing" value={stats.processingCount} icon="â³" />
+          <StatCard label="Completed" value={stats.completedCount} icon="âœ…" />
+          <StatCard label="Queue Items" value={stats.queueSize} icon="ðŸ“‹" />
         </div>
       )}
 
@@ -544,3 +544,4 @@ function ItemStatusBadge({ status }) {
 }
 
 export default CloudBatchQueue;
+

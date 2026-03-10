@@ -58,9 +58,7 @@ class VideoPipelineController {
   });
 
   static listVideos = asyncHandler(async (req, res) => {
-    console.log('[DEBUG] listVideos called with filters:', req.query);
     const result = await videoPipelineService.listSourceVideos(req.query || {});
-    console.log('[DEBUG] listVideos result count:', result.items?.length);
     res.json(result);
   });
 
@@ -72,8 +70,24 @@ class VideoPipelineController {
     res.json(result);
   });
 
+  static queueVideosToFolder = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.queueSourceVideosToFolder(req.body || {});
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
   static uploadVideo = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.uploadSourceVideo(req.params.videoId);
+    res.json(result);
+  });
+
+  static deleteVideo = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.deleteSourceVideo(req.params.videoId);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     res.json(result);
   });
 
@@ -96,11 +110,85 @@ class VideoPipelineController {
 
   static triggerPendingDownloads = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.triggerPendingDownloads(req.body?.limit || req.query?.limit || 200);
+    if (!result.success) {
+      return res.status(502).json(result);
+    }
     res.json(result);
   });
 
   static listJobs = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.listJobs(req.query || {});
+    res.json(result);
+  });
+
+  static getProductionOverview = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getProductionOverview(req.query || {});
+    res.json(result);
+  });
+
+  static getProductionHistory = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getProductionHistory(req.query || {});
+    res.json(result);
+  });
+
+  static getProductionHistoryItem = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getProductionHistoryItem(req.params.queueId);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    res.json(result);
+  });
+
+  static deleteProductionHistoryItem = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.deleteProductionHistoryItem(req.params.queueId);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static remashupJob = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.remashupJob(req.params.queueId, req.body || {});
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static runMassProduction = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.runMassProduction(req.body || {});
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static getQueueRuntime = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getQueueRuntime(req.query?.timeoutMinutes || 30);
+    res.json(result);
+  });
+
+  static retryFailedJobs = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.retryFailedJobs(req.body?.maxRetries || req.query?.maxRetries || 3);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static releaseStaleJobs = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.releaseStaleJobs(req.body?.timeoutMinutes || req.query?.timeoutMinutes || 30);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static clearQueueJobs = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.clearQueueJobs(req.body || req.query || {});
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     res.json(result);
   });
 
@@ -174,11 +262,37 @@ class VideoPipelineController {
     res.json(result);
   });
 
+  static getSchedulerRuntimeStatus = asyncHandler(async (_req, res) => {
+    const result = await videoPipelineService.getSchedulerRuntimeStatus();
+    res.json(result);
+  });
+
   static saveSettings = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.saveSettings(req.body || {});
+    res.json(result);
+  });
+
+  /**
+   * Get all available publishing accounts (YouTube OAuth + legacy MultiAccountService)
+   */
+  static getPublishAccounts = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getPublishAccounts();
+    res.json(result);
+  });
+
+  /**
+   * Publish video to selected YouTube accounts via OAuth
+   */
+  static publishToYoutubeAccounts = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.publishToYoutubeAccounts(
+      req.params.queueId,
+      req.body || {}
+    );
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
     res.json(result);
   });
 }
 
 export default VideoPipelineController;
-

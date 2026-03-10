@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Enhanced Video Prompt Generator with ChatGPT Integration
  * Features:
  * - 5 integrated generators (Style, Movement, Camera, Lighting, Templates)
@@ -16,7 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
 import { VIDEO_SCENARIOS } from '../constants/videoScenarios';
-// 💫 NEW: Import segment calculation functions
+// ðŸ’« NEW: Import segment calculation functions
 import { 
   calculateSegmentCount, 
   getSegmentDurationForProvider 
@@ -32,7 +32,7 @@ import {
 
 export default function VideoPromptEnhancedWithChatGPT({
   onNext,
-  videoDuration = 20,  // 💫 NEW: Accept video duration from props
+  videoDuration = 20,  // ðŸ’« NEW: Accept video duration from props
   videoScenario = 'Fashion Flow',
   videoStyle = 'Normal Speed',
   videoProvider = 'grok',
@@ -45,7 +45,7 @@ export default function VideoPromptEnhancedWithChatGPT({
   initialSegments
 }) {
   // ==================== STATE: CONFIGURATION ====================
-  const [duration, setDuration] = useState(videoDuration);  // 💫 FIXED: Use prop value instead of hardcoded 20
+  const [duration, setDuration] = useState(videoDuration);  // ðŸ’« FIXED: Use prop value instead of hardcoded 20
   const [scenario, setScenario] = useState(videoScenario);
   const [style, setStyle] = useState(videoStyle);
   const [productName, setProductName] = useState(productType);
@@ -75,70 +75,70 @@ export default function VideoPromptEnhancedWithChatGPT({
   });
 
   // ==================== CALCULATE SEGMENT DURATION ====================
-  // 💫 FIXED: Use dynamic calculation based on provider instead of hardcoded logic
+  // ðŸ’« FIXED: Use dynamic calculation based on provider instead of hardcoded logic
   const segmentCount = calculateSegmentCount(videoProvider, duration);
   const segmentDurationPerProvider = getSegmentDurationForProvider(videoProvider);
   const perSegmentDuration = Math.round((duration / segmentCount) * 10) / 10;
 
   // ==================== SCENARIOS & FLOWS ====================
   const SCENARIO_OPTIONS = [
-    { name: '👗 Fashion Flow' },
-    { name: '🎯 Product Zoom' },
-    { name: '💡 Styling Tips' },
-    { name: '🌟 Casual Vibe' },
-    { name: '✨ Glamour Slow-Motion' },
-    { name: '⚡ Dynamic Energy' }
+    { name: 'ðŸ‘— Fashion Flow' },
+    { name: 'ðŸŽ¯ Product Zoom' },
+    { name: 'ðŸ’¡ Styling Tips' },
+    { name: 'ðŸŒŸ Casual Vibe' },
+    { name: 'âœ¨ Glamour Slow-Motion' },
+    { name: 'âš¡ Dynamic Energy' }
   ];
 
   const STYLE_OPTIONS = [
-    { name: '🎬 Slow Motion', speed: '50%' },
-    { name: '▶️ Normal Speed', speed: '100%' },
-    { name: '⚡ Quick Cuts', speed: '125%' },
-    { name: '✨ Graceful Float', speed: '60%' }
+    { name: 'ðŸŽ¬ Slow Motion', speed: '50%' },
+    { name: 'â–¶ï¸ Normal Speed', speed: '100%' },
+    { name: 'âš¡ Quick Cuts', speed: '125%' },
+    { name: 'âœ¨ Graceful Float', speed: '60%' }
   ];
 
   // ==================== GENERATOR CONFIGURATIONS ====================
   const GENERATORS = [
     {
       id: 'scenario',
-      name: '🎬 Scenario Script',
+      name: 'ðŸŽ¬ Scenario Script',
       icon: PlayCircle,
       description: 'Generate detailed segment-by-segment scripts'
     },
     {
       id: 'style',
-      name: '🎨 Style Variations',
+      name: 'ðŸŽ¨ Style Variations',
       icon: TrendingUp,
       description: 'Create 5+ different stylistic approaches'
     },
     {
       id: 'movement',
-      name: '🚶 Movement Detail',
+      name: 'ðŸš¶ Movement Detail',
       icon: Zap,
       description: 'Frame-by-frame breakdown of movements'
     },
     {
       id: 'camera',
-      name: '📹 Camera Guidance',
+      name: 'ðŸ“¹ Camera Guidance',
       icon: Camera,
       description: 'Detailed camera work specifications'
     },
     {
       id: 'lighting',
-      name: '💡 Lighting Setup',
+      name: 'ðŸ’¡ Lighting Setup',
       icon: Lightbulb,
       description: 'Complete lighting design'
     },
     {
       id: 'template',
-      name: '📚 Template Library',
+      name: 'ðŸ“š Template Library',
       icon: BookOpen,
       description: 'Generate 20-30 unique templates'
     }
   ];
 
   // ==================== INITIALIZE SEGMENT EDITING STATE ====================
-  // 💫 NEW: Sync duration state when videoDuration prop changes
+  // ðŸ’« NEW: Sync duration state when videoDuration prop changes
   useEffect(() => {
     setDuration(videoDuration);
   }, [videoDuration]);
@@ -264,7 +264,7 @@ export default function VideoPromptEnhancedWithChatGPT({
         prompt // Send the generated prompt
       });
 
-      console.log('✅ Backend response received:', response.data);
+      console.log('âœ… Backend response received:', response.data);
       console.log('Full response object:', response);
       console.log('Response structure:', {
         hasSuccess: !!response.data?.success,
@@ -288,17 +288,17 @@ export default function VideoPromptEnhancedWithChatGPT({
       const parsedSegs = responseData.segments || [];
       const rawContent = responseData.rawContent || '';
       
-      console.log('✅ Extracted data:', {
+      console.log('âœ… Extracted data:', {
         responseData: responseData,
         parsedSegs: parsedSegs,
         rawContentLength: rawContent.length
       });
 
-      console.log(`📊 Parsed segments count: ${parsedSegs.length}`);
+      console.log(`ðŸ“Š Parsed segments count: ${parsedSegs.length}`);
       console.log('First segment:', parsedSegs[0]);
 
       if (!Array.isArray(parsedSegs) || parsedSegs.length === 0) {
-        console.error('❌ Invalid segments:', parsedSegs);
+        console.error('âŒ Invalid segments:', parsedSegs);
         throw new Error(`No segments received. Segments: ${JSON.stringify(parsedSegs).substring(0, 100)}`);
       }
 
@@ -307,7 +307,7 @@ export default function VideoPromptEnhancedWithChatGPT({
       let targetSegments = editingSegments;
       
       if (!targetSegments || targetSegments.length === 0 || targetSegments.length < parsedSegs.length) {
-        console.warn(`⚠️  editingSegments (${editingSegments.length}) doesn't match parsedSegs (${parsedSegs.length}), creating new ones`);
+        console.warn(`âš ï¸  editingSegments (${editingSegments.length}) doesn't match parsedSegs (${parsedSegs.length}), creating new ones`);
         targetSegments = Array.from({ length: parsedSegs.length }, (_, i) => ({
           id: i + 1,
           number: i + 1,
@@ -346,7 +346,7 @@ export default function VideoPromptEnhancedWithChatGPT({
         };
       });
 
-      console.log(`✅ Filled ${filledSegments.length} segments with data`);
+      console.log(`âœ… Filled ${filledSegments.length} segments with data`);
       
       setEditingSegments(filledSegments);
       setChatGPTResponse(rawContent);
@@ -356,14 +356,14 @@ export default function VideoPromptEnhancedWithChatGPT({
       // Show warning if in demo mode
       if (responseData.mode === 'demo') {
         toast.success(
-          '⚠️ Demo Mode: ChatGPT browser unavailable. Installing Puppeteer would enable live generation.',
+          'âš ï¸ Demo Mode: ChatGPT browser unavailable. Installing Puppeteer would enable live generation.',
           { duration: 5000 }
         );
       } else {
-        toast.success(`✅ Generated ${segmentCount} segments from ChatGPT!`);
+        toast.success(`âœ… Generated ${segmentCount} segments from ChatGPT!`);
       }
     } catch (error) {
-      console.error('❌ Error generating segments:', error);
+      console.error('âŒ Error generating segments:', error);
       console.error('Error details:', {
         message: error.message,
         responseStatus: error.response?.status,
@@ -417,7 +417,7 @@ export default function VideoPromptEnhancedWithChatGPT({
       onNext();
     }
 
-    toast.success('✅ Segments prepared for video generation!');
+    toast.success('âœ… Segments prepared for video generation!');
   };
 
   // ==================== RENDER ====================
@@ -503,7 +503,7 @@ export default function VideoPromptEnhancedWithChatGPT({
             onClick={() => setShowSegmentReview(false)}
             className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded text-sm transition"
           >
-            ← Regenerate
+            â† Regenerate
           </button>
         </div>
       </div>
@@ -526,7 +526,7 @@ export default function VideoPromptEnhancedWithChatGPT({
 
       {/* Video Flow Selection */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">📹 Video Flow</label>
+        <label className="block text-xs font-semibold mb-1">ðŸ“¹ Video Flow</label>
         <select
           value={scenario}
           onChange={(e) => setScenario(e.target.value)}
@@ -542,7 +542,7 @@ export default function VideoPromptEnhancedWithChatGPT({
 
       {/* Video Style */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">💫 Video Style</label>
+        <label className="block text-xs font-semibold mb-1">ðŸ’« Video Style</label>
         <select
           value={style}
           onChange={(e) => setStyle(e.target.value)}
@@ -558,7 +558,7 @@ export default function VideoPromptEnhancedWithChatGPT({
 
       {/* Product Name */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">📦 Product Name</label>
+        <label className="block text-xs font-semibold mb-1">ðŸ“¦ Product Name</label>
         <input
           type="text"
           value={productName}
@@ -570,7 +570,7 @@ export default function VideoPromptEnhancedWithChatGPT({
 
       {/* Audience */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">👥 Target Audience</label>
+        <label className="block text-xs font-semibold mb-1">ðŸ‘¥ Target Audience</label>
         <input
           type="text"
           value={audience}
@@ -582,7 +582,7 @@ export default function VideoPromptEnhancedWithChatGPT({
 
       {/* Product Details (collapsed) */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">📝 Details</label>
+        <label className="block text-xs font-semibold mb-1">ðŸ“ Details</label>
         <textarea
           value={productDesc}
           onChange={(e) => setProductDesc(e.target.value)}
@@ -596,16 +596,16 @@ export default function VideoPromptEnhancedWithChatGPT({
       <div className="bg-purple-900/20 border border-purple-700/30 rounded p-2">
         <p className="text-xs text-gray-300">
           <span className="text-purple-300 font-semibold">{duration}s</span> total
-          {' '} • {' '}
+          {' '} â€¢ {' '}
           <span className="text-purple-300 font-semibold">{segmentCount}</span> segments
-          {' '} • {' '}
+          {' '} â€¢ {' '}
           <span className="text-purple-300 font-semibold">{perSegmentDuration}s</span> each
         </p>
       </div>
 
       {/* Generator Type (Minimal) */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold mb-1">🎯 Generator</label>
+        <label className="block text-xs font-semibold mb-1">ðŸŽ¯ Generator</label>
         <div className="grid grid-cols-2 gap-2">
           {GENERATORS.slice(0, 2).map(gen => (
             <button
@@ -644,4 +644,5 @@ export default function VideoPromptEnhancedWithChatGPT({
     </div>
   );
 }
+
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 1: Video Upload Component
  * Allows users to upload multiple videos and optionally upload a product image
  */
@@ -284,3 +284,4 @@ export default function VideoUploadStep({
     </div>
   );
 }
+

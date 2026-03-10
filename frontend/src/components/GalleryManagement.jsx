@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+import ModalPortal from './ModalPortal';
   AlertTriangle,
   Check,
   CheckCircle2,
@@ -151,7 +152,8 @@ function PreviewModal({ image, index, total, onClose, onPrevious, onNext, hasPre
   if (!image) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/88 px-4 py-6 backdrop-blur-sm" onClick={onClose}>
+    <ModalPortal>
+    <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-slate-950/88 px-4 py-6 backdrop-blur-sm" onClick={onClose}>
       <div
         className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(7,14,28,0.98))] shadow-[0_30px_120px_rgba(2,6,23,0.62)]"
         onClick={(event) => event.stopPropagation()}
@@ -160,7 +162,7 @@ function PreviewModal({ image, index, total, onClose, onPrevious, onNext, hasPre
           <div className="min-w-0">
             <h3 className="truncate text-lg font-semibold text-white">{image.name}</h3>
             <p className="mt-1 text-sm text-slate-400">
-              {index + 1} / {total} • {getCategoryLabel(image.category)} • {formatBytes(image.size)}
+              {index + 1} / {total} â€¢ {getCategoryLabel(image.category)} â€¢ {formatBytes(image.size)}
             </p>
           </div>
           <button
@@ -198,6 +200,7 @@ function PreviewModal({ image, index, total, onClose, onPrevious, onNext, hasPre
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -237,7 +240,7 @@ function AssetCard({
             onError={onError}
             className="h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t" />
           {imageErrors[image.id]?.failed && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/85 px-4 text-center text-xs font-medium text-slate-200">
               Preview unavailable
@@ -317,7 +320,7 @@ function AssetCard({
           />
         </button>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-950/5 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t" />
         {imageErrors[image.id]?.failed && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 px-4 text-center text-xs font-medium text-slate-200">
             Preview unavailable
@@ -1003,4 +1006,6 @@ export default function GalleryManagement({
     </div>
   );
 }
+
+
 

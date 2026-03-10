@@ -1,6 +1,7 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Sparkles, LogOut, Video, Film, History } from 'lucide-react';
+import { Home, LogOut, Video, Film, History } from 'lucide-react';
+import LogoKG from '../../assets/Logo-KG.png';
 import useAuthStore from '../../stores/useAuthStore';
 
 const navItems = [
@@ -29,9 +30,9 @@ export default function Navbar() {
           
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-2">
-            <Sparkles className="text-purple-600" size={28} />
+            <img src={LogoKG} alt="Logo" className="w-7 h-7 object-contain" />
             <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              AI Fashion Studio
+              K-Creative Studio
             </span>
           </Link>
           
@@ -76,3 +77,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

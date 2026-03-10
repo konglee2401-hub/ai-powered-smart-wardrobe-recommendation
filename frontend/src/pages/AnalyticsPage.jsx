@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowUpRight,
@@ -146,10 +146,10 @@ function OpportunityList({ items }) {
         <div key={`${item.title}-${index}`} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-amber-300">{item.platform} • {item.topic}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-amber-300">{item.platform} â€¢ {item.topic}</div>
               <div className="mt-2 text-base font-medium text-white">{item.title}</div>
               <div className="mt-2 text-sm text-slate-400">
-                {formatInteger(item.views)} views • {formatInteger(item.likes)} likes • published {item.publishingCount} time(s)
+                {formatInteger(item.views)} views â€¢ {formatInteger(item.likes)} likes â€¢ published {item.publishingCount} time(s)
               </div>
             </div>
             {item.url ? (
@@ -448,3 +448,4 @@ export default function AnalyticsPage() {
     </div>
   );
 }
+

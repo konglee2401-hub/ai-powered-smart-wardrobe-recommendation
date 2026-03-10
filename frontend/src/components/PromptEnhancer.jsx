@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PromptEnhancer Component
  * React UI for prompt enhancement functionality
  * 
@@ -387,7 +387,7 @@ export default function PromptEnhancer() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>✨ Prompt Enhancer</h1>
+        <h1 style={styles.title}>âœ¨ Prompt Enhancer</h1>
         <p style={styles.subtitle}>
           Enhance, analyze, and optimize your prompts for AI image/video generation
         </p>
@@ -468,7 +468,7 @@ export default function PromptEnhancer() {
               onClick={handleEnhance}
               disabled={loading}
             >
-              {loading ? 'Enhancing...' : '✨ Enhance Prompt'}
+              {loading ? 'Enhancing...' : 'âœ¨ Enhance Prompt'}
             </button>
           )}
           {activeTab === 'analyze' && (
@@ -477,7 +477,7 @@ export default function PromptEnhancer() {
               onClick={handleAnalyze}
               disabled={loading}
             >
-              {loading ? 'Analyzing...' : '📊 Analyze Quality'}
+              {loading ? 'Analyzing...' : 'ðŸ“Š Analyze Quality'}
             </button>
           )}
           {activeTab === 'variations' && (
@@ -486,7 +486,7 @@ export default function PromptEnhancer() {
               onClick={handleVariations}
               disabled={loading}
             >
-              {loading ? 'Generating...' : '🎨 Generate Variations'}
+              {loading ? 'Generating...' : 'ðŸŽ¨ Generate Variations'}
             </button>
           )}
           {activeTab === 'safety' && (
@@ -495,7 +495,7 @@ export default function PromptEnhancer() {
               onClick={handleSafetyCheck}
               disabled={loading}
             >
-              {loading ? 'Checking...' : '🔒 Check Safety'}
+              {loading ? 'Checking...' : 'ðŸ”’ Check Safety'}
             </button>
           )}
           {activeTab === 'optimize' && (
@@ -505,14 +505,14 @@ export default function PromptEnhancer() {
                 onClick={() => handleOptimize('image')}
                 disabled={loading}
               >
-                🖼️ Optimize for Image
+                ðŸ–¼ï¸ Optimize for Image
               </button>
               <button
                 style={{ ...styles.button, ...styles.successButton }}
                 onClick={() => handleOptimize('video')}
                 disabled={loading}
               >
-                🎬 Optimize for Video
+                ðŸŽ¬ Optimize for Video
               </button>
             </>
           )}
@@ -522,7 +522,7 @@ export default function PromptEnhancer() {
               onClick={handleFullEnhancement}
               disabled={loading}
             >
-              {loading ? 'Processing...' : '🚀 Full Enhancement'}
+              {loading ? 'Processing...' : 'ðŸš€ Full Enhancement'}
             </button>
           )}
         </div>
@@ -538,7 +538,7 @@ export default function PromptEnhancer() {
       {/* Loading */}
       {loading && (
         <div style={styles.loading}>
-          <div style={{ fontSize: '24px', marginBottom: '12px' }}>⏳</div>
+          <div style={{ fontSize: '24px', marginBottom: '12px' }}>â³</div>
           Processing your request...
         </div>
       )}
@@ -547,7 +547,7 @@ export default function PromptEnhancer() {
       {activeTab === 'enhance' && enhancedPrompt && !loading && (
         <div style={styles.card}>
           <div style={styles.resultHeader}>
-            <h3 style={{ margin: 0, fontSize: '16px' }}>✨ Enhanced Prompt</h3>
+            <h3 style={{ margin: 0, fontSize: '16px' }}>âœ¨ Enhanced Prompt</h3>
             <span style={{ fontSize: '12px', color: '#6b7280' }}>
               {formatProcessingTime(enhancedPrompt.processingTime)}
             </span>
@@ -562,7 +562,7 @@ export default function PromptEnhancer() {
               style={{ ...styles.button, ...styles.secondaryButton }}
               onClick={() => copyToClipboard(enhancedPrompt.enhancedPrompt)}
             >
-              📋 Copy
+              ðŸ“‹ Copy
             </button>
           </div>
         </div>
@@ -572,7 +572,7 @@ export default function PromptEnhancer() {
       {activeTab === 'analyze' && qualityAnalysis && !loading && (
         <div style={styles.card}>
           <div style={styles.resultHeader}>
-            <h3 style={{ margin: 0, fontSize: '16px' }}>📊 Quality Analysis</h3>
+            <h3 style={{ margin: 0, fontSize: '16px' }}>ðŸ“Š Quality Analysis</h3>
             <span
               style={{
                 ...styles.badge,
@@ -611,7 +611,7 @@ export default function PromptEnhancer() {
           {/* Strengths & Weaknesses */}
           <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
-              <h4 style={{ marginBottom: '8px', color: '#10b981' }}>✓ Strengths</h4>
+              <h4 style={{ marginBottom: '8px', color: '#10b981' }}>âœ“ Strengths</h4>
               <ul style={{ margin: 0, paddingLeft: '20px' }}>
                 {qualityAnalysis.strengths.map((s, i) => (
                   <li key={i} style={{ marginBottom: '4px' }}>{s}</li>
@@ -619,7 +619,7 @@ export default function PromptEnhancer() {
               </ul>
             </div>
             <div>
-              <h4 style={{ marginBottom: '8px', color: '#ef4444' }}>✗ Weaknesses</h4>
+              <h4 style={{ marginBottom: '8px', color: '#ef4444' }}>âœ— Weaknesses</h4>
               <ul style={{ margin: 0, paddingLeft: '20px' }}>
                 {qualityAnalysis.weaknesses.map((w, i) => (
                   <li key={i} style={{ marginBottom: '4px' }}>{w}</li>
@@ -630,7 +630,7 @@ export default function PromptEnhancer() {
 
           {/* Suggestions */}
           <div style={{ marginTop: '16px' }}>
-            <h4 style={{ marginBottom: '8px' }}>💡 Suggestions</h4>
+            <h4 style={{ marginBottom: '8px' }}>ðŸ’¡ Suggestions</h4>
             <ul style={{ margin: 0, paddingLeft: '20px' }}>
               {qualityAnalysis.suggestions.map((s, i) => (
                 <li key={i} style={{ marginBottom: '4px' }}>{s}</li>
@@ -643,7 +643,7 @@ export default function PromptEnhancer() {
       {/* Variations Result */}
       {activeTab === 'variations' && variations.length > 0 && !loading && (
         <div style={styles.card}>
-          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>🎨 Prompt Variations</h3>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>ðŸŽ¨ Prompt Variations</h3>
           {variations.map((v, index) => (
             <div key={index} style={styles.variation}>
               <div style={styles.variationHeader}>
@@ -668,7 +668,7 @@ export default function PromptEnhancer() {
                 style={{ ...styles.button, ...styles.secondaryButton, marginTop: '8px', padding: '8px 16px' }}
                 onClick={() => copyToClipboard(v.text)}
               >
-                📋 Copy
+                ðŸ“‹ Copy
               </button>
             </div>
           ))}
@@ -678,7 +678,7 @@ export default function PromptEnhancer() {
       {/* Safety Check Result */}
       {activeTab === 'safety' && safetyCheck && !loading && (
         <div style={styles.card}>
-          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>🔒 Safety Check</h3>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>ðŸ”’ Safety Check</h3>
           
           <div
             style={{
@@ -687,7 +687,7 @@ export default function PromptEnhancer() {
             }}
           >
             <span style={{ fontSize: '24px' }}>
-              {safetyCheck.safe ? '✅' : '⚠️'}
+              {safetyCheck.safe ? 'âœ…' : 'âš ï¸'}
             </span>
             <div>
               <strong>{safetyCheck.safe ? 'Safe to use' : 'Contains issues'}</strong>
@@ -701,10 +701,10 @@ export default function PromptEnhancer() {
           {Object.entries(safetyCheck.issues).map(([key, value]) => (
             <div key={key} style={{ marginTop: '12px' }}>
               <span style={{ fontWeight: '500' }}>
-                {key === 'explicit' && '🔴'}
-                {key === 'discriminatory' && '🟠'}
-                {key === 'violent' && '🟡'}
-                {key === 'misleading' && '🔵'}
+                {key === 'explicit' && 'ðŸ”´'}
+                {key === 'discriminatory' && 'ðŸŸ '}
+                {key === 'violent' && 'ðŸŸ¡'}
+                {key === 'misleading' && 'ðŸ”µ'}
                 {' '}{key.charAt(0).toUpperCase() + key.slice(1)}:
               </span>
               <span style={{ marginLeft: '8px', color: value ? '#dc2626' : '#10b981' }}>
@@ -716,7 +716,7 @@ export default function PromptEnhancer() {
           {/* Suggestions */}
           {safetyCheck.suggestions.length > 0 && (
             <div style={{ marginTop: '16px' }}>
-              <h4>💡 Suggestions:</h4>
+              <h4>ðŸ’¡ Suggestions:</h4>
               <ul style={{ paddingLeft: '20px' }}>
                 {safetyCheck.suggestions.map((s, i) => (
                   <li key={i}>{s}</li>
@@ -732,7 +732,7 @@ export default function PromptEnhancer() {
         <div style={styles.card}>
           <div style={styles.resultHeader}>
             <h3 style={{ margin: 0, fontSize: '16px' }}>
-              {optimization.type === 'image' ? '🖼️' : '🎬'} Optimized for {optimization.type === 'image' ? 'Image' : 'Video'}
+              {optimization.type === 'image' ? 'ðŸ–¼ï¸' : 'ðŸŽ¬'} Optimized for {optimization.type === 'image' ? 'Image' : 'Video'}
             </h3>
           </div>
           <div style={styles.result}>
@@ -755,7 +755,7 @@ export default function PromptEnhancer() {
               style={{ ...styles.button, ...styles.secondaryButton }}
               onClick={() => copyToClipboard(optimization.optimizedPrompt)}
             >
-              📋 Copy
+              ðŸ“‹ Copy
             </button>
           </div>
         </div>
@@ -764,11 +764,11 @@ export default function PromptEnhancer() {
       {/* Full Enhancement Result */}
       {activeTab === 'full' && fullResult && !loading && (
         <div style={styles.card}>
-          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>🚀 Full Enhancement Results</h3>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>ðŸš€ Full Enhancement Results</h3>
 
           {/* Enhanced Prompt */}
           <div style={{ marginBottom: '20px' }}>
-            <h4>✨ Enhanced Prompt:</h4>
+            <h4>âœ¨ Enhanced Prompt:</h4>
             <div style={styles.result}>
               <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
                 {fullResult.enhancedPrompt}
@@ -779,7 +779,7 @@ export default function PromptEnhancer() {
           {/* Quality Score */}
           {fullResult.qualityAnalysis && (
             <div style={{ marginBottom: '20px' }}>
-              <h4>📊 Quality Score: {fullResult.qualityAnalysis.score}/100</h4>
+              <h4>ðŸ“Š Quality Score: {fullResult.qualityAnalysis.score}/100</h4>
               <span
                 style={{
                   ...styles.badge,
@@ -795,7 +795,7 @@ export default function PromptEnhancer() {
           {/* Variations */}
           {fullResult.variations && fullResult.variations.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <h4>🎨 Variations ({fullResult.variations.length}):</h4>
+              <h4>ðŸŽ¨ Variations ({fullResult.variations.length}):</h4>
               {fullResult.variations.map((v, i) => (
                 <div key={i} style={{ ...styles.variation, marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -813,14 +813,14 @@ export default function PromptEnhancer() {
           {/* Safety */}
           {fullResult.safetyCheck && (
             <div style={{ marginBottom: '20px' }}>
-              <h4>🔒 Safety: {fullResult.safetyCheck.safe ? '✅ Safe' : '⚠️ Issues detected'}</h4>
+              <h4>ðŸ”’ Safety: {fullResult.safetyCheck.safe ? 'âœ… Safe' : 'âš ï¸ Issues detected'}</h4>
             </div>
           )}
 
           {/* Optimization */}
           {fullResult.optimization && (
             <div style={{ marginBottom: '20px' }}>
-              <h4>📦 Optimized ({fullResult.optimization.type}):</h4>
+              <h4>ðŸ“¦ Optimized ({fullResult.optimization.type}):</h4>
               <div style={styles.result}>
                 <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap' }}>
                   {fullResult.optimization.optimizedPrompt}
@@ -834,7 +834,7 @@ export default function PromptEnhancer() {
               style={{ ...styles.button, ...styles.secondaryButton }}
               onClick={() => copyToClipboard(fullResult.enhancedPrompt)}
             >
-              📋 Copy Enhanced Prompt
+              ðŸ“‹ Copy Enhanced Prompt
             </button>
           </div>
         </div>
@@ -842,3 +842,4 @@ export default function PromptEnhancer() {
     </div>
   );
 }
+

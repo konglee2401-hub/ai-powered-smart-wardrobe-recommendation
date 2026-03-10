@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, Database, Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2 } from 'lucide-react';
 import PageHeaderBar from '../components/PageHeaderBar';
 import promptTemplateService from '../services/promptTemplateService';
@@ -250,7 +250,7 @@ export default function PromptTemplateManager() {
             <div>
               <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-600">Prompt Template Console</div>
               <h2 className="mt-2 text-2xl font-semibold text-slate-900">Manage every system prompt</h2>
-              <p className="mt-2 max-w-4xl text-sm text-slate-600">Catalog prompt đang dùng, vị trí sử dụng, mục đích sử dụng, CRUD template tùy biến, khóa placeholder theo option category, và gán template active cho flow thật.</p>
+              <p className="mt-2 max-w-4xl text-sm text-slate-600">Catalog prompt Ä‘ang dÃ¹ng, vá»‹ trÃ­ sá»­ dá»¥ng, má»¥c Ä‘Ã­ch sá»­ dá»¥ng, CRUD template tÃ¹y biáº¿n, khÃ³a placeholder theo option category, vÃ  gÃ¡n template active cho flow tháº­t.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => { setMode('create'); setSelectedId(null); setForm(EMPTY_FORM); }} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-600 transition hover:bg-cyan-400/15"><Plus size={14} />New</button>
@@ -375,7 +375,7 @@ export default function PromptTemplateManager() {
                     </div>
 
                     <div className="rounded-xl border border-sky-800/40 bg-sky-950/20 p-3 text-xs leading-6 text-sky-100/80">
-                      Core template không xóa được. Muốn đổi wording từng câu, hãy clone rồi gán lại ở phần <span className="font-semibold text-sky-200">Active Assignment</span>. Với placeholder source = <span className="font-mono text-sky-200">option</span>, nên để hệ thống bơm từ option hiện có thay vì nhập tay.
+                      Core template khÃ´ng xÃ³a Ä‘Æ°á»£c. Muá»‘n Ä‘á»•i wording tá»«ng cÃ¢u, hÃ£y clone rá»“i gÃ¡n láº¡i á»Ÿ pháº§n <span className="font-semibold text-sky-200">Active Assignment</span>. Vá»›i placeholder source = <span className="font-mono text-sky-200">option</span>, nÃªn Ä‘á»ƒ há»‡ thá»‘ng bÆ¡m tá»« option hiá»‡n cÃ³ thay vÃ¬ nháº­p tay.
                     </div>
                   </div>
                 </div>
@@ -393,3 +393,4 @@ export default function PromptTemplateManager() {
     </div>
   );
 }
+

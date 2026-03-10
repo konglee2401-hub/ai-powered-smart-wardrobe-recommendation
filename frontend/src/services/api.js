@@ -224,7 +224,7 @@ export const imageGenAPI = {
   getProviders: () => api.get(API_ENDPOINTS.PROVIDERS),
   
   // Test provider
-  testProvider: (providerId) => api.post(API_ENDPOINTS.TEST, { providerId }),
+  testProvider: (providerId) => api.post(API_ENDPOINTS.TEST(providerId), {}),
 };
 
 // ============================================

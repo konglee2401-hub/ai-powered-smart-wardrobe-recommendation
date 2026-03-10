@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { X, Download, Copy } from 'lucide-react';
 import io from 'socket.io-client';
+import ModalPortal from './ModalPortal';
 
 /**
  * Real-time Log Viewer using Socket.io
@@ -40,7 +41,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   useEffect(() => {
     if (!isOpen || !activeSession) return;
 
-    console.log(`🔌 Connecting to log session: ${activeSession}`);
+    console.log(`ðŸ”Œ Connecting to log session: ${activeSession}`);
 
     // Connect to Socket.io
     socketRef.current = io(window.location.origin, {
@@ -55,7 +56,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
 
     // Receive logs
     socketRef.current.on('log', (message) => {
-      console.log('📨 Received log:', message);
+      console.log('ðŸ“¨ Received log:', message);
       
       // Handle both direct log entries and wrapped messages
       const logEntry = message.data || message;
@@ -67,7 +68,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     // Receive historical logs (for newly connected clients)
     socketRef.current.on('log-history', (message) => {
       if (message.logs) {
-        console.log(`📚 Received ${message.logs.length} historical logs`);
+        console.log(`ðŸ“š Received ${message.logs.length} historical logs`);
         setLogs(message.logs);
         if (message.status && message.status !== 'running') {
           setStatus(message.status);
@@ -77,7 +78,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
 
     // Session ended
     socketRef.current.on('log-session-end', (message) => {
-      console.log(`🏁 Log session ended: ${message.status}`);
+      console.log(`ðŸ Log session ended: ${message.status}`);
       setStatus(message.status);
     });
 
@@ -250,16 +251,17 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   }[status];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-6">
+    <ModalPortal>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center app-layer-modal p-3 md:p-6">
       <div className="bg-gray-900 rounded-xl border border-purple-400/60 shadow-2xl w-full max-w-6xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-gray-700 bg-slate-900">
           <div className="flex items-center gap-3">
-            <div className="text-xl font-semibold">📋 Auto-Login Logs</div>
+            <div className="text-xl font-semibold">ðŸ“‹ Auto-Login Logs</div>
             <div className={`text-sm font-mono ${statusColor}`}>
-              {status === 'running' && '⏳ Running...'}
-              {status === 'completed' && '✅ Completed'}
-              {status === 'failed' && '❌ Failed'}
+              {status === 'running' && 'â³ Running...'}
+              {status === 'completed' && 'âœ… Completed'}
+              {status === 'failed' && 'âŒ Failed'}
             </div>
             {notice && (
               <div className="ml-3 px-2 py-1 rounded text-xs bg-white/8 text-white">
@@ -280,7 +282,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
         <div className="flex-1 overflow-y-auto bg-gray-950 p-4 md:p-5 font-mono text-sm md:text-[1rem]">
           {logs.length === 0 ? (
             <div className="text-gray-500 text-center py-8">
-              Waiting for logs... 🕐
+              Waiting for logs... ðŸ•
             </div>
           ) : (
             logs.map((log, idx) => (
@@ -320,7 +322,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
                 isAutoScrollEnabled ? 'bg-purple-600' : 'bg-gray-700 hover:bg-gray-600'
               }`}
             >
-              {isAutoScrollEnabled ? '📍 Auto-Scroll' : '📌 Paused'}
+              {isAutoScrollEnabled ? 'ðŸ“ Auto-Scroll' : 'ðŸ“Œ Paused'}
             </button>
             <button
               onClick={copyLogsToClipboard}
@@ -349,14 +351,14 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
               className="px-4 py-2 bg-green-700 hover:bg-green-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
               title="Run Auto-Login"
             >
-              ▶️ Run Auto-Login
+              â–¶ï¸ Run Auto-Login
             </button>
             <button
               onClick={() => runAutoLogin('validate')}
               className="px-4 py-2 bg-yellow-700 hover:bg-yellow-600 rounded-lg text-sm flex items-center gap-1.5 text-white transition"
               title="Validate Session"
             >
-              ✔️ Validate
+              âœ”ï¸ Validate
             </button>
             <button
               onClick={sendEnter}
@@ -364,7 +366,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
               className={`px-4 py-2 ${processRunning? 'bg-gray-700 hover:bg-gray-600':'bg-gray-600 opacity-50'} rounded-lg text-sm flex items-center gap-1.5 text-white transition`}
               title="Send ENTER to process"
             >
-              ⏎ Send ENTER
+              âŽ Send ENTER
             </button>
             <button
               onClick={killSession}
@@ -387,5 +389,8 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
+
+

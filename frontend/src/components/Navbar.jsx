@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Link, matchPath, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -18,6 +18,7 @@ import {
   Volume2,
 } from 'lucide-react';
 
+import LogoKG from '../assets/Logo-KG.png';
 import { navGroups } from '../config/appRoutes';
 
 const baseLinkClass =
@@ -141,7 +142,7 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
     }
 
     return (
-      <div className="apple-nav-nest rounded-[1.4rem] p-2.5">
+      <div className="apple-nav-nest rounded-[1.4rem]">
         <button
           type="button"
           onClick={() => setIsGenerationMenuOpen((prev) => !prev)}
@@ -192,7 +193,7 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
   return (
     <>
       <button
-        className={`fixed left-4 top-4 z-50 rounded-2xl border border-transparent p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl lg:hidden ${
+        className={`fixed left-4 top-4 app-layer-nav rounded-2xl border border-transparent p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl lg:hidden ${
           isLightTheme ? 'bg-white/95 text-slate-900 shadow-[0_8px_18px_rgba(0,0,0,0.05)]' : 'bg-white/[0.07] text-slate-100'
         }`}
         onClick={() => setIsMobileOpen((prev) => !prev)}
@@ -203,13 +204,13 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
 
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/55 backdrop-blur-md lg:hidden"
+          className="fixed inset-0 app-layer-overlay bg-black/55 backdrop-blur-md lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       <aside
-        className={`app-sidebar fixed z-40 h-[100dvh] transition-all duration-300 lg:relative lg:left-0 lg:h-auto lg:self-stretch ${
+        className={`app-sidebar fixed app-layer-nav h-[100dvh] transition-all duration-300 lg:relative lg:left-0 lg:h-auto lg:self-stretch ${
           isCollapsed ? 'w-[88px]' : 'w-[238px]'
         } ${isMobileOpen ? 'left-0' : '-left-full lg:left-0'}`}
         onMouseEnter={() => setIsHovering(true)}
@@ -222,13 +223,10 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
               className={`flex items-center gap-3 ${isCollapsed ? 'w-full justify-center' : ''}`}
               onClick={() => setIsMobileOpen(false)}
             >
-              <div className="apple-logo-chip flex-shrink-0 rounded-xl p-1.5">
-                <Sparkles className={`h-4 w-4 ${isLightTheme ? 'text-sky-700' : 'text-white'}`} />
-              </div>
+              <img src={LogoKG} alt="Logo" className="h-10 w-10 object-contain flex-shrink-0" />
               {!isCollapsed && (
                 <div className="flex-1">
-                  <p className={`truncate text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>Smart Wardrobe</p>
-                  <p className={`truncate text-xs ${isLightTheme ? 'text-slate-500' : 'text-violet-200/80'}`}>AI Creative Studio</p>
+                  <p className={`truncate text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>K-Creative Studio</p>
                 </div>
               )}
             </Link>
@@ -308,4 +306,6 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
     </>
   );
 }
+
+
 

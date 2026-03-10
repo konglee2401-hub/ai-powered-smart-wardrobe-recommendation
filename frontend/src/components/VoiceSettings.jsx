@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Voice Settings Component
  * Left sidebar for selecting gender, language, reading style, and voice
  */
@@ -227,3 +227,4 @@ export default function VoiceSettings({
     </div>
   );
 }
+

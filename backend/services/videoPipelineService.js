@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Asset from '../models/Asset.js';
@@ -18,16 +19,26 @@ import TrendVideo from '../models/TrendVideo.js';
 import TrendSetting from '../models/TrendSetting.js';
 import QueueScannerSettings from '../models/QueueScannerSettings.js';
 import DriveTemplateSource from '../models/DriveTemplateSource.js';
+import VideoPipelineJob from '../models/VideoPipelineJob.js';
+import SocialMediaAccount from '../models/SocialMediaAccount.js';
 import VideoQueueService, { buildQueueControl } from './videoQueueService.js';
 import MultiAccountService from './multiAccountService.js';
 import AutoUploadService from './autoUploadService.js';
 import driveService from './googleDriveOAuth.js';
 import VideoMashupService from './videoMashupService.js';
-import publicDriveFolderIngestService, { extractFolderId as extractPublicDriveFolderId } from './publicDriveFolderIngestService.js';
+import youtubeOAuthService from './youtubeOAuthService.js';
+import publicDriveFolderIngestService, {
+  extractFolderId as extractPublicDriveFolderId,
+  resolveTemplateGroup,
+} from './publicDriveFolderIngestService.js';
+import queueScannerCronJob from './queueScannerCronJob.js';
+import GoogleDriveIntegration from './googleDriveIntegration.js';
+import { buildPublishMetadata, mergePublishUploadConfig } from './publishMetadataGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, '..');
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
+const googleDriveIntegration = new GoogleDriveIntegration();
 
 function normalizeTemplateHealth(source) {
   if (!source.enabled) {
@@ -367,9 +378,10 @@ async function uploadVideoFileToDrive(video) {
     throw new Error('Video has no local file path');
   }
 
-  await fs.access(video.localPath);
-  const fileBuffer = await fs.readFile(video.localPath);
-  const fileName = path.basename(video.localPath) || `${video.videoId || video._id}.mp4`;
+  const resolvedLocalPath = resolveBackendPath(video.localPath);
+  await fs.access(resolvedLocalPath);
+  const fileBuffer = await fs.readFile(resolvedLocalPath);
+  const fileName = path.basename(resolvedLocalPath) || `${video.videoId || video._id}.mp4`;
   const uploadMethod = sourceUploadMethod(video.source || video.platform);
 
   if (uploadMethod === 'uploadSourceScrapedVideo') {
@@ -437,11 +449,21 @@ function resolveBackendPath(candidate = '') {
   if (!normalized) return '';
   if (path.isAbsolute(normalized)) return normalized;
 
+  const workspaceRoot = path.dirname(BACKEND_ROOT);
   if (normalized === 'backend' || normalized.startsWith(`backend${path.sep}`)) {
-    return path.join(path.dirname(BACKEND_ROOT), normalized);
+    return path.join(workspaceRoot, normalized);
   }
 
-  return path.join(BACKEND_ROOT, normalized);
+  const backendPath = path.join(BACKEND_ROOT, normalized);
+  if (fsSync.existsSync(backendPath)) return backendPath;
+
+  const workspacePath = path.join(workspaceRoot, normalized);
+  if (fsSync.existsSync(workspacePath)) return workspacePath;
+
+  const scraperServicePath = path.join(workspaceRoot, 'scraper_service', normalized);
+  if (fsSync.existsSync(scraperServicePath)) return scraperServicePath;
+
+  return backendPath;
 }
 
 function resolveAssetLocalPath(asset = {}) {
@@ -487,13 +509,290 @@ async function resolveVideoSelection(selection = null) {
   return null;
 }
 
+function buildSourceVideoQuery(sourceKey = '') {
+  const normalized = String(sourceKey || '').trim();
+  if (!normalized) return {};
+
+  if (normalized.toLowerCase() === 'playboard') {
+    return {
+      $or: [
+        { source: 'playboard' },
+        { platform: 'youtube', topics: { $regex: 'playboard', $options: 'i' } },
+      ],
+    };
+  }
+
+  return {
+    $or: [
+      { source: normalized },
+      { platform: normalized },
+    ],
+  };
+}
+
+function buildProductionJobQuery(sourceKey = '') {
+  const normalized = String(sourceKey || '').trim();
+  const base = { contentType: 'mashup' };
+  if (!normalized) return base;
+
+  if (normalized.toLowerCase() === 'playboard') {
+    return {
+      ...base,
+      $or: [
+        { 'metadata.sourceKey': 'playboard' },
+        { 'metadata.sourcePlatform': 'playboard' },
+      ],
+    };
+  }
+
+  return {
+    ...base,
+    $or: [
+      { 'metadata.sourceKey': normalized },
+      { 'metadata.sourcePlatform': normalized },
+      { platform: normalized },
+    ],
+  };
+}
+
+function extractDriveFileId(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('public_drive_')) return raw.replace('public_drive_', '');
+
+  const urlMatch = raw.match(/\/file\/d\/([A-Za-z0-9_-]{20,})/i)
+    || raw.match(/[?&]id=([A-Za-z0-9_-]{20,})/i)
+    || raw.match(/open\?id=([A-Za-z0-9_-]{20,})/i);
+  if (urlMatch) return urlMatch[1];
+
+  const fileMatch = raw.match(/([A-Za-z0-9_-]{20,})-/);
+  if (fileMatch) return fileMatch[1];
+
+  return '';
+}
+
+function buildDriveThumbnail(fileId) {
+  if (!fileId) return '';
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w640`;
+}
+
+function buildMashupLog(job = {}) {
+  const metadataLog = job.metadata?.mashupLog || job.videoConfig?.mashupLog;
+  if (metadataLog) return metadataLog;
+
+  const productionConfig = job.videoConfig?.productionConfig || {};
+  const templateName = productionConfig.templateName || 'reaction';
+  const templateGroup = resolveTemplateGroup(templateName);
+  const subVideo = job.videoConfig?.subVideo || productionConfig.manualSubVideo || {};
+  const autoSelected = Boolean(subVideo?.autoSelected || job.videoConfig?.autoSelectedSubVideo);
+
+  return {
+    recipe: job.videoConfig?.recipe || job.contentType || 'mashup',
+    templateName,
+    templateGroup,
+    layout: productionConfig.layout || '2-3-1-3',
+    duration: Number(productionConfig.duration) || 30,
+    aspectRatio: productionConfig.aspectRatio || '9:16',
+    audioSource: productionConfig.audioSource || 'main',
+    mainVideo: {
+      sourceVideoId: job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '',
+      title: job.videoConfig?.sourceTitle || '',
+      path: job.videoConfig?.mainVideoPath || '',
+      url: job.videoConfig?.sourceUrl || '',
+    },
+    subVideo: {
+      selectionMethod: autoSelected ? 'auto' : (subVideo?.assetId ? 'manual' : 'auto'),
+      assetId: subVideo?.assetId || '',
+      name: subVideo?.name || job.videoConfig?.autoSelectedSubVideo?.name || '',
+      path: job.videoConfig?.subVideoPath || subVideo?.localPath || '',
+      sourceKey: subVideo?.sourceKey || job.videoConfig?.autoSelectedSubVideo?.sourceKey || '',
+      sourceType: subVideo?.sourceType || job.videoConfig?.autoSelectedSubVideo?.sourceType || '',
+      theme: subVideo?.theme || job.videoConfig?.autoSelectedSubVideo?.theme || '',
+    },
+    selection: autoSelected ? {
+      method: 'auto',
+      sourceKey: subVideo?.sourceKey || job.videoConfig?.autoSelectedSubVideo?.sourceKey || '',
+      sourceType: subVideo?.sourceType || job.videoConfig?.autoSelectedSubVideo?.sourceType || '',
+      sourceName: subVideo?.name || job.videoConfig?.autoSelectedSubVideo?.name || '',
+      templateGroup,
+      desiredThemes: [],
+      score: null,
+      candidates: [],
+    } : { method: 'manual' },
+    subtitleMode: productionConfig.subtitleMode || 'none',
+    subtitleText: productionConfig.subtitleText || '',
+    subtitleContext: productionConfig.subtitleContext || '',
+  };
+}
+
+function resolveSubThumbnail(job = {}, mashupLog = {}) {
+  const subVideo = mashupLog?.subVideo || {};
+  const candidates = [
+    subVideo?.assetId,
+    job.videoConfig?.subVideo?.assetId,
+    job.videoConfig?.autoSelectedSubVideo?.name,
+    job.videoConfig?.subVideo?.url,
+    job.videoConfig?.subVideo?.localPath,
+    job.videoConfig?.subVideoPath,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const fileId = extractDriveFileId(candidate);
+    if (fileId) {
+      return buildDriveThumbnail(fileId);
+    }
+  }
+
+  return '';
+}
+
+async function updateTrendVideoProductionSnapshot(videoId, updates = {}) {
+  if (!videoId) return null;
+
+  const video = await TrendVideo.findById(videoId);
+  if (!video) return null;
+
+  video.production = {
+    ...(video.production?.toObject ? video.production.toObject() : video.production || {}),
+    ...updates,
+  };
+  await video.save();
+  return video;
+}
+
+async function clearTrendVideoProductionSnapshot(videoId, queueId) {
+  if (!videoId) return null;
+  const video = await TrendVideo.findById(videoId);
+  if (!video) return null;
+  if (queueId && video.production?.queueId && String(video.production.queueId) !== String(queueId)) {
+    return video;
+  }
+
+  video.production = {
+    ...(video.production?.toObject ? video.production.toObject() : video.production || {}),
+    queueStatus: 'idle',
+    queueId: '',
+    recipe: '',
+    lastQueuedAt: null,
+    completedVideoPath: '',
+    completedDriveFileId: '',
+    completedAt: null,
+    lastError: '',
+  };
+  await video.save();
+  return video;
+}
+
+async function upsertGeneratedVideoAsset(payload = {}) {
+  const {
+    queueId,
+    outputPath,
+    driveSync = {},
+    sourceVideoId = '',
+    recipe = 'mashup',
+    sourceTitle = '',
+  } = payload;
+
+  if (!queueId || !outputPath) {
+    return { success: false, error: 'queueId and outputPath are required' };
+  }
+
+  const stats = await fs.stat(outputPath);
+  const relativePath = path.relative(BACKEND_ROOT, outputPath).replace(/\\/g, '/');
+  const filename = path.basename(outputPath);
+  const assetId = `video_pipeline_generated_${queueId}`;
+  const synced = Boolean(driveSync?.driveFileId);
+  const now = new Date();
+
+  const assetPayload = {
+    assetId,
+    filename,
+    mimeType: 'video/mp4',
+    fileSize: stats.size,
+    assetType: 'video',
+    assetCategory: 'generated-video',
+    userId: 'anonymous',
+    sessionId: 'video-pipeline',
+    storage: {
+      location: synced ? 'google-drive' : 'local',
+      localPath: relativePath,
+      googleDriveId: driveSync?.driveFileId || '',
+      googleDrivePath: driveSync?.name || filename,
+      url: driveSync?.webViewLink || `/api/assets/proxy/${assetId}`,
+    },
+    localStorage: {
+      location: 'local',
+      path: relativePath,
+      fileSize: stats.size,
+      savedAt: now,
+      verified: true,
+    },
+    cloudStorage: synced ? {
+      location: 'google-drive',
+      googleDriveId: driveSync.driveFileId,
+      webViewLink: driveSync.webViewLink || '',
+      status: 'synced',
+      syncedAt: now,
+      attempted: 1,
+    } : (driveSync?.status === 'failed' ? {
+      location: 'google-drive',
+      googleDriveId: '',
+      webViewLink: '',
+      status: 'failed',
+      syncedAt: null,
+      attempted: 1,
+    } : undefined),
+    syncStatus: synced ? 'synced' : (driveSync?.status === 'failed' ? 'failed' : 'pending'),
+    generation: {
+      model: 'video-pipeline-mashup',
+      parameters: {
+        queueId,
+        sourceVideoId,
+        recipe,
+        sourceTitle,
+        completedDriveStatus: driveSync?.status || 'pending',
+      },
+    },
+    usedIn: ['video-generation', 'gallery'],
+    tags: ['video-pipeline', 'generated-video', recipe, queueId],
+    projectId: 'video-pipeline',
+    status: 'active',
+  };
+
+  const existing = await Asset.findOne({ assetId });
+  if (existing) {
+    Object.assign(existing, assetPayload);
+    await existing.save();
+    return { success: true, item: existing };
+  }
+
+  const asset = await Asset.create(assetPayload);
+  return { success: true, item: asset };
+}
+
 class VideoPipelineService {
   /**
    * Dashboard data is intentionally small and aggregated so the overview tab
    * can render quickly without needing to preload the large video tables.
    */
   async getDashboard() {
-    const [queueStats, accountStats, sourceConfigs, totalVideos, driveReadyVideos, queuedVideos, totalChannels, templateSources] =
+    const [
+      queueStats,
+      accountStats,
+      sourceConfigs,
+      totalVideos,
+      driveReadyVideos,
+      queuedVideos,
+      totalChannels,
+      templateSources,
+      completedMashups,
+      failedMashups,
+      generatedVideoAssets,
+      downloadPending,
+      downloadProcessing,
+      downloadDone,
+      downloadFailed,
+    ] =
       await Promise.all([
         VideoQueueService.getQueueStats(),
         Promise.resolve(MultiAccountService.getAccountStats()),
@@ -503,6 +802,13 @@ class VideoPipelineService {
         TrendVideo.countDocuments({ 'production.queueStatus': 'queued' }),
         TrendChannel.countDocuments(),
         DriveTemplateSource.find({}).sort({ updatedAt: -1 }).lean(),
+        VideoPipelineJob.countDocuments({ contentType: 'mashup', status: { $in: ['ready', 'uploaded'] } }),
+        VideoPipelineJob.countDocuments({ contentType: 'mashup', status: 'failed' }),
+        Asset.countDocuments({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' }),
+        TrendVideo.countDocuments({ downloadStatus: 'pending' }),
+        TrendVideo.countDocuments({ downloadStatus: 'downloading' }),
+        TrendVideo.countDocuments({ downloadStatus: 'done' }),
+        TrendVideo.countDocuments({ downloadStatus: 'failed' }),
       ]);
 
     return {
@@ -513,10 +819,17 @@ class VideoPipelineService {
         totalVideos,
         driveReadyVideos,
         queuedVideos,
+        downloadPending,
+        downloadProcessing,
+        downloadDone,
+        downloadFailed,
         queueJobs: queueStats.stats?.total || 0,
         readyToPublish: (queueStats.stats?.byStatus?.ready || 0) + (queueStats.stats?.byStatus?.uploaded || 0),
         connections: accountStats.stats?.totalAccounts || 0,
         healthyTemplateSources: templateSources.filter((item) => item.healthStatus === 'healthy').length,
+        completedMashups,
+        failedMashups,
+        generatedVideoAssets,
       },
       queue: queueStats.stats || {},
       connections: accountStats.stats || {},
@@ -846,6 +1159,7 @@ class VideoPipelineService {
       items: items.map((item) => ({
         ...item,
         id: String(item._id),
+        thumbnail: item.thumbnail || (item.platform === 'youtube' && item.videoId ? `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg` : ''),
         sourceKey: item.source || item.platform,
         queueReady: item.downloadStatus === 'done',
         driveReady: item.driveSync?.status === 'uploaded',
@@ -955,11 +1269,22 @@ class VideoPipelineService {
         }
       );
 
+      const upstreamData = response?.data || {};
+      if (upstreamData && typeof upstreamData === 'object' && upstreamData.success === false) {
+        return {
+          success: false,
+          error: upstreamData.error || upstreamData.message || 'Scraper service rejected the trigger request',
+          upstream: PY_SERVICE_BASE,
+          data: upstreamData,
+          source: 'python-trend-service',
+        };
+      }
+
       return {
         success: true,
-        message: 'Pending download trigger sent successfully',
+        message: upstreamData.message || 'Pending download trigger sent successfully',
         upstream: PY_SERVICE_BASE,
-        data: response.data,
+        data: upstreamData,
       };
     } catch (error) {
       return {
@@ -988,6 +1313,7 @@ class VideoPipelineService {
     const manualSubVideo = await resolveVideoSelection(productionConfig.manualSubVideo || null);
     const effectiveProductionConfig = {
       ...productionConfig,
+      subtitleMode: productionConfig.subtitleMode || 'auto',
       manualMainVideo,
       manualSubVideo,
     };
@@ -1011,6 +1337,7 @@ class VideoPipelineService {
         metadata: {
           sourceVideoId: null,
           sourcePlatform: 'manual',
+          sourceKey: 'manual',
           driveSyncStatus: 'manual',
           inputMode: 'manual-assets',
         },
@@ -1037,6 +1364,7 @@ class VideoPipelineService {
         metadata: {
           sourceVideoId: String(video._id),
           sourcePlatform: video.platform,
+          sourceKey: video.source || (String(video.topics || '').toLowerCase().includes('playboard') ? 'playboard' : video.platform),
           driveSyncStatus: video.driveSync?.status || 'pending',
         },
       });
@@ -1067,6 +1395,80 @@ class VideoPipelineService {
       queued,
       totalQueued: queued.length,
       failed: videoIds.length - queued.length,
+    };
+  }
+
+  /**
+   * Adds downloaded source videos into the legacy Queue folder so the
+   * queue-scanner cron job can auto-generate mashups.
+   */
+  async queueSourceVideosToFolder(payload = {}) {
+    const { videoIds = [] } = payload;
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return { success: false, error: 'Select at least one source video to queue' };
+    }
+
+    const videos = await TrendVideo.find({ _id: { $in: videoIds } }).lean();
+    if (!videos.length) {
+      return { success: false, error: 'No matching source videos found' };
+    }
+
+    const queueDir = googleDriveIntegration.getFolderDirectory('queue');
+    await fs.mkdir(queueDir, { recursive: true });
+
+    const queued = [];
+    const failed = [];
+
+    for (const video of videos) {
+      try {
+        const sourcePath = resolveBackendPath(video.localPath || '');
+        if (!sourcePath || !fsSync.existsSync(sourcePath)) {
+          failed.push({ id: String(video._id), error: 'Local file not found' });
+          continue;
+        }
+
+        const ext = path.extname(sourcePath) || '.mp4';
+        const baseName = sanitizeFileName(video.videoId || path.parse(sourcePath).name || `queue-${Date.now()}`);
+        let fileName = `${baseName}${ext}`;
+        let destPath = path.join(queueDir, fileName);
+        let counter = 1;
+        while (fsSync.existsSync(destPath)) {
+          fileName = `${baseName}-${Date.now()}-${counter}${ext}`;
+          destPath = path.join(queueDir, fileName);
+          counter += 1;
+        }
+
+        await fs.copyFile(sourcePath, destPath);
+
+        const metadata = {
+          sourceVideoId: String(video._id),
+          sourceKey: video.source || video.platform || 'other',
+          sourcePlatform: video.platform || video.source || 'other',
+          sourceUrl: video.url || '',
+          sourceTitle: video.title || video.videoId || fileName,
+          sourceThumbnail: video.thumbnail || '',
+          videoId: video.videoId || '',
+          queuedAt: new Date().toISOString(),
+        };
+        const metadataPath = `${destPath}.json`;
+        await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+
+        queued.push({
+          id: String(video._id),
+          fileName,
+          queuePath: destPath,
+        });
+      } catch (error) {
+        failed.push({ id: String(video._id), error: error.message });
+      }
+    }
+
+    return {
+      success: queued.length > 0,
+      queued,
+      failed,
+      totalQueued: queued.length,
+      totalFailed: failed.length,
     };
   }
 
@@ -1110,6 +1512,559 @@ class VideoPipelineService {
       items: enriched,
       count: enriched.length,
       stats: (await VideoQueueService.getQueueStats()).stats,
+    };
+  }
+
+  async getQueueRuntime(timeoutMinutes = 30) {
+    const [statsResult, runtimeResult] = await Promise.all([
+      VideoQueueService.getQueueStats(),
+      VideoQueueService.getQueueRuntime(timeoutMinutes),
+    ]);
+
+    if (!statsResult.success) return statsResult;
+    if (!runtimeResult.success) return runtimeResult;
+
+    return {
+      success: true,
+      stats: statsResult.stats || {},
+      runtime: runtimeResult.runtime || {},
+    };
+  }
+
+  async getProductionOverview(filters = {}) {
+    const sourceQuery = buildSourceVideoQuery(filters.sourceKey);
+    const jobQuery = buildProductionJobQuery(filters.sourceKey);
+    const pendingDriveSyncQuery = Object.keys(sourceQuery).length
+      ? {
+          downloadStatus: 'done',
+          $and: [
+            sourceQuery,
+            {
+              $or: [
+                { 'driveSync.status': { $exists: false } },
+                { 'driveSync.status': { $in: ['pending', 'failed', 'skipped'] } },
+              ],
+            },
+          ],
+        }
+      : {
+          downloadStatus: 'done',
+          $or: [
+            { 'driveSync.status': { $exists: false } },
+            { 'driveSync.status': { $in: ['pending', 'failed', 'skipped'] } },
+          ],
+        };
+
+    const [
+      eligibleSourceVideos,
+      driveReadySourceVideos,
+      sourceVideosPendingDriveSync,
+      activeSourceVideos,
+      completedSourceVideos,
+      failedSourceVideos,
+      mashupStatusBuckets,
+      generatedVideoAssets,
+      recentJobs,
+    ] = await Promise.all([
+      TrendVideo.countDocuments({ downloadStatus: 'done', ...sourceQuery }),
+      TrendVideo.countDocuments({ downloadStatus: 'done', 'driveSync.status': 'uploaded', ...sourceQuery }),
+      TrendVideo.countDocuments(pendingDriveSyncQuery),
+      TrendVideo.countDocuments({ ...sourceQuery, 'production.queueStatus': { $in: ['queued', 'processing', 'ready'] } }),
+      TrendVideo.countDocuments({ ...sourceQuery, 'production.queueStatus': 'completed' }),
+      TrendVideo.countDocuments({ ...sourceQuery, 'production.queueStatus': 'failed' }),
+      VideoPipelineJob.aggregate([
+        { $match: jobQuery },
+        { $group: { _id: '$status', total: { $sum: 1 } } },
+      ]),
+      Asset.countDocuments({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' }),
+      VideoPipelineJob.find(jobQuery).sort({ updatedAt: -1 }).limit(12).lean(),
+    ]);
+
+    const byStatus = mashupStatusBuckets.reduce((accumulator, bucket) => {
+      const key = bucket._id || 'unknown';
+      accumulator[key] = bucket.total || 0;
+      return accumulator;
+    }, {});
+
+    return {
+      success: true,
+      metrics: {
+        eligibleSourceVideos,
+        driveReadySourceVideos,
+        sourceVideosPendingDriveSync,
+        activeSourceVideos,
+        completedSourceVideos,
+        failedSourceVideos,
+        generatedVideoAssets,
+        completedMashupJobs: (byStatus.ready || 0) + (byStatus.uploaded || 0),
+        failedMashupJobs: byStatus.failed || 0,
+      },
+      jobSummary: {
+        total: Object.values(byStatus).reduce((sum, value) => sum + value, 0),
+        byStatus,
+      },
+      recentHistory: recentJobs.map((job) => ({
+        queueId: job.queueId,
+        status: job.status,
+        sourceTitle: job.videoConfig?.sourceTitle || job.queueId,
+        sourceVideoId: job.metadata?.sourceVideoId || '',
+        sourcePlatform: job.metadata?.sourceKey || job.metadata?.sourcePlatform || job.platform,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        completedAt: job.completedAt,
+        uploadedAt: job.uploadedAt,
+        outputPath: job.videoConfig?.outputPath || job.videoConfig?.videoPath || '',
+        completedDriveSync: job.videoConfig?.completedDriveSync || job.metadata?.completedDriveSync || {},
+        executionState: buildQueueControl(job).executionState,
+        errorCount: job.errorCount || 0,
+      })),
+    };
+  }
+
+  async getProductionHistory(filters = {}) {
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(filters.limit) || 20));
+    const status = String(filters.status || '').trim();
+    const sourceKey = String(filters.sourceKey || '').trim();
+    const query = buildProductionJobQuery(sourceKey);
+
+    if (status) query.status = status;
+
+    const [items, total] = await Promise.all([
+      VideoPipelineJob.find(query)
+        .sort({ completedAt: -1, updatedAt: -1, createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      VideoPipelineJob.countDocuments(query),
+    ]);
+
+    const sourceIds = items
+      .map((job) => job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '')
+      .filter(Boolean);
+    const sources = sourceIds.length
+      ? await TrendVideo.find({ _id: { $in: sourceIds } }).lean()
+      : [];
+    const sourceMap = new Map(sources.map((item) => [String(item._id), item]));
+
+    const enriched = items.map((job) => {
+      const sourceId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
+      const source = sourceMap.get(String(sourceId));
+      const mashupLog = buildMashupLog(job);
+      const mainThumbnail = job.videoConfig?.sourceThumbnail || source?.thumbnail || '';
+      const subThumbnail = resolveSubThumbnail(job, mashupLog);
+      const publishMetadata = job.metadata?.publishMetadata || job.videoConfig?.publishMetadata || null;
+
+      return {
+        queueId: job.queueId,
+        status: job.status,
+        contentType: job.contentType,
+        priority: job.priority,
+        sourceVideoId: sourceId,
+        sourceTitle: source?.title || job.videoConfig?.sourceTitle || job.queueId,
+        sourcePlatform: job.metadata?.sourceKey || job.metadata?.sourcePlatform || job.platform,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        completedAt: job.completedAt,
+        uploadedAt: job.uploadedAt,
+        outputPath: job.videoConfig?.outputPath || job.videoConfig?.videoPath || '',
+        completedDriveSync: job.videoConfig?.completedDriveSync || job.metadata?.completedDriveSync || {},
+        mainThumbnail,
+        subThumbnail,
+        mashupLog,
+        templateName: mashupLog?.templateName || job.videoConfig?.productionConfig?.templateName || '',
+        templateGroup: mashupLog?.templateGroup || resolveTemplateGroup(job.videoConfig?.productionConfig?.templateName || 'reaction'),
+        selectionMethod: mashupLog?.subVideo?.selectionMethod || (job.videoConfig?.subVideo?.autoSelected ? 'auto' : 'manual'),
+        publishMetadata,
+      };
+    });
+
+    return {
+      success: true,
+      page,
+      limit,
+      total,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      items: enriched,
+    };
+  }
+
+  async getProductionHistoryItem(queueId) {
+    const job = await VideoPipelineJob.findOne({ queueId }).lean();
+    if (!job) {
+      return { success: false, error: `Queue item not found: ${queueId}` };
+    }
+
+    const sourceId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
+    const source = sourceId ? await TrendVideo.findById(sourceId).lean() : null;
+    const mashupLog = buildMashupLog(job);
+    const mainThumbnail = job.videoConfig?.sourceThumbnail || source?.thumbnail || '';
+    const subThumbnail = resolveSubThumbnail(job, mashupLog);
+    const publishMetadata = job.metadata?.publishMetadata || job.videoConfig?.publishMetadata || null;
+
+    return {
+      success: true,
+      item: {
+        ...job,
+        sourceTitle: source?.title || job.videoConfig?.sourceTitle || job.queueId,
+        sourcePlatform: job.metadata?.sourceKey || job.metadata?.sourcePlatform || job.platform,
+        mainThumbnail,
+        subThumbnail,
+        mashupLog,
+        publishMetadata,
+      },
+    };
+  }
+
+  async deleteProductionHistoryItem(queueId) {
+    const job = await VideoPipelineJob.findOne({ queueId });
+    if (!job) {
+      return { success: false, error: `Queue item not found: ${queueId}` };
+    }
+
+    const outputPath = job.videoConfig?.outputPath || job.videoConfig?.videoPath || '';
+    const driveFileId = job.videoConfig?.completedDriveSync?.driveFileId || job.metadata?.completedDriveSync?.driveFileId || '';
+    const assetId = job.videoConfig?.generatedAsset?.assetId || `video_pipeline_generated_${queueId}`;
+
+    if (outputPath) {
+      try {
+        await fs.unlink(outputPath);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (driveFileId) {
+      try {
+        await driveService.deleteFile(driveFileId);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (assetId) {
+      await Asset.updateOne({ assetId }, { $set: { status: 'deleted' } });
+    }
+
+    const sourceVideoId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
+    await clearTrendVideoProductionSnapshot(sourceVideoId, queueId);
+
+    await VideoPipelineJob.deleteOne({ queueId });
+
+    return { success: true, message: 'Production history item deleted' };
+  }
+
+  async remashupJob(queueId, payload = {}) {
+    const job = await VideoPipelineJob.findOne({ queueId });
+    if (!job) {
+      return { success: false, error: `Queue item not found: ${queueId}` };
+    }
+
+    if (job.contentType !== 'mashup') {
+      return { success: false, error: 'Only mashup jobs can be re-rendered' };
+    }
+
+    const outputPath = job.videoConfig?.outputPath || job.videoConfig?.videoPath || '';
+    const driveFileId = job.videoConfig?.completedDriveSync?.driveFileId || job.metadata?.completedDriveSync?.driveFileId || '';
+    const assetId = job.videoConfig?.generatedAsset?.assetId || `video_pipeline_generated_${queueId}`;
+
+    if (outputPath) {
+      try {
+        await fs.unlink(outputPath);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (driveFileId) {
+      try {
+        await driveService.deleteFile(driveFileId);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (assetId) {
+      await Asset.updateOne({ assetId }, { $set: { status: 'deleted' } });
+    }
+
+    const productionConfig = {
+      ...(job.videoConfig?.productionConfig || {}),
+    };
+    if (!productionConfig.subtitleMode) {
+      productionConfig.subtitleMode = 'auto';
+    }
+
+    if (payload.templateName) {
+      productionConfig.templateName = payload.templateName;
+    }
+    if (payload.templateStrategy) {
+      productionConfig.templateStrategy = payload.templateStrategy;
+    }
+    if (payload.manualSubVideo) {
+      productionConfig.manualSubVideo = payload.manualSubVideo;
+    } else if (payload.manualSubVideo === null) {
+      productionConfig.manualSubVideo = null;
+    }
+
+    job.status = 'pending';
+    job.errorCount = 0;
+    job.retry = 0;
+    job.errorLog = [];
+    job.startedAt = null;
+    job.completedAt = null;
+    job.uploadedAt = null;
+    job.uploadUrl = '';
+    job.lastRetryAt = null;
+    job.metadata = {
+      ...(job.metadata || {}),
+      completedDriveSync: null,
+      mashupLog: null,
+      queueControl: {
+        retryEligible: true,
+        retryStopped: false,
+        retryStoppedReason: '',
+        retryStoppedAt: null,
+        manualInterventionRequired: false,
+        nextAction: 'await-render',
+      },
+    };
+    job.videoConfig = {
+      ...(job.videoConfig || {}),
+      productionConfig,
+      subVideo: payload.manualSubVideo || null,
+      subVideoPath: payload.manualSubVideo?.localPath || '',
+      outputPath: '',
+      videoPath: '',
+      completedDriveSync: {},
+      generatedAsset: null,
+    };
+    job.processLogs.push({
+      stage: 'remashup',
+      status: 'success',
+      message: `Re-mashup requested${payload.templateName ? ` with template ${payload.templateName}` : ''}`,
+      timestamp: new Date(),
+    });
+
+    await job.save();
+
+    const sourceVideoId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
+    await updateTrendVideoProductionSnapshot(sourceVideoId, {
+      queueStatus: 'queued',
+      queueId,
+      recipe: job.videoConfig?.recipe || 'mashup',
+      lastQueuedAt: new Date(),
+      lastError: '',
+    });
+
+    if (payload.startImmediately !== false) {
+      return this.startJob(queueId);
+    }
+
+    return {
+      success: true,
+      queueId,
+      message: 'Re-mashup queued',
+      queueItem: job.toObject(),
+    };
+  }
+
+  async runMassProduction(payload = {}) {
+    const limit = Math.min(50, Math.max(1, Number(payload.limit) || 5));
+    const sourceKey = String(payload.sourceKey || '').trim();
+    const syncSourceToDrive = payload.syncSourceToDrive !== false;
+    const startImmediately = payload.startImmediately !== false;
+    const recipe = String(payload.recipe || 'mashup').trim() || 'mashup';
+    const platform = String(payload.platform || 'youtube').trim() || 'youtube';
+    const sourceQuery = buildSourceVideoQuery(sourceKey);
+    const productionConfig = {
+      ...(payload.productionConfig || {}),
+    };
+    if (!productionConfig.subtitleMode) {
+      productionConfig.subtitleMode = 'auto';
+    }
+    const candidateQuery = Object.keys(sourceQuery).length
+      ? {
+          downloadStatus: 'done',
+          localPath: { $exists: true, $ne: '' },
+          $and: [
+            sourceQuery,
+            {
+              $or: [
+                { 'production.queueStatus': { $exists: false } },
+                { 'production.queueStatus': { $in: ['idle', 'failed', null, ''] } },
+              ],
+            },
+          ],
+        }
+      : {
+          downloadStatus: 'done',
+          localPath: { $exists: true, $ne: '' },
+          $or: [
+            { 'production.queueStatus': { $exists: false } },
+            { 'production.queueStatus': { $in: ['idle', 'failed', null, ''] } },
+          ],
+        };
+
+    const candidates = await TrendVideo.find(candidateQuery)
+      .sort({ downloadedAt: 1, discoveredAt: 1, createdAt: 1 })
+      .limit(limit * 4);
+
+    const picked = [];
+    const skipped = [];
+
+    for (const video of candidates) {
+      if (picked.length >= limit) break;
+
+      const activeJob = await VideoPipelineJob.exists({
+        'metadata.sourceVideoId': String(video._id),
+        status: { $in: ['pending', 'processing', 'ready'] },
+      });
+
+      if (activeJob) {
+        skipped.push({
+          videoId: String(video._id),
+          title: video.title,
+          reason: 'active-job-exists',
+        });
+        continue;
+      }
+
+      picked.push(video);
+    }
+
+    const results = [];
+    for (const video of picked) {
+      const itemResult = {
+        videoId: String(video._id),
+        title: video.title,
+        sourceKey: video.source || video.platform,
+        syncedSourceToDrive: false,
+        queueId: '',
+        status: 'skipped',
+        error: '',
+      };
+
+      if (syncSourceToDrive && video.driveSync?.status !== 'uploaded') {
+        const syncResult = await this.uploadSourceVideo(video._id);
+        if (!syncResult.success) {
+          await updateTrendVideoProductionSnapshot(video._id, {
+            queueStatus: 'failed',
+            lastError: syncResult.error || 'Source drive sync failed before mass production',
+          });
+          itemResult.status = 'failed';
+          itemResult.error = syncResult.error || 'Source drive sync failed';
+          results.push(itemResult);
+          continue;
+        }
+
+        itemResult.syncedSourceToDrive = Boolean(syncResult.uploaded);
+      }
+
+      const queueResult = await this.queueSourceVideos({
+        videoIds: [String(video._id)],
+        recipe,
+        platform,
+        productionConfig,
+      });
+
+      if (!queueResult.success || !queueResult.queued?.length) {
+        await updateTrendVideoProductionSnapshot(video._id, {
+          queueStatus: 'failed',
+          lastError: queueResult.error || 'Could not queue production job',
+        });
+        itemResult.status = 'failed';
+        itemResult.error = queueResult.error || 'Queue failed';
+        results.push(itemResult);
+        continue;
+      }
+
+      itemResult.queueId = queueResult.queued[0]?.queueId || '';
+      itemResult.status = startImmediately ? 'queued' : 'pending';
+
+      if (startImmediately && itemResult.queueId) {
+        const startResult = await this.startJob(itemResult.queueId);
+        if (!startResult.success) {
+          itemResult.status = 'failed';
+          itemResult.error = startResult.error || 'Inline render failed';
+          results.push(itemResult);
+          continue;
+        }
+
+        itemResult.status = startResult.queueItem?.status || 'ready';
+      }
+
+      results.push(itemResult);
+    }
+
+    const summary = {
+      requested: limit,
+      considered: candidates.length,
+      selected: picked.length,
+      skipped: skipped.length,
+      queued: results.filter((item) => ['pending', 'queued'].includes(item.status)).length,
+      completed: results.filter((item) => ['ready', 'uploaded'].includes(item.status)).length,
+      failed: results.filter((item) => item.status === 'failed').length,
+      syncedSourceToDrive: results.filter((item) => item.syncedSourceToDrive).length,
+    };
+
+    return {
+      success: true,
+      message: `Processed ${summary.selected} source video(s) for ${recipe}`,
+      summary,
+      skipped,
+      results,
+    };
+  }
+
+  async retryFailedJobs(maxRetries = 3) {
+    return VideoQueueService.retryFailedBatch(maxRetries);
+  }
+
+  async releaseStaleJobs(timeoutMinutes = 30) {
+    return VideoQueueService.releaseStaleJobs(timeoutMinutes);
+  }
+
+  async clearQueueJobs(payload = {}) {
+    const statusFilter = String(payload.statusFilter || '').trim() || null;
+    const force = payload.force === true;
+
+    if (statusFilter === 'processing' && !force) {
+      return {
+        success: false,
+        error: 'Clearing processing jobs requires force=true',
+      };
+    }
+
+    return VideoQueueService.clearQueue(statusFilter);
+  }
+
+  async getSchedulerRuntimeStatus() {
+    await queueScannerCronJob.loadScheduleSettings();
+    const status = await queueScannerCronJob.getStatus();
+    const videos = googleDriveIntegration.listQueueVideos();
+    const driveQueue = await queueScannerCronJob.listDriveQueueVideos();
+
+    return {
+      success: true,
+      data: {
+        ...status,
+        scheduleConfig: queueScannerCronJob.scheduleConfig || {},
+        videos: videos.map((item) => ({
+          name: item.name,
+          size: item.size,
+          createdAt: item.createdAt,
+          metadata: queueScannerCronJob.readQueueMetadata(item.path) || null,
+        })),
+        driveQueue: driveQueue.map((item) => ({
+          name: item.name,
+          size: item.size,
+          createdAt: item.createdTime || null,
+          driveFileId: item.id,
+          thumbnail: item.thumbnailLink || '',
+          webViewLink: item.webViewLink || '',
+        })),
+      },
     };
   }
 
@@ -1358,6 +2313,21 @@ class VideoPipelineService {
       return { success: false, error: 'At least one valid account target is required for publishing' };
     }
 
+    const publishMetadata = queueItem.metadata?.publishMetadata
+      || queueItem.videoConfig?.publishMetadata
+      || buildPublishMetadata({
+        sourceTitle: queueItem.videoConfig?.sourceTitle || queueItem.title || queueId,
+        templateName: queueItem.videoConfig?.productionConfig?.templateName || queueItem.metadata?.mashupLog?.templateName || '',
+        templateGroup: queueItem.metadata?.mashupLog?.templateGroup || resolveTemplateGroup(queueItem.videoConfig?.productionConfig?.templateName || 'reaction'),
+        sourceKey: queueItem.metadata?.sourceKey || queueItem.metadata?.sourcePlatform || queueItem.platform,
+        sourcePlatform: queueItem.metadata?.sourcePlatform || queueItem.platform,
+        subtitleText: queueItem.metadata?.mashupLog?.subtitleText || queueItem.videoConfig?.productionConfig?.subtitleText || '',
+        subtitleContext: queueItem.metadata?.mashupLog?.subtitleContext || queueItem.videoConfig?.productionConfig?.subtitleContext || '',
+        subVideoName: queueItem.metadata?.mashupLog?.subVideo?.name || '',
+      });
+
+    const mergedUploadConfig = mergePublishUploadConfig(uploadConfig, publishMetadata);
+
     const results = [];
     for (const target of targets) {
       const account = MultiAccountService.getRawAccount(target.accountId);
@@ -1366,12 +2336,17 @@ class VideoPipelineService {
         continue;
       }
 
+      const resolvedUploadConfig = mergePublishUploadConfig(
+        target.uploadConfig || mergedUploadConfig,
+        publishMetadata
+      );
+
       const upload = AutoUploadService.registerUpload({
         queueId,
         videoPath,
         platform: target.platform || account.platform,
         accountId: target.accountId,
-        uploadConfig: target.uploadConfig || uploadConfig,
+        uploadConfig: resolvedUploadConfig,
       });
 
       if (!upload.success) {
@@ -1404,6 +2379,186 @@ class VideoPipelineService {
 
   async getJobLogs(queueId) {
     return VideoQueueService.getProcessLogs(queueId);
+  }
+
+  /**
+   * Get all available publishing accounts (YouTube OAuth + legacy MultiAccountService)
+   */
+  async getPublishAccounts() {
+    try {
+      // Fetch YouTube OAuth accounts from database
+      const youtubeAccounts = await SocialMediaAccount.find({
+        platform: 'youtube',
+        isActive: true,
+        isVerified: true
+      }).select('_id username displayName platform isActive isVerified platformData totalUploads lastPostTime');
+
+      // Get legacy MultiAccountService accounts
+      const legacyAccounts = new MultiAccountService().accounts || [];
+
+      // Format YouTube accounts
+      const youtubeFormatted = youtubeAccounts.map(acc => ({
+        id: acc._id.toString(),
+        accountId: acc._id.toString(),
+        username: acc.username || acc.displayName,
+        displayName: acc.displayName,
+        platform: 'youtube',
+        source: 'oauth',
+        isActive: acc.isActive,
+        isVerified: acc.isVerified,
+        channelInfo: acc.platformData?.channelInfo || {},
+        stats: {
+          totalUploads: acc.totalUploads || 0,
+          lastPostTime: acc.lastPostTime
+        }
+      }));
+
+      // Format legacy accounts
+      const legacyFormatted = legacyAccounts.map(acc => ({
+        id: acc.id || acc.accountId,
+        accountId: acc.id || acc.accountId,
+        username: acc.username || acc.email,
+        displayName: acc.displayName || acc.username,
+        platform: acc.platform || 'youtube',
+        source: 'legacy',
+        isActive: acc.isActive !== false,
+        isVerified: acc.verified !== false
+      }));
+
+      return {
+        success: true,
+        accounts: [...youtubeFormatted, ...legacyFormatted],
+        total: youtubeFormatted.length + legacyFormatted.length,
+        youtube: youtubeFormatted.length,
+        legacy: legacyFormatted.length
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        accounts: []
+      };
+    }
+  }
+
+  /**
+   * Publish video to selected YouTube accounts via OAuth
+   */
+  async publishToYoutubeAccounts(queueId, payload = {}) {
+    try {
+      const { accountIds = [], videoMetadata = {} } = payload;
+
+      if (!accountIds || accountIds.length === 0) {
+        return { success: false, error: 'At least one YouTube account must be selected' };
+      }
+
+      // Get video from queue
+      const queueResult = await VideoQueueService.getQueueItem(queueId);
+      if (!queueResult.success) {
+        return queueResult;
+      }
+
+      const queueItem = queueResult.queueItem;
+      const videoPath = queueItem.videoConfig?.outputPath || queueItem.videoConfig?.videoPath;
+
+      if (!videoPath) {
+        return { success: false, error: 'Missing output video path in queue item' };
+      }
+
+      // Upload to each selected account
+      const results = [];
+
+      for (const accountId of accountIds) {
+        try {
+          // Fetch account from database
+          const account = await SocialMediaAccount.findById(accountId);
+
+          if (!account) {
+            results.push({
+              accountId,
+              success: false,
+              error: 'Account not found'
+            });
+            continue;
+          }
+
+          if (account.platform !== 'youtube') {
+            results.push({
+              accountId,
+              success: false,
+              error: 'Account is not a YouTube account'
+            });
+            continue;
+          }
+
+          if (!account.isActive || !account.isVerified) {
+            results.push({
+              accountId,
+              success: false,
+              error: 'Account is not active or verified'
+            });
+            continue;
+          }
+
+          // Upload video using YouTube OAuth service
+          const uploadResult = await youtubeOAuthService.uploadVideo(account, {
+            filePath: videoPath,
+            title: videoMetadata.title || queueItem.title || 'Generated Video',
+            description: videoMetadata.description || '',
+            tags: videoMetadata.tags || [],
+            visibility: videoMetadata.visibility || 'private',
+            thumbnail: videoMetadata.thumbnail
+          });
+
+          if (uploadResult.success) {
+            // Update account stats
+            account.totalUploads = (account.totalUploads || 0) + 1;
+            account.lastPostTime = new Date();
+            await account.save();
+
+            results.push({
+              accountId: accountId.toString(),
+              username: account.username,
+              platform: 'youtube',
+              success: true,
+              videoId: uploadResult.videoId,
+              videoUrl: `https://www.youtube.com/watch?v=${uploadResult.videoId}`
+            });
+          } else {
+            results.push({
+              accountId: accountId.toString(),
+              username: account.username,
+              platform: 'youtube',
+              success: false,
+              error: uploadResult.error || 'Upload failed'
+            });
+          }
+        } catch (error) {
+          results.push({
+            accountId,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+
+      // Update queue status if at least one succeeded
+      if (results.some(r => r.success)) {
+        await VideoQueueService.updateQueueStatus(queueId, 'uploaded');
+      }
+
+      return {
+        success: results.some(r => r.success),
+        results,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 
   async listFactoryTemplates() {
@@ -1498,6 +2653,7 @@ class VideoPipelineService {
     }
 
     const queueItem = queueResult.queueItem;
+    const sourceVideoId = queueItem.metadata?.sourceVideoId || queueItem.videoConfig?.sourceVideoId || '';
     if (queueItem.status === 'uploaded') {
       return { success: false, error: 'Uploaded jobs cannot be started again' };
     }
@@ -1526,6 +2682,8 @@ class VideoPipelineService {
     let subVideo = await resolveVideoSelection(queueItem.videoConfig?.subVideo || queueItem.videoConfig?.productionConfig?.manualSubVideo || null);
     const mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
     let subVideoPath = resolveBackendPath(subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '');
+    let autoSelection = null;
+    let autoSelectionSource = null;
 
     if (!mainVideoPath) {
       const error = new Error('Mashup jobs require a main video input before manual start');
@@ -1533,6 +2691,12 @@ class VideoPipelineService {
         retryEligible: false,
         manualInterventionRequired: true,
         category: 'validation',
+      });
+      await updateTrendVideoProductionSnapshot(sourceVideoId, {
+        queueStatus: 'failed',
+        queueId,
+        recipe,
+        lastError: error.message,
       });
       return {
         success: false,
@@ -1549,6 +2713,12 @@ class VideoPipelineService {
           manualInterventionRequired: true,
           category: 'asset-selection',
           message: autoSubVideoResult.errors?.join(' | ') || autoSubError.message,
+        });
+        await updateTrendVideoProductionSnapshot(sourceVideoId, {
+          queueStatus: 'failed',
+          queueId,
+          recipe,
+          lastError: autoSubError.message,
         });
         return {
           success: false,
@@ -1568,6 +2738,8 @@ class VideoPipelineService {
         autoSelected: true,
       };
       subVideoPath = autoSubVideoResult.item?.localPath || '';
+      autoSelection = autoSubVideoResult.selection || null;
+      autoSelectionSource = autoSubVideoResult.source || null;
 
       await VideoQueueService.logProcess({
         queueId,
@@ -1577,7 +2749,85 @@ class VideoPipelineService {
       });
     }
 
-    await VideoQueueService.updateQueueStatus(queueId, 'processing', { lastRetryAt: new Date() });
+    const productionConfig = queueItem.videoConfig?.productionConfig || {};
+    const templateName = productionConfig.templateName || 'reaction';
+    const templateGroup = resolveTemplateGroup(templateName);
+    const mashupLog = {
+      recipe,
+      templateName,
+      templateGroup,
+      layout: productionConfig.layout || '2-3-1-3',
+      duration: Number(productionConfig.duration) || 30,
+      aspectRatio: productionConfig.aspectRatio || '9:16',
+      audioSource: productionConfig.audioSource || 'main',
+      subtitleMode: productionConfig.subtitleMode || 'none',
+      subtitleText: productionConfig.subtitleText || '',
+      subtitleContext: productionConfig.subtitleContext || '',
+      mainVideo: {
+        sourceVideoId,
+        title: queueItem.videoConfig?.sourceTitle || '',
+        path: mainVideoPath,
+        url: queueItem.videoConfig?.sourceUrl || '',
+      },
+      subVideo: {
+        selectionMethod: subVideo?.autoSelected ? 'auto' : 'manual',
+        assetId: subVideo?.assetId || '',
+        name: subVideo?.name || (subVideoPath ? path.basename(subVideoPath) : ''),
+        path: subVideoPath,
+        sourceKey: subVideo?.sourceKey || '',
+        sourceType: subVideo?.sourceType || '',
+        theme: subVideo?.theme || '',
+      },
+      selection: subVideo?.autoSelected ? {
+        method: 'auto',
+        sourceKey: autoSelectionSource?.key || 'public-drive',
+        sourceType: autoSelectionSource?.sourceType || 'public-drive-folder',
+        sourceName: autoSelectionSource?.name || 'default library source',
+        templateGroup: autoSelection?.templateGroup || templateGroup,
+        desiredThemes: autoSelection?.desiredThemes || [],
+        score: Number.isFinite(autoSelection?.score) ? autoSelection.score : null,
+        candidates: (autoSelection?.candidates || []).map((candidate) => ({
+          id: candidate.file?.id || '',
+          name: candidate.file?.name || '',
+          score: Number.isFinite(candidate.score) ? candidate.score : null,
+          theme: candidate.file?.theme || '',
+          recommendedTemplateGroups: candidate.file?.recommendedTemplateGroups || [],
+        })),
+      } : {
+        method: 'manual',
+      },
+    };
+
+    await VideoQueueService.logProcess({
+      queueId,
+      stage: 'mashup-config',
+      status: 'success',
+      message: JSON.stringify({
+        recipe: mashupLog.recipe,
+        templateName: mashupLog.templateName,
+        templateGroup: mashupLog.templateGroup,
+        mainVideoId: mashupLog.mainVideo.sourceVideoId,
+        mainTitle: mashupLog.mainVideo.title,
+        subVideoName: mashupLog.subVideo.name,
+        subSelection: mashupLog.subVideo.selectionMethod,
+        subSourceKey: mashupLog.subVideo.sourceKey,
+      }),
+    });
+
+    await VideoQueueService.updateQueueStatus(queueId, 'processing', {
+      lastRetryAt: new Date(),
+      metadata: {
+        ...(queueItem.metadata || {}),
+        mashupLog,
+      },
+    });
+    await updateTrendVideoProductionSnapshot(sourceVideoId, {
+      queueStatus: 'processing',
+      queueId,
+      recipe,
+      lastQueuedAt: queueItem.videoConfig?.lastQueuedAt || queueItem.createdAt || new Date(),
+      lastError: '',
+    });
 
     try {
       const outputDir = path.join(BACKEND_ROOT, 'media', 'mashups');
@@ -1585,7 +2835,6 @@ class VideoPipelineService {
 
       const outputFileName = sanitizeFileName(queueItem.videoConfig?.outputFileName || `${queueId}.mp4`);
       const outputPath = path.join(outputDir, outputFileName);
-      const productionConfig = queueItem.videoConfig?.productionConfig || {};
       const renderResult = await VideoMashupService.generateMashupVideo({
         mainVideoPath,
         templateVideoPath: subVideoPath,
@@ -1611,6 +2860,12 @@ class VideoPipelineService {
 
       if (!renderResult.success) {
         await VideoQueueService.recordError(queueId, new Error(renderResult.error || 'Mashup render failed'), 'mashup');
+        await updateTrendVideoProductionSnapshot(sourceVideoId, {
+          queueStatus: 'failed',
+          queueId,
+          recipe,
+          lastError: renderResult.error || 'Mashup render failed',
+        });
         return { success: false, error: renderResult.error || 'Mashup render failed' };
       }
 
@@ -1642,6 +2897,26 @@ class VideoPipelineService {
         };
       }
 
+      const assetResult = await upsertGeneratedVideoAsset({
+        queueId,
+        outputPath,
+        driveSync: completedDriveSync,
+        sourceVideoId,
+        recipe,
+        sourceTitle: queueItem.videoConfig?.sourceTitle || '',
+      });
+
+      const publishMetadata = buildPublishMetadata({
+        sourceTitle: queueItem.videoConfig?.sourceTitle || queueItem.title || queueId,
+        templateName: mashupLog.templateName,
+        templateGroup: mashupLog.templateGroup,
+        sourceKey: queueItem.metadata?.sourceKey || queueItem.metadata?.sourcePlatform || queueItem.platform,
+        sourcePlatform: queueItem.metadata?.sourcePlatform || queueItem.platform,
+        subtitleText: mashupLog.subtitleText || '',
+        subtitleContext: mashupLog.subtitleContext || '',
+        subVideoName: mashupLog.subVideo?.name || '',
+      });
+
       const nextVideoConfig = {
         ...(queueItem.videoConfig || {}),
         mainVideo,
@@ -1650,7 +2925,13 @@ class VideoPipelineService {
         subVideoPath,
         outputPath,
         videoPath: outputPath,
+        mashupLog,
         completedDriveSync,
+        publishMetadata,
+        generatedAsset: assetResult.success ? {
+          assetId: assetResult.item?.assetId || '',
+          id: assetResult.item?._id ? String(assetResult.item._id) : '',
+        } : null,
         autoSelectedSubVideo: subVideo?.autoSelected ? {
           sourceKey: subVideo.sourceKey || 'public-drive',
           sourceType: subVideo.sourceType || 'public-drive-folder',
@@ -1664,10 +2945,24 @@ class VideoPipelineService {
         videoConfig: nextVideoConfig,
         metadata: {
           ...(queueItem.metadata || {}),
+          mashupLog,
           completedDriveSync,
           manualStartedAt: new Date().toISOString(),
+          publishMetadata,
         },
         uploadUrl: completedDriveSync.webViewLink || '',
+      });
+
+      await updateTrendVideoProductionSnapshot(sourceVideoId, {
+        queueStatus: 'completed',
+        queueId,
+        recipe,
+        completedVideoPath: outputPath,
+        completedDriveFileId: completedDriveSync.driveFileId || '',
+        completedAt: new Date(),
+        lastError: completedDriveSync.status === 'failed'
+          ? (completedDriveSync.error || '')
+          : '',
       });
 
       return {
@@ -1678,19 +2973,197 @@ class VideoPipelineService {
       };
     } catch (error) {
       await VideoQueueService.recordError(queueId, error, 'manual-start');
+      await updateTrendVideoProductionSnapshot(sourceVideoId, {
+        queueStatus: 'failed',
+        queueId,
+        recipe,
+        lastError: error.message,
+      });
       return {
         success: false,
         error: error.message,
       };
     }
   }
+
+  /**
+   * Completely deletes a source video:
+   * - Local file
+   * - Google Drive file (if synced)
+   * - All associated production jobs
+   * - All generated assets
+   * - Mashup queue entries
+   * - Production snapshot from TrendVideo
+   */
+  async deleteSourceVideo(videoId) {
+    try {
+      const video = await TrendVideo.findById(videoId);
+      if (!video) {
+        return { success: false, error: 'Source video not found' };
+      }
+
+      const deletionLog = {
+        videoId: String(video._id),
+        title: video.title || video.videoId,
+        timestamp: new Date(),
+        deletedItems: {
+          localFile: false,
+          googleDriveFile: false,
+          productionJobs: 0,
+          generatedAssets: 0,
+          queueItems: 0,
+        },
+        errors: [],
+      };
+
+      // 1. Delete local file
+      if (video.localPath) {
+        try {
+          const resolvedPath = resolveBackendPath(video.localPath);
+          if (fsSync.existsSync(resolvedPath)) {
+            await fs.unlink(resolvedPath);
+            deletionLog.deletedItems.localFile = true;
+          }
+        } catch (error) {
+          deletionLog.errors.push(`Local file deletion failed: ${error.message}`);
+        }
+      }
+
+      // 2. Delete from Google Drive
+      if (video.driveSync?.driveFileId) {
+        try {
+          await driveService.deleteFile(video.driveSync.driveFileId);
+          deletionLog.deletedItems.googleDriveFile = true;
+        } catch (error) {
+          deletionLog.errors.push(`Google Drive file deletion failed: ${error.message}`);
+        }
+      }
+
+      // 3. Find and delete all production jobs for this video
+      const productionJobs = await VideoPipelineJob.find({
+        $or: [
+          { 'videoConfig.sourceVideoId': String(video._id) },
+          { 'metadata.sourceVideoId': String(video._id) },
+        ],
+      });
+
+      for (const job of productionJobs) {
+        try {
+          // Delete generated output file
+          if (job.videoConfig?.outputPath) {
+            try {
+              await fs.unlink(job.videoConfig.outputPath);
+            } catch {
+              // ignore
+            }
+          }
+
+          // Delete from Google Drive
+          if (job.videoConfig?.completedDriveSync?.driveFileId) {
+            try {
+              await driveService.deleteFile(job.videoConfig.completedDriveSync.driveFileId);
+            } catch {
+              // ignore
+            }
+          }
+
+          // Mark generated asset as deleted
+          if (job.videoConfig?.generatedAsset?.assetId) {
+            await Asset.updateOne(
+              { assetId: job.videoConfig.generatedAsset.assetId },
+              { $set: { status: 'deleted' } }
+            );
+          }
+
+          // Delete the job itself
+          await VideoPipelineJob.deleteOne({ _id: job._id });
+          deletionLog.deletedItems.productionJobs += 1;
+        } catch (error) {
+          deletionLog.errors.push(`Production job deletion failed: ${error.message}`);
+        }
+      }
+
+      // 4. Delete all generated assets linked to this source video
+      const linkedAssets = await Asset.find({
+        'generation.parameters.sourceVideoId': String(video._id),
+        assetCategory: 'generated-video',
+        projectId: 'video-pipeline',
+      });
+
+      for (const asset of linkedAssets) {
+        try {
+          // Delete local file if exists
+          if (asset.localStorage?.path) {
+            try {
+              const assetPath = resolveBackendPath(asset.localStorage.path);
+              if (fsSync.existsSync(assetPath)) {
+                await fs.unlink(assetPath);
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          // Delete from Drive if synced
+          if (asset.cloudStorage?.googleDriveId) {
+            try {
+              await driveService.deleteFile(asset.cloudStorage.googleDriveId);
+            } catch {
+              // ignore
+            }
+          }
+
+          // Mark asset as deleted
+          asset.status = 'deleted';
+          await asset.save();
+          deletionLog.deletedItems.generatedAssets += 1;
+        } catch (error) {
+          deletionLog.errors.push(`Asset deletion failed: ${error.message}`);
+        }
+      }
+
+      // 5. Remove video from queue folder if it was queued
+      const queueDir = googleDriveIntegration.getFolderDirectory('queue');
+      if (fsSync.existsSync(queueDir)) {
+        try {
+          const queueFiles = await fs.readdir(queueDir);
+          for (const fileName of queueFiles) {
+            const filePath = path.join(queueDir, fileName);
+            const metadataPath = `${filePath}.json`;
+
+            if (fsSync.existsSync(metadataPath)) {
+              try {
+                const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
+                if (metadata.sourceVideoId === String(video._id)) {
+                  await fs.unlink(filePath);
+                  await fs.unlink(metadataPath);
+                  deletionLog.deletedItems.queueItems += 1;
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+        } catch (error) {
+          deletionLog.errors.push(`Queue folder cleanup failed: ${error.message}`);
+        }
+      }
+
+      // 6. Delete the TrendVideo document itself
+      await TrendVideo.deleteOne({ _id: video._id });
+
+      return {
+        success: true,
+        message: `Source video "${video.title || video.videoId}" and all associated data deleted completely`,
+        deletionLog,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Unexpected error during video deletion',
+      };
+    }
+  }
 }
 
 export default new VideoPipelineService();
-
-
-
-
-
-
-

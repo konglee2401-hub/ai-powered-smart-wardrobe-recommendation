@@ -1,45 +1,49 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Server, Shield, Key, RefreshCw, ChevronDown, ChevronUp, 
   Trash2, Plus, GripVertical, CheckCircle, XCircle, Zap, Play, 
-  AlertCircle, Loader2, Clock, TrendingUp, Download, Brain, Settings
+  AlertCircle, Loader2, Clock, TrendingUp, Download, Brain, Settings,
+  Search, ChevronRight
 } from 'lucide-react';
 import { api, providersAPI } from '../services/api';
 import { testProvider, getProviderStatus } from '../services/productPhotoService';
 import PageHeaderBar from '../components/PageHeaderBar';
-import EmptyState from '../components/ui/EmptyState';
-import { SkeletonBlock } from '../components/ui/Skeleton';
 
 /**
- * AI Provider Manager Page
- * Unified provider management, settings, and testing
+ * AI Provider Manager - Redesigned with Design System
+ * Dark mode theme with consistent styling
  */
 export default function AIProviderManager() {
   const { t } = useTranslation();
   const [providers, setProviders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState('manage'); // manage, test
-  const [activeCategory, setActiveCategory] = useState('analysis'); // analysis, image, video
-
-  // Test state
-  const [selectedProviderForTest, setSelectedProviderForTest] = useState(null);
+  const [activeTab, setActiveTab] = useState('manage');
+  const [activeCategory, setActiveCategory] = useState('analysis');
+  const [searchFilter, setSearchFilter] = useState('');
+  
+  const [selectedProviderId, setSelectedProviderId] = useState(null);
   const [testResults, setTestResults] = useState([]);
   const [testing, setTesting] = useState(false);
   const [currentTest, setCurrentTest] = useState(null);
+  const [testMode, setTestMode] = useState('lightweight');
+  const [testingAll, setTestingAll] = useState(false);
 
-  // Fetch data
+  const [syncingKeys, setSyncingKeys] = useState(false);
+  const [syncResults, setSyncResults] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [message, setMessage] = useState('');
+
+  // Load providers
   const loadProviders = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await providersAPI.getAll();
-      if (response.success) {
-        setProviders(response.data);
-      }
+      const data = response.success && response.data ? response.data : Array.isArray(response) ? response : [];
+      setProviders(data);
     } catch (error) {
       console.error('Failed to load providers:', error);
+      setProviders([]);
     } finally {
       setIsLoading(false);
     }
@@ -49,51 +53,31 @@ export default function AIProviderManager() {
     loadProviders();
   }, [loadProviders]);
 
-  // Sync Models Handler
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      await providersAPI.syncModels(true);
-      await loadProviders();
-    } catch (error) {
-      console.error('Sync failed:', error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Test Provider Handler
   const handleTestProvider = async (providerId) => {
     setTesting(true);
     setCurrentTest(providerId);
-    
     const startTime = Date.now();
     
     try {
-      const result = await testProvider(providerId);
+      const result = await testProvider(providerId, testMode);
       const endTime = Date.now();
-      const duration = endTime - startTime;
-      
       setTestResults(prev => [{
         providerId,
         success: result.success,
-        duration,
+        duration: endTime - startTime,
         timestamp: new Date().toISOString(),
         data: result.data,
+        testMode,
       }, ...prev]);
-      
     } catch (error) {
-      console.error('[Test Provider Error]', error);
-      
       const endTime = Date.now();
-      const duration = endTime - startTime;
-      
       setTestResults(prev => [{
         providerId,
         success: false,
-        duration,
+        duration: endTime - startTime,
         timestamp: new Date().toISOString(),
         error: error.message,
+        testMode,
       }, ...prev]);
     } finally {
       setTesting(false);
@@ -101,544 +85,393 @@ export default function AIProviderManager() {
     }
   };
 
-  // Move Provider Priority (Simple Up/Down)
-  const moveProvider = async (index, direction) => {
-    const filteredProviders = providers.filter(p => p.capabilities?.[activeCategory]);
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === filteredProviders.length - 1) return;
+  const handleTestAll = async () => {
+    setTestingAll(true);
+    const newResults = [];
 
-    const newOrder = [...filteredProviders];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    
-    [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
-    
-    const orderedIds = newOrder.map(p => p._id);
+    for (const provider of providers) {
+      try {
+        setCurrentTest(provider._id);
+        const result = await testProvider(provider._id, testMode);
+        const startTime = Date.now();
+        const endTime = Date.now();
+        newResults.push({
+          providerId: provider._id,
+          success: result.success,
+          duration: endTime - startTime,
+          timestamp: new Date().toISOString(),
+          data: result.data,
+          testMode,
+        });
+      } catch (error) {
+        newResults.push({
+          providerId: provider._id,
+          success: false,
+          duration: 0,
+          timestamp: new Date().toISOString(),
+          error: error.message,
+          testMode,
+        });
+      }
+    }
+
+    setTestResults(prev => [...newResults, ...prev]);
+    setTestingAll(false);
+    setCurrentTest(null);
+  };
+
+  const handleSyncKeys = async () => {
+    setSyncingKeys(true);
+    setSyncError(null);
+    setSyncResults(null);
     
     try {
-      await providersAPI.reorder(orderedIds);
+      const response = await api.post('/providers/sync-keys', { force: false });
+      setSyncResults(response);
+      setMessage('Keys synced successfully');
+      await new Promise(r => setTimeout(r, 1000));
       await loadProviders();
     } catch (error) {
-      console.error('Reorder failed:', error);
+      setSyncError(error.message || 'Failed to sync keys');
+    } finally {
+      setSyncingKeys(false);
     }
   };
 
-  // Export results to CSV
-  const exportResults = () => {
-    const csv = [
-      ['Provider', 'Success', 'Duration (ms)', 'Timestamp', 'Error'],
-      ...testResults.map(r => [
-        r.providerId,
-        r.success ? 'Yes' : 'No',
-        r.duration,
-        r.timestamp,
-        r.error || ''
-      ])
-    ].map(row => row.join(',')).join('\n');
+  const filteredProviders = providers
+    .filter(p => p.capabilities?.[activeCategory])
+    .filter(p => p.name?.toLowerCase().includes(searchFilter.toLowerCase()));
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `provider-test-results-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const clearResults = () => {
-    setTestResults([]);
-  };
-
-  // Render content
-  const filteredProviders = providers.filter(p => p.capabilities?.[activeCategory]);
+  const selected = providers.find(p => p._id === selectedProviderId);
   const successfulTests = testResults.filter(r => r.success);
   const failedTests = testResults.filter(r => !r.success);
-  const avgDuration = successfulTests.length > 0
-    ? successfulTests.reduce((sum, r) => sum + r.duration, 0) / successfulTests.length
-    : 0;
-
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-850 py-6 px-4 sm:px-6 lg:px-8">
+    <div className="page-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden lg:-mx-6 lg:-mb-6 lg:-mt-6">
+      {/* Header */}
       <PageHeaderBar 
+        icon={<Server className="h-4 w-4 text-sky-400" />}
         title="AI Providers"
-        subtitle="Manage providers, API keys, settings, and test performance"
-        icon={<Server className="h-4 w-4 text-amber-400" />}
+        meta="Manage API keys, settings, and test provider performance"
+        className="h-16"
       />
 
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Tab Navigation */}
-        <div className="flex gap-3 flex-wrap">
-          {[
-            { id: 'manage', label: 'Manage Providers', icon: Settings },
-            { id: 'test', label: 'Test Providers', icon: Zap }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
+      {/* Content */}
+      <div className="min-h-0 overflow-y-auto px-5 py-4 lg:px-6">
+        <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
+          
+          {/* Message */}
+          {message && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              âœ… {message}
+            </div>
+          )}
+
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-b border-slate-800">
+            {['manage', 'test', 'sync'].map(tab => (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-amber-400/20 to-amber-300/10 border border-amber-400/40 text-amber-100'
-                    : 'bg-slate-800/30 border border-slate-700/50 text-slate-300 hover:border-slate-600/50 hover:bg-slate-800/40'
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-3 text-sm font-medium transition border-b-2 -mb-px ${
+                  activeTab === tab
+                    ? 'border-sky-500 text-sky-300'
+                    : 'border-transparent text-slate-400 hover:text-slate-300'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                {tab.label}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
-            );
-          })}
-        </div>
-
-        {/* Provider Category Selector */}
-        <div className="flex gap-3 flex-wrap">
-          {[
-            { id: 'analysis', label: '👁️ Vision & Analysis' },
-            { id: 'image', label: '🎨 Image Gen' },
-            { id: 'video', label: '🎬 Video Gen' }
-          ].map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeCategory === cat.id
-                  ? 'bg-gradient-to-r from-violet-400/20 to-violet-300/10 border border-violet-400/40 text-violet-100'
-                  : 'bg-slate-800/30 border border-slate-700/50 text-slate-300 hover:border-slate-600/50'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Manage Tab */}
-        {activeTab === 'manage' && (
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-100">Provider Management</h2>
-              <button 
-                onClick={handleSync} 
-                disabled={isSyncing}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-all disabled:opacity-50 font-medium"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing...' : 'Sync Models'}
-              </button>
-            </div>
-
-            {/* Providers List */}
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-                </div>
-              ) : filteredProviders.length === 0 ? (
-                <div className="rounded-2xl border border-slate-700/50 bg-slate-800/20 p-8 text-center">
-                  <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                  <p className="text-slate-300">No providers available for this category</p>
-                </div>
-              ) : (
-                filteredProviders.map((provider, index) => (
-                  <ProviderCard 
-                    key={provider._id} 
-                    provider={provider} 
-                    index={index}
-                    onMove={moveProvider}
-                    onRefresh={loadProviders}
-                  />
-                ))
-              )}
-            </div>
+            ))}
           </div>
-        )}
 
-        {/* Test Tab */}
-        {activeTab === 'test' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Main Grid */}
+          <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
             
-            {/* Left Column - Providers */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm p-6">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-100 mb-4">
-                  <Zap className="w-5 h-5 text-amber-400" />
-                  Providers
-                </h3>
-                
+            {/* Sidebar - Provider List */}
+            <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="space-y-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+                  <input 
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    placeholder="Search providers..." 
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/50 py-2 pl-9 pr-3 text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
+                  />
+                </div>
+
+                {/* Category Filter */}
+                <div className="grid grid-cols-2 gap-2">
+                  {['analysis', 'image', 'video'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      className={`rounded-xl px-3 py-2 text-xs font-medium transition ${
+                        activeCategory === cat
+                          ? 'bg-sky-500/20 border border-sky-500/50 text-sky-200'
+                          : 'bg-slate-900/50 border border-slate-800 text-slate-400 hover:text-slate-300'
+                      }`}
+                    >
+                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Provider List */}
+              <div className="max-h-[calc(100vh-400px)] space-y-2 overflow-y-auto pr-1">
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+                  <div className="py-8 text-center text-slate-400">
+                    <Loader2 className="inline animate-spin mb-2" size={20} />
+                    <p className="text-xs">Loading providers...</p>
                   </div>
                 ) : filteredProviders.length === 0 ? (
-                  <p className="text-center text-slate-400 py-6">No providers available</p>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredProviders.map(provider => (
-                      <button
-                        key={provider._id}
-                        onClick={() => setSelectedProviderForTest(provider._id)}
-                        className={`w-full p-3 rounded-xl border transition-all text-left ${
-                          selectedProviderForTest === provider._id
-                            ? 'border-violet-400/50 bg-violet-400/10 text-violet-100'
-                            : 'border-slate-700/50 bg-slate-800/20 text-slate-300 hover:border-slate-600/50'
-                        }`}
-                      >
-                        <div className="font-medium">{provider.name}</div>
-                        <div className="text-xs text-slate-400 mt-1">
-                          {provider.isEnabled ? (
-                            <span className="text-emerald-400">✓ Active</span>
-                          ) : (
-                            <span className="text-red-400">✕ Disabled</span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
+                  <div className="py-8 text-center text-slate-400">
+                    <p className="text-xs">No providers found</p>
                   </div>
+                ) : (
+                  filteredProviders.map(provider => (
+                    <button
+                      key={provider._id}
+                      onClick={() => {
+                        setSelectedProviderId(provider._id);
+                        setActiveTab('manage');
+                      }}
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                        selectedProviderId === provider._id
+                          ? 'border-sky-500/50 bg-sky-950/30'
+                          : 'border-slate-800 bg-slate-900/30 hover:bg-slate-900/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-100">
+                            {provider.name}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            {provider.capabilities?.analysis ? 'ðŸ“Š' : ''}
+                            {provider.capabilities?.image ? 'ðŸ–¼ï¸' : ''}
+                            {provider.capabilities?.video ? 'ðŸ“¹' : ''}
+                          </div>
+                        </div>
+                        {provider.isEnabled && (
+                          <div className="flex-shrink-0 inline-block rounded px-1.5 py-0.5 bg-emerald-500/20 text-[0.65rem] text-emerald-200 font-medium">
+                            Active
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))
                 )}
               </div>
+            </div>
 
-              {/* Stats */}
-              {testResults.length > 0 && (
-                <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm p-6">
-                  <h3 className="font-semibold text-slate-100 mb-4">Statistics</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-slate-700/20 rounded-lg">
-                      <span className="text-sm text-slate-300">Total Tests:</span>
-                      <span className="font-bold text-slate-100">{testResults.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg">
-                      <span className="text-sm text-emerald-200">
-                        <CheckCircle className="w-4 h-4 inline mr-1" />
-                        Success:
-                      </span>
-                      <span className="font-bold text-emerald-300">{successfulTests.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg">
-                      <span className="text-sm text-red-200">
-                        <XCircle className="w-4 h-4 inline mr-1" />
-                        Failed:
-                      </span>
-                      <span className="font-bold text-red-300">{failedTests.length}</span>
-                    </div>
-                    {successfulTests.length > 0 && (
-                      <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg">
-                        <span className="text-sm text-blue-200">
-                          <TrendingUp className="w-4 h-4 inline mr-1" />
-                          Avg Time:
-                        </span>
-                        <span className="font-bold text-blue-300">{avgDuration.toFixed(0)}ms</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {/* Main Area */}
+            <div className="space-y-4">
+              {activeTab === 'manage' ? (
+                <ProviderDetailView 
+                  provider={selected} 
+                  onUpdate={() => loadProviders()}
+                />
+              ) : activeTab === 'test' ? (
+                <ProviderTestView
+                  providers={filteredProviders}
+                  testResults={testResults}
+                  testing={testing}
+                  testingAll={testingAll}
+                  currentTest={currentTest}
+                  testMode={testMode}
+                  onTestOne={handleTestProvider}
+                  onTestAll={handleTestAll}
+                  onTestModeChange={setTestMode}
+                />
+              ) : (
+                <ProviderSyncView
+                  syncingKeys={syncingKeys}
+                  syncResults={syncResults}
+                  syncError={syncError}
+                  onSync={handleSyncKeys}
+                />
               )}
             </div>
-
-            {/* Middle Column - Test Control */}
-            <div className="lg:col-span-1">
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm p-6">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-100 mb-4">
-                  <Brain className="w-5 h-5 text-violet-400" />
-                  Quick Test
-                </h3>
-                
-                {selectedProviderForTest ? (
-                  <button
-                    onClick={() => handleTestProvider(selectedProviderForTest)}
-                    disabled={testing && currentTest === selectedProviderForTest}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-xl hover:from-violet-600 hover:to-purple-600 transition-all disabled:from-slate-600 disabled:to-slate-600 flex items-center justify-center gap-2 font-medium"
-                  >
-                    {testing && currentTest === selectedProviderForTest ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        Run Test
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <p className="text-center text-slate-400 py-6">Select a provider to test</p>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column - Results */}
-            <div className="lg:col-span-1">
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm p-6 h-full flex flex-col">
-                <h3 className="flex items-center justify-between mb-4">
-                  <span className="flex items-center gap-2 text-lg font-semibold text-slate-100">
-                    <Clock className="w-5 h-5 text-sky-400" />
-                    Results
-                  </span>
-                  {testResults.length > 0 && (
-                    <span className="text-xs text-slate-400">{testResults.length} tests</span>
-                  )}
-                </h3>
-
-                {testResults.length === 0 ? (
-                  <p className="text-center text-slate-400 py-8">No test results yet</p>
-                ) : (
-                  <div className="space-y-2 flex-1 overflow-y-auto">
-                    {testResults.map((result, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded-lg border text-sm ${
-                          result.success
-                            ? 'border-emerald-500/30 bg-emerald-500/10'
-                            : 'border-red-500/30 bg-red-500/10'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          {result.success ? (
-                            <CheckCircle className="w-4 h-4 text-emerald-400" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-400" />
-                          )}
-                          <span className={result.success ? 'text-emerald-200' : 'text-red-200'}>
-                            {result.providerId}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-400">
-                          <Clock className="w-3 h-3" />
-                          {result.duration}ms
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {testResults.length > 0 && (
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
-                    <button
-                      onClick={exportResults}
-                      className="flex-1 px-3 py-2 bg-emerald-500/20 text-emerald-200 rounded-lg hover:bg-emerald-500/30 transition-all text-sm font-medium"
-                    >
-                      <Download className="w-4 h-4 inline mr-1" />
-                      Export
-                    </button>
-                    <button
-                      onClick={clearResults}
-                      className="flex-1 px-3 py-2 bg-slate-700/30 text-slate-300 rounded-lg hover:bg-slate-700/50 transition-all text-sm font-medium"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-/**
- * Individual Provider Card Component
- */
-function ProviderCard({ provider, index, onMove, onRefresh }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [newKey, setNewKey] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const toggleEnabled = async () => {
-    try {
-      await providersAPI.update(provider._id, { isEnabled: !provider.isEnabled });
-      onRefresh();
-    } catch (error) {
-      console.error('Update failed:', error);
-    }
-  };
-
-  const addKey = async () => {
-    if (!newKey.trim()) return;
-    setIsSaving(true);
-    try {
-      await providersAPI.addKey(provider._id, newKey, `Key ${(provider.apiKeys?.length || 0) + 1}`);
-      setNewKey('');
-      onRefresh();
-    } catch (error) {
-      console.error('Add key failed:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const removeKey = async (keyId) => {
-    if (!confirm('Remove this API key?')) return;
-    try {
-      await providersAPI.removeKey(provider._id, keyId);
-      onRefresh();
-    } catch (error) {
-      console.error('Remove key failed:', error);
-    }
-  };
+// Sub-components
+function ProviderDetailView({ provider, onUpdate }) {
+  if (!provider) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center">
+        <p className="text-slate-400">Select a provider to view details</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`rounded-2xl border transition-all backdrop-blur-sm ${
-      provider.isEnabled
-        ? 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600/50'
-        : 'border-slate-700/30 bg-slate-900/20 opacity-60'
-    }`}>
-      {/* Header Row */}
-      <div className="flex items-center gap-4 p-4 border-b border-slate-700/30">
-        {/* Priority Controls */}
-        <div className="flex flex-col items-center gap-1">
-          <button
-            onClick={() => onMove(index, 'up')}
-            disabled={index === 0}
-            className="p-1 text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronUp size={16} />
-          </button>
-          <span className="text-xs font-semibold text-slate-500">{index + 1}</span>
-          <button
-            onClick={() => onMove(index, 'down')}
-            className="p-1 text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronDown size={16} />
-          </button>
+    <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Provider Details</div>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-100">{provider.name}</h2>
+        </div>
+        <div className="inline-block rounded-xl px-3 py-1.5 bg-sky-500/20 border border-sky-500/30 text-xs font-medium text-sky-200">
+          {provider.isEnabled ? 'âœ“ Active' : 'â—‹ Inactive'}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs uppercase tracking-[0.18em] text-slate-500 font-medium">Description</label>
+          <p className="mt-2 text-slate-300">{provider.description || 'No description'}</p>
         </div>
 
-        {/* Provider Info */}
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
-            <h3 className="font-bold text-slate-100">{provider.name}</h3>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-              provider.isEnabled
-                ? 'bg-emerald-500/20 text-emerald-200'
-                : 'bg-slate-700/30 text-slate-400'
-            }`}>
-              {provider.isEnabled ? '✓ Active' : '✕ Disabled'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-slate-400">
-            <span className="flex items-center gap-1">
-              <Shield size={14} />
-              {provider.models?.length || 0} Models
-            </span>
-            <span className="flex items-center gap-1">
-              <Key size={14} />
-              {provider.apiKeys?.length || 0} Keys
-            </span>
+        <div>
+          <label className="text-xs uppercase tracking-[0.18em] text-slate-500 font-medium">Capabilities</label>
+          <div className="mt-2 flex gap-2">
+            {provider.capabilities?.analysis && (
+              <span className="inline-block rounded-lg px-3 py-1 bg-slate-700/50 text-xs text-slate-200">Analysis</span>
+            )}
+            {provider.capabilities?.image && (
+              <span className="inline-block rounded-lg px-3 py-1 bg-slate-700/50 text-xs text-slate-200">Image Generation</span>
+            )}
+            {provider.capabilities?.video && (
+              <span className="inline-block rounded-lg px-3 py-1 bg-slate-700/50 text-xs text-slate-200">Video</span>
+            )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
+function ProviderTestView({ 
+  providers, 
+  testResults, 
+  testing, 
+  testingAll, 
+  currentTest, 
+  testMode,
+  onTestOne, 
+  onTestAll, 
+  onTestModeChange 
+}) {
+  const successCount = testResults.filter(r => r.success).length;
+  const failureCount = testResults.filter(r => !r.success).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Test Controls */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-6 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-[0.18em] text-slate-500 font-medium">Test Mode</label>
+            <select
+              value={testMode}
+              onChange={(e) => onTestModeChange(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 focus:border-sky-500/50 focus:outline-none"
+            >
+              <option value="lightweight">Lightweight (Fast)</option>
+              <option value="full">Full Testing</option>
+            </select>
+          </div>
           <button
-            onClick={toggleEnabled}
-            className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-all ${
-              provider.isEnabled
-                ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
-                : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10'
-            }`}
+            onClick={onTestAll}
+            disabled={testingAll || providers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/20 border border-sky-500/50 text-sky-200 font-medium hover:bg-sky-500/30 disabled:opacity-50 transition"
           >
-            {provider.isEnabled ? 'Disable' : 'Enable'}
-          </button>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-700/30 rounded-lg transition-all"
-          >
-            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            {testingAll ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
+            Test All
           </button>
         </div>
       </div>
 
-      {/* Expanded Details */}
-      {isExpanded && (
-        <div className="border-t border-slate-700/30 p-6 space-y-6 bg-slate-900/20">
-          
-          {/* API Keys Section */}
-          <div>
-            <h4 className="font-semibold text-slate-100 flex items-center gap-2 mb-3">
-              <Key size={16} className="text-amber-400" />
-              API Keys & Settings
-            </h4>
-            
-            {provider.apiKeys && provider.apiKeys.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {provider.apiKeys.map((key) => (
-                  <div
-                    key={key._id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-slate-700/50 bg-slate-800/40"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${
-                        key.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'
-                      }`} />
-                      <div>
-                        <div className="text-sm font-mono text-slate-300">{key.label}</div>
-                        <div className="text-xs text-slate-500">****{key.key?.slice(-4)}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeKey(key._id)}
-                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            <div className="flex gap-2">
-              <input
-                type="password"
-                placeholder="Add new API key..."
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !isSaving && addKey()}
-                className="flex-1 px-3 py-2 text-sm bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-100 placeholder-slate-500 focus:border-amber-400/50 focus:ring-1 focus:ring-amber-400/20 outline-none transition-all"
-              />
-              <button
-                onClick={addKey}
-                disabled={!newKey || isSaving}
-                className="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 rounded-lg hover:from-amber-600 hover:to-yellow-600 transition-all disabled:opacity-50 font-medium text-sm"
-              >
-                {isSaving ? '...' : 'Add'}
-              </button>
-            </div>
+      {/* Test Results Stats */}
+      {testResults.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="rounded-xl bg-slate-900/50 p-3 text-center">
+            <div className="text-2xl font-bold text-slate-100">{testResults.length}</div>
+            <div className="text-xs text-slate-400 mt-1">Total Tests</div>
           </div>
+          <div className="rounded-xl bg-emerald-500/10 p-3 text-center border border-emerald-500/20">
+            <div className="text-2xl font-bold text-emerald-200">{successCount}</div>
+            <div className="text-xs text-emerald-300 mt-1">Successful</div>
+          </div>
+          <div className="rounded-xl bg-violet-500/10 p-3 text-center border border-violet-500/20">
+            <div className="text-2xl font-bold text-violet-200">{failureCount}</div>
+            <div className="text-xs text-violet-300 mt-1">Failed</div>
+          </div>
+        </div>
+      )}
 
-          {/* Models Section */}
-          {provider.models && provider.models.length > 0 && (
-            <div>
-              <h4 className="font-semibold text-slate-100 flex items-center gap-2 mb-3">
-                <Server size={16} className="text-blue-400" />
-                Available Models
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {provider.models.map(model => (
-                  <div
-                    key={model._id}
-                    className="p-3 rounded-lg border border-slate-700/50 bg-slate-800/40 flex justify-between items-start"
-                  >
-                    <div>
-                      <div className="font-medium text-sm text-slate-100">{model.name}</div>
-                      <div className="text-xs text-slate-500 font-mono mt-1">{model.modelId}</div>
+      {/* Test Results List */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+        <h3 className="text-sm font-semibold text-slate-100 mb-4">Test Results</h3>
+        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          {testResults.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-8">No test results yet</p>
+          ) : (
+            testResults.map((result, idx) => (
+              <div key={idx} className="rounded-lg bg-slate-900/50 p-3 border border-slate-800/50">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-slate-200">
+                      {providers.find(p => p._id === result.providerId)?.name || result.providerId}
                     </div>
-                    <div className={`px-2 py-0.5 text-[10px] rounded-full font-bold whitespace-nowrap ${
-                      model.status?.available
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-red-500/20 text-red-300'
-                    }`}>
-                      {model.status?.available ? 'Ready' : 'Offline'}
+                    <div className="text-xs text-slate-400 mt-1">
+                      {new Date(result.timestamp).toLocaleTimeString()} â€¢ {result.duration}ms
                     </div>
                   </div>
-                ))}
+                  <div className={`text-xs font-medium px-2 py-1 rounded ${
+                    result.success 
+                      ? 'bg-emerald-500/20 text-emerald-200' 
+                      : 'bg-violet-500/20 text-violet-200'
+                  }`}>
+                    {result.success ? 'âœ“' : 'âœ—'}
+                  </div>
+                </div>
               </div>
-            </div>
+            ))
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProviderSyncView({ syncingKeys, syncResults, syncError, onSync }) {
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+      <div className="border-b border-slate-800 pb-4">
+        <h3 className="text-sm font-semibold text-slate-100">Sync API Keys</h3>
+        <p className="text-xs text-slate-400 mt-1">Synchronize API keys from .env to database</p>
+      </div>
+
+      <button
+        onClick={onSync}
+        disabled={syncingKeys}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-200 font-medium hover:bg-amber-500/30 disabled:opacity-50 transition"
+      >
+        {syncingKeys ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+        {syncingKeys ? 'Syncing...' : 'Sync Keys'}
+      </button>
+
+      {syncError && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-200">
+          âŒ {syncError}
+        </div>
+      )}
+
+      {syncResults && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+          âœ… Sync completed successfully
         </div>
       )}
     </div>
   );
 }
+

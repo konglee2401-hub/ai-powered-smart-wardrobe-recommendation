@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ModalPortal from './ModalPortal';
 import {
   Copy,
   Download,
@@ -232,6 +233,7 @@ export default function GenerationResult({
   }
 
   return (
+    <ModalPortal>
     <div className="grid gap-5 xl:grid-cols-[minmax(240px,0.58fr),minmax(620px,1.42fr)]">
       <div className="space-y-4">
         <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_40px_rgba(2,6,23,0.2)]">
@@ -483,7 +485,7 @@ export default function GenerationResult({
       </div>
 
       {showModal && normalizedImages.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/80 p-4">
           <div className="relative flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-[1.6rem] bg-slate-950/95 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.6)]">
             <button
               type="button"
@@ -555,8 +557,11 @@ export default function GenerationResult({
         </div>
       )}
     </div>
+    </ModalPortal>
   );
 }
+
+
 
 
 

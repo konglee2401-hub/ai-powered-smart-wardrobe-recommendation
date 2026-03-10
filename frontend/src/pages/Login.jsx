@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Login Page
  * User authentication
  */
@@ -6,8 +6,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import LogoKG from '../assets/Logo-KG.png';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -104,9 +105,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl mb-4">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
+          <img src={LogoKG} alt="Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
           <h1 className="text-3xl font-bold text-gray-800">{t('login.title')}</h1>
           <p className="text-gray-600 mt-2">{t('login.subtitle')}</p>
         </div>
@@ -197,3 +196,4 @@ export default function Login() {
     </div>
   );
 }
+

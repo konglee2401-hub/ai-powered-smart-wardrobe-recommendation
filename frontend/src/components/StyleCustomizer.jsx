@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Style Customizer Component - Enhanced with AI Recommendations
  * Display and manage generation options with AI suggestions
  */
@@ -12,176 +12,176 @@ const CATEGORY_CONFIG = {
   // Core Photography Categories
   scene: {
     label: 'Scene',
-    icon: '🎬',
-    description: 'Môi trường chụp ảnh',
+    icon: 'ðŸŽ¬',
+    description: 'MÃ´i trÆ°á»ng chá»¥p áº£nh',
     options: [
-      { value: 'studio', label: 'Professional Studio', icon: '📷' },
-      { value: 'white-background', label: 'White Background', icon: '⬜' },
-      { value: 'urban-street', label: 'Urban Street', icon: '🏙️' },
-      { value: 'minimalist-indoor', label: 'Minimalist Indoor', icon: '🏠' },
-      { value: 'cafe', label: 'Cafe', icon: '☕' },
-      { value: 'outdoor-park', label: 'Outdoor Park', icon: '🌳' },
-      { value: 'office', label: 'Modern Office', icon: '💼' },
-      { value: 'luxury-interior', label: 'Luxury Interior', icon: '✨' },
-      { value: 'rooftop', label: 'Rooftop', icon: '🏙️' },
+      { value: 'studio', label: 'Professional Studio', icon: 'ðŸ“·' },
+      { value: 'white-background', label: 'White Background', icon: 'â¬œ' },
+      { value: 'urban-street', label: 'Urban Street', icon: 'ðŸ™ï¸' },
+      { value: 'minimalist-indoor', label: 'Minimalist Indoor', icon: 'ðŸ ' },
+      { value: 'cafe', label: 'Cafe', icon: 'â˜•' },
+      { value: 'outdoor-park', label: 'Outdoor Park', icon: 'ðŸŒ³' },
+      { value: 'office', label: 'Modern Office', icon: 'ðŸ’¼' },
+      { value: 'luxury-interior', label: 'Luxury Interior', icon: 'âœ¨' },
+      { value: 'rooftop', label: 'Rooftop', icon: 'ðŸ™ï¸' },
     ],
   },
   lighting: {
     label: 'Lighting',
-    icon: '💡',
-    description: 'Ánh sáng và hiệu ứng',
+    icon: 'ðŸ’¡',
+    description: 'Ãnh sÃ¡ng vÃ  hiá»‡u á»©ng',
     options: [
-      { value: 'soft-diffused', label: 'Soft Diffused', icon: '🌤️' },
-      { value: 'natural-window', label: 'Natural Window', icon: '🪟' },
-      { value: 'golden-hour', label: 'Golden Hour', icon: '🌅' },
-      { value: 'dramatic-rembrandt', label: 'Dramatic Rembrandt', icon: '🎭' },
-      { value: 'high-key', label: 'High Key (Bright)', icon: '🔆' },
-      { value: 'backlit', label: 'Backlit', icon: '✨' },
-      { value: 'neon-colored', label: 'Neon/Colored', icon: '🎨' },
-      { value: 'overcast-outdoor', label: 'Overcast Outdoor', icon: '☁️' },
+      { value: 'soft-diffused', label: 'Soft Diffused', icon: 'ðŸŒ¤ï¸' },
+      { value: 'natural-window', label: 'Natural Window', icon: 'ðŸªŸ' },
+      { value: 'golden-hour', label: 'Golden Hour', icon: 'ðŸŒ…' },
+      { value: 'dramatic-rembrandt', label: 'Dramatic Rembrandt', icon: 'ðŸŽ­' },
+      { value: 'high-key', label: 'High Key (Bright)', icon: 'ðŸ”†' },
+      { value: 'backlit', label: 'Backlit', icon: 'âœ¨' },
+      { value: 'neon-colored', label: 'Neon/Colored', icon: 'ðŸŽ¨' },
+      { value: 'overcast-outdoor', label: 'Overcast Outdoor', icon: 'â˜ï¸' },
     ],
   },
   mood: {
     label: 'Mood',
-    icon: '😊',
-    description: 'Tâm trạng và cảm xúc',
+    icon: 'ðŸ˜Š',
+    description: 'TÃ¢m tráº¡ng vÃ  cáº£m xÃºc',
     options: [
-      { value: 'confident', label: 'Confident & Powerful', icon: '💪' },
-      { value: 'relaxed', label: 'Relaxed & Casual', icon: '😌' },
-      { value: 'elegant', label: 'Elegant & Sophisticated', icon: '👑' },
-      { value: 'energetic', label: 'Energetic & Dynamic', icon: '⚡' },
-      { value: 'playful', label: 'Playful & Fun', icon: '🎉' },
-      { value: 'mysterious', label: 'Mysterious & Edgy', icon: '🕵️' },
-      { value: 'romantic', label: 'Romantic & Dreamy', icon: '💕' },
-      { value: 'professional', label: 'Professional', icon: '👔' },
+      { value: 'confident', label: 'Confident & Powerful', icon: 'ðŸ’ª' },
+      { value: 'relaxed', label: 'Relaxed & Casual', icon: 'ðŸ˜Œ' },
+      { value: 'elegant', label: 'Elegant & Sophisticated', icon: 'ðŸ‘‘' },
+      { value: 'energetic', label: 'Energetic & Dynamic', icon: 'âš¡' },
+      { value: 'playful', label: 'Playful & Fun', icon: 'ðŸŽ‰' },
+      { value: 'mysterious', label: 'Mysterious & Edgy', icon: 'ðŸ•µï¸' },
+      { value: 'romantic', label: 'Romantic & Dreamy', icon: 'ðŸ’•' },
+      { value: 'professional', label: 'Professional', icon: 'ðŸ‘”' },
     ],
   },
   style: {
     label: 'Photography Style',
-    icon: '📸',
-    description: 'Phong cách nhiếp ảnh',
+    icon: 'ðŸ“¸',
+    description: 'Phong cÃ¡ch nhiáº¿p áº£nh',
     options: [
-      { value: 'minimalist', label: 'Minimalist', icon: '🔳' },
-      { value: 'editorial', label: 'Editorial', icon: '📖' },
-      { value: 'commercial', label: 'Commercial', icon: '🛒' },
-      { value: 'lifestyle', label: 'Lifestyle', icon: '🏞️' },
-      { value: 'high-fashion', label: 'High Fashion', icon: '👠' },
-      { value: 'vintage', label: 'Vintage/Retro', icon: '🕰️' },
-      { value: 'street', label: 'Street Style', icon: '🛹' },
-      { value: 'bohemian', label: 'Bohemian', icon: '🌻' },
+      { value: 'minimalist', label: 'Minimalist', icon: 'ðŸ”³' },
+      { value: 'editorial', label: 'Editorial', icon: 'ðŸ“–' },
+      { value: 'commercial', label: 'Commercial', icon: 'ðŸ›’' },
+      { value: 'lifestyle', label: 'Lifestyle', icon: 'ðŸžï¸' },
+      { value: 'high-fashion', label: 'High Fashion', icon: 'ðŸ‘ ' },
+      { value: 'vintage', label: 'Vintage/Retro', icon: 'ðŸ•°ï¸' },
+      { value: 'street', label: 'Street Style', icon: 'ðŸ›¹' },
+      { value: 'bohemian', label: 'Bohemian', icon: 'ðŸŒ»' },
     ],
   },
   colorPalette: {
     label: 'Color Palette',
-    icon: '🎨',
-    description: 'Bảng màu tổng thể',
+    icon: 'ðŸŽ¨',
+    description: 'Báº£ng mÃ u tá»•ng thá»ƒ',
     options: [
-      { value: 'neutral', label: 'Neutral', icon: '⚪' },
-      { value: 'warm', label: 'Warm Tones', icon: '🔥' },
-      { value: 'cool', label: 'Cool Tones', icon: '❄️' },
-      { value: 'pastel', label: 'Pastel', icon: '🌸' },
-      { value: 'monochrome', label: 'Monochrome', icon: '⚫' },
-      { value: 'vibrant', label: 'Vibrant', icon: '🌈' },
-      { value: 'earth-tones', label: 'Earth Tones', icon: '🌍' },
-      { value: 'metallic', label: 'Metallic', icon: '🪙' },
+      { value: 'neutral', label: 'Neutral', icon: 'âšª' },
+      { value: 'warm', label: 'Warm Tones', icon: 'ðŸ”¥' },
+      { value: 'cool', label: 'Cool Tones', icon: 'â„ï¸' },
+      { value: 'pastel', label: 'Pastel', icon: 'ðŸŒ¸' },
+      { value: 'monochrome', label: 'Monochrome', icon: 'âš«' },
+      { value: 'vibrant', label: 'Vibrant', icon: 'ðŸŒˆ' },
+      { value: 'earth-tones', label: 'Earth Tones', icon: 'ðŸŒ' },
+      { value: 'metallic', label: 'Metallic', icon: 'ðŸª™' },
     ],
   },
   cameraAngle: {
     label: 'Camera Angle',
-    icon: '📐',
-    description: 'Góc máy ảnh',
+    icon: 'ðŸ“',
+    description: 'GÃ³c mÃ¡y áº£nh',
     options: [
-      { value: 'eye-level', label: 'Eye Level', icon: '👀' },
-      { value: 'slight-angle', label: 'Slight Angle', icon: '📐' },
-      { value: 'three-quarter', label: 'Three-Quarter', icon: '🔄' },
-      { value: 'full-front', label: 'Full Front', icon: '🧍' },
-      { value: 'over-shoulder', label: 'Over Shoulder', icon: '👥' },
+      { value: 'eye-level', label: 'Eye Level', icon: 'ðŸ‘€' },
+      { value: 'slight-angle', label: 'Slight Angle', icon: 'ðŸ“' },
+      { value: 'three-quarter', label: 'Three-Quarter', icon: 'ðŸ”„' },
+      { value: 'full-front', label: 'Full Front', icon: 'ðŸ§' },
+      { value: 'over-shoulder', label: 'Over Shoulder', icon: 'ðŸ‘¥' },
     ],
   },
   
   // NEW: Fashion & Styling Categories
   hairstyle: {
     label: 'Hairstyle',
-    icon: '💇',
-    description: 'Kiểu tóc',
+    icon: 'ðŸ’‡',
+    description: 'Kiá»ƒu tÃ³c',
     options: [
-      { value: 'long-straight', label: 'Long Straight', icon: '📏' },
-      { value: 'long-wavy', label: 'Long Wavy', icon: '〰️' },
-      { value: 'long-curly', label: 'Long Curly', icon: '🌀' },
-      { value: 'medium-straight', label: 'Medium Straight', icon: '📏' },
-      { value: 'medium-wavy', label: 'Medium Wavy', icon: '〰️' },
-      { value: 'short-bob', label: 'Short Bob', icon: '✂️' },
-      { value: 'short-pixie', label: 'Short Pixie', icon: '✨' },
-      { value: 'braided', label: 'Braided', icon: '📿' },
-      { value: 'bun', label: 'Bun Updo', icon: '🧦' },
+      { value: 'long-straight', label: 'Long Straight', icon: 'ðŸ“' },
+      { value: 'long-wavy', label: 'Long Wavy', icon: 'ã€°ï¸' },
+      { value: 'long-curly', label: 'Long Curly', icon: 'ðŸŒ€' },
+      { value: 'medium-straight', label: 'Medium Straight', icon: 'ðŸ“' },
+      { value: 'medium-wavy', label: 'Medium Wavy', icon: 'ã€°ï¸' },
+      { value: 'short-bob', label: 'Short Bob', icon: 'âœ‚ï¸' },
+      { value: 'short-pixie', label: 'Short Pixie', icon: 'âœ¨' },
+      { value: 'braided', label: 'Braided', icon: 'ðŸ“¿' },
+      { value: 'bun', label: 'Bun Updo', icon: 'ðŸ§¦' },
     ],
   },
   makeup: {
     label: 'Makeup Look',
-    icon: '💄',
-    description: 'Kiểu trang điểm',
+    icon: 'ðŸ’„',
+    description: 'Kiá»ƒu trang Ä‘iá»ƒm',
     options: [
-      { value: 'natural', label: 'Natural/No-Makeup', icon: '✨' },
-      { value: 'light', label: 'Light & Fresh', icon: '🌙' },
-      { value: 'glowing', label: 'Glowing', icon: '💫' },
-      { value: 'bold-lips', label: 'Bold Lips', icon: '💋' },
-      { value: 'smokey-eyes', label: 'Smokey Eyes', icon: '👁️' },
-      { value: 'winged-liner', label: 'Winged Eyeliner', icon: '🎨' },
-      { value: 'glamorous', label: 'Glamorous', icon: '👑' },
+      { value: 'natural', label: 'Natural/No-Makeup', icon: 'âœ¨' },
+      { value: 'light', label: 'Light & Fresh', icon: 'ðŸŒ™' },
+      { value: 'glowing', label: 'Glowing', icon: 'ðŸ’«' },
+      { value: 'bold-lips', label: 'Bold Lips', icon: 'ðŸ’‹' },
+      { value: 'smokey-eyes', label: 'Smokey Eyes', icon: 'ðŸ‘ï¸' },
+      { value: 'winged-liner', label: 'Winged Eyeliner', icon: 'ðŸŽ¨' },
+      { value: 'glamorous', label: 'Glamorous', icon: 'ðŸ‘‘' },
     ],
   },
   bottoms: {
     label: 'Bottoms',
-    icon: '👖',
-    description: 'Quần/ Váy',
+    icon: 'ðŸ‘–',
+    description: 'Quáº§n/ VÃ¡y',
     options: [
-      { value: 'jeans', label: 'Jeans', icon: '👖' },
-      { value: 'trousers', label: 'Trousers', icon: '👔' },
-      { value: 'shorts', label: 'Shorts', icon: '🩳' },
-      { value: 'skirt', label: 'Skirt', icon: '👗' },
-      { value: 'leggings', label: 'Leggings', icon: '🧘' },
-      { value: 'cargo-pants', label: 'Cargo Pants', icon: '🎒' },
+      { value: 'jeans', label: 'Jeans', icon: 'ðŸ‘–' },
+      { value: 'trousers', label: 'Trousers', icon: 'ðŸ‘”' },
+      { value: 'shorts', label: 'Shorts', icon: 'ðŸ©³' },
+      { value: 'skirt', label: 'Skirt', icon: 'ðŸ‘—' },
+      { value: 'leggings', label: 'Leggings', icon: 'ðŸ§˜' },
+      { value: 'cargo-pants', label: 'Cargo Pants', icon: 'ðŸŽ’' },
     ],
   },
   shoes: {
     label: 'Shoes',
-    icon: '👟',
-    description: 'Giày/ Dép',
+    icon: 'ðŸ‘Ÿ',
+    description: 'GiÃ y/ DÃ©p',
     options: [
-      { value: 'sneakers', label: 'Sneakers', icon: '👟' },
-      { value: 'heels', label: 'Heels', icon: '👠' },
-      { value: 'boots', label: 'Boots', icon: '👢' },
-      { value: 'flats', label: 'Flats', icon: '🥿' },
-      { value: 'sandals', label: 'Sandals', icon: '🩴' },
-      { value: 'loafers', label: 'Loafers', icon: '👞' },
+      { value: 'sneakers', label: 'Sneakers', icon: 'ðŸ‘Ÿ' },
+      { value: 'heels', label: 'Heels', icon: 'ðŸ‘ ' },
+      { value: 'boots', label: 'Boots', icon: 'ðŸ‘¢' },
+      { value: 'flats', label: 'Flats', icon: 'ðŸ¥¿' },
+      { value: 'sandals', label: 'Sandals', icon: 'ðŸ©´' },
+      { value: 'loafers', label: 'Loafers', icon: 'ðŸ‘ž' },
     ],
   },
   accessories: {
     label: 'Accessories',
-    icon: '💎',
-    description: 'Phụ kiện',
+    icon: 'ðŸ’Ž',
+    description: 'Phá»¥ kiá»‡n',
     options: [
-      { value: 'necklace', label: 'Necklace', icon: '📿' },
-      { value: 'earrings', label: 'Earrings', icon: '💫' },
-      { value: 'watch', label: 'Watch', icon: '⌚' },
-      { value: 'bag', label: 'Bag', icon: '👜' },
-      { value: 'sunglasses', label: 'Sunglasses', icon: '🕶️' },
-      { value: 'scarf', label: 'Scarf', icon: '🧣' },
-      { value: 'belt', label: 'Belt', icon: '👔' },
-      { value: 'hat', label: 'Hat', icon: '🎩' },
+      { value: 'necklace', label: 'Necklace', icon: 'ðŸ“¿' },
+      { value: 'earrings', label: 'Earrings', icon: 'ðŸ’«' },
+      { value: 'watch', label: 'Watch', icon: 'âŒš' },
+      { value: 'bag', label: 'Bag', icon: 'ðŸ‘œ' },
+      { value: 'sunglasses', label: 'Sunglasses', icon: 'ðŸ•¶ï¸' },
+      { value: 'scarf', label: 'Scarf', icon: 'ðŸ§£' },
+      { value: 'belt', label: 'Belt', icon: 'ðŸ‘”' },
+      { value: 'hat', label: 'Hat', icon: 'ðŸŽ©' },
     ],
   },
   outerwear: {
     label: 'Outerwear',
-    icon: '🧥',
-    description: 'Áo khoác',
+    icon: 'ðŸ§¥',
+    description: 'Ão khoÃ¡c',
     options: [
-      { value: 'jacket', label: 'Jacket', icon: '🧥' },
-      { value: 'coat', label: 'Coat', icon: '🧥' },
-      { value: 'blazer', label: 'Blazer', icon: '👔' },
-      { value: 'cardigan', label: 'Cardigan', icon: '🧶' },
-      { value: 'hoodie', label: 'Hoodie', icon: '👕' },
-      { value: 'vest', label: 'Vest', icon: '🎽' },
+      { value: 'jacket', label: 'Jacket', icon: 'ðŸ§¥' },
+      { value: 'coat', label: 'Coat', icon: 'ðŸ§¥' },
+      { value: 'blazer', label: 'Blazer', icon: 'ðŸ‘”' },
+      { value: 'cardigan', label: 'Cardigan', icon: 'ðŸ§¶' },
+      { value: 'hoodie', label: 'Hoodie', icon: 'ðŸ‘•' },
+      { value: 'vest', label: 'Vest', icon: 'ðŸŽ½' },
     ],
   },
 };
@@ -227,9 +227,9 @@ export default function StyleCustomizer({
         { reason: newOption.reason }
       );
       setSavedNewOptions(prev => [...prev, newOption.value]);
-      console.log(`✅ New option saved: ${newOption.category}/${newOption.value}`);
+      console.log(`âœ… New option saved: ${newOption.category}/${newOption.value}`);
     } catch (error) {
-      console.error('❌ Failed to save new option:', error);
+      console.error('âŒ Failed to save new option:', error);
     } finally {
       setSavingOptions(prev => ({ ...prev, [newOption.value]: false }));
     }
@@ -256,10 +256,10 @@ export default function StyleCustomizer({
       <div className="bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl p-6 text-white mb-6">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Sliders className="w-6 h-6" />
-          Tùy Chỉnh Phong Cách
+          TÃ¹y Chá»‰nh Phong CÃ¡ch
         </h2>
         <p className="text-purple-100 mt-1">
-          AI đã phân tích và đề xuất các tùy chọn tối ưu. Bạn có thể thay đổi theo ý muốn.
+          AI Ä‘Ã£ phÃ¢n tÃ­ch vÃ  Ä‘á» xuáº¥t cÃ¡c tÃ¹y chá»n tá»‘i Æ°u. Báº¡n cÃ³ thá»ƒ thay Ä‘á»•i theo Ã½ muá»‘n.
         </p>
       </div>
 
@@ -313,14 +313,14 @@ export default function StyleCustomizer({
                       <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-blue-900 mb-1">
-                          AI Đề Xuất: {CATEGORY_CONFIG[categoryKey].options.find(o => o.value === recommendations[categoryKey].primary)?.label}
+                          AI Äá» Xuáº¥t: {CATEGORY_CONFIG[categoryKey].options.find(o => o.value === recommendations[categoryKey].primary)?.label}
                         </p>
                         <p className="text-sm text-blue-800 leading-relaxed">
                           {recommendations[categoryKey].reason}
                         </p>
                         {recommendations[categoryKey].alternatives && recommendations[categoryKey].alternatives.length > 0 && (
                           <p className="text-xs text-blue-700 mt-2">
-                            <strong>Các tùy chọn khác:</strong> {recommendations[categoryKey].alternatives.join(', ')}
+                            <strong>CÃ¡c tÃ¹y chá»n khÃ¡c:</strong> {recommendations[categoryKey].alternatives.join(', ')}
                           </p>
                         )}
                       </div>
@@ -381,11 +381,11 @@ export default function StyleCustomizer({
         <div className="mt-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl shadow-sm border border-amber-200 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-5 h-5 text-amber-600" />
-            <h3 className="text-lg font-semibold text-amber-900">✨ AI Đề Xuất Thêm Tùy Chọn Mới</h3>
+            <h3 className="text-lg font-semibold text-amber-900">âœ¨ AI Äá» Xuáº¥t ThÃªm TÃ¹y Chá»n Má»›i</h3>
           </div>
           
           <p className="text-sm text-amber-800 mb-4">
-            AI nhận thấy những tùy chọn mới có thể phù hợp hơn với hình ảnh của bạn. Nhấp "Lưu" để thêm vào hệ thống.
+            AI nháº­n tháº¥y nhá»¯ng tÃ¹y chá»n má»›i cÃ³ thá»ƒ phÃ¹ há»£p hÆ¡n vá»›i hÃ¬nh áº£nh cá»§a báº¡n. Nháº¥p "LÆ°u" Ä‘á»ƒ thÃªm vÃ o há»‡ thá»‘ng.
           </p>
 
           <div className="space-y-3">
@@ -413,7 +413,7 @@ export default function StyleCustomizer({
                       <p className="text-sm text-gray-600 mb-2">{newOption.description}</p>
                       {newOption.reason && (
                         <p className="text-xs text-gray-500 italic">
-                          💡 {newOption.reason}
+                          ðŸ’¡ {newOption.reason}
                         </p>
                       )}
                     </div>
@@ -434,7 +434,7 @@ export default function StyleCustomizer({
                       {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                       {isSaved && <Check className="w-4 h-4" />}
                       {!isSaving && !isSaved && <Plus className="w-4 h-4" />}
-                      {isSaved ? 'Đã Lưu' : isSaving ? 'Đang Lưu...' : 'Lưu Tùy Chọn'}
+                      {isSaved ? 'ÄÃ£ LÆ°u' : isSaving ? 'Äang LÆ°u...' : 'LÆ°u TÃ¹y Chá»n'}
                     </button>
                   </div>
                 </div>
@@ -449,7 +449,7 @@ export default function StyleCustomizer({
         <details className="group">
           <summary className="px-6 py-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-lg">⚙️</span>
+              <span className="text-lg">âš™ï¸</span>
               <span className="font-semibold text-gray-800">Advanced Options</span>
             </div>
             <ChevronDown className="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" />
@@ -555,3 +555,4 @@ export default function StyleCustomizer({
 
 // Export category config for other components
 export { CATEGORY_CONFIG };
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -28,11 +28,12 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const DEFAULT_SCENE_VALUE = 'linhphap-tryon-room';
-const PANEL_CLASS = 'video-section-card rounded-[1.35rem] p-4';
-const SUB_PANEL_CLASS = 'video-mini-card rounded-[1.1rem] p-3';
-const CONTROL_CHIP_CLASS = 'apple-option-chip rounded-xl border px-3 py-2 text-xs font-semibold transition';
+const PANEL_CLASS = 'studio-card-shell rounded-[0.875rem] p-3';
+const SUB_PANEL_CLASS = 'studio-card-shell rounded-[0.75rem] p-2.5';
+const CONTROL_CHIP_CLASS = 'apple-option-chip rounded-[0.65rem] border px-3 py-2 text-xs font-semibold transition';
+const STATUS_BANNER_CLASS = 'studio-card-shell rounded-full px-3 py-1.5 text-xs font-medium';
 const TEXTAREA_CLASS =
-  'w-full rounded-[1.05rem] border border-white/10 bg-slate-950/55 px-3 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-sky-300/35 focus:ring-2 focus:ring-sky-300/10';
+  'w-full rounded-[0.75rem] border border-white/10 bg-slate-950/55 px-3 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-sky-300/35 focus:ring-2 focus:ring-sky-300/10';
 
 const PROVIDERS = [
   { id: 'google-flow', label: 'Google Flow', shortLabel: 'Flow', accent: 'cool', description: 'Two-frame motion workflow' },
@@ -175,7 +176,6 @@ function MediaCard({
   onGallery,
   onClear,
   headerAction = null,
-  browseLabel = 'Browse',
   galleryLabel = 'Gallery',
   emptyLabel = 'Upload',
 }) {
@@ -225,12 +225,9 @@ function MediaCard({
         )}
       </button>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <button type="button" onClick={onGallery} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
           {galleryLabel}
-        </button>
-        <button type="button" onClick={onBrowse} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
-          {browseLabel}
         </button>
       </div>
     </div>
@@ -243,7 +240,6 @@ export default function VideoGenerationPage() {
   const location = useLocation();
   const startInputRef = useRef(null);
   const endInputRef = useRef(null);
-  const sceneInputRef = useRef(null);
 
   const [videoProvider, setVideoProvider] = useState('google-flow');
   const [selectedDuration, setSelectedDuration] = useState(8);
@@ -605,16 +601,16 @@ export default function VideoGenerationPage() {
         actions={(
           <>
             <div className="video-generation-header-note hidden items-center text-xs text-slate-400 xl:flex">
-              Upload 2 frames, add an optional scene note, or click a recent session to reload it.
+              Upload 2 frames, pick an optional scene reference, or click a recent session to reload it.
             </div>
             <button type="button" onClick={handleReset} className="apple-option-chip rounded-xl px-3 py-1.5 text-xs font-medium transition">Reset</button>
           </>
         )}
       />
 
-      <div className="video-generation-workspace min-h-0 overflow-hidden pl-4 pr-0 py-4">
-        <div className="video-generation-grid grid h-full min-h-0 gap-4">
-          <aside className="video-generation-sidebar min-h-0 overflow-y-auto space-y-3.5">
+      <div className="video-generation-workspace min-h-0 overflow-hidden px-3 py-3">
+        <div className="video-generation-grid grid h-full min-h-0 gap-3">
+          <aside className="video-generation-sidebar min-h-0 overflow-y-auto space-y-2.5">
             <section className={`${PANEL_CLASS} video-control-strip`}>
               <div className="video-control-row">
                 <span className="video-control-label" title="Provider">AI</span>
@@ -695,7 +691,6 @@ export default function VideoGenerationPage() {
 
             <input ref={startInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { handleFileSelect('start', event.target.files?.[0]); event.target.value = ''; }} />
             <input ref={endInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { handleFileSelect('end', event.target.files?.[0]); event.target.value = ''; }} />
-            <input ref={sceneInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { handleFileSelect('scene', event.target.files?.[0]); event.target.value = ''; }} />
           </aside>
 
           <main className="video-generation-center video-gen-main-panel min-h-0 overflow-hidden">
@@ -722,9 +717,6 @@ export default function VideoGenerationPage() {
                 <div className={`${SUB_PANEL_CLASS} video-media-card space-y-3`} title={getSceneLockedPrompt(currentScene, i18n.language || 'en') || 'Optional scene reference'}>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-100">Scene</p>
-                    <button type="button" onClick={() => setShowScenePicker(true)} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
-                      Pick
-                    </button>
                   </div>
                   <button
                     type="button"
@@ -745,21 +737,18 @@ export default function VideoGenerationPage() {
                       </div>
                     )}
                   </button>
-                  <div className="grid grid-cols-[minmax(0,1fr),minmax(0,1fr),minmax(0,1.2fr)] gap-2">
+                  <div className="grid grid-cols-[minmax(0,1fr),minmax(0,1.35fr)] gap-2">
                     <button type="button" onClick={() => { setGalleryTarget('scene'); setShowGalleryPicker(true); }} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
                       Gallery
                     </button>
-                    <button type="button" onClick={() => sceneInputRef.current?.click()} className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition">
-                      Browse
+                    <button
+                      type="button"
+                      onClick={() => setShowScenePicker(true)}
+                      title={currentScene?.label || 'Pick scene'}
+                      className="apple-option-chip rounded-xl px-3 py-2 text-xs font-medium transition"
+                    >
+                      <span className="block truncate">{currentScene?.label || 'Pick scene'}</span>
                     </button>
-                    <input
-                      type="text"
-                      value={scenePrompt}
-                      onChange={(event) => setScenePrompt(event.target.value)}
-                      placeholder="Scene note"
-                      title="Optional extra scene notes"
-                      className="w-full rounded-xl border border-white/10 bg-slate-950/55 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-sky-300/35 focus:ring-2 focus:ring-sky-300/10"
-                    />
                   </div>
                 </div>
               </div>
@@ -824,7 +813,7 @@ export default function VideoGenerationPage() {
                   </div>
 
                   {!generatedVideos.length ? (
-                    <div className="video-result-panel flex min-h-[220px] flex-col items-center justify-center rounded-[1.2rem] border border-dashed border-white/10 px-6 text-center">
+                    <div className="studio-card-shell video-result-panel flex min-h-[220px] flex-col items-center justify-center rounded-[1.2rem] border border-dashed border-white/10 px-6 text-center">
                       <Film className="h-8 w-8 text-slate-500" />
                       <p className="mt-3 text-sm font-semibold text-slate-200">No video yet</p>
                       <p className="mt-1 text-xs text-slate-500">Generate or open a recent session.</p>
@@ -837,7 +826,7 @@ export default function VideoGenerationPage() {
                         const uploadState = videoUploadStatuses[video.filename]?.status || '';
 
                         return (
-                          <article key={`${video.filename}-${index}`} className="video-result-card overflow-hidden rounded-[1.2rem]">
+                          <article key={`${video.filename}-${index}`} className="studio-card-shell video-result-card overflow-hidden rounded-[1.2rem]">
                             <div className="aspect-video overflow-hidden bg-slate-950/70">
                               {previewUrl ? (
                                 <video src={previewUrl} controls className="h-full w-full object-cover" />
@@ -916,7 +905,7 @@ export default function VideoGenerationPage() {
                       type="button"
                       onClick={() => hydrateFromSession(sessionId)}
                       className={`video-recent-item w-full text-left transition ${isActive ? 'video-recent-item-active' : ''}`}
-                      title={`${USE_CASES.find((item) => item.id === request.useCase)?.label || 'Video Session'} • ${formatDate(session.updatedAt || session.createdAt)}`}
+                      title={`${USE_CASES.find((item) => item.id === request.useCase)?.label || 'Video Session'} â€¢ ${formatDate(session.updatedAt || session.createdAt)}`}
                     >
                       <div className="video-recent-thumb overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/45">
                         {previewUrl ? (
@@ -939,13 +928,13 @@ export default function VideoGenerationPage() {
 
       <div className="video-generation-footer px-0 pb-0">
         <div className="video-generation-footer-bar px-2 py-1.5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div className={`video-status-banner rounded-full px-3 py-1.5 text-xs font-medium ${isReadyToGenerate ? 'video-status-banner-success text-emerald-200' : 'video-status-banner-warning text-amber-200'}`}>
+              <div className={`${STATUS_BANNER_CLASS} video-status-banner ${isReadyToGenerate ? 'video-status-banner-success text-emerald-200' : 'video-status-banner-warning text-amber-200'}`}>
                 {isReadyToGenerate ? 'Ready' : 'Frames + prompt needed'}
               </div>
               {driveUploadStatus ? (
-                <div className="video-status-banner rounded-full px-3 py-1.5 text-xs font-medium text-slate-200">
+                <div className={`${STATUS_BANNER_CLASS} video-status-banner text-slate-200`}>
                   {driveUploadStatus}
                 </div>
               ) : null}
@@ -960,15 +949,18 @@ export default function VideoGenerationPage() {
               </label>
             </div>
 
-            <button
-              type="button"
-              onClick={handleGenerateVideo}
-              disabled={!isReadyToGenerate || isGenerating}
-              className="inline-flex items-center justify-center gap-2 rounded-[1rem] border border-sky-300/28 bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(14,165,233,0.16))] px-4 py-3 text-sm font-semibold text-sky-50 shadow-[0_14px_30px_rgba(8,47,73,0.24)] transition hover:border-sky-200/36 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.3),rgba(14,165,233,0.2))] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-              {isGenerating ? 'Generating...' : 'Generate'}
-            </button>
+            <div className="flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleGenerateVideo}
+                disabled={!isReadyToGenerate || isGenerating}
+                className="inline-flex items-center justify-center gap-2 rounded-[1rem] border border-sky-300/28 bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(14,165,233,0.16))] px-4 py-3 text-sm font-semibold text-sky-50 shadow-[0_14px_30px_rgba(8,47,73,0.24)] transition hover:border-sky-200/36 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.3),rgba(14,165,233,0.2))] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                {isGenerating ? 'Generating...' : 'Generate'}
+              </button>
+            </div>
+            <div />
           </div>
         </div>
       </div>
@@ -999,3 +991,4 @@ export default function VideoGenerationPage() {
     </div>
   );
 }
+

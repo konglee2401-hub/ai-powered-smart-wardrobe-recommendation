@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Frontend UI Patch for UnifiedVideoGeneration.jsx
  * This file contains the UI components that need to be added
  * 
@@ -179,3 +179,4 @@
     </div>
   </div>
 )}
+

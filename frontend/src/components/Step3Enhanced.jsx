@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 3 Enhanced - Style Customization with Live Prompt
  * Layout:
  * - Left: Style options (2-3 columns)
@@ -14,12 +14,13 @@ import {
 } from 'lucide-react';
 import { promptsAPI } from '../services/api';
 import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
+import ModalPortal from './ModalPortal';
 
 // Style Categories Configuration
 const STYLE_CATEGORIES = {
   scene: {
-    label: 'Môi trường chụp',
-    icon: '🎬',
+    label: 'MÃ´i trÆ°á»ng chá»¥p',
+    icon: 'ðŸŽ¬',
     options: [
       { value: 'studio', label: 'Professional Studio' },
       { value: 'white-background', label: 'White Background' },
@@ -33,8 +34,8 @@ const STYLE_CATEGORIES = {
     ],
   },
   lighting: {
-    label: 'Ánh sáng',
-    icon: '💡',
+    label: 'Ãnh sÃ¡ng',
+    icon: 'ðŸ’¡',
     options: [
       { value: 'soft-diffused', label: 'Soft Diffused' },
       { value: 'natural-window', label: 'Natural Window' },
@@ -47,8 +48,8 @@ const STYLE_CATEGORIES = {
     ],
   },
   mood: {
-    label: 'Tâm trạng',
-    icon: '😊',
+    label: 'TÃ¢m tráº¡ng',
+    icon: 'ðŸ˜Š',
     options: [
       { value: 'confident', label: 'Confident & Powerful' },
       { value: 'relaxed', label: 'Relaxed & Casual' },
@@ -61,8 +62,8 @@ const STYLE_CATEGORIES = {
     ],
   },
   style: {
-    label: 'Phong cách nhiếp ảnh',
-    icon: '📸',
+    label: 'Phong cÃ¡ch nhiáº¿p áº£nh',
+    icon: 'ðŸ“¸',
     options: [
       { value: 'minimalist', label: 'Minimalist' },
       { value: 'editorial', label: 'Editorial' },
@@ -75,8 +76,8 @@ const STYLE_CATEGORIES = {
     ],
   },
   colorPalette: {
-    label: 'Bảng màu',
-    icon: '🎨',
+    label: 'Báº£ng mÃ u',
+    icon: 'ðŸŽ¨',
     options: [
       { value: 'neutral', label: 'Neutral' },
       { value: 'warm', label: 'Warm Tones' },
@@ -89,8 +90,8 @@ const STYLE_CATEGORIES = {
     ],
   },
   cameraAngle: {
-    label: 'Góc máy',
-    icon: '📐',
+    label: 'GÃ³c mÃ¡y',
+    icon: 'ðŸ“',
     options: [
       { value: 'eye-level', label: 'Eye Level' },
       { value: 'slight-angle', label: 'Slight Angle' },
@@ -101,7 +102,7 @@ const STYLE_CATEGORIES = {
   },
   framing: {
     label: 'Thumbnail Framing',
-    icon: '🖼️',
+    icon: 'ðŸ–¼ï¸',
     options: [
       { value: 'tight-headshot', label: 'Tight Headshot' },
       { value: 'shoulders-up', label: 'Shoulders Up' },
@@ -111,7 +112,7 @@ const STYLE_CATEGORIES = {
   },
   expression: {
     label: 'Expression',
-    icon: '😮',
+    icon: 'ðŸ˜®',
     options: [
       { value: 'surprised', label: 'Surprised / Shocked' },
       { value: 'excited', label: 'Excited' },
@@ -125,7 +126,7 @@ const STYLE_CATEGORIES = {
   },
   gesture: {
     label: 'Gesture',
-    icon: '🫴',
+    icon: 'ðŸ«´',
     options: [
       { value: 'pointing', label: 'Pointing' },
       { value: 'open-hand-presenting', label: 'Open Hand Presenting' },
@@ -138,7 +139,7 @@ const STYLE_CATEGORIES = {
   },
   textOverlayZone: {
     label: 'Text Overlay Zone',
-    icon: '🔤',
+    icon: 'ðŸ”¤',
     options: [
       { value: 'left-negative-space', label: 'Left Negative Space' },
       { value: 'right-negative-space', label: 'Right Negative Space' },
@@ -149,7 +150,7 @@ const STYLE_CATEGORIES = {
   },
   productPresence: {
     label: 'Product Presence',
-    icon: '📦',
+    icon: 'ðŸ“¦',
     options: [
       { value: 'hero-prop', label: 'Hero Prop' },
       { value: 'secondary-prop', label: 'Secondary Prop' },
@@ -158,7 +159,7 @@ const STYLE_CATEGORIES = {
   },
   storyRole: {
     label: 'Story Role',
-    icon: '🎭',
+    icon: 'ðŸŽ­',
     options: [
       { value: 'hero', label: 'Hero' },
       { value: 'friend', label: 'Friend' },
@@ -171,7 +172,7 @@ const STYLE_CATEGORIES = {
   },
   pose: {
     label: 'Story Pose',
-    icon: '🕴️',
+    icon: 'ðŸ•´ï¸',
     options: [
       { value: 'neutral-standing', label: 'Neutral Standing' },
       { value: 'walking-forward', label: 'Walking Forward' },
@@ -184,7 +185,7 @@ const STYLE_CATEGORIES = {
   },
   sceneDepth: {
     label: 'Scene Depth',
-    icon: '🌌',
+    icon: 'ðŸŒŒ',
     options: [
       { value: 'clean-backdrop', label: 'Clean Backdrop' },
       { value: 'mid-depth', label: 'Mid Depth' },
@@ -194,7 +195,7 @@ const STYLE_CATEGORIES = {
   },
   propCue: {
     label: 'Prop Cue',
-    icon: '🧩',
+    icon: 'ðŸ§©',
     options: [
       { value: 'microphone', label: 'Microphone' },
       { value: 'notebook', label: 'Notebook' },
@@ -206,38 +207,38 @@ const STYLE_CATEGORIES = {
     ],
   },
   shotType: {
-    label: 'Loại chụp',
-    icon: '📷',
+    label: 'Loáº¡i chá»¥p',
+    icon: 'ðŸ“·',
     options: [
-      { value: 'headshot', label: 'Headshot (Chỉ mặt)' },
-      { value: 'half-body', label: 'Half Body (Nửa trên người)' },
-      { value: 'full-body', label: 'Full Body (Toàn thân)' },
-      { value: 'back-shot', label: 'Back Shot (Chụp từ phía sau)' },
-      { value: 'three-quarter-view', label: '3/4 View (3/4 người)' },
-      { value: 'close-up-detail', label: 'Close-up Detail (Cận cảnh chi tiết)' },
-      { value: 'sitting', label: 'Sitting (Ngồi)' },
-      { value: 'walking', label: 'Walking (Đi bộ)' },
+      { value: 'headshot', label: 'Headshot (Chá»‰ máº·t)' },
+      { value: 'half-body', label: 'Half Body (Ná»­a trÃªn ngÆ°á»i)' },
+      { value: 'full-body', label: 'Full Body (ToÃ n thÃ¢n)' },
+      { value: 'back-shot', label: 'Back Shot (Chá»¥p tá»« phÃ­a sau)' },
+      { value: 'three-quarter-view', label: '3/4 View (3/4 ngÆ°á»i)' },
+      { value: 'close-up-detail', label: 'Close-up Detail (Cáº­n cáº£nh chi tiáº¿t)' },
+      { value: 'sitting', label: 'Sitting (Ngá»“i)' },
+      { value: 'walking', label: 'Walking (Äi bá»™)' },
     ],
   },
   bodyPose: {
-    label: 'Dáng đứng/Tư thế',
-    icon: '🧍',
+    label: 'DÃ¡ng Ä‘á»©ng/TÆ° tháº¿',
+    icon: 'ðŸ§',
     options: [
-      { value: 'neutral-standing', label: 'Neutral Standing (Đứng bình thường)' },
-      { value: 'crossed-arms', label: 'Crossed Arms (Cũi tay)' },
-      { value: 'hand-on-hip', label: 'Hand on Hip (Tay trên hông)' },
-      { value: 'hands-in-pocket', label: 'Hands in Pockets (Tay túi)' },
-      { value: 'dynamic-pose', label: 'Dynamic Pose (Dáng động)' },
-      { value: 'leaning', label: 'Leaning (Dựa)' },
-      { value: 'side-profile', label: 'Side Profile (Từ cạnh)' },
-      { value: 'seated', label: 'Seated (Ngồi)' },
+      { value: 'neutral-standing', label: 'Neutral Standing (Äá»©ng bÃ¬nh thÆ°á»ng)' },
+      { value: 'crossed-arms', label: 'Crossed Arms (CÅ©i tay)' },
+      { value: 'hand-on-hip', label: 'Hand on Hip (Tay trÃªn hÃ´ng)' },
+      { value: 'hands-in-pocket', label: 'Hands in Pockets (Tay tÃºi)' },
+      { value: 'dynamic-pose', label: 'Dynamic Pose (DÃ¡ng Ä‘á»™ng)' },
+      { value: 'leaning', label: 'Leaning (Dá»±a)' },
+      { value: 'side-profile', label: 'Side Profile (Tá»« cáº¡nh)' },
+      { value: 'seated', label: 'Seated (Ngá»“i)' },
     ],
   },
   tops: {
-    label: 'Áo/Trên người',
-    icon: '👕',
+    label: 'Ão/TrÃªn ngÆ°á»i',
+    icon: 'ðŸ‘•',
     options: [
-      { value: 'keep-current', label: 'Keep Current (Giữ áo hiện tại)' },
+      { value: 'keep-current', label: 'Keep Current (Giá»¯ Ã¡o hiá»‡n táº¡i)' },
       { value: 'shirt', label: 'Shirt' },
       { value: 'tshirt', label: 'T-Shirt' },
       { value: 'blouse', label: 'Blouse' },
@@ -248,10 +249,10 @@ const STYLE_CATEGORIES = {
     ],
   },
   bottoms: {
-    label: 'Quần/Dưới người',
-    icon: '👖',
+    label: 'Quáº§n/DÆ°á»›i ngÆ°á»i',
+    icon: 'ðŸ‘–',
     options: [
-      { value: 'keep-current', label: 'Keep Current (Giữ quần hiện tại)' },
+      { value: 'keep-current', label: 'Keep Current (Giá»¯ quáº§n hiá»‡n táº¡i)' },
       { value: 'jeans', label: 'Jeans' },
       { value: 'shorts', label: 'Shorts' },
       { value: 'skirt', label: 'Skirt' },
@@ -262,10 +263,10 @@ const STYLE_CATEGORIES = {
     ],
   },
   shoes: {
-    label: 'Giày',
-    icon: '👠',
+    label: 'GiÃ y',
+    icon: 'ðŸ‘ ',
     options: [
-      { value: 'keep-current', label: 'Keep Current (Giữ giày hiện tại)' },
+      { value: 'keep-current', label: 'Keep Current (Giá»¯ giÃ y hiá»‡n táº¡i)' },
       { value: 'sneakers', label: 'Sneakers' },
       { value: 'heels', label: 'Heels' },
       { value: 'boots', label: 'Boots' },
@@ -276,10 +277,10 @@ const STYLE_CATEGORIES = {
     ],
   },
   outerwear: {
-    label: 'Áo khoác ngoài',
-    icon: '🧥',
+    label: 'Ão khoÃ¡c ngoÃ i',
+    icon: 'ðŸ§¥',
     options: [
-      { value: 'none', label: 'None (Không)' },
+      { value: 'none', label: 'None (KhÃ´ng)' },
       { value: 'blazer', label: 'Blazer' },
       { value: 'jacket', label: 'Jacket' },
       { value: 'coat', label: 'Coat' },
@@ -290,21 +291,21 @@ const STYLE_CATEGORIES = {
     ],
   },
   accessories: {
-    label: 'Phụ kiện',
-    icon: '✨',
+    label: 'Phá»¥ kiá»‡n',
+    icon: 'âœ¨',
     options: [
-      { value: 'none', label: 'None (Không có)' },
-      { value: 'rings', label: 'Rings (Nhẫn)' },
-      { value: 'bracelets', label: 'Bracelets (Vòng tay)' },
-      { value: 'watch', label: 'Watch (Đồng hồ)' },
-      { value: 'necklace', label: 'Necklace (Dây chuyền)' },
-      { value: 'earrings', label: 'Earrings (Khuyên tai)' },
-      { value: 'handbag', label: 'Handbag (Túi xách)' },
-      { value: 'backpack', label: 'Backpack (Ba lô)' },
-      { value: 'scarf', label: 'Scarf (Khăn quàng)' },
-      { value: 'belt', label: 'Belt (Thắt lưng)' },
-      { value: 'hat', label: 'Hat (Mũ)' },
-      { value: 'sunglasses', label: 'Sunglasses (Kính mát)' },
+      { value: 'none', label: 'None (KhÃ´ng cÃ³)' },
+      { value: 'rings', label: 'Rings (Nháº«n)' },
+      { value: 'bracelets', label: 'Bracelets (VÃ²ng tay)' },
+      { value: 'watch', label: 'Watch (Äá»“ng há»“)' },
+      { value: 'necklace', label: 'Necklace (DÃ¢y chuyá»n)' },
+      { value: 'earrings', label: 'Earrings (KhuyÃªn tai)' },
+      { value: 'handbag', label: 'Handbag (TÃºi xÃ¡ch)' },
+      { value: 'backpack', label: 'Backpack (Ba lÃ´)' },
+      { value: 'scarf', label: 'Scarf (KhÄƒn quÃ ng)' },
+      { value: 'belt', label: 'Belt (Tháº¯t lÆ°ng)' },
+      { value: 'hat', label: 'Hat (MÅ©)' },
+      { value: 'sunglasses', label: 'Sunglasses (KÃ­nh mÃ¡t)' },
     ],
   },
 };
@@ -643,6 +644,7 @@ const Step3Enhanced = ({
   };
 
   return (
+    <ModalPortal>
     <div className="h-full flex flex-col bg-gray-900 text-white">
       {/* ==================== TOP: Use Case Info ==================== */}
       <div className="flex-shrink-0 bg-gray-800/50 px-4 py-2 border-b border-gray-700">
@@ -717,7 +719,7 @@ const Step3Enhanced = ({
           <div className="flex-1 bg-gray-800 rounded-lg border border-gray-700 p-4 flex flex-col">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold text-green-400 flex items-center gap-2">
-                ✓ Positive Prompt
+                âœ“ Positive Prompt
               </h4>
               {generatedPrompt?.positive && (
                 <button
@@ -771,7 +773,7 @@ const Step3Enhanced = ({
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold text-red-400 flex items-center gap-2">
-                ✗ Negative Prompt
+                âœ— Negative Prompt
               </h4>
               {generatedPrompt?.negative && (
                 <button
@@ -807,14 +809,14 @@ const Step3Enhanced = ({
               {characterImage?.preview && (
                 <div className="aspect-square bg-gray-900 rounded border border-gray-700 overflow-hidden">
                   <img src={characterImage.preview} alt="Character" className="w-full h-full object-cover" />
-                  <div className="text-xs text-gray-400 text-center py-1 bg-gray-900">👤 Character</div>
+                  <div className="text-xs text-gray-400 text-center py-1 bg-gray-900">ðŸ‘¤ Character</div>
                 </div>
               )}
               
               {productImage?.preview && (
                 <div className="aspect-square bg-gray-900 rounded border border-gray-700 overflow-hidden">
                   <img src={productImage.preview} alt="Product" className="w-full h-full object-cover" />
-                  <div className="text-xs text-gray-400 text-center py-1 bg-gray-900">👕 Product</div>
+                  <div className="text-xs text-gray-400 text-center py-1 bg-gray-900">ðŸ‘• Product</div>
                 </div>
               )}
             </div>
@@ -862,7 +864,7 @@ const Step3Enhanced = ({
 
       {/* ==================== PROMPT OPTIMIZER MODAL ==================== */}
       {showOptimizerModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center app-layer-modal">
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -906,7 +908,7 @@ const Step3Enhanced = ({
               {optimizedPrompt && (
                 <div className="bg-gray-900 border border-gray-700 rounded p-4 space-y-3">
                   <div className="bg-green-900/20 border border-green-700 rounded p-3">
-                    <p className="text-xs text-green-400 mb-2">✓ Optimized ({optimizedPrompt.optimized.length} chars)</p>
+                    <p className="text-xs text-green-400 mb-2">âœ“ Optimized ({optimizedPrompt.optimized.length} chars)</p>
                     <p className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
                       {optimizedPrompt.optimized}
                     </p>
@@ -932,8 +934,11 @@ const Step3Enhanced = ({
         </div>
       )}
     </div>
+    </ModalPortal>
   );
 };
 
 export { STYLE_CATEGORIES };
 export default Step3Enhanced;
+
+

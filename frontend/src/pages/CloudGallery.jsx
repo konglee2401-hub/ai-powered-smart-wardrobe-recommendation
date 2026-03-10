@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cloud Gallery Page
  * Display and manage media from Google Drive
  */
@@ -143,11 +143,11 @@ export function CloudGallery() {
   }
 
   const mediaTypes = [
-    { id: 'all', label: 'All', icon: '📁' },
-    { id: 'image', label: 'Images', icon: '🖼️' },
-    { id: 'video', label: 'Videos', icon: '🎬' },
-    { id: 'audio', label: 'Audio', icon: '🎵' },
-    { id: 'template', label: 'Templates', icon: '📋' },
+    { id: 'all', label: 'All', icon: 'ðŸ“' },
+    { id: 'image', label: 'Images', icon: 'ðŸ–¼ï¸' },
+    { id: 'video', label: 'Videos', icon: 'ðŸŽ¬' },
+    { id: 'audio', label: 'Audio', icon: 'ðŸŽµ' },
+    { id: 'template', label: 'Templates', icon: 'ðŸ“‹' },
   ];
 
   return (
@@ -381,7 +381,7 @@ function MediaCard({ item, onDownload, onDelete }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-500">
-            📄
+            ðŸ“„
           </div>
         )}
         
@@ -462,3 +462,4 @@ function MediaListItem({ item, onDownload, onDelete }) {
 }
 
 export default CloudGallery;
+

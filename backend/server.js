@@ -52,7 +52,9 @@ import trendAutomationRoutes from './routes/trendAutomationRoutes.js';
 import authSetupRoutes from './routes/authSetupRoutes.js';
 import characterRoutes from './routes/characterRoutes.js';
 import videoPipelineRoutes from './routes/videoPipelineRoutes.js';
+import socialMediaRoutes from './routes/socialMediaRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
+import queueScannerCronJob from './services/queueScannerCronJob.js';
 import { seedProviders } from './scripts/seed/seedProviders.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
@@ -69,6 +71,9 @@ connectDB().then(async () => {
   // Auto-sync models after DB connection
   await seedProviders(); // Ensure providers exist first
   modelSyncService.autoSyncOnStartup(); // Only one sync - runs after 5s
+  queueScannerCronJob.loadScheduleSettings().catch((error) => {
+    console.warn('[queue-scanner] Failed to load schedule settings:', error.message);
+  });
 });
 
 app.use(cors({ origin: [
@@ -167,6 +172,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/video', videoGenRoutes);
 app.use('/api/multi-flow', multiFlowRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/providers', aiProviderRoutes);
 app.use('/api/v1/browser-automation', browserAutomationRoutes);
 app.use('/api/prompts', promptEnhancementRoutes);
 app.use('/api/prompts-v1', promptsRoutes); // Keep old as v1 for compatibility
@@ -191,6 +197,7 @@ app.use('/api/shorts-reels', trendAutomationRoutes);
 app.use('/api/auth-setup', authSetupRoutes);
 app.use('/api/characters', characterRoutes);
 app.use('/api/video-pipeline', videoPipelineRoutes);
+app.use('/api/social-media', socialMediaRoutes);
 
 app.use(errorHandler);
 

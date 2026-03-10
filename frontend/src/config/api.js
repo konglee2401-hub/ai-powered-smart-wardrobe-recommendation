@@ -18,6 +18,14 @@ export const API_ENDPOINTS = {
   
   // AI & Providers
   PROVIDER_STATUS: '/ai/providers',
+  PROVIDERS: '/providers',
+  TEST: (providerId) => `/providers/${providerId}/test`,
+  
+  // Image Generation
+  IMAGE_GENERATE: '/browser-automation/generate-image',
+  
+  // AI Provider Options
+  OPTIONS: '/prompt-options',
   
   // Flows & Generation
   UNIFIED_ANALYZE: '/flows/analyze',
@@ -45,6 +53,11 @@ export const API_ENDPOINTS = {
   CLOUD_GALLERY_DOWNLOAD: (fileId) => `/cloud-gallery/download/${fileId}`,
   CLOUD_GALLERY_PREVIEW: (fileId) => `/cloud-gallery/preview/${fileId}`,
   CLOUD_GALLERY_SEARCH: '/cloud-gallery/search',
+  
+  // Stats
+  STATS: '/stats',
+  STATS_PROVIDERS: '/stats/providers',
+  STATS_USAGE: '/stats/usage',
 };
 
 const apiClient = axios.create({

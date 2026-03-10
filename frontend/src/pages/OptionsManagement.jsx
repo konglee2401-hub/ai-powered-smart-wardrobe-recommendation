@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
   Settings, Loader2, AlertCircle, ImagePlus, Layers, ChevronRight, ChevronLeft, X, Trash2
 } from 'lucide-react';
 import PageHeaderBar from '../components/PageHeaderBar';
+import ModalPortal from '../components/ModalPortal';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -609,7 +610,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                               : 'bg-slate-700/50 hover:bg-slate-600 text-slate-300'
                           }`}
                         >
-                          {isAspectLocked ? '✓ Locked' : 'Select'}
+                          {isAspectLocked ? 'âœ“ Locked' : 'Select'}
                         </button>
                       </div>
                     </div>
@@ -625,7 +626,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
       {modalImageUrl && (
         <div
           onClick={() => setModalImageUrl(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/80 p-4"
         >
           <div className="relative max-w-4xl max-h-[90vh]">
             <button
@@ -760,3 +761,5 @@ export default function OptionsManagement() {
     </div>
   );
 }
+
+

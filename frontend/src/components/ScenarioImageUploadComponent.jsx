@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Check, Upload, X } from 'lucide-react';
 import { VIDEO_SCENARIOS } from '../constants/videoGeneration';
@@ -289,3 +289,4 @@ export default function ScenarioImageUploadComponent({
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Character & Product Summary Component
  * Display extracted information with option to save new options
  */
@@ -99,17 +99,17 @@ export default function CharacterProductSummary({
   return (
     <div className="space-y-3">
       {/* Character Summary */}
-      <TraitCard icon="👤" title="Character Profile" traits={characterTraits} />
+      <TraitCard icon="ðŸ‘¤" title="Character Profile" traits={characterTraits} />
 
       {/* Product Summary */}
-      <TraitCard icon="👕" title="Product Details" traits={productTraits} />
+      <TraitCard icon="ðŸ‘•" title="Product Details" traits={productTraits} />
 
       {/* Recommendations Summary - Removed, now handled by RecommendationSelector */}
 
       {/* Image Preview - Hidden in Step 2 to reduce clutter */}
       {false && (characterImage || productImage) && (
         <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-          <h4 className="text-xs font-semibold text-gray-300 mb-2">📸 Uploaded Images</h4>
+          <h4 className="text-xs font-semibold text-gray-300 mb-2">ðŸ“¸ Uploaded Images</h4>
           <div className="grid grid-cols-2 gap-2">
             {characterImage && (
               <div className="aspect-square bg-gray-900 rounded-lg overflow-hidden">
@@ -135,3 +135,4 @@ export default function CharacterProductSummary({
     </div>
   );
 }
+

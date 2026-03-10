@@ -244,13 +244,13 @@ export async function getProviderStatus() {
 /**
  * Test specific provider
  * @param {string} providerId - Provider ID to test
+ * @param {string} mode - Test mode ('lightweight' or 'full')
  * @returns {Promise<Object>} Test result
  */
-export async function testProvider(providerId) {
+export async function testProvider(providerId, mode = 'lightweight') {
   try {
-    const response = await axiosInstance.post(API_ENDPOINTS.TEST, {
-      providerId,
-    });
+    const endpoint = `${API_ENDPOINTS.TEST(providerId)}?mode=${mode}`;
+    const response = await axiosInstance.post(endpoint, {});
     return {
       success: true,
       data: response.data,

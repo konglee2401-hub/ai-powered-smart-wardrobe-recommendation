@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Recommendation Selector Component
  * Allow per-category choice: Apply AI / Keep Current / Choose Manually + Save as option
  *
@@ -490,3 +490,4 @@ const RecommendationSelector = forwardRef(function RecommendationSelector({
 });
 
 export default RecommendationSelector;
+

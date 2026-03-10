@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+﻿import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import {
   BrowserRouter as Router,
   Navigate,
@@ -15,7 +15,7 @@ import { pageRoutes, redirectRoutes } from './config/appRoutes';
 
 function PageTitle() {
   useEffect(() => {
-    document.title = 'AI Creative Studio';
+    document.title = 'K-Creative Studio';
   }, []);
 
   return null;
@@ -139,3 +139,4 @@ function App() {
 }
 
 export default App;
+

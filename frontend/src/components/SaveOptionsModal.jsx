@@ -1,4 +1,5 @@
-import React from 'react';
+﻿import React from 'react';
+import ModalPortal from './ModalPortal';
 
 export default function SaveOptionsModal({
   showSaveConfirm,
@@ -9,7 +10,8 @@ export default function SaveOptionsModal({
   if (!showSaveConfirm) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <ModalPortal>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center app-layer-modal">
       <div className="bg-gray-800 p-4 rounded-xl max-w-md mx-4">
         <h3 className="font-bold mb-2">Save {saveOptionsPending.length} new options?</h3>
         <div className="flex flex-wrap gap-1 mb-4 max-h-32 overflow-y-auto">
@@ -35,5 +37,8 @@ export default function SaveOptionsModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
+
+

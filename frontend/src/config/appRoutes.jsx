@@ -1,4 +1,4 @@
-import React, { lazy } from 'react';
+﻿import React, { lazy } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -6,6 +6,7 @@ import {
   FileText,
   Film,
   Gauge,
+  Globe,
   Image,
   LayoutDashboard,
   Layers,
@@ -41,6 +42,8 @@ const AdvancedCustomizationPage = lazy(() => import('../pages/AdvancedCustomizat
 const PerformanceOptimizerPage = lazy(() => import('../pages/PerformanceOptimizerPage'));
 const AIProviderManager = lazy(() => import('../pages/AIProviderManager'));
 const VideoPipeline = lazy(() => import('../pages/VideoPipeline'));
+const ProductionHistory = lazy(() => import('../pages/ProductionHistory'));
+const SocialAccountManager = lazy(() => import('../pages/SocialAccountManager'));
 
 export const pageRoutes = [
   { path: '/', Component: ImageGenerationPage, contentClassName: 'overflow-hidden' },
@@ -69,11 +72,13 @@ export const pageRoutes = [
   { path: '/video-pipeline', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/video-pipeline/:section', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/video-production', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/video-production/history', Component: ProductionHistory, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/dashboard', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/channels', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/videos', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/logs', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/settings', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/settings/social-accounts', Component: SocialAccountManager },
 ];
 
 export const redirectRoutes = [
@@ -119,6 +124,8 @@ export const navGroups = [
       { path: '/options', labelKey: 'navbar.options', icon: Settings },
       { path: '/setup-authentication', labelKey: 'navbar.setupAuthentication', icon: Gauge },
       { path: '/admin/providers', labelKey: 'navbar.aiProviders', icon: Zap },
+      { path: '/settings/social-accounts', label: 'Social Accounts', icon: Globe },
     ],
   },
 ];
+

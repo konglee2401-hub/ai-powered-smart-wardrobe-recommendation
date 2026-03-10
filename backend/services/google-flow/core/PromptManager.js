@@ -22,6 +22,7 @@ class PromptManager {
     this.page = page;
     this.options = options;
     this.debugMode = options.debugMode || false;
+    this.appendedTriggerSpaces = false;
     
     // Bind utilities to this page instance
     // ClipboardHelper now accepts page as parameter - no binding needed
@@ -65,68 +66,72 @@ class PromptManager {
       await this.page.waitForTimeout(300);
 
       // Clear any existing text
-      console.log('   🧹 Clearing existing text...');
-      await ClipboardHelper.clearTextbox(this.page, textboxSelector);
-      await this.page.waitForTimeout(200);
-
-      // 💫 NEW: 3-Part Strategy for prompt entry
-      console.log(`   📋 Entering prompt (${prompt.length} chars): "${prompt.substring(0, 60)}..."`);
-      
-      // PART 1: Type first 20 characters
-      const charCount = 20;
-      const part1 = prompt.substring(0, charCount);
-      const part3Start = Math.max(charCount, prompt.length - charCount);
-      const part2 = prompt.substring(charCount, part3Start);
-      const part3 = prompt.substring(part3Start);
-      
-      console.log(`   📌 Part 1 (type first 20): "${part1}"`);
-      console.log(`   📌 Part 2 (paste middle): ${part2.length} chars`);
-      console.log(`   📌 Part 3 (type last 20): "${part3}"`);
-      
-      // Type Part 1
-      console.log('   ✍️  Typing first 20 characters...');
-      for (const char of part1) {
-        await this.page.keyboard.type(char);
-        await this.page.waitForTimeout(20);  // Small delay between chars
+      if (this.options.type !== 'video') {
+        console.log('   ???? Clearing existing text...');
+        await ClipboardHelper.clearTextbox(this.page, textboxSelector);
+        await this.page.waitForTimeout(200);
+      } else {
+        console.log('   ???? Skipping Ctrl+A clear for video Slate composer...');
       }
-      console.log('   ✓ Part 1 typed');
-      await this.page.waitForTimeout(1000);  // 1s delay after part 1
+      console.log(`   ???? Entering prompt (${prompt.length} chars): "${prompt.substring(0, 60)}..."`);
+      this.appendedTriggerSpaces = false;
 
-      // Paste Part 2
-      if (part2.length > 0) {
-        console.log('   📋 Pasting middle part via clipboard...');
-        await ClipboardHelper.copyAndPaste(this.page, part2, textboxSelector);
-        console.log('   ✓ Part 2 pasted');
-        await this.page.waitForTimeout(1000);  // 1s delay after part 2
-      }
+      if (this.options.type === 'video') {
+        console.log('   ??????  Using full keyboard entry for video prompt...');
+        await this.page.keyboard.type(prompt, { delay: 12 });
+        await this.page.waitForTimeout(1200);
+      } else {
+        const charCount = 20;
+        const part1 = prompt.substring(0, charCount);
+        const part3Start = Math.max(charCount, prompt.length - charCount);
+        const part2 = prompt.substring(charCount, part3Start);
+        const part3 = prompt.substring(part3Start);
 
-      // Type Part 3
-      if (part3.length > 0) {
-        console.log('   ✍️  Typing last 20 characters...');
-        for (const char of part3) {
+        console.log(`   ???? Part 1 (type first 20): "${part1}"`);
+        console.log(`   ???? Part 2 (paste middle): ${part2.length} chars`);
+        console.log(`   ???? Part 3 (type last 20): "${part3}"`);
+
+        console.log('   ??????  Typing first 20 characters...');
+        for (const char of part1) {
           await this.page.keyboard.type(char);
-          await this.page.waitForTimeout(20);  // Small delay between chars
+          await this.page.waitForTimeout(20);
         }
-        console.log('   ✓ Part 3 typed');
-        await this.page.waitForTimeout(1000);  // 1s delay after part 3
+        console.log('   ??? Part 1 typed');
+        await this.page.waitForTimeout(1000);
+
+        if (part2.length > 0) {
+          console.log('   ???? Pasting middle part via clipboard...');
+          await ClipboardHelper.copyAndPaste(this.page, part2, textboxSelector);
+          console.log('   ??? Part 2 pasted');
+          await this.page.waitForTimeout(1000);
+        }
+
+        if (part3.length > 0) {
+          console.log('   ??????  Typing last 20 characters...');
+          for (const char of part3) {
+            await this.page.keyboard.type(char);
+            await this.page.waitForTimeout(20);
+          }
+          console.log('   ??? Part 3 typed');
+          await this.page.waitForTimeout(1000);
+        }
+
+        console.log('   ???? Focusing textbox for Slate editor...');
+        await this.page.focus(textboxSelector);
+        await this.page.waitForTimeout(1000);
+
+        console.log('   ??????  Adding spaces to trigger Slate editor...');
+        for (let i = 0; i < 5; i++) {
+          await this.page.keyboard.press('Space');
+          await this.page.waitForTimeout(100);
+        }
+        this.appendedTriggerSpaces = true;
+        console.log('   ??? Waiting 5s for Slate editor to process...');
+        await this.page.waitForTimeout(5000);
       }
 
-      // 💫 FIX: After entry, focus + type spaces to trigger Slate editor recognition
-      console.log('   📍 Focusing textbox for Slate editor...');
-      await this.page.focus(textboxSelector);
-      await this.page.waitForTimeout(1000);  // 1s delay after focus
-
-      // Type spaces to trigger validation
-      console.log('   ✍️  Adding spaces to trigger Slate editor...');
-      for (let i = 0; i < 5; i++) {
-        await this.page.keyboard.press('Space');
-        await this.page.waitForTimeout(100);
-      }
-
-      // Wait for editor to process
-      console.log('   ⏳ Waiting 5s for Slate editor to process...');
-      await this.page.waitForTimeout(5000);
-
+      const finalText = await this.getPromptText();
+      console.log(`   ??? Prompt visible length after entry: ${finalText.length}`);
       console.log('   ✓ Prompt entered with 3-part strategy');
 
       // Wait for send button to become enabled
@@ -165,27 +170,21 @@ class PromptManager {
 
     try {
       const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
-      
-      // 💫 FIX: Remove trailing spaces we added for Slate editor recognition
-      console.log('   🧹 Removing trailing spaces from prompt...');
-      await this.page.evaluate((selector) => {
-        const box = document.querySelector(selector);
-        if (box) {
-          // Remove trailing spaces (we added 5)
-          let text = box.textContent || '';
-          text = text.replace(/\s+$/, '');  // Remove all trailing spaces
-          // Trigger input event to update Slate editor
-          box.focus();
-          // Use keyboard to delete trailing spaces
+      if (this.appendedTriggerSpaces) {
+        console.log('   ???? Removing trailing spaces from prompt...');
+        await this.page.evaluate((selector) => {
+          const box = document.querySelector(selector);
+          if (box) box.focus();
+        }, textboxSelector);
+
+        for (let i = 0; i < 5; i++) {
+          await this.page.keyboard.press('Backspace');
+          await this.page.waitForTimeout(50);
         }
-      }, textboxSelector);
-      
-      // Delete trailing spaces by pressing Backspace 5 times
-      for (let i = 0; i < 5; i++) {
-        await this.page.keyboard.press('Backspace');
-        await this.page.waitForTimeout(50);
+
+        console.log('   ??? Trailing spaces removed');
+        this.appendedTriggerSpaces = false;
       }
-      
       console.log('   ✓ Trailing spaces removed');
 
       // Focus textbox first

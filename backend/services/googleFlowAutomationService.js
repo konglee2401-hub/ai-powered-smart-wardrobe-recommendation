@@ -60,6 +60,9 @@ class GoogleFlowAutomationService {
       observedRequests: []
     };
     this._requestInterceptorReady = false;
+    this._generationResponseObserverAttached = false;
+    this.lastGenerationApiFailure = null;
+    this.lastGenerationApiEvent = null;
     
     // 🔐 Support flowId for flow-specific Chrome profile isolation
     // This prevents "profile locked by another process" errors when flows run in parallel
@@ -71,12 +74,12 @@ class GoogleFlowAutomationService {
       // 💫 FIX: Don't override sessionFilePath - use SessionManager's shared profile default
       // sessionFilePath will default to: data/google-flow-profiles/default/session.json
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
-      projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
+      projectId: options.projectId || '87b78b0e-8b5a-40fc-9142-cdeda1419be7',
       aspectRatio: options.aspectRatio || '9:16',
       imageCount: this.type === 'image' ? (options.imageCount || 1) : undefined,
       videoCount: this.type === 'video' ? (options.videoCount || 1) : undefined,
       model: options.model || (this.type === 'image' ? 'Nano Banana 2' : 'Veo 3.1 - Fast'),
-      videoReferenceType: options.videoReferenceType || 'ingredients',
+      videoReferenceType: options.videoReferenceType || 'frames',
       outputDir: options.outputDir || path.join(__dirname, `../uploads/generated-images`),
       timeouts: {
         pageLoad: 60000,
@@ -130,6 +133,7 @@ class GoogleFlowAutomationService {
 
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 720 });
+    this._installGenerationResponseObserver();
 
     if (this.seedControl.enabled) {
       await this.setupFlowSeedInterceptor();
@@ -158,7 +162,7 @@ class GoogleFlowAutomationService {
     await this.sessionManager.loadSession();
 
     this.tokenManager = new TokenManager(this.sessionManager);
-    this.promptManager = new PromptManager();
+    this.promptManager = new PromptManager(this.page, { type: this.type, debugMode: this.debugMode });
     this.promptManager.page = this.page;
     
     this.imageUploadManager = new ImageUploadManager();
@@ -341,6 +345,155 @@ class GoogleFlowAutomationService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // 
+  _installGenerationResponseObserver() {
+    if (this._generationResponseObserverAttached || !this.page) {
+      return;
+    }
+
+    const generationEndpoints = [
+      'batchAsyncGenerateVideoStartAndEndImage',
+      'flowMedia:batchGenerateImages'
+    ];
+
+    this.page.on('response', async (response) => {
+      const url = response.url();
+      if (!generationEndpoints.some((endpoint) => url.includes(endpoint))) {
+        return;
+      }
+
+      let body = '';
+      try {
+        body = await response.text();
+      } catch {
+        body = '';
+      }
+
+      const status = response.status();
+      const bodySnippet = typeof body === 'string' ? body.slice(0, 1000) : '';
+      const isRecaptchaFailure = /reCAPTCHA evaluation failed/i.test(bodySnippet);
+      const isPromptFailure = /errorPrompt must be provided/i.test(bodySnippet);
+      const isPermissionDenied = /PERMISSION_DENIED/i.test(bodySnippet);
+      const isFailure = status >= 400 || isRecaptchaFailure || isPromptFailure || isPermissionDenied;
+
+      const event = {
+        url,
+        status,
+        bodySnippet,
+        at: new Date().toISOString()
+      };
+
+      this.lastGenerationApiEvent = event;
+
+      if (!isFailure) {
+        this.lastGenerationApiFailure = null;
+        return;
+      }
+
+      const failure = {
+        ...event,
+        type: isRecaptchaFailure ? 'recaptcha' : (isPromptFailure ? 'prompt' : 'generation')
+      };
+
+      if (failure.type === 'recaptcha') {
+        failure.message = 'Google Flow rejected generation with reCAPTCHA evaluation failed. Refresh session or solve CAPTCHA, then resume.';
+      } else if (failure.type === 'prompt') {
+        failure.message = 'Google Flow rejected generation because prompt was not accepted by the composer.';
+      } else {
+        failure.message = 'Google Flow generation request failed with status ' + status + '.';
+      }
+
+      this.lastGenerationApiFailure = failure;
+      console.warn('[FLOW-API] ' + failure.message);
+      if (bodySnippet) {
+        console.warn('[FLOW-API] Response snippet: ' + bodySnippet);
+      }
+    });
+
+    this._generationResponseObserverAttached = true;
+  }
+
+  _resetGenerationApiState() {
+    this.lastGenerationApiFailure = null;
+    this.lastGenerationApiEvent = null;
+  }
+
+  _consumeGenerationApiFailure() {
+    const failure = this.lastGenerationApiFailure;
+    this.lastGenerationApiFailure = null;
+    return failure;
+  }
+
+  _classifyGenerationFailure(error) {
+    const message = error?.message || '';
+    if (/reCAPTCHA evaluation failed/i.test(message)) {
+      return {
+        errorCode: 'google_flow_recaptcha_failed',
+        actionRequired: 'refresh_google_flow_session'
+      };
+    }
+
+    if (/prompt was not accepted|errorPrompt must be provided/i.test(message)) {
+      return {
+        errorCode: 'google_flow_prompt_rejected',
+        actionRequired: null
+      };
+    }
+
+    return {
+      errorCode: 'google_flow_generation_failed',
+      actionRequired: null
+    };
+  }
+
+  async _primeRecaptchaForGeneration(contextLabel = 'generation') {
+    if (!this.page) {
+      return { primed: false, reason: 'no-page' };
+    }
+
+    const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+    try {
+      const primed = await this.page.evaluate((selector) => {
+        const box = document.querySelector(selector);
+        if (!box) return false;
+        box.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(box);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return document.activeElement === box;
+      }, textboxSelector);
+
+      if (!primed) {
+        return { primed: false, reason: 'textbox-not-focused' };
+      }
+
+      await this.page.keyboard.type('prime', { delay: 35 });
+      await this.page.waitForTimeout(600);
+      for (let i = 0; i < 5; i++) {
+        await this.page.keyboard.press('Backspace');
+      }
+      await this.page.waitForTimeout(1200);
+
+      const tokenSummary = await this.page.evaluate(() => {
+        const localMatches = Object.keys(localStorage)
+          .filter((key) => /grecaptcha|rc::/i.test(key))
+          .map((key) => ({ key, len: (localStorage.getItem(key) || '').length }));
+        const sessionMatches = Object.keys(sessionStorage)
+          .filter((key) => /grecaptcha|rc::/i.test(key))
+          .map((key) => ({ key, len: (sessionStorage.getItem(key) || '').length }));
+        return { localMatches, sessionMatches };
+      });
+
+      console.log('[RECAPTCHA] Prime completed for ' + contextLabel + ': local=' + tokenSummary.localMatches.length + ', session=' + tokenSummary.sessionMatches.length);
+      return { primed: true, ...tokenSummary };
+    } catch (error) {
+      console.warn('[RECAPTCHA] Prime failed for ' + contextLabel + ': ' + error.message);
+      return { primed: false, reason: error.message };
+    }
+  }
+
   // PHASE 5 ADAPTER METHODS - Delegation to Modular Managers
   // These methods delegate work to specialized managers
   // ═══════════════════════════════════════════════════════════════════════
@@ -698,51 +851,57 @@ class GoogleFlowAutomationService {
       timeoutSeconds = 120,
       isVideoMode = false,
       storagePrefix = 'gen',
-      expectedNewHrefs = this.options.imageCount || 1  // 💫 FIX: Get expected count from options
+      expectedNewHrefs = this.options.imageCount || 1,  // 💫 FIX: Get expected count from options
+      skipPromptEntry = false
     } = config;
 
     console.log(`\n[SHARED-FLOW] 🎨 Starting generation (${isVideoMode ? 'video' : 'image'} mode) - expecting ${expectedNewHrefs} image(s)`);
 
     try {
-      // ═══ PHASE A: PROMPT ENTRY AND SUBMISSION ═══
-      console.log('[SHARED-FLOW] 📝 PHASE A: Entering and submitting prompt...');
-      
-      // BEFORE SUBMIT: Refresh baseline to account for any page changes
-      // This ensures we have the most current snapshot before generation starts
-      console.log('[SHARED-FLOW] 🔄 Refreshing baseline before submit...');
-      if (this.preGenerationMonitor) {
-        await this.preGenerationMonitor.refreshBaseline();
-      }
-      
-      // Store prompt for retry
       const safePromptResult = this.sanitizePromptForFlow(promptText);
       promptText = safePromptResult.prompt;
       this.lastPromptSubmitted = promptText;
 
-      // Use PromptManager if available
-      if (this.promptManager) {
-        console.log('[SHARED-FLOW] ✓ Using PromptManager for entry');
-        await this.promptManager.enterPrompt(promptText);
-        console.log('[SHARED-FLOW] ⏳ Waiting 5s for Slate editor to stabilize...');
-        await this.page.waitForTimeout(5000);  // 5s to let editor stabilize
+      if (!skipPromptEntry) {
+        // ??? PHASE A: PROMPT ENTRY AND SUBMISSION ???
+        console.log('[SHARED-FLOW] ?? PHASE A: Entering and submitting prompt...');
         
-        const submitted = await this.promptManager.submit();
-        if (!submitted) {
-          console.log('[SHARED-FLOW] ⚠️  PromptManager submit returned false, falling back to original submit');
+        // BEFORE SUBMIT: Refresh baseline to account for any page changes
+        // This ensures we have the most current snapshot before generation starts
+        console.log('[SHARED-FLOW] ?? Refreshing baseline before submit...');
+        if (this.preGenerationMonitor) {
+          await this.preGenerationMonitor.refreshBaseline();
+        }
+
+        // Use PromptManager if available
+        if (this.promptManager) {
+          console.log('[SHARED-FLOW] ? Using PromptManager for entry');
+          await this.promptManager.enterPrompt(promptText);
+          console.log('[SHARED-FLOW] ? Waiting 5s for Slate editor to stabilize...');
+          await this.page.waitForTimeout(5000);  // 5s to let editor stabilize
+          this._resetGenerationApiState();
+          
+          const submitted = await this.promptManager.submit();
+          if (!submitted) {
+            console.log('[SHARED-FLOW] ??  PromptManager submit returned false, falling back to original submit');
+            await this.submit();
+          }
+        } else {
+          // Fallback: use original inline submit logic
+          console.log('[SHARED-FLOW] ? Using inline entry/submit logic (no PromptManager)');
+          await this.enterPrompt(promptText);
+          console.log('[SHARED-FLOW] ? Waiting 5s for Slate editor to stabilize...');
+          await this.page.waitForTimeout(5000);  // 5s to let editor stabilize before submit
+          this._resetGenerationApiState();
           await this.submit();
         }
-      } else {
-        // Fallback: use original inline submit logic
-        console.log('[SHARED-FLOW] ✓ Using inline entry/submit logic (no PromptManager)');
-        await this.enterPrompt(promptText);
-        console.log('[SHARED-FLOW] ⏳ Waiting 5s for Slate editor to stabilize...');
-        await this.page.waitForTimeout(5000);  // 5s to let editor stabilize before submit
-        await this.submit();
-      }
 
-      console.log('[SHARED-FLOW] ⏳ Waiting for server acknowledgment...');
-      await this.page.waitForTimeout(2000);
-      console.log('[SHARED-FLOW] ✅ PHASE A complete\n');
+        console.log('[SHARED-FLOW] ? Waiting for server acknowledgment...');
+        await this.page.waitForTimeout(2000);
+        console.log('[SHARED-FLOW] ? PHASE A complete\n');
+      } else {
+        console.log('[SHARED-FLOW] ?? PHASE A skipped: prompt already prepared and submitted by caller');
+      }
 
       // ═══ PHASE B: GENERATION MONITORING ═══
       console.log('[SHARED-FLOW] ⏳ PHASE B: Monitoring generation...');
@@ -1524,18 +1683,207 @@ class GoogleFlowAutomationService {
     );
   }
 
+  async _pasteImageIntoPromptTextbox(imagePath, label = 'image') {
+    const textboxSelector = '.iTYalL[role="textbox"][data-slate-editor="true"]';
+    const imageData = fs.readFileSync(imagePath);
+    const base64 = Buffer.from(imageData).toString('base64');
+
+    await this.page.evaluate((b64) => {
+      return fetch(`data:image/png;base64,${b64}`)
+        .then((res) => res.blob())
+        .then((blob) => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+        .catch(() => false);
+    }, base64);
+
+    await this.page.waitForTimeout(500);
+    await this.page.focus(textboxSelector);
+    await this.page.waitForTimeout(120);
+    await this.page.keyboard.down('Control');
+    await this.page.keyboard.press('v');
+    await this.page.keyboard.up('Control');
+    await this.page.waitForTimeout(5000);
+    console.log(`[UPLOAD] ?? ${label} pasted into Flow library`);
+  }
+
+  async _uploadReferenceImageToLibrary(imagePath, label) {
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      throw new Error(`${label} image not found: ${imagePath}`);
+    }
+
+    console.log(`[UPLOAD] ?? Uploading ${label}: ${path.basename(imagePath)}`);
+    await this._pasteImageIntoPromptTextbox(imagePath, label);
+    const href = await this.checkSingleImageUpload(label, 45);
+    if (!href) {
+      throw new Error(`${label} image upload check failed`);
+    }
+
+    this.uploadedImageRefs[label] = { href, text: label, validated: true };
+    console.log(`[UPLOAD] ? ${label}: ${href.substring(0, 80)}`);
+    return href;
+  }
+
+  async _getVideoComposerState() {
+    return await this.page.evaluate(() => {
+      const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+      };
+
+      const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+      let panel = textbox?.closest('[role="dialog"]') || textbox?.parentElement;
+      while (panel && panel.parentElement && !panel.querySelector('button')) {
+        panel = panel.parentElement;
+      }
+
+      const scope = panel || document;
+      const buttons = Array.from(scope.querySelectorAll('button')).filter(isVisible);
+      const attachmentButtons = buttons.filter((button) => {
+        if (!button.querySelector('img')) return false;
+        const meta = normalize(String(button.textContent || '') + ' ' + String(button.getAttribute('aria-label') || '') + ' ' + String(button.getAttribute('title') || ''));
+        return !/xoa cau lenh|clear prompt|close prompt/.test(meta);
+      });
+      const clearButton = buttons.find((button) => {
+        const meta = normalize(String(button.textContent || '') + ' ' + String(button.getAttribute('aria-label') || '') + ' ' + String(button.getAttribute('title') || ''));
+        return /xoa cau lenh|clear prompt|close prompt/.test(meta);
+      });
+      const textValue = normalize(textbox?.textContent || '');
+
+      return {
+        attachmentCount: attachmentButtons.length,
+        hasClearButton: !!clearButton,
+        textLength: textValue.length
+      };
+    });
+  }
+
+  async _waitForComposerAttachmentCount(expectedCount, timeoutMs = 8000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const state = await this._getVideoComposerState();
+      if (state.attachmentCount === expectedCount) {
+        return state;
+      }
+      await this.page.waitForTimeout(250);
+    }
+
+    return await this._getVideoComposerState();
+  }
+
+  async _clearVideoFramesPromptComposer() {
+    console.log('[VIDEO-FRAMES] ?? Clearing video composer...');
+    const beforeState = await this._getVideoComposerState();
+
+    if (beforeState.attachmentCount > 0 || beforeState.textLength > 0) {
+      const cleared = await this.page.evaluate(() => {
+        const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const isVisible = (el) => {
+          if (!el) return false;
+          const style = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+        };
+
+        const textbox = document.querySelector('.iTYalL[role="textbox"][data-slate-editor="true"]');
+        let panel = textbox?.closest('[role="dialog"]') || textbox?.parentElement;
+        while (panel && panel.parentElement && !panel.querySelector('button')) {
+          panel = panel.parentElement;
+        }
+
+        const scope = panel || document;
+        const clearButton = Array.from(scope.querySelectorAll('button'))
+          .filter(isVisible)
+          .find((button) => {
+            const meta = normalize(String(button.textContent || '') + ' ' + String(button.getAttribute('aria-label') || '') + ' ' + String(button.getAttribute('title') || ''));
+            return /xoa cau lenh|clear prompt|close prompt/.test(meta);
+          });
+
+        if (!clearButton) return false;
+        clearButton.click();
+        return true;
+      });
+
+      if (cleared) {
+        await this.page.waitForTimeout(400);
+      }
+    }
+
+    const afterState = await this._waitForComposerAttachmentCount(0, 5000);
+    if (afterState.attachmentCount !== 0) {
+      throw new Error(`Video composer clear did not remove attachments (remaining: ${afterState.attachmentCount})`);
+    }
+  }
+
+  async _attachLibraryTileToVideoFramesPrompt(href, label = 'frame') {
+    console.log(`[VIDEO-FRAMES] ?? Attaching ${label} to video prompt`);
+    const beforeState = await this._getVideoComposerState();
+
+    const monitoredItem = this.preGenerationMonitor
+      ? await this.preGenerationMonitor.findItemByHref(href)
+      : null;
+
+    const tileBox = await this.page.evaluate(({ targetHref, targetPosition }) => {
+      const tiles = Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] [data-tile-id]'));
+      const uniqueTiles = [];
+      const seen = new Set();
+
+      for (const tile of tiles) {
+        const link = tile.querySelector('a[href*="/edit/"]');
+        if (!link) continue;
+
+        const href = link.getAttribute('href') || '';
+        if (!href || !href.includes('/edit/') || seen.has(href)) continue;
+
+        const rect = tile.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        seen.add(href);
+        uniqueTiles.push({ href, tile });
+      }
+
+      const targetEntry = (typeof targetPosition === 'number' && uniqueTiles[targetPosition]?.href === targetHref)
+        ? uniqueTiles[targetPosition]
+        : uniqueTiles.find((entry) => entry.href === targetHref);
+
+      if (!targetEntry?.tile) return null;
+
+      targetEntry.tile.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = targetEntry.tile.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    }, { targetHref: href, targetPosition: monitoredItem?.position ?? null });
+
+    if (!tileBox) {
+      throw new Error(`Could not find library tile for ${label}`);
+    }
+
+    await this.page.mouse.click(tileBox.x, tileBox.y, { button: 'right' });
+    await this.page.waitForTimeout(650);
+
+    // Flow context menu is a custom overlay; two ArrowDown presses consistently land on
+    // "Th?m v?o c?u l?nh" for both the first and second frame attachments.
+    await this.page.keyboard.press('ArrowDown');
+    await this.page.waitForTimeout(120);
+    await this.page.keyboard.press('ArrowDown');
+    await this.page.waitForTimeout(120);
+    await this.page.keyboard.press('Enter');
+
+    const afterState = await this._waitForComposerAttachmentCount(beforeState.attachmentCount + 1, 3500);
+
+    if (afterState.attachmentCount <= beforeState.attachmentCount) {
+      throw new Error(`Attach failed for ${label}: composer attachment count stayed at ${afterState.attachmentCount}`);
+    }
+
+    await this.page.waitForTimeout(600);
+  }
+
   async generateVideo(videoPrompt, primaryImagePath, secondaryImagePath, options = {}) {
-    /**
-     * REFACTORED Phase 5b: Now uses _sharedGenerationFlow() for core generation
-     * Key changes:
-     * - Steps 1-8 (init, video setup, upload) simplified
-     * - Uses _sharedGenerationFlow() for prompt → submit → monitor → download
-     * - Code reduced from 500+ lines to ~150 lines (-70%)
-     * - Only difference from image generation: settings (video-specific config)
-     */
-    
     if (this.debugMode) {
-      console.log('\n🔧 [DEBUG] generateVideo() is disabled (debug mode)');
+      console.log('\n?? [DEBUG] generateVideo() is disabled (debug mode)');
       console.log('   - init() allowed');
       console.log('   - navigateToFlow() allowed');
       console.log('   - All other steps skipped\n');
@@ -1543,7 +1891,7 @@ class GoogleFlowAutomationService {
       await this.init();
       await this.navigateToFlow();
       
-      console.log('\n✅ Browser open at Google Flow project (video mode)\n');
+      console.log('\n? Browser open at Google Flow project (video mode)\n');
       
       return {
         success: true,
@@ -1553,264 +1901,171 @@ class GoogleFlowAutomationService {
       };
     }
 
+    const { reloadAfter = false, onProgress = null } = options;
+    const reportProgress = async (phase, details = {}) => {
+      if (typeof onProgress !== 'function') return;
+      await onProgress({ phase, timestamp: new Date().toISOString(), ...details });
+    };
+
     try {
-      const { download = true, outputPath = null, reloadAfter = false } = options;
 
-      console.log(`\n${'═'.repeat(80)}`);
-      console.log(`🎬 VIDEO GENERATION: Single video`);
-      console.log(`${'═'.repeat(80)}\n`);
-      console.log(`📸 Primary image: ${path.basename(primaryImagePath)}`);
-      console.log(`🔄 Secondary image: ${path.basename(secondaryImagePath)}\n`);
+      console.log(`\n${'?'.repeat(80)}`);
+      console.log('?? VIDEO GENERATION: Single video (frames mode)');
+      console.log(`${'?'.repeat(80)}\n`);
+      console.log(`?? Start image: ${path.basename(primaryImagePath)}`);
+      console.log(`?? End image: ${path.basename(secondaryImagePath)}\n`);
 
-      // STEP 1-3: Init, navigate, wait (same as image)
-      console.log('[INIT] 🚀 Initializing browser...');
+      console.log('[INIT] ?? Initializing browser...');
+      await reportProgress('init');
       await this.init();
-      
-      console.log('[NAV] 🔗 Navigating to Google Flow...');
+
+      console.log('[NAV] ?? Navigating to Google Flow...');
+      await reportProgress('navigate');
       await this.navigateToFlow();
       await this.page.waitForTimeout(2000);
-      
-      console.log('[PAGE] ⏳ Waiting for page to load...');
+
+      console.log('[PAGE] ? Waiting for page to load...');
       await this.waitForPageReady();
       await this.page.waitForTimeout(5000);
-      console.log('[PAGE] ✅ Ready\n');
+      console.log('[PAGE] ? Ready\n');
 
-      // STEP 4: Video setup is now handled inside settings popup only
-      console.log('[VIDEO] ⚙️  Video mode will be selected via settings dialog');
-
-      // STEP 5: Configure video settings
-
-      console.log('[CONFIG] ⚙️  Configuring video settings...');
+      console.log('[CONFIG] ??  Configuring video settings...');
+      await reportProgress('configure-settings');
       await this._delegateConfigureSettings();
       await this.page.waitForTimeout(2000);
-      
-      // 🔥 DEBUG: Check DOM after config
-      const domStateAfterConfig = await this.page.evaluate(() => {
-        return {
-          virtuosoList: !!document.querySelector('[data-testid="virtuoso-item-list"]'),
-          virtuosoItems: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-          virtuosoItemsSlice15: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 15).length
-        };
-      });
-      console.log('[VIDEO] 🔍 DOM state after config:');
-      console.log(`   Virtuoso list: ${domStateAfterConfig.virtuosoList ? '✓' : '✗'}`);
-      console.log(`   Virtuoso items total: ${domStateAfterConfig.virtuosoItems}`);
-      console.log(`   First 15 items: ${domStateAfterConfig.virtuosoItemsSlice15}\n`);
 
-      // STEP 6-8: Upload images (same as image generation)
-      console.log('[UPLOAD] 📤 Uploading reference images...');
+      console.log('[UPLOAD] ?? Uploading frame references to library...');
+      await reportProgress('focus-composer');
       await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
       await this.page.waitForTimeout(300);
 
-      const pasteImage = async (imagePath, label) => {
-        const imageData = fs.readFileSync(imagePath);
-        const base64 = Buffer.from(imageData).toString('base64');
-        await this.page.evaluate((b64) => {
-          return fetch(`data:image/png;base64,${b64}`)
-            .then(res => res.blob())
-            .then(blob => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
-            .catch(() => false);
-        }, base64);
-        await this.page.waitForTimeout(500);
-        await this.page.focus('.iTYalL[role="textbox"][data-slate-editor="true"]');
-        await this.page.waitForTimeout(120);
-        await this.page.keyboard.down('Control');
-        await this.page.keyboard.press('v');
-        await this.page.keyboard.up('Control');
-        await this.page.waitForTimeout(5000);
-      };
-
-      // 💫 NEW: Upload image 1, check it, then upload image 2, check it (SEQUENTIAL)
-      let primaryRef = null;
-      try {
-        console.log(`[UPLOAD] 📎 Before pasting primary: checking virtuoso state...`);
-        const virtuosoBeforePrimary = await this.page.evaluate(() => {
-          return {
-            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map(l => ({
-              href: l.getAttribute('href').substring(0, 50),
-              hasImg: !!l.querySelector('img')
-            }))
-          };
-        });
-        console.log(`   Items before paste: ${virtuosoBeforePrimary.itemsCount}`);
-        
-        await pasteImage(primaryImagePath, 'primary');
-        console.log('[UPLOAD] 📤 Primary image pasted, waiting for virtuoso to update...');
-        
-        // 🔥 DEBUG: Check virtuoso state immediately after paste
-        await this.page.waitForTimeout(1000);
-        const virtuosoAfterPaste = await this.page.evaluate(() => {
-          return {
-            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-            imageElements: document.querySelectorAll('[data-testid="virtuoso-item-list"] img').length,
-            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map((l, idx) => ({
-              idx,
-              href: l.getAttribute('href').substring(0, 50),
-              hasImg: !!l.querySelector('img'),
-              imgSrc: l.querySelector('img')?.getAttribute('src')?.substring(0, 30) || 'N/A'
-            }))
-          };
-        });
-        console.log(`   Items after paste: ${virtuosoAfterPaste.itemsCount} (was: ${virtuosoBeforePrimary.itemsCount})`);
-        console.log(`   Image elements in list: ${virtuosoAfterPaste.imageElements}`);
-        if (virtuosoAfterPaste.firstItems.length > 0) {
-          virtuosoAfterPaste.firstItems.forEach(item => {
-            console.log(`      [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href}... | img=${item.imgSrc}`);
-          });
-        }
-        
-        console.log('[UPLOAD] 📤 Primary image pasted, checking upload...');
-        primaryRef = await this.checkSingleImageUpload('primary', 45);
-        if (!primaryRef) {
-          throw new Error('Primary image upload check failed');
-        }
-        console.log(`[UPLOAD] ✅ Primary confirmed: ${primaryRef.substring(0, 80)}\n`);
-      } catch (e) {
-        console.error(`[UPLOAD] ❌ Primary image failed: ${e.message}`);
-        throw e;
-      }
-
-      let secondaryRef = null;
-      try {
-        console.log(`[UPLOAD] 📎 Before pasting secondary: checking virtuoso state...`);
-        const virtuosoBeforeSecondary = await this.page.evaluate(() => {
-          return {
-            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length
-          };
-        });
-        console.log(`   Items before paste: ${virtuosoBeforeSecondary.itemsCount}`);
-        
-        console.log(`[UPLOAD] 📎 Pasting secondary image: ${path.basename(secondaryImagePath)}`);
-        await pasteImage(secondaryImagePath, 'secondary');
-        console.log('[UPLOAD] 📤 Secondary image pasted, waiting for virtuoso to update...');
-        
-        // 🔥 DEBUG: Check virtuoso state immediately after paste
-        await this.page.waitForTimeout(1000);
-        const virtuosoAfterSecondaryPaste = await this.page.evaluate(() => {
-          return {
-            itemsCount: document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]').length,
-            imageElements: document.querySelectorAll('[data-testid="virtuoso-item-list"] img').length,
-            firstItems: Array.from(document.querySelectorAll('[data-testid="virtuoso-item-list"] a[href]')).slice(0, 5).map((l, idx) => ({
-              idx,
-              href: l.getAttribute('href').substring(0, 50),
-              hasImg: !!l.querySelector('img'),
-              imgSrc: l.querySelector('img')?.getAttribute('src')?.substring(0, 30) || 'N/A'
-            }))
-          };
-        });
-        console.log(`   Items after paste: ${virtuosoAfterSecondaryPaste.itemsCount} (was: ${virtuosoBeforeSecondary.itemsCount})`);
-        console.log(`   Image elements in list: ${virtuosoAfterSecondaryPaste.imageElements}`);
-        if (virtuosoAfterSecondaryPaste.firstItems.length > 0) {
-          virtuosoAfterSecondaryPaste.firstItems.forEach(item => {
-            console.log(`      [${item.idx}] ${item.hasImg ? '✓' : '✗'} | ${item.href}... | img=${item.imgSrc}`);
-          });
-        }
-        
-        console.log('[UPLOAD] 📤 Secondary image pasted, checking upload...');
-        secondaryRef = await this.checkSingleImageUpload('secondary', 45);
-        if (!secondaryRef) {
-          throw new Error('Secondary image upload check failed');
-        }
-        console.log(`[UPLOAD] ✅ Secondary confirmed: ${secondaryRef.substring(0, 80)}\n`);
-      } catch (e) {
-        console.error(`[UPLOAD] ❌ Secondary image failed: ${e.message}`);
-        throw e;
-      }
-
-      // Optional scene image for video generation
+      await reportProgress('upload-primary-start', { asset: 'primary', fileName: path.basename(primaryImagePath) });
+      const primaryRef = await this._uploadReferenceImageToLibrary(primaryImagePath, 'primary');
+      await reportProgress('upload-primary-complete', { asset: 'primary', href: primaryRef });
+      await reportProgress('upload-secondary-start', { asset: 'secondary', fileName: path.basename(secondaryImagePath) });
+      const secondaryRef = await this._uploadReferenceImageToLibrary(secondaryImagePath, 'secondary');
+      await reportProgress('upload-secondary-complete', { asset: 'secondary', href: secondaryRef });
       let sceneRef = null;
       if (options.sceneImagePath && fs.existsSync(options.sceneImagePath)) {
         try {
-          console.log(`[UPLOAD] 📎 Pasting scene image: ${path.basename(options.sceneImagePath)}`);
-          await pasteImage(options.sceneImagePath, 'scene');
-          console.log('[UPLOAD] 📤 Scene image pasted, checking upload...');
-          sceneRef = await this.checkSingleImageUpload('scene', 45);
-          if (sceneRef) {
-            console.log(`[UPLOAD] ✅ Scene confirmed: ${sceneRef.substring(0, 80)}\n`);
-          } else {
-            console.warn('[UPLOAD] ⚠️  Scene image check failed, continuing without it');
-          }
-        } catch (e) {
-          console.warn(`[UPLOAD] ⚠️  Scene image error: ${e.message}, continuing`);
+          await reportProgress('upload-scene-start', { asset: 'scene', fileName: path.basename(options.sceneImagePath) });
+          sceneRef = await this._uploadReferenceImageToLibrary(options.sceneImagePath, 'scene');
+          await reportProgress('upload-scene-complete', { asset: 'scene', href: sceneRef });
+        } catch (error) {
+          console.warn(`[UPLOAD] ?? Scene image skipped: ${error.message}`);
+          await reportProgress('upload-scene-skipped', { asset: 'scene', error: error.message });
         }
       }
 
-      // Store confirmed refs
       this.uploadedImageRefs = {
         primary: { href: primaryRef, text: 'primary', validated: true },
         secondary: { href: secondaryRef, text: 'secondary', validated: true },
         ...(sceneRef ? { scene: { href: sceneRef, text: 'scene', validated: true } } : {})
       };
-      
-      console.log(`[UPLOAD] 📦 Uploaded references confirmed and stored`);
-      console.log(`   [0] primary: ${primaryRef.substring(0, 80)}`);
-      console.log(`   [1] secondary: ${secondaryRef.substring(0, 80)}\n`);
-      if (sceneRef) {
-        console.log(`   [2] scene: ${sceneRef.substring(0, 80)}\n`);
-      }
-      
-      // Update managers with uploaded refs so they can identify generated video
+
       if (this.generationMonitor) {
         this.generationMonitor.uploadedImageRefs = this.uploadedImageRefs;
       }
       if (this.errorRecoveryManager) {
         this.errorRecoveryManager.uploadedImageRefs = this.uploadedImageRefs;
       }
-
-      // CAPTURE BASELINE: After upload completes, capture current state as baseline
-      // This baseline includes the 2 uploaded images
-      // When generation completes, we'll find hrefs NOT in this baseline = generated video
-      console.log('[UPLOAD] 📸 Capturing baseline hrefs for generation detection...');
+      if (this.generationMonitor) {
+        console.log('[VIDEO-FRAMES] Clearing stale failed tiles before capturing baseline...');
+        await this.generationMonitor.deleteFailedItems();
+        await this.page.waitForTimeout(1000);
+      }
       if (this.preGenerationMonitor) {
         await this.preGenerationMonitor.captureBaselineHrefs();
       }
 
-      console.log('[UPLOAD] ✅ Ready to generate\n');
+      console.log('[VIDEO-FRAMES] ?? Preparing sequential frame attachments...');
+      await reportProgress('clear-composer-start');
+      await this._clearVideoFramesPromptComposer();
+      await reportProgress('clear-composer-complete');
+      await reportProgress('attach-first-start', { href: primaryRef });
+      await this._attachLibraryTileToVideoFramesPrompt(primaryRef, 'first-frame');
+      await reportProgress('attach-first-complete', { href: primaryRef });
+      await reportProgress('attach-second-start', { href: secondaryRef });
+      await this._attachLibraryTileToVideoFramesPrompt(secondaryRef, 'second-frame');
+      await reportProgress('attach-second-complete', { href: secondaryRef });
 
-      // STEP 9: Use shared generation flow
-      // Timeout is longer for videos (typically 3+ minutes for full video generation)
+      await reportProgress('prime-recaptcha-start');
+      await this._primeRecaptchaForGeneration('video-frames');
+      await reportProgress('prime-recaptcha-complete');
+
+      await reportProgress('enter-prompt-start');
+      const promptEntered = await this._delegateEnterPrompt(videoPrompt);
+      if (!promptEntered) {
+        throw new Error('Could not enter video prompt after attaching frames');
+      }
+
+      await reportProgress('enter-prompt-complete', { promptLength: videoPrompt?.length || 0 });
+      await reportProgress('submit-prompt-start');
+      this._resetGenerationApiState();
+      const submitted = await this._delegateSubmitPrompt();
+      if (!submitted) {
+        throw new Error('Could not submit video prompt after attaching frames');
+      }
+
+      await reportProgress('submit-prompt-complete');
+
+      await this.page.waitForTimeout(2000);
+
+      const immediateVideoFailure = this._consumeGenerationApiFailure();
+      if (immediateVideoFailure) {
+        throw new Error(immediateVideoFailure.message);
+      }
+
+      await reportProgress('monitor-generation-start');
       const genResult = await this._sharedGenerationFlow(videoPrompt, {
-        timeoutSeconds: 300,  // 5 minutes for video generation
-        isVideoMode: true
+        timeoutSeconds: 300,
+        isVideoMode: true,
+        skipPromptEntry: true
       });
 
       if (!genResult.success) {
         throw new Error(`Video generation failed: ${genResult.error || 'unknown error'}`);
       }
 
-      let videoPath = genResult.downloadedFile;
-      console.log(`[FILE] ✅ Video generated: ${path.basename(videoPath)}`);
+      const videoPath = genResult.downloadedFile;
+      console.log(`[FILE] ? Video generated: ${path.basename(videoPath)}`);
+      await reportProgress('download-complete', { href: genResult.href, path: videoPath });
 
-      // STEP 10: Reload if requested
       if (reloadAfter) {
-        console.log('\n[RELOAD] ↻ Reloading page...');
+        console.log('\n[RELOAD] ? Reloading page...');
         await this.page.reload({ waitUntil: 'networkidle2' });
         await this.page.waitForTimeout(2000);
-        console.log('[RELOAD] ✅ Page reloaded\n');
+        console.log('[RELOAD] ? Page reloaded\n');
       }
 
-      console.log(`\n${'═'.repeat(80)}`);
-      console.log(`✅ VIDEO GENERATION COMPLETE`);
-      console.log(`${'═'.repeat(80)}\n`);
+      console.log(`\n${'?'.repeat(80)}`);
+      console.log('? VIDEO GENERATION COMPLETE');
+      console.log(`${'?'.repeat(80)}\n`);
 
       return {
         success: true,
         path: videoPath,
         href: genResult.href,
-        duration: 60,  // Approximate
-        format: '9:16'
+        duration: 60,
+        format: '9:16',
+        uploadedImageRefs: this.uploadedImageRefs,
+        progressPhase: 'completed'
       };
-
     } catch (error) {
-      console.error(`\n❌ VIDEO GENERATION FAILED: ${error.message}\n`);
+      const failureMeta = this._classifyGenerationFailure(error);
+      console.error(`
+? VIDEO GENERATION FAILED: ${error.message}
+`);
+      await reportProgress('failed', { error: error.message, errorCode: failureMeta.errorCode, actionRequired: failureMeta.actionRequired });
       if (this.browser) {
         await this.close();
       }
       return {
         success: false,
         path: null,
-        error: error.message
+        error: error.message,
+        errorCode: failureMeta.errorCode,
+        actionRequired: failureMeta.actionRequired
       };
     }
   }

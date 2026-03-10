@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock3,
   ChevronDown,
@@ -278,3 +278,4 @@ export default function GalleryPage() {
     </div>
   );
 }
+

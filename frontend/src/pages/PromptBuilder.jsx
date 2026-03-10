@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Fashion Prompt Builder - React Component
  * Phase 2: Revised with all fixes
  * 
@@ -510,12 +510,12 @@ const PromptBuilder = () => {
       {/* Alerts */}
       {error && (
         <div style={{ ...styles.alert, ...styles.errorAlert }}>
-          ❌ {t('common.error', { defaultValue: error })}
+          âŒ {t('common.error', { defaultValue: error })}
         </div>
       )}
       {success && (
         <div style={{ ...styles.alert, ...styles.successAlert }}>
-          ✅ {t('common.success', { defaultValue: success })}
+          âœ… {t('common.success', { defaultValue: success })}
         </div>
       )}
 
@@ -679,7 +679,7 @@ const PromptBuilder = () => {
           {/* Stats */}
           {promptStats && (
             <div style={styles.statsBox}>
-              📊 <strong>{t('promptBuilder.stats')}:</strong> {promptStats.characters} {t('promptBuilder.chars')} | {promptStats.words} {t('promptBuilder.words')} | {promptStats.sentences} {t('promptBuilder.sentences')}
+              ðŸ“Š <strong>{t('promptBuilder.stats')}:</strong> {promptStats.characters} {t('promptBuilder.chars')} | {promptStats.words} {t('promptBuilder.words')} | {promptStats.sentences} {t('promptBuilder.sentences')}
             </div>
           )}
 
@@ -725,7 +725,7 @@ const PromptBuilder = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {showCustomize ? '▼ ' + t('common.hide') : '▶ ' + t('common.show')}
+                  {showCustomize ? 'â–¼ ' + t('common.hide') : 'â–¶ ' + t('common.show')}
                 </button>
               </div>
 
@@ -837,3 +837,4 @@ const PromptBuilder = () => {
 };
 
 export default PromptBuilder;
+

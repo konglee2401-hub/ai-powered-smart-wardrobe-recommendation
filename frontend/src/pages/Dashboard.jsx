@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard Page
  * Overview of AI generation statistics and recent activity
  */
@@ -254,3 +254,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

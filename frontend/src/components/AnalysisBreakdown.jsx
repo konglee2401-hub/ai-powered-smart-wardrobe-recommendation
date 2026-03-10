@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Analysis Breakdown Component
  * Display AI analysis results in organized sections with extracted keywords
  */
@@ -9,23 +9,23 @@ import {
 } from 'lucide-react';
 
 const ANALYSIS_SECTIONS = [
-  { key: 'scene', label: 'Scene', icon: '🎬' },
-  { key: 'lighting', label: 'Lighting', icon: '💡' },
-  { key: 'mood', label: 'Mood', icon: '😊' },
-  { key: 'cameraAngle', label: 'Camera Angle', icon: '📐' },
-  { key: 'makeup', label: 'Makeup', icon: '✨' },
-  { key: 'hairstyle', label: 'Hairstyle', icon: '💇' },
-  { key: 'bottoms', label: 'Bottoms', icon: '👖' },
-  { key: 'shoes', label: 'Shoes', icon: '👠' },
-  { key: 'accessories', label: 'Accessories', icon: '💍' },
-  { key: 'outerwear', label: 'Outerwear', icon: '🧥' },
+  { key: 'scene', label: 'Scene', icon: 'ðŸŽ¬' },
+  { key: 'lighting', label: 'Lighting', icon: 'ðŸ’¡' },
+  { key: 'mood', label: 'Mood', icon: 'ðŸ˜Š' },
+  { key: 'cameraAngle', label: 'Camera Angle', icon: 'ðŸ“' },
+  { key: 'makeup', label: 'Makeup', icon: 'âœ¨' },
+  { key: 'hairstyle', label: 'Hairstyle', icon: 'ðŸ’‡' },
+  { key: 'bottoms', label: 'Bottoms', icon: 'ðŸ‘–' },
+  { key: 'shoes', label: 'Shoes', icon: 'ðŸ‘ ' },
+  { key: 'accessories', label: 'Accessories', icon: 'ðŸ’' },
+  { key: 'outerwear', label: 'Outerwear', icon: 'ðŸ§¥' },
 ];
 
 function Tooltip({ children, content }) {
   return (
     <div className="group relative inline-block">
       {children}
-      <div className="absolute bottom-full left-0 mb-2 z-50 hidden group-hover:block w-56">
+      <div className="absolute bottom-full left-0 mb-2 app-layer-overlay hidden group-hover:block w-56">
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl whitespace-normal">
           {content}
           <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-900" />
@@ -185,8 +185,8 @@ export default function AnalysisBreakdown({
       {/* Breakdown Sections */}
       <div>
         <h3 className="text-xs font-semibold text-gray-400 uppercase mb-3 flex items-center gap-2">
-          <Tooltip content="AI phân tích chi tiết từng khía cạnh của ảnh">
-            <span>📋 Analysis Breakdown</span>
+          <Tooltip content="AI phÃ¢n tÃ­ch chi tiáº¿t tá»«ng khÃ­a cáº¡nh cá»§a áº£nh">
+            <span>ðŸ“‹ Analysis Breakdown</span>
           </Tooltip>
         </h3>
         <div className="space-y-2">
@@ -211,7 +211,7 @@ export default function AnalysisBreakdown({
           className="w-full flex items-center justify-between p-3 bg-gray-800 hover:bg-gray-750 transition-colors"
         >
           <span className="text-sm font-medium flex items-center gap-2">
-            <span className="text-lg">📄</span>
+            <span className="text-lg">ðŸ“„</span>
             Raw API Response
             {metadata && (
               <span className="text-xs text-gray-500">
@@ -228,10 +228,10 @@ export default function AnalysisBreakdown({
           <div className="p-3 bg-gray-900 border-t border-gray-700 space-y-2">
             {metadata && (
               <div className="text-xs text-gray-500 space-y-1 mb-3 pb-3 border-b border-gray-700">
-                <div>⏱️  <strong>Analysis completed in:</strong> {metadata.duration}s</div>
-                <div>📊 <strong>Response length:</strong> {metadata.responseLength} characters</div>
-                <div>🔧 <strong>Provider:</strong> {metadata.provider}</div>
-                <div>🕐 <strong>Timestamp:</strong> {new Date(metadata.timestamp).toLocaleString()}</div>
+                <div>â±ï¸  <strong>Analysis completed in:</strong> {metadata.duration}s</div>
+                <div>ðŸ“Š <strong>Response length:</strong> {metadata.responseLength} characters</div>
+                <div>ðŸ”§ <strong>Provider:</strong> {metadata.provider}</div>
+                <div>ðŸ• <strong>Timestamp:</strong> {new Date(metadata.timestamp).toLocaleString()}</div>
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -263,3 +263,5 @@ export default function AnalysisBreakdown({
     </div>
   );
 }
+
+

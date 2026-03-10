@@ -10,8 +10,7 @@ const distributionTrackingSchema = new mongoose.Schema(
     },
     videoGenerationId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'VideoGeneration',
-      index: true
+      ref: 'VideoGeneration'
     },
     videoGenerationConfigId: {
       type: mongoose.Schema.Types.ObjectId,

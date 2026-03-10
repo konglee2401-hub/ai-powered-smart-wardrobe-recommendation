@@ -38,8 +38,6 @@ class KeyRotationManager {
    * Supports multiple numbered keys: PROVIDER_API_KEY_1, PROVIDER_API_KEY_2, etc.
    */
   loadKeys() {
-    console.log('\n🔑 LOADING API KEYS...');
-
     const providers = [
       'OPENROUTER', 'ANTHROPIC', 'OPENAI', 'GOOGLE', 'GROQ', 'MISTRAL',
       'FIREWORKS', 'NVIDIA', 'REPLICATE', 'FAL', 'TOGETHER', 'HUGGINGFACE',
@@ -92,7 +90,6 @@ class KeyRotationManager {
         this.keys.set(provider, providerKeys);
         this.currentIndex.set(provider, 0);
 
-        console.log(`   ✅ ${provider}: ${providerKeys.length} key(s) loaded`);
         totalKeys += providerKeys.length;
 
         // Initialize stats
@@ -106,8 +103,6 @@ class KeyRotationManager {
         });
       }
     });
-
-    console.log(`🔑 Total keys loaded: ${totalKeys} across ${this.keys.size} providers\n`);
 
     if (totalKeys === 0) {
       console.warn('⚠️  WARNING: No API keys found! Check your .env file.');
@@ -544,6 +539,19 @@ KeyRotationManager.prototype.getCurrentKeyForProvider = function(provider) {
 
   const currentIdx = this.currentIndex.get(provider);
   return keys[currentIdx]?.key || null;
+};
+
+// Add method to get raw keys for testing (returns actual key values for test operations)
+KeyRotationManager.prototype.getRawKeys = function(provider) {
+  const keys = this.keys.get(provider);
+  if (!keys) return [];
+  
+  return keys.map(keyObj => ({
+    key: keyObj.key,
+    index: keyObj.index,
+    status: this.getKeyStatus(keyObj, Date.now()),
+    lastError: keyObj.lastError
+  }));
 };
 
 // ============================================================

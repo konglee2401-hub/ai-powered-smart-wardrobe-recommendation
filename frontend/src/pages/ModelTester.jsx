@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Model Tester Page
  * Test different providers and configurations
  */
@@ -42,7 +42,7 @@ export default function ModelTester() {
   // Test configuration
   const [testImage, setTestImage] = useState(null);
   const [testImagePreview, setTestImagePreview] = useState(null);
-  const [testPrompt, setTestPrompt] = useState('Phân tích hình ảnh này chi tiết cho việc thương mại điện tử thời trang.');
+  const [testPrompt, setTestPrompt] = useState('PhÃ¢n tÃ­ch hÃ¬nh áº£nh nÃ y chi tiáº¿t cho viá»‡c thÆ°Æ¡ng máº¡i Ä‘iá»‡n tá»­ thá»i trang.');
   const [testOptions, setTestOptions] = useState({
     quality: 'high',
     style: 'professional',
@@ -78,7 +78,7 @@ export default function ModelTester() {
       }
     } catch (error) {
       console.error('[Load Providers Error]', error);
-      setError(error.message || 'Không thể tải danh sách providers');
+      setError(error.message || 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch providers');
     } finally {
       setLoading(false);
       setLoadingModels(false);
@@ -131,12 +131,12 @@ export default function ModelTester() {
 
   const handleTestWithImage = async () => {
     if (!testImage) {
-      setError('Vui lòng upload ảnh test');
+      setError('Vui lÃ²ng upload áº£nh test');
       return;
     }
     
     if (!selectedProvider) {
-      setError('Vui lòng chọn provider');
+      setError('Vui lÃ²ng chá»n provider');
       return;
     }
     
@@ -250,7 +250,7 @@ export default function ModelTester() {
                 {t('modelTester.title')}
               </h1>
               <p className="text-gray-600 mt-2">
-                Test và so sánh hiệu suất các providers
+                Test vÃ  so sÃ¡nh hiá»‡u suáº¥t cÃ¡c providers
               </p>
             </div>
             
@@ -260,7 +260,7 @@ export default function ModelTester() {
               className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2 disabled:bg-gray-400"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Đang tải...' : 'Làm Mới'}
+              {loading ? 'Äang táº£i...' : 'LÃ m Má»›i'}
             </button>
           </div>
         </div>
@@ -271,7 +271,7 @@ export default function ModelTester() {
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <p className="text-red-600">{error}</p>
             <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
-              ✕
+              âœ•
             </button>
           </div>
         )}
@@ -293,7 +293,7 @@ export default function ModelTester() {
               ) : providers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Info className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                  <p>Chưa có provider nào</p>
+                  <p>ChÆ°a cÃ³ provider nÃ o</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -316,7 +316,7 @@ export default function ModelTester() {
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {provider.status === 'active' || provider.available ? 'Hoạt động' : 'Không hoạt động'}
+                          {provider.status === 'active' || provider.available ? 'Hoáº¡t Ä‘á»™ng' : 'KhÃ´ng hoáº¡t Ä‘á»™ng'}
                         </span>
                       </div>
                       
@@ -331,7 +331,7 @@ export default function ModelTester() {
                         {testing && currentTest === (provider.id || provider.name) ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Đang test...
+                            Äang test...
                           </>
                         ) : (
                           <>
@@ -350,19 +350,19 @@ export default function ModelTester() {
             {testResults.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">
-                  Thống Kê
+                  Thá»‘ng KÃª
                 </h2>
                 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm text-gray-600">Tổng số test:</span>
+                    <span className="text-sm text-gray-600">Tá»•ng sá»‘ test:</span>
                     <span className="font-bold">{testResults.length}</span>
                   </div>
                   
                   <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                     <span className="text-sm text-green-700 flex items-center">
                       <CheckCircle className="w-4 h-4 mr-1" />
-                      Thành công:
+                      ThÃ nh cÃ´ng:
                     </span>
                     <span className="font-bold text-green-600">{successfulTests.length}</span>
                   </div>
@@ -370,7 +370,7 @@ export default function ModelTester() {
                   <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                     <span className="text-sm text-red-700 flex items-center">
                       <XCircle className="w-4 h-4 mr-1" />
-                      Thất bại:
+                      Tháº¥t báº¡i:
                     </span>
                     <span className="font-bold text-red-600">{failedTests.length}</span>
                   </div>
@@ -379,7 +379,7 @@ export default function ModelTester() {
                     <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
                       <span className="text-sm text-purple-700 flex items-center">
                         <TrendingUp className="w-4 h-4 mr-1" />
-                        TB Thời gian:
+                        TB Thá»i gian:
                       </span>
                       <span className="font-bold text-purple-600">{avgDuration.toFixed(0)}ms</span>
                     </div>
@@ -394,19 +394,19 @@ export default function ModelTester() {
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Settings className="w-6 h-6 text-blue-500" />
-                Cấu Hình Test
+                Cáº¥u HÃ¬nh Test
               </h2>
               
               {/* Image Upload */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ảnh Test
+                  áº¢nh Test
                 </label>
                 <ImageUpload
                   image={testImagePreview}
                   onUpload={handleImageUpload}
                   onRemove={handleImageRemove}
-                  label="Upload ảnh test"
+                  label="Upload áº£nh test"
                 />
               </div>
               
@@ -418,7 +418,7 @@ export default function ModelTester() {
                 <textarea
                   value={testPrompt}
                   onChange={(e) => setTestPrompt(e.target.value)}
-                  placeholder="Nhập prompt test..."
+                  placeholder="Nháº­p prompt test..."
                   className="w-full h-24 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm resize-none"
                 />
               </div>
@@ -427,7 +427,7 @@ export default function ModelTester() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Chất Lượng
+                    Cháº¥t LÆ°á»£ng
                   </label>
                   <select
                     value={testOptions.quality}
@@ -442,7 +442,7 @@ export default function ModelTester() {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phong Cách
+                    Phong CÃ¡ch
                   </label>
                   <select
                     value={testOptions.style}
@@ -466,12 +466,12 @@ export default function ModelTester() {
                 {testing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Đang Test...
+                    Äang Test...
                   </>
                 ) : (
                   <>
                     <Play className="w-5 h-5" />
-                    Chạy Test Đầy Đủ
+                    Cháº¡y Test Äáº§y Äá»§
                   </>
                 )}
               </button>
@@ -481,7 +481,7 @@ export default function ModelTester() {
             {testResults.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">
-                  Thao Tác
+                  Thao TÃ¡c
                 </h2>
                 
                 <div className="space-y-3">
@@ -490,14 +490,14 @@ export default function ModelTester() {
                     className="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
                   >
                     <Download className="w-5 h-5" />
-                    Xuất Kết Quả (CSV)
+                    Xuáº¥t Káº¿t Quáº£ (CSV)
                   </button>
 
                   <button
                     onClick={clearResults}
                     className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                   >
-                    Xóa Kết Quả
+                    XÃ³a Káº¿t Quáº£
                   </button>
                 </div>
               </div>
@@ -508,7 +508,7 @@ export default function ModelTester() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-800">Kết Quả Test</h2>
+                <h2 className="text-xl font-bold text-gray-800">Káº¿t Quáº£ Test</h2>
                 {testResults.length > 0 && (
                   <span className="text-sm text-gray-500">
                     {testResults.length} tests
@@ -519,9 +519,9 @@ export default function ModelTester() {
               {testResults.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Info className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                  <p>Chưa có kết quả test</p>
+                  <p>ChÆ°a cÃ³ káº¿t quáº£ test</p>
                   <p className="text-sm text-gray-400 mt-1">
-                    Chọn provider và bắt đầu test
+                    Chá»n provider vÃ  báº¯t Ä‘áº§u test
                   </p>
                 </div>
               ) : (
@@ -570,7 +570,7 @@ function TestResultCard({ result }) {
       
       {result.withImage && (
         <span className="inline-block px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full mb-2">
-          Test Đầy Đủ
+          Test Äáº§y Äá»§
         </span>
       )}
       
@@ -592,3 +592,4 @@ function TestResultCard({ result }) {
     </div>
   );
 }
+

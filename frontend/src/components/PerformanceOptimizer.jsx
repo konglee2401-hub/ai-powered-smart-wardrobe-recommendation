@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import './PerformanceOptimizer.css';
 
 const PerformanceOptimizer = ({ 
@@ -11,10 +11,10 @@ const PerformanceOptimizer = ({
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const tabs = [
-    { id: 'speed', label: '⚡ Speed', icon: '⚡' },
-    { id: 'quality', label: '⭐ Quality', icon: '⭐' },
-    { id: 'cost', label: '💰 Cost', icon: '💰' },
-    { id: 'balance', label: '⚖️ Balance', icon: '⚖️' }
+    { id: 'speed', label: 'âš¡ Speed', icon: 'âš¡' },
+    { id: 'quality', label: 'â­ Quality', icon: 'â­' },
+    { id: 'cost', label: 'ðŸ’° Cost', icon: 'ðŸ’°' },
+    { id: 'balance', label: 'âš–ï¸ Balance', icon: 'âš–ï¸' }
   ];
 
   useEffect(() => {
@@ -158,7 +158,7 @@ const PerformanceOptimizer = ({
         <h4>{title}</h4>
         {trend && (
           <span className={`trend ${trend > 0 ? 'positive' : 'negative'}`}>
-            {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
+            {trend > 0 ? 'â†‘' : 'â†“'} {Math.abs(trend)}%
           </span>
         )}
       </div>
@@ -180,13 +180,13 @@ const PerformanceOptimizer = ({
   return (
     <div className="performance-optimizer">
       <div className="optimizer-header">
-        <h2>🚀 Performance Optimizer</h2>
+        <h2>ðŸš€ Performance Optimizer</h2>
         <p>AI-powered suggestions to optimize your generation workflow</p>
       </div>
 
       {/* Current Performance Metrics */}
       <div className="performance-metrics">
-        <h3>📊 Current Performance</h3>
+        <h3>ðŸ“Š Current Performance</h3>
         <div className="metrics-grid">
           {renderMetricsCard(
             'Generation Speed',
@@ -235,7 +235,7 @@ const PerformanceOptimizer = ({
 
       {/* Optimization Suggestions */}
       <div className="optimization-section">
-        <h3>💡 Optimization Suggestions</h3>
+        <h3>ðŸ’¡ Optimization Suggestions</h3>
         <div className="suggestions-list">
           {getCurrentOptimization().map(suggestion => (
             <div key={suggestion.id} className="suggestion-card">
@@ -259,10 +259,10 @@ const PerformanceOptimizer = ({
                   onClick={() => applyOptimization(suggestion)}
                   disabled={isOptimizing}
                 >
-                  {isOptimizing ? '⏳ Applying...' : '✅ Apply'}
+                  {isOptimizing ? 'â³ Applying...' : 'âœ… Apply'}
                 </button>
                 <button className="preview-btn">
-                  👁️ Preview
+                  ðŸ‘ï¸ Preview
                 </button>
               </div>
             </div>
@@ -271,7 +271,7 @@ const PerformanceOptimizer = ({
 
         {getCurrentOptimization().length === 0 && (
           <div className="no-suggestions">
-            <div className="no-suggestions-icon">✅</div>
+            <div className="no-suggestions-icon">âœ…</div>
             <h4>You're already optimized!</h4>
             <p>Your current settings are performing well for {activeTab} optimization.</p>
           </div>
@@ -281,7 +281,7 @@ const PerformanceOptimizer = ({
       {/* Advanced Settings */}
       <div className="advanced-settings">
         <details>
-          <summary>⚙️ Advanced Performance Settings</summary>
+          <summary>âš™ï¸ Advanced Performance Settings</summary>
           
           <div className="settings-grid">
             <div className="setting-group">
@@ -364,10 +364,10 @@ const PerformanceOptimizer = ({
 
       {/* Performance Tips */}
       <div className="performance-tips">
-        <h3>💡 Performance Tips</h3>
+        <h3>ðŸ’¡ Performance Tips</h3>
         <div className="tips-grid">
           <div className="tip-card">
-            <div className="tip-icon">⚡</div>
+            <div className="tip-icon">âš¡</div>
             <div className="tip-content">
               <h5>Use OpenRouter First</h5>
               <p>Always try free providers first - they're fast and often good enough for most use cases.</p>
@@ -375,7 +375,7 @@ const PerformanceOptimizer = ({
           </div>
 
           <div className="tip-card">
-            <div className="tip-icon">🎯</div>
+            <div className="tip-icon">ðŸŽ¯</div>
             <div className="tip-content">
               <h5>Optimize Prompts</h5>
               <p>Clear, specific prompts generate faster and better results than vague descriptions.</p>
@@ -383,7 +383,7 @@ const PerformanceOptimizer = ({
           </div>
 
           <div className="tip-card">
-            <div className="tip-icon">📦</div>
+            <div className="tip-icon">ðŸ“¦</div>
             <div className="tip-content">
               <h5>Batch Wisely</h5>
               <p>Generate 2-3 images per batch for optimal speed. More than that increases failure rates.</p>
@@ -391,7 +391,7 @@ const PerformanceOptimizer = ({
           </div>
 
           <div className="tip-card">
-            <div className="tip-icon">💾</div>
+            <div className="tip-icon">ðŸ’¾</div>
             <div className="tip-content">
               <h5>Cache Results</h5>
               <p>Save successful generations as references for future similar requests.</p>
@@ -404,3 +404,4 @@ const PerformanceOptimizer = ({
 };
 
 export default PerformanceOptimizer;
+

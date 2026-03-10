@@ -187,7 +187,7 @@ async function main() {
     timestamp: new Date().toISOString(),
     rootFolder: rootFolderName,
     rootFolderId: structure.id,
-    description: 'Folder structure for Smart Wardrobe app',
+    description: 'Folder structure for K-Creative Studio app',
     folders: flatStructure,
     tree: structure,
   };

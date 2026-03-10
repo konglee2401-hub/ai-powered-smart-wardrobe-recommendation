@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Universal Gallery Dialog Component
  * Reusable modal for file uploads and media selection across the entire application
  */
@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Cloud, Upload, Grid, List, Search, Filter, FolderOpen, Image as ImageIcon, Film, Music, File, Heart, Star, Download } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import ModalPortal from './ModalPortal';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
 
@@ -68,7 +69,7 @@ export function GalleryDialog({
       if (response.data.success) {
         const library = response.data.data;
         
-        // 💫 NEW: Load character and product images from Asset database
+        // ðŸ’« NEW: Load character and product images from Asset database
         try {
           const characterRes = await axios.get(`${API_BASE}/cloud-gallery/category/character-image`);
           if (characterRes.data.success) {
@@ -212,7 +213,7 @@ export function GalleryDialog({
     setFavorites(newFavorites);
     // Save to localStorage
     localStorage.setItem('gallery-favorites', JSON.stringify(Array.from(newFavorites)));
-    toast.success(newFavorites.has(mediaId) ? '❤️ Marked as favorite' : '💔 Removed from favorites');
+    toast.success(newFavorites.has(mediaId) ? 'â¤ï¸ Marked as favorite' : 'ðŸ’” Removed from favorites');
   };
 
   const isFavorite = (mediaId) => favorites.has(mediaId);
@@ -258,7 +259,8 @@ export function GalleryDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <ModalPortal>
+    <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-4xl h-[90vh] bg-gray-900 text-white rounded-lg shadow-2xl flex flex-col overflow-hidden border border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
@@ -433,11 +435,11 @@ export function GalleryDialog({
                 />
               )}
 
-              {/* 💫 NEW: Uploaded Models (Character Images) Section */}
+              {/* ðŸ’« NEW: Uploaded Models (Character Images) Section */}
               {(selectedType === 'all' || selectedType === 'image') && 
                filterMedia(mediaLibrary.characterImages)?.length > 0 && (
                 <MediaSection
-                  title="📸 Uploaded Models"
+                  title="ðŸ“¸ Uploaded Models"
                   items={filterMedia(mediaLibrary.characterImages)}
                   viewMode={viewMode}
                   isSelected={isMediaSelected}
@@ -448,11 +450,11 @@ export function GalleryDialog({
                 />
               )}
 
-              {/* 💫 NEW: Uploaded Products Section */}
+              {/* ðŸ’« NEW: Uploaded Products Section */}
               {(selectedType === 'all' || selectedType === 'image') && 
                filterMedia(mediaLibrary.productImages)?.length > 0 && (
                 <MediaSection
-                  title="🛍️ Uploaded Products"
+                  title="ðŸ›ï¸ Uploaded Products"
                   items={filterMedia(mediaLibrary.productImages)}
                   viewMode={viewMode}
                   isSelected={isMediaSelected}
@@ -506,6 +508,7 @@ export function GalleryDialog({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -602,7 +605,7 @@ function MediaCard({ item, isSelected, onSelect, allowedTypes, onToggleFavorite,
         {isSelected && (
           <div className="absolute top-2 right-2">
             <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm">✓</span>
+              <span className="text-white text-sm">âœ“</span>
             </div>
           </div>
         )}
@@ -650,7 +653,7 @@ function MediaListItem({ item, isSelected, onSelect, allowedTypes, onToggleFavor
           ? 'bg-purple-600 border-purple-600'
           : 'border-gray-600 bg-transparent'
       }`}>
-        {isSelected && <span className="text-white text-sm">✓</span>}
+        {isSelected && <span className="text-white text-sm">âœ“</span>}
       </div>
 
       {/* Thumbnail */}
@@ -695,14 +698,16 @@ function MediaListItem({ item, isSelected, onSelect, allowedTypes, onToggleFavor
 function getTypeIcon(type) {
   switch (type) {
     case 'image':
-      return '🖼️';
+      return 'ðŸ–¼ï¸';
     case 'video':
-      return '🎬';
+      return 'ðŸŽ¬';
     case 'audio':
-      return '🎵';
+      return 'ðŸŽµ';
     default:
-      return '📄';
+      return 'ðŸ“„';
   }
 }
 
 export default GalleryDialog;
+
+

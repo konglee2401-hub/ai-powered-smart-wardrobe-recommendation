@@ -1,4 +1,4 @@
-/**
+﻿/**
  * New Options Detected Component
  * Display and save newly detected options from AI analysis
  */
@@ -9,16 +9,16 @@ import { AlertCircle, Database, Star, TrendingUp } from 'lucide-react';
 import { getRecommendationLabel } from '../utils/recommendationMeta';
 
 const CATEGORY_ICONS = {
-  scene: '🎬',
-  lighting: '💡',
-  mood: '😊',
-  cameraAngle: '📐',
-  makeup: '✨',
-  hairstyle: '💇',
-  bottoms: '👖',
-  shoes: '👠',
-  accessories: '💍',
-  outerwear: '🧥'
+  scene: 'ðŸŽ¬',
+  lighting: 'ðŸ’¡',
+  mood: 'ðŸ˜Š',
+  cameraAngle: 'ðŸ“',
+  makeup: 'âœ¨',
+  hairstyle: 'ðŸ’‡',
+  bottoms: 'ðŸ‘–',
+  shoes: 'ðŸ‘ ',
+  accessories: 'ðŸ’',
+  outerwear: 'ðŸ§¥'
 };
 
 export default function NewOptionsDetected({
@@ -126,7 +126,7 @@ export default function NewOptionsDetected({
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <div>
-            <p className="text-xs font-semibold text-amber-300">🆕 New Options Detected</p>
+            <p className="text-xs font-semibold text-amber-300">ðŸ†• New Options Detected</p>
             <p className="text-xs text-amber-200/70 mt-0.5">
               {totalNewOptions} new option(s) found
             </p>
@@ -147,7 +147,7 @@ export default function NewOptionsDetected({
         {Object.entries(detectedNewOptions).map(([category, values]) => (
           <div key={category} className="bg-gray-700/30 rounded-lg p-3 border border-gray-700 space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-lg">{CATEGORY_ICONS[category] || '📦'}</span>
+              <span className="text-lg">{CATEGORY_ICONS[category] || 'ðŸ“¦'}</span>
               <h4 className="text-xs font-semibold text-gray-300">
                 {CATEGORY_LABELS[category] || getRecommendationLabel(category)}
               </h4>
@@ -194,3 +194,4 @@ export default function NewOptionsDetected({
     </div>
   );
 }
+

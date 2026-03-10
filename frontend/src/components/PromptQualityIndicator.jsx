@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Prompt Quality Indicator Component
  * Visual feedback for prompt quality based on content analysis
  */
@@ -152,15 +152,16 @@ export default function PromptQualityIndicator({
 
       {/* Tips */}
       <div className="text-xs text-gray-500 p-2 bg-gray-800/50 rounded border border-gray-700">
-        <p className="mb-1 font-medium text-gray-400">💡 Tips to improve quality:</p>
+        <p className="mb-1 font-medium text-gray-400">ðŸ’¡ Tips to improve quality:</p>
         <ul className="space-y-0.5 text-gray-600">
-          <li>• Use specific, descriptive keywords</li>
-          <li>• Include camera/lighting terms</li>
-          <li>• Specify mood, style, and composition</li>
-          <li>• Aim for 200-400 characters</li>
-          <li>• Use comma-separated terms</li>
+          <li>â€¢ Use specific, descriptive keywords</li>
+          <li>â€¢ Include camera/lighting terms</li>
+          <li>â€¢ Specify mood, style, and composition</li>
+          <li>â€¢ Aim for 200-400 characters</li>
+          <li>â€¢ Use comma-separated terms</li>
         </ul>
       </div>
     </div>
   );
 }
+

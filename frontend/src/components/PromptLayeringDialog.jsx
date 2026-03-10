@@ -1,9 +1,10 @@
-/**
+﻿/**
  * Prompt Layering & Variations Dialog
  * Displays layered prompts and variations for A/B testing
  */
 
 import React, { useState, useCallback } from 'react';
+import ModalPortal from './ModalPortal';
 import {
   ChevronDown,
   ChevronUp,
@@ -37,7 +38,8 @@ const PromptLayeringDialog = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <ModalPortal>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center app-layer-modal">
       <div className="bg-gray-900 rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
@@ -49,7 +51,7 @@ const PromptLayeringDialog = ({
             onClick={onClose}
             className="text-gray-400 hover:text-white transition"
           >
-            ✕
+            âœ•
           </button>
         </div>
 
@@ -207,7 +209,7 @@ const PromptLayeringDialog = ({
 
               {/* Info */}
               <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3 text-sm text-blue-200">
-                <p className="font-semibold mb-1">💡 How to use layered prompts:</p>
+                <p className="font-semibold mb-1">ðŸ’¡ How to use layered prompts:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>Main prompt for primary instructions</li>
                   <li>Refiner for quality enhancements (some models support this)</li>
@@ -325,7 +327,7 @@ const PromptLayeringDialog = ({
 
               {/* Info */}
               <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg p-3 text-sm text-purple-200 mt-4">
-                <p className="font-semibold mb-1">🧪 A/B Testing Tips:</p>
+                <p className="font-semibold mb-1">ðŸ§ª A/B Testing Tips:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>Try different variations to find best results</li>
                   <li>Variations maintain core meaning with different wording</li>
@@ -353,7 +355,10 @@ const PromptLayeringDialog = ({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 };
 
 export default PromptLayeringDialog;
+
+

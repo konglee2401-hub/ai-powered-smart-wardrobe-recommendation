@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 export function SkeletonBlock({ className = '' }) {
   return <div className={`ui-skeleton rounded-2xl ${className}`} />;
@@ -31,3 +31,4 @@ export function SkeletonCards({ count = 3 }) {
     </div>
   );
 }
+

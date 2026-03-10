@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Product Focus Selector Component
  * Select which part of the product to focus on
  */
@@ -10,42 +10,42 @@ const FOCUS_OPTIONS = [
   {
     value: 'full-outfit',
     label: 'Full Outfit',
-    description: 'Toàn bộ trang phục',
+    description: 'ToÃ n bá»™ trang phá»¥c',
     icon: User,
     recommended: true,
   },
   {
     value: 'top',
-    label: 'Top (Áo)',
-    description: 'Phần trên',
+    label: 'Top (Ão)',
+    description: 'Pháº§n trÃªn',
     icon: Shirt,
     recommended: false,
   },
   {
     value: 'bottom',
-    label: 'Bottom (Quần/Váy)',
-    description: 'Phần dưới',
+    label: 'Bottom (Quáº§n/VÃ¡y)',
+    description: 'Pháº§n dÆ°á»›i',
     icon: Armchair,
     recommended: false,
   },
   {
     value: 'shoes',
     label: 'Shoes',
-    description: 'Giày',
+    description: 'GiÃ y',
     icon: Footprints,
     recommended: false,
   },
   {
     value: 'accessories',
     label: 'Accessories',
-    description: 'Phụ kiện',
+    description: 'Phá»¥ kiá»‡n',
     icon: Watch,
     recommended: false,
   },
   {
     value: 'specific-item',
     label: 'Specific Item',
-    description: 'Món đồ cụ thể',
+    description: 'MÃ³n Ä‘á»“ cá»¥ thá»ƒ',
     icon: Target,
     recommended: false,
   },
@@ -55,9 +55,9 @@ export default function ProductFocusSelector({ selectedFocus, onFocusChange }) {
   return (
     <div className="product-focus-selector">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">🎯 Chọn Khu Vực Tập Trung</h3>
+        <h3 className="text-lg font-semibold text-gray-800">ðŸŽ¯ Chá»n Khu Vá»±c Táº­p Trung</h3>
         <p className="text-sm text-gray-500 mt-1">
-          Xác định phần nào của sản phẩm cần tập trung hiển thị
+          XÃ¡c Ä‘á»‹nh pháº§n nÃ o cá»§a sáº£n pháº©m cáº§n táº­p trung hiá»ƒn thá»‹
         </p>
       </div>
 
@@ -123,3 +123,4 @@ export default function ProductFocusSelector({ selectedFocus, onFocusChange }) {
 
 // Export focus options for other components
 export { FOCUS_OPTIONS };
+

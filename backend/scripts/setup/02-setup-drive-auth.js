@@ -131,7 +131,7 @@ const server = http.createServer(async (req, res) => {
               <body style="font-family: Arial; padding: 20px; text-align: center;">
                 <h1>✅ Authorization Successful!</h1>
                 <p style="font-size: 18px; margin: 30px 0;">
-                  Your Google Drive is now connected to Smart Wardrobe.
+                  Your Google Drive is now connected to K-Creative Studio.
                 </p>
                 <div style="background: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0;">
                   <p><strong>🎉 You can now:</strong></p>

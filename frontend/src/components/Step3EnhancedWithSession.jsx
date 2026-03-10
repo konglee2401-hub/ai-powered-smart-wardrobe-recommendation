@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 3 Enhanced - Style & Prompt (Merged)
  * Clean, straightforward layout with 3 functional sections
  */
@@ -16,6 +16,7 @@ import {
 } from '../utils/advancedPromptEngineering';
 import PromptLayeringDialog from './PromptLayeringDialog';
 import { generateAdvancedPrompt } from '../utils/advancedPromptBuilder';
+import ModalPortal from './ModalPortal';
 
 const getStep3SmartDefaults = (useCase, scene = 'studio') => {
   switch (useCase) {
@@ -122,9 +123,9 @@ const Step3EnhancedWithSessionComponent = ({
             productImageId: productImage?.id
           });
           if (result) {
-            console.log('✅ Session synced to backend');
+            console.log('âœ… Session synced to backend');
           } else {
-            console.log('📱 Working offline - session saved locally only');
+            console.log('ðŸ“± Working offline - session saved locally only');
           }
         }
       } catch (error) {
@@ -177,7 +178,7 @@ const Step3EnhancedWithSessionComponent = ({
       let optionsToUse = { ...selectedOptions };
       
       if (Object.keys(optionsToUse).length === 0) {
-        console.log('⚠️ No selected options, building defaults from analysis...');
+        console.log('âš ï¸ No selected options, building defaults from analysis...');
         
         // Try to extract recommendations from analysis
         if (analysis?.recommendations) {
@@ -196,24 +197,24 @@ const Step3EnhancedWithSessionComponent = ({
             optionsToUse[key] = rawChoice;
           });
           
-          console.log('✅ Extracted defaults from analysis:', optionsToUse);
+          console.log('âœ… Extracted defaults from analysis:', optionsToUse);
         }
         
         // If still empty after analysis, use sensible defaults
         if (Object.keys(optionsToUse).length === 0) {
-          console.log('⚠️ No analysis recommendations, using sensible defaults...');
+          console.log('âš ï¸ No analysis recommendations, using sensible defaults...');
           optionsToUse = getStep3SmartDefaults(useCase, selectedOptions?.scene || 'studio');
         }
       }
 
       try {
-        console.log('📝 Generating prompt with options:', optionsToUse);
-        console.log('📝 Character description:', characterDescription);
+        console.log('ðŸ“ Generating prompt with options:', optionsToUse);
+        console.log('ðŸ“ Character description:', characterDescription);
         
         // Extract product information from analysis
         const productDesc = getProductDescription();
         const productName = getProductName();
-        console.log('🏷️ Product info - Name:', productName, 'Description:', productDesc);
+        console.log('ðŸ·ï¸ Product info - Name:', productName, 'Description:', productDesc);
         
         let finalPositive = '';
         let finalNegative = '';
@@ -264,8 +265,8 @@ ${finalPositive}`;
 
         setPromptLayering(layering);
         
-        // ✅ Send back to parent component
-        console.log('📤 Sending prompt to parent via onPromptChange');
+        // âœ… Send back to parent component
+        console.log('ðŸ“¤ Sending prompt to parent via onPromptChange');
         onPromptChange({
           positive: finalPositive,
           negative: finalNegative
@@ -359,6 +360,7 @@ ${finalPositive}`;
   }, [promptLayering]);
 
   return (
+    <ModalPortal>
     <div className="w-full">
       <section className="apple-surface-panel flex min-h-[640px] min-w-0 flex-col rounded-[2rem] p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -475,7 +477,7 @@ ${finalPositive}`;
       />
 
       {showOptimizerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60">
           <div className="apple-surface-panel w-full max-w-sm rounded-[1.75rem] p-5 mx-4">
             <h3 className="text-lg font-bold text-white mb-4">Optimize Prompt</h3>
 
@@ -492,7 +494,7 @@ ${finalPositive}`;
                   <p className="text-sm text-gray-400 mb-2 font-semibold">Result</p>
                   <p className="text-sm text-white mb-2 max-h-24 overflow-y-auto">{optimizedPrompt}</p>
                   <p className="text-sm text-green-400">
-                    ✓ Reduced by {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
+                    âœ“ Reduced by {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
                   </p>
                 </div>
 
@@ -516,7 +518,10 @@ ${finalPositive}`;
         </div>
       )}
     </div>
+    </ModalPortal>
   );
 };
 
 export default forwardRef(Step3EnhancedWithSessionComponent);
+
+

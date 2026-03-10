@@ -35,8 +35,9 @@ export class QueueScannerController {
   static async getStatus(req, res) {
     try {
       await queueScannerCronJob.loadScheduleSettings();
-      const status = queueScannerCronJob.getStatus();
+      const status = await queueScannerCronJob.getStatus();
       const queueVideos = googleDriveIntegration.listQueueVideos();
+      const driveQueue = await queueScannerCronJob.listDriveQueueVideos();
       
       res.json({
         success: true,
@@ -46,7 +47,15 @@ export class QueueScannerController {
             name: v.name,
             size: v.size,
             createdAt: v.createdAt
-          }))
+          })),
+          driveQueue: driveQueue.map((item) => ({
+            name: item.name,
+            size: item.size,
+            createdAt: item.createdTime || null,
+            driveFileId: item.id,
+            thumbnail: item.thumbnailLink || '',
+            webViewLink: item.webViewLink || '',
+          })),
         }
       });
     } catch (error) {
@@ -145,15 +154,24 @@ export class QueueScannerController {
   static async listQueueVideos(req, res) {
     try {
       const videos = googleDriveIntegration.listQueueVideos();
+      const driveQueue = await queueScannerCronJob.listDriveQueueVideos();
       res.json({
         success: true,
         data: {
-          count: videos.length,
+          count: videos.length + driveQueue.length,
           videos: videos.map(v => ({
             name: v.name,
             size: (v.size / 1024 / 1024).toFixed(2) + ' MB',
             createdAt: v.createdAt
-          }))
+          })),
+          driveQueue: driveQueue.map((item) => ({
+            name: item.name,
+            size: item.size ? `${(Number(item.size) / 1024 / 1024).toFixed(2)} MB` : '',
+            createdAt: item.createdTime || null,
+            driveFileId: item.id,
+            thumbnail: item.thumbnailLink || '',
+            webViewLink: item.webViewLink || '',
+          })),
         }
       });
     } catch (error) {

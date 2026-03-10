@@ -548,6 +548,51 @@ class VideoQueueService {
   }
 
   /**
+   * Summarize runtime health for the production queue, including stale
+   * processing jobs that likely need operator release after a crash/restart.
+   */
+  async getQueueRuntime(timeoutMinutes = 30) {
+    try {
+      const normalizedTimeout = Math.max(1, Number(timeoutMinutes) || 30);
+      const jobs = await VideoPipelineJob.find({}).lean();
+      const cutoff = Date.now() - normalizedTimeout * 60 * 1000;
+
+      const processing = jobs.filter((job) => job.status === 'processing');
+      const staleProcessing = processing.filter((job) => {
+        const reference = job.updatedAt || job.startedAt || job.createdAt;
+        return reference ? new Date(reference).getTime() < cutoff : false;
+      });
+
+      const oldestPending = jobs
+        .filter((job) => job.status === 'pending')
+        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())[0] || null;
+
+      return {
+        success: true,
+        runtime: {
+          timeoutMinutes: normalizedTimeout,
+          total: jobs.length,
+          processing: processing.length,
+          staleProcessing: staleProcessing.length,
+          pending: jobs.filter((job) => job.status === 'pending').length,
+          ready: jobs.filter((job) => job.status === 'ready').length,
+          failed: jobs.filter((job) => job.status === 'failed').length,
+          uploaded: jobs.filter((job) => job.status === 'uploaded').length,
+          manualReview: jobs.filter((job) => buildQueueControl(job).executionState === 'manual-review').length,
+          autoRetryPending: jobs.filter((job) => buildQueueControl(job).executionState === 'auto-retry-pending').length,
+          oldestPending: oldestPending ? toPlainJob(oldestPending) : null,
+          staleJobs: staleProcessing
+            .sort((left, right) => new Date(left.updatedAt || left.startedAt || left.createdAt).getTime() - new Date(right.updatedAt || right.startedAt || right.createdAt).getTime())
+            .slice(0, 20)
+            .map(toPlainJob),
+        },
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Returns queue jobs that permanently failed and may need manual retry.
    */
   async getFailedVideos() {
@@ -573,14 +618,27 @@ class VideoQueueService {
       let retryCount = 0;
 
       for (const job of jobs) {
-        if (job.errorCount < maxRetries) {
+        const queueControl = buildQueueControl(job);
+        const retryEligible = queueControl.retryEligible !== false;
+        const manualInterventionRequired = queueControl.manualInterventionRequired === true;
+        if (retryEligible && !manualInterventionRequired && job.errorCount < maxRetries) {
           job.status = 'pending';
-          job.retry = 0;
-          job.errorLog = [];
+          job.metadata = {
+            ...(job.metadata || {}),
+            queueControl: {
+              ...(job.metadata?.queueControl || {}),
+              retryEligible: true,
+              retryStopped: false,
+              retryStoppedReason: '',
+              retryStoppedAt: null,
+              manualInterventionRequired: false,
+              nextAction: 'auto-retry',
+            },
+          };
           job.processLogs.push({
             stage: 'retry',
             status: 'success',
-            message: 'Job moved back to pending',
+            message: 'Job moved back to pending for automatic retry batch',
             timestamp: new Date(),
           });
           await job.save();
@@ -700,6 +758,66 @@ class VideoQueueService {
         deleted,
         remaining,
         message: `Cleared ${deleted} queue items`,
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Releases stale processing jobs back to pending so operators can resume
+   * after a crash or an interrupted server restart.
+   */
+  async releaseStaleJobs(timeoutMinutes = 30) {
+    try {
+      const normalizedTimeout = Math.max(1, Number(timeoutMinutes) || 30);
+      const cutoff = new Date(Date.now() - normalizedTimeout * 60 * 1000);
+      const staleJobs = await VideoPipelineJob.find({
+        status: 'processing',
+        $or: [
+          { updatedAt: { $lt: cutoff } },
+          { updatedAt: { $exists: false }, startedAt: { $lt: cutoff } },
+        ],
+      });
+
+      let released = 0;
+      const queueIds = [];
+      for (const job of staleJobs) {
+        job.status = 'pending';
+        job.metadata = {
+          ...(job.metadata || {}),
+          queueControl: {
+            ...(job.metadata?.queueControl || {}),
+            retryEligible: true,
+            retryStopped: false,
+            retryStoppedReason: '',
+            retryStoppedAt: null,
+            manualInterventionRequired: false,
+            lastFailureStage: 'runtime-recovery',
+            lastFailureMessage: `Released from stale processing after ${normalizedTimeout} minute timeout`,
+            lastFailureAt: new Date().toISOString(),
+            nextAction: 'auto-retry',
+          },
+        };
+        job.processLogs.push({
+          stage: 'runtime-recovery',
+          status: 'warning',
+          message: `Released stale processing job back to pending after ${normalizedTimeout} minute timeout`,
+          timestamp: new Date(),
+        });
+        await job.save();
+        released += 1;
+        queueIds.push(job.queueId);
+      }
+
+      return {
+        success: true,
+        released,
+        queueIds,
+        timeoutMinutes: normalizedTimeout,
+        message: released
+          ? `Released ${released} stale processing job(s)`
+          : 'No stale processing jobs found',
       };
     } catch (error) {
       return { success: false, error: error.message };

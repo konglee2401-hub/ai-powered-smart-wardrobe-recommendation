@@ -10,7 +10,7 @@ from bson import ObjectId
 from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize, log_job
-from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records
+from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records, reset_orphaned_downloads
 
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
@@ -25,15 +25,26 @@ app.add_middleware(
 scheduler = AsyncIOScheduler()
 
 
+def build_playboard_manual_topic_label(config: dict | None = None) -> str:
+    source_config = config or {}
+    category = str(source_config.get('category', 'All')).strip() or 'All'
+    country = str(source_config.get('country', 'Worldwide')).strip() or 'Worldwide'
+    period = str(source_config.get('period', 'weekly')).strip() or 'weekly'
+    return f"playboard-{category}-{country}-{period}"
+
+
 @app.on_event('startup')
 async def startup_event():
     ensure_indexes()
     get_or_create_settings()
+    reset_result = await reset_orphaned_downloads()
+    if reset_result.get('reset'):
+        print(f"[startup] reset orphaned download states: {reset_result}")
     await start_worker()
 
     if AUTO_ENQUEUE_PENDING_ON_STARTUP:
-        queued = await _enqueue_pending_videos(STARTUP_PENDING_ENQUEUE_LIMIT)
-        print(f'[startup] queued pending videos: {queued}')
+        queue_result = await _enqueue_pending_videos(STARTUP_PENDING_ENQUEUE_LIMIT)
+        print(f'[startup] queued pending videos: {queue_result}')
 
     # Auto-clean obviously invalid YouTube records (e.g. test IDs) on startup
     try:
@@ -66,17 +77,21 @@ def cron_to_args(expr):
     return {'minute': minute, 'hour': hour, 'day': day, 'month': month, 'day_of_week': dow}
 
 
-async def _enqueue_pending_videos(limit: int) -> int:
+async def _enqueue_pending_videos(limit: int) -> dict:
     pending_cursor = videos.find({'downloadStatus': 'pending'}).sort([('views', -1), ('discoveredAt', -1)]).limit(limit)
     pending_items = list(pending_cursor)
 
     queued = 0
+    skipped = 0
     for item in pending_items:
         priority = 1 if item.get('views', 0) > 1_000_000 else 5
-        await enqueue(str(item['_id']), priority)
-        queued += 1
+        accepted = await enqueue(str(item['_id']), priority)
+        if accepted:
+            queued += 1
+        else:
+            skipped += 1
 
-    return queued
+    return {'queued': queued, 'skipped': skipped, 'considered': len(pending_items)}
 
 
 @app.get('/api/shorts-reels/stats/overview')
@@ -154,7 +169,7 @@ async def redownload(video_id: str):
     v = videos.find_one({'_id': ObjectId(video_id)})
     if not v:
         raise HTTPException(status_code=404, detail='Video not found')
-    videos.update_one({'_id': v['_id']}, {'$set': {'downloadStatus': 'pending', 'failReason': ''}})
+    videos.update_one({'_id': v['_id']}, {'$set': {'downloadStatus': 'pending', 'queueState': 'pending', 'failReason': ''}})
     await enqueue(str(v['_id']), 1 if v.get('views', 0) > 1_000_000 else 5)
     return {'success': True}
 
@@ -162,14 +177,20 @@ async def redownload(video_id: str):
 @app.post('/api/shorts-reels/videos/trigger-pending-downloads')
 async def trigger_pending_downloads(limit: int = Query(default=200, ge=1, le=2000)):
     """Manually enqueue videos that are currently in pending download state."""
-    queued = await _enqueue_pending_videos(limit)
+    queue_result = await _enqueue_pending_videos(limit)
 
     return {
         'success': True,
-        'queued': queued,
+        'queued': queue_result.get('queued', 0),
+        'skipped': queue_result.get('skipped', 0),
+        'considered': queue_result.get('considered', 0),
         'pendingTotal': videos.count_documents({'downloadStatus': 'pending'}),
         'queue': queue_stats(),
-        'message': 'No pending videos to enqueue' if queued == 0 else f'Queued {queued} pending videos'
+        'message': (
+            'No new pending videos were queued'
+            if queue_result.get('queued', 0) == 0
+            else f"Queued {queue_result.get('queued', 0)} pending videos"
+        )
     }
 
 
@@ -199,6 +220,7 @@ async def get_settings():
 @app.post('/api/shorts-reels/settings')
 async def save_settings(payload: dict):
     saved = update_settings(payload)
+    await start_worker()
     if ENABLE_SCHEDULER:
         await reload_scheduler()
     return saved
@@ -345,9 +367,8 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
     if not config:
         raise HTTPException(status_code=400, detail='config is required')
     
-    # Import TOPICS from utils if topics param not provided
-    from .utils import TOPICS
-    target_topics = topics if topics else TOPICS
+    topic_label = build_playboard_manual_topic_label(config)
+    target_topics = topics if topics else [topic_label]
     
     found = 0
     failed = 0
@@ -364,7 +385,17 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
                 failed += 1
         
         duration = int((time.time() - started) * 1000)
-        log_job('discover', 'success', isManual=True, itemsFound=found, failedTopics=failed, duration=duration)
+        log_job(
+            'discover',
+            'success',
+            isManual=True,
+            platform='playboard',
+            topic=topic_label if len(target_topics) == 1 else ','.join(target_topics),
+            itemsFound=found,
+            failedTopics=failed,
+            duration=duration,
+            config=config,
+        )
         
         return {
             'success': True,
@@ -375,7 +406,17 @@ async def manual_discover_playboard(config: dict, topics: list[str] | None = Non
         }
     except Exception as ex:
         duration = int((time.time() - started) * 1000)
-        log_job('discover', 'failed', isManual=True, itemsFound=found, error=str(ex), duration=duration)
+        log_job(
+            'discover',
+            'failed',
+            isManual=True,
+            platform='playboard',
+            topic=topic_label,
+            itemsFound=found,
+            error=str(ex),
+            duration=duration,
+            config=config,
+        )
         raise HTTPException(status_code=500, detail=f'Manual discovery failed: {str(ex)}')
 
 

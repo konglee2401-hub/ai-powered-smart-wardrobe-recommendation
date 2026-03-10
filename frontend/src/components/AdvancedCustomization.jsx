@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import './AdvancedCustomization.css';
 
 const AdvancedCustomization = ({ 
@@ -13,11 +13,11 @@ const AdvancedCustomization = ({
   const [showPresetSave, setShowPresetSave] = useState(false);
 
   const tabs = [
-    { id: 'style', label: '🎨 Style', icon: '🎨' },
-    { id: 'lighting', label: '💡 Lighting', icon: '💡' },
-    { id: 'composition', label: '📐 Composition', icon: '📐' },
-    { id: 'effects', label: '✨ Effects', icon: '✨' },
-    { id: 'presets', label: '📚 Presets', icon: '📚' }
+    { id: 'style', label: 'ðŸŽ¨ Style', icon: 'ðŸŽ¨' },
+    { id: 'lighting', label: 'ðŸ’¡ Lighting', icon: 'ðŸ’¡' },
+    { id: 'composition', label: 'ðŸ“ Composition', icon: 'ðŸ“' },
+    { id: 'effects', label: 'âœ¨ Effects', icon: 'âœ¨' },
+    { id: 'presets', label: 'ðŸ“š Presets', icon: 'ðŸ“š' }
   ];
 
   // Advanced style options
@@ -349,7 +349,7 @@ const AdvancedCustomization = ({
               className="save-preset-btn"
               onClick={() => setShowPresetSave(true)}
             >
-              💾 Save Current as Preset
+              ðŸ’¾ Save Current as Preset
             </button>
           </div>
 
@@ -399,7 +399,7 @@ const AdvancedCustomization = ({
   return (
     <div className="advanced-customization">
       <div className="customization-header">
-        <h2>⚙️ Advanced Customization</h2>
+        <h2>âš™ï¸ Advanced Customization</h2>
         <p>Fine-tune your generation with professional controls</p>
       </div>
 
@@ -424,7 +424,7 @@ const AdvancedCustomization = ({
         <div className="ai-insights">
           {analysis?.recommendations && (
             <div className="insights-content">
-              <h4>🤖 AI Insights</h4>
+              <h4>ðŸ¤– AI Insights</h4>
               <p>Based on your character and product analysis, these settings are optimized for best results.</p>
             </div>
           )}
@@ -435,13 +435,13 @@ const AdvancedCustomization = ({
             className="reset-btn"
             onClick={() => onOptionsChange({})}
           >
-            🔄 Reset All
+            ðŸ”„ Reset All
           </button>
           <button 
             className="apply-btn"
             onClick={() => {/* Apply changes */}}
           >
-            ✅ Apply Changes
+            âœ… Apply Changes
           </button>
         </div>
       </div>
@@ -450,3 +450,4 @@ const AdvancedCustomization = ({
 };
 
 export default AdvancedCustomization;
+

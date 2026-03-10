@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import axiosInstance from '../services/axios';
 import { API_BASE_URL } from '../config/api';
@@ -124,7 +124,7 @@ export default function UnifiedVideoGeneration() {
   // ==================== LOAD DATA ON MOUNT ====================
 
   useEffect(() => {
-    addLog('🚀 Session started', 'info', { sessionId: sessionId.current });
+    addLog('ðŸš€ Session started', 'info', { sessionId: sessionId.current });
     loadAvailableModels();
     loadPromptOptions();
     loadImageProviders();
@@ -155,11 +155,11 @@ export default function UnifiedVideoGeneration() {
     setLogs(prev => [...prev, log]);
 
     const emoji = {
-      info: 'ℹ️',
-      success: '✅',
-      error: '❌',
-      warning: '⚠️'
-    }[type] || 'ℹ️';
+      info: 'â„¹ï¸',
+      success: 'âœ…',
+      error: 'âŒ',
+      warning: 'âš ï¸'
+    }[type] || 'â„¹ï¸';
 
     console.log(`${emoji} [${timestamp}] ${message}`, details || '');
   };
@@ -282,7 +282,7 @@ export default function UnifiedVideoGeneration() {
       );
 
       setCharacterAnalysis(characterResponse.data.data.analysis);
-      addLog('✅ Character analysis complete', 'success', {
+      addLog('âœ… Character analysis complete', 'success', {
         model: characterResponse.data.data.modelUsed,
         duration: `${characterResponse.data.data.duration}s`
       });
@@ -303,7 +303,7 @@ export default function UnifiedVideoGeneration() {
       );
 
       setProductAnalysis(productResponse.data.data.analysis);
-      addLog('✅ Product analysis complete', 'success', {
+      addLog('âœ… Product analysis complete', 'success', {
         model: productResponse.data.data.modelUsed,
         duration: `${productResponse.data.data.duration}s`
       });
@@ -312,7 +312,7 @@ export default function UnifiedVideoGeneration() {
       const analysis = characterResponse.data.data.analysis + ' ' + productResponse.data.data.analysis;
       const suggestions = extractSuggestions(analysis);
       setAiSuggestions(suggestions);
-      addLog('✨ AI suggestions extracted', 'success', suggestions);
+      addLog('âœ¨ AI suggestions extracted', 'success', suggestions);
 
       // Apply based on mode
       if (analysisMode === 'full-auto') {
@@ -324,17 +324,17 @@ export default function UnifiedVideoGeneration() {
           style: false,
           colorPalette: false
         });
-        addLog('🤖 Full Auto: All AI suggestions applied', 'success');
+        addLog('ðŸ¤– Full Auto: All AI suggestions applied', 'success');
       } else if (analysisMode === 'semi-auto') {
         // Show suggestions but don't apply yet
-        addLog('🔔 Semi Auto: Review AI suggestions before applying', 'info');
+        addLog('ðŸ”” Semi Auto: Review AI suggestions before applying', 'info');
       } else if (analysisMode === 'manual') {
-        addLog('✋ Manual: Select all options manually', 'info');
+        addLog('âœ‹ Manual: Select all options manually', 'info');
       }
 
       setCurrentStep(2);
       setExpandedSections(prev => ({ ...prev, preAnalysis: false, analysis: true }));
-      addLog('✅ Analysis phase completed', 'success');
+      addLog('âœ… Analysis phase completed', 'success');
 
       // Reload options (might have new ones from AI)
       await loadPromptOptions();
@@ -342,7 +342,7 @@ export default function UnifiedVideoGeneration() {
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
       setError(`Analysis failed: ${errorMsg}`);
-      addLog('❌ Analysis failed', 'error', errorMsg);
+      addLog('âŒ Analysis failed', 'error', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -491,7 +491,7 @@ export default function UnifiedVideoGeneration() {
       ...prev,
       [field]: false
     }));
-    addLog(`✅ Applied AI suggestion for ${field}`, 'success', {
+    addLog(`âœ… Applied AI suggestion for ${field}`, 'success', {
       value: aiSuggestions[field]
     });
   };
@@ -505,7 +505,7 @@ export default function UnifiedVideoGeneration() {
       style: false,
       colorPalette: false
     });
-    addLog('✅ Applied all AI suggestions', 'success', aiSuggestions);
+    addLog('âœ… Applied all AI suggestions', 'success', aiSuggestions);
   };
 
   // ==================== HANDLE OPTION CHANGE ====================
@@ -524,7 +524,7 @@ export default function UnifiedVideoGeneration() {
     }));
 
     if (isChanged) {
-      addLog(`🔄 ${field} changed manually`, 'info', {
+      addLog(`ðŸ”„ ${field} changed manually`, 'info', {
         from: aiSuggestions[field],
         to: value
       });
@@ -585,7 +585,7 @@ export default function UnifiedVideoGeneration() {
       });
     }
 
-    addLog('🔄 Re-analyzing images...', 'info');
+    addLog('ðŸ”„ Re-analyzing images...', 'info');
     await analyzeImages();
   };
 
@@ -657,14 +657,14 @@ export default function UnifiedVideoGeneration() {
       }));
 
       setGeneratedImages(images);
-      addLog(`✅ Generated ${images.length} images`, 'success');
+      addLog(`âœ… Generated ${images.length} images`, 'success');
       setCurrentStep(3);
       setExpandedSections(prev => ({ ...prev, analysis: false, imageGen: true }));
 
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
       setError(`Image generation failed: ${errorMsg}`);
-      addLog('❌ Image generation failed', 'error', errorMsg);
+      addLog('âŒ Image generation failed', 'error', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -673,7 +673,7 @@ export default function UnifiedVideoGeneration() {
   // ==================== RE-GENERATE SINGLE IMAGE ====================
 
   const regenerateImage = async (index) => {
-    addLog(`🔄 Re-generating image ${index + 1}...`, 'info');
+    addLog(`ðŸ”„ Re-generating image ${index + 1}...`, 'info');
 
     setLoading(true);
     try {
@@ -711,11 +711,11 @@ export default function UnifiedVideoGeneration() {
         return updated;
       });
 
-      addLog(`✅ Image ${index + 1} re-generated`, 'success');
+      addLog(`âœ… Image ${index + 1} re-generated`, 'success');
 
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
-      addLog(`❌ Re-generation failed`, 'error', errorMsg);
+      addLog(`âŒ Re-generation failed`, 'error', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -725,7 +725,7 @@ export default function UnifiedVideoGeneration() {
 
   const saveImageToDb = async (image, index) => {
     setSavingImages(prev => ({ ...prev, [image.id]: true }));
-    addLog(`💾 Saving image ${index + 1} to database...`, 'info');
+    addLog(`ðŸ’¾ Saving image ${index + 1} to database...`, 'info');
 
     try {
       const imageData = {
@@ -764,13 +764,13 @@ export default function UnifiedVideoGeneration() {
         return updated;
       });
 
-      addLog(`✅ Image ${index + 1} saved to database`, 'success', {
+      addLog(`âœ… Image ${index + 1} saved to database`, 'success', {
         id: response.data.data._id
       });
 
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
-      addLog(`❌ Failed to save image ${index + 1}`, 'error', errorMsg);
+      addLog(`âŒ Failed to save image ${index + 1}`, 'error', errorMsg);
     } finally {
       setSavingImages(prev => ({ ...prev, [image.id]: false }));
     }
@@ -797,7 +797,7 @@ export default function UnifiedVideoGeneration() {
       return;
     }
 
-    addLog('🎬 Building video prompt...', 'info');
+    addLog('ðŸŽ¬ Building video prompt...', 'info');
 
     try {
       const response = await axiosInstance.post(`/api/video/build-prompt`, {
@@ -810,12 +810,12 @@ export default function UnifiedVideoGeneration() {
       });
 
       setVideoPrompt(response.data.data.prompt);
-      addLog('✅ Video prompt built', 'success');
+      addLog('âœ… Video prompt built', 'success');
       setExpandedSections(prev => ({ ...prev, imageGen: false, videoGen: true }));
 
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
-      addLog('❌ Failed to build video prompt', 'error', errorMsg);
+      addLog('âŒ Failed to build video prompt', 'error', errorMsg);
     }
   };
 
@@ -850,12 +850,12 @@ export default function UnifiedVideoGeneration() {
       );
 
       setGeneratedVideo(response.data.data.video);
-      addLog('✅ Video generated successfully', 'success');
+      addLog('âœ… Video generated successfully', 'success');
 
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
       setError(`Video generation failed: ${errorMsg}`);
-      addLog('❌ Video generation failed', 'error', errorMsg);
+      addLog('âŒ Video generation failed', 'error', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -916,7 +916,7 @@ export default function UnifiedVideoGeneration() {
           {options.map(opt => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
-              {aiValue === opt.value && hasAiSuggestion ? ' ⭐' : ''}
+              {aiValue === opt.value && hasAiSuggestion ? ' â­' : ''}
             </option>
           ))}
         </select>
@@ -952,7 +952,7 @@ export default function UnifiedVideoGeneration() {
             AI Fashion Video Generator
           </h1>
           <p className="text-gray-600">
-            Complete workflow: Upload → Configure → Analyze → Generate Images → Create Video
+            Complete workflow: Upload â†’ Configure â†’ Analyze â†’ Generate Images â†’ Create Video
           </p>
           <p className="text-sm text-gray-500 mt-1">
             Session ID: {sessionId.current}
@@ -1110,14 +1110,14 @@ export default function UnifiedVideoGeneration() {
                       {/* Analysis Mode */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-3">
-                          🤖 Analysis Mode *
+                          ðŸ¤– Analysis Mode *
                         </label>
                         <div className="space-y-2">
                           {[
-                            { value: 'manual', label: 'Manual', desc: 'You select all options manually', icon: '✋' },
-                            { value: 'semi-auto', label: 'Semi-Auto', desc: 'AI suggests, you confirm', icon: '🔔' },
-                            { value: 'full-auto', label: 'Full Auto', desc: 'AI selects everything', icon: '🤖' },
-                            { value: 'hybrid', label: 'Hybrid', desc: 'Mix of manual and auto', icon: '🎯' }
+                            { value: 'manual', label: 'Manual', desc: 'You select all options manually', icon: 'âœ‹' },
+                            { value: 'semi-auto', label: 'Semi-Auto', desc: 'AI suggests, you confirm', icon: 'ðŸ””' },
+                            { value: 'full-auto', label: 'Full Auto', desc: 'AI selects everything', icon: 'ðŸ¤–' },
+                            { value: 'hybrid', label: 'Hybrid', desc: 'Mix of manual and auto', icon: 'ðŸŽ¯' }
                           ].map(mode => (
                             <label
                               key={mode.value}
@@ -1150,7 +1150,7 @@ export default function UnifiedVideoGeneration() {
                       {/* Content Use Case */}
                       <div className="mt-6">
                         <label className="block text-sm font-medium text-gray-700 mb-3">
-                          🎯 Content Use Case *
+                          ðŸŽ¯ Content Use Case *
                         </label>
                         <div className="space-y-2">
                           {Object.entries(availableUseCases).map(([key, useCaseData]) => (
@@ -1182,7 +1182,7 @@ export default function UnifiedVideoGeneration() {
                       {/* Product Focus */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-3">
-                          👗 Product Focus Area *
+                          ðŸ‘— Product Focus Area *
                         </label>
                         <div className="space-y-2">
                           {Object.entries(availableFocusAreas).map(([key, focusData]) => (
@@ -1215,7 +1215,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Analysis Model */}
                     <div className="mt-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        🧠 Analysis Model
+                        ðŸ§  Analysis Model
                       </label>
                       <select
                         value={preferredModel}
@@ -1357,7 +1357,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Use Case */}
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        🎯 Use Case
+                        ðŸŽ¯ Use Case
                       </label>
                       <select
                         value={useCase}
@@ -1377,17 +1377,17 @@ export default function UnifiedVideoGeneration() {
 
                     {/* Styling Options Grid */}
                     <div className="grid md:grid-cols-2 gap-4 mb-6">
-                      {renderOptionSelect('scene', 'Scene', '🎬')}
-                      {renderOptionSelect('lighting', 'Lighting', '💡')}
-                      {renderOptionSelect('mood', 'Mood', '😊')}
-                      {renderOptionSelect('style', 'Photography Style', '📸')}
-                      {renderOptionSelect('colorPalette', 'Color Palette', '🎨')}
+                      {renderOptionSelect('scene', 'Scene', 'ðŸŽ¬')}
+                      {renderOptionSelect('lighting', 'Lighting', 'ðŸ’¡')}
+                      {renderOptionSelect('mood', 'Mood', 'ðŸ˜Š')}
+                      {renderOptionSelect('style', 'Photography Style', 'ðŸ“¸')}
+                      {renderOptionSelect('colorPalette', 'Color Palette', 'ðŸŽ¨')}
                     </div>
 
                     {/* Custom Prompt */}
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ✍️ Custom Prompt (Optional)
+                        âœï¸ Custom Prompt (Optional)
                       </label>
                       <textarea
                         value={customPrompt}
@@ -1400,7 +1400,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Prompt Mode Toggle */}
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        📝 Prompt Mode
+                        ðŸ“ Prompt Mode
                       </label>
                       <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
                         <button
@@ -1485,7 +1485,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Generation Method */}
                     <div className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
                       <label className="block text-sm font-medium text-gray-700 mb-3">
-                        🚀 Generation Method
+                        ðŸš€ Generation Method
                       </label>
                       <div className="grid md:grid-cols-2 gap-4">
                         <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${
@@ -1543,94 +1543,94 @@ export default function UnifiedVideoGeneration() {
                       {generationMethod === 'api' ? (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            🎨 Image Generation Provider
+                            ðŸŽ¨ Image Generation Provider
                           </label>
                           <select
                             value={imageProvider}
                             onChange={(e) => setImageProvider(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="auto">🔄 Auto (Try best providers first)</option>
+                            <option value="auto">ðŸ”„ Auto (Try best providers first)</option>
                             
-                            <optgroup label="🚀 Tier 1: OpenRouter (1 key, 10 models)">
-                              <option value="openrouter-flux-1.1-pro">💎 Flux 1.1 Pro ($0.04) ⭐⭐⭐⭐⭐</option>
-                              <option value="openrouter-flux-pro">⚡ Flux Pro ($0.055) ⭐⭐⭐⭐⭐</option>
-                              <option value="openrouter-flux-dev">🔥 Flux Dev ($0.025) ⭐⭐⭐⭐</option>
-                              <option value="openrouter-flux-schnell">⚡ Flux Schnell ($0.003) ⭐⭐⭐</option>
-                              <option value="openrouter-sd3">🎨 SD3 ($0.035) ⭐⭐⭐⭐</option>
-                              <option value="openrouter-sdxl">🖼️ SDXL ($0.002) ⭐⭐⭐</option>
-                              <option value="openrouter-ideogram-v2">✨ Ideogram V2 ($0.08) ⭐⭐⭐⭐</option>
-                              <option value="openrouter-recraft-v3">🎭 Recraft V3 ($0.05) ⭐⭐⭐⭐</option>
-                              <option value="openrouter-fal-flux-pro">🌟 FAL Flux Pro ($0.055) ⭐⭐⭐⭐</option>
-                              <option value="openrouter-fal-flux-realism">📸 FAL Flux Realism ($0.05) ⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸš€ Tier 1: OpenRouter (1 key, 10 models)">
+                              <option value="openrouter-flux-1.1-pro">ðŸ’Ž Flux 1.1 Pro ($0.04) â­â­â­â­â­</option>
+                              <option value="openrouter-flux-pro">âš¡ Flux Pro ($0.055) â­â­â­â­â­</option>
+                              <option value="openrouter-flux-dev">ðŸ”¥ Flux Dev ($0.025) â­â­â­â­</option>
+                              <option value="openrouter-flux-schnell">âš¡ Flux Schnell ($0.003) â­â­â­</option>
+                              <option value="openrouter-sd3">ðŸŽ¨ SD3 ($0.035) â­â­â­â­</option>
+                              <option value="openrouter-sdxl">ðŸ–¼ï¸ SDXL ($0.002) â­â­â­</option>
+                              <option value="openrouter-ideogram-v2">âœ¨ Ideogram V2 ($0.08) â­â­â­â­</option>
+                              <option value="openrouter-recraft-v3">ðŸŽ­ Recraft V3 ($0.05) â­â­â­â­</option>
+                              <option value="openrouter-fal-flux-pro">ðŸŒŸ FAL Flux Pro ($0.055) â­â­â­â­</option>
+                              <option value="openrouter-fal-flux-realism">ðŸ“¸ FAL Flux Realism ($0.05) â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🆓 Tier 2: Google (Free)">
-                              <option value="gemini-2.0-flash-image">✨ Gemini 2.0 Flash ⭐⭐⭐⭐</option>
-                              <option value="google-imagen-3">🎨 Imagen 3 ⭐⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸ†“ Tier 2: Google (Free)">
+                              <option value="gemini-2.0-flash-image">âœ¨ Gemini 2.0 Flash â­â­â­â­</option>
+                              <option value="google-imagen-3">ðŸŽ¨ Imagen 3 â­â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🎮 Tier 3: NVIDIA (Free)">
-                              <option value="nvidia-sdxl">🖼️ SDXL ⭐⭐⭐</option>
-                              <option value="nvidia-sd3">🎨 SD3 ⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸŽ® Tier 3: NVIDIA (Free)">
+                              <option value="nvidia-sdxl">ðŸ–¼ï¸ SDXL â­â­â­</option>
+                              <option value="nvidia-sd3">ðŸŽ¨ SD3 â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🔥 Tier 4: Fireworks (Free Credits)">
-                              <option value="fireworks-sd3">🎨 SD3 ⭐⭐⭐⭐</option>
-                              <option value="fireworks-playground-v2.5">🎮 Playground v2.5 ⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸ”¥ Tier 4: Fireworks (Free Credits)">
+                              <option value="fireworks-sd3">ðŸŽ¨ SD3 â­â­â­â­</option>
+                              <option value="fireworks-playground-v2.5">ðŸŽ® Playground v2.5 â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🤝 Tier 5: Together AI (Free Credits)">
-                              <option value="together-flux-schnell">⚡ Flux Schnell ⭐⭐⭐</option>
-                              <option value="together-sdxl">🖼️ SDXL ⭐⭐⭐</option>
+                            <optgroup label="ðŸ¤ Tier 5: Together AI (Free Credits)">
+                              <option value="together-flux-schnell">âš¡ Flux Schnell â­â­â­</option>
+                              <option value="together-sdxl">ðŸ–¼ï¸ SDXL â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🌟 Tier 6: FAL.ai (Free Tier)">
-                              <option value="fal-flux-pro">💎 Flux Pro ⭐⭐⭐⭐</option>
-                              <option value="fal-flux-realism">📸 Flux Realism ⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸŒŸ Tier 6: FAL.ai (Free Tier)">
+                              <option value="fal-flux-pro">ðŸ’Ž Flux Pro â­â­â­â­</option>
+                              <option value="fal-flux-realism">ðŸ“¸ Flux Realism â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🎨 Tier 7: Segmind (Free Tier)">
-                              <option value="segmind-sd3">🎨 SD3 ⭐⭐⭐⭐</option>
-                              <option value="segmind-sdxl">🖼️ SDXL ⭐⭐⭐</option>
+                            <optgroup label="ðŸŽ¨ Tier 7: Segmind (Free Tier)">
+                              <option value="segmind-sd3">ðŸŽ¨ SD3 â­â­â­â­</option>
+                              <option value="segmind-sdxl">ðŸ–¼ï¸ SDXL â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🚀 Tier 8: DeepInfra (Free Tier)">
-                              <option value="deepinfra-sdxl">🖼️ SDXL ⭐⭐⭐</option>
-                              <option value="deepinfra-flux-schnell">⚡ Flux Schnell ⭐⭐⭐</option>
+                            <optgroup label="ðŸš€ Tier 8: DeepInfra (Free Tier)">
+                              <option value="deepinfra-sdxl">ðŸ–¼ï¸ SDXL â­â­â­</option>
+                              <option value="deepinfra-flux-schnell">âš¡ Flux Schnell â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🤗 Tier 9: Hugging Face (Free)">
-                              <option value="huggingface-flux">⚡ Flux Schnell ⭐⭐⭐</option>
+                            <optgroup label="ðŸ¤— Tier 9: Hugging Face (Free)">
+                              <option value="huggingface-flux">âš¡ Flux Schnell â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="🔷 Tier 10: Replicate (Paid)">
-                              <option value="replicate-flux-pro">💎 Flux Pro ($0.055) ⭐⭐⭐⭐⭐</option>
+                            <optgroup label="ðŸ”· Tier 10: Replicate (Paid)">
+                              <option value="replicate-flux-pro">ðŸ’Ž Flux Pro ($0.055) â­â­â­â­â­</option>
                             </optgroup>
                             
-                            <optgroup label="⚠️ Fallback">
-                              <option value="pollinations">🌸 Pollinations (No key needed) ⭐⭐</option>
+                            <optgroup label="âš ï¸ Fallback">
+                              <option value="pollinations">ðŸŒ¸ Pollinations (No key needed) â­â­</option>
                             </optgroup>
                           </select>
                           
                           <p className="text-xs text-gray-500 mt-1">
                             {imageProvider === 'auto' 
-                              ? '✅ Recommended: Will try OpenRouter first (10 models with 1 key), then other free providers'
+                              ? 'âœ… Recommended: Will try OpenRouter first (10 models with 1 key), then other free providers'
                               : imageProvider.startsWith('openrouter')
-                              ? '🚀 OpenRouter: Best quality, multiple models with single API key'
+                              ? 'ðŸš€ OpenRouter: Best quality, multiple models with single API key'
                               : imageProvider === 'pollinations'
-                              ? '⚠️ Pollinations: Free but lower quality, used as last resort'
+                              ? 'âš ï¸ Pollinations: Free but lower quality, used as last resort'
                               : imageProvider.startsWith('gemini') || imageProvider.startsWith('google')
-                              ? '🆓 Google: Free with generous limits, excellent quality'
+                              ? 'ðŸ†“ Google: Free with generous limits, excellent quality'
                               : imageProvider.startsWith('nvidia')
-                              ? '🆓 NVIDIA: Free tier, good quality'
-                              : '🆓 Free tier or credits available'}
+                              ? 'ðŸ†“ NVIDIA: Free tier, good quality'
+                              : 'ðŸ†“ Free tier or credits available'}
                           </p>
                         </div>
                       ) : (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            🌐 Browser Provider
+                            ðŸŒ Browser Provider
                           </label>
                           <select
                             value={browserProvider}
@@ -1651,7 +1651,7 @@ export default function UnifiedVideoGeneration() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          🔢 Number of Images
+                          ðŸ”¢ Number of Images
                         </label>
                         <select
                           value={imageCount}
@@ -1920,7 +1920,7 @@ export default function UnifiedVideoGeneration() {
                         {/* Duration */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            ⏱️ Duration (seconds)
+                            â±ï¸ Duration (seconds)
                           </label>
                           <input
                             type="number"
@@ -1935,7 +1935,7 @@ export default function UnifiedVideoGeneration() {
                         {/* Camera Movement */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            📹 Camera Movement
+                            ðŸ“¹ Camera Movement
                           </label>
                           <select
                             value={videoOptions.cameraMovement}
@@ -1955,7 +1955,7 @@ export default function UnifiedVideoGeneration() {
                         {/* Transition Style */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            🎬 Transition Style
+                            ðŸŽ¬ Transition Style
                           </label>
                           <select
                             value={videoOptions.transitionStyle}
@@ -1974,7 +1974,7 @@ export default function UnifiedVideoGeneration() {
                         {/* Aspect Ratio */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            📐 Aspect Ratio
+                            ðŸ“ Aspect Ratio
                           </label>
                           <select
                             value={videoOptions.aspectRatio}
@@ -1991,7 +1991,7 @@ export default function UnifiedVideoGeneration() {
                         {/* FPS */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            🎞️ Frame Rate (FPS)
+                            ðŸŽžï¸ Frame Rate (FPS)
                           </label>
                           <select
                             value={videoOptions.fps}
@@ -2014,7 +2014,7 @@ export default function UnifiedVideoGeneration() {
                               className="w-4 h-4"
                             />
                             <span className="text-sm font-medium text-gray-700">
-                              🎵 Add Background Music
+                              ðŸŽµ Add Background Music
                             </span>
                           </label>
                           {videoOptions.addMusic && (
@@ -2033,7 +2033,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Custom Video Prompt */}
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ✍️ Custom Video Prompt (Optional)
+                        âœï¸ Custom Video Prompt (Optional)
                       </label>
                       <textarea
                         value={customVideoPrompt}
@@ -2046,7 +2046,7 @@ export default function UnifiedVideoGeneration() {
                     {/* Video Provider */}
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        🎥 Video Provider
+                        ðŸŽ¥ Video Provider
                       </label>
                       <select
                         value={videoProvider}
@@ -2164,7 +2164,7 @@ export default function UnifiedVideoGeneration() {
           </div>
 
           {/* ==================== LOGS SIDEBAR ==================== */}
-          <div className={`fixed right-0 top-0 h-full bg-white shadow-2xl transition-all duration-300 z-50 ${
+          <div className={`fixed right-0 top-0 h-full bg-white shadow-2xl transition-all duration-300 app-layer-nav ${
             showLogs ? 'w-80' : 'w-0'
           } overflow-hidden`}>
             <div className="h-full flex flex-col">
@@ -2246,7 +2246,7 @@ export default function UnifiedVideoGeneration() {
           {/* Logs Toggle Button (Fixed) */}
           <button
             onClick={() => setShowLogs(!showLogs)}
-            className={`fixed right-4 bottom-4 bg-gray-900 text-white p-4 rounded-full shadow-lg hover:bg-gray-800 transition-all z-40 ${
+            className={`fixed right-4 bottom-4 bg-gray-900 text-white p-4 rounded-full shadow-lg hover:bg-gray-800 transition-all app-layer-overlay ${
               showLogs ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:scale-110'
             }`}
           >
@@ -2264,3 +2264,4 @@ export default function UnifiedVideoGeneration() {
     </div>
   );
 }
+

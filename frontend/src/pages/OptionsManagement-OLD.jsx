@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
@@ -843,7 +843,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
                           onClick={() => chooseDefaultImage(sample.url, ratio)}
                           style={{ marginLeft: 'auto', padding: '0.4rem 0.7rem', background: isAspectLocked ? '#22c55e' : '#374151', border: 'none', borderRadius: '6px', color: '#fff', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer' }}
                         >
-                          {isAspectLocked ? t('optionsManagement.locked', '✓ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
+                          {isAspectLocked ? t('optionsManagement.locked', 'âœ“ Locked') : t('optionsManagement.selectAsDefault', 'Select')}
                         </button>
                       </div>
                     </div>
@@ -950,7 +950,7 @@ export default function OptionsManagement() {
         <div className="mb-6 rounded-xl border border-indigo-500/20 bg-indigo-500/8 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <p className="text-sm text-indigo-100">
             <strong className="text-indigo-200">{t('optionsManagement.workflow', 'Workflow')}:</strong>{' '}
-            {t('optionsManagement.workflowDesc', 'Load scenes → Generate canonical prompt via ChatGPT browser → Generate 1-4 previews via Google Flow → Pick default image and lock')}
+            {t('optionsManagement.workflowDesc', 'Load scenes â†’ Generate canonical prompt via ChatGPT browser â†’ Generate 1-4 previews via Google Flow â†’ Pick default image and lock')}
           </p>
         </div>
 
@@ -1005,3 +1005,4 @@ export default function OptionsManagement() {
     </div>
   );
 }
+

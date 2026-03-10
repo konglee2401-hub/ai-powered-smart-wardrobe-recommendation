@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import './BatchProcessing.css';
 
 const BatchProcessing = ({ 
@@ -20,28 +20,28 @@ const BatchProcessing = ({
       id: 'ecommerce-variants',
       name: 'E-commerce Variants',
       description: 'Generate multiple product shots',
-      icon: '🛒',
+      icon: 'ðŸ›’',
       settings: { imageCount: 4, aspectRatio: '1:1' }
     },
     {
       id: 'social-media-pack',
       name: 'Social Media Pack',
       description: 'Create content for social platforms',
-      icon: '📱',
+      icon: 'ðŸ“±',
       settings: { imageCount: 6, aspectRatio: '1:1' }
     },
     {
       id: 'fashion-editorial',
       name: 'Fashion Editorial',
       description: 'Professional editorial shots',
-      icon: '📸',
+      icon: 'ðŸ“¸',
       settings: { imageCount: 8, aspectRatio: '3:4' }
     },
     {
       id: 'before-after-series',
       name: 'Before/After Series',
       description: 'Compare transformations',
-      icon: '⚖️',
+      icon: 'âš–ï¸',
       settings: { imageCount: 2, aspectRatio: '1:1' }
     }
   ];
@@ -121,13 +121,13 @@ const BatchProcessing = ({
   return (
     <div className="batch-processing">
       <div className="batch-header">
-        <h2>📦 Batch Processing</h2>
+        <h2>ðŸ“¦ Batch Processing</h2>
         <p>Process multiple images at once with templates and automation</p>
       </div>
 
       {/* Template Selection */}
       <div className="template-section">
-        <h3>🎯 Choose Template</h3>
+        <h3>ðŸŽ¯ Choose Template</h3>
         <div className="template-grid">
           {templates.map(template => (
             <div 
@@ -139,10 +139,10 @@ const BatchProcessing = ({
               <div className="template-info">
                 <h4>{template.name}</h4>
                 <p>{template.description}</p>
-                <small>{template.settings.imageCount} images • {template.settings.aspectRatio}</small>
+                <small>{template.settings.imageCount} images â€¢ {template.settings.aspectRatio}</small>
               </div>
               {selectedTemplate?.id === template.id && (
-                <div className="template-check">✓</div>
+                <div className="template-check">âœ“</div>
               )}
             </div>
           ))}
@@ -151,7 +151,7 @@ const BatchProcessing = ({
 
       {/* File Upload */}
       <div className="upload-section">
-        <h3>📤 Upload Images</h3>
+        <h3>ðŸ“¤ Upload Images</h3>
         <div className="upload-area">
           <input
             type="file"
@@ -162,7 +162,7 @@ const BatchProcessing = ({
             disabled={batchItems.length >= maxBatchSize}
           />
           <label htmlFor="batch-upload" className="upload-label">
-            <div className="upload-icon">📁</div>
+            <div className="upload-icon">ðŸ“</div>
             <div className="upload-text">
               <strong>Click to upload</strong> or drag and drop
               <br />
@@ -176,11 +176,11 @@ const BatchProcessing = ({
       {batchItems.length > 0 && (
         <div className="batch-items-section">
           <div className="batch-items-header">
-            <h3>📋 Batch Items ({batchItems.length}/{maxBatchSize})</h3>
+            <h3>ðŸ“‹ Batch Items ({batchItems.length}/{maxBatchSize})</h3>
             <div className="batch-stats">
-              <span className="stat-completed">✓ {stats.completed}</span>
-              <span className="stat-processing">⏳ {stats.processing}</span>
-              <span className="stat-failed">✗ {stats.failed}</span>
+              <span className="stat-completed">âœ“ {stats.completed}</span>
+              <span className="stat-processing">â³ {stats.processing}</span>
+              <span className="stat-failed">âœ— {stats.failed}</span>
             </div>
           </div>
 
@@ -195,7 +195,7 @@ const BatchProcessing = ({
                       onClick={() => removeBatchItem(item.id)}
                       disabled={isProcessing}
                     >
-                      ✕
+                      âœ•
                     </button>
                   </div>
                 </div>
@@ -205,10 +205,10 @@ const BatchProcessing = ({
                   <div className="item-meta">
                     <span className="item-size">{(item.size / 1024 / 1024).toFixed(1)}MB</span>
                     <span className={`item-status ${item.status}`}>
-                      {item.status === 'pending' && '⏳ Pending'}
-                      {item.status === 'processing' && '⚙️ Processing'}
-                      {item.status === 'completed' && '✅ Completed'}
-                      {item.status === 'failed' && '❌ Failed'}
+                      {item.status === 'pending' && 'â³ Pending'}
+                      {item.status === 'processing' && 'âš™ï¸ Processing'}
+                      {item.status === 'completed' && 'âœ… Completed'}
+                      {item.status === 'failed' && 'âŒ Failed'}
                     </span>
                   </div>
 
@@ -230,7 +230,7 @@ const BatchProcessing = ({
       {/* Batch Settings */}
       {selectedTemplate && (
         <div className="batch-settings">
-          <h3>⚙️ Batch Settings</h3>
+          <h3>âš™ï¸ Batch Settings</h3>
           <div className="settings-grid">
             <div className="setting-group">
               <label>Images per Item</label>
@@ -285,7 +285,7 @@ const BatchProcessing = ({
       {/* Batch Progress */}
       {isProcessing && batchProgress && (
         <div className="batch-progress">
-          <h3>🚀 Processing Batch</h3>
+          <h3>ðŸš€ Processing Batch</h3>
           <div className="progress-overview">
             <div className="progress-bar">
               <div 
@@ -320,7 +320,7 @@ const BatchProcessing = ({
             onClick={clearBatch}
             disabled={isProcessing}
           >
-            🗑️ Clear Batch
+            ðŸ—‘ï¸ Clear Batch
           </button>
         )}
 
@@ -329,7 +329,7 @@ const BatchProcessing = ({
           onClick={startBatchProcessing}
           disabled={batchItems.length === 0 || !selectedTemplate || isProcessing}
         >
-          {isProcessing ? '⏳ Processing...' : '🚀 Start Batch Processing'}
+          {isProcessing ? 'â³ Processing...' : 'ðŸš€ Start Batch Processing'}
         </button>
       </div>
     </div>
@@ -337,3 +337,4 @@ const BatchProcessing = ({
 };
 
 export default BatchProcessing;
+

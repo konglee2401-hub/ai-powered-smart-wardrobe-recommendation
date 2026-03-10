@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 /**
@@ -74,11 +74,11 @@ function VideoGenerationProgress({ sessionId, onComplete, onError }) {
   };
 
   const statusMessages = {
-    uploading: '📤 Uploading image to Grok...',
-    detecting: '🔍 Detecting video generation page...',
-    generating: '🎬 Generating video segments...',
-    completed: '✅ Video generation completed!',
-    failed: '❌ Video generation failed'
+    uploading: 'ðŸ“¤ Uploading image to Grok...',
+    detecting: 'ðŸ” Detecting video generation page...',
+    generating: 'ðŸŽ¬ Generating video segments...',
+    completed: 'âœ… Video generation completed!',
+    failed: 'âŒ Video generation failed'
   };
 
   return (
@@ -135,11 +135,11 @@ function VideoGenerationProgress({ sessionId, onComplete, onError }) {
         {/* Time information */}
         <div className="progress-timing">
           <div className="timing-item">
-            <span className="timing-label">⏱️ Elapsed</span>
+            <span className="timing-label">â±ï¸ Elapsed</span>
             <span className="timing-value">{formatTime(progress.elapsedSeconds)}</span>
           </div>
           <div className="timing-item">
-            <span className="timing-label">⏳ Remaining</span>
+            <span className="timing-label">â³ Remaining</span>
             <span className="timing-value">{formatTime(progress.estimatedRemainingSeconds)}</span>
           </div>
         </div>
@@ -402,3 +402,4 @@ function formatTime(seconds) {
 }
 
 export default VideoGenerationProgress;
+

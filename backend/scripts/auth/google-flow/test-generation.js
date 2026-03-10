@@ -21,7 +21,7 @@ class GoogleFlowTestGenerator {
     this.browser = null;
     this.page = null;
     this.sessionFile = path.join(__dirname, '../.sessions/google-flow-session-complete.json');
-    this.projectUrl = 'https://labs.google/fx/vi/tools/flow/project/58d791d4-37c9-47a8-ae3b-816733bc3ec0';
+    this.projectUrl = 'https://labs.google/fx/vi/tools/flow/project/87b78b0e-8b5a-40fc-9142-cdeda1419be7';
   }
 
   loadSession() {

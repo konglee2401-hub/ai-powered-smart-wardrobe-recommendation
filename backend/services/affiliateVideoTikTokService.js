@@ -148,6 +148,34 @@ import crypto from 'crypto';
  */
 // ?? Global store for tracking flow preview data (for intermediate image display)
 const flowPreviewStore = new Map();
+const flowPreviewLoggers = new Map();
+const flowPreviewPersistTimers = new Map();
+
+async function getFlowLogger(flowId) {
+  if (flowPreviewLoggers.has(flowId)) return flowPreviewLoggers.get(flowId);
+  const logger = new SessionLogService(flowId, 'affiliate-tiktok');
+  await logger.init();
+  flowPreviewLoggers.set(flowId, logger);
+  return logger;
+}
+
+function scheduleFlowPreviewPersist(flowId, workflowState) {
+  if (!flowId || !workflowState) return;
+  const existing = flowPreviewPersistTimers.get(flowId);
+  if (existing) clearTimeout(existing);
+  const snapshot = JSON.parse(JSON.stringify(workflowState));
+  const timer = setTimeout(async () => {
+    try {
+      const logger = await getFlowLogger(flowId);
+      if (logger) {
+        await logger.storeWorkflowState(snapshot, { merge: false });
+      }
+    } catch (error) {
+      console.warn(`[FLOW] Failed to persist workflow state for ${flowId}: ${error.message}`);
+    }
+  }, 500);
+  flowPreviewPersistTimers.set(flowId, timer);
+}
 
 /**
  * Helper: Extract JSON from ChatGPT response text
@@ -215,6 +243,7 @@ function updateFlowPreview(flowId, updates) {
   const current = flowPreviewStore.get(flowId) || {};
   const updated = { ...current, ...updates, flowId, updatedAt: Date.now() };
   flowPreviewStore.set(flowId, updated);
+  scheduleFlowPreviewPersist(flowId, updated);
 }
 function pickLegacyFrameKeys(frameLibrary = []) {
   const hookStart = frameLibrary.find((frame) => frame.frameKey === 'seg1_start') || frameLibrary[0] || null;
@@ -629,7 +658,7 @@ Garment Compatibility:
 - Skill level: Easy to wear, needs styling, professional fit
 
 ===== RECOMMENDATION GENERATION =====
-Based on character × product compatibility, recommend:
+Based on character ï¿½ product compatibility, recommend:
 
 1. SCENE/SETTING (JSON):
    - Best environment: studio, outdoor, urban, nature, luxury, casual, etc.
@@ -869,16 +898,16 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       } else if ((language || 'en').split('-')[0].split('_')[0].toLowerCase() === 'vi') {
         analysisPrompt += `
 
-===== PHÂN TÍCH SCENE REFERENCE (B?T BU?C) =====
+===== PHï¿½N Tï¿½CH SCENE REFERENCE (B?T BU?C) =====
 `;
         analysisPrompt += `${sceneContextLine}
 `;
         analysisPrompt += hasSceneReference
-          ? `Image 3 = SCENE REFERENCE. B?t bu?c dùng scene này d? tu v?n pose t? nhiên cho nhân v?t.
+          ? `Image 3 = SCENE REFERENCE. B?t bu?c dï¿½ng scene nï¿½y d? tu v?n pose t? nhiï¿½n cho nhï¿½n v?t.
 `
-          : `Không có Image 3, hãy d?a trên Scene lock/Scene key d? tu v?n pose t? nhiên.
+          : `Khï¿½ng cï¿½ Image 3, hï¿½y d?a trï¿½n Scene lock/Scene key d? tu v?n pose t? nhiï¿½n.
 `;
-        analysisPrompt += `Hãy tu v?n pose c? th? cho c? WEARING và HOLDING d? nhân v?t hòa h?p v?i ph?i c?nh scene (hu?ng ngu?i, v? trí chân tay, tr?ng tâm co th?, kho?ng cách camera). Tránh gi? c?ng pose t? ?nh nhân v?t g?c.
+        analysisPrompt += `Hï¿½y tu v?n pose c? th? cho c? WEARING vï¿½ HOLDING d? nhï¿½n v?t hï¿½a h?p v?i ph?i c?nh scene (hu?ng ngu?i, v? trï¿½ chï¿½n tay, tr?ng tï¿½m co th?, kho?ng cï¿½ch camera). Trï¿½nh gi? c?ng pose t? ?nh nhï¿½n v?t g?c.
 `;
       } else {
         analysisPrompt += `
@@ -1440,7 +1469,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     try {
       const imageGen = new GoogleFlowAutomationService({
         type: 'image',
-        projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
+        projectId: '87b78b0e-8b5a-40fc-9142-cdeda1419be7',
         imageCount: 1,
         headless: false,
         debugMode: false
@@ -1963,7 +1992,14 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         );
 
         if (!videoResult?.success || !videoResult?.path) {
-          throw new Error(`Segment ${segment.segmentIndex} generation failed: ${videoResult?.error || 'unknown error'}`);
+          const generationError = new Error(`Segment ${segment.segmentIndex} generation failed: ${videoResult?.error || 'unknown error'}`);
+          if (videoResult?.errorCode) {
+            generationError.code = videoResult.errorCode;
+          }
+          if (videoResult?.actionRequired) {
+            generationError.actionRequired = videoResult.actionRequired;
+          }
+          throw generationError;
         }
 
         const extractedFramePath = await extractLastFrame(
@@ -2039,7 +2075,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         videos: [],
         totalCount: 0,
         status: 'failed',
-        error: error.message
+        error: error.message,
+        errorCode: error.code || null,
+        actionRequired: error.actionRequired || null
       };
       await logger.error(error.message, 'video-generation-error');
     }
@@ -2056,7 +2094,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
     });
 
     updateFlowPreview(flowId, {
-      status: videoGenerationResult?.success ? 'step4-complete' : 'step4-failed',
+      status: videoGenerationResult?.success
+        ? 'step4-complete'
+        : (videoGenerationResult?.actionRequired ? 'action_required' : 'step4-failed'),
+      actionRequired: videoGenerationResult?.actionRequired || null,
       step4: {
         videos: (videoGenerationResult?.videos || []).map((video, idx) => ({
           key: `segment-${video.segmentIndex || idx + 1}`,
@@ -2072,7 +2113,9 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         completedCount: videoGenerationResult?.totalCount || 0,
         assemblyStatus: videoGenerationResult?.assemblyStatus || null,
         stitchedVideoPath: videoGenerationResult?.stitchedVideoPath || null,
-        error: videoGenerationResult?.error || null
+        error: videoGenerationResult?.error || null,
+        actionRequired: videoGenerationResult?.actionRequired || null,
+        errorCode: videoGenerationResult?.errorCode || null
       }
     });
     // ============================================================
@@ -2545,13 +2588,13 @@ function generateStructuredVideoContent(analysis, config) {
       {
         segment: 'wearing',
         duration: segmentDurations.wearing,
-        script: `See how flawlessly it looks when worn – perfect fit, amazing style, incredibly comfortable. This ${productType} is a must-have!`,
+        script: `See how flawlessly it looks when worn ï¿½ perfect fit, amazing style, incredibly comfortable. This ${productType} is a must-have!`,
         imageComposition: ['wearing']  // Single image
       },
       {
         segment: 'holding',
         duration: segmentDurations.holding,
-        script: `Check out the exquisite details – the quality is insane! Made with premium ${productMaterial}, designed for durability and elegance.`,
+        script: `Check out the exquisite details ï¿½ the quality is insane! Made with premium ${productMaterial}, designed for durability and elegance.`,
         imageComposition: ['holding', 'product']  // Multi-image composition
       },
       {
@@ -3023,7 +3066,7 @@ VISUAL DIRECTION EXAMPLES:
 ?? WEARING IMAGE SEGMENT:
 - Camera: Slow zoom-in from full-body to torso (2 seconds)
 - Character Pose: Standing, turning slowly to show product fit from different angles
-- Movement: Natural 90° turn, slight hand gestures to emphasize fit
+- Movement: Natural 90ï¿½ turn, slight hand gestures to emphasize fit
 - Product Focus: Showing how product fits on body, flattering angle
 - Lip-sync: [Smiling while describing product quality - seconds 0-2]
 
@@ -3292,7 +3335,7 @@ Design Details:
 - Key features
 
 ===== RECOMMENDATION GENERATION =====
-Based on character × product compatibility, recommend:
+Based on character ï¿½ product compatibility, recommend:
 
 1. SCENE/SETTING
 2. LIGHTING  
@@ -3394,5 +3437,8 @@ Return as JSON with:
     `;
   }
 };
+
+
+
 
 

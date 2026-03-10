@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { characterAPI } from '../services/api';
 import { Plus, Edit, Trash2, AlertCircle, Users } from 'lucide-react';
 import PageHeaderBar from '../components/PageHeaderBar';
+import ModalPortal from '../components/ModalPortal';
 
 export default function CharacterListPage() {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ export default function CharacterListPage() {
   };
 
   return (
+    <ModalPortal>
     <div className="image-generation-shell -mx-5 -mb-5 -mt-5 grid min-h-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden text-[13px] text-white lg:-mx-6 lg:-mb-6 lg:-mt-6" data-main-body>
       <PageHeaderBar
         icon={<Users className="h-4 w-4 text-sky-400" />}
@@ -184,7 +186,7 @@ export default function CharacterListPage() {
       </div>
 
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="studio-card-shell max-w-sm rounded-[1.2rem] p-6">
             <h3 className="mb-2 text-lg font-semibold">Delete Character?</h3>
             <p className="mb-6 text-sm text-slate-400">
@@ -210,5 +212,8 @@ export default function CharacterListPage() {
         </div>
       )}
     </div>
+    </ModalPortal>
   );
 }
+
+

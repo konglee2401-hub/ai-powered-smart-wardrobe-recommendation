@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import './AIImage.css';
 
 export default function AIImage({ src, alt = '', size = null, className = '', imageClassName = '' }) {
@@ -42,3 +42,4 @@ export default function AIImage({ src, alt = '', size = null, className = '', im
     </div>
   );
 }
+

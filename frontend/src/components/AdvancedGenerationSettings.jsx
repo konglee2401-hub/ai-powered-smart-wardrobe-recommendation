@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Advanced Generation Settings Component
  * Quality controls, CFG scale, sampling methods
  */
@@ -25,7 +25,7 @@ function Tooltip({ children, content }) {
   return (
     <div className="group relative inline-block">
       {children}
-      <div className="absolute bottom-full left-0 mb-2 z-50 hidden group-hover:flex w-56">
+      <div className="absolute bottom-full left-0 mb-2 app-layer-overlay hidden group-hover:flex w-56">
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl whitespace-normal">
           {content}
           <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-900" />
@@ -65,7 +65,7 @@ export default function AdvancedGenerationSettings({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-3 hover:bg-gray-750 transition-colors"
       >
-        <span className="text-sm font-semibold">⚙️ Advanced Settings</span>
+        <span className="text-sm font-semibold">âš™ï¸ Advanced Settings</span>
         {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
@@ -100,7 +100,7 @@ export default function AdvancedGenerationSettings({
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block flex items-center gap-1">
               <Tooltip content="Number of denoising steps. More = better quality but slower">
-                📊 Steps: {steps}
+                ðŸ“Š Steps: {steps}
               </Tooltip>
             </label>
             <input
@@ -123,7 +123,7 @@ export default function AdvancedGenerationSettings({
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block flex items-center gap-1">
               <Tooltip content="Classifier-Free Guidance. Higher = follow prompt more strictly">
-                🎯 CFG Scale: {cfgScale.toFixed(1)}
+                ðŸŽ¯ CFG Scale: {cfgScale.toFixed(1)}
               </Tooltip>
             </label>
             <input
@@ -146,7 +146,7 @@ export default function AdvancedGenerationSettings({
           <div>
             <label className="text-xs font-semibold text-gray-400 mb-2 block">
               <Tooltip content="Algorithm used for image generation">
-                🔄 Sampling Method
+                ðŸ”„ Sampling Method
               </Tooltip>
             </label>
             <div className="grid grid-cols-2 gap-1">
@@ -172,7 +172,7 @@ export default function AdvancedGenerationSettings({
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-gray-400 flex items-center gap-1">
                 <Tooltip content="Seed for reproducible results. Leave random for variation">
-                  🌱 Seed
+                  ðŸŒ± Seed
                 </Tooltip>
               </label>
               <label className="flex items-center gap-2 text-xs text-gray-400">
@@ -206,3 +206,5 @@ export default function AdvancedGenerationSettings({
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Prompt Template Renderer
  * Renders template with dynamic fields for user input
  */
@@ -42,7 +42,7 @@ const PromptTemplateRenderer = ({
       setTemplate(result.data);
       initializeFieldValues(result.data.fields);
     } catch (err) {
-      setError('Không thể tải template');
+      setError('KhÃ´ng thá»ƒ táº£i template');
       console.error(err);
     } finally {
       setLoading(false);
@@ -71,7 +71,7 @@ const PromptTemplateRenderer = ({
     try {
       const result = await promptTemplateService.renderTemplate(templateId, fieldValues);
       setRenderedPrompt(result.data);
-      setSuccess('✨ Prompt rendered successfully!');
+      setSuccess('âœ¨ Prompt rendered successfully!');
 
       if (onRender) {
         onRender(result.data);
@@ -291,7 +291,7 @@ const PromptTemplateRenderer = ({
       {/* Context Info */}
       {template.usedInPages && template.usedInPages.length > 0 && (
         <div className="p-3 bg-blue-900/20 border border-blue-700/50 rounded text-sm text-blue-200">
-          <strong>Sử dụng trong:</strong>{' '}
+          <strong>Sá»­ dá»¥ng trong:</strong>{' '}
           {template.usedInPages.map((loc, idx) => (
             <span key={idx}>
               {loc.page} {loc.step && `(Step ${loc.step})`}
@@ -422,3 +422,4 @@ const PromptTemplateRenderer = ({
 };
 
 export default PromptTemplateRenderer;
+

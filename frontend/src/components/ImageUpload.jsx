@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Image Upload Component
  * Reusable image upload with preview
  */
@@ -23,14 +23,14 @@ export default function ImageUpload({
 
     // Validate file size
     if (file.size > maxSize) {
-      alert(`File quá lớn. Kích thước tối đa là ${maxSize / 1024 / 1024}MB`);
+      alert(`File quÃ¡ lá»›n. KÃ­ch thÆ°á»›c tá»‘i Ä‘a lÃ  ${maxSize / 1024 / 1024}MB`);
       return;
     }
 
     // Validate file type
     const acceptedTypes = accept.split(',').map(t => t.trim());
     if (!acceptedTypes.includes(file.type)) {
-      alert('Định dạng file không được hỗ trợ');
+      alert('Äá»‹nh dáº¡ng file khÃ´ng Ä‘Æ°á»£c há»— trá»£');
       return;
     }
 
@@ -98,3 +98,4 @@ export default function ImageUpload({
     </div>
   );
 }
+

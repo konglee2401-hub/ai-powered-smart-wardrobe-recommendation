@@ -1,4 +1,4 @@
-/**
+﻿/**
  * VoiceOverPage - Main page for TTS voiceover generation
  * Implements 3-step flow: Video Upload > Script Generation > Audio Generation
  */
@@ -14,9 +14,9 @@ import { useTranslation } from 'react-i18next';
 import PageHeaderBar from '../components/PageHeaderBar';
 
 const STEPS = [
-  { id: 1, name: 'Upload Videos', icon: '📹' },
-  { id: 2, name: 'Generate Script', icon: '✍️' },
-  { id: 3, name: 'Generate Audio', icon: '🎙️' },
+  { id: 1, name: 'Upload Videos', icon: 'ðŸ“¹' },
+  { id: 2, name: 'Generate Script', icon: 'âœï¸' },
+  { id: 3, name: 'Generate Audio', icon: 'ðŸŽ™ï¸' },
 ];
 
 export default function VoiceOverPage() {
@@ -103,12 +103,12 @@ export default function VoiceOverPage() {
         className="h-16"
       />
 
-      <div className="flex min-h-0 gap-4 px-5 py-4 lg:px-6">
+      <div className="flex min-h-0 gap-3 px-4 py-3 lg:px-4">
         {/* Left Sidebar - Voice Settings */}
-        <div className="studio-card-shell w-72 overflow-y-auto rounded-[1.35rem]">
-          <div className="p-4 space-y-4">
+        <div className="generation-content-plain w-64 overflow-y-auto">
+          <div className="space-y-3">
             {/* Branding */}
-            <div className="flex items-center gap-2 mb-6">
+            <div className="mb-4 flex items-center gap-2">
               <Volume2 className="w-6 h-6 text-amber-400" />
               <div>
                 <h1 className="text-lg font-bold text-white">{t('voiceOver.title')}</h1>
@@ -117,7 +117,7 @@ export default function VoiceOverPage() {
             </div>
 
             {/* Product Info (Optional metadata) */}
-            <div className="space-y-2 p-3 rounded-lg bg-gray-700/20 border border-gray-700">
+            <div className="studio-card-shell space-y-2 p-3">
               <label className="text-xs font-semibold text-gray-300">Product Name (Optional)</label>
               <input
                 type="text"
@@ -151,7 +151,7 @@ export default function VoiceOverPage() {
             />
 
             {/* Progress Indicator */}
-            <div className="mt-6 pt-4 border-t border-gray-700 space-y-2">
+            <div className="studio-card-shell space-y-2 p-3">
               <h3 className="text-xs font-semibold text-gray-400 uppercase">Progress</h3>
               <div className="space-y-2">
                 {STEPS.map((step, index) => (
@@ -181,9 +181,9 @@ export default function VoiceOverPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="studio-card-shell flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem]">
+        <div className="generation-content-plain flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Step Header */}
-          <div className="px-8 py-4">
+          <div className="px-4 py-3">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-white">
@@ -209,7 +209,7 @@ export default function VoiceOverPage() {
           </div>
 
           {/* Step Content */}
-          <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="flex-1 overflow-y-auto px-4 py-3">
             {currentStep === 1 && (
               <VideoUploadStep
                 videos={videos}
@@ -279,3 +279,4 @@ export default function VoiceOverPage() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Style Presets Component
  * Pre-configured style combinations for quick application
  */
@@ -11,7 +11,7 @@ const STYLE_PRESETS = [
     id: 'minimalist-studio',
     name: 'Minimalist Studio',
     description: 'Clean, professional studio look',
-    icon: '📷',
+    icon: 'ðŸ“·',
     styles: {
       scene: 'studio',
       lighting: 'soft-diffused',
@@ -25,7 +25,7 @@ const STYLE_PRESETS = [
     id: 'golden-editorial',
     name: 'Golden Hour Editorial',
     description: 'Warm, luxurious editorial style',
-    icon: '✨',
+    icon: 'âœ¨',
     styles: {
       scene: 'outdoor-park',
       lighting: 'golden-hour',
@@ -39,7 +39,7 @@ const STYLE_PRESETS = [
     id: 'urban-street',
     name: 'Urban Street',
     description: 'Modern street style photography',
-    icon: '🏙️',
+    icon: 'ðŸ™ï¸',
     styles: {
       scene: 'urban-street',
       lighting: 'natural-window',
@@ -53,7 +53,7 @@ const STYLE_PRESETS = [
     id: 'luxury-interior',
     name: 'Luxury Interior',
     description: 'High-end interior fashion shoot',
-    icon: '💎',
+    icon: 'ðŸ’Ž',
     styles: {
       scene: 'luxury-interior',
       lighting: 'dramatic-rembrandt',
@@ -67,7 +67,7 @@ const STYLE_PRESETS = [
     id: 'casual-lifestyle',
     name: 'Casual Lifestyle',
     description: 'Relaxed everyday wear style',
-    icon: '📸',
+    icon: 'ðŸ“¸',
     styles: {
       scene: 'cafe',
       lighting: 'natural-window',
@@ -81,7 +81,7 @@ const STYLE_PRESETS = [
     id: 'high-fashion-dramatic',
     name: 'High Fashion Dramatic',
     description: 'Bold, artistic haute couture',
-    icon: '👠',
+    icon: 'ðŸ‘ ',
     styles: {
       scene: 'minimalist-indoor',
       lighting: 'dramatic-rembrandt',
@@ -95,7 +95,7 @@ const STYLE_PRESETS = [
     id: 'vibrant-neon',
     name: 'Vibrant Neon',
     description: 'Contemporary neon-lit look',
-    icon: '🎨',
+    icon: 'ðŸŽ¨',
     styles: {
       scene: 'minimalist-indoor',
       lighting: 'neon-colored',
@@ -109,7 +109,7 @@ const STYLE_PRESETS = [
     id: 'bohemian-dreamy',
     name: 'Bohemian Dreamy',
     description: 'Soft, romantic bohemian aesthetic',
-    icon: '🌻',
+    icon: 'ðŸŒ»',
     styles: {
       scene: 'outdoor-park',
       lighting: 'overcast-outdoor',
@@ -166,7 +166,7 @@ export default function StylePresets({
                 >
                   <div className="flex items-start justify-between mb-1">
                     <span className="text-lg">{preset.icon}</span>
-                    {isActive && <span className="text-xs text-purple-400">✓</span>}
+                    {isActive && <span className="text-xs text-purple-400">âœ“</span>}
                   </div>
                   <h4 className="text-xs font-medium text-gray-200 mb-0.5">{preset.name}</h4>
                   <p className="text-xs text-gray-500 line-clamp-1">{preset.description}</p>
@@ -183,3 +183,4 @@ export default function StylePresets({
     </div>
   );
 }
+

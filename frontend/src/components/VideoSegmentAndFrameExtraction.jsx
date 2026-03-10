@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 /**
@@ -99,7 +99,7 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
     <div className="video-segment-frame-container">
       {/* Video Segments */}
       <div className="segments-section">
-        <h3>📹 Video Segments</h3>
+        <h3>ðŸ“¹ Video Segments</h3>
         
         {videoSegments && videoSegments.length > 0 ? (
           <div className="segments-carousel">
@@ -121,14 +121,14 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
                           onClick={() => handleExtractLastFrame(index)}
                           disabled={loading}
                         >
-                          📸 Extract Last Frame
+                          ðŸ“¸ Extract Last Frame
                         </button>
                         <a
                           href={segment.url || segment.path}
                           download
                           className="download-btn"
                         >
-                          ⬇️ Download
+                          â¬‡ï¸ Download
                         </a>
                       </div>
                     </>
@@ -145,7 +145,7 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
                   <h4>Segment {index + 1}</h4>
                   <p className="segment-prompt">{segment.prompt || 'No prompt'}</p>
                   {segment.duration && (
-                    <p className="segment-duration">⏱️ {segment.duration}s</p>
+                    <p className="segment-duration">â±ï¸ {segment.duration}s</p>
                   )}
                 </div>
               </div>
@@ -163,7 +163,7 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
       {/* Extracted Frames */}
       {extractedFrames.length > 0 && (
         <div className="frames-section">
-          <h3>🖼️ Extracted Frames</h3>
+          <h3>ðŸ–¼ï¸ Extracted Frames</h3>
           <p className="frames-subtitle">
             Use extracted frames as the base image for your next video generation
           </p>
@@ -204,14 +204,14 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
                     onClick={() => handleUseFrameForNextGeneration(frame.id)}
                     title="Use this frame as base image for next generation"
                   >
-                    ↻ Use for Next Generation
+                    â†» Use for Next Generation
                   </button>
                   <button
                     className="delete-frame-btn"
                     onClick={() => handleDeleteFrame(frame.id)}
                     title="Delete this extracted frame"
                   >
-                    🗑️
+                    ðŸ—‘ï¸
                   </button>
                 </div>
               </div>
@@ -222,7 +222,7 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
           {selectedFrame && (
             <div className="frame-preview-modal" onClick={() => setSelectedFrame(null)}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <button className="close-btn" onClick={() => setSelectedFrame(null)}>✕</button>
+                <button className="close-btn" onClick={() => setSelectedFrame(null)}>âœ•</button>
 
                 <div className="preview-image">
                   <img
@@ -246,7 +246,7 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
                     setSelectedFrame(null);
                   }}
                 >
-                  ↻ Use This Frame for Next Generation
+                  â†» Use This Frame for Next Generation
                 </button>
               </div>
             </div>
@@ -638,3 +638,4 @@ function VideoSegmentAndFrameExtraction({ sessionId, videoSegments, onFrameSelec
 }
 
 export default VideoSegmentAndFrameExtraction;
+

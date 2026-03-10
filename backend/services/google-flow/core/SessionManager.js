@@ -49,7 +49,7 @@ class SessionManager {
       userDataDir: profileDir,  // 💫 Use persistent Chrome profile for each flow
       sessionFilePath: options.sessionFilePath || GOOGLE_FLOW_DEFAULT_SESSION,  // 💫 Shared session file
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
-      projectId: options.projectId || '58d791d4-37c9-47a8-ae3b-816733bc3ec0',
+      projectId: options.projectId || '87b78b0e-8b5a-40fc-9142-cdeda1419be7',
       outputDir: options.outputDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'uploads/generated-images'),
       timeouts: {
         pageLoad: 60000,
@@ -335,18 +335,11 @@ class SessionManager {
         const minimalReady = elements.visible > 8 && elements.documentReady === 'complete' && elements.bodyChildren > 10;
         
         pageReady = strictReady || flexibleReady || minimalReady;
-
         if (!pageReady) {
           if (attempts <= 3 || attempts % 5 === 0) {
-            console.log(`   🔍 Attempt ${attempts}/${maxAttempts}:`);
-            console.log(`      Buttons: ${elements.buttons} (visible: ${elements.visible})`);
-            console.log(`      Inputs: file=${elements.fileInput}, text=${elements.textInput}, prompts=${elements.prompts}`);
-            console.log(`      Content: main=${elements.mainContent}, flowUI=${elements.flowUI}`);
-            console.log(`      Document: ${elements.documentReady}, body children: ${elements.bodyChildren}`);
+            console.log(`   Waiting for page readiness (attempt ${attempts}/${maxAttempts}): visible=${elements.visible}, file=${elements.fileInput}, text=${elements.textInput}, prompts=${elements.prompts}`);
           }
           await this.page.waitForTimeout(1000);
-        } else {
-          console.log(`   ✅ Page ready (attempt ${attempts}): strict=${strictReady}, flexible=${flexibleReady}, minimal=${minimalReady}\n`);
         }
       } catch (e) {
         console.log(`   ⚠️  Error: ${e.message}`);

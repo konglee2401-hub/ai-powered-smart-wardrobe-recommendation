@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 3: Audio Generation Component
  * Generates TTS audio from script and provides preview/download options
  */
@@ -209,7 +209,7 @@ export default function AudioGenerationStep({
         <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-700/50">
           <div className="text-xs text-gray-400 mb-1">Language</div>
           <div className="text-sm font-bold text-blue-300">
-            {language === 'VI' ? 'Tiếng Việt' : 'English'}
+            {language === 'VI' ? 'Tiáº¿ng Viá»‡t' : 'English'}
           </div>
         </div>
       </div>
@@ -308,3 +308,4 @@ export default function AudioGenerationStep({
     </div>
   );
 }
+

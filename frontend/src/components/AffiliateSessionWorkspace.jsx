@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FileText, Video } from 'lucide-react';
 import AIImage from './AIImage';
 
 const normalizeHashtag = (tag) => `#${String(tag || '').replace(/^#+/, '').trim()}`;
 const resolveMediaSrc = (item) => item?.href || item?.url || item?.path || item?.driveUrl || null;
+const formatJsonText = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return String(value);
+  }
+};
 
 const getSessionFrameLibrary = (session) => {
   if (Array.isArray(session.step2Items) && session.step2Items.length > 0) return session.step2Items;
@@ -104,9 +113,11 @@ function CollapsibleTextCard({ title, text, badge, rightAction = null, minHeight
 }
 
 function MediaStripCard({ title, items, expectedCount, mediaType = 'image', helperText }) {
-  const totalSlots = Math.max(expectedCount || 0, items.length || 0, 1);
+  const resolvedExpectedCount = Number.isFinite(expectedCount) ? expectedCount : 0;
+  const totalSlots = Math.max(resolvedExpectedCount, items.length || 0, 0);
   const normalizedItems = Array.from({ length: totalSlots }, (_, idx) => items[idx] || null);
   const completedCount = items.filter((item) => item?.status === 'completed' || resolveMediaSrc(item)).length;
+  const hasKnownOutputs = totalSlots > 0;
 
   return (
     <div className="studio-card-shell rounded-2xl p-3 shadow-[0_14px_34px_rgba(100,156,198,0.10)]">
@@ -118,8 +129,11 @@ function MediaStripCard({ title, items, expectedCount, mediaType = 'image', help
         <span className="apple-option-chip rounded-full px-2 py-1 text-[10px] font-semibold text-slate-600">{completedCount}/{totalSlots}</span>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {normalizedItems.map((item, idx) => {
+      {!hasKnownOutputs ? (
+        <div className="rounded-2xl border border-dashed border-white/45 bg-white/20 px-4 py-6 text-[12px] text-slate-500">Waiting for backend to publish output slots...</div>
+      ) : (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {normalizedItems.map((item, idx) => {
           const src = resolveMediaSrc(item);
           const completed = item?.status === 'completed' || Boolean(src);
           const failed = item?.status === 'failed';
@@ -146,8 +160,9 @@ function MediaStripCard({ title, items, expectedCount, mediaType = 'image', help
               {item?.error ? <p className="mt-2 text-[11px] text-rose-600">{item.error}</p> : null}
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -190,11 +205,22 @@ export default function AffiliateSessionWorkspace({ session }) {
   const scriptText = getSessionScriptsText(session);
   const scriptValue = scriptText || session.analysis?.voiceoverScript || '';
   const hashtagText = (session.analysis?.hashtags || []).map(normalizeHashtag).join('\n');
+  const analysisText = formatJsonText(session.analysis?.step1);
   const expectedFrameCount = session.step2Progress?.total || session.preview?.step2?.imageCount || frameItems.length;
   const expectedVideoCount = session.step4Progress?.total || session.preview?.step4?.totalCount || videoItems.length;
 
   return (
     <div className="grid gap-3">
+      {session.error && (
+        <div className="rounded-2xl border border-rose-300/70 bg-rose-100/60 px-4 py-3 text-rose-900/90">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">Session Failed</p>
+          <p className="mt-2 text-[12px] leading-6">{session.error}</p>
+          {session.preview?.status ? (
+            <p className="mt-1 text-[11px] text-rose-700/80">Last status: {session.preview.status}</p>
+          ) : null}
+        </div>
+      )}
+
       {session.manualAction && (
         <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Manual Action Required</p>
@@ -206,6 +232,7 @@ export default function AffiliateSessionWorkspace({ session }) {
       <div className="grid gap-3 xl:grid-cols-[minmax(300px,0.92fr)_minmax(0,2.08fr)]">
         <div className="grid content-start gap-3">
           <CollapsibleTextCard title="Step 1 Prompt" text={promptText} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'analyze')} label={getAffiliateSessionStepStatus(session, 'analyze')} />} rightAction={<CopyInlineButton value={promptText} />} minHeight="min-h-[190px]" />
+          <CollapsibleTextCard title="Step 1 Analysis" text={analysisText} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'analyze')} label={getAffiliateSessionStepStatus(session, 'analyze')} />} rightAction={<CopyInlineButton value={analysisText} />} minHeight="min-h-[190px]" />
           <CollapsibleTextCard title="Step 3 Script" text={scriptValue} badge={<SessionStatusPill status={getAffiliateSessionStepStatus(session, 'deep-analysis')} label={getAffiliateSessionStepStatus(session, 'deep-analysis')} />} rightAction={<CopyInlineButton value={scriptValue} />} minHeight="min-h-[220px]" />
           <CollapsibleTextCard title="Hashtags" text={hashtagText} rightAction={<CopyInlineButton value={hashtagText} />} minHeight="min-h-[140px]" />
         </div>
@@ -219,3 +246,5 @@ export default function AffiliateSessionWorkspace({ session }) {
     </div>
   );
 }
+
+

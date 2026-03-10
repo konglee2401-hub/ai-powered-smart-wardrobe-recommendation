@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Style Options Component
  * Display and manage generation options
  */
@@ -10,41 +10,41 @@ export default function StyleOptions({ options, onChange, availableOptions }) {
   const optionCategories = {
     quality: {
       label: 'Quality',
-      icon: '✨',
+      icon: 'âœ¨',
       options: ['standard', 'high', 'ultra'],
     },
     style: {
       label: 'Style',
-      icon: '🎨',
+      icon: 'ðŸŽ¨',
       options: ['professional', 'dramatic', 'minimalist', 'natural', 'vintage'],
     },
     lighting: {
       label: 'Lighting',
-      icon: '💡',
+      icon: 'ðŸ’¡',
       options: ['studio', 'natural', 'soft', 'dramatic', 'golden-hour'],
     },
     background: {
       label: 'Background',
-      icon: '🖼️',
+      icon: 'ðŸ–¼ï¸',
       options: ['white', 'gradient', 'lifestyle', 'studio', 'transparent'],
     },
     cameraAngle: {
       label: 'Camera Angle',
-      icon: '📷',
+      icon: 'ðŸ“·',
       options: ['eye-level', 'slightly-above', 'birds-eye', 'low-angle'],
     },
     composition: {
       label: 'Composition',
-      icon: '📐',
+      icon: 'ðŸ“',
       options: ['centered', 'rule-of-thirds', 'environmental', 'close-up'],
     },
   };
 
   const booleanOptions = [
-    { key: 'enhanceColors', label: 'Enhance Colors', icon: '🌈' },
-    { key: 'enhanceDetails', label: 'Enhance Details', icon: '🔍' },
-    { key: 'addShadows', label: 'Add Shadows', icon: '🌓' },
-    { key: 'removeBackground', label: 'Remove Background', icon: '✂️' },
+    { key: 'enhanceColors', label: 'Enhance Colors', icon: 'ðŸŒˆ' },
+    { key: 'enhanceDetails', label: 'Enhance Details', icon: 'ðŸ”' },
+    { key: 'addShadows', label: 'Add Shadows', icon: 'ðŸŒ“' },
+    { key: 'removeBackground', label: 'Remove Background', icon: 'âœ‚ï¸' },
   ];
 
   function handleSelectChange(key, value) {
@@ -113,3 +113,4 @@ export default function StyleOptions({ options, onChange, availableOptions }) {
     </div>
   );
 }
+

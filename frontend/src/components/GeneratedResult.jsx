@@ -1,10 +1,11 @@
-/**
+﻿/**
  * Generated Result Component
  * Display generated image with actions
  */
 
 import React, { useState } from 'react';
 import {
+import ModalPortal from './ModalPortal';
   Download, RefreshCw, Eye, Copy, ExternalLink,
   ZoomIn, ZoomOut, Maximize2, X, CheckCircle
 } from 'lucide-react';
@@ -36,6 +37,7 @@ export default function GeneratedResult({
   }
 
   return (
+    <ModalPortal>
     <>
       <div className="space-y-4">
         {/* Image Preview */}
@@ -150,7 +152,7 @@ export default function GeneratedResult({
 
       {/* Fullscreen Modal */}
       {showFullscreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-95 app-layer-modal flex items-center justify-center p-4">
           <button
             onClick={handleCloseFullscreen}
             className="absolute top-4 right-4 p-3 bg-white text-gray-800 rounded-full hover:bg-gray-100 transition-colors z-10"
@@ -185,5 +187,8 @@ export default function GeneratedResult({
         </div>
       )}
     </>
+    </ModalPortal>
   );
 }
+
+

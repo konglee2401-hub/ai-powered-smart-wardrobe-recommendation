@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -116,6 +116,45 @@ function formatDuration(duration) {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
+
+function normalizePath(value) {
+  if (!value) return null;
+  return String(value).replace(/\\/g, '/');
+}
+
+function getPublicUrl(value) {
+  if (!value) return null;
+  const normalized = normalizePath(value);
+  if (!normalized) return null;
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
+  if (normalized.startsWith('/uploads/') || normalized.startsWith('/temp/')) return normalized;
+  const uploadsIndex = normalized.indexOf('/uploads/');
+  if (uploadsIndex >= 0) return normalized.slice(uploadsIndex);
+  const tempIndex = normalized.indexOf('/temp/');
+  if (tempIndex >= 0) return normalized.slice(tempIndex);
+  const backendUploadsIndex = normalized.indexOf('/backend/uploads/');
+  if (backendUploadsIndex >= 0) return normalized.slice(backendUploadsIndex + '/backend'.length);
+  const backendTempIndex = normalized.indexOf('/backend/temp/');
+  if (backendTempIndex >= 0) return normalized.slice(backendTempIndex + '/backend'.length);
+  return null;
+}
+
+function getMediaKind(value) {
+  if (!value) return 'file';
+  const normalized = normalizePath(value);
+  const ext = normalized?.split('.').pop()?.toLowerCase() || '';
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext)) return 'image';
+  if (['mp4', 'mov', 'webm', 'mkv'].includes(ext)) return 'video';
+  if (['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(ext)) return 'audio';
+  return 'file';
+}
+
+function getFileLabel(value) {
+  if (!value) return '';
+  const normalized = normalizePath(value);
+  return normalized.split('/').pop() || normalized;
+}
+
 function summarizeJson(data) {
   if (!data || typeof data !== 'object') return [];
   return Object.entries(data)
@@ -200,6 +239,49 @@ function JsonPreview({ data, emptyLabel = 'No structured data captured yet.' }) 
           </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+
+function MediaPreviewCard({ item, compact = false }) {
+  const kind = item?.kind || getMediaKind(item?.path || item?.url);
+  const label = item?.label || getFileLabel(item?.path || item?.url) || 'Asset';
+  const previewUrl = item?.url || getPublicUrl(item?.path);
+
+  return (
+    <div className={`rounded-2xl border border-slate-800/80 bg-slate-950/60 ${compact ? 'p-2' : 'p-3'}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="truncate text-[11px] font-medium text-slate-200">{label}</p>
+        {previewUrl ? (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] uppercase tracking-[0.12em] text-cyan-200/80 hover:text-cyan-200"
+          >
+            Preview
+          </a>
+        ) : null}
+      </div>
+      <div className={`overflow-hidden rounded-xl border border-slate-800/70 bg-black/40 ${compact ? 'h-24' : 'h-44'}`}>
+        {previewUrl ? (
+          kind === 'video' ? (
+            <video controls src={previewUrl} className="h-full w-full object-contain" />
+          ) : kind === 'audio' ? (
+            <div className="flex h-full w-full items-center justify-center p-3">
+              <audio controls src={previewUrl} className="w-full" />
+            </div>
+          ) : kind === 'image' ? (
+            <img src={previewUrl} alt={label} className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">No preview</div>
+          )
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No preview</div>
+        )}
+      </div>
+      <p className="mt-2 break-all text-[11px] text-slate-500">{item?.path || item?.url || 'No file path'}</p>
     </div>
   );
 }
@@ -400,6 +482,24 @@ export default function GenerationHistory() {
     ...(selectedArtifacts.videoSegmentPaths || []),
     ...(selectedArtifacts.audioPaths || []),
   ];
+  const workflowState = selectedSession?.workflowState || null;
+  const workflowInputs = [
+    workflowState?.step1?.characterImage?.path,
+    workflowState?.step1?.productImage?.path,
+  ].filter(Boolean);
+  const workflowOutputs = [
+    workflowState?.step2?.images?.wearing?.path || workflowState?.step2?.images?.wearing?.previewUrl,
+    workflowState?.step2?.images?.holding?.path || workflowState?.step2?.images?.holding?.previewUrl,
+    workflowState?.step4?.video?.path || workflowState?.step4?.video?.previewUrl,
+    workflowState?.step4?.stitchedVideo?.path || workflowState?.step4?.stitchedVideo?.previewUrl,
+    workflowState?.step5?.audio?.path || workflowState?.step5?.audio?.previewUrl,
+  ].filter(Boolean);
+  const inputItems = [...inputArtifacts, ...workflowInputs]
+    .filter(Boolean)
+    .map((item) => ({ path: item, url: getPublicUrl(item), kind: getMediaKind(item) }));
+  const outputItems = [...outputArtifacts, ...workflowOutputs]
+    .filter(Boolean)
+    .map((item) => ({ path: item, url: getPublicUrl(item), kind: getMediaKind(item) }));
 
   async function handleDeleteSession(sessionId) {
     const confirmed = window.confirm(`Delete session ${sessionId}?`);
@@ -668,15 +768,13 @@ export default function GenerationHistory() {
                   title="Inputs and outputs"
                   subtitle="Stored artifacts captured from the run. Inputs stay separate from generated outputs to keep review fast."
                 >
-                  <div className="grid gap-4 grid-cols-2 min-w-0">
+                  <div className="grid gap-4 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] min-w-0">
                     <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/8 p-3 min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Inputs</p>
-                      <div className="mt-3 space-y-2 min-w-0">
-                        {inputArtifacts.length ? (
-                          inputArtifacts.map((item) => (
-                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 min-w-0">
-                              {item}
-                            </div>
+                      <div className="mt-3 flex flex-col gap-3">
+                        {inputItems.length ? (
+                          inputItems.map((item, index) => (
+                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} compact />
                           ))
                         ) : (
                           <p className="text-xs text-slate-500">No persisted input artifact path was recorded.</p>
@@ -685,12 +783,10 @@ export default function GenerationHistory() {
                     </div>
                     <div className="rounded-2xl border border-pink-400/20 bg-pink-500/8 p-3 min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-pink-200/80">Outputs</p>
-                      <div className="mt-3 space-y-2 min-w-0">
-                        {outputArtifacts.length ? (
-                          outputArtifacts.map((item) => (
-                            <div key={item} className="break-all rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 min-w-0">
-                              {item}
-                            </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {outputItems.length ? (
+                          outputItems.map((item, index) => (
+                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} />
                           ))
                         ) : (
                           <p className="text-xs text-slate-500">No generated output artifact was stored on this session.</p>
@@ -811,3 +907,12 @@ export default function GenerationHistory() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

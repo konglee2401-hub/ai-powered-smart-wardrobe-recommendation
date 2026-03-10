@@ -1,5 +1,5 @@
-/**
- * AI Creative Studio - Enhanced Virtual Try-On
+﻿/**
+ * K-Creative Studio - Enhanced Virtual Try-On
  * - Step 1: Upload images (Character + Product)
  * - Step 2: AI Analysis with breakdown & extraction
  * - Step 3: Style customization & Prompt building (Merged)
@@ -64,14 +64,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // Use cases
 const USE_CASES = [
-  { value: 'change-clothes', label: 'changeClothes', description: 'M?c s?n ph?m l�n ngu?i m?u' },
-  { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nh�n v?t c?m s?n ph?m tr�n tay' },
+  { value: 'change-clothes', label: 'changeClothes', description: 'M?c s?n ph?m lï¿½n ngu?i m?u' },
+  { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nhï¿½n v?t c?m s?n ph?m trï¿½n tay' },
   { value: 'affiliate-video-tiktok', label: 'affiliateVideoTikTok', description: 'Video affiliate TikTok 9:16 (lu?ng Step 1 + Step 2)' },
   { value: 'ecommerce-product', label: 'ecommerce', description: '?nh s?n ph?m thuong m?i' },
-  { value: 'social-media', label: 'socialMedia', description: 'B�i dang m?ng x� h?i' },
-  { value: 'fashion-editorial', label: 'editorial', description: 'B�i b�o th?i trang chuy�n nghi?p' },
-  { value: 'lifestyle-scene', label: 'lifestyle', description: 'C?nh s?ng h�ng ng�y' },
-  { value: 'before-after', label: 'beforeAfter', description: 'So s�nh tru?c/sau' },
+  { value: 'social-media', label: 'socialMedia', description: 'Bï¿½i dang m?ng xï¿½ h?i' },
+  { value: 'fashion-editorial', label: 'editorial', description: 'Bï¿½i bï¿½o th?i trang chuyï¿½n nghi?p' },
+  { value: 'lifestyle-scene', label: 'lifestyle', description: 'C?nh s?ng hï¿½ng ngï¿½y' },
+  { value: 'before-after', label: 'beforeAfter', description: 'So sï¿½nh tru?c/sau' },
 ];
 
 const ACTIVE_IMAGE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
@@ -84,12 +84,12 @@ const ACTIVE_IMAGE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
 
 // Focus options
 const FOCUS_OPTIONS = [
-  { value: 'full-outfit', label: 'fullOutfit', description: 'To�n b? trang ph?c' },
-  { value: 'top', label: 'top', description: 'Ph?n tr�n (�o)' },
-  { value: 'bottom', label: 'bottom', description: 'Ph?n du?i (qu?n/v�y)' },
-  { value: 'shoes', label: 'shoes', description: 'Gi�y' },
+  { value: 'full-outfit', label: 'fullOutfit', description: 'Toï¿½n b? trang ph?c' },
+  { value: 'top', label: 'top', description: 'Ph?n trï¿½n (ï¿½o)' },
+  { value: 'bottom', label: 'bottom', description: 'Ph?n du?i (qu?n/vï¿½y)' },
+  { value: 'shoes', label: 'shoes', description: 'Giï¿½y' },
   { value: 'accessories', label: 'accessories', description: 'Ph? ki?n' },
-  { value: 'specific-item', label: 'specific', description: 'M�n d? c? th?' },
+  { value: 'specific-item', label: 'specific', description: 'Mï¿½n d? c? th?' },
 ];
 
 const USE_CASE_DISPLAY_LABELS = {
@@ -460,7 +460,7 @@ function Tooltip({ children, content }) {
   return (
     <div className="group relative inline-block w-full">
       {children}
-      <div className="absolute bottom-full left-0 mb-2 z-50 hidden group-hover:block w-48">
+      <div className="absolute bottom-full left-0 mb-2 app-layer-overlay hidden group-hover:block w-48">
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl whitespace-normal">
           {content}
           <div className="absolute top-full left-4 border-8 border-transparent border-t-gray-900" />
@@ -532,9 +532,9 @@ const getUploadInstructions = (useCase) => {
       hint: 'Character holds product; character is 60% focus, product is 40% focus'
     },
     'affiliate-video-tiktok': {
-      character: 'KOL/creator r� m?t v� to�n th�n ho?c n?a th�n',
-      product: 'S?n ph?m d�ng d? quay affiliate TikTok',
-      hint: 'Use case n�y ch?y lu?ng Affiliate TikTok Step 1 (analyze) + Step 2 (generate wearing/holding)'
+      character: 'KOL/creator rï¿½ m?t vï¿½ toï¿½n thï¿½n ho?c n?a thï¿½n',
+      product: 'S?n ph?m dï¿½ng d? quay affiliate TikTok',
+      hint: 'Use case nï¿½y ch?y lu?ng Affiliate TikTok Step 1 (analyze) + Step 2 (generate wearing/holding)'
     },
     'ecommerce-product': {
       character: 'Optional: person for scale/styling reference',
@@ -1735,7 +1735,7 @@ export default function ImageGenerationPage() {
           const file = new File([blob], fileName, { type: 'image/png' });
           
           const uploadResult = await driveAPI.uploadFile(file, {
-            description: `Generated from Smart Wardrobe App\nPrompt: ${generatedPrompt?.positive?.slice(0, 100)}...`,
+            description: `Generated from K-Creative Studio\nPrompt: ${generatedPrompt?.positive?.slice(0, 100)}...`,
             metadata: {
               useCase: useCase,
               style: selectedOptions.style || 'unknown',
@@ -1846,12 +1846,12 @@ export default function ImageGenerationPage() {
   const currentScene = sceneOptions.find((scene) => scene.value === selectedOptions.scene);
   const selectedScenePrompt = getSceneLockedPrompt(currentScene, i18n.language || 'en');
   const scenePreviewUrl = referenceImage?.preview || getScenePreviewUrl(currentScene, aspectRatio);
-  const step1SectionClass = 'studio-card-shell rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.022))] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_28px_rgba(2,6,23,0.16)]';
-  const uploadCardBaseClass = 'studio-card-shell flex min-h-[342px] flex-col rounded-[1.35rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_34px_rgba(2,6,23,0.14)]';
-  const uploadDropzoneBaseClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition';
-  const characterCardClass = `${uploadCardBaseClass} ${!isCharacterRequired ? 'opacity-80' : ''} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
-  const productCardClass = `${uploadCardBaseClass} ${showOptionalProductAsSecondary ? 'min-h-[332px] opacity-75 saturate-[0.88]' : ''} bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.08),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
-  const sceneCardClass = `${uploadCardBaseClass} bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_40%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(15,23,42,0.18))]`;
+  const step1SectionClass = 'studio-card-shell rounded-[0.75rem] px-2.5 py-2';
+  const uploadCardBaseClass = 'studio-card-shell flex min-h-[318px] flex-col rounded-[0.875rem] p-2.5';
+  const uploadDropzoneBaseClass = 'studio-dropzone group relative flex items-center justify-center overflow-hidden rounded-[0.75rem] transition';
+  const characterCardClass = `${uploadCardBaseClass} ${!isCharacterRequired ? 'opacity-80' : ''}`;
+  const productCardClass = `${uploadCardBaseClass} ${showOptionalProductAsSecondary ? 'min-h-[304px] opacity-75 saturate-[0.88]' : ''}`;
+  const sceneCardClass = uploadCardBaseClass;
   const getSectionOptionChipClass = (isSelected, tone = 'cool') => {
     const accentClass = isSelected
       ? tone === 'warm'
@@ -1861,7 +1861,7 @@ export default function ImageGenerationPage() {
           : ''
       : '';
     const selectedClass = isSelected ? 'apple-option-chip-selected selected' : '';
-    return `apple-option-chip ${tone ? `apple-option-chip-${tone}` : ''} ${selectedClass} ${accentClass} flex w-full items-center justify-between gap-2 rounded-[1rem] px-3 py-2.5 text-left text-[12px] font-medium leading-4 transition`;
+    return `apple-option-chip ${tone ? `apple-option-chip-${tone}` : ''} ${selectedClass} ${accentClass} flex w-full items-center justify-between gap-2 rounded-[0.625rem] px-2.5 py-2 text-left text-[12px] font-medium leading-4 transition`;
   };
 
   const handleImageFileSelection = (event, setter) => {
@@ -1910,8 +1910,8 @@ export default function ImageGenerationPage() {
       />
 
       {/* ==================== MAIN BODY ==================== */}
-      <div className={`${currentStep === 1 ? 'step1-main-shell' : ''} flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-3`}>
-        <div className={`${currentStep === 1 ? 'step1-main-row' : ''} flex min-h-0 flex-1 items-stretch gap-4 overflow-hidden`}>
+      <div className={`${currentStep === 1 ? 'step1-main-shell' : ''} flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-2.5`}>
+        <div className={`${currentStep === 1 ? 'step1-main-row' : ''} flex min-h-0 flex-1 items-stretch gap-[15px] overflow-hidden`}>
           {/* ==================== LEFT TOOLBAR: Mode + Provider ==================== */}
           <div className="hidden">
           <Tooltip content="Browser AI mode">
@@ -1946,7 +1946,7 @@ export default function ImageGenerationPage() {
           {activeMode === 'browser' && (
             <div className="flex flex-col gap-2">
               {PROVIDERS.map((provider) => (
-                <Tooltip key={provider.id} content={`${provider.label} · ${provider.description}`}>
+                <Tooltip key={provider.id} content={`${provider.label} Â· ${provider.description}`}>
                   <button
                     onClick={() => setBrowserProvider(provider.id)}
                     className={`rounded-2xl border p-2.5 transition-all ${
@@ -1972,7 +1972,7 @@ export default function ImageGenerationPage() {
           </div>
 
           {/* ==================== LEFT SIDEBAR: Options ==================== */}
-          <div className={`${currentStep === 2 ? 'w-[190px] xl:w-[206px]' : currentStep === 3 ? 'w-[206px]' : 'w-[350px] xl:w-[380px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} flex min-h-0 flex-col flex-shrink-0 overflow-hidden rounded-[1.75rem] transition-all duration-300`}>
+          <div className={`${currentStep === 2 ? 'w-[184px] xl:w-[198px]' : currentStep === 3 ? 'w-[198px]' : 'w-[250px] xl:w-[300px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} generation-content-plain flex min-h-0 flex-col flex-shrink-0 overflow-hidden transition-all duration-300`}>
           <div className={`step1-sidebar-scroll min-h-0 flex-1 space-y-3 ${currentStep === 1 ? 'overflow-y-auto overflow-x-hidden' : 'overflow-y-auto'}`}>
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
@@ -2068,17 +2068,9 @@ export default function ImageGenerationPage() {
                   <Wand2 className="w-3 h-3" /> Style Options
                 </h3>
                 <div className="mb-3 rounded-[1.45rem] bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs uppercase text-sky-300 font-semibold">Scene Locked</p>
-                      <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedOptions.scene)?.label || selectedOptions.scene || 'Not selected'}</p>
-                    </div>
-                    <button
-                      onClick={() => setShowScenePicker(true)}
-                      className="rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.12]"
-                    >
-                      Pick Scene
-                    </button>
+                  <div className="mb-2">
+                    <p className="text-xs uppercase text-sky-300 font-semibold">Scene Locked</p>
+                    <p className="text-sm text-white font-medium">{sceneOptions.find(s => s.value === selectedOptions.scene)?.label || selectedOptions.scene || 'Not selected'}</p>
                   </div>
                   <button
                     onClick={() => setShowSceneLockedPrompt(v => !v)}
@@ -2097,6 +2089,12 @@ export default function ImageGenerationPage() {
                       })()}
                     </p>
                   )}
+                  <button
+                    onClick={() => setShowScenePicker(true)}
+                    className="mt-3 rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/[0.12] w-full"
+                  >
+                    Pick Scene
+                  </button>
                 </div>
 
                 <div className="space-y-2">
@@ -2141,7 +2139,7 @@ export default function ImageGenerationPage() {
                                   <span className="flex w-full items-center justify-between gap-2">
                                     {selectedOptions[key] === opt.value ? (
                                       <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-950/15 text-[9px] font-bold">
-                                        ✓
+                                        âœ“
                                       </span>
                                     ) : null}
                                     <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
@@ -2194,9 +2192,9 @@ export default function ImageGenerationPage() {
           <div className={`${currentStep === 1 ? 'step1-work-area' : ''} flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
             <div className={`${currentStep === 1 ? 'step1-work-row' : ''} flex min-h-0 min-w-0 flex-1 overflow-hidden`}>
             {/* ==================== CENTER MAIN CONTENT ==================== */}
-            <div className={`${currentStep === 1 ? 'step1-center-panel' : ''} studio-card-shell center-main flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_18px_50px_rgba(2,6,23,0.28)] backdrop-blur-[2px]`}>
+            <div className={`${currentStep === 1 ? 'step1-center-panel' : ''} generation-content-plain center-main flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
               {showUseCaseFocusInfo && (
-                <div className="flex-shrink-0 px-5 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]">
+                <div className="flex-shrink-0 px-4 py-2.5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex flex-wrap items-center gap-3">
                     <span className="rounded-full bg-white/[0.05] px-3 py-1 text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -2238,12 +2236,12 @@ export default function ImageGenerationPage() {
                 </div>
               )}
 
-              <div className={`${currentStep === 1 ? 'step1-center-scroll' : ''} flex-1 overflow-y-auto p-4`}>
+              <div className={`${currentStep === 1 ? 'step1-center-scroll' : ''} flex-1 overflow-y-auto`}>
                 <div className={`${currentStep === 1 ? 'step1-center-shell flex h-full min-h-0 flex-col' : ''} relative mx-auto max-w-6xl`}>
                   {/* Step 1: Upload */}
                   {currentStep === 1 && (
                     <div className="step1-upload-stage flex h-full min-h-0 flex-col gap-3">
-                      <div className="step1-upload-toolbar flex flex-wrap items-center gap-1.5 rounded-[1.1rem] bg-white/[0.03] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] lg:gap-2 lg:px-3 lg:py-2.5 xl:gap-2.5 xl:px-3.5">
+                      <div className="step1-upload-toolbar flex flex-wrap items-center gap-1.5 rounded-[1.1rem] bg-white/[0.03] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] lg:gap-1.5 lg:px-3 lg:py-2.5 xl:gap-2.5 xl:px-3.5">
                         <button
                           type="button"
                           onClick={() => setActiveMode('browser')}
@@ -2270,7 +2268,7 @@ export default function ImageGenerationPage() {
                         </button>
                         {activeMode === 'browser' && (
                           <>
-                            <div className="mx-0.5 h-3.5 w-px bg-white/10 lg:mx-1 lg:h-4" />
+                            <div className="mx-0.5 h-3.5 w-px bg-white/10 lg:mx-0.5 lg:h-4" />
                             {PROVIDERS.map((provider) => (
                               <button
                                 key={provider.id}
@@ -2311,10 +2309,6 @@ export default function ImageGenerationPage() {
                                   {isCharacterRequired ? 'Required' : 'Optional'}
                                 </span>
                               </div>
-                              <ClampedDescription
-                                text={getUploadInstructions(useCase)?.character || 'Upload or select a saved character profile.'}
-                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
-                              />
                             </div>
                           </div>
 
@@ -2333,17 +2327,17 @@ export default function ImageGenerationPage() {
                                     <span className="text-sm font-medium">{selectedCharacter.name}</span>
                                   </div>
                                 )}
-                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
-                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{selectedCharacter.name}</p>
-                                  <p className="studio-media-overlay-meta text-xs text-slate-300">@{selectedCharacter.alias}</p>
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/60 px-4 py-3 text-left backdrop-blur drop-shadow-lg">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white drop-shadow">{selectedCharacter.name}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-white drop-shadow">@{selectedCharacter.alias}</p>
                                 </div>
                               </>
                             ) : characterImage?.preview ? (
                               <>
                                 <img src={characterImage.preview} alt="Character" className="h-full w-full object-contain p-3" />
-                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
-                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{step1Copy.characterUploadedLabel}</p>
-                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{step1Copy.characterUploadedSubLabel}</p>
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/60 px-4 py-3 text-left backdrop-blur drop-shadow-lg">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white drop-shadow">{step1Copy.characterUploadedLabel}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-white drop-shadow">{step1Copy.characterUploadedSubLabel}</p>
                                 </div>
                               </>
                             ) : (
@@ -2400,10 +2394,6 @@ export default function ImageGenerationPage() {
                                   {isProductRequired ? 'Required' : 'Optional'}
                                 </span>
                               </div>
-                              <ClampedDescription
-                                text={getUploadInstructions(useCase)?.product || 'Keep the product clear and tightly framed.'}
-                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
-                              />
                             </div>
                           </div>
 
@@ -2415,9 +2405,9 @@ export default function ImageGenerationPage() {
                             {productImage?.preview ? (
                               <>
                                 <img src={productImage.preview} alt="Product" className="h-full w-full object-contain p-3" />
-                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/40 px-4 py-3 text-left backdrop-blur">
-                                  <p className="studio-media-overlay-title text-sm font-medium text-white">{step1Copy.productUploadedLabel}</p>
-                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{step1Copy.productUploadedSubLabel}</p>
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/60 px-4 py-3 text-left backdrop-blur drop-shadow-lg">
+                                  <p className="studio-media-overlay-title text-sm font-medium text-white drop-shadow">{step1Copy.productUploadedLabel}</p>
+                                  <p className="studio-media-overlay-meta text-xs text-white drop-shadow">{step1Copy.productUploadedSubLabel}</p>
                                 </div>
                               </>
                             ) : (
@@ -2459,45 +2449,22 @@ export default function ImageGenerationPage() {
                           >
                             <X className="h-3.5 w-3.5" />
                           </button>
-                          <div className="mb-3 flex items-start gap-3 pr-12">
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300">Scene</p>
-                              <ClampedDescription
-                                text="Locked scene plus optional custom reference image."
-                                className="mt-2 min-h-[2.5rem] text-xs leading-5 text-slate-400"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="studio-accent-panel rounded-2xl bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_24px_rgba(8,78,120,0.12)]">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="studio-accent-title truncate text-[13px] font-medium text-white md:text-sm">{currentScene?.label || 'No scene selected'}</p>
-                                <p className="studio-accent-copy mt-1 line-clamp-2 text-xs leading-5 text-slate-300">
-                                  {selectedScenePrompt || 'Pick a locked scene to keep environment and lighting consistent.'}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setShowScenePicker(true)}
-                                className="studio-accent-button rounded-xl bg-sky-400/12 px-3 py-2 text-xs font-medium text-sky-100 transition hover:bg-sky-400/18"
-                              >
-                                Pick scene
-                              </button>
-                            </div>
+                          <div className="mb-3 flex items-center justify-between gap-3 pr-12">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300">Scene</p>
+                            <p className="text-sm text-white font-medium">{currentScene?.label || 'No scene selected'}</p>
                           </div>
 
                           <button
                             type="button"
                             onClick={() => sceneFileInputRef.current?.click()}
-                            className={`step1-upload-dropzone step1-scene-dropzone ${uploadDropzoneBaseClass} mt-3 h-[128px] hover:bg-white/[0.03]`}
+                            className={`step1-upload-dropzone step1-scene-dropzone ${uploadDropzoneBaseClass} h-[188px] hover:bg-white/[0.03]`}
                           >
                             {scenePreviewUrl ? (
                               <>
                                 <img src={scenePreviewUrl} alt="Scene reference" className="h-full w-full object-cover" />
-                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/45 px-4 py-3 text-left backdrop-blur">
-                                  {referenceImage ? <p className="studio-media-overlay-title text-sm font-medium text-white">Custom scene reference</p> : null}
-                                  <p className="studio-media-overlay-meta text-xs text-slate-300">{referenceImage ? 'Tap to replace' : 'Upload to override with your own reference'}</p>
+                                <div className="studio-media-overlay absolute inset-x-0 bottom-0 border-t border-black/10 bg-black/60 px-4 py-3 text-left backdrop-blur drop-shadow-lg">
+                                  {referenceImage ? <p className="studio-media-overlay-title text-sm font-medium text-white drop-shadow">Custom scene reference</p> : null}
+                                  <p className="studio-media-overlay-meta text-xs text-white drop-shadow">{referenceImage ? 'Tap to replace' : 'Upload to override with your own reference'}</p>
                                 </div>
                               </>
                             ) : (
@@ -2514,6 +2481,14 @@ export default function ImageGenerationPage() {
                               className="hidden"
                               onChange={(event) => handleImageFileSelection(event, setReferenceImage)}
                             />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowScenePicker(true)}
+                            className="mt-3 w-full rounded-full bg-white/[0.08] px-3 py-2 text-xs font-medium text-white transition hover:bg-white/[0.12]"
+                          >
+                            Pick Scene
                           </button>
 
                         </section>
@@ -2729,8 +2704,8 @@ export default function ImageGenerationPage() {
 
       {/* ==================== ACTION BAR ==================== */}
       <div className="apple-footer-bar z-20 flex h-[60px] flex-shrink-0 items-center px-4">
-        <div className="flex h-full w-full items-center justify-end gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="flex items-center justify-center gap-2">
             {currentStep === 1 && (
               <button
                 onClick={handleStartAnalysis}
@@ -2760,7 +2735,7 @@ export default function ImageGenerationPage() {
             )}
 
             {currentStep === 3 && (
-              <div className="flex w-full items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   onClick={() => step3ComponentRef.current?.triggerVariations()}
                   className="flex h-11 items-center gap-2 rounded-lg bg-purple-600 px-4 text-sm hover:bg-purple-700"
@@ -2835,7 +2810,7 @@ export default function ImageGenerationPage() {
             )}
 
             {generatedImages.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <button
                   onClick={handleReset}
                   className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-gray-700 px-4 leading-none hover:bg-gray-600"
@@ -2913,4 +2888,6 @@ export default function ImageGenerationPage() {
     </div>
   );
 }
+
+
 

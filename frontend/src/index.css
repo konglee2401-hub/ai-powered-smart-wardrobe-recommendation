@@ -52,6 +52,12 @@
   --apple-label-secondary: #a1a1aa;
   --apple-fill: rgba(120, 120, 128, 0.2);
   --apple-fill-strong: rgba(120, 120, 128, 0.32);
+  --z-base: 0;
+  --z-content: 10;
+  --z-nav: 70;
+  --z-overlay: 60;
+  --z-modal: 100;
+  --z-toast: 120;
 }
 
 html,
@@ -682,6 +688,10 @@ body {
   min-height: 0 !important;
 }
 
+.app-main.overflow-hidden > .apple-page > .apple-content-frame > .apple-page-content > .video-pipeline-shell {
+  height: calc(100% + 2.5rem) !important;
+}
+
 .apple-page-content > * {
   padding: 1.25rem;
 }
@@ -709,8 +719,8 @@ body {
 
   .one-click-footer-bar {
     margin-left: -1.5rem;
-    margin-right: -1.5rem;
-    margin-bottom: -1.5rem;
+    margin-right: -0.5rem;
+    margin-bottom: -0.75rem;
   }
 }
 
@@ -1683,7 +1693,6 @@ html[data-theme="light"] .apple-logo-chip {
 }
 
 html[data-theme="light"] .apple-nav-nest {
-  margin-top: 0.95rem;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -3292,35 +3301,43 @@ html[data-theme="light"] .generation-history-shell input::placeholder {
 }
 
 .video-pipeline-surface {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.88), rgba(15, 23, 42, 0.96));
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(7, 12, 22, 0.9), rgba(4, 9, 18, 0.96));
 }
 
 .video-pipeline-subtle {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.022));
 }
 
 .video-pipeline-checkbox-card {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(2, 6, 23, 0.42);
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.34));
   color: #cbd5e1;
 }
 
 .video-pipeline-inset {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(148, 163, 184, 0.18);
   background: rgba(2, 6, 23, 0.34);
 }
 
 .video-pipeline-log-surface {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(2, 6, 23, 0.68);
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.08), transparent 22%),
+    rgba(2, 6, 23, 0.74);
 }
 
 .video-pipeline-input {
-  border-color: rgba(51, 65, 85, 0.82);
-  background: rgba(2, 6, 23, 0.8);
+  border-color: rgba(71, 85, 105, 0.66);
+  background: rgba(3, 10, 20, 0.74);
   color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .video-pipeline-input::placeholder {
@@ -3329,10 +3346,187 @@ html[data-theme="light"] .generation-history-shell input::placeholder {
 
 .video-pipeline-input:focus {
   border-color: rgba(125, 211, 252, 0.7);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.08);
 }
 
 .video-pipeline-shell {
   overflow-x: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.14), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(168, 85, 247, 0.12), transparent 26%),
+    linear-gradient(180deg, #040913 0%, #07101d 45%, #030813 100%);
+  color: #dbe5f3;
+  height: calc(100% + 2.5rem);
+}
+
+.video-pipeline-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.video-pipeline-nav-shell {
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(5, 10, 19, 0.94), rgba(4, 9, 17, 0.98));
+}
+
+.video-pipeline-nav-intro {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+}
+
+.video-pipeline-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.video-pipeline-nav-link {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(255, 255, 255, 0.022);
+  color: #cbd5e1;
+}
+
+.video-pipeline-nav-link:hover {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+}
+
+.video-pipeline-nav-link-active {
+  border-color: rgba(125, 211, 252, 0.28);
+  background:
+    radial-gradient(circle at left, rgba(56, 189, 248, 0.18), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  color: #f8fbff;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12), 0 18px 36px rgba(2, 6, 23, 0.18);
+}
+
+.video-pipeline-action {
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.16);
+}
+
+.video-pipeline-action-slate {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.52);
+  color: #e2e8f0;
+}
+
+.video-pipeline-action-sky {
+  border-color: rgba(125, 211, 252, 0.24);
+  background: rgba(14, 165, 233, 0.16);
+  color: #e0f2fe;
+}
+
+.video-pipeline-action-amber {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(245, 158, 11, 0.16);
+  color: #fef3c7;
+}
+
+.video-pipeline-action-emerald {
+  border-color: rgba(110, 231, 183, 0.22);
+  background: rgba(16, 185, 129, 0.16);
+  color: #d1fae5;
+}
+
+.video-pipeline-action-violet {
+  border-color: rgba(196, 181, 253, 0.22);
+  background: rgba(139, 92, 246, 0.18);
+  color: #ede9fe;
+}
+
+.video-pipeline-action-rose {
+  border-color: rgba(244, 63, 94, 0.22);
+  background: rgba(225, 29, 72, 0.18);
+  color: #ffe4e6;
+}
+
+.video-pipeline-status-pill {
+  backdrop-filter: blur(10px);
+}
+
+.video-pipeline-pill-sky {
+  border-color: rgba(125, 211, 252, 0.24);
+  background: rgba(14, 165, 233, 0.12);
+  color: #d8f1fd;
+}
+
+.video-pipeline-pill-emerald {
+  border-color: rgba(110, 231, 183, 0.24);
+  background: rgba(16, 185, 129, 0.12);
+  color: #d1fae5;
+}
+
+.video-pipeline-pill-amber {
+  border-color: rgba(251, 191, 36, 0.24);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+
+.video-pipeline-pill-violet {
+  border-color: rgba(196, 181, 253, 0.24);
+  background: rgba(139, 92, 246, 0.14);
+  color: #e9d5ff;
+}
+
+.video-pipeline-pill-slate {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(51, 65, 85, 0.22);
+  color: #cbd5e1;
+}
+
+.video-pipeline-pill-rose {
+  border-color: rgba(253, 164, 175, 0.24);
+  background: rgba(225, 29, 72, 0.12);
+  color: #fecdd3;
+}
+
+.video-pipeline-metric-card {
+  position: relative;
+}
+
+.video-pipeline-metric-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.video-pipeline-metric-sky {
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(6, 23, 40, 0.94), rgba(4, 12, 24, 0.98));
+}
+
+.video-pipeline-metric-violet {
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(20, 16, 46, 0.94), rgba(9, 8, 27, 0.98));
+}
+
+.video-pipeline-metric-amber {
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(37, 23, 4, 0.94), rgba(19, 12, 4, 0.98));
+}
+
+.video-pipeline-metric-emerald {
+  background:
+    radial-gradient(circle at top left, rgba(52, 211, 153, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(5, 31, 24, 0.94), rgba(4, 18, 15, 0.98));
+}
+
+@media (min-width: 968px) {
+  .video-pipeline-shell {
+    height: calc(100% + 3rem);
+  }
 }
 
 .video-pipeline-shell .border-white\/8,
@@ -3365,6 +3559,7 @@ html[data-theme="light"] .video-pipeline-shell .video-pipeline-input {
   border-color: #cbd5e1;
   background: rgba(255, 255, 255, 0.95);
   color: #1e293b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 html[data-theme="light"] .video-pipeline-shell .video-pipeline-input::placeholder {
@@ -3398,6 +3593,120 @@ html[data-theme="light"] .video-pipeline-shell .border-white\/8,
 html[data-theme="light"] .video-pipeline-shell .border-white\/10,
 html[data-theme="light"] .video-pipeline-shell .border-white\/12 {
   border-color: rgba(203, 213, 225, 0.78) !important;
+}
+
+html[data-theme="light"] .video-pipeline-shell {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(125, 211, 252, 0.22), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(196, 181, 253, 0.16), transparent 24%),
+    linear-gradient(180deg, #f6fbff 0%, #eef5fb 52%, #e9f1f9 100%);
+  color: #243042;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-nav-shell {
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.2), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 246, 252, 0.96));
+  box-shadow: 0 22px 48px rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-nav-intro {
+  border-color: rgba(203, 213, 225, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 250, 255, 0.96));
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-nav-link {
+  border-color: rgba(203, 213, 225, 0.66);
+  background: rgba(255, 255, 255, 0.7);
+  color: #334155;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-nav-link:hover {
+  border-color: rgba(147, 197, 253, 0.72);
+  background: rgba(239, 249, 255, 0.94);
+  color: #0f172a;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-nav-link-active {
+  border-color: rgba(125, 211, 252, 0.72);
+  background:
+    radial-gradient(circle at left, rgba(125, 211, 252, 0.24), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(232, 246, 255, 0.98));
+  color: #0f172a;
+  box-shadow: 0 18px 40px rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-slate {
+  border-color: rgba(203, 213, 225, 0.72);
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-sky {
+  border-color: rgba(125, 211, 252, 0.58);
+  background: rgba(14, 165, 233, 0.12);
+  color: #0f4c81;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-amber {
+  border-color: rgba(251, 191, 36, 0.48);
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a3412;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-emerald {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(16, 185, 129, 0.12);
+  color: #065f46;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-violet {
+  border-color: rgba(196, 181, 253, 0.56);
+  background: rgba(139, 92, 246, 0.12);
+  color: #5b21b6;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-action-rose {
+  border-color: rgba(244, 63, 94, 0.52);
+  background: rgba(225, 29, 72, 0.12);
+  color: #9f1239;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-sky {
+  border-color: rgba(125, 211, 252, 0.58);
+  background: rgba(14, 165, 233, 0.1);
+  color: #0f4c81;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-emerald {
+  border-color: rgba(52, 211, 153, 0.54);
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-amber {
+  border-color: rgba(251, 191, 36, 0.52);
+  background: rgba(245, 158, 11, 0.1);
+  color: #9a3412;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-violet {
+  border-color: rgba(196, 181, 253, 0.56);
+  background: rgba(139, 92, 246, 0.1);
+  color: #5b21b6;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-slate {
+  border-color: rgba(203, 213, 225, 0.74);
+  background: rgba(241, 245, 249, 0.98);
+  color: #475569;
+}
+
+html[data-theme="light"] .video-pipeline-shell .video-pipeline-pill-rose {
+  border-color: rgba(253, 164, 175, 0.56);
+  background: rgba(244, 63, 94, 0.1);
+  color: #be123c;
 }
 
 /* ==================== ImageGenerationPage + VoiceOverPage + VideoGenerationPage Light Theme ==================== */
@@ -3475,14 +3784,6 @@ html[data-theme="light"] .image-generation-shell select:focus {
   outline: none !important;
 }
 
-/* Studio card shell */
-html[data-theme="light"] .image-generation-shell .studio-card-shell {
-  background: rgba(255, 255, 255, 0.8) !important;
-  backdrop-filter: blur(10px) !important;
-  border-color: rgba(255, 255, 255, 0.42) !important;
-  color: #334155 !important;
-}
-
 /* Buttons */
 html[data-theme="light"] .image-generation-shell button {
   background: rgba(255, 255, 255, 0.8) !important;
@@ -3500,18 +3801,18 @@ html[data-theme="light"] .image-generation-shell button:active {
 }
 
 /* Chips */
-html[data-theme="light"] .image-generation-shell .apple-option-chip {
+html[data-theme="light"] .image-generation-shell:not(.video-generation-shell) .apple-option-chip {
   background: rgba(255, 255, 255, 0.8) !important;
   backdrop-filter: blur(8px) !important;
   border-color: rgba(255, 255, 255, 0.42) !important;
   color: #334155 !important;
 }
 
-html[data-theme="light"] .image-generation-shell .apple-option-chip:hover {
+html[data-theme="light"] .image-generation-shell:not(.video-generation-shell) .apple-option-chip:hover {
   background: rgba(255, 255, 255, 0.9) !important;
 }
 
-html[data-theme="light"] .image-generation-shell .apple-option-chip.selected {
+html[data-theme="light"] .image-generation-shell:not(.video-generation-shell) .apple-option-chip.selected {
   background:
     radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.98), transparent 24%),
     var(--apple-selected-bg) !important;
@@ -3827,3 +4128,155 @@ html[data-theme="light"] .image-generation-shell [class*="text-gray-500"] {
   color: #64748b !important;
 }
 
+/* ==================== Generation Layout Refresh ==================== */
+:root {
+  --generation-radius-shell: 0.9rem;
+  --generation-radius-card: 0.78rem;
+  --generation-radius-chip: 0.62rem;
+  --generation-radius-tight: 0.48rem;
+  --generation-glass-bg:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.07), transparent 26%),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.58), rgba(10, 15, 24, 0.48));
+  --generation-glass-border: rgba(255, 255, 255, 0.08);
+  --generation-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 24px rgba(2, 6, 23, 0.18);
+}
+
+html[data-theme="light"] {
+  --generation-glass-bg:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.86), transparent 28%),
+    linear-gradient(180deg, rgba(248, 252, 255, 0.42), rgba(231, 242, 255, 0.24));
+  --generation-glass-border: rgba(255, 255, 255, 0.42);
+  --generation-glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 12px 24px rgba(100, 156, 198, 0.1);
+}
+
+.apple-header-bar,
+.apple-footer-bar,
+.apple-surface-panel,
+.apple-surface-panel-raised,
+.flat-panel,
+.studio-card-shell,
+.studio-dropzone,
+.studio-accent-panel {
+  border-radius: var(--generation-radius-shell) !important;
+}
+
+.apple-header-icon,
+.apple-secondary-button,
+.apple-option-chip,
+.apple-cta-primary {
+  border-radius: var(--generation-radius-chip) !important;
+}
+
+.apple-field-pill,
+.apple-field-pill-required,
+.apple-field-pill-optional {
+  border-radius: var(--generation-radius-tight) !important;
+}
+
+.image-generation-shell,
+.one-click-shell,
+.video-generation-shell {
+  background: transparent !important;
+}
+
+.image-generation-shell .apple-header-bar,
+.image-generation-shell .apple-footer-bar,
+.one-click-shell .apple-header-bar,
+.one-click-shell .apple-footer-bar,
+.video-generation-shell .apple-header-bar,
+.video-generation-shell .apple-footer-bar,
+.image-generation-shell .studio-card-shell,
+.image-generation-shell .studio-dropzone,
+.image-generation-shell .step1-upload-toolbar,
+.image-generation-shell .apple-prompt-text,
+.one-click-shell .studio-card-shell,
+.one-click-shell .studio-dropzone,
+.one-click-shell input,
+.one-click-shell select,
+.one-click-shell textarea,
+.video-generation-shell .studio-card-shell,
+.video-generation-shell .video-section-card,
+.video-generation-shell .video-mini-card,
+.video-generation-shell .video-result-card,
+.video-generation-shell .video-result-panel,
+.video-generation-shell .video-status-banner,
+.video-generation-shell .video-info-banner,
+.video-generation-shell .video-toggle-button,
+.video-generation-shell .video-segment-button,
+.video-generation-shell .video-editor-textarea,
+.video-generation-shell .video-control-label,
+.video-generation-shell .video-media-preview,
+.video-generation-shell .apple-footer-bar {
+  background: var(--generation-glass-bg) !important;
+  border: 1px solid var(--generation-glass-border) !important;
+  box-shadow: var(--generation-glass-shadow) !important;
+  backdrop-filter: blur(16px) saturate(118%);
+}
+
+.generation-content-plain,
+.image-generation-shell .generation-content-plain,
+.one-click-shell .generation-content-plain,
+.video-generation-shell .generation-content-plain,
+.video-generation-shell .video-generation-sidebar,
+.video-generation-shell .video-generation-center,
+.video-generation-shell .video-generation-recent {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  border-radius: 0 !important;
+}
+
+.image-generation-shell .center-main,
+.one-click-shell .one-click-main-panel {
+  padding: 0 !important;
+}
+
+.image-generation-shell .step1-upload-grid,
+.video-generation-shell .video-generation-top-grid,
+.video-generation-shell .video-generation-bottom-grid,
+.one-click-shell .one-click-main-grid {
+  gap: 0.75rem !important;
+}
+
+.image-generation-shell .step1-upload-toolbar,
+.video-generation-shell .video-control-strip {
+  padding: 0.75rem !important;
+}
+
+.image-generation-shell input,
+.image-generation-shell select,
+.image-generation-shell textarea,
+.one-click-shell input,
+.one-click-shell select,
+.one-click-shell textarea,
+.video-generation-shell input,
+.video-generation-shell select,
+.video-generation-shell textarea {
+  border-radius: var(--generation-radius-chip) !important;
+}
+
+.image-generation-shell button,
+.one-click-shell button,
+.video-generation-shell button,
+.image-generation-shell [role="button"],
+.one-click-shell [role="button"],
+.video-generation-shell [role="button"] {
+  border-radius: var(--generation-radius-chip) !important;
+}
+
+.app-layer-nav {
+  z-index: var(--z-nav);
+}
+
+.app-layer-overlay {
+  z-index: var(--z-overlay);
+}
+
+.app-layer-modal {
+  z-index: var(--z-modal);
+}
+
+.app-layer-toast {
+  z-index: var(--z-toast);
+}

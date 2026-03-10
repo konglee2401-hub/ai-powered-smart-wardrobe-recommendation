@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 3 Enhanced - Style & Prompt (Merged)
  * Clean, straightforward layout with 3 functional sections
  */
@@ -18,6 +18,7 @@ import {
 import PromptLayeringDialog from './PromptLayeringDialog';
 import { generateAdvancedPrompt } from '../utils/advancedPromptBuilder';
 import { STYLE_CATEGORIES } from './Step3Enhanced';
+import ModalPortal from './ModalPortal';
 
 const Step3EnhancedWithSession = ({
   characterImage,
@@ -213,6 +214,7 @@ const Step3EnhancedWithSession = ({
   }, [promptLayering]);
 
   return (
+    <ModalPortal>
     <div className="flex flex-col gap-4 bg-gray-900 rounded-lg p-4 h-full">
       {/* Three Column Layout */}
       <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
@@ -327,7 +329,7 @@ const Step3EnhancedWithSession = ({
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">
-              Select options → prompt appears here
+              Select options â†’ prompt appears here
             </div>
           )}
         </div>
@@ -423,7 +425,7 @@ const Step3EnhancedWithSession = ({
       />
 
       {showOptimizerModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center app-layer-modal">
           <div className="bg-gray-900 rounded-lg p-5 max-w-sm border border-gray-700 w-full mx-4">
             <h3 className="text-sm font-bold text-white mb-4">Optimize Prompt</h3>
 
@@ -440,7 +442,7 @@ const Step3EnhancedWithSession = ({
                   <p className="text-xs text-gray-400 mb-2 font-semibold">Result</p>
                   <p className="text-xs text-white mb-2">{optimizedPrompt}</p>
                   <p className="text-xs text-green-400">
-                    ✓ Reduced {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
+                    âœ“ Reduced {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
                   </p>
                 </div>
 
@@ -464,7 +466,10 @@ const Step3EnhancedWithSession = ({
         </div>
       )}
     </div>
+    </ModalPortal>
   );
 };
 
 export default Step3EnhancedWithSession;
+
+

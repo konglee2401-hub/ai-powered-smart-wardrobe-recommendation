@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 /**
@@ -66,7 +66,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
         <div className="validation-section">
           <div className={`validation-status ${validation.valid ? 'valid' : 'invalid'}`}>
             <div className="status-header">
-              <span className="status-icon">{validation.valid ? '✅' : '⚠️'}</span>
+              <span className="status-icon">{validation.valid ? 'âœ…' : 'âš ï¸'}</span>
               <span className="status-text">
                 {validation.valid ? 'Prompt is ready' : 'Prompt needs improvement'}
               </span>
@@ -89,7 +89,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
                 <ul>
                   {validation.issues.map((issue, i) => (
                     <li key={i} className="issue-item">
-                      <span className="issue-icon">❌</span> {issue}
+                      <span className="issue-icon">âŒ</span> {issue}
                     </li>
                   ))}
                 </ul>
@@ -103,7 +103,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
                 <ul>
                   {validation.warnings.map((warning, i) => (
                     <li key={i} className="warning-item">
-                      <span className="warning-icon">💡</span> {warning}
+                      <span className="warning-icon">ðŸ’¡</span> {warning}
                     </li>
                   ))}
                 </ul>
@@ -116,7 +116,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
       {/* Suggestions list */}
       {suggestions.length > 0 && (
         <div className="suggestions-section">
-          <h4 className="suggestions-title">✨ Suggested Improvements</h4>
+          <h4 className="suggestions-title">âœ¨ Suggested Improvements</h4>
 
           <div className="suggestions-list">
             {suggestions.map((suggestion, index) => (
@@ -134,7 +134,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
 
                 {/* Reason */}
                 <p className="suggestion-reason">
-                  💡 {suggestion.reason}
+                  ðŸ’¡ {suggestion.reason}
                 </p>
 
                 {/* Original vs Suggested */}
@@ -144,7 +144,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
                     <p className="comparison-text">{prompt}</p>
                   </div>
 
-                  <div className="comparison-arrow">→</div>
+                  <div className="comparison-arrow">â†’</div>
 
                   <div className="comparison-block suggested">
                     <span className="comparison-label">Suggested:</span>
@@ -176,7 +176,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
       {/* Error state */}
       {error && (
         <div className="suggestions-error">
-          <span className="error-icon">⚠️</span>
+          <span className="error-icon">âš ï¸</span>
           <p>{error}</p>
         </div>
       )}
@@ -184,7 +184,7 @@ function PromptSuggestions({ prompt, scenario, onSelectSuggestion, characterDesc
       {/* Empty state */}
       {!loading && !error && suggestions.length === 0 && prompt && validation && validation.valid && (
         <div className="suggestions-empty">
-          <p>✅ Your prompt looks great! No improvements needed.</p>
+          <p>âœ… Your prompt looks great! No improvements needed.</p>
         </div>
       )}
 
@@ -561,3 +561,4 @@ function getPriorityColor(priority) {
 }
 
 export default PromptSuggestions;
+

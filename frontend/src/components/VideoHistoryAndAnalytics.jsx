@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
@@ -85,13 +85,13 @@ function VideoHistoryAndAnalytics({ userId }) {
           className={`tab-button ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
-          📹 Generation History
+          ðŸ“¹ Generation History
         </button>
         <button
           className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
           onClick={() => setActiveTab('analytics')}
         >
-          📊 Analytics Dashboard
+          ðŸ“Š Analytics Dashboard
         </button>
       </div>
 
@@ -109,7 +109,7 @@ function VideoHistoryAndAnalytics({ userId }) {
               </select>
             </div>
             <button className="refresh-btn" onClick={fetchHistory}>
-              🔄 Refresh
+              ðŸ”„ Refresh
             </button>
           </div>
 
@@ -307,10 +307,10 @@ function VideoCard({ video, onSelect, isSelected, onDelete, onRate }) {
         {video.generatedVideos && video.generatedVideos[0] ? (
           <video src={video.generatedVideos[0].url} preload="none" />
         ) : (
-          <div className="video-placeholder">📹</div>
+          <div className="video-placeholder">ðŸ“¹</div>
         )}
         <div className="video-overlay">
-          <button className="play-btn">▶️</button>
+          <button className="play-btn">â–¶ï¸</button>
         </div>
       </div>
 
@@ -332,11 +332,11 @@ function VideoCard({ video, onSelect, isSelected, onDelete, onRate }) {
             setShowOptions(!showOptions);
           }}
         >
-          ⋮
+          â‹®
         </button>
         {showOptions && (
           <div className="dropdown-menu">
-            <button onClick={() => onDelete(video._id)}>🗑️ Delete</button>
+            <button onClick={() => onDelete(video._id)}>ðŸ—‘ï¸ Delete</button>
           </div>
         )}
       </div>
@@ -520,7 +520,7 @@ function VideoDetails({ video, onClose, onDelete, onRate }) {
   return (
     <div className="video-details-modal" onClick={onClose}>
       <div className="video-details-content" onClick={(e) => e.stopPropagation()}>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        <button className="close-btn" onClick={onClose}>âœ•</button>
 
         {/* Video Player */}
         {video.composedVideoUrl && (
@@ -543,7 +543,7 @@ function VideoDetails({ video, onClose, onDelete, onRate }) {
                   <p className="segment-prompt">{segment.prompt}</p>
                   {segment.videoUrl && (
                     <a href={segment.videoUrl} target="_blank" rel="noopener noreferrer">
-                      🎬 Download Segment
+                      ðŸŽ¬ Download Segment
                     </a>
                   )}
                 </div>
@@ -581,7 +581,7 @@ function VideoDetails({ video, onClose, onDelete, onRate }) {
                 className={`star ${star <= (video.userRating || 0) ? 'filled' : ''}`}
                 onClick={() => onRate(video._id, star)}
               >
-                ⭐
+                â­
               </button>
             ))}
           </div>
@@ -596,11 +596,11 @@ function VideoDetails({ video, onClose, onDelete, onRate }) {
               onClose();
             }}
           >
-            🗑️ Delete
+            ðŸ—‘ï¸ Delete
           </button>
           {video.composedVideoUrl && (
             <a href={video.composedVideoUrl} download className="download-btn">
-              ⬇️ Download
+              â¬‡ï¸ Download
             </a>
           )}
         </div>
@@ -809,10 +809,10 @@ function AnalyticsDashboard({ analytics }) {
   return (
     <div className="analytics-dashboard">
       <div className="analytics-grid">
-        <StatCard label="Total Generated" value={analytics.totalCount} icon="🎬" />
-        <StatCard label="Average Time" value={`${analytics.averageTimeSeconds.toFixed(0)}s`} icon="⏱️" />
-        <StatCard label="Success Rate" value={`${analytics.successRate.toFixed(1)}%`} icon="✅" />
-        <StatCard label="Average Rating" value={`${analytics.averageRating.toFixed(1)}/5`} icon="⭐" />
+        <StatCard label="Total Generated" value={analytics.totalCount} icon="ðŸŽ¬" />
+        <StatCard label="Average Time" value={`${analytics.averageTimeSeconds.toFixed(0)}s`} icon="â±ï¸" />
+        <StatCard label="Success Rate" value={`${analytics.successRate.toFixed(1)}%`} icon="âœ…" />
+        <StatCard label="Average Rating" value={`${analytics.averageRating.toFixed(1)}/5`} icon="â­" />
       </div>
 
       {/* Charts would go here */}
@@ -885,3 +885,4 @@ function StatCard({ label, value, icon }) {
 }
 
 export default VideoHistoryAndAnalytics;
+

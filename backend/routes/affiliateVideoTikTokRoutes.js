@@ -29,6 +29,18 @@ import SessionLog from '../models/SessionLog.js';
 
 const router = express.Router();
 
+const formatBytes = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size)) return null;
+  if (size <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+  const value = size / Math.pow(1024, index);
+  const precision = value >= 10 || index === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[index]}`;
+};
+
+
 // 💾 In-memory flow state storage (in production, use Redis)
 const flowStates = new Map();
 const step2Jobs = new Map();
@@ -1445,12 +1457,71 @@ router.get('/progress/:flowId', (req, res) => {
 router.get('/status/:flowId', async (req, res) => {
   const { flowId } = req.params;
 
+  let session = null;
   let flowState = flowStates.get(flowId);
   if (!flowState) {
-    const session = await SessionLog.findOne({ sessionId: flowId }).select('workflowState status');
+    session = await SessionLog.findOne({ sessionId: flowId }).select('workflowState status');
     if (session?.workflowState) {
       flowState = cloneWorkflowState(session.workflowState);
       flowState.status = flowState.status || session.status || 'in-progress';
+      flowStates.set(flowId, flowState);
+    }
+  }
+
+  if (!flowState) {
+    const previewState = affiliateVideoTikTokService.getFlowPreview(flowId);
+    if (previewState && previewState.status && previewState.status !== 'not-found') {
+      const frameLibrary = (previewState.step2?.items || []).map((item, index) => ({
+        imagePath: item?.path || item?.href || item?.url || null,
+        href: item?.href || item?.url || null,
+        frameKey: item?.id || ('frame-' + (index + 1)),
+        segmentIndex: item?.segmentIndex ?? index,
+        segmentName: item?.label || item?.segmentName || ('Frame ' + (index + 1)),
+        role: item?.role || null,
+        purpose: item?.purpose || null,
+        focus: item?.focus || null
+      }));
+      const segmentVideos = (previewState.step4?.videos || []).map((item, index) => ({
+        path: item?.path || item?.href || item?.url || null,
+        segmentIndex: item?.segmentIndex ?? index,
+        segmentName: item?.label || item?.segmentName || ('Segment ' + (index + 1))
+      }));
+
+      flowState = {
+        status: session?.status || previewState.status || 'in-progress',
+        startedAt: previewState.startedAt || null,
+        step1: previewState.step1 ? {
+          analysis: previewState.step1.analysis || null,
+          analysisText: previewState.step1.summary || previewState.step1.analysisText || null,
+          characterImagePath: previewState.step1.characterImage?.path || previewState.step1.characterImage?.previewUrl || null,
+          productImagePath: previewState.step1.productImage?.path || previewState.step1.productImage?.previewUrl || null
+        } : null,
+        step2: previewState.step2 ? {
+          status: previewState.status?.includes('step2') ? 'processing' : (frameLibrary.length > 0 ? 'completed' : null),
+          wearingPrompt: previewState.step1?.wearingPrompt || null,
+          holdingPrompt: previewState.step1?.holdingPrompt || null,
+          wearingImagePath: previewState.step2.images?.wearing || previewState.step2.wearingImagePath || null,
+          holdingImagePath: previewState.step2.images?.holding || previewState.step2.holdingImagePath || null,
+          frameLibrary,
+          progress: {
+            totalFrames: previewState.step2.imageCount || frameLibrary.length,
+            completedFrames: previewState.step2.completedCount || frameLibrary.filter((item) => item.imagePath).length
+          },
+          error: previewState.step2.error || null
+        } : null,
+        step3: previewState.step3 ? {
+          videoScripts: previewState.step3.videoScripts || [],
+          hashtags: previewState.step3.hashtags || [],
+          voiceoverScript: previewState.step3.voiceoverScript || ''
+        } : null,
+        step4: previewState.step4 ? {
+          segmentVideos,
+          error: previewState.step4.error || null
+        } : null,
+        step5: previewState.step5 ? {
+          voiceoverText: previewState.step5.ttsText || previewState.step5.voiceoverText || ''
+        } : null
+      };
       flowStates.set(flowId, flowState);
     }
   }

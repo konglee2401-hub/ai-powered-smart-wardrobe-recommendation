@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Asset Management Admin Panel
  * Manage, monitor, and maintain assets in the system
  */
@@ -39,7 +39,7 @@ export default function AssetManagementAdmin() {
       setLoading(false);
     } catch (error) {
       console.error('Failed to load admin data:', error);
-      toast.error('Lỗi tải dữ liệu quản lý');
+      toast.error('Lá»—i táº£i dá»¯ liá»‡u quáº£n lÃ½');
     }
   };
 
@@ -55,14 +55,14 @@ export default function AssetManagementAdmin() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success(`✅ ${title} thành công`, { duration: 5000 });
+        toast.success(`âœ… ${title} thÃ nh cÃ´ng`, { duration: 5000 });
         // Reload data after execution
         await loadData();
       } else {
-        toast.error(`❌ ${title} thất bại: ${data.error}`);
+        toast.error(`âŒ ${title} tháº¥t báº¡i: ${data.error}`);
       }
     } catch (error) {
-      toast.error(`❌ Lỗi: ${error.message}`);
+      toast.error(`âŒ Lá»—i: ${error.message}`);
     } finally {
       setExecuting(null);
     }
@@ -73,7 +73,7 @@ export default function AssetManagementAdmin() {
       <div className="flex items-center justify-center h-screen bg-slate-900">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
-          <p className="text-gray-300">Đang tải dữ liệu...</p>
+          <p className="text-gray-300">Äang táº£i dá»¯ liá»‡u...</p>
         </div>
       </div>
     );
@@ -85,8 +85,8 @@ export default function AssetManagementAdmin() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">🔧 Quản Lý Asset</h1>
-            <p className="text-gray-400">Giám sát và bảo trì tài nguyên hệ thống</p>
+            <h1 className="text-4xl font-bold text-white mb-2">ðŸ”§ Quáº£n LÃ½ Asset</h1>
+            <p className="text-gray-400">GiÃ¡m sÃ¡t vÃ  báº£o trÃ¬ tÃ i nguyÃªn há»‡ thá»‘ng</p>
           </div>
           <button
             onClick={loadData}
@@ -94,7 +94,7 @@ export default function AssetManagementAdmin() {
             className="flex items-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-5 h-5 ${executing !== null ? 'animate-spin' : ''}`} />
-            Làm mới
+            LÃ m má»›i
           </button>
         </div>
 
@@ -104,23 +104,23 @@ export default function AssetManagementAdmin() {
             <div className="flex items-start gap-4">
               <CheckCircle className="w-8 h-8 text-emerald-400 flex-shrink-0 mt-1" />
               <div className="flex-1">
-                <h2 className="text-xl font-bold text-white mb-2">📊 Trạng Thái Asset</h2>
+                <h2 className="text-xl font-bold text-white mb-2">ðŸ“Š Tráº¡ng ThÃ¡i Asset</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-slate-800/50 rounded p-3">
                     <div className="text-2xl font-bold text-emerald-400">{health.stats.healthy.count}</div>
-                    <div className="text-sm text-gray-300">Đã lưu địa phương & Drive ({health.stats.healthy.percent}%)</div>
+                    <div className="text-sm text-gray-300">ÄÃ£ lÆ°u Ä‘á»‹a phÆ°Æ¡ng & Drive ({health.stats.healthy.percent}%)</div>
                   </div>
                   <div className="bg-slate-800/50 rounded p-3">
                     <div className="text-2xl font-bold text-blue-400">{health.stats.driveOnly.count}</div>
-                    <div className="text-sm text-gray-300">Chỉ Drive ({health.stats.driveOnly.percent}%)</div>
+                    <div className="text-sm text-gray-300">Chá»‰ Drive ({health.stats.driveOnly.percent}%)</div>
                   </div>
                   <div className="bg-slate-800/50 rounded p-3">
                     <div className="text-2xl font-bold text-amber-400">{health.stats.localOnly.count}</div>
-                    <div className="text-sm text-gray-300">Chỉ địa phương ({health.stats.localOnly.percent}%)</div>
+                    <div className="text-sm text-gray-300">Chá»‰ Ä‘á»‹a phÆ°Æ¡ng ({health.stats.localOnly.percent}%)</div>
                   </div>
                   <div className="bg-slate-800/50 rounded p-3">
                     <div className="text-2xl font-bold text-red-400">{health.stats.broken.count}</div>
-                    <div className="text-sm text-gray-300">Bị hỏng ({health.stats.broken.percent}%)</div>
+                    <div className="text-sm text-gray-300">Bá»‹ há»ng ({health.stats.broken.percent}%)</div>
                   </div>
                 </div>
                 <p className="text-sm text-gray-300 mt-4">{health.recommendation}</p>
@@ -135,30 +135,30 @@ export default function AssetManagementAdmin() {
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-4">
                 <BarChart3 className="w-6 h-6 text-blue-400" />
-                <h3 className="text-lg font-semibold text-white">Tổng Asset</h3>
+                <h3 className="text-lg font-semibold text-white">Tá»•ng Asset</h3>
               </div>
               <div className="text-3xl font-bold text-blue-400">{stats.total}</div>
               <div className="text-sm text-gray-400 mt-2">
-                ✅ {stats.active} hoạt động • ⚪ {stats.inactive} ngừng
+                âœ… {stats.active} hoáº¡t Ä‘á»™ng â€¢ âšª {stats.inactive} ngá»«ng
               </div>
             </div>
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Cloud className="w-6 h-6 text-purple-400" />
-                <h3 className="text-lg font-semibold text-white">Lưu Trữ</h3>
+                <h3 className="text-lg font-semibold text-white">LÆ°u Trá»¯</h3>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-300">Cả hai:</span>
+                  <span className="text-gray-300">Cáº£ hai:</span>
                   <span className="font-bold text-emerald-400">{stats.byStorage.both}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-300">Chỉ Drive:</span>
+                  <span className="text-gray-300">Chá»‰ Drive:</span>
                   <span className="font-bold text-blue-400">{stats.byStorage.drive}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-300">Chỉ địa phương:</span>
+                  <span className="text-gray-300">Chá»‰ Ä‘á»‹a phÆ°Æ¡ng:</span>
                   <span className="font-bold text-amber-400">{stats.byStorage.local}</span>
                 </div>
               </div>
@@ -167,7 +167,7 @@ export default function AssetManagementAdmin() {
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
               <div className="flex items-center gap-3 mb-4">
                 <HardDrive className="w-6 h-6 text-cyan-400" />
-                <h3 className="text-lg font-semibold text-white">Loại Asset</h3>
+                <h3 className="text-lg font-semibold text-white">Loáº¡i Asset</h3>
               </div>
               <div className="space-y-1 text-sm">
                 {Object.entries(stats.byType)
@@ -190,12 +190,12 @@ export default function AssetManagementAdmin() {
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
               <Activity className="w-6 h-6 text-emerald-400" />
-              📈 Giám Sát Sức Khỏe
+              ðŸ“ˆ GiÃ¡m SÃ¡t Sá»©c Khá»e
             </h2>
-            <p className="text-gray-300 mb-4">Kiểm tra trạng thái tất cả asset và xác định những vấn đề tiềm ẩn</p>
+            <p className="text-gray-300 mb-4">Kiá»ƒm tra tráº¡ng thÃ¡i táº¥t cáº£ asset vÃ  xÃ¡c Ä‘á»‹nh nhá»¯ng váº¥n Ä‘á» tiá»m áº©n</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
-                onClick={() => runScript('run-asset-health-monitor', 'Kiểm tra sức khỏe Asset')}
+                onClick={() => runScript('run-asset-health-monitor', 'Kiá»ƒm tra sá»©c khá»e Asset')}
                 disabled={executing !== null}
                 className="flex items-center gap-3 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 font-semibold"
               >
@@ -204,10 +204,10 @@ export default function AssetManagementAdmin() {
                 ) : (
                   <CheckCircle className="w-5 h-5" />
                 )}
-                🏥 Kiểm Tra Sức Khỏe
+                ðŸ¥ Kiá»ƒm Tra Sá»©c Khá»e
               </button>
               <button
-                onClick={() => runScript('run-asset-storage-status', 'Phân tích lưu trữ')}
+                onClick={() => runScript('run-asset-storage-status', 'PhÃ¢n tÃ­ch lÆ°u trá»¯')}
                 disabled={executing !== null}
                 className="flex items-center gap-3 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 font-semibold"
               >
@@ -216,7 +216,7 @@ export default function AssetManagementAdmin() {
                 ) : (
                   <BarChart3 className="w-5 h-5" />
                 )}
-                📊 Phân Tích Lưu Trữ
+                ðŸ“Š PhÃ¢n TÃ­ch LÆ°u Trá»¯
               </button>
             </div>
           </div>
@@ -225,14 +225,14 @@ export default function AssetManagementAdmin() {
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
               <Zap className="w-6 h-6 text-yellow-400" />
-              🧹 Bảo Trì & Dọn Dẹp
+              ðŸ§¹ Báº£o TrÃ¬ & Dá»n Dáº¹p
             </h2>
-            <p className="text-gray-300 mb-4">Xoá asset cũ, tệp tạm thời và tối ưu hóa dung lượng lưu trữ</p>
+            <p className="text-gray-300 mb-4">XoÃ¡ asset cÅ©, tá»‡p táº¡m thá»i vÃ  tá»‘i Æ°u hÃ³a dung lÆ°á»£ng lÆ°u trá»¯</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => {
-                  if (confirm('⚠️ Chế độ xem trước: Sẽ hiển thị những asset sắp bị xoá mà không thực sự xoá.\n\nTiếp tục?')) {
-                    runScript('run-delete-orphaned-assets', 'Xem trước xoá Asset', { confirm: false });
+                  if (confirm('âš ï¸ Cháº¿ Ä‘á»™ xem trÆ°á»›c: Sáº½ hiá»ƒn thá»‹ nhá»¯ng asset sáº¯p bá»‹ xoÃ¡ mÃ  khÃ´ng thá»±c sá»± xoÃ¡.\n\nTiáº¿p tá»¥c?')) {
+                    runScript('run-delete-orphaned-assets', 'Xem trÆ°á»›c xoÃ¡ Asset', { confirm: false });
                   }
                 }}
                 disabled={executing !== null}
@@ -243,12 +243,12 @@ export default function AssetManagementAdmin() {
                 ) : (
                   <AlertCircle className="w-5 h-5" />
                 )}
-                👁️ Xem Trước Xoá
+                ðŸ‘ï¸ Xem TrÆ°á»›c XoÃ¡
               </button>
               <button
                 onClick={() => {
-                  if (confirm('⚠️ CẢNH BÁO: Sẽ XOÁ VĨNH VIỄN những asset mồ côi khỏi cơ sở dữ liệu!\n\nBạn thực sự muốn tiếp tục?')) {
-                    runScript('run-delete-orphaned-assets', 'Xoá Asset mồ côi', { confirm: true });
+                  if (confirm('âš ï¸ Cáº¢NH BÃO: Sáº½ XOÃ VÄ¨NH VIá»„N nhá»¯ng asset má»“ cÃ´i khá»i cÆ¡ sá»Ÿ dá»¯ liá»‡u!\n\nBáº¡n thá»±c sá»± muá»‘n tiáº¿p tá»¥c?')) {
+                    runScript('run-delete-orphaned-assets', 'XoÃ¡ Asset má»“ cÃ´i', { confirm: true });
                   }
                 }}
                 disabled={executing !== null}
@@ -259,10 +259,10 @@ export default function AssetManagementAdmin() {
                 ) : (
                   <Trash2 className="w-5 h-5" />
                 )}
-                🔥 Xoá Mồ Côi
+                ðŸ”¥ XoÃ¡ Má»“ CÃ´i
               </button>
               <button
-                onClick={() => runScript('cleanup-temp-files', 'Dọn dẹp tệp tạm thời')}
+                onClick={() => runScript('cleanup-temp-files', 'Dá»n dáº¹p tá»‡p táº¡m thá»i')}
                 disabled={executing !== null}
                 className="flex items-center gap-3 px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors disabled:opacity-50 font-semibold col-span-1 md:col-span-2"
               >
@@ -271,7 +271,7 @@ export default function AssetManagementAdmin() {
                 ) : (
                   <Zap className="w-5 h-5" />
                 )}
-                🗑️ Dọn Dẹp Tệp Tạm (> 7 ngày)
+                ðŸ—‘ï¸ Dá»n Dáº¹p Tá»‡p Táº¡m (> 7 ngÃ y)
               </button>
             </div>
           </div>
@@ -279,7 +279,7 @@ export default function AssetManagementAdmin() {
           {/* Category Breakdown */}
           {health && health.byCategory && (
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
-              <h2 className="text-2xl font-bold text-white mb-4">📂 Asset theo Danh Mục</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">ðŸ“‚ Asset theo Danh Má»¥c</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.entries(health.byCategory)
                   .sort(([,a], [,b]) => b.total - a.total)
@@ -288,15 +288,15 @@ export default function AssetManagementAdmin() {
                       <div className="font-semibold text-white mb-3 capitalize">{category}</div>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-300">Tổng:</span>
+                          <span className="text-gray-300">Tá»•ng:</span>
                           <span className="font-bold text-white">{data.total}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-300">Cả hai:</span>
+                          <span className="text-gray-300">Cáº£ hai:</span>
                           <span className="font-bold text-emerald-400">{data.healthy}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-300">Chỉ Drive:</span>
+                          <span className="text-gray-300">Chá»‰ Drive:</span>
                           <span className="font-bold text-blue-400">{data.driveOnly}</span>
                         </div>
                       </div>
@@ -310,3 +310,4 @@ export default function AssetManagementAdmin() {
     </div>
   );
 }
+

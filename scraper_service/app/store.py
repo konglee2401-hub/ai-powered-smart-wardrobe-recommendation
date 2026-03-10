@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from bson import ObjectId
 from pymongo import ReturnDocument
 from .db import channels, videos, logs, settings
@@ -90,18 +91,25 @@ def upsert_channel(platform, channel_id, name, topic):
 
 
 def upsert_video(payload):
+    thumbnail_value = payload.get('thumbnail', '') or ''
+    if not thumbnail_value and payload.get('platform') == 'youtube' and payload.get('videoId'):
+        thumbnail_value = f'https://img.youtube.com/vi/{payload["videoId"]}/hqdefault.jpg'
+
+    set_doc = {
+        'title': payload.get('title', ''),
+        'views': payload.get('views', 0),
+        'url': payload.get('url', ''),
+        'topics': payload.get('topic'),
+        'channel': oid(payload['channelId']),
+        'updatedAt': now_utc(),
+    }
+    if thumbnail_value:
+        set_doc['thumbnail'] = thumbnail_value
+
     doc = videos.find_one_and_update(
         {'platform': payload['platform'], 'videoId': payload['videoId']},
         {
-            '$set': {
-                'title': payload.get('title', ''),
-                'views': payload.get('views', 0),
-                'url': payload.get('url', ''),
-                'topics': payload.get('topic'),
-                'thumbnail': payload.get('thumbnail', ''),
-                'channel': oid(payload['channelId']),
-                'updatedAt': now_utc(),
-            },
+            '$set': set_doc,
             '$setOnInsert': {
                 'discoveredAt': now_utc(),
                 'downloadStatus': 'pending',
@@ -138,9 +146,17 @@ def log_job(job_type, status, **kwargs):
 def normalize(doc):
     if not doc:
         return None
-    out = dict(doc)
-    if '_id' in out:
-        out['_id'] = str(out['_id'])
-    if 'channel' in out and out['channel'] is not None:
-        out['channel'] = str(out['channel'])
-    return out
+
+    def serialize(value):
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, datetime):
+            utc_value = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return utc_value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+        if isinstance(value, list):
+            return [serialize(item) for item in value]
+        if isinstance(value, dict):
+            return {key: serialize(item) for key, item in value.items()}
+        return value
+
+    return serialize(dict(doc))

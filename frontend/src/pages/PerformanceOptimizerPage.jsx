@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PerformanceOptimizer from '../components/PerformanceOptimizer';
 
@@ -56,3 +56,4 @@ const PerformanceOptimizerPage = () => {
 };
 
 export default PerformanceOptimizerPage;
+

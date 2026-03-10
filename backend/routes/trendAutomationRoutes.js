@@ -3,6 +3,7 @@ import axios from 'axios';
 import TrendSetting from '../models/TrendSetting.js';
 import { protect } from '../middleware/auth.js';
 import trendYoutubeUploadService from '../services/trendYoutubeUploadService.js';
+import youtubeOAuthService from '../services/youtubeOAuthService.js';
 
 const router = express.Router();
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
@@ -14,7 +15,7 @@ async function proxy(req, res, path) {
       url: `${PY_SERVICE_BASE}${path}`,
       params: req.query,
       data: req.body,
-      timeout: 120000,
+      timeout: 600000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -187,20 +188,58 @@ router.post('/youtube/oauth-exchange', async (req, res) => {
   }
 });
 
+// YouTube OAuth Start - Generate authorization URL
+router.get('/youtube/oauth/start', async (req, res) => {
+  try {
+    const authUrl = youtubeOAuthService.getAuthUrl();
+    res.json({
+      success: true,
+      authUrl: authUrl
+    });
+  } catch (error) {
+    console.error('❌ OAuth Start Error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// YouTube OAuth Callback - Exchange code for tokens
 router.get(['/youtube/oauth/callback', '/youtube/oauth/callback-v2'], async (req, res) => {
   try {
-    const { code, error } = req.query || {};
+    const { code, error, state } = req.query || {};
+    
+    // Handle OAuth error from Google
     if (error) {
-      return res.status(400).send(`YouTube OAuth failed: ${error}`);
+      console.log(`⚠️ [OAuth Error] ${error}`);
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=${encodeURIComponent(error)}`;
+      return res.redirect(frontendUrl);
     }
+    
     if (!code) {
-      return res.status(400).send('Missing OAuth code');
+      console.log('❌ [OAuth] Missing authorization code');
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=${encodeURIComponent('missing_code')}`;
+      return res.redirect(frontendUrl);
     }
 
-    await trendYoutubeUploadService.exchangeCodeForToken(String(code));
-    return res.send('YouTube OAuth success. Token saved. You can close this tab.');
+    // Exchange code for tokens
+    console.log('🔄 [OAuth] Processing authorization code...');
+    const result = await youtubeOAuthService.handleOAuthCallback(String(code));
+    
+    if (result.success) {
+      console.log(`✅ [OAuth] Success - Redirecting to frontend`);
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?connected=youtube&accountId=${result.account._id}&channelId=${result.account.channelId}&channelTitle=${encodeURIComponent(result.account.channelTitle)}`;
+      return res.redirect(frontendUrl);
+    } else {
+      console.log('❌ [OAuth] Failed:', result);
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=${encodeURIComponent('oauth_failed')}`;
+      return res.redirect(frontendUrl);
+    }
   } catch (err) {
-    return res.status(500).send(`YouTube OAuth callback error: ${err.message}`);
+    console.error('❌ [OAuth Callback Error]', err.message);
+    const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=${encodeURIComponent('callback_error')}`;
+    return res.redirect(frontendUrl);
   }
 });
 

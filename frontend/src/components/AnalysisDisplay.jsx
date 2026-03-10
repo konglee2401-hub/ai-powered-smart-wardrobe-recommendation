@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Analysis Display Component
  * Display unified analysis results (character + product + compatibility)
  */
@@ -29,7 +29,7 @@ export default function AnalysisDisplay({ analysis, isAnalyzing }) {
             <div className="absolute inset-0 border-4 border-purple-200 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-purple-500 rounded-full border-t-transparent animate-spin"></div>
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">🔍 Performing Unified AI Analysis...</h3>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">ðŸ” Performing Unified AI Analysis...</h3>
           <p className="text-gray-500 text-center max-w-md">
             Analyzing character and product together for optimal compatibility.
           </p>
@@ -129,7 +129,7 @@ export default function AnalysisDisplay({ analysis, isAnalyzing }) {
       {/* Recommendations Highlights */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">✨ AI Recommendations</h3>
+          <h3 className="font-semibold text-gray-800">âœ¨ AI Recommendations</h3>
         </div>
         <div className="p-6 grid md:grid-cols-3 gap-4">
           {recommendations && Object.entries(recommendations).map(([key, value]) => (
@@ -156,7 +156,7 @@ export default function AnalysisDisplay({ analysis, isAnalyzing }) {
       {/* Extracted Keywords */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">🔑 Extracted Keywords</h3>
+          <h3 className="font-semibold text-gray-800">ðŸ”‘ Extracted Keywords</h3>
         </div>
         <div className="p-6 flex flex-wrap gap-2">
           {promptKeywords && Object.values(promptKeywords).flat().map((keyword, idx) => (
@@ -197,3 +197,4 @@ export default function AnalysisDisplay({ analysis, isAnalyzing }) {
     </div>
   );
 }
+

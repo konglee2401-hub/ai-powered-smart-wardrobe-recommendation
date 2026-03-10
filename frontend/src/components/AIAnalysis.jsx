@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AI Analysis Component
  * Display AI analysis and comparison
  */
@@ -98,7 +98,7 @@ export default function AIAnalysis({ originalImage, generatedImage, metadata }) 
             <ul className="space-y-2">
               {analysis.strengths.map((strength, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                  <span className="text-green-500 mt-0.5">✓</span>
+                  <span className="text-green-500 mt-0.5">âœ“</span>
                   {strength}
                 </li>
               ))}
@@ -115,7 +115,7 @@ export default function AIAnalysis({ originalImage, generatedImage, metadata }) 
               <ul className="space-y-2">
                 {analysis.suggestions.map((suggestion, index) => (
                   <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                    <span className="text-blue-500 mt-0.5">→</span>
+                    <span className="text-blue-500 mt-0.5">â†’</span>
                     {suggestion}
                   </li>
                 ))}
@@ -171,3 +171,4 @@ export default function AIAnalysis({ originalImage, generatedImage, metadata }) 
     </div>
   );
 }
+

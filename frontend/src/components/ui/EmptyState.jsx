@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Inbox } from 'lucide-react';
 import SemanticIconBadge from './SemanticIconBadge';
 
@@ -19,3 +19,4 @@ export default function EmptyState({
     </div>
   );
 }
+

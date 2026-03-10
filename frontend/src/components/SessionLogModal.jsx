@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import ModalPortal from './ModalPortal';
 import {
   X,
   Copy,
@@ -21,6 +22,34 @@ import {
   HardDrive,
   Check,
 } from 'lucide-react';
+
+const formatErrorMessage = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value?.message === 'string') return value.message;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return String(value);
+  }
+};
+
+const inferAffiliateStepKey = (flowState, status) => {
+  if (flowState?.step6?.completed) return 'step6';
+  if (flowState?.step5?.completed) return 'step5';
+  if (flowState?.step4?.completed) return 'step4';
+  if (flowState?.step3?.completed) return 'step3';
+  if (flowState?.step2?.completed) return 'step2';
+  if (flowState?.step1?.completed) return 'step1';
+  const normalized = String(status || '').toLowerCase();
+  if (normalized.includes('step6')) return 'step6';
+  if (normalized.includes('step5')) return 'step5';
+  if (normalized.includes('step4')) return 'step4';
+  if (normalized.includes('step3')) return 'step3';
+  if (normalized.includes('step2')) return 'step2';
+  if (normalized.includes('step1')) return 'step1';
+  return 'step1';
+};
 
 const AFFILIATE_STEPS = [
   { key: 'step1', label: 'Analyze', icon: Sparkles },
@@ -50,7 +79,8 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   useEffect(() => {
     if (!affiliateStatus?.flowState) return;
     const completedSteps = AFFILIATE_STEPS.filter(({ key }) => affiliateStatus.flowState?.[key]?.completed);
-    setActiveStep(completedSteps[completedSteps.length - 1]?.key || 'step1');
+    const inferredStep = inferAffiliateStepKey(affiliateStatus.flowState, affiliateStatus.sessionStatus || affiliateStatus.status);
+    setActiveStep(completedSteps[completedSteps.length - 1]?.key || inferredStep || 'step1');
   }, [affiliateStatus]);
 
   const loadSessionPreview = async () => {
@@ -105,8 +135,13 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
 
   const summary = useMemo(() => {
     const totalDuration = affiliateStatus?.totalDuration ?? sessionData?.metrics?.totalDuration ?? null;
+    const statusValue = affiliateStatus?.sessionStatus || affiliateStatus?.status || sessionData?.status || 'unknown';
+    const lastStatus = affiliateStatus?.status || null;
+    const errorMessage = formatErrorMessage(affiliateStatus?.error || sessionData?.error);
     return {
-      status: affiliateStatus?.status || sessionData?.status || 'unknown',
+      status: statusValue,
+      lastStatus,
+      errorMessage,
       flowType: sessionData?.flowType || 'affiliate-tiktok',
       totalDuration,
       createdAt: sessionData?.createdAt || null,
@@ -119,6 +154,7 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
   const currentStep = affiliateStatus?.flowState?.[activeStep] || null;
 
   return (
+    <ModalPortal>
     <div className={`apple-typography fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)]' : 'bg-black/70'}`}>
       <div className={`flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border shadow-2xl ${isLightTheme ? 'studio-card-shell border-white/50' : 'border-slate-700 bg-slate-950'}`}>
         <div className="flex items-start justify-between border-b border-slate-800 bg-slate-950/95 px-6 py-5">
@@ -132,6 +168,7 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
               <span className="rounded-full border border-slate-700 px-2 py-1">Flow ID: {effectiveFlowId}</span>
               <span className={`rounded-full px-2 py-1 ${summary.status === 'completed' ? 'bg-emerald-500/15 text-emerald-300' : summary.status === 'failed' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>
                 {summary.status}
+              {summary.lastStatus && summary.lastStatus !== summary.status ? (<span className="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300">Last: {summary.lastStatus}</span>) : null}
               </span>
               {summary.totalDuration ? <span>{formatDuration(summary.totalDuration)}</span> : null}
               {summary.createdAt ? <span>{new Date(summary.createdAt).toLocaleString()}</span> : null}
@@ -180,6 +217,19 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
                 <StatCard label="Flow Type" value={summary.flowType || 'affiliate-tiktok'} icon={Sparkles} />
                 <StatCard label="Duration" value={summary.totalDuration ? formatDuration(summary.totalDuration) : 'Pending'} icon={Clock} />
               </div>
+              {(summary.errorMessage || String(summary.status || '').toLowerCase().includes('failed')) ? (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-4 text-rose-200">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <div>
+                      <div className="font-semibold">Failure Reason</div>
+                      <div className="mt-1 text-sm text-rose-200/90">{summary.errorMessage || 'Unknown error'}</div>
+                      {summary.lastStatus ? <div className="mt-1 text-xs text-rose-300/80">Last status: {summary.lastStatus}</div> : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
 
               <div className="overflow-x-auto pb-2">
                 <div className="flex min-w-max items-center gap-2">
@@ -247,6 +297,7 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

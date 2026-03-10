@@ -28,7 +28,7 @@ import readline from 'readline';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
 
-const PROJECT_ID = '58d791d4-37c9-47a8-ae3b-816733bc3ec0';
+const PROJECT_ID = '87b78b0e-8b5a-40fc-9142-cdeda1419be7';
 const SESSION_FILE = path.join(__dirname, '../.sessions/google-flow-session-complete.json');
 
 async function askUser(question) {

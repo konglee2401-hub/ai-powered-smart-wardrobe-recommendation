@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Settings, RefreshCw, CheckCircle, AlertCircle, Shield, Save, Link as LinkIcon, Play, FileText } from 'lucide-react';
 import axiosInstance from '../services/axios';
 import { useTranslation } from 'react-i18next';
@@ -93,7 +93,7 @@ export default function SetupAuthentication() {
     try {
       const { data } = await axiosInstance.post('/auth-setup/scraper-videos-config', scraperConfig);
       if (data.success) {
-        setMessage('✅ Scraper configuration saved successfully');
+        setMessage('âœ… Scraper configuration saved successfully');
       }
     } catch (e) {
       setMessage('Failed to save scraper config: ' + (e.response?.data?.error || e.message));
@@ -123,7 +123,7 @@ export default function SetupAuthentication() {
         // Show log viewer with the session ID
         setLogSessionId(response.data.sessionId);
         setLogViewerVisible(true);
-        setMessage('📋 Log viewer opened - monitoring refresh process...');
+        setMessage('ðŸ“‹ Log viewer opened - monitoring refresh process...');
         // Check status after refresh completes
         setTimeout(loadStatuses, 5000);
       } else {
@@ -143,7 +143,7 @@ export default function SetupAuthentication() {
         // Show log viewer with the session ID
         setLogSessionId(response.data.sessionId);
         setLogViewerVisible(true);
-        setMessage('📋 Log viewer opened - monitoring auto-login process...');
+        setMessage('ðŸ“‹ Log viewer opened - monitoring auto-login process...');
         // Check status after auto-login completes
         setTimeout(loadStatuses, 5000);
       } else {
@@ -421,7 +421,7 @@ export default function SetupAuthentication() {
               {active === 'drive-config' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-lg font-semibold">📊 Drive Configuration Check</div>
+                    <div className="text-lg font-semibold">ðŸ“Š Drive Configuration Check</div>
                     <button onClick={loadDriveConfig} disabled={loadingDriveConfig} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs flex items-center gap-1 disabled:opacity-50">
                       <RefreshCw className="w-4 h-4" /> {loadingDriveConfig ? 'Loading...' : 'Refresh'}
                     </button>
@@ -432,7 +432,7 @@ export default function SetupAuthentication() {
                       {/* Folder Mappings */}
                       {driveConfig.folderMappings && (
                         <div className="space-y-3">
-                          <div className="text-sm font-semibold text-white">📁 Folder Mappings (10/10)</div>
+                          <div className="text-sm font-semibold text-white">ðŸ“ Folder Mappings (10/10)</div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                             {Object.entries(driveConfig.folderMappings).map(([name, folder]) => (
                               <div key={name} className="flex items-center gap-2 p-2 bg-gray-800 rounded border border-gray-700">
@@ -448,14 +448,14 @@ export default function SetupAuthentication() {
                       {/* Upload Methods */}
                       {driveConfig.uploadMethods && (
                         <div className="space-y-3">
-                          <div className="text-sm font-semibold text-white">🚀 Upload Methods</div>
+                          <div className="text-sm font-semibold text-white">ðŸš€ Upload Methods</div>
                           <div className="space-y-2 text-sm">
                             {driveConfig.uploadMethods.map((method, idx) => (
                               <div key={idx} className="flex items-center gap-2 p-2 bg-gray-800 rounded border border-gray-700">
                                 <CheckCircle className="w-4 h-4 text-green-400" />
                                 <div className="flex-1">
                                   <span className="font-mono text-xs">{method.method}</span>
-                                  <span className="text-gray-400 ml-2">→ {method.folder}</span>
+                                  <span className="text-gray-400 ml-2">â†’ {method.folder}</span>
                                 </div>
                               </div>
                             ))}
@@ -466,19 +466,19 @@ export default function SetupAuthentication() {
                       {/* Authentication Status */}
                       {driveConfig.auth && (
                         <div className="space-y-2 p-3 bg-gray-800 rounded border border-gray-700">
-                          <div className="text-sm font-semibold text-white">🔐 Authentication Status</div>
+                          <div className="text-sm font-semibold text-white">ðŸ” Authentication Status</div>
                           <div className="space-y-1 text-sm">
                             <div className={`flex items-center gap-2 ${driveConfig.auth.clientIdConfigured ? 'text-green-400' : 'text-red-400'}`}>
                               <CheckCircle className="w-4 h-4" />
-                              OAUTH_CLIENT_ID: {driveConfig.auth.clientIdConfigured ? '✅ Configured' : '❌ Missing'}
+                              OAUTH_CLIENT_ID: {driveConfig.auth.clientIdConfigured ? 'âœ… Configured' : 'âŒ Missing'}
                             </div>
                             <div className={`flex items-center gap-2 ${driveConfig.auth.clientSecretConfigured ? 'text-green-400' : 'text-red-400'}`}>
                               <CheckCircle className="w-4 h-4" />
-                              OAUTH_CLIENT_SECRET: {driveConfig.auth.clientSecretConfigured ? '✅ Configured' : '❌ Missing'}
+                              OAUTH_CLIENT_SECRET: {driveConfig.auth.clientSecretConfigured ? 'âœ… Configured' : 'âŒ Missing'}
                             </div>
                             <div className={`flex items-center gap-2 ${driveConfig.auth.tokenValid ? 'text-green-400' : 'text-yellow-400'}`}>
                               <CheckCircle className="w-4 h-4" />
-                              Token: {driveConfig.auth.tokenValid ? '✅ Valid' : '⚠️ Expired/Missing'}
+                              Token: {driveConfig.auth.tokenValid ? 'âœ… Valid' : 'âš ï¸ Expired/Missing'}
                               {driveConfig.auth.tokenExpires && <span className="text-xs text-gray-400 ml-2">({driveConfig.auth.tokenExpires})</span>}
                             </div>
                           </div>
@@ -488,8 +488,8 @@ export default function SetupAuthentication() {
                       {/* Overall Status */}
                       {driveConfig.allConfigured && (
                         <div className="p-3 bg-green-900 border border-green-700 rounded">
-                          <div className="text-sm font-semibold text-green-300">✅✅✅ All Google Drive Configurations Correct</div>
-                          <div className="text-xs text-green-300 mt-1">🚀 Ready to upload images and videos!</div>
+                          <div className="text-sm font-semibold text-green-300">âœ…âœ…âœ… All Google Drive Configurations Correct</div>
+                          <div className="text-xs text-green-300 mt-1">ðŸš€ Ready to upload images and videos!</div>
                         </div>
                       )}
                     </>
@@ -501,7 +501,7 @@ export default function SetupAuthentication() {
 
               {active === 'scraper-videos' && (
                 <div className="space-y-4">
-                  <div className="text-lg font-semibold">📥 Scraper Downloaded Videos Configuration</div>
+                  <div className="text-lg font-semibold">ðŸ“¥ Scraper Downloaded Videos Configuration</div>
                   <p className="text-sm text-gray-300">Configure where videos downloaded from scraper sources should be stored in Google Drive.</p>
                   
                   <div className="space-y-4 p-4 bg-gray-800 rounded border border-gray-700">
@@ -517,7 +517,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">📱 For TikTok content downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸ“± For TikTok content downloaded for repurposing</p>
                       </div>
 
                       {/* Instagram Reels */}
@@ -529,7 +529,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">📱 For Instagram Reels content downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸ“± For Instagram Reels content downloaded for repurposing</p>
                       </div>
 
                       {/* YouTube Videos */}
@@ -541,7 +541,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">🎥 For YouTube videos downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸŽ¥ For YouTube videos downloaded for repurposing</p>
                       </div>
 
                       {/* Playboard Videos */}
@@ -553,7 +553,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">🎬 For Playboard videos downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸŽ¬ For Playboard videos downloaded for repurposing</p>
                       </div>
 
                       {/* DailyHaha Videos */}
@@ -565,7 +565,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">😄 For DailyHaha videos downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸ˜„ For DailyHaha videos downloaded for repurposing</p>
                       </div>
 
                       {/* Douyin Videos */}
@@ -577,7 +577,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">🏮 For Douyin videos downloaded for repurposing</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸ® For Douyin videos downloaded for repurposing</p>
                       </div>
 
                       {/* General Source Videos */}
@@ -589,7 +589,7 @@ export default function SetupAuthentication() {
                           <option value="videos-app">Videos/Uploaded/App</option>
                           <option value="custom">Custom Folder (specify below)</option>
                         </select>
-                        <p className="text-xs text-gray-500 mt-1">🎬 For general source videos from various platforms</p>
+                        <p className="text-xs text-gray-500 mt-1">ðŸŽ¬ For general source videos from various platforms</p>
                       </div>
 
                       {/* Custom Folder ID */}
@@ -616,7 +616,7 @@ export default function SetupAuthentication() {
                   </div>
 
                   <div className="p-3 bg-blue-900 border border-blue-700 rounded text-sm">
-                    <div className="font-semibold text-blue-300 mb-2">💡 How it works:</div>
+                    <div className="font-semibold text-blue-300 mb-2">ðŸ’¡ How it works:</div>
                     <ul className="list-disc list-inside text-blue-300 space-y-1 text-xs">
                       <li>Videos downloaded from scraper services automatically upload to configured folders</li>
                       <li>Each source type (TikTok, Reels, YouTube, Playboard, DailyHaha, Douyin, General) can have its own destination</li>
@@ -640,3 +640,4 @@ export default function SetupAuthentication() {
     </div>
   );
 }
+

@@ -1,7 +1,7 @@
 {
   "name": "smart-wardrobe",
   "version": "1.0.0",
-  "description": "AI-Powered Smart Wardrobe Management System",
+  "description": "AI-Powered K-Creative Studio Management System",
   "scripts": {
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",

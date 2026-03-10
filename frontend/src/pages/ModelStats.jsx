@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Model Statistics Page
  * Display comprehensive statistics and analytics
  */
@@ -80,7 +80,7 @@ export default function ModelStats() {
 
     } catch (err) {
       console.error('Failed to load stats:', err);
-      setError(err.message || 'Không thể tải thống kê. Vui lòng thử lại.');
+      setError(err.message || 'KhÃ´ng thá»ƒ táº£i thá»‘ng kÃª. Vui lÃ²ng thá»­ láº¡i.');
     } finally {
       setLoading(false);
     }
@@ -104,9 +104,9 @@ export default function ModelStats() {
     try {
       await axios.post(`${API_BASE_URL}/models/sync`);
       await loadStats();
-      alert('Đồng bộ models thành công!');
+      alert('Äá»“ng bá»™ models thÃ nh cÃ´ng!');
     } catch (error) {
-      alert('Lỗi đồng bộ models: ' + error.message);
+      alert('Lá»—i Ä‘á»“ng bá»™ models: ' + error.message);
     } finally {
       setSyncing(false);
     }
@@ -127,7 +127,7 @@ export default function ModelStats() {
       case 'decreasing':
         return { icon: TrendingUp, color: 'text-red-600', label: `${trend.change}%` };
       default:
-        return { icon: Activity, color: 'text-gray-600', label: 'Ổn định' };
+        return { icon: Activity, color: 'text-gray-600', label: 'á»”n Ä‘á»‹nh' };
     }
   };
 
@@ -140,7 +140,7 @@ export default function ModelStats() {
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 mx-auto text-purple-600 animate-spin mb-4" />
-          <p className="text-gray-600">Đang tải thống kê...</p>
+          <p className="text-gray-600">Äang táº£i thá»‘ng kÃª...</p>
         </div>
       </div>
     );
@@ -159,7 +159,7 @@ export default function ModelStats() {
                 {t('modelStats.title')}
               </h1>
               <p className="text-gray-600 mt-2">
-                Theo dõi hiệu suất và sử dụng hệ thống
+                Theo dÃµi hiá»‡u suáº¥t vÃ  sá»­ dá»¥ng há»‡ thá»‘ng
               </p>
             </div>
             
@@ -170,10 +170,10 @@ export default function ModelStats() {
                 onChange={(e) => setTimeRange(e.target.value)}
                 className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
-                <option value="7d">7 ngày</option>
-                <option value="30d">30 ngày</option>
-                <option value="90d">90 ngày</option>
-                <option value="1y">1 năm</option>
+                <option value="7d">7 ngÃ y</option>
+                <option value="30d">30 ngÃ y</option>
+                <option value="90d">90 ngÃ y</option>
+                <option value="1y">1 nÄƒm</option>
               </select>
               
               {/* Refresh Button */}
@@ -183,7 +183,7 @@ export default function ModelStats() {
                 className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2 disabled:bg-gray-400"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Làm Mới
+                LÃ m Má»›i
               </button>
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function ModelStats() {
               <span>{error}</span>
             </div>
             <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-              ✕
+              âœ•
             </button>
           </div>
         )}
@@ -209,11 +209,11 @@ export default function ModelStats() {
             icon={Activity}
             iconColor="text-purple-500"
             iconBg="bg-purple-100"
-            title="Tổng Số Lần Tạo"
+            title="Tá»•ng Sá»‘ Láº§n Táº¡o"
             value={metrics?.totalGenerations || stats?.total || 0}
             subtitle={trend && (
               <span className={trendInfo.color}>
-                {trend.change > 0 ? '+' : ''}{trend.change}% so với kỳ trước
+                {trend.change > 0 ? '+' : ''}{trend.change}% so vá»›i ká»³ trÆ°á»›c
               </span>
             )}
             trend={trend?.trend}
@@ -224,9 +224,9 @@ export default function ModelStats() {
             icon={CheckCircle}
             iconColor="text-green-500"
             iconBg="bg-green-100"
-            title="Tỷ Lệ Thành Công"
+            title="Tá»· Lá»‡ ThÃ nh CÃ´ng"
             value={`${calculateSuccessRate(stats?.successful || 0, stats?.total || 1)}%`}
-            subtitle={`${stats?.successful || 0} thành công`}
+            subtitle={`${stats?.successful || 0} thÃ nh cÃ´ng`}
           />
 
           {/* Average Time */}
@@ -234,9 +234,9 @@ export default function ModelStats() {
             icon={Clock}
             iconColor="text-blue-500"
             iconBg="bg-blue-100"
-            title="Thời Gian Trung Bình"
+            title="Thá»i Gian Trung BÃ¬nh"
             value={formatGenerationTime(stats?.avgGenerationTime || 0)}
-            subtitle="Thời gian tạo ảnh"
+            subtitle="Thá»i gian táº¡o áº£nh"
           />
 
           {/* Failed */}
@@ -244,9 +244,9 @@ export default function ModelStats() {
             icon={XCircle}
             iconColor="text-red-500"
             iconBg="bg-red-100"
-            title="Thất Bại"
+            title="Tháº¥t Báº¡i"
             value={stats?.failed || 0}
-            subtitle={`${((stats?.failed || 0) / (stats?.total || 1) * 100).toFixed(1)}% tổng số`}
+            subtitle={`${((stats?.failed || 0) / (stats?.total || 1) * 100).toFixed(1)}% tá»•ng sá»‘`}
           />
         </div>
 
@@ -258,9 +258,9 @@ export default function ModelStats() {
               icon={Zap}
               iconColor="text-yellow-500"
               iconBg="bg-yellow-100"
-              title="Provider Nhanh Nhất"
+              title="Provider Nhanh Nháº¥t"
               value={metrics.fastestProvider || 'N/A'}
-              description="Thời gian xử lý nhanh nhất"
+              description="Thá»i gian xá»­ lÃ½ nhanh nháº¥t"
             />
 
             {/* Most Reliable */}
@@ -268,9 +268,9 @@ export default function ModelStats() {
               icon={Award}
               iconColor="text-blue-500"
               iconBg="bg-blue-100"
-              title="Provider Tin Cậy Nhất"
+              title="Provider Tin Cáº­y Nháº¥t"
               value={metrics.mostReliableProvider || 'N/A'}
-              description="Tỷ lệ thành công cao nhất"
+              description="Tá»· lá»‡ thÃ nh cÃ´ng cao nháº¥t"
             />
 
             {/* Total Generations */}
@@ -278,9 +278,9 @@ export default function ModelStats() {
               icon={Target}
               iconColor="text-purple-500"
               iconBg="bg-purple-100"
-              title="Tổng Số Lần Tạo"
+              title="Tá»•ng Sá»‘ Láº§n Táº¡o"
               value={metrics.totalGenerations || 0}
-              description="Tất cả các lần tạo ảnh"
+              description="Táº¥t cáº£ cÃ¡c láº§n táº¡o áº£nh"
             />
           </div>
         )}
@@ -291,7 +291,7 @@ export default function ModelStats() {
           <div className="bg-white rounded-2xl shadow-lg p-6 col-span-2">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <TrendingUp className="w-6 h-6 text-green-600" />
-              Thống Kê Theo Provider
+              Thá»‘ng KÃª Theo Provider
             </h2>
             
             {providerStats.length > 0 ? (
@@ -308,7 +308,7 @@ export default function ModelStats() {
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <Info className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                <p>Chưa có dữ liệu provider</p>
+                <p>ChÆ°a cÃ³ dá»¯ liá»‡u provider</p>
               </div>
             )}
           </div>
@@ -317,26 +317,26 @@ export default function ModelStats() {
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Zap className="w-6 h-6 text-yellow-600" />
-              Thống Kê Nhanh
+              Thá»‘ng KÃª Nhanh
             </h2>
             
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-xl">
-                <p className="text-sm text-gray-500">Provider Nhanh Nhất</p>
+                <p className="text-sm text-gray-500">Provider Nhanh Nháº¥t</p>
                 <p className="font-semibold text-gray-900">
                   {metrics?.fastestProvider || 'N/A'}
                 </p>
               </div>
               
               <div className="p-4 bg-gray-50 rounded-xl">
-                <p className="text-sm text-gray-500">Provider Tin Cậy Nhất</p>
+                <p className="text-sm text-gray-500">Provider Tin Cáº­y Nháº¥t</p>
                 <p className="font-semibold text-gray-900">
                   {metrics?.mostReliableProvider || 'N/A'}
                 </p>
               </div>
               
               <div className="p-4 bg-gray-50 rounded-xl">
-                <p className="text-sm text-gray-500">Tổng Providers</p>
+                <p className="text-sm text-gray-500">Tá»•ng Providers</p>
                 <p className="font-semibold text-gray-900">
                   {providerStats.length}
                 </p>
@@ -348,7 +348,7 @@ export default function ModelStats() {
                 className="w-full mt-4 px-4 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
               >
                 <RefreshCw className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? 'Đang đồng bộ...' : 'Đồng Bộ Models'}
+                {syncing ? 'Äang Ä‘á»“ng bá»™...' : 'Äá»“ng Bá»™ Models'}
               </button>
             </div>
           </div>
@@ -359,7 +359,7 @@ export default function ModelStats() {
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
             <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Calendar className="w-6 h-6 text-blue-600" />
-              Biểu Đồ Sử Dụng Theo Thời Gian
+              Biá»ƒu Äá»“ Sá»­ Dá»¥ng Theo Thá»i Gian
             </h2>
             
             <div className="h-48 flex items-end space-x-2">
@@ -387,26 +387,26 @@ export default function ModelStats() {
           {/* Success vs Failed */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6">
-              Phân Bố Trạng Thái
+              PhÃ¢n Bá»‘ Tráº¡ng ThÃ¡i
             </h2>
             
             <div className="space-y-4">
               <StatusBar
-                label="Thành công"
+                label="ThÃ nh cÃ´ng"
                 value={stats?.successful || 0}
                 total={stats?.total || 0}
                 color="bg-green-500"
               />
               
               <StatusBar
-                label="Thất bại"
+                label="Tháº¥t báº¡i"
                 value={stats?.failed || 0}
                 total={stats?.total || 0}
                 color="bg-red-500"
               />
               
               <StatusBar
-                label="Đang xử lý"
+                label="Äang xá»­ lÃ½"
                 value={stats?.processing || 0}
                 total={stats?.total || 0}
                 color="bg-yellow-500"
@@ -417,7 +417,7 @@ export default function ModelStats() {
           {/* Provider Distribution */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-6">
-              Phân Bố Provider
+              PhÃ¢n Bá»‘ Provider
             </h2>
             
             <div className="space-y-4">
@@ -440,7 +440,7 @@ export default function ModelStats() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <Database className="w-6 h-6 text-blue-600" />
-                Tất Cả Models ({filteredModels.length})
+                Táº¥t Cáº£ Models ({filteredModels.length})
               </h2>
 
               <div className="flex flex-wrap gap-2">
@@ -454,7 +454,7 @@ export default function ModelStats() {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {type === 'all' ? 'Tất cả' : type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    {type === 'all' ? 'Táº¥t cáº£' : type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                   </button>
                 ))}
               </div>
@@ -466,10 +466,10 @@ export default function ModelStats() {
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Model</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Provider</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Loại</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Trạng Thái</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tỷ Lệ Thành Công</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Thời Gian TB</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Loáº¡i</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tráº¡ng ThÃ¡i</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tá»· Lá»‡ ThÃ nh CÃ´ng</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Thá»i Gian TB</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -480,7 +480,7 @@ export default function ModelStats() {
                           <p className="font-medium text-gray-900">{model.name}</p>
                           {model.pricing?.free && (
                             <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded mt-1">
-                              MIỄN PHÍ
+                              MIá»„N PHÃ
                             </span>
                           )}
                         </div>
@@ -491,12 +491,12 @@ export default function ModelStats() {
                         {model.status?.available ? (
                           <span className="flex items-center text-green-600 text-sm">
                             <CheckCircle className="w-4 h-4 mr-1" />
-                            Khả dụng
+                            Kháº£ dá»¥ng
                           </span>
                         ) : (
                           <span className="flex items-center text-red-600 text-sm">
                             <XCircle className="w-4 h-4 mr-1" />
-                            Không khả dụng
+                            KhÃ´ng kháº£ dá»¥ng
                           </span>
                         )}
                       </td>
@@ -582,28 +582,28 @@ function ProviderStatRow({ provider, calculateSuccessRate, formatGenerationTime 
           successRate >= 70 ? 'bg-yellow-100 text-yellow-700' :
           'bg-red-100 text-red-700'
         }`}>
-          {successRate.toFixed(1)}% Thành công
+          {successRate.toFixed(1)}% ThÃ nh cÃ´ng
         </span>
       </div>
       
       <div className="grid grid-cols-4 gap-4 text-sm">
         <div>
-          <p className="text-gray-600 mb-1">Tổng</p>
+          <p className="text-gray-600 mb-1">Tá»•ng</p>
           <p className="font-semibold text-gray-800">{provider.total || 0}</p>
         </div>
         
         <div>
-          <p className="text-gray-600 mb-1">Thành công</p>
+          <p className="text-gray-600 mb-1">ThÃ nh cÃ´ng</p>
           <p className="font-semibold text-green-600">{provider.successful || 0}</p>
         </div>
         
         <div>
-          <p className="text-gray-600 mb-1">Thất bại</p>
+          <p className="text-gray-600 mb-1">Tháº¥t báº¡i</p>
           <p className="font-semibold text-red-600">{provider.failed || 0}</p>
         </div>
         
         <div>
-          <p className="text-gray-600 mb-1">Thời gian TB</p>
+          <p className="text-gray-600 mb-1">Thá»i gian TB</p>
           <p className="font-semibold text-blue-600">{formatGenerationTime(provider.avgTime || 0)}</p>
         </div>
       </div>
@@ -644,3 +644,4 @@ function StatusBar({ label, value, total, color }) {
     </div>
   );
 }
+

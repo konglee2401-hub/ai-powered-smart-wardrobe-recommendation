@@ -23,6 +23,7 @@ class GenerationMonitor {
     this.mediaType = options.type || options.mediaType || 'image';
     this.uploadedImageRefs = options.uploadedImageRefs || {}; // Legacy: for ErrorRecovery compatibility
     this.preGenerationMonitor = null; // NEW: Reference to PreGenerationMonitor for baseline comparison
+    this.verbose = options.verbose === true;
     
     // Bind utilities
     // VirtuosoQueryHelper now accepts page as parameter - no binding needed
@@ -46,19 +47,10 @@ class GenerationMonitor {
    * @param {string} promptText - Original prompt text (for recovery Strategy 3)
    */
   async monitorGeneration(timeoutSeconds = 300, expectedNewHrefs = 1, promptText = null) {
-    console.log(`⏳ [MONITOR] Starting generation monitoring (max ${timeoutSeconds}s, expecting ${expectedNewHrefs} new image${expectedNewHrefs > 1 ? 's' : ''})...`);
+    console.log(`[MONITOR] Starting generation monitoring (timeout=${timeoutSeconds}s, expected=${expectedNewHrefs})`);
     
     // 💾 IMPORTANT: Save prompt for Strategy 3 recovery
     const originalPrompt = promptText || 'unknown prompt';
-    
-    // 🔥 DEBUG: Check if PreGenerationMonitor baseline is available
-    if (this.preGenerationMonitor) {
-      const baseline = this.preGenerationMonitor.getBaseline();
-      console.log(`   📍 [MONITOR] Using PreGenerationMonitor baseline: ${baseline.length} items`);
-    } else {
-      console.log(`   ⚠️  [MONITOR] No PreGenerationMonitor set (using uploadedImageRefs detection)`);
-    }
-    
     const startTime = Date.now();
     const timeoutMs = timeoutSeconds * 1000;
     let generationDetected = false;
@@ -67,9 +59,11 @@ class GenerationMonitor {
     let lastHrefCount = 0;  // Track href count to detect completion
     let errorRetryCount = 0;  // 💫 NEW: Track how many times we've retried on error
     let lastNewHrefTime = Date.now();  // 💫 Track last time we found a new href
+    let firstPendingHrefTime = null;  // Track when video output first appeared as href-only/pending
     let lastHrefLogTime = Date.now();  // 💫 NEW: Track last time we logged href analysis (to reduce spam)
     const MAX_SIMPLE_RETRIES = 3;  // Max direct retry button clicks
     const PARTIAL_TIMEOUT_MS = 20000;  // 20s - if no new hrefs in 20s, assume partial failure
+    const VIDEO_PENDING_GRACE_MS = 45000;  // Give new href-only video tiles time to settle into downloadable outputs
     const POLL_INTERVAL_MS = 800;  // 💫 OPTIMIZED: Fast polling for quick href detection (was 2000ms)
     const LOG_INTERVAL_MS = 5000;  // 💫 NEW: Log href analysis every 5 seconds (not every poll)
 
@@ -129,21 +123,18 @@ class GenerationMonitor {
         let hrefAnalysis = null;  // Store for reuse
         let newHrefCount = 0;      // Track new href count for display
         
-        if (this.preGenerationMonitor && status !== 'error') {
+        if (this.preGenerationMonitor) {
           try {
             hrefAnalysis = await this.preGenerationMonitor.findNewHref();
             const readyHrefCount = this.mediaType === 'video' ? (hrefAnalysis?.newCountStrict || 0) : (hrefAnalysis?.newCount || 0);
+            const looseHrefCount = hrefAnalysis?.newCountLoose || 0;
+            const pendingHrefCount = hrefAnalysis?.newCountPending || 0;
             newHrefCount = readyHrefCount;
             
             // � NEW: Only log href analysis every 5 seconds (reduce spam)
             const now = Date.now();
-            if (now - lastHrefLogTime >= LOG_INTERVAL_MS) {
-              console.log(`      📊 [MONITOR] Href analysis (check ${statusCheckCount}):`);
-              console.log(`         New (strict): ${hrefAnalysis?.newCountStrict || 0}/${expectedNewHrefs}`);
-              console.log(`         New (loose): ${hrefAnalysis?.newCountLoose || 0}`);
-              console.log(`         Ready for ${this.mediaType}: ${readyHrefCount}`);
-              console.log(`         Existing: ${hrefAnalysis?.existingCount || 0}`);
-              console.log(`         Total items: ${hrefAnalysis?.totalItems || 0}`);
+            if (this.verbose && now - lastHrefLogTime >= LOG_INTERVAL_MS) {
+              console.log(`[MONITOR] Href summary (check ${statusCheckCount}): pending=${hrefAnalysis?.newCountPending || 0}, strict=${hrefAnalysis?.newCountStrict || 0}/${expectedNewHrefs}, loose=${hrefAnalysis?.newCountLoose || 0}, ready=${readyHrefCount}, existing=${hrefAnalysis?.existingCount || 0}, total=${hrefAnalysis?.totalItems || 0}`);
               lastHrefLogTime = now;
             }
             
@@ -154,11 +145,15 @@ class GenerationMonitor {
               const readyLabel = this.mediaType === 'video' ? 'downloadable video item(s)' : 'image(s)';
               console.log(`      Detected ${newHrefCount}/${expectedNewHrefs} ${readyLabel} generated - proceeding to download`);
               lastHrefCount = newHrefCount;
-              lastNewHrefTime = Date.now();  // 💫 Update time when new href found
-              console.log(`      📈 Progress: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found so far`);
-            } else if (newHrefCount > 0 && Date.now() - lastNewHrefTime > PARTIAL_TIMEOUT_MS) {
-              // 💫 NEW: Partial success - no new hrefs for 30s but we have some
-              console.log(`      ⚠️  PARTIAL: No new hrefs for ${PARTIAL_TIMEOUT_MS/1000}s, assuming ${newHrefCount}/${expectedNewHrefs} are all that will generate`);
+              lastNewHrefTime = Date.now();  // ???? Update time when new href found
+              firstPendingHrefTime = null;
+              console.log(`      ???? Progress: ${newHrefCount}/${expectedNewHrefs} new href${expectedNewHrefs > 1 ? 's' : ''} found so far`);
+            } else if (this.mediaType === 'video' && looseHrefCount > 0) {
+              if (!firstPendingHrefTime) firstPendingHrefTime = Date.now();
+              preGenStatus = 'pending-output';
+              console.log(`      Pending video output detected: ${pendingHrefCount}/${looseHrefCount} tile(s) still settling`);
+            } else if (looseHrefCount > 0 && Date.now() - lastNewHrefTime > PARTIAL_TIMEOUT_MS) {
+              console.log(`      ??????  PARTIAL: No new hrefs for ${PARTIAL_TIMEOUT_MS/1000}s, assuming ${looseHrefCount}/${expectedNewHrefs} are all that will generate`);
               preGenStatus = 'partial-ready';
             }
           } catch (e) {
@@ -170,15 +165,19 @@ class GenerationMonitor {
         let effectiveStatus = status;
         if (preGenStatus === 'ready-by-hrefs') {
           effectiveStatus = 'ready';
+        } else if (preGenStatus === 'pending-output') {
+          effectiveStatus = 'pending-output';
         } else if (preGenStatus === 'partial-ready') {
-          effectiveStatus = 'partial-ready';  // 💫 Handle partial success
+          effectiveStatus = 'partial-ready';  // ???? Handle partial success
         }
 
-        // 💫 NEW: Log every check iteration with href status
+        // Reduce per-poll log noise; keep first check, every 5th check, and terminal states.
         const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
-        console.log(`   [CHECK ${statusCheckCount}] ${elapsedSeconds}s elapsed | Status: ${status}${preGenStatus ? ` (→ ${preGenStatus})` : ''}`);
-        
-        // 💫 NEW: Check if first tile is generating (show progress)
+        if (this.verbose || statusCheckCount === 1 || statusCheckCount % 5 === 0 || effectiveStatus === 'error' || effectiveStatus === 'ready') {
+          console.log(`[MONITOR] Check ${statusCheckCount}: ${elapsedSeconds}s status=${status}${preGenStatus ? ` -> ${preGenStatus}` : ''}`);
+        }
+
+        // Check if the first tile is still actively rendering even if status detection is ambiguous.
         if (status === 'error' || status === 'unknown') {
           try {
             const tileProgress = await this.page.evaluate(() => {
@@ -191,51 +190,77 @@ class GenerationMonitor {
               }
               return { hasProgress: false };
             });
-            
+
             if (tileProgress.hasProgress) {
-              console.log(`      🔄 Tile is generating: ${tileProgress.percent}% complete`);
+              console.log(`      Tile is generating: ${tileProgress.percent}% complete`);
             }
           } catch (e) {
             // Skip progress check if error
           }
         }
 
-        // Show href count if available (from already-captured analysis)
-        if (hrefAnalysis && (status === 'generating' || effectiveStatus === 'generating')) {
+        // Show href count only in verbose mode; the summary above is enough for normal runs.
+        if (this.verbose && hrefAnalysis && (status === 'generating' || effectiveStatus === 'generating' || effectiveStatus === 'pending-output')) {
           const totalNew = this.mediaType === 'video' ? (hrefAnalysis.newCountStrict || 0) : (hrefAnalysis.newCount || 0);
-          console.log(`      📊 New hrefs found: ${totalNew}/${expectedNewHrefs}`);
+          console.log(`[MONITOR] New hrefs=${totalNew}/${expectedNewHrefs}`);
+          if ((hrefAnalysis.newCountPending || 0) > 0) {
+            console.log(`[MONITOR] Pending hrefs: ${(hrefAnalysis.pendingHrefs || []).slice(0, 2).join(', ')}`);
+          }
           if (totalNew > 0 && hrefAnalysis.href) {
-            console.log(`         ↳ ${hrefAnalysis.href.substring(0, 60)}`);
+            console.log(`[MONITOR] Latest href: ${hrefAnalysis.href.substring(0, 60)}`);
           }
         }
 
         // Log status changes (track effective status, not just button status)
         if (effectiveStatus !== lastStatus) {
-          console.log(`   ℹ️  STATUS CHANGE: ${lastStatus || 'start'} → ${effectiveStatus}`);
+          console.log(`   STATUS CHANGE: ${lastStatus || 'start'} -> ${effectiveStatus}`);
           lastStatus = effectiveStatus;
-          if (effectiveStatus === 'generating') {
+          if (effectiveStatus === 'generating' || effectiveStatus === 'pending-output') {
             generationDetected = true;
-            console.log(`   🎬 Generation detected!`);
           }
+        }
+
+        if (effectiveStatus === 'pending-output') {
+          const pendingMs = firstPendingHrefTime ? (Date.now() - firstPendingHrefTime) : 0;
+          console.log(`      Pending video output still settling (${Math.round(pendingMs / 1000)}s/${VIDEO_PENDING_GRACE_MS / 1000}s grace)`);
+          if (pendingMs < VIDEO_PENDING_GRACE_MS) {
+            await this.page.waitForTimeout(POLL_INTERVAL_MS);
+            continue;
+          }
+          effectiveStatus = 'error';
         }
 
         // Handle error status
         if (effectiveStatus === 'error') {
-          console.warn('⚠️  Generation error detected on page');
+          console.warn('[MONITOR] Generation error detected on page');
           errorRetryCount++;
-          
-          // 💫 FIX: Before cleanup, check if any new hrefs exist despite error state
-          console.log('   🔍 Checking if any images were generated despite error state...');
+
+          // ???? FIX: Before cleanup, check if any new hrefs exist despite error state
+          if (this.verbose) {
+            console.log('   Checking if outputs exist despite error state...');
+          }
           let existingNewHrefs = 0;
+          let existingPendingHrefs = 0;
           if (this.preGenerationMonitor) {
             try {
-              const preCheckAnalysis = await this.preGenerationMonitor.findNewHref();
+              const preCheckAnalysis = hrefAnalysis || await this.preGenerationMonitor.findNewHref();
               existingNewHrefs = this.mediaType === 'video' ? (preCheckAnalysis?.newCountStrict || 0) : (preCheckAnalysis?.newCountLoose || 0);
+              existingPendingHrefs = this.mediaType === 'video' ? (preCheckAnalysis?.newCountPending || 0) : 0;
               if (existingNewHrefs > 0) {
                 console.log(`   Found ${existingNewHrefs} ready item(s) despite error. Proceeding to download instead of retry.`);
+                return { success: true, href: preCheckAnalysis?.href || 'error-recovery-success', newCount: existingNewHrefs, partial: existingNewHrefs < expectedNewHrefs, found: existingNewHrefs, expected: expectedNewHrefs };
+              }
+              if (existingPendingHrefs > 0) {
+                if (!firstPendingHrefTime) firstPendingHrefTime = Date.now();
+                const pendingMs = Date.now() - firstPendingHrefTime;
+                if (pendingMs < VIDEO_PENDING_GRACE_MS) {
+                  console.log(`   Pending href-only video output exists (${existingPendingHrefs}). Waiting instead of deleting failed tiles.`);
+                  await this.page.waitForTimeout(POLL_INTERVAL_MS);
+                  continue;
+                }
               }
             } catch (e) {
-              console.warn(`   ⚠️  Pre-cleanup href check failed: ${e.message}`);
+              console.warn(`   ??????  Pre-cleanup href check failed: ${e.message}`);
             }
           }
           
@@ -856,3 +881,4 @@ class GenerationMonitor {
 }
 
 export default GenerationMonitor;
+

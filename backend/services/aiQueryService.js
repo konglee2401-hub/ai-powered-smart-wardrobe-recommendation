@@ -129,7 +129,7 @@ async function callImageAPI(provider, model, prompt, apiKey, timeout) {
                 "Authorization": `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
                 "HTTP-Referer": process.env.APP_URL || "http://localhost:5000", // Required by OpenRouter
-                "X-Title": "Smart Wardrobe"
+                "X-Title": "K-Creative Studio"
             },
             timeout: timeout
         });

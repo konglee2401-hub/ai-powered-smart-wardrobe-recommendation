@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Step 2: Script Generation Component
  * Sends videos to ChatGPT for analysis and script generation
  */
@@ -355,3 +355,4 @@ Format: Provide ONLY the script text, no additional commentary.`,
     </div>
   );
 }
+

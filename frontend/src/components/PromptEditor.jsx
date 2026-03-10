@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Prompt Editor Component
  * Edit positive and negative prompts with length counter
  */
@@ -56,9 +56,9 @@ export default function PromptEditor({
   };
 
   const tabs = [
-    { id: 'positive', label: 'Positive Prompt', icon: '✅', count: positiveLength },
-    { id: 'negative', label: 'Negative Prompt', icon: '❌', count: negativeLength },
-    ...(onCustomPromptChange ? [{ id: 'custom', label: 'Custom Additions', icon: '📝', count: customPrompt?.length || 0 }] : []),
+    { id: 'positive', label: 'Positive Prompt', icon: 'âœ…', count: positiveLength },
+    { id: 'negative', label: 'Negative Prompt', icon: 'âŒ', count: negativeLength },
+    ...(onCustomPromptChange ? [{ id: 'custom', label: 'Custom Additions', icon: 'ðŸ“', count: customPrompt?.length || 0 }] : []),
   ];
 
   return (
@@ -88,7 +88,7 @@ export default function PromptEditor({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-gray-300 flex items-center gap-2">
-                <span className="text-lg">✅</span>
+                <span className="text-lg">âœ…</span>
                 What you want to see
               </label>
               <div className="flex items-center gap-2">
@@ -109,14 +109,14 @@ export default function PromptEditor({
             {positiveLength < 100 && (
               <div className="flex items-start gap-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                <span>Prompt quá ngắn. Hãy thêm chi tiết hơn để có kết quả tốt hơn.</span>
+                <span>Prompt quÃ¡ ngáº¯n. HÃ£y thÃªm chi tiáº¿t hÆ¡n Ä‘á»ƒ cÃ³ káº¿t quáº£ tá»‘t hÆ¡n.</span>
               </div>
             )}
 
             {positiveLength > 600 && (
               <div className="flex items-start gap-2 p-2 bg-purple-500/10 border border-purple-500/30 rounded text-xs text-purple-400">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                <span>Prompt quá dài. Model có thể bỏ qua các keyword ở cuối.</span>
+                <span>Prompt quÃ¡ dÃ i. Model cÃ³ thá»ƒ bá» qua cÃ¡c keyword á»Ÿ cuá»‘i.</span>
               </div>
             )}
 
@@ -144,7 +144,7 @@ export default function PromptEditor({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-gray-300 flex items-center gap-2">
-                <span className="text-lg">❌</span>
+                <span className="text-lg">âŒ</span>
                 What to avoid
               </label>
               <div className="flex items-center gap-2">
@@ -164,7 +164,7 @@ export default function PromptEditor({
 
             <div className="flex items-start gap-2 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-400">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <span>Negative prompt giúp loại bỏ các chi tiết không mong muốn. Cùng 50-150 ký tự là lý tưởng.</span>
+              <span>Negative prompt giÃºp loáº¡i bá» cÃ¡c chi tiáº¿t khÃ´ng mong muá»‘n. CÃ¹ng 50-150 kÃ½ tá»± lÃ  lÃ½ tÆ°á»Ÿng.</span>
             </div>
 
             <button
@@ -180,20 +180,20 @@ export default function PromptEditor({
         {activeTab === 'custom' && onCustomPromptChange && (
           <div className="space-y-2">
             <label className="text-xs font-medium text-gray-300 flex items-center gap-2">
-              <span className="text-lg">📝</span>
+              <span className="text-lg">ðŸ“</span>
               Custom Additions
             </label>
 
             <textarea
               value={customPrompt || ''}
               onChange={(e) => onCustomPromptChange(e.target.value)}
-              placeholder="Thêm các yêu cầu tùy chỉnh riêng của bạn. Những thay đổi này sẽ được thêm vào cuối positive prompt."
+              placeholder="ThÃªm cÃ¡c yÃªu cáº§u tÃ¹y chá»‰nh riÃªng cá»§a báº¡n. Nhá»¯ng thay Ä‘á»•i nÃ y sáº½ Ä‘Æ°á»£c thÃªm vÃ o cuá»‘i positive prompt."
               className="w-full h-32 p-3 bg-gray-900 rounded-lg border border-gray-700 text-xs text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-purple-500 font-mono"
             />
 
             <div className="flex items-start gap-2 p-2 bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <span>Những nội dung tùy chỉnh sẽ được hợp nhất vào prompt cuối cùng.</span>
+              <span>Nhá»¯ng ná»™i dung tÃ¹y chá»‰nh sáº½ Ä‘Æ°á»£c há»£p nháº¥t vÃ o prompt cuá»‘i cÃ¹ng.</span>
             </div>
           </div>
         )}
@@ -213,3 +213,4 @@ export default function PromptEditor({
     </div>
   );
 }
+

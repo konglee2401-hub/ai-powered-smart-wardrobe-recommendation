@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Video Scenario Selector Component
  * Allows users to select video scenarios, styles, and camera movements
  */
@@ -43,7 +43,7 @@ export default function VideoScenarioSelector({
               <div className="font-semibold text-sm">{scenario.name}</div>
               <div className="text-xs text-gray-400 mt-1">{scenario.description}</div>
               <div className="text-xs text-gray-500 mt-2">
-                {scenario.duration}s • {scenario.segments} segments
+                {scenario.duration}s â€¢ {scenario.segments} segments
               </div>
             </button>
           ))}
@@ -75,7 +75,7 @@ export default function VideoScenarioSelector({
               <div className="text-xs text-gray-400 mt-1">{style.description}</div>
               <div className="text-xs text-gray-500 mt-2 space-y-1">
                 {style.characteristics.map((char, idx) => (
-                  <div key={idx}>• {char}</div>
+                  <div key={idx}>â€¢ {char}</div>
                 ))}
               </div>
             </button>
@@ -108,7 +108,7 @@ export default function VideoScenarioSelector({
               <div className="text-xs text-gray-400 mt-1">{movement.description}</div>
               <div className="text-xs text-gray-500 mt-2">
                 {movement.movements.map((m, idx) => (
-                  <div key={idx}>• {m}</div>
+                  <div key={idx}>â€¢ {m}</div>
                 ))}
               </div>
             </button>
@@ -151,7 +151,7 @@ export default function VideoScenarioSelector({
               </div>
               <div className="text-xs text-gray-500 mt- 2 space-y-1 mt-2">
                 {preset.characteristics.map((char, idx) => (
-                  <div key={idx}>• {char}</div>
+                  <div key={idx}>â€¢ {char}</div>
                 ))}
               </div>
             </button>
@@ -185,3 +185,4 @@ export default function VideoScenarioSelector({
     </div>
   );
 }
+

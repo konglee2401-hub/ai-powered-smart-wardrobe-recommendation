@@ -23,10 +23,10 @@ const decrypt = (text) => {
 
 const socialMediaAccountSchema = new mongoose.Schema(
   {
+    // Optional user reference (for future user-owned channels)
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
       index: true
     },
     platform: {
@@ -35,20 +35,30 @@ const socialMediaAccountSchema = new mongoose.Schema(
       required: true
     },
     
+    // ==== YOUTUBE SPECIFIC FIELDS ====
+    // Channel Information (from YouTube API)
+    channelId: {
+      type: String
+    },
+    channelTitle: String,        // Channel name/title
+    channelDescription: String,
+    channelThumbnailUrl: String,
+    channelUrl: String,          // URL to channel
+    channelCustomUrl: String,    // Custom URL if available
+    
     // Account Info
-    accountName: {
-      type: String,
-      required: true
-    },
-    accountId: {
-      type: String,
-      required: true
-    },
+    accountName: String,         // Display name
+    accountId: String,           // Primary account identifier
     accountHandle: String,
     accountUrl: String,
     accountImage: String,
     
-    // Credentials (encrypted)
+    // Google Account Email (from OAuth)
+    email: {
+      type: String
+    },
+    
+    // OAuth Credentials (encrypted)
     credentials: {
       accessToken: {
         type: String,
@@ -60,14 +70,15 @@ const socialMediaAccountSchema = new mongoose.Schema(
         set: encrypt,
         get: decrypt
       },
-      refreshTokenExpiry: Date,
+      expiresAt: Date,           // When access token expires
+      scope: [String],           // Granted scopes
       secretKey: {
         type: String,
         set: encrypt,
         get: decrypt
       },
       // Platform-specific fields
-      platformData: mongoose.Schema.Types.Mixed // Store any extra platform-specific data
+      platformData: mongoose.Schema.Types.Mixed
     },
     
     // Account Status
@@ -177,9 +188,12 @@ const socialMediaAccountSchema = new mongoose.Schema(
 );
 
 // Index for efficient queries
-socialMediaAccountSchema.index({ userId: 1, platform: 1 });
+socialMediaAccountSchema.index({ channelId: 1 }, { sparse: true });  // YouTube channel lookup
+socialMediaAccountSchema.index({ email: 1 }, { sparse: true });      // Google email lookup
+socialMediaAccountSchema.index({ userId: 1, platform: 1 }, { sparse: true }); // User + platform
 socialMediaAccountSchema.index({ isActive: 1 });
 socialMediaAccountSchema.index({ createdAt: 1 });
+socialMediaAccountSchema.index({ platform: 1, isActive: 1 });       // Platform + status
 
 // Methods
 socialMediaAccountSchema.methods.isRateLimited = function() {

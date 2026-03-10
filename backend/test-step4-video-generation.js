@@ -125,7 +125,7 @@ async function generateVideo(segment, prompt, characterImagePath) {
   
   const videoGen = new GoogleFlowAutomationService({
     type: 'video',
-    projectId: '58d791d4-37c9-47a8-ae3b-816733bc3ec0',  // Google Flow project
+    projectId: '87b78b0e-8b5a-40fc-9142-cdeda1419be7',  // Google Flow project
     videoCount: 1,
     headless: false,
     outputDir: path.join(__dirname, 'test-affiliate'),

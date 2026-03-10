@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-_ = load_dotenv()
+ENV_PATH = Path(__file__).resolve().parents[1] / '.env'
+_ = load_dotenv(dotenv_path=ENV_PATH)
 
 PORT = int(os.getenv('PORT', '8001'))
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/smart-wardrobe')

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Image Prompt Step with Template Support
  * Allows users to choose between template-based or Step3 enhanced mode
  */
@@ -109,7 +109,7 @@ const ImagePromptWithTemplates = ({
         <div className="space-y-4">
           <div className="rounded-[1.5rem] bg-sky-400/10 p-4">
             <p className="text-xs text-blue-300">
-              ✨ Select a template and customize its fields to generate an image prompt based on your selections.
+              âœ¨ Select a template and customize its fields to generate an image prompt based on your selections.
             </p>
           </div>
 
@@ -128,7 +128,7 @@ const ImagePromptWithTemplates = ({
             ) : templates.length === 0 ? (
               <div className="rounded-[1.5rem] bg-amber-400/10 p-4">
                 <p className="text-xs text-yellow-300">
-                  📝 No templates found for image generation. Please create templates in the manager or use Step 3 Mode.
+                  ðŸ“ No templates found for image generation. Please create templates in the manager or use Step 3 Mode.
                 </p>
               </div>
             ) : (
@@ -234,7 +234,7 @@ const ImagePromptWithTemplates = ({
               {renderedPrompt && (
                 <div className="space-y-2">
                   <div className="rounded-[1rem] bg-emerald-400/10 p-3">
-                    <p className="text-xs text-green-300">✓ Prompt generated successfully!</p>
+                    <p className="text-xs text-green-300">âœ“ Prompt generated successfully!</p>
                   </div>
                   <div className="max-h-32 overflow-y-auto rounded-[1rem] bg-white/[0.04] p-3">
                     <p className="apple-prompt-text text-xs leading-6 text-gray-300">{renderedPrompt}</p>
@@ -267,3 +267,4 @@ const ImagePromptWithTemplates = ({
 };
 
 export default ImagePromptWithTemplates;
+

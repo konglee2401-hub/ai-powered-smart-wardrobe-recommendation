@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Gallery Picker Component
  * Reusable modal dialog for selecting media from gallery in upload workflows
  * Integrates with Database records for proper asset tracking
@@ -305,7 +305,7 @@ const GalleryPicker = ({
     }
   };
 
-  // 💫 Get category options based on asset type
+  // ðŸ’« Get category options based on asset type
   const getCategoryOptions = () => {
     const imageCategories = [
       { value: 'all', label: 'All Image Categories' },
@@ -345,7 +345,7 @@ const GalleryPicker = ({
   };
 
   const handleItemSelect = (item) => {
-    console.log(`🖼️  Item clicked:`, {
+    console.log(`ðŸ–¼ï¸  Item clicked:`, {
       assetId: item.assetId,
       name: item.name,
       id: item.id,
@@ -360,25 +360,25 @@ const GalleryPicker = ({
         const newSelection = isSelected 
           ? prev.filter(s => s.id !== item.id)
           : [...prev, item];
-        console.log(`   ${isSelected ? '❌ Deselected' : '✅ Selected'} | Total: ${newSelection.length}`);
+        console.log(`   ${isSelected ? 'âŒ Deselected' : 'âœ… Selected'} | Total: ${newSelection.length}`);
         return newSelection;
       });
     } else {
-      console.log(`   ✅ Single select mode - item will be selected`);
+      console.log(`   âœ… Single select mode - item will be selected`);
       setSelectedItems(item);
     }
   };
 
   const handleConfirm = () => {
     if (multiSelect) {
-      console.log(`✅ Gallery: Confirming multiselect with ${selectedItems.length} items`);
+      console.log(`âœ… Gallery: Confirming multiselect with ${selectedItems.length} items`);
       selectedItems.forEach(item => {
         console.log(`   - ${item.name} (${item.assetId}): url=${item.url}`);
       });
       onSelect(selectedItems);
     } else {
       if (selectedItems) {
-        console.log(`✅ Gallery: Confirming single select:`, {
+        console.log(`âœ… Gallery: Confirming single select:`, {
           assetId: selectedItems.assetId,
           name: selectedItems.name,
           url: selectedItems.url,
@@ -388,7 +388,7 @@ const GalleryPicker = ({
         });
         onSelect(selectedItems);
       } else {
-        console.warn('⚠️  Gallery: No item selected');
+        console.warn('âš ï¸  Gallery: No item selected');
       }
     }
     onClose();
@@ -783,7 +783,7 @@ const GalleryPicker = ({
                     pointerEvents: 'none'
                   }}>
                     <div>
-                      <div>⚠️</div>
+                      <div>âš ï¸</div>
                       <div>Image unavailable</div>
                     </div>
                   </div>
@@ -827,7 +827,7 @@ const GalleryPicker = ({
                     fontSize: '0.8rem',
                     fontWeight: 'bold'
                   }}>
-                    ✓
+                    âœ“
                   </div>
                 )}
               </div>
@@ -936,3 +936,4 @@ const GalleryPicker = ({
 };
 
 export default GalleryPicker;
+

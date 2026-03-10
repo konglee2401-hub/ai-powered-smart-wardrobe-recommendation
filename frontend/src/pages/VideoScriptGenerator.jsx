@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Copy, Download, Send, Sparkles, Zap, BookOpen, PlayCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
@@ -223,13 +223,13 @@ export default function VideoScriptGenerator() {
               </h2>
               
               {[
-                { id: 'scenario-script', label: '🎬 Scenario Script', icon: PlayCircle },
-                { id: 'style-variations', label: '🎨 Style Variations', icon: Sparkles },
-                { id: 'movement-detail', label: '🚶 Movement Detail', icon: Zap },
-                { id: 'camera-guidance', label: '📹 Camera Guidance', icon: Sparkles },
-                { id: 'lighting-setup', label: '💡 Lighting Setup', icon: Sparkles },
-                { id: 'template-library', label: '📚 Template Library', icon: BookOpen },
-                { id: 'production-templates', label: '🎥 Production Templates', icon: PlayCircle }
+                { id: 'scenario-script', label: 'ðŸŽ¬ Scenario Script', icon: PlayCircle },
+                { id: 'style-variations', label: 'ðŸŽ¨ Style Variations', icon: Sparkles },
+                { id: 'movement-detail', label: 'ðŸš¶ Movement Detail', icon: Zap },
+                { id: 'camera-guidance', label: 'ðŸ“¹ Camera Guidance', icon: Sparkles },
+                { id: 'lighting-setup', label: 'ðŸ’¡ Lighting Setup', icon: Sparkles },
+                { id: 'template-library', label: 'ðŸ“š Template Library', icon: BookOpen },
+                { id: 'production-templates', label: 'ðŸŽ¥ Production Templates', icon: PlayCircle }
               ].map(item => (
                 <button
                   key={item.id}
@@ -634,8 +634,8 @@ export default function VideoScriptGenerator() {
                           <div>
                             <h3 className="font-semibold text-white">{template.title}</h3>
                             <div className="text-sm text-gray-400 mt-1 space-y-1">
-                              <p>📦 {template.productType} • ⏱️ {template.duration}s • 📹 {template.scenarioId}</p>
-                              <p className="text-xs text-gray-500">{template.segments.length} segments • Style: {template.style}</p>
+                              <p>ðŸ“¦ {template.productType} â€¢ â±ï¸ {template.duration}s â€¢ ðŸ“¹ {template.scenarioId}</p>
+                              <p className="text-xs text-gray-500">{template.segments.length} segments â€¢ Style: {template.style}</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -769,3 +769,4 @@ export default function VideoScriptGenerator() {
     </div>
   );
 }
+

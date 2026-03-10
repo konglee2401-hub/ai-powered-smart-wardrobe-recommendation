@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 const TONE_CLASS = {
   info: 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100',
@@ -19,3 +19,4 @@ export default function StatusPill({ children, tone = 'neutral', className = '' 
     </span>
   );
 }
+

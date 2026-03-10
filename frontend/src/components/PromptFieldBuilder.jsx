@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Prompt Field Builder Component
  * Build and manage dynamic fields/placeholders for templates
  */
@@ -24,14 +24,14 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
   });
 
   const fieldTypes = [
-    { value: 'text', label: 'Text Input', icon: '📝' },
-    { value: 'textarea', label: 'Text Area', icon: '📄' },
-    { value: 'select', label: 'Dropdown Select', icon: '📋' },
-    { value: 'radio', label: 'Radio Buttons', icon: '🔘' },
-    { value: 'checkbox', label: 'Checkbox', icon: '☑️' },
-    { value: 'number', label: 'Number', icon: '🔢' },
-    { value: 'date', label: 'Date', icon: '📅' },
-    { value: 'color', label: 'Color Picker', icon: '🎨' }
+    { value: 'text', label: 'Text Input', icon: 'ðŸ“' },
+    { value: 'textarea', label: 'Text Area', icon: 'ðŸ“„' },
+    { value: 'select', label: 'Dropdown Select', icon: 'ðŸ“‹' },
+    { value: 'radio', label: 'Radio Buttons', icon: 'ðŸ”˜' },
+    { value: 'checkbox', label: 'Checkbox', icon: 'â˜‘ï¸' },
+    { value: 'number', label: 'Number', icon: 'ðŸ”¢' },
+    { value: 'date', label: 'Date', icon: 'ðŸ“…' },
+    { value: 'color', label: 'Color Picker', icon: 'ðŸŽ¨' }
   ];
 
   // ============================================================
@@ -40,7 +40,7 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
 
   const addField = () => {
     if (!newField.id || !newField.label) {
-      alert('ID và Label không được để trống');
+      alert('ID vÃ  Label khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng');
       return;
     }
 
@@ -169,7 +169,7 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
     <div className="space-y-4">
       {/* Add New Field Form */}
       <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg">
-        <h4 className="font-semibold text-white mb-4">Thêm trường mới</h4>
+        <h4 className="font-semibold text-white mb-4">ThÃªm trÆ°á»ng má»›i</h4>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
@@ -184,13 +184,13 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
               className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-amber-500 outline-none text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Sẽ được dùng như: {newField.id ? `{${newField.id}}` : '{placeholder}'}
+              Sáº½ Ä‘Æ°á»£c dÃ¹ng nhÆ°: {newField.id ? `{${newField.id}}` : '{placeholder}'}
             </p>
           </div>
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              Label hiển thị *
+              Label hiá»ƒn thá»‹ *
             </label>
             <input
               type="text"
@@ -205,7 +205,7 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              Loại trường *
+              Loáº¡i trÆ°á»ng *
             </label>
             <select
               value={newField.type}
@@ -236,10 +236,10 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
 
         <div className="mb-4">
           <label className="block text-sm text-gray-400 mb-1">
-            Mô tả
+            MÃ´ táº£
           </label>
           <textarea
-            placeholder="Mô tả chi tiết về trường này"
+            placeholder="MÃ´ táº£ chi tiáº¿t vá» trÆ°á»ng nÃ y"
             value={newField.description}
             onChange={(e) => setNewField({ ...newField, description: e.target.value })}
             className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-amber-500 outline-none text-sm resize-none"
@@ -255,7 +255,7 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
               onChange={(e) => setNewField({ ...newField, editable: e.target.checked })}
               className="w-4 h-4"
             />
-            <span className="text-gray-300">Cho phép người dùng sửa</span>
+            <span className="text-gray-300">Cho phÃ©p ngÆ°á»i dÃ¹ng sá»­a</span>
           </label>
         </div>
 
@@ -264,21 +264,21 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
           className="mt-4 w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium flex items-center justify-center gap-2 transition"
         >
           <Plus className="w-4 h-4" />
-          Thêm trường
+          ThÃªm trÆ°á»ng
         </button>
       </div>
 
       {/* Fields List */}
       <div className="space-y-2">
         <h4 className="font-semibold text-white">
-          Các trường đã thêm ({fields.length})
+          CÃ¡c trÆ°á»ng Ä‘Ã£ thÃªm ({fields.length})
         </h4>
 
         {fields.length === 0 ? (
           <div className="p-8 text-center bg-gray-800 border border-gray-700 rounded-lg">
-            <p className="text-gray-400">Chưa có trường nào được thêm</p>
+            <p className="text-gray-400">ChÆ°a cÃ³ trÆ°á»ng nÃ o Ä‘Æ°á»£c thÃªm</p>
             <p className="text-sm text-gray-500 mt-1">
-              Thêm trường để tạo dynamic placeholders trong prompt
+              ThÃªm trÆ°á»ng Ä‘á»ƒ táº¡o dynamic placeholders trong prompt
             </p>
           </div>
         ) : (
@@ -387,7 +387,7 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
 
                   {field.description && (
                     <div className="p-3 bg-blue-900/20 border border-blue-700/50 rounded text-sm text-blue-200">
-                      <strong>Mô tả:</strong> {field.description}
+                      <strong>MÃ´ táº£:</strong> {field.description}
                     </div>
                   )}
 
@@ -416,12 +416,12 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
         <div className="flex gap-2 mb-2">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
-            <strong>Cách sử dụng:</strong>
+            <strong>CÃ¡ch sá»­ dá»¥ng:</strong>
             <ul className="mt-2 space-y-1 ml-4 list-disc">
-              <li>ID là placeholder sẽ được dùng trong prompt: {'{outfit1}, {mood}...'}</li>
-              <li>Người dùng sẽ nhập giá trị cho từng trường</li>
-              <li>Hệ thống sẽ tự thay thế placeholders bằng giá trị đó</li>
-              <li>Đặt "Cho phép sửa" để kiểm soát xem trường có thể sửa được không</li>
+              <li>ID lÃ  placeholder sáº½ Ä‘Æ°á»£c dÃ¹ng trong prompt: {'{outfit1}, {mood}...'}</li>
+              <li>NgÆ°á»i dÃ¹ng sáº½ nháº­p giÃ¡ trá»‹ cho tá»«ng trÆ°á»ng</li>
+              <li>Há»‡ thá»‘ng sáº½ tá»± thay tháº¿ placeholders báº±ng giÃ¡ trá»‹ Ä‘Ã³</li>
+              <li>Äáº·t "Cho phÃ©p sá»­a" Ä‘á»ƒ kiá»ƒm soÃ¡t xem trÆ°á»ng cÃ³ thá»ƒ sá»­a Ä‘Æ°á»£c khÃ´ng</li>
             </ul>
           </div>
         </div>
@@ -431,3 +431,4 @@ const PromptFieldBuilder = ({ fields = [], onFieldsChange }) => {
 };
 
 export default PromptFieldBuilder;
+

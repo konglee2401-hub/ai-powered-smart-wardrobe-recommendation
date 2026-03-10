@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AdvancedCustomization from '../components/AdvancedCustomization';
 
@@ -41,3 +41,4 @@ const AdvancedCustomizationPage = () => {
 };
 
 export default AdvancedCustomizationPage;
+

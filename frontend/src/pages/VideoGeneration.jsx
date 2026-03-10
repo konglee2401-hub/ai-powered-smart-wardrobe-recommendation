@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import axios from 'axios';
 import { Upload, Film, Sparkles, Clock, CheckCircle, XCircle, Play, Download } from 'lucide-react';
 import Navbar from '../components/ui/Navbar';
@@ -453,7 +453,7 @@ export default function VideoGeneration() {
                         onClick={() => submitFeedback(result.videoGenerationId, rating)}
                         className="text-2xl hover:scale-110 transition"
                       >
-                        ⭐
+                        â­
                       </button>
                     ))}
                   </div>
@@ -569,3 +569,4 @@ async function submitFeedback(videoId, rating) {
     console.error('Feedback error:', error);
   }
 }
+

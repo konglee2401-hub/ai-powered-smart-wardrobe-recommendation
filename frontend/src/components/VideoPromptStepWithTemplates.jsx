@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Enhanced Video Prompt Step with Template Support
  * Allows users to choose between template-based or manual prompt editing
  */
@@ -12,7 +12,7 @@ import {
 import promptTemplateService from '../services/promptTemplateService';
 import { api } from '../services/api';
 import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
-// 💫 NEW: Import calculation functions
+// ðŸ’« NEW: Import calculation functions
 import { 
   calculateSegmentCount, 
   getSegmentDurationForProvider 
@@ -39,7 +39,7 @@ const VideoPromptStepWithTemplates = ({
   const [isGeneratingPrompts, setIsGeneratingPrompts] = React.useState(false);
   const [promptError, setPromptError] = React.useState(null);
 
-  // 💫 FIXED: Use dynamic calculation based on provider
+  // ðŸ’« FIXED: Use dynamic calculation based on provider
   const segments = calculateSegmentCount(videoProvider, duration);
   const maxPerVideo = getSegmentDurationForProvider(videoProvider);
 
@@ -236,7 +236,7 @@ const VideoPromptStepWithTemplates = ({
         <div className="space-y-4">
           <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-700/50">
             <p className="text-xs text-blue-300">
-              ✨ Select a template and customize its fields to generate video prompts for {segments} segments (~{maxPerVideo}s each).
+              âœ¨ Select a template and customize its fields to generate video prompts for {segments} segments (~{maxPerVideo}s each).
             </p>
           </div>
 
@@ -255,7 +255,7 @@ const VideoPromptStepWithTemplates = ({
             ) : templates.length === 0 ? (
               <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-700/50">
                 <p className="text-xs text-yellow-300">
-                  📝 No templates found for video generation. Please create templates in the manager or use Manual Mode.
+                  ðŸ“ No templates found for video generation. Please create templates in the manager or use Manual Mode.
                 </p>
               </div>
             ) : (
@@ -360,7 +360,7 @@ const VideoPromptStepWithTemplates = ({
 
               {renderedPrompts && (
                 <div className="bg-green-900/20 rounded p-2 border border-green-700/50">
-                  <p className="text-xs text-green-300">✓ Prompts generated successfully!</p>
+                  <p className="text-xs text-green-300">âœ“ Prompts generated successfully!</p>
                 </div>
               )}
             </div>
@@ -373,7 +373,7 @@ const VideoPromptStepWithTemplates = ({
         <div className="space-y-4">
               <div className="bg-purple-900/20 rounded-lg p-3 border border-purple-700/50">
             <p className="text-xs text-purple-300">
-              ✨ Each segment is ~{maxPerVideo} seconds. Describe the action, camera movement, and details for each segment.
+              âœ¨ Each segment is ~{maxPerVideo} seconds. Describe the action, camera movement, and details for each segment.
               {videoProvider === 'grok'
                 ? ' Grok will generate videos with smooth transitions between segments.'
                 : ' Google Flow Veo will generate high-quality video clips optimized for each segment.'}
@@ -447,7 +447,7 @@ const VideoPromptStepWithTemplates = ({
           {/* Info */}
           <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700">
             <p className="text-xs text-gray-400">
-              💡 <strong>Pro tip:</strong> Mention specific details like clothing, accessories, emotions, camera angles, and movements for better results.
+              ðŸ’¡ <strong>Pro tip:</strong> Mention specific details like clothing, accessories, emotions, camera angles, and movements for better results.
             </p>
           </div>
         </div>
@@ -457,3 +457,4 @@ const VideoPromptStepWithTemplates = ({
 };
 
 export default VideoPromptStepWithTemplates;
+

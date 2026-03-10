@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Use Case Selector Component
  * Select content use case for image generation
  */
@@ -11,49 +11,49 @@ const USE_CASES = [
   {
     value: 'change-clothes',
     label: 'Change Clothes',
-    description: 'Mặc sản phẩm lên người mẫu',
+    description: 'Máº·c sáº£n pháº©m lÃªn ngÆ°á»i máº«u',
     icon: Shirt,
     color: 'bg-blue-500',
   },
   {
     value: 'character-holding-product',
     label: 'Character Holding Product',
-    description: 'Nhân vật cầm sản phẩm trên tay',
+    description: 'NhÃ¢n váº­t cáº§m sáº£n pháº©m trÃªn tay',
     icon: Hand,
     color: 'bg-indigo-500',
   },
   {
     value: 'ecommerce-product',
     label: 'E-commerce Product Shot',
-    description: 'Ảnh sản phẩm thương mại',
+    description: 'áº¢nh sáº£n pháº©m thÆ°Æ¡ng máº¡i',
     icon: ShoppingBag,
     color: 'bg-green-500',
   },
   {
     value: 'social-media',
     label: 'Social Media Post',
-    description: 'Bài đăng mạng xã hội',
+    description: 'BÃ i Ä‘Äƒng máº¡ng xÃ£ há»™i',
     icon: Share2,
     color: 'bg-pink-500',
   },
   {
     value: 'fashion-editorial',
     label: 'Fashion Editorial',
-    description: 'Bài báo thời trang chuyên nghiệp',
+    description: 'BÃ i bÃ¡o thá»i trang chuyÃªn nghiá»‡p',
     icon: Camera,
     color: 'bg-purple-500',
   },
   {
     value: 'lifestyle-scene',
     label: 'Lifestyle Scene',
-    description: 'Cảnh sống hàng ngày',
+    description: 'Cáº£nh sá»‘ng hÃ ng ngÃ y',
     icon: Home,
     color: 'bg-orange-500',
   },
   {
     value: 'before-after',
     label: 'Before/After Comparison',
-    description: 'So sánh trước/sau',
+    description: 'So sÃ¡nh trÆ°á»›c/sau',
     icon: GitCompare,
     color: 'bg-teal-500',
   },
@@ -95,9 +95,9 @@ export default function UseCaseSelector({ selectedUseCase, onUseCaseChange }) {
   return (
     <div className="use-case-selector">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">🎯 Chọn Mục Đích Nội Dung</h3>
+        <h3 className="text-lg font-semibold text-gray-800">ðŸŽ¯ Chá»n Má»¥c ÄÃ­ch Ná»™i Dung</h3>
         <p className="text-sm text-gray-500 mt-1">
-          Chọn mục đích sử dụng để AI tối ưu hóa kết quả
+          Chá»n má»¥c Ä‘Ã­ch sá»­ dá»¥ng Ä‘á»ƒ AI tá»‘i Æ°u hÃ³a káº¿t quáº£
         </p>
       </div>
 
@@ -154,3 +154,4 @@ export default function UseCaseSelector({ selectedUseCase, onUseCaseChange }) {
 
 // Export use cases for other components
 export { USE_CASES };
+

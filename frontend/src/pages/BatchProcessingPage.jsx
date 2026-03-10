@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import BatchProcessing from '../components/BatchProcessing';
 import productPhotoService from '../services/productPhotoService';
 import { useTranslation } from 'react-i18next';
@@ -94,13 +94,13 @@ const BatchProcessingPage = () => {
         {/* Results Section */}
         {results.length > 0 && (
           <div className="batch-results">
-            <h3>📊 Batch Results</h3>
+            <h3>ðŸ“Š Batch Results</h3>
             <div className="results-summary">
               <div className="result-stat success">
-                ✓ {results.filter(r => r.status === 'completed').length} Completed
+                âœ“ {results.filter(r => r.status === 'completed').length} Completed
               </div>
               <div className="result-stat failed">
-                ✗ {results.filter(r => r.status === 'failed').length} Failed
+                âœ— {results.filter(r => r.status === 'failed').length} Failed
               </div>
             </div>
             
@@ -111,7 +111,7 @@ const BatchProcessingPage = () => {
                   <div className="result-info">
                     <div className="result-name">{result.name}</div>
                     <div className="result-status">
-                      {result.status === 'completed' ? '✅ Success' : '❌ Failed'}
+                      {result.status === 'completed' ? 'âœ… Success' : 'âŒ Failed'}
                     </div>
                     {result.result?.url && (
                       <a 
@@ -120,7 +120,7 @@ const BatchProcessingPage = () => {
                         rel="noopener noreferrer"
                         className="result-link"
                       >
-                        View Result →
+                        View Result â†’
                       </a>
                     )}
                   </div>
@@ -238,3 +238,4 @@ const BatchProcessingPage = () => {
 };
 
 export default BatchProcessingPage;
+

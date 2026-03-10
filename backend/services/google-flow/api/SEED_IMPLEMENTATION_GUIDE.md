@@ -171,8 +171,7 @@ export function generateSeededPromptVariants(basePrompt, count = 4) {
  * {
  *   "clientContext": {
  *     "recaptchaContext": { "token": "..." },
- *     "projectId": "58d791d4-37c9-47a8-ae3b-816733bc3ec0",
- *     "sessionId": ";1772728961016"
+ *     "projectId": "87b78b0e-8b5a-40fc-9142-cdeda1419be7"
  *   },
  *   "requests": [
  *     {

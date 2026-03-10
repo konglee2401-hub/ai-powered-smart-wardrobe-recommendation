@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 
 /**
  * Negative Prompt Component
@@ -82,14 +82,14 @@ export default function NegativePrompt({
           color: '#e2e8f0'
         }}
       >
-        <span>⚙️</span>
+        <span>âš™ï¸</span>
         <span>{t('negativePrompt.advancedOptions')}</span>
         <span style={{ 
           transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)', 
           transition: 'transform 0.3s',
           fontSize: '10px'
         }}>
-          ▼
+          â–¼
         </span>
       </button>
 
@@ -111,7 +111,7 @@ export default function NegativePrompt({
               color: '#e2e8f0',
               fontSize: '14px'
             }}>
-              🚫 {t('negativePrompt.subtitle')}
+              ðŸš« {t('negativePrompt.subtitle')}
             </label>
             <textarea
               value={localNegative}
@@ -201,7 +201,7 @@ export default function NegativePrompt({
                   e.target.style.color = '#fc8181';
                 }}
               >
-                ✖️ Clear
+                âœ–ï¸ Clear
               </button>
             </div>
           </div>
@@ -236,3 +236,4 @@ export default function NegativePrompt({
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Prompt Builder Component
  * View and edit generated prompts before image generation
  * Supports Vietnamese language prompts
@@ -184,7 +184,7 @@ export default function PromptBuilder({
     return (
       <div className="p-6 bg-gray-50 rounded-xl text-center">
         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <p className="text-gray-500">Chưa có dữ liệu phân tích. Vui lòng hoàn thành bước phân tích trước.</p>
+        <p className="text-gray-500">ChÆ°a cÃ³ dá»¯ liá»‡u phÃ¢n tÃ­ch. Vui lÃ²ng hoÃ n thÃ nh bÆ°á»›c phÃ¢n tÃ­ch trÆ°á»›c.</p>
       </div>
     );
   }
@@ -197,7 +197,7 @@ export default function PromptBuilder({
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <FileText className="w-6 h-6" />
-              Xây Dựng Prompt Thông Minh
+              XÃ¢y Dá»±ng Prompt ThÃ´ng Minh
               {isGenerating && (
                 <span className="ml-2 inline-block animate-spin">
                   <Sparkles className="w-5 h-5" />
@@ -206,8 +206,8 @@ export default function PromptBuilder({
             </h2>
             <p className="text-blue-100 mt-1">
               {isGenerating 
-                ? 'Đang tạo prompt trong ngôn ngữ ' + (i18n.language === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh') + '...'
-                : 'Prompt được tạo tự động từ phân tích AI. Bạn có thể xem và chỉnh sửa.'
+                ? 'Äang táº¡o prompt trong ngÃ´n ngá»¯ ' + (i18n.language === 'vi' ? 'Tiáº¿ng Viá»‡t' : 'Tiáº¿ng Anh') + '...'
+                : 'Prompt Ä‘Æ°á»£c táº¡o tá»± Ä‘á»™ng tá»« phÃ¢n tÃ­ch AI. Báº¡n cÃ³ thá»ƒ xem vÃ  chá»‰nh sá»­a.'
               }
             </p>
           </div>
@@ -219,7 +219,7 @@ export default function PromptBuilder({
             {showPrompt ? (
               <>
                 <EyeOff className="w-4 h-4" />
-                Ẩn Prompt
+                áº¨n Prompt
               </>
             ) : (
               <>
@@ -235,10 +235,10 @@ export default function PromptBuilder({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">
-            📏 Positive: {prompts?.positive?.length || 0} chars
+            ðŸ“ Positive: {prompts?.positive?.length || 0} chars
           </span>
           <span className="text-sm text-gray-500">
-            🚫 Negative: {prompts?.negative?.length || 0} chars
+            ðŸš« Negative: {prompts?.negative?.length || 0} chars
           </span>
         </div>
       </div>
@@ -250,7 +250,7 @@ export default function PromptBuilder({
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="bg-green-50 px-6 py-3 border-b border-green-100 flex items-center justify-between">
               <h3 className="font-semibold text-green-800 flex items-center gap-2">
-                📝 Positive Prompt
+                ðŸ“ Positive Prompt
               </h3>
               <div className="flex items-center gap-2">
                 <button
@@ -308,7 +308,7 @@ export default function PromptBuilder({
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="bg-red-50 px-6 py-3 border-b border-red-100 flex items-center justify-between">
               <h3 className="font-semibold text-red-800 flex items-center gap-2">
-                🚫 Negative Prompt
+                ðŸš« Negative Prompt
               </h3>
               <div className="flex items-center gap-2">
                 <button
@@ -359,24 +359,24 @@ export default function PromptBuilder({
 
           {/* Prompt Breakdown */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold text-gray-800 mb-4">🔍 Prompt Breakdown</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">ðŸ” Prompt Breakdown</h3>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-green-700">📸 Photography</h4>
+                <h4 className="text-sm font-medium text-green-700">ðŸ“¸ Photography</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Scene: {selectedOptions?.scene || 'Auto'}</li>
-                  <li>• Lighting: {selectedOptions?.lighting || 'Auto'}</li>
-                  <li>• Style: {selectedOptions?.style || 'Auto'}</li>
-                  <li>• Camera: {selectedOptions?.cameraAngle || 'Auto'}</li>
+                  <li>â€¢ Scene: {selectedOptions?.scene || 'Auto'}</li>
+                  <li>â€¢ Lighting: {selectedOptions?.lighting || 'Auto'}</li>
+                  <li>â€¢ Style: {selectedOptions?.style || 'Auto'}</li>
+                  <li>â€¢ Camera: {selectedOptions?.cameraAngle || 'Auto'}</li>
                 </ul>
               </div>
               <div className="space-y-2">
-                <h4 className="text-sm font-medium text-purple-700">👤 Subject</h4>
+                <h4 className="text-sm font-medium text-purple-700">ðŸ‘¤ Subject</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Age: {analysis?.character?.age || 'N/A'}</li>
-                  <li>• Body Type: {analysis?.character?.bodyType || 'N/A'}</li>
-                  <li>• Vibe: {analysis?.character?.overallVibe || 'N/A'}</li>
-                  <li>• Product: {analysis?.product?.type || 'N/A'}</li>
+                  <li>â€¢ Age: {analysis?.character?.age || 'N/A'}</li>
+                  <li>â€¢ Body Type: {analysis?.character?.bodyType || 'N/A'}</li>
+                  <li>â€¢ Vibe: {analysis?.character?.overallVibe || 'N/A'}</li>
+                  <li>â€¢ Product: {analysis?.product?.type || 'N/A'}</li>
                 </ul>
               </div>
             </div>
@@ -393,7 +393,7 @@ export default function PromptBuilder({
               onClick={() => setShowPrompt(true)}
               className="text-purple-600 hover:text-purple-700 text-sm font-medium"
             >
-              Edit Prompt →
+              Edit Prompt â†’
             </button>
           </div>
           
@@ -407,3 +407,4 @@ export default function PromptBuilder({
     </div>
   );
 }
+

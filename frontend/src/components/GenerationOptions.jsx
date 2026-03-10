@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import AdvancedGenerationSettings from './AdvancedGenerationSettings';
 
@@ -140,3 +140,4 @@ export default function GenerationOptions({
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import './AnalyticsDashboard.css';
 
@@ -115,7 +115,7 @@ const AnalyticsDashboard = ({
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-info">
-          <h2>📊 {t('analyticsDashboard.overview')}</h2>
+          <h2>ðŸ“Š {t('analyticsDashboard.overview')}</h2>
           <p>{t('analytics.title')}</p>
         </div>
 
@@ -144,40 +144,40 @@ const AnalyticsDashboard = ({
       {/* Overview Cards */}
       <div className="overview-cards">
         <div className="overview-card">
-          <div className="card-icon generations">🖼️</div>
+          <div className="card-icon generations">ðŸ–¼ï¸</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalGenerations)}</div>
             <div className="card-label">{t('analyticsDashboard.totalGenerations')}</div>
             <div className={`card-trend ${stats.trends.generations >= 0 ? 'positive' : 'negative'}`}>
-              {stats.trends.generations >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.generations)}%
+              {stats.trends.generations >= 0 ? 'â†‘' : 'â†“'} {Math.abs(stats.trends.generations)}%
             </div>
           </div>
         </div>
 
         <div className="overview-card">
-          <div className="card-icon images">📷</div>
+          <div className="card-icon images">ðŸ“·</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalImages)}</div>
             <div className="card-label">{t('analyticsDashboard.totalImages')}</div>
             <div className={`card-trend ${stats.trends.images >= 0 ? 'positive' : 'negative'}`}>
-              {stats.trends.images >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.images)}%
+              {stats.trends.images >= 0 ? 'â†‘' : 'â†“'} {Math.abs(stats.trends.images)}%
             </div>
           </div>
         </div>
 
         <div className="overview-card">
-          <div className="card-icon videos">🎬</div>
+          <div className="card-icon videos">ðŸŽ¬</div>
           <div className="card-content">
             <div className="card-value">{formatNumber(stats.overview.totalVideos)}</div>
             <div className="card-label">{t('analyticsDashboard.totalVideos')}</div>
             <div className={`card-trend ${stats.trends.videos >= 0 ? 'positive' : 'negative'}`}>
-              {stats.trends.videos >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.videos)}%
+              {stats.trends.videos >= 0 ? 'â†‘' : 'â†“'} {Math.abs(stats.trends.videos)}%
             </div>
           </div>
         </div>
 
         <div className="overview-card">
-          <div className="card-icon success">✅</div>
+          <div className="card-icon success">âœ…</div>
           <div className="card-content">
             <div className="card-value">{stats.overview.avgSuccessRate}%</div>
             <div className="card-label">{t('analyticsDashboard.avgSuccessRate')}</div>
@@ -186,7 +186,7 @@ const AnalyticsDashboard = ({
         </div>
 
         <div className="overview-card">
-          <div className="card-icon time">⏱️</div>
+          <div className="card-icon time">â±ï¸</div>
           <div className="card-content">
             <div className="card-value">{stats.overview.avgProcessingTime}s</div>
             <div className="card-label">{t('analyticsDashboard.avgProcessingTime')}</div>
@@ -195,12 +195,12 @@ const AnalyticsDashboard = ({
         </div>
 
         <div className="overview-card">
-          <div className="card-icon cost">💰</div>
+          <div className="card-icon cost">ðŸ’°</div>
           <div className="card-content">
             <div className="card-value">${stats.overview.totalCost}</div>
             <div className="card-label">{t('analyticsDashboard.totalCost')}</div>
             <div className={`card-trend ${stats.trends.cost >= 0 ? 'negative' : 'positive'}`}>
-              {stats.trends.cost >= 0 ? '↑' : '↓'} {Math.abs(stats.trends.cost)}%
+              {stats.trends.cost >= 0 ? 'â†‘' : 'â†“'} {Math.abs(stats.trends.cost)}%
             </div>
           </div>
         </div>
@@ -210,7 +210,7 @@ const AnalyticsDashboard = ({
       <div className="charts-section">
         {/* Main Chart */}
         <div className="chart-card main-chart">
-          <h3>📈 {t('analyticsDashboard.trends')}</h3>
+          <h3>ðŸ“ˆ {t('analyticsDashboard.trends')}</h3>
           <div className="chart-tabs">
             <button 
               className={selectedMetric === 'generations' ? 'active' : ''}
@@ -260,7 +260,7 @@ const AnalyticsDashboard = ({
 
         {/* Provider Usage */}
         <div className="chart-card">
-          <h3>🔌 {t('analyticsDashboard.providerUsage')}</h3>
+          <h3>ðŸ”Œ {t('analyticsDashboard.providerUsage')}</h3>
           <div className="donut-chart">
             {stats.providerUsage.map((provider, index) => {
               const total = stats.providerUsage.reduce((sum, p) => sum + p.count, 0);
@@ -291,7 +291,7 @@ const AnalyticsDashboard = ({
 
         {/* Category Distribution */}
         <div className="chart-card">
-          <h3>📂 {t('analyticsDashboard.categoryDistribution')}</h3>
+          <h3>ðŸ“‚ {t('analyticsDashboard.categoryDistribution')}</h3>
           <div className="category-chart">
             {stats.categoryDistribution.map((category, index) => (
               <div key={index} className="category-item">
@@ -316,7 +316,7 @@ const AnalyticsDashboard = ({
 
         {/* Top Templates */}
         <div className="chart-card">
-          <h3>📋 {t('analyticsDashboard.topTemplates')}</h3>
+          <h3>ðŸ“‹ {t('analyticsDashboard.topTemplates')}</h3>
           <div className="templates-list">
             {stats.topTemplates.map((template, index) => (
               <div key={index} className="template-item">
@@ -343,7 +343,7 @@ const AnalyticsDashboard = ({
       {/* Performance Metrics */}
       <div className="performance-section">
         <div className="chart-card full-width">
-          <h3>⚡ Performance Metrics</h3>
+          <h3>âš¡ Performance Metrics</h3>
           <div className="metrics-grid">
             <div className="metric-card">
               <div className="metric-header">
@@ -420,3 +420,4 @@ const AnalyticsDashboard = ({
 };
 
 export default AnalyticsDashboard;
+

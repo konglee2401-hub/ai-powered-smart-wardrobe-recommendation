@@ -38,7 +38,7 @@ class SettingsManager {
       videoCount: options.videoCount || 1,
       aspectRatio: options.aspectRatio || '9:16',
       model: options.model || 'Nano Banana 2',
-      videoReferenceType: options.videoReferenceType || 'ingredients',
+      videoReferenceType: options.videoReferenceType || 'frames',
       ...options
     };
     this.debugMode = options.debugMode || false;
@@ -484,8 +484,8 @@ class SettingsManager {
   /**
    * Select video reference type (Ingredients/Frames)
    */
-  async selectVideoReferenceType(referenceType = 'ingredients') {
-    const type = (referenceType || 'ingredients').toLowerCase();
+  async selectVideoReferenceType(referenceType = 'frames') {
+    const type = (referenceType || 'frames').toLowerCase();
     const displayName = type === 'frames' ? 'Frames' : 'Ingredients';
     
     console.log(`   > Selecting VIDEO reference type: ${displayName}...`);
