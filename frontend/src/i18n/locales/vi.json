@@ -165,7 +165,105 @@
     "building": "Đang xây dựng..."
   },
   "videoGeneration": {
-    "title": "Tạo Video AI"
+    "title": "AI Video Generation",
+    "subtitle": "Single-video workspace",
+    "reset": "Reset",
+    "header_hint": "Upload 2 frames, pick an optional scene reference, or click a recent session to reload it.",
+    "provider": "Provider",
+    "duration": "thời lượng",
+    "seconds_short": "Sec",
+    "aspect_ratio": "Aspect ratio",
+    "aspect": {
+      "landscape": "Landscape",
+      "vertical": "Vertical"
+    },
+    "template": "Template",
+    "start_frame": "Start Frame",
+    "end_frame": "End Frame",
+    "start": "Start",
+    "end": "End",
+    "scene": "Scene",
+    "scene_optional": "Optional scene reference",
+    "pick_scene": "Pick scene",
+    "gallery": "Gallery",
+    "prompt": "Prompt",
+    "prompt_placeholder": "Motion, pacing, camera, landing frame.",
+    "final_prompt": "Final Prompt",
+    "copy_final_prompt": "Copy final prompt",
+    "final_prompt_copied": "Final prompt copied.",
+    "show_final_prompt": "Show final prompt",
+    "hide_final_prompt": "Hide final prompt",
+    "output": "Output",
+    "latest_ready": "Latest Ready",
+    "no_video_yet": "No video yet",
+    "no_video_hint": "Generate or open a recent session.",
+    "preview_unavailable": "Preview unavailable",
+    "download": "Download",
+    "drive": "Drive",
+    "recent": "Recent",
+    "refresh_recent": "Refresh recent videos",
+    "loading": "Loading...",
+    "no_sessions": "No sessions",
+    "session": "Video Session",
+    "empty": "Empty",
+    "ready": "Sẵn sàng",
+    "frames_prompt_needed": "Frames + prompt needed",
+    "drive_auto_upload": "Drive auto-upload",
+    "generating": "Generating...",
+    "generate": "Generate",
+    "select_scene_image": "Select Scene Image",
+    "select_end_frame": "Select End Frame",
+    "select_start_frame": "Select Start Frame",
+    "start_frame_label": "Start frame",
+    "session_start_frame": "Session start frame",
+    "session_end_frame": "Session end frame",
+    "session_scene": "Session scene",
+    "gallery_image": "Gallery image",
+    "scene_reference_alt": "Scene reference",
+    "recent_session_alt": "Recent session",
+    "loaded_session": "Loaded session {{id}}",
+    "drive_uploading": "Uploading to Google Drive...",
+    "drive_uploaded_all": "All generated videos uploaded.",
+    "drive_description": "Generated video from Smart Wardrobe",
+    "generated_count": "Generated {{count}} video output(s).",
+    "unknown": "Unknown",
+    "time": {
+      "just_now": "just now",
+      "minutes_ago": "{{count}}m ago",
+      "hours_ago": "{{count}}h ago",
+      "days_ago": "{{count}}d ago"
+    },
+    "errors": {
+      "read_file": "Could not read image file.",
+      "gallery_missing_url": "Selected gallery item is missing an image URL.",
+      "gallery_load": "Could not load gallery image.",
+      "session_not_found": "Session detail not found.",
+      "load_session": "Could not load session.",
+      "upload_failed": "Upload failed.",
+      "missing_inputs": "Upload both frames and finish the motion prompt first.",
+      "missing_download_url": "Missing download URL for {{filename}}",
+      "fetch_failed": "Failed to fetch {{filename}}",
+      "no_output": "No playable video output was returned.",
+      "generation_failed": "Video generation failed."
+    },
+    "useCases": {
+      "motionShowcase": {
+        "label": "Motion Showcase",
+        "summary": "Tóm tắt"
+      },
+      "fashionBeat": {
+        "label": "Fashion Beat",
+        "summary": "Tóm tắt"
+      },
+      "productDemo": {
+        "label": "Product Demo",
+        "summary": "Tóm tắt"
+      },
+      "sceneTransition": {
+        "label": "Scene Transition",
+        "summary": "Tóm tắt"
+      }
+    }
   },
   "voiceOver": {
     "title": "Tạo Giọng nói"
