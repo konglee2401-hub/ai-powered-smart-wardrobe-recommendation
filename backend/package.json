@@ -29,6 +29,7 @@
     "auth:grok:capture": "node scripts/auth/grok/capture-session.js",
     "auth:google-flow": "node scripts/auth/google-flow/capture-session.js",
     "auth:google-flow:refresh": "node scripts/auth/google-flow/refresh-session.js",
+    "auth:capcut": "node scripts/auth/capcut/capture-session.js",
     "auth:zai": "node scripts/debug/zai-login.js",
     "session:list": "node scripts/debug/session-manager.js list",
     "session:info": "node scripts/debug/session-manager.js info",
@@ -55,6 +56,7 @@
     "axios": "^1.13.5",
     "chalk": "^5.6.2",
     "cloudinary": "^2.9.0",
+    "cloudscraper": "^4.6.0",
     "commander": "^14.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -74,7 +76,8 @@
     "puppeteer": "^21.11.0",
     "replicate": "^0.25.2",
     "sharp": "^0.34.5",
-    "socket.io": "^4.7.0"
+    "socket.io": "^4.7.0",
+    "undetected-chromedriver": "^0.0.1-security"
   },
   "devDependencies": {
     "bcryptjs": "^3.0.3",

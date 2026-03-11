@@ -32,7 +32,8 @@ from .config import (
     SCRAPER_PROXIES,
 )
 from .db import channels, videos
-from .store import get_or_create_settings, upsert_channel, upsert_video, log_job
+from .store import get_or_create_settings, upsert_channel, upsert_video, update_video_transcript, update_video_transcript_error, log_job
+from .transcriptService import fetch_transcript_for_video
 from .simple_upload import upload_video_after_download
 from .utils import TOPICS, parse_views, extract_youtube_id, extract_reel_id, extract_douyin_id, match_topic
 
@@ -1829,6 +1830,38 @@ async def process_download(video_id, attempts):
             await upload_video_after_download(doc['_id'], out, platform)
         except Exception as upload_err:
             print(f"⚠️  Google Drive upload error (non-fatal): {upload_err}")
+        
+        # 📝 Fetch transcript for YouTube videos (Vietnamese/English)
+        platform = (doc.get('platform') or '').lower()
+        if platform == 'youtube':
+            try:
+                video_id = doc.get('videoId', '').strip()
+                if video_id and len(video_id) == 11:
+                    print(f'[transcript] Fetching transcript for YouTube video {video_id}...')
+                    transcript_result = await fetch_transcript_for_video(video_id)
+                    
+                    if transcript_result['success'] and transcript_result['transcript']:
+                        update_video_transcript(
+                            doc['_id'],
+                            transcript_result['transcript'],
+                            transcript_result.get('language', 'mixed')
+                        )
+                        print(f'✅ Transcript saved ({transcript_result["snippetCount"]} snippets, format: {transcript_result["format"]})')
+                    else:
+                        error_msg = transcript_result.get('error', 'Unknown error')
+                        update_video_transcript_error(doc['_id'], error_msg)
+                        print(f"⚠️  No transcript available: {error_msg}")
+                else:
+                    error_msg = f'Invalid YouTube ID format: {video_id}'
+                    update_video_transcript_error(doc['_id'], error_msg)
+                    print(f"⚠️  {error_msg}")
+            except Exception as transcript_err:
+                error_msg = f'Transcript fetch exception: {str(transcript_err)}'
+                try:
+                    update_video_transcript_error(doc['_id'], error_msg)
+                except Exception:
+                    pass
+                print(f"⚠️  Transcript fetch error (non-fatal): {transcript_err}")
         
         log_job(
             'download',

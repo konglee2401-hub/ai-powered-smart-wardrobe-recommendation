@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Link, matchPath, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ import {
 
 import LogoKG from '../assets/Logo-KG.png';
 import { navGroups } from '../config/appRoutes';
+import { NavbarCollapseContext } from '../context/NavbarCollapseContext';
 
 const baseLinkClass =
   'group flex items-center gap-2 rounded-[0.95rem] px-2 py-1.5 text-[13px] transition-all duration-300 border border-transparent';
@@ -35,6 +36,10 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
   const currentLang = i18n.language?.startsWith('vi') ? 'vi' : 'en';
   const currentLangLabel = currentLang.toUpperCase();
   const isLightTheme = theme === 'light';
+  const { shouldCollapseNavbar } = useContext(NavbarCollapseContext) || {};
+
+  // Force collapse when in video-pipeline
+  const effectiveIsCollapsed = isCollapsed || shouldCollapseNavbar;
 
   const generationSubmenuPaths = useMemo(
     () => ['/', '/video-generation', '/voice-over', '/generate/one-click'],
@@ -102,8 +107,8 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
           isActive
             ? `${isLightTheme ? 'apple-sidebar-link-active text-slate-900 shadow-[0_8px_18px_rgba(0,0,0,0.04)]' : 'apple-sidebar-link-active text-white shadow-[0_12px_28px_rgba(8,18,34,0.24)]'}`
             : `${isLightTheme ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/[0.03]' : 'text-slate-300 hover:text-white hover:bg-white/[0.06]'}`
-        } ${isCollapsed ? 'justify-center px-2.5' : ''}`}
-        title={isCollapsed ? item.label : ''}
+        } ${effectiveIsCollapsed ? 'justify-center px-2.5' : ''}`}
+        title={effectiveIsCollapsed ? item.label : ''}
       >
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-transparent transition-all duration-300 ${
@@ -114,13 +119,13 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
         >
           <Icon className="h-4 w-4 shrink-0" />
         </span>
-        {!isCollapsed && <span className="truncate">{item.label}</span>}
+        {!effectiveIsCollapsed && <span className="truncate">{item.label}</span>}
       </Link>
     );
   };
 
   const renderGenerationSubmenu = () => {
-    if (isCollapsed) {
+    if (effectiveIsCollapsed) {
       return (
         <button
           type="button"
@@ -210,21 +215,21 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
       )}
 
       <aside
-        className={`app-sidebar fixed app-layer-nav h-[100dvh] transition-all duration-300 lg:relative lg:left-0 lg:h-auto lg:self-stretch ${
-          isCollapsed ? 'w-[88px]' : 'w-[238px]'
+        className={`app-sidebar fixed app-layer-nav h-[100dvh] transition-all duration-300 lg:relative lg:h-auto lg:self-stretch ${
+          effectiveIsCollapsed ? 'w-[88px]' : 'w-[238px]'
         } ${isMobileOpen ? 'left-0' : '-left-full lg:left-0'}`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
         <div className="flex h-full flex-col">
-          <div className={`relative flex items-center gap-2 px-3 py-3 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className={`relative flex items-center gap-2 px-3 py-3 ${effectiveIsCollapsed ? 'justify-center' : 'justify-between'}`}>
             <Link
               to="/"
-              className={`flex items-center gap-3 ${isCollapsed ? 'w-full justify-center' : ''}`}
+              className={`flex items-center gap-3 ${effectiveIsCollapsed ? 'w-full justify-center' : ''}`}
               onClick={() => setIsMobileOpen(false)}
             >
               <img src={LogoKG} alt="Logo" className="h-10 w-10 object-contain flex-shrink-0" />
-              {!isCollapsed && (
+              {!effectiveIsCollapsed && (
                 <div className="flex-1">
                   <p className={`truncate text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>K-Creative Studio</p>
                 </div>
@@ -235,11 +240,11 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
               className={`hidden rounded-2xl border border-transparent p-1.5 transition lg:block ${
                 isLightTheme ? 'bg-slate-900/[0.04] text-slate-600 hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] text-slate-200 hover:bg-white/[0.1]'
               } ${
-                isCollapsed && !isHovering ? 'pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 opacity-0' : 'opacity-100'
+                effectiveIsCollapsed && !isHovering ? 'pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 opacity-0' : 'opacity-100'
               }`}
               aria-label="Collapse sidebar"
             >
-              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              {effectiveIsCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
           </div>
 
@@ -252,7 +257,7 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
 
               return (
               <div key={group.title}>
-                {!isCollapsed && (
+                {!effectiveIsCollapsed && (
                   <p className={`px-1.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${isLightTheme ? 'text-slate-400' : 'text-violet-200/45'}`}>
                     {group.title}
                   </p>
@@ -269,15 +274,15 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
               className={`w-full rounded-2xl border border-transparent px-3 py-2.5 text-sm transition ${
                 isLightTheme ? 'bg-slate-900/[0.04] hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] hover:bg-white/[0.1]'
               } ${
-                isCollapsed ? `flex items-center justify-center gap-2 px-2 ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}` : `flex items-center justify-between ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}`
+                effectiveIsCollapsed ? `flex items-center justify-center gap-2 px-2 ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}` : `flex items-center justify-between ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}`
               }`}
-              title={isCollapsed ? `Switch to ${isLightTheme ? 'dark' : 'light'} mode` : ''}
+              title={effectiveIsCollapsed ? `Switch to ${isLightTheme ? 'dark' : 'light'} mode` : ''}
             >
               <span className="flex items-center gap-2">
                 {isLightTheme ? <MoonStar className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
-                {!isCollapsed && <span>{isLightTheme ? 'Light mode' : 'Dark mode'}</span>}
+                {!effectiveIsCollapsed && <span>{isLightTheme ? 'Light mode' : 'Dark mode'}</span>}
               </span>
-              {!isCollapsed && (
+              {!effectiveIsCollapsed && (
                 <span className={`font-semibold ${isLightTheme ? 'text-slate-600' : 'text-violet-100'}`}>
                   {isLightTheme ? 'LIGHT' : 'DARK'}
                 </span>

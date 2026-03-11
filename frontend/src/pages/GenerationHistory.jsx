@@ -9,6 +9,7 @@ import {
   Loader2,
   Mic2,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
   Trash2,
@@ -25,6 +26,7 @@ import {
   deleteGenerationSession,
   getGenerationSessionDetail,
   getGenerationSessions,
+  resumeSession,
 } from '../services/generationSessionsService';
 
 const getFlowOptions = (t) => ([
@@ -223,8 +225,9 @@ function MetricPill({ label, value }) {
   );
 }
 
-function JsonPreview({ data, emptyLabel }) {
-  const { t } = useTranslation();
+function JsonPreview({ data, emptyLabel, t }) {
+  const flowOptions = useMemo(() => getFlowOptions(t), [t]);
+  const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const resolvedEmptyLabel = emptyLabel || t('generationHistory.no_structured_data_captured_yet');
   const entries = summarizeJson(data);
 
@@ -246,7 +249,7 @@ function JsonPreview({ data, emptyLabel }) {
   );
 }
 
-function MediaPreviewCard({ item, compact = false }) {
+function MediaPreviewCard({ item, compact = false, t }) {
   const kind = item?.kind || getMediaKind(item?.path || item?.url);
   const label = item?.label || getFileLabel(item?.path || item?.url) || 'Asset';
   const previewUrl = item?.url || getPublicUrl(item?.path);
@@ -308,24 +311,24 @@ function SessionCard({ session, selected, onSelect, tr, flowOptions }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="truncate text-[12px] font-semibold text-white">{flow.label}</h3>
-              <StatusPill tone={getStatusTone(session.status)}>{session.status || t('generationHistory.unknown_4')}</StatusPill>
+              <StatusPill tone={getStatusTone(session.status)}>{session.status || tr('generationHistory.unknown_4')}</StatusPill>
             </div>
             <p className="mt-0.5 truncate text-[11px] text-slate-400">{session.useCase || session.sessionId}</p>
           </div>
         </div>
-        <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(session.createdAt, t)}</p>
+        <p className="shrink-0 text-[11px] text-slate-500">{formatDateTime(session.createdAt, tr)}</p>
       </div>
 
       <div className="mt-2 grid grid-cols-4 gap-1">
-        <MetricPill label={t('generationHistory.in')} value={session.inputCount || 0} />
-        <MetricPill label={t('generationHistory.metric.out')} value={session.outputCount || 0} />
-        <MetricPill label={t('generationHistory.stages')} value={session.stageCount || 0} />
-        <MetricPill label={t('generationHistory.time')} value={formatDuration(session.totalDuration, t)} />
+        <MetricPill label={tr('generationHistory.in')} value={session.inputCount || 0} />
+        <MetricPill label={tr('generationHistory.metric.out')} value={session.outputCount || 0} />
+        <MetricPill label={tr('generationHistory.stages')} value={session.stageCount || 0} />
+        <MetricPill label={tr('generationHistory.time')} value={formatDuration(session.totalDuration, tr)} />
       </div>
 
       <div className="mt-1.5 rounded-xl border border-slate-800/80 bg-slate-950/60 px-2 py-1.5">
         <p className={`line-clamp-1 text-[10px] leading-4 ${session.error?.message ? 'text-rose-200' : 'text-slate-300'}`}>
-          {session.error?.message || session.latestLog?.message || t('generationHistory.no_detailed_event_captured_yet')}
+          {session.error?.message || session.latestLog?.message || tr('generationHistory.no_detailed_event_captured_yet')}
         </p>
       </div>
     </button>
@@ -333,6 +336,9 @@ function SessionCard({ session, selected, onSelect, tr, flowOptions }) {
 }
 
 export default function GenerationHistory() {
+  const { t } = useTranslation();
+  const flowOptions = useMemo(() => getFlowOptions(t), [t]);
+  const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const [filters, setFilters] = useState({
     search: '',
     flowType: 'all',
@@ -348,6 +354,7 @@ export default function GenerationHistory() {
   const [selectedSession, setSelectedSession] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deletingId, setDeletingId] = useState('');
+  const [resumingId, setResumingId] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -470,7 +477,7 @@ export default function GenerationHistory() {
     ];
   }, [summary]);
 
-  const selectedFlow = selectedSession ? getFlowMeta(selectedSession.flowType, flowOptions, tr) : null;
+  const selectedFlow = selectedSession ? getFlowMeta(selectedSession.flowType, flowOptions, t) : null;
   const selectedLogs = selectedSession?.logs || [];
   const selectedStages = selectedSession?.metrics?.stages || [];
   const selectedArtifacts = selectedSession?.artifacts || {};
@@ -523,6 +530,24 @@ export default function GenerationHistory() {
     }
   }
 
+  async function handleResumeSession(sessionId, flowType) {
+    setResumingId(sessionId);
+    try {
+      const result = await resumeSession(sessionId, flowType);
+      setError('');
+      // Reload the session detail to show updated state
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
+      const response = await getGenerationSessionDetail(sessionId);
+      setSelectedSession(response.data || null);
+    } catch (resumeError) {
+      setError(resumeError.message || 'Failed to resume session');
+    } finally {
+      setResumingId('');
+    }
+  }
+
   function copySessionId(sessionId) {
     navigator.clipboard?.writeText(sessionId);
   }
@@ -565,21 +590,21 @@ export default function GenerationHistory() {
         </section>
 
         <section className={`${SURFACE_CARD_CLASS} shrink-0 p-3 shadow-[0_30px_90px_rgba(14,165,233,0.08)]`}>
-          <div className="flex flex-row gap-3 items-center justify-between">
-            <div className="flex flex-1 flex-row gap-3">
-              <label className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={filters.search}
-                  onChange={(event) => {
-                    setPage(1);
-                    setFilters((current) => ({ ...current, search: event.target.value }));
-                  }}
-                  placeholder={t('generationHistory.search_session_id_flow_error_or_log_text')}
-                  className="h-11 w-full rounded-2xl border border-slate-800/80 bg-slate-950/70 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40"
-                />
-              </label>
+          <div className="flex flex-col gap-3">
+            <label className="relative min-w-0 flex-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                value={filters.search}
+                onChange={(event) => {
+                  setPage(1);
+                  setFilters((current) => ({ ...current, search: event.target.value }));
+                }}
+                placeholder={t('generationHistory.search_session_id_flow_error_or_log_text')}
+                className="h-11 w-full rounded-2xl border border-slate-800/80 bg-slate-950/70 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40"
+              />
+            </label>
 
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <div className="flex flex-wrap gap-2">
                 {statusOptions.map((option) => (
                   <button
@@ -589,7 +614,7 @@ export default function GenerationHistory() {
                       setPage(1);
                       setFilters((current) => ({ ...current, status: option.value }));
                     }}
-                    className={`rounded-2xl border px-3 py-2 text-[12px] font-medium transition ${
+                    className={`rounded-2xl border px-3 py-2 text-[12px] font-medium transition whitespace-nowrap ${
                       option.value === 'failed'
                         ? filters.status === option.value
                           ? 'border-rose-500/80 bg-[linear-gradient(180deg,rgba(225,29,72,0.2),rgba(127,29,29,0.16))] text-rose-100 shadow-[0_0_0_1px_rgba(251,113,133,0.18),0_18px_48px_rgba(127,29,29,0.28)]'
@@ -601,26 +626,28 @@ export default function GenerationHistory() {
                   </button>
                 ))}
               </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2">
-              {flowOptions.map((option) => {
-                const FlowIcon = option.icon;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setPage(1);
-                      setFilters((current) => ({ ...current, flowType: option.value }));
-                    }}
-                    className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-[12px] font-medium transition ${getFilterButtonClass(filters.flowType === option.value, option.tone)}`}
-                  >
-                    <FlowIcon className="h-4 w-4" />
-                    {option.label}
-                  </button>
-                );
-              })}
+              <div className="h-px sm:h-6 w-full sm:w-px bg-slate-800/60 flex-shrink-0 sm:ml-2" />
+
+              <div className="flex flex-wrap gap-2">
+                {flowOptions.map((option) => {
+                  const FlowIcon = option.icon;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setPage(1);
+                        setFilters((current) => ({ ...current, flowType: option.value }));
+                      }}
+                      className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-[12px] font-medium transition whitespace-nowrap ${getFilterButtonClass(filters.flowType === option.value, option.tone)}`}
+                    >
+                      <FlowIcon className="h-4 w-4" />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -689,6 +716,8 @@ export default function GenerationHistory() {
                     session={session}
                     selected={session.sessionId === selectedSessionId}
                     onSelect={() => setSelectedSessionId(session.sessionId)}
+                    tr={t}
+                    flowOptions={flowOptions}
                   />
                 ))
               ) : (
@@ -730,6 +759,21 @@ export default function GenerationHistory() {
                         <Copy className="h-4 w-4" />
                         Copy ID
                       </button>
+                      {selectedSession.status === 'in-progress' && ['video-generation', 'one-click', 'image-generation'].includes(selectedSession.flowType) && (
+                        <button
+                          type="button"
+                          onClick={() => handleResumeSession(selectedSession.sessionId, selectedSession.flowType)}
+                          disabled={resumingId === selectedSession.sessionId}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-500/12 px-3 py-2 text-[12px] font-medium text-cyan-100 transition hover:bg-cyan-500/18 disabled:cursor-not-allowed"
+                        >
+                          {resumingId === selectedSession.sessionId ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4" />
+                          )}
+                          Resume
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleDeleteSession(selectedSession.sessionId)}
@@ -776,7 +820,7 @@ export default function GenerationHistory() {
                       <div className="mt-3 flex flex-col gap-3">
                         {inputItems.length ? (
                           inputItems.map((item, index) => (
-                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} compact />
+                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} compact t={t} />
                           ))
                         ) : (
                           <p className="text-xs text-slate-500">{t('generationHistory.no_persisted_input_artifact_path_was_recorded')}</p>
@@ -788,7 +832,7 @@ export default function GenerationHistory() {
                       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         {outputItems.length ? (
                           outputItems.map((item, index) => (
-                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} />
+                            <MediaPreviewCard key={`${item.path || item.url}-${index}`} item={item} t={t} />
                           ))
                         ) : (
                           <p className="text-xs text-slate-500">{t('generationHistory.no_generated_output_artifact_was_stored_on_this_session')}</p>
@@ -805,11 +849,11 @@ export default function GenerationHistory() {
                   <div className="grid gap-4">
                     <div>
                       <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">{t('generationHistory.analysis_payload')}</p>
-                      <JsonPreview data={selectedSession.analysis} />
+                      <JsonPreview data={selectedSession.analysis} t={t} />
                     </div>
                     <div>
                       <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-slate-500">{t('generationHistory.error_payload')}</p>
-                      <JsonPreview data={selectedSession.error} emptyLabel={t('generationHistory.no_error_payload_captured_for_this_session')} />
+                      <JsonPreview data={selectedSession.error} emptyLabel={t('generationHistory.no_error_payload_captured_for_this_session')} t={t} />
                     </div>
                   </div>
                 </DetailSection>
@@ -909,7 +953,6 @@ export default function GenerationHistory() {
     </div>
   );
 }
-
 
 
 

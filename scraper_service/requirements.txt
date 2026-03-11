@@ -11,3 +11,5 @@ pydantic==2.1.1
 # HTTP client for async requests
 aiohttp==3.10.0
 requests==2.32.3
+# YouTube transcript extraction
+youtube-transcript-api==0.6.2

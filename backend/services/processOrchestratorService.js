@@ -169,7 +169,8 @@ class ProcessOrchestratorService {
         audioPath: audioTrack,
         audioVolume: config.audioVolume || 0.8,
         transition: config.transition || 'fade',
-        duration: config.duration || 30 // seconds
+        duration: config.duration || 30, // seconds
+        contentType, // Smart template selection
       };
 
       const mashupResult = await this.videoMashup.generateMashupVideo(mashupConfig);

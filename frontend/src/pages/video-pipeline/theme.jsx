@@ -110,8 +110,7 @@ export function SectionHeader({ title, subtitle, actions = null }) {
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
-        <p className="video-pipeline-kicker">Section</p>
-        <h3 className="mt-2 text-[1.05rem] font-semibold text-white">{title}</h3>
+        <h3 className="text-[1.05rem] font-semibold text-white">{title}</h3>
         {subtitle ? <p className="mt-1 max-w-3xl text-[13px] leading-6 text-slate-400">{subtitle}</p> : null}
       </div>
       {actions}

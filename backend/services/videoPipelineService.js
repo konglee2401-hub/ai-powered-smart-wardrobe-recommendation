@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Video Pipeline Service
  *
  * This service is the backend facade for the merged source -> production ->
@@ -26,19 +26,74 @@ import MultiAccountService from './multiAccountService.js';
 import AutoUploadService from './autoUploadService.js';
 import driveService from './googleDriveOAuth.js';
 import VideoMashupService from './videoMashupService.js';
+import CapCutAICaptionService from './browser/capcutAICaptionService.js';
 import youtubeOAuthService from './youtubeOAuthService.js';
 import publicDriveFolderIngestService, {
   extractFolderId as extractPublicDriveFolderId,
   resolveTemplateGroup,
+  themeFromName,
+  recommendedTemplateGroups,
 } from './publicDriveFolderIngestService.js';
 import queueScannerCronJob from './queueScannerCronJob.js';
+import publishSchedulerCronJob from './publishSchedulerCronJob.js';
 import GoogleDriveIntegration from './googleDriveIntegration.js';
 import { buildPublishMetadata, mergePublishUploadConfig } from './publishMetadataGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, '..');
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
+const CAPCUT_EXPORT_DIR = path.join(BACKEND_ROOT, 'media', 'temp', 'capcut-exports');
 const googleDriveIntegration = new GoogleDriveIntegration();
+
+async function shouldUseCapCutCaptions({ productionConfig = {}, queueItem = {}, sourceVideoId = '' }) {
+  if (!productionConfig) return false;
+  if (productionConfig.capcutAutoCaption === false) return false;
+  if (productionConfig.subtitleMode !== 'auto') return false;
+  if (productionConfig.subtitleFilePath) return false;
+
+  const provider = String(productionConfig.subtitleProvider || '').toLowerCase();
+  const fallback = String(productionConfig.subtitleFallback || '').toLowerCase();
+  const forceCapCut = provider === 'capcut';
+
+  if (productionConfig.capcutAutoCaption === true) return true;
+
+  const sourcePlatform = String(
+    queueItem.videoConfig?.sourcePlatform ||
+    queueItem.metadata?.sourcePlatform ||
+    queueItem.platform ||
+    ''
+  ).toLowerCase();
+  const nonYoutube = sourcePlatform && !sourcePlatform.includes('youtube');
+
+  let transcriptMissing = false;
+  if (sourceVideoId) {
+    const video = await TrendVideo.findById(sourceVideoId).select('+transcript.srt').lean();
+    const transcript = video?.transcript || {};
+    transcriptMissing = !transcript.srt && (transcript.fetchedAt || transcript.fetchError);
+  }
+
+  if (forceCapCut) return true;
+  if (fallback === 'capcut' && (nonYoutube || transcriptMissing)) return true;
+  if (nonYoutube || transcriptMissing) return true;
+  return false;
+}
+
+async function generateCapCutCaptions({ videoPath, queueId = '', language = 'auto', onStep = null }) {
+  const flowId = queueId ? `capcut-${queueId}` : `capcut-${Date.now()}`;
+  const service = new CapCutAICaptionService({ headless: false, flowId });
+
+  try {
+    await service.initialize();
+    return await service.generateCaptionedVideo({
+      videoPath,
+      outputDirVideo: CAPCUT_EXPORT_DIR,
+      language,
+      onStep,
+    });
+  } finally {
+    await service.close();
+  }
+}
 
 function normalizeTemplateHealth(source) {
   if (!source.enabled) {
@@ -66,10 +121,22 @@ function buildProductionPayload(video, recipe, productionConfig = {}) {
   const identity = video?.videoId || video?._id || manualMainVideo?.assetId || `manual-${Date.now()}`;
   const fileName = `${identity}.mp4`;
   const outputFileName = `${recipe}-${identity}-${Date.now()}.mp4`;
+  
+  // Auto-detect theme from source title
+  const sourceTitle = video?.title || manualMainVideo?.name || 'Manual video selection';
+  const detectedTheme = productionConfig.theme || themeFromName(sourceTitle) || 'general';
+  
+  // Recommend template based on detected theme
+  const recommendedTemplates = recommendedTemplateGroups(detectedTheme);
+  const normalizedTemplateName = String(productionConfig.templateName || '').trim();
+  const fallbackTemplateName = recommendedTemplates[0] || 'reaction';
+  const templateName = normalizedTemplateName && normalizedTemplateName !== 'reaction'
+    ? normalizedTemplateName
+    : fallbackTemplateName;
 
   return {
     sourceVideoId: video?._id ? String(video._id) : '',
-    sourceTitle: video?.title || manualMainVideo?.name || 'Manual video selection',
+    sourceTitle,
     sourcePlatform: video?.platform || 'manual',
     sourceUrl: video?.url || manualMainVideo?.url || '',
     sourceThumbnail: video?.thumbnail || '',
@@ -84,7 +151,8 @@ function buildProductionPayload(video, recipe, productionConfig = {}) {
       aspectRatio: '9:16',
       duration: 30,
       layout: '2-3-1-3',
-      templateName: 'reaction',
+      templateName,
+      theme: detectedTheme,
       quality: 'high',
       audioSource: 'main',
       subtitleMode: 'auto',
@@ -233,6 +301,17 @@ function normalizeProductionSchedule(input = {}) {
   };
 }
 
+function normalizePublishFilters(input = {}) {
+  return {
+    status: String(input.status || 'ready').trim() || 'ready',
+    platform: String(input.platform || '').trim(),
+    source: String(input.source || '').trim(),
+    recipe: String(input.recipe || '').trim(),
+    channel: String(input.channel || '').trim(),
+    minViews: Math.max(0, Number(input.minViews) || 0),
+  };
+}
+
 function normalizeTemplateBrowserPreferences(input = {}) {
   const normalizeString = (value, fallback = '') => String(value || '').trim() || fallback;
   const suggestionLimit = Math.min(12, Math.max(1, Number(input.suggestionLimit) || 6));
@@ -271,7 +350,7 @@ function normalizeComposerDefaults(input = {}) {
     duration: clampNumber(input.duration, 30, 3, 300),
     aspectRatio: pick(String(input.aspectRatio || ''), '9:16', allowed.aspectRatio),
     layout: pick(String(input.layout || ''), '2-3-1-3', allowed.layout),
-    templateName: String(input.templateName || 'reaction').trim() || 'reaction',
+    templateName: String(input.templateName || '').trim(),
     templateStrategy: pick(String(input.templateStrategy || ''), 'weighted', allowed.templateStrategy),
     quality: pick(String(input.quality || ''), 'high', allowed.quality),
     audioSource: pick(String(input.audioSource || ''), 'main', allowed.audioSource),
@@ -619,11 +698,14 @@ function buildMashupLog(job = {}) {
       score: null,
       candidates: [],
     } : { method: 'manual' },
-    subtitleMode: productionConfig.subtitleMode || 'none',
-    subtitleText: productionConfig.subtitleText || '',
-    subtitleContext: productionConfig.subtitleContext || '',
-  };
-}
+      subtitleMode: productionConfig.subtitleMode || 'none',
+      subtitleText: productionConfig.subtitleText || '',
+      subtitleContext: productionConfig.subtitleContext || '',
+      subtitleFilePath: productionConfig.subtitleFilePath || '',
+      subtitleProvider: productionConfig.subtitleProvider || '',
+      captionedVideoPath: productionConfig.captionedVideoPath || '',
+    };
+  }
 
 function resolveSubThumbnail(job = {}, mashupLog = {}) {
   const subVideo = mashupLog?.subVideo || {};
@@ -771,6 +853,36 @@ async function upsertGeneratedVideoAsset(payload = {}) {
 }
 
 class VideoPipelineService {
+  /**
+   * Infers contentType from source video metadata
+   * Used to select the appropriate template type for mashups
+   */
+  inferContentType(video = {}) {
+    if (!video || typeof video !== 'object') return 'general';
+
+    // Check title and keywords for product/shopping content
+    const titleLower = String(video.title || '').toLowerCase();
+    const productKeywords = ['product', 'buy', 'shop', 'offer', 'discount', 'deal', 'price', 'review', 'unbox'];
+    if (productKeywords.some(kw => titleLower.includes(kw))) {
+      return 'product';
+    }
+
+    // Check if from Playboard (trending content often humorous)
+    const sourceKey = String(video.source || video.platform || '').toLowerCase();
+    if (sourceKey === 'playboard' || sourceKey.includes('playboard')) {
+      return 'funny-animal';
+    }
+
+    // Check topic field
+    const topic = String(video.topic || '').toLowerCase();
+    if (['hai', 'dance'].includes(topic)) {
+      return 'funny-animal';
+    }
+
+    // Default to general
+    return 'general';
+  }
+
   /**
    * Dashboard data is intentionally small and aggregated so the overview tab
    * can render quickly without needing to preload the large video tables.
@@ -1440,6 +1552,9 @@ class VideoPipelineService {
 
         await fs.copyFile(sourcePath, destPath);
 
+        // Infer contentType from video metadata
+        const inferredContentType = this.inferContentType(video);
+        
         const metadata = {
           sourceVideoId: String(video._id),
           sourceKey: video.source || video.platform || 'other',
@@ -1449,6 +1564,7 @@ class VideoPipelineService {
           sourceThumbnail: video.thumbnail || '',
           videoId: video.videoId || '',
           queuedAt: new Date().toISOString(),
+          contentType: inferredContentType,
         };
         const metadataPath = `${destPath}.json`;
         await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
@@ -1788,6 +1904,10 @@ class VideoPipelineService {
       await Asset.updateOne({ assetId }, { $set: { status: 'deleted' } });
     }
 
+    if (payload.templateStrategy === 'specific' && !payload.templateName) {
+      return { success: false, error: 'Specific template requires templateName' };
+    }
+
     const productionConfig = {
       ...(job.videoConfig?.productionConfig || {}),
     };
@@ -1800,6 +1920,18 @@ class VideoPipelineService {
     }
     if (payload.templateStrategy) {
       productionConfig.templateStrategy = payload.templateStrategy;
+    }
+    if (payload.subtitleMode) {
+      productionConfig.subtitleMode = payload.subtitleMode;
+    }
+    if (payload.watermarkEnabled !== undefined) {
+      productionConfig.watermarkEnabled = Boolean(payload.watermarkEnabled);
+    }
+    if (payload.voiceoverEnabled !== undefined) {
+      productionConfig.voiceoverEnabled = Boolean(payload.voiceoverEnabled);
+    }
+    if (payload.capcutAutoCaption !== undefined) {
+      productionConfig.capcutAutoCaption = Boolean(payload.capcutAutoCaption);
     }
     if (payload.manualSubVideo) {
       productionConfig.manualSubVideo = payload.manualSubVideo;
@@ -2045,6 +2177,9 @@ class VideoPipelineService {
     const videos = googleDriveIntegration.listQueueVideos();
     const driveQueue = await queueScannerCronJob.listDriveQueueVideos();
 
+    await publishSchedulerCronJob.loadScheduleSettings();
+    const publishStatus = await publishSchedulerCronJob.getStatus();
+
     return {
       success: true,
       data: {
@@ -2056,6 +2191,10 @@ class VideoPipelineService {
           createdAt: item.createdAt,
           metadata: queueScannerCronJob.readQueueMetadata(item.path) || null,
         })),
+        publishScheduler: {
+          ...publishStatus,
+          scheduleConfig: publishSchedulerCronJob.scheduleConfig || {},
+        },
         driveQueue: driveQueue.map((item) => ({
           name: item.name,
           size: item.size,
@@ -2072,6 +2211,24 @@ class VideoPipelineService {
    * Connections stay on the existing multi-account service for now, but this
    * method exposes them in the unified API contract used by the page.
    */
+  async triggerPublishSchedulerNow() {
+    const timeout = (ms, message) => new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms));
+    try {
+      await Promise.race([
+        publishSchedulerCronJob.loadScheduleSettings(),
+        timeout(10000, 'Publish scheduler settings timed out'),
+      ]);
+    } catch (error) {
+      return { success: false, error: error?.message || 'Publish scheduler settings timed out' };
+    }
+
+    const result = await publishSchedulerCronJob.runPublishCycle();
+    if (!result?.success) {
+      return { success: false, error: result?.error || 'Publish scheduler failed.' };
+    }
+    return { success: true, result, message: 'Publish scheduler triggered.' };
+  }
+
   async getConnections() {
     return {
       success: true,
@@ -2112,6 +2269,17 @@ class VideoPipelineService {
       dailyTime: queueScanner?.dailyTime || '09:00',
     });
 
+    const publishScheduler = normalizeProductionSchedule({
+      enabled: queueScanner?.publishEnabled ?? false,
+      mode: queueScanner?.publishScheduleMode || (queueScanner?.publishEnabled ? 'daily' : 'manual'),
+      everyHours: queueScanner?.publishEveryHours || Math.max(1, Math.round((queueScanner?.publishIntervalMinutes || 1440) / 60)),
+      dailyTime: queueScanner?.publishDailyTime || '09:00',
+    });
+    const publishFilters = normalizePublishFilters(queueScanner?.publishFilters || {});
+    const publishGapMinutes = Math.max(1, Number(queueScanner?.publishGapMinutes) || 30);
+    const publishMaxPerRun = Math.max(1, Number(queueScanner?.publishMaxPerRun) || 20);
+    const publishAccountIds = Array.isArray(queueScanner?.publishAccountIds) ? queueScanner.publishAccountIds : [];
+
     return {
       success: true,
       settings: {
@@ -2131,6 +2299,11 @@ class VideoPipelineService {
           autoPublish: queueScanner?.autoPublish || false,
           defaultPlatform: queueScanner?.platform || 'youtube',
           youtubePublishType: queueScanner?.youtubePublishType || 'shorts',
+          publishScheduler,
+          publishFilters,
+          publishGapMinutes,
+          publishMaxPerRun,
+          publishAccountIds,
           templateSources,
           templateLibrary: normalizeTemplateLibrary(trendSetting.videoPipelinePreferences?.production?.templateLibrary),
           subVideoLibrarySources: normalizeSubVideoLibrarySources(trendSetting.videoPipelinePreferences?.production?.subVideoLibrarySources),
@@ -2152,6 +2325,14 @@ class VideoPipelineService {
       ...(production.scheduler || {}),
       enabled: production.scheduler?.enabled ?? production.schedulerEnabled ?? false,
     });
+    const publishScheduler = normalizeProductionSchedule({
+      ...(production.publishScheduler || {}),
+      enabled: production.publishScheduler?.enabled ?? false,
+    });
+    const publishFilters = normalizePublishFilters(production.publishFilters || {});
+    const publishGapMinutes = Math.max(1, Number(production.publishGapMinutes) || 30);
+    const publishMaxPerRun = Math.max(1, Number(production.publishMaxPerRun) || 20);
+    const publishAccountIds = Array.isArray(production.publishAccountIds) ? production.publishAccountIds : [];
 
     const trendSetting = await TrendSetting.getOrCreateDefault();
     trendSetting.keywords = discovery.keywords || trendSetting.keywords;
@@ -2202,9 +2383,56 @@ class VideoPipelineService {
         autoPublish: production.autoPublish ?? false,
         platform: production.defaultPlatform || 'youtube',
         youtubePublishType: production.youtubePublishType || 'shorts',
+        publishEnabled: publishScheduler.enabled,
+        publishIntervalMinutes: publishScheduler.intervalMinutes,
+        publishScheduleMode: publishScheduler.mode,
+        publishEveryHours: publishScheduler.everyHours,
+        publishDailyTime: publishScheduler.dailyTime,
+        publishScheduleLabel: publishScheduler.label,
+        publishGapMinutes,
+        publishMaxPerRun,
+        publishFilters,
+        publishAccountIds,
       },
       { upsert: true, new: true }
     );
+
+    if (scheduler.enabled) {
+      queueScannerCronJob.initializeSchedule(scheduler.intervalMinutes, {
+        scheduleMode: scheduler.mode,
+        everyHours: scheduler.everyHours,
+        dailyTime: scheduler.dailyTime,
+        scheduleLabel: scheduler.label,
+        autoPublish: production.autoPublish ?? false,
+        accountIds: production.accountIds || [],
+        platform: production.defaultPlatform || 'youtube',
+        youtubePublishType: production.youtubePublishType || 'shorts',
+      }, { persist: false });
+      console.log('[QueueScanner] Enabled', {
+        intervalMinutes: scheduler.intervalMinutes,
+        mode: scheduler.mode,
+        everyHours: scheduler.everyHours,
+        dailyTime: scheduler.dailyTime,
+      });
+    } else {
+      queueScannerCronJob.disableSchedule({ persist: false });
+      console.log('[QueueScanner] Disabled');
+    }
+
+    if (publishScheduler.enabled) {
+      publishSchedulerCronJob.initializeSchedule(publishScheduler.intervalMinutes, {
+        ...publishScheduler,
+      }, { persist: false });
+      console.log('[PublishScheduler] Enabled', {
+        intervalMinutes: publishScheduler.intervalMinutes,
+        mode: publishScheduler.mode,
+        everyHours: publishScheduler.everyHours,
+        dailyTime: publishScheduler.dailyTime,
+      });
+    } else {
+      publishSchedulerCronJob.disableSchedule({ persist: false });
+      console.log('[PublishScheduler] Disabled');
+    }
 
     if (Array.isArray(production.templateSources)) {
       const keepIds = [];
@@ -2389,12 +2617,10 @@ class VideoPipelineService {
       // Fetch YouTube OAuth accounts from database
       const youtubeAccounts = await SocialMediaAccount.find({
         platform: 'youtube',
-        isActive: true,
-        isVerified: true
       }).select('_id username displayName platform isActive isVerified platformData totalUploads lastPostTime');
 
-      // Get legacy MultiAccountService accounts
-      const legacyAccounts = new MultiAccountService().accounts || [];
+      // Get legacy MultiAccountService accounts (singleton instance)
+      const legacyAccounts = MultiAccountService.accounts || [];
 
       // Format YouTube accounts
       const youtubeFormatted = youtubeAccounts.map(acc => ({
@@ -2406,7 +2632,12 @@ class VideoPipelineService {
         source: 'oauth',
         isActive: acc.isActive,
         isVerified: acc.isVerified,
-        channelInfo: acc.platformData?.channelInfo || {},
+        channelInfo: {
+          title: acc.channelTitle || acc.platformData?.channelInfo?.title || '',
+          channelId: acc.channelId || acc.platformData?.channelInfo?.channelId || '',
+          thumbnailUrl: acc.channelThumbnailUrl || acc.platformData?.channelInfo?.thumbnailUrl || '',
+          url: acc.channelUrl || acc.platformData?.channelInfo?.url || '',
+        },
         stats: {
           totalUploads: acc.totalUploads || 0,
           lastPostTime: acc.lastPostTime
@@ -2680,7 +2911,7 @@ class VideoPipelineService {
 
     const mainVideo = await resolveVideoSelection(queueItem.videoConfig?.mainVideo || queueItem.videoConfig?.productionConfig?.manualMainVideo || null);
     let subVideo = await resolveVideoSelection(queueItem.videoConfig?.subVideo || queueItem.videoConfig?.productionConfig?.manualSubVideo || null);
-    const mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
+      let mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
     let subVideoPath = resolveBackendPath(subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '');
     let autoSelection = null;
     let autoSelectionSource = null;
@@ -2749,26 +2980,82 @@ class VideoPipelineService {
       });
     }
 
-    const productionConfig = queueItem.videoConfig?.productionConfig || {};
-    const templateName = productionConfig.templateName || 'reaction';
-    const templateGroup = resolveTemplateGroup(templateName);
-    const mashupLog = {
-      recipe,
-      templateName,
-      templateGroup,
-      layout: productionConfig.layout || '2-3-1-3',
-      duration: Number(productionConfig.duration) || 30,
-      aspectRatio: productionConfig.aspectRatio || '9:16',
-      audioSource: productionConfig.audioSource || 'main',
-      subtitleMode: productionConfig.subtitleMode || 'none',
-      subtitleText: productionConfig.subtitleText || '',
-      subtitleContext: productionConfig.subtitleContext || '',
-      mainVideo: {
-        sourceVideoId,
-        title: queueItem.videoConfig?.sourceTitle || '',
-        path: mainVideoPath,
-        url: queueItem.videoConfig?.sourceUrl || '',
-      },
+      const productionConfig = queueItem.videoConfig?.productionConfig || {};
+      let capcutSubtitleResult = null;
+      try {
+        const shouldUseCapCut = await shouldUseCapCutCaptions({
+          productionConfig,
+          queueItem,
+          sourceVideoId,
+        });
+        if (shouldUseCapCut && mainVideoPath) {
+          await VideoQueueService.logProcess({
+            queueId,
+            stage: 'capcut-captions',
+            status: 'processing',
+            message: 'Generating captions via CapCut',
+          });
+
+          capcutSubtitleResult = await generateCapCutCaptions({
+            videoPath: mainVideoPath,
+            queueId,
+            language: productionConfig.subtitleLanguage || 'auto',
+            onStep: async (step, message) => {
+              await VideoQueueService.logProcess({
+                queueId,
+                stage: `capcut-${step}`,
+                status: 'processing',
+                message,
+              });
+            },
+          });
+
+          if (capcutSubtitleResult?.outputVideoPath) {
+            mainVideoPath = capcutSubtitleResult.outputVideoPath;
+            productionConfig.captionedVideoPath = mainVideoPath;
+            productionConfig.subtitleProvider = 'capcut';
+            productionConfig.subtitleMode = 'none';
+            productionConfig.subtitleText = '';
+            productionConfig.subtitleFilePath = '';
+            await VideoQueueService.logProcess({
+              queueId,
+              stage: 'capcut-captions',
+              status: 'success',
+              message: `CapCut captioned video saved: ${mainVideoPath}`,
+            });
+          }
+        }
+      } catch (error) {
+        await VideoQueueService.logProcess({
+          queueId,
+          stage: 'capcut-captions',
+          status: 'failed',
+          message: error.message || 'CapCut caption generation failed',
+        });
+      }
+
+      const templateName = productionConfig.templateName || 'reaction';
+      const templateGroup = resolveTemplateGroup(templateName);
+      const mashupLog = {
+        recipe,
+        templateName,
+        templateGroup,
+        layout: productionConfig.layout || '2-3-1-3',
+        duration: Number(productionConfig.duration) || 30,
+        aspectRatio: productionConfig.aspectRatio || '9:16',
+        audioSource: productionConfig.audioSource || 'main',
+        subtitleMode: productionConfig.subtitleMode || 'none',
+        subtitleText: productionConfig.subtitleText || '',
+        subtitleContext: productionConfig.subtitleContext || '',
+        subtitleFilePath: productionConfig.subtitleFilePath || '',
+        subtitleProvider: productionConfig.subtitleProvider || '',
+        captionedVideoPath: productionConfig.captionedVideoPath || '',
+        mainVideo: {
+          sourceVideoId,
+          title: queueItem.videoConfig?.sourceTitle || '',
+          path: mainVideoPath,
+          url: queueItem.videoConfig?.sourceUrl || '',
+        },
       subVideo: {
         selectionMethod: subVideo?.autoSelected ? 'auto' : 'manual',
         assetId: subVideo?.assetId || '',
@@ -2835,6 +3122,20 @@ class VideoPipelineService {
 
       const outputFileName = sanitizeFileName(queueItem.videoConfig?.outputFileName || `${queueId}.mp4`);
       const outputPath = path.join(outputDir, outputFileName);
+
+      // Infer contentType from source video for smart template selection
+      let inferredContentType = 'general';
+      if (sourceVideoId) {
+        try {
+          const sourceVideo = await TrendVideo.findById(sourceVideoId).lean();
+          if (sourceVideo) {
+            inferredContentType = this.inferContentType(sourceVideo);
+          }
+        } catch (err) {
+          // If error fetching source video, just use inferred contentType = 'general'
+        }
+      }
+
       const renderResult = await VideoMashupService.generateMashupVideo({
         mainVideoPath,
         templateVideoPath: subVideoPath,
@@ -2853,9 +3154,14 @@ class VideoPipelineService {
         backgroundAudioVolume: productionConfig.backgroundAudioVolume ?? 0.18,
         memeOverlayPath: productionConfig.memeOverlayPath || '',
         memeOverlayWindow: productionConfig.memeOverlayWindow || null,
+        watermarkEnabled: productionConfig.watermarkEnabled !== false,
+        watermarkPath: productionConfig.watermarkPath || '',
+        watermarkOpacity: productionConfig.watermarkOpacity,
+        watermarkWidth: productionConfig.watermarkWidth,
         highlightDetection: productionConfig.highlightDetection || {},
         clipExtraction: productionConfig.clipExtraction || {},
         additionalVideoPaths: productionConfig.additionalVideoPaths || [],
+        contentType: inferredContentType, // Smart template selection
       });
 
       if (!renderResult.success) {
@@ -3161,6 +3467,38 @@ class VideoPipelineService {
       return {
         success: false,
         error: error.message || 'Unexpected error during video deletion',
+      };
+    }
+  }
+
+  async getVideoTranscript(videoId) {
+    try {
+      const video = await TrendVideo.findById(videoId).select('+transcript.srt');
+      if (!video) {
+        return {
+          success: false,
+          error: 'Video not found',
+        };
+      }
+
+      const transcript = video.transcript || {};
+      return {
+        success: true,
+        videoId: video._id,
+        title: video.title,
+        platform: video.platform,
+        transcript: {
+          srt: transcript.srt || null,
+          language: transcript.language || 'unknown',
+          fetchedAt: transcript.fetchedAt || null,
+          fetchError: transcript.fetchError || null,
+        },
+        hasMissedTranscript: !transcript.srt && transcript.fetchedAt,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Failed to retrieve transcript',
       };
     }
   }

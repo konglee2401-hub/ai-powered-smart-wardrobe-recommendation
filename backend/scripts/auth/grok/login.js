@@ -300,3 +300,62 @@ export default {
   verifyGrokLogin,
   getSessionInfo
 };
+
+/**
+ * CLI Entry Point
+ * Allows script to be executed via: node login.js --capture --log-session <id>
+ * Can use --playwright flag to use Playwright instead of Puppeteer
+ */
+async function main() {
+  // Parse command-line arguments
+  const args = new Map();
+  for (let i = 2; i < process.argv.length; i += 2) {
+    const key = process.argv[i].replace(/^--/, '');
+    const value = process.argv[i + 1] || true;
+    args.set(key, value);
+  }
+
+  const logSession = args.get('log-session');
+  const capture = args.has('capture');
+  const refresh = args.has('refresh');
+  const validate = args.has('validate');
+  const usePlaywright = args.has('playwright');
+
+  try {
+    if (capture) {
+      if (usePlaywright) {
+        // Use Playwright version for better Cloudflare handling
+        console.log('🎭 Using Playwright backend for Cloudflare bypass...');
+        const { GrokSessionCapturePlaywright } = await import('./capture-session-playwright.js');
+        const captureInstance = new GrokSessionCapturePlaywright();
+        await captureInstance.captureSessionInteractive();
+      } else {
+        // Use Puppeteer version (original)
+        const { GrokSessionCapture } = await import('./capture-session.js');
+        const captureInstance = new GrokSessionCapture();
+        await captureInstance.captureSessionInteractive();
+      }
+    } else if (refresh) {
+      console.log('🔄 Refresh mode not yet implemented');
+      process.exit(1);
+    } else if (validate) {
+      console.log('✅ Validate mode not yet implemented');
+      process.exit(1);
+    } else {
+      console.log('ℹ️  No mode specified. Use --capture, --refresh, or --validate');
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('❌ Fatal error:', error.message);
+    console.error(error.stack);
+    process.exit(1);
+  }
+}
+
+// Check if this file is being run directly (not imported)
+// import.meta.url is like "file:///path/to/login.js"
+// process.argv[1] is like "/path/to/login.js"
+const scriptPath = import.meta.url.replace('file://', '').replace(/^\/([A-Z]:)/, '$1');
+if (scriptPath === process.argv[1] || process.argv[1]?.endsWith('login.js')) {
+  main();
+}

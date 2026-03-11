@@ -3,6 +3,7 @@ import connectDB from '../../config/db.js';
 import TrendSetting from '../../models/TrendSetting.js';
 import QueueScannerSettings from '../../models/QueueScannerSettings.js';
 import DEFAULT_SCORING_CONFIG from '../../constants/videoScriptScoring.js';
+import subtitleDictionaryService from '../../services/subtitleDictionaryService.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ async function run() {
         ? existingTemplateLibrary
         : { favorites: [], pinned: [], recent: [] },
       subVideoLibrarySources: mergeSubVideoLibrarySources(existingSubVideoLibrarySources),
+      subtitleDictionary: subtitleDictionaryService.SUBTITLE_DICTIONARY,
       composerDefaults: SEEDED_COMPOSER_DEFAULTS,
       templateBrowserPreferences: SEEDED_TEMPLATE_BROWSER_PREFERENCES,
     },
@@ -114,6 +116,11 @@ async function run() {
   console.log(JSON.stringify({
     templateLibrary: trendSetting.videoPipelinePreferences?.production?.templateLibrary,
     subVideoLibrarySources: trendSetting.videoPipelinePreferences?.production?.subVideoLibrarySources,
+    subtitleDictionary: {
+      templates: Object.keys(trendSetting.videoPipelinePreferences?.production?.subtitleDictionary || {}),
+      totalVariants: Object.values(trendSetting.videoPipelinePreferences?.production?.subtitleDictionary || {})
+        .reduce((sum, templates) => sum + Object.values(templates).reduce((s, themes) => s + themes.length, 0), 0),
+    },
     composerDefaults: trendSetting.videoPipelinePreferences?.production?.composerDefaults,
     templateBrowserPreferences: trendSetting.videoPipelinePreferences?.production?.templateBrowserPreferences,
     scheduler: {

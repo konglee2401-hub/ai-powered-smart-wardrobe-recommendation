@@ -1,4 +1,4 @@
-﻿import apiClient from '../config/api';
+import apiClient from '../config/api';
 
 /**
  * Unified frontend API client for the merged video pipeline workspace.
@@ -69,6 +69,7 @@ export const videoPipelineApi = {
   publishJob: (queueId, payload) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/publish`, payload)),
   publishToYoutubeAccounts: (queueId, payload) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/publish-youtube`, payload)),
   getPublishAccounts: () => unwrap(apiClient.get(`${PIPELINE_BASE}/publish-accounts`)),
+  triggerPublishSchedulerNow: () => unwrap(apiClient.post(`${PIPELINE_BASE}/publish/run-now`)),
   retryFailedJobs: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/retry-failed`, payload)),
   releaseStaleJobs: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/release-stale`, payload)),
   clearQueueJobs: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/clear`, payload)),
@@ -90,7 +91,7 @@ export const videoPipelineApi = {
   getPlayboardMetadata: () => unwrap(apiClient.get(`${SCRAPER_BASE}/playboard/metadata`)),
   getPlayboardConfigs: () => unwrap(apiClient.get(`${SCRAPER_BASE}/playboard/configs`)),
   triggerScraperJob: (type, filters = {}) =>
-    unwrap(apiClient.post(`${SCRAPER_BASE}/jobs/trigger`, null, { params: { type, ...filters } })),
+    unwrap(apiClient.post(`${SCRAPER_BASE}/jobs/trigger`, {}, { params: { type, ...filters } })),
   manualDiscoverPlayboard: (payload) =>
     unwrap(apiClient.post(`${SCRAPER_BASE}/playboard/manual-discover`, wrapPlayboardManualDiscoverPayload(payload))),
   manualDiscoverDailyhaha: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/dailyhaha/manual-discover`, payload)),
@@ -103,6 +104,9 @@ export const videoPipelineApi = {
 };
 
 export default videoPipelineApi;
+
+
+
 
 
 

@@ -344,7 +344,8 @@ class QueueScannerCronJob {
             {
               duration: 30,
               quality: 'high',
-              aspectRatio: '9:16' // YouTube Shorts
+              aspectRatio: '9:16', // YouTube Shorts
+              contentType: enrichedMetadata.contentType || 'general', // Smart template selection
             }
           );
 

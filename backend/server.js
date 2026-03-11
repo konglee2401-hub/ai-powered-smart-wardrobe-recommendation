@@ -55,6 +55,7 @@ import videoPipelineRoutes from './routes/videoPipelineRoutes.js';
 import socialMediaRoutes from './routes/socialMediaRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import queueScannerCronJob from './services/queueScannerCronJob.js';
+import publishSchedulerCronJob from './services/publishSchedulerCronJob.js';
 import { seedProviders } from './scripts/seed/seedProviders.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
@@ -342,4 +343,7 @@ server.listen(PORT, () => {
 // Set socket and request timeouts to 10 minutes for long-running operations
 server.timeout = 600000;          // 10 minutes socket timeout
 server.keepAliveTimeout = 610000; // slightly higher than socket timeout
+
+
+
 

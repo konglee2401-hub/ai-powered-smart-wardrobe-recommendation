@@ -13,6 +13,26 @@ const VIDEO_MIME_PREFIX = 'video/';
 const MANIFEST_CACHE_TTL_MS = 15 * 60 * 1000;
 const DOWNLOAD_CACHE_DIR = path.join(BACKEND_ROOT, 'media', 'video-factory-cache', 'public-drive');
 const manifestCache = new Map();
+const selectionHistoryCache = new Map(); // Track last selected videos per source
+const MAX_HISTORY_SIZE = 50; // Track last 50 selections
+
+function addToSelectionHistory(sourceId, file, maxSize = MAX_HISTORY_SIZE) {
+  if (!selectionHistoryCache.has(sourceId)) {
+    selectionHistoryCache.set(sourceId, []);
+  }
+  const history = selectionHistoryCache.get(sourceId);
+  history.unshift({ fileId: file.id, name: file.name, selectedAt: Date.now() });
+  if (history.length > maxSize) {
+    history.pop();
+  }
+}
+
+function isRecentlySelected(sourceId, fileId, recentThresholdMinutes = 60) {
+  if (!selectionHistoryCache.has(sourceId)) return false;
+  const history = selectionHistoryCache.get(sourceId);
+  const thresholdMs = recentThresholdMinutes * 60 * 1000;
+  return history.some((item) => item.fileId === fileId && (Date.now() - item.selectedAt) < thresholdMs);
+}
 
 function decodeEscapedString(value = '') {
   return String(value)
@@ -135,7 +155,7 @@ function resolveTemplateGroup(templateName = '') {
   return 'reaction';
 }
 
-function scoreFileCandidate(file, context = {}) {
+function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}) {
   const templateGroup = resolveTemplateGroup(context.templateName);
   const desiredThemes = collectThemeHints(context);
   const fileThemes = Array.from(new Set([
@@ -144,17 +164,37 @@ function scoreFileCandidate(file, context = {}) {
   ].filter(Boolean)));
 
   let score = file.mimeType?.startsWith(VIDEO_MIME_PREFIX) ? 20 : -100;
+  
+  // Template group matching
   if (file.recommendedTemplateGroups?.includes(templateGroup)) score += 25;
+  
+  // Aspect ratio preference
   if (context.aspectRatio === '9:16') score += 3;
 
+  // Theme matching
   for (const theme of desiredThemes) {
     if (fileThemes.includes(theme)) score += 18;
     else if (file.recommendedTemplateGroups?.some((group) => recommendedTemplateGroups(theme).includes(group))) score += 8;
   }
 
+  // General scoring
   if (!desiredThemes.length && file.theme !== 'general') score += 6;
   if (file.path?.length) score += Math.min(file.path.length, 6);
   if (/reel|short|clip|video/i.test(file.name || '')) score += 2;
+
+  // Folder diversity bonus - prefer videos from different folders
+  const sourceFolder = file.path?.[0];
+  if (sourceFolder && folderCounts[sourceFolder]) {
+    // Penalize files from folders that have many candidates already selected
+    const folderSelectCount = folderCounts[sourceFolder];
+    if (folderSelectCount > 2) score -= folderSelectCount * 3;
+    else if (folderSelectCount > 0) score -= folderSelectCount;
+  }
+
+  // Recent selection penalty - avoid picking same video too soon
+  if (isRecentlySelected(sourceId, file.id, 60)) {
+    score -= 999; // Severely penalize recently selected
+  }
 
   return score;
 }
@@ -370,27 +410,86 @@ class PublicDriveFolderIngestService {
     };
   }
 
-  selectBestSubVideo(manifest, context = {}) {
+  selectBestSubVideo(manifest, context = {}, sourceId = '') {
     const files = (manifest?.files || []).filter((item) => item.mimeType?.startsWith(VIDEO_MIME_PREFIX));
     if (!files.length) {
       return { success: false, error: 'No public video files found in library source' };
     }
 
+    // Count files per source folder for diversity
+    const folderCounts = {};
+    files.forEach((file) => {
+      const folder = file.path?.[0] || 'root';
+      folderCounts[folder] = (folderCounts[folder] || 0) + 1;
+    });
+
+    // Score all candidates
     const ranked = files
-      .map((file) => ({ file, score: scoreFileCandidate(file, context) }))
+      .map((file) => ({ 
+        file, 
+        score: scoreFileCandidate(file, context, sourceId, folderCounts),
+        folder: file.path?.[0] || 'root'
+      }))
+      .filter((item) => item.score > -100) // Filter out severely penalized items
       .sort((left, right) => right.score - left.score);
 
-    const shortlist = ranked.slice(0, Math.min(5, ranked.length));
-    const picked = shortlist[Math.floor(Math.random() * shortlist.length)] || ranked[0];
-    if (!picked?.file) {
-      return { success: false, error: 'Could not rank a suitable sub-video candidate' };
+    if (!ranked.length) {
+      return { success: false, error: 'Could not rank any suitable sub-video candidate' };
     }
 
+    // Diversify selection strategy:
+    // 1. If top candidate is from same folder as many previous, look for alternatives
+    // 2. Select from top 5-10, weighting towards higher scores but allowing variance
+    // 3. Add random element to top contenders
+    
+    let finalPicked = null;
+    const topCandidates = ranked.slice(0, Math.min(10, ranked.length));
+    
+    // Group by folder
+    const folderGroups = {};
+    topCandidates.forEach((candidate) => {
+      if (!folderGroups[candidate.folder]) folderGroups[candidate.folder] = [];
+      folderGroups[candidate.folder].push(candidate);
+    });
+
+    // Prefer candidates from different folders for diversity
+    const uniqueFolders = Object.keys(folderGroups);
+    if (uniqueFolders.length > 1) {
+      // Pick a random folder first, weighted by folder diversity
+      const selectedFolder = uniqueFolders[Math.floor(Math.random() * uniqueFolders.length)];
+      const folderCandidates = folderGroups[selectedFolder];
+      // Then pick from that folder's candidates
+      finalPicked = folderCandidates[Math.floor(Math.random() * folderCandidates.length)];
+    } else {
+      // If all from same folder, use weighted random with exponential decay
+      const weights = topCandidates.map((_, idx) => Math.pow(0.7, idx));
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      let random = Math.random() * totalWeight;
+      for (let i = 0; i < topCandidates.length; i++) {
+        random -= weights[i];
+        if (random <= 0) {
+          finalPicked = topCandidates[i];
+          break;
+        }
+      }
+      finalPicked = finalPicked || topCandidates[0];
+    }
+
+    if (!finalPicked?.file) {
+      finalPicked = topCandidates[0];
+    }
+
+    // Track selection
+    addToSelectionHistory(sourceId, finalPicked.file);
+
+    const shortlist = topCandidates.slice(0, Math.min(5, topCandidates.length));
     return {
       success: true,
-      file: picked.file,
-      score: picked.score,
-      candidates: shortlist,
+      file: finalPicked.file,
+      score: finalPicked.score,
+      candidates: shortlist.map((c) => c.file),
+      folderDiversity: uniqueFolders.length,
+      selectedFolder: finalPicked.folder,
       templateGroup: resolveTemplateGroup(context.templateName),
       desiredThemes: collectThemeHints(context),
     };
@@ -446,6 +545,7 @@ class PublicDriveFolderIngestService {
   }
 
   async resolveSubVideoFromSource(source = {}, context = {}) {
+    const sourceId = extractFolderId(source.url || source.folderId) || source.key || 'unknown';
     const manifest = await this.crawlPublicFolder({
       url: source.url,
       folderId: source.folderId,
@@ -456,7 +556,7 @@ class PublicDriveFolderIngestService {
     const selected = this.selectBestSubVideo(manifest, {
       ...context,
       themeHints: [...(context.themeHints || []), ...(source.themeHints || [])],
-    });
+    }, sourceId);
 
     if (!selected.success) {
       return selected;

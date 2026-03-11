@@ -55,22 +55,68 @@ class GrokSessionCapture {
     console.log('🚀 GROK SESSION CAPTURE - INTERACTIVE MODE');
     console.log('═'.repeat(80));
     console.log('\n📋 Steps:');
-    console.log('  1. Browser will open to Grok.com');
-    console.log('  2. Complete login manually (email/password or X account)');
-    console.log('  3. Navigate to home page after login completes');
-    console.log('  4. Press ENTER in this terminal when ready to capture');
-    console.log('  5. Session will be automatically saved\n');
+    console.log('  1. Fresh browser window will open (clean session)');
+    console.log('  2. Navigate to Grok.com');
+    console.log('  3. Try to login - test Cloudflare bypass');
+    console.log('  4. If login succeeds, session will be auto-captured');
+    console.log('  5. Session will be saved for future use\n');
 
     try {
-      // Launch browser
-      this.browser = await puppeteer.launch({
+      // Launch fresh browser (no profile loading)
+      console.log('🚀 Launching fresh browser (clean session)...');
+      
+      const browserArgs = [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-resources',
+        '--disable-client-side-phishing-detection',
+        '--disable-popup-blocking',
+        '--disable-plugins',
+        '--disable-extensions',
+        '--disable-sync',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-extensions',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-background-timer-throttling',
+        '--disable-breakpad',
+        '--disable-client-side-phishing-detection',
+        '--disable-component-extensions-with-background-pages',
+        '--disable-default-apps',
+        '--disable-device-discovery-notifications',
+        '--disable-extensions-file-access-check',
+        '--disable-preconnect',
+        '--disable-prompt-on-repost',
+        '--disable-renderer-backgrounding',
+        '--disable-sync',
+        '--enable-automation=false',
+        '--start-maximized'
+      ];
+
+      const launchPromise = puppeteer.launch({
         headless: false,
-        args: [
-          '--no-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-features=IsolateOrigins,site-per-process'
-        ]
+        executablePath: undefined,  // Use default Chromium
+        args: browserArgs
       });
+
+      // Set a timeout for browser launch
+      const launchTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Browser launch timeout (30s)')), 30000)
+      );
+
+      try {
+        this.browser = await Promise.race([launchPromise, launchTimeout]);
+        console.log('✅ Browser launched\n');
+      } catch (e) {
+        console.error(`❌ Browser launch failed: ${e.message}`);
+        console.log('\n⚠️  TROUBLESHOOTING:');
+        console.log('   - Run this script on a machine with a display (not headless)');
+        console.log('   - On Linux/Mac: Install xvfb for virtual display (xvfb-run node script.js)');
+        console.log('   - On Windows: Run from PowerShell/CMD directly, not through remote connection\n');
+        throw e;
+      }
 
       this.page = await this.browser.newPage();
       await this.page.setViewport({ width: 1280, height: 720 });
@@ -86,13 +132,30 @@ class GrokSessionCapture {
         console.log(`⚠️  Navigation timeout: ${e.message}`);
       }
 
-      // Wait for manual login
-      await this.waitForUserInput('Press ENTER when login is complete...');
+      // Auto-detect login with polling (no user input needed)
+      console.log('📍 Waiting for login... (auto-detecting in 5-second intervals)\n');
+      let isLoggedIn = false;
+      let attempts = 0;
+      const maxAttempts = 120; // 10 minutes (120 * 5 seconds)
 
-      // Check if logged in
-      const isLoggedIn = await this.checkLoginStatus();
+      while (!isLoggedIn && attempts < maxAttempts) {
+        attempts++;
+        await this.page.waitForTimeout(5000); // Check every 5 seconds
+
+        isLoggedIn = await this.checkLoginStatus();
+        if (isLoggedIn) {
+          console.log('✅ Login detected! Capturing session...\n');
+          break;
+        }
+
+        if (attempts % 6 === 0) { // Log every 30 seconds
+          console.log(`⏳ Still waiting for login... (${attempts * 5}s elapsed)`);
+        }
+      }
+
       if (!isLoggedIn) {
-        console.log('⚠️  Login may not be complete. Continuing anyway...\n');
+        console.log('⚠️  Login timeout after 10 minutes. Session capture cancelled.\n');
+        return;
       }
 
       // Capture session data
@@ -475,6 +538,9 @@ class GrokSessionCapture {
   }
 }
 
+// Export for importing as module
+export { GrokSessionCapture };
+
 // Main execution
 async function main() {
   const mode = process.argv[process.argv.indexOf('--mode') + 1] || 'interactive';
@@ -514,7 +580,14 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+// Only run main() if this is the entry point (being run directly),
+// not if it's being imported as a module (from login.js)
+const isEntryPoint = import.meta.url.replace('file://', '').replace(/^\/([A-Z]:)/, '$1') === process.argv[1] || 
+                     process.argv[1]?.endsWith('capture-session.js');
+
+if (isEntryPoint) {
+  main().catch(error => {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
+  });
+}

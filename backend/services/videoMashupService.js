@@ -81,6 +81,10 @@ class VideoMashupService {
         audioVolume,
         memeOverlayPath,
         memeOverlayWindow,
+        watermarkEnabled,
+        watermarkPath,
+        watermarkOpacity,
+        watermarkWidth,
         subtitleMode,
         subtitleFilePath,
         subtitleText,
@@ -89,6 +93,7 @@ class VideoMashupService {
         highlightDetection,
         clipExtraction,
         additionalVideoPaths,
+        contentType,
         dryRun = false,
       } = config;
 
@@ -111,6 +116,10 @@ class VideoMashupService {
         backgroundAudioVolume: backgroundAudioVolume ?? audioVolume ?? 0.18,
         memeOverlayPath,
         memeOverlayWindow,
+        watermarkEnabled,
+        watermarkPath,
+        watermarkOpacity,
+        watermarkWidth,
         subtitleMode: subtitleMode || 'none',
         subtitleFilePath,
         subtitleText,
@@ -119,6 +128,7 @@ class VideoMashupService {
         highlightDetection,
         clipExtraction,
         additionalVideoPaths,
+        contentType, // Smart template selection
         dryRun,
       });
 
@@ -156,6 +166,10 @@ class VideoMashupService {
       backgroundAudioVolume: config.backgroundAudioVolume ?? config.audioVolume,
       memeOverlayPath: config.memeOverlayPath,
       memeOverlayWindow: config.memeOverlayWindow,
+      watermarkEnabled: config.watermarkEnabled,
+      watermarkPath: config.watermarkPath,
+      watermarkOpacity: config.watermarkOpacity,
+      watermarkWidth: config.watermarkWidth,
       subtitleMode: config.subtitleMode,
       subtitleFilePath: config.subtitleFilePath,
       subtitleText: config.subtitleText,
@@ -166,6 +180,7 @@ class VideoMashupService {
       additionalVideoPaths: config.additionalVideoPaths,
       dryRun: config.dryRun,
       layout: config.layout,
+      contentType: config.contentType, // Smart template selection
     });
   }
 
@@ -300,5 +315,4 @@ class VideoMashupService {
 }
 
 export default new VideoMashupService();
-
 

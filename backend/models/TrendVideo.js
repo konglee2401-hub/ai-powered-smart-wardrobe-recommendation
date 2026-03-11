@@ -114,6 +114,33 @@ const TrendVideoSchema = new mongoose.Schema({
     lastPublishedAt: Date,
     lastResult: String,
   },
+  transcript: {
+    /**
+     * YouTube transcript in SRT format for voice-over and subtitle generation
+     * Automatically fetched for YouTube videos after successful download
+     */
+    srt: {
+      type: String,
+      default: null,
+      select: false,  // Exclude from default queries due to size
+    },
+    language: {
+      type: String,
+      enum: ['vi', 'en', 'mixed', 'auto', null],
+      default: 'mixed',
+      description: 'Language code of the transcript',
+    },
+    fetchedAt: {
+      type: Date,
+      default: null,
+      description: 'When transcript was fetched from YouTube',
+    },
+    fetchError: {
+      type: String,
+      default: null,
+      description: 'Error message if transcript fetch failed',
+    },
+  },
   channel: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'TrendChannel',
@@ -124,6 +151,7 @@ const TrendVideoSchema = new mongoose.Schema({
 TrendVideoSchema.index({ platform: 1, videoId: 1 }, { unique: true });
 TrendVideoSchema.index({ topic: 1, downloadStatus: 1, discoveredAt: -1 });
 TrendVideoSchema.index({ 'driveSync.status': 1, 'production.queueStatus': 1, discoveredAt: -1 });
+TrendVideoSchema.index({ 'transcript.fetchedAt': 1 }, { sparse: true });
 
 // Always register with explicit collection name
 // If already registered, mongoose will reuse the existing model

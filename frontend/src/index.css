@@ -54,7 +54,7 @@
   --apple-fill-strong: rgba(120, 120, 128, 0.32);
   --z-base: 0;
   --z-content: 10;
-  --z-nav: 70;
+  --z-nav: 30;
   --z-overlay: 60;
   --z-modal: 100;
   --z-toast: 120;
@@ -4275,6 +4275,10 @@ html[data-theme="light"] {
 
 .app-layer-modal {
   z-index: var(--z-modal);
+}
+
+.app-layer-modal-top {
+  z-index: 9999;
 }
 
 .app-layer-toast {

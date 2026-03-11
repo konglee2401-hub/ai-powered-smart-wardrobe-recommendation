@@ -3,7 +3,8 @@ import multer from 'multer';
 import {
   getProviders,
   generateImages,
-  browserGenerateImages
+  browserGenerateImages,
+  resumeImageGeneration
 } from '../controllers/imageGenController.js';
 
 const router = express.Router();
@@ -33,5 +34,8 @@ router.post('/browser-generate', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
 ]), browserGenerateImages);
+
+// Resume image generation
+router.post('/resume/:sessionId', resumeImageGeneration);
 
 export default router;

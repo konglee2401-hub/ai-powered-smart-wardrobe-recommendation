@@ -2169,6 +2169,11 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
         errorCode: videoGenerationResult?.errorCode || null
       }
     });
+    if (videoGenerationResult?.errorCode === 'insufficient_credits') {
+      const creditError = new Error(videoGenerationResult?.error || 'Insufficient credits for video generation');
+      creditError.code = 'insufficient_credits';
+      throw creditError;
+    }
     // ============================================================
     // STEP 5: ?? AUTO-SAVE GENERATED ASSETS TO DATABASE
     // ============================================================

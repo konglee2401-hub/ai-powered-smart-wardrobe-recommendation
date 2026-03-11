@@ -58,7 +58,58 @@ const queueScannerSettingsSchema = new mongoose.Schema({
     type: String,
     enum: ['shorts', 'video'],
     default: 'shorts'
+  },
+  publishEnabled: {
+    type: Boolean,
+    default: false
+  },
+  publishIntervalMinutes: {
+    type: Number,
+    default: 1440,
+    min: 1,
+    max: 10080
+  },
+  publishScheduleMode: {
+    type: String,
+    enum: ['manual', 'hourly', 'daily'],
+    default: 'daily'
+  },
+  publishEveryHours: {
+    type: Number,
+    default: 24,
+    min: 1,
+    max: 24
+  },
+  publishDailyTime: {
+    type: String,
+    default: '09:00'
+  },
+  publishScheduleLabel: {
+    type: String,
+    default: 'Manual only'
+  },
+  publishGapMinutes: {
+    type: Number,
+    default: 30,
+    min: 1,
+    max: 1440
+  },
+  publishMaxPerRun: {
+    type: Number,
+    default: 20,
+    min: 1,
+    max: 500
+  },
+  publishFilters: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  publishAccountIds: {
+    type: [String],
+    default: []
   }
 }, { timestamps: true });
 
 export default mongoose.model('QueueScannerSettings', queueScannerSettingsSchema);
+
+

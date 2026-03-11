@@ -45,6 +45,11 @@ node scripts/auth/chatgpt/login.js       # Auto-login to ChatGPT
 node scripts/auth/chatgpt/debug-auth.js  # Debug auth issues
 ```
 
+### CapCut
+```bash
+node scripts/auth/capcut/capture-session.js  # Manual login + session capture
+```
+
 ### Grok (X.AI)
 ```bash
 node scripts/auth/grok/login.js          # Auto-login to Grok

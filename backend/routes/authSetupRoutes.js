@@ -637,4 +637,108 @@ router.post('/run/command', (req, res) => {
   }
 });
 
+/**
+ * Grok Authentication Endpoints
+ */
+
+router.post('/run/grok-auto-login', (req, res) => {
+  try {
+    const script = path.join(__dirname, '..', 'scripts', 'auth', 'grok', 'login.js');
+    if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
+    
+    // Create a unique session ID for this auto-login run
+    const sessionId = randomUUID();
+    
+    // Initialize logging session
+    LogStreamingService.createSession(sessionId);
+    LogStreamingService.addLog(sessionId, 'Starting Grok Auto-Login Process...', 'info');
+    
+    const args = [
+      '--log-session', sessionId,
+      '--log-server', `http://localhost:${process.env.PORT || 5000}`
+    ];
+    if (req.query?.mode === 'refresh') {
+      args.push('--refresh');
+      LogStreamingService.addLog(sessionId, 'Mode: Refresh existing session', 'info');
+    }
+    if (req.query?.mode === 'validate') {
+      args.push('--validate');
+      LogStreamingService.addLog(sessionId, 'Mode: Validate session', 'info');
+    }
+    if (req.query?.mode === 'capture') {
+      args.push('--capture');
+      LogStreamingService.addLog(sessionId, 'Mode: Capture new session (manual login)', 'info');
+    }
+    
+    // Support Playwright backend for better Cloudflare handling
+    if (req.query?.playwright === 'true' || req.query?.backend === 'playwright') {
+      args.push('--playwright');
+      LogStreamingService.addLog(sessionId, 'Backend: Playwright (Cloudflare optimized)', 'info');
+    } else {
+      LogStreamingService.addLog(sessionId, 'Backend: Puppeteer (default)', 'info');
+    }
+    
+    const child = spawn(process.execPath, [script, ...args], {
+      cwd: path.join(__dirname, '..'),
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe']  // stdin: ignore (no input needed), stdout/stderr: pipe (logging)
+    });
+
+    // Attach child process to log session for runtime control
+    try {
+      LogStreamingService.attachProcess(sessionId, child, path.basename(script));
+    } catch (e) {
+      console.warn('Failed to attach process to LogStreamingService', e.message || e);
+    }
+
+    // Capture script output
+    let scriptOutput = '';
+    child.stdout?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'info');
+    });
+
+    child.stderr?.on('data', (data) => {
+      scriptOutput += data.toString();
+      LogStreamingService.addLog(sessionId, data.toString().trim(), 'warn');
+    });
+
+    child.on('error', (error) => {
+      LogStreamingService.addLog(sessionId, `Process error: ${error.message}`, 'error');
+      LogStreamingService.endSession(sessionId, 'failed');
+    });
+
+    child.on('exit', (code) => {
+      if (code === 0) {
+        LogStreamingService.addLog(sessionId, 'Grok Auto-Login completed successfully ✓', 'success');
+        LogStreamingService.endSession(sessionId, 'completed');
+      } else {
+        LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
+        LogStreamingService.endSession(sessionId, 'failed');
+      }
+      // ensure attached process record is cleaned up
+      try { LogStreamingService.detachProcess(sessionId); } catch (e) {}
+    });
+
+    res.json({ success: true, sessionId, pid: child.pid });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/status/grok-session', (req, res) => {
+  try {
+    const sessionPath = path.join(__dirname, '..', '.sessions', 'grok-session-complete.json');
+    const exists = fs.existsSync(sessionPath);
+    let meta = null;
+    if (exists) {
+      const stat = fs.statSync(sessionPath);
+      meta = { size: stat.size, mtime: stat.mtime };
+    }
+    res.json({ success: true, exists, path: exists ? sessionPath : null, meta });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

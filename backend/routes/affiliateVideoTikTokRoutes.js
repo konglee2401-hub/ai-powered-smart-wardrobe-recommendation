@@ -10,6 +10,7 @@
 
 import express from 'express';
 import SessionLogService from '../services/sessionLogService.js';
+import workflowStateService from '../services/workflowStateService.js';
 import affiliateVideoTikTokService from '../services/affiliateVideoTikTokService.js';
 import GoogleFlowAutomationService from '../services/googleFlowAutomationService.js';
 import GoogleDriveOAuthService from '../services/googleDriveOAuth.js';
@@ -41,78 +42,7 @@ const formatBytes = (bytes) => {
   return `${value.toFixed(precision)} ${units[index]}`;
 };
 
-
-// 💾 In-memory flow state storage (in production, use Redis)
-const flowStates = new Map();
-const step2Jobs = new Map();
-const cloneWorkflowState = (value) => JSON.parse(JSON.stringify(value || null));
-
-function sanitizeWorkflowState(value) {
-  if (value == null) return value;
-  if (Buffer.isBuffer(value)) return undefined;
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => sanitizeWorkflowState(item))
-      .filter((item) => item !== undefined);
-  }
-  if (typeof value !== 'object') return value;
-
-  const next = {};
-  for (const [key, nestedValue] of Object.entries(value)) {
-    if (['characterImageBuffer', 'productImageBuffer', 'audioBuffer'].includes(key)) continue;
-    const sanitized = sanitizeWorkflowState(nestedValue);
-    if (sanitized !== undefined) {
-      next[key] = sanitized;
-    }
-  }
-  return next;
-}
-
-async function persistFlowStateSnapshot(flowId, flowType = 'affiliate-tiktok') {
-  const flowState = flowStates.get(flowId);
-  if (!flowState) return null;
-
-  const logger = new SessionLogService(flowId, flowType);
-  await logger.init();
-  const sanitizedState = sanitizeWorkflowState({ ...flowState, flowId });
-  await logger.storeWorkflowState(sanitizedState, { merge: false });
-  return sanitizedState;
-}
-
-function deriveResumeTarget(flowState = {}) {
-  if (!flowState || typeof flowState !== 'object') {
-    return { nextStep: 1, canContinue: false, shouldPoll: false, reason: 'missing-state' };
-  }
-
-  const status = String(flowState.status || '').toLowerCase();
-  const step2Status = String(flowState.step2?.status || '').toLowerCase();
-  const hasStep1 = Boolean(flowState.step1?.analysis);
-  const hasStep2 = step2Status === 'completed' || Boolean(flowState.step2?.frameLibrary?.length);
-  const hasStep3 = Boolean(flowState.step3?.segmentPlan?.length || flowState.step3?.videoScripts?.length);
-  const hasStep4 = Boolean(flowState.step4?.videoPath || flowState.step4?.segmentVideos?.length);
-  const hasStep5 = Boolean(flowState.step5?.voiceoverText || flowState.step5?.audioPath);
-  const hasStep6 = Boolean(flowState.step6?.finalPackage);
-
-  if (status === 'completed' || hasStep6) {
-    return { nextStep: 6, canContinue: false, shouldPoll: false, reason: 'completed' };
-  }
-
-  if (status.includes('processing') || status.includes('generating') || status === 'resuming' || status === 'action_required') {
-    return {
-      nextStep: hasStep5 ? 6 : hasStep4 ? 5 : hasStep3 ? 4 : hasStep2 ? 3 : hasStep1 ? 2 : 1,
-      canContinue: false,
-      shouldPoll: true,
-      reason: 'in-progress'
-    };
-  }
-
-  if (!hasStep1) return { nextStep: 1, canContinue: false, shouldPoll: false, reason: 'missing-step1' };
-  if (!hasStep2) return { nextStep: 2, canContinue: true, shouldPoll: false, reason: 'resume-step2' };
-  if (!hasStep3) return { nextStep: 3, canContinue: true, shouldPoll: false, reason: 'resume-step3' };
-  if (!hasStep4) return { nextStep: 4, canContinue: true, shouldPoll: false, reason: 'resume-step4' };
-  if (!hasStep5) return { nextStep: 5, canContinue: true, shouldPoll: false, reason: 'resume-step5' };
-  return { nextStep: 6, canContinue: true, shouldPoll: false, reason: 'resume-step6' };
-}
+// 💾 Use workflowStateService for state management (replicas all state ops)
 
 function parseJsonField(value, fallback = null) {
   if (value == null || value === '') return fallback;
@@ -201,7 +131,7 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
   let logger = null;
 
   try {
-    let flowState = flowStates.get(flowId);
+    let flowState = workflowStateService.getFlowState(flowId);
     if (!flowState?.step1) {
       throw new Error('Step 1 not completed. Run Step 1 before Step 2.');
     }
@@ -235,7 +165,7 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
       productFocus
     });
 
-    flowStates.set(flowId, {
+    const updatedState = {
       ...flowState,
       status: 'step2-processing',
       step2: {
@@ -267,10 +197,11 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
       step4: null,
       step5: null,
       step6: null
-    });
+    };
+    workflowStateService.setFlowState(flowId, updatedState);
 
     const prompts = framePlan.frames.map((frame) => frame.prompt);
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, updatedState, 'video-generation');
     const imageGenService = new GoogleFlowAutomationService({
       type: 'image',
       aspectRatio,
@@ -311,9 +242,9 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
 
     const { hookStart, showcaseEnd } = pickLegacyFrameKeys(frameLibrary);
     const step2Duration = ((Date.now() - startedAt) / 1000).toFixed(2);
-    flowState = flowStates.get(flowId) || flowState;
+    flowState = workflowStateService.getFlowState(flowId) || flowState;
 
-    flowStates.set(flowId, {
+    const completedState = {
       ...flowState,
       status: 'step2-complete',
       step2: {
@@ -341,9 +272,10 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
         },
         duration: parseFloat(step2Duration)
       }
-    });
+    };
+    workflowStateService.setFlowState(flowId, completedState);
 
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, completedState, 'video-generation');
     await logger.info('Step 2 frame library generation complete', 'step-2-complete', {
       frames: frameLibrary.length,
       storyboardTemplate: storyboardBlueprint.templateKey,
@@ -352,8 +284,8 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
     await logger.endStage('step-2-generate-images', true);
   } catch (error) {
     const step2Duration = ((Date.now() - startedAt) / 1000).toFixed(2);
-    const flowState = flowStates.get(flowId) || {};
-    flowStates.set(flowId, {
+    const flowState = workflowStateService.getFlowState(flowId) || {};
+    const errorState = {
       ...flowState,
       status: 'failed',
       step2: {
@@ -368,16 +300,15 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
         },
         duration: parseFloat(step2Duration)
       }
-    });
+    };
+    workflowStateService.setFlowState(flowId, errorState);
 
     console.error(`\n? STEP 2 ERROR [${flowId}] after ${step2Duration}s:`, error.message);
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, errorState, 'video-generation');
     if (logger) {
       await logger.error(`Step 2 failed: ${error.message}`, 'step-2-error', { stack: error.stack, duration: parseFloat(step2Duration) });
       await logger.endStage('step-2-generate-images', false);
     }
-  } finally {
-    step2Jobs.delete(flowId);
   }
 }
 
@@ -595,7 +526,7 @@ router.post('/step-1-analyze', upload.fields([
       newOptionsCreated: newOptionsCreated.length
     });
 
-    flowStates.set(flowId, {
+    const step1State = {
       step1: {
         analysis,
         analysisText,
@@ -611,9 +542,10 @@ router.post('/step-1-analyze', upload.fields([
       },
       status: 'step1-complete',
       startedAt: new Date().toISOString()
-    });
+    };
+    workflowStateService.setFlowState(flowId, step1State);
 
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, step1State, 'video-generation');
     res.json({
       success: true,
       flowId,
@@ -665,7 +597,7 @@ router.post('/step-2-generate-images', async (req, res) => {
 
     if (!flowId) throw new Error('flowId is required');
 
-    const flowState = flowStates.get(flowId);
+    const flowState = workflowStateService.getFlowState(flowId);
     if (!flowState?.step1) {
       throw new Error('Step 1 not completed. Run Step 1 before Step 2.');
     }
@@ -680,7 +612,7 @@ router.post('/step-2-generate-images', async (req, res) => {
       });
     }
 
-    if (step2Jobs.has(flowId) || flowState.step2?.status === 'processing') {
+    if (flowState.step2?.status === 'processing') {
       return res.status(202).json({
         success: true,
         flowId,
@@ -692,9 +624,8 @@ router.post('/step-2-generate-images', async (req, res) => {
     }
 
     const jobPromise = runStep2FrameGenerationJob(flowId, req.body);
-    step2Jobs.set(flowId, jobPromise);
 
-    const queuedState = flowStates.get(flowId) || flowState;
+    const queuedState = workflowStateService.getFlowState(flowId) || flowState;
     return res.status(202).json({
       success: true,
       flowId,
@@ -739,7 +670,7 @@ router.post('/step-3-deep-analysis', async (req, res) => {
     await logger.startStage('step-3-deep-analysis');
     await logger.info('Starting Step 3: Segment Planning', 'step-3-init');
 
-    const flowState = flowStates.get(flowId);
+    const flowState = workflowStateService.getFlowState(flowId);
     if (!flowState?.step2 || !flowState?.step1) {
       throw new Error('Previous steps not found. Please run Steps 1 and 2 first.');
     }
@@ -838,7 +769,7 @@ router.post('/step-3-deep-analysis', async (req, res) => {
       }))
       : [];
 
-    flowStates.set(flowId, {
+    const step3State = {
       ...flowState,
       step3: {
         storyboardBlueprint,
@@ -862,9 +793,10 @@ router.post('/step-3-deep-analysis', async (req, res) => {
       step5: null,
       step6: null,
       status: 'step3-complete'
-    });
+    };
+    workflowStateService.setFlowState(flowId, step3State);
 
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, step3State, 'video-generation');
     await logger.info('Step 3 segment planning complete', 'step-3-complete', {
       segments: segmentPlan.length,
       hashtags: hashtags.length,
@@ -926,7 +858,7 @@ router.post('/step-4-generate-video', async (req, res) => {
     await logger.startStage('step-4-generate-video');
     await logger.info('Starting Step 4: Sequential Frames Video Generation', 'step-4-init');
 
-    const flowState = flowStates.get(flowId);
+    const flowState = workflowStateService.getFlowState(flowId);
     if (!flowState?.step3 || !flowState?.step2) {
       throw new Error('Previous steps not found. Please run Steps 1-3 first.');
     }
@@ -1009,7 +941,7 @@ router.post('/step-4-generate-video', async (req, res) => {
 
     const step4Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    flowStates.set(flowId, {
+    const step4State = {
       ...flowState,
       step4: {
         videoPath: primaryVideoPath,
@@ -1026,9 +958,10 @@ router.post('/step-4-generate-video', async (req, res) => {
         duration: parseFloat(step4Duration)
       },
       status: 'step4-complete'
-    });
+    };
+    workflowStateService.setFlowState(flowId, step4State);
 
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, step4State, 'video-generation');
     await logger.info('Step 4 sequential video generation complete', 'step-4-complete', {
       segments: segmentVideos.length,
       stitchedVideoPath: stitchedVideoPath || null,
@@ -1087,7 +1020,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
     await logger.info('Starting Step 5: Voiceover Generation', 'step-5-init');
 
     // Get flow state
-    const flowState = flowStates.get(flowId);
+    const flowState = workflowStateService.getFlowState(flowId);
     if (!flowState?.step3) {
       throw new Error('Step 3 analysis not found. Please run Steps 1-3 first.');
     }
@@ -1141,7 +1074,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
     const step5Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     // Update flow state - Include language and text for logging
-    flowStates.set(flowId, {
+    const step5State = {
       ...flowState,
       step5: {
         audioPath,
@@ -1154,10 +1087,11 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
         wordCount: voiceoverText.split(' ').length,
         duration: parseFloat(step5Duration)
       }
-    });
+    };
+    workflowStateService.setFlowState(flowId, step5State);
 
     // Log comprehensive info
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, step5State, 'video-generation');
     await logger.info(`Step 5 voiceover generation complete`, 'step-5-complete', {
       audio_path: audioPath,
       audio_size: fs.statSync(audioPath).size,
@@ -1220,7 +1154,7 @@ router.post('/step-6-finalize', async (req, res) => {
     await logger.info('Starting Step 6: Finalization', 'step-6-init');
 
     // Get flow state
-    const flowState = flowStates.get(flowId);
+    const flowState = workflowStateService.getFlowState(flowId);
     if (!flowState) {
       throw new Error('Flow state not found');
     }
@@ -1316,7 +1250,7 @@ router.post('/step-6-finalize', async (req, res) => {
       .reduce((sum, key) => sum + (flowState[key].duration || 0), 0);
 
     // Update flow state with comprehensive final info
-    flowStates.set(flowId, {
+    const step6State = {
       ...flowState,
       step6: {
         finalPackage,
@@ -1324,10 +1258,11 @@ router.post('/step-6-finalize', async (req, res) => {
       },
       status: 'completed',
       totalDuration: totalDuration
-    });
+    };
+    workflowStateService.setFlowState(flowId, step6State);
 
     // Log comprehensive final summary
-    await persistFlowStateSnapshot(flowId);
+    await workflowStateService.persistWorkflowState(flowId, step6State, 'video-generation');
     await logger.info(`Step 6 finalization complete`, 'step-6-complete', {
       final_package_type: finalPackage.type,
       final_package_contents: {
@@ -1432,30 +1367,46 @@ router.post('/resume/:flowId', async (req, res) => {
       return res.status(400).json({ success: false, error: 'flowId is required' });
     }
 
-    const session = await SessionLog.findOne({ sessionId: flowId }).select('sessionId status workflowState error updatedAt');
-    if (!session?.workflowState) {
-      return res.status(404).json({ success: false, error: 'No resumable workflow state found in DB', flowId });
+    const resumeIntent = req.body?.resumeIntent || '';
+    if (resumeIntent !== 'fe-manual-resume') {
+      console.warn('[affiliate-resume] blocked: missing explicit FE resume intent', { flowId, resumeIntent });
+      return res.status(400).json({ success: false, error: 'Resume requires explicit FE intent', flowId });
     }
 
-    const workflowState = cloneWorkflowState(session.workflowState);
-    workflowState.status = workflowState.status || session.status || 'in-progress';
-    flowStates.set(flowId, workflowState);
+    // Load workflow state from service
+    const workflowState = await workflowStateService.loadWorkflowState(flowId);
+    if (!workflowState || Object.keys(workflowState).length === 0) {
+      console.warn('[affiliate-resume] no workflow state found', { flowId });
+      return res.status(404).json({ success: false, error: 'No resumable workflow state found', flowId });
+    }
 
-    const resume = deriveResumeTarget(workflowState);
+    // Validate workflow state is resumable
+    const resumability = workflowStateService.isResumable(workflowState, 'video-generation');
+    if (!resumability.resumable) {
+      console.warn('[affiliate-resume] blocked: workflow not resumable', { flowId, reason: resumability.reason });
+      return res.status(409).json({ 
+        success: false, 
+        error: `Workflow is not resumable: ${resumability.reason}`, 
+        flowId 
+      });
+    }
 
-    return res.json({
-      success: true,
-      flowId,
-      status: workflowState.status,
+    // Cache the state for active processing
+    workflowStateService.setFlowState(flowId, workflowState);
+
+    // Derive the resume target
+    const resume = workflowStateService.deriveResumeTarget(workflowState, 'video-generation');
+    console.log('[affiliate-resume] restored flow state', { flowId, status: workflowState.status, reason: resume.reason });
+
+    // Build response
+    const response = workflowStateService.createResumeResponse({
+      sessionId: flowId,
       workflowState,
-      sessionStatus: session.status,
-      error: session.error || null,
-      updatedAt: session.updatedAt,
-      nextStep: resume.nextStep,
-      canContinue: resume.canContinue,
-      shouldPoll: resume.shouldPoll,
-      reason: resume.reason
+      resume,
+      dbStatus: workflowState.status
     });
+
+    return res.json(response);
   } catch (error) {
     console.error("Resume failed: ", error);
     return res.status(500).json({ success: false, error: error.message });
@@ -1464,7 +1415,7 @@ router.post('/resume/:flowId', async (req, res) => {
 router.get('/progress/:flowId', (req, res) => {
   const { flowId } = req.params;
 
-  const flowState = flowStates.get(flowId);
+  const flowState = workflowStateService.getFlowState(flowId);
   if (!flowState) {
     return res.status(404).json({
       success: false,
@@ -1510,72 +1461,19 @@ router.get('/progress/:flowId', (req, res) => {
 router.get('/status/:flowId', async (req, res) => {
   const { flowId } = req.params;
 
-  let session = null;
-  let flowState = flowStates.get(flowId);
+  const flowState = workflowStateService.getFlowState(flowId);
   if (!flowState) {
-    session = await SessionLog.findOne({ sessionId: flowId }).select('workflowState status');
+    const session = await SessionLog.findOne({ sessionId: flowId }).select('status updatedAt workflowState');
     if (session?.workflowState) {
-      flowState = cloneWorkflowState(session.workflowState);
-      flowState.status = flowState.status || session.status || 'in-progress';
-      flowStates.set(flowId, flowState);
-    }
-  }
-
-  if (!flowState) {
-    const previewState = affiliateVideoTikTokService.getFlowPreview(flowId);
-    if (previewState && previewState.status && previewState.status !== 'not-found') {
-      const frameLibrary = (previewState.step2?.items || []).map((item, index) => ({
-        imagePath: item?.path || item?.href || item?.url || null,
-        href: item?.href || item?.url || null,
-        frameKey: item?.id || ('frame-' + (index + 1)),
-        segmentIndex: item?.segmentIndex ?? index,
-        segmentName: item?.label || item?.segmentName || ('Frame ' + (index + 1)),
-        role: item?.role || null,
-        purpose: item?.purpose || null,
-        focus: item?.focus || null
-      }));
-      const segmentVideos = (previewState.step4?.videos || []).map((item, index) => ({
-        path: item?.path || item?.href || item?.url || null,
-        segmentIndex: item?.segmentIndex ?? index,
-        segmentName: item?.label || item?.segmentName || ('Segment ' + (index + 1))
-      }));
-
-      flowState = {
-        status: session?.status || previewState.status || 'in-progress',
-        startedAt: previewState.startedAt || null,
-        step1: previewState.step1 ? {
-          analysis: previewState.step1.analysis || null,
-          analysisText: previewState.step1.summary || previewState.step1.analysisText || null,
-          characterImagePath: previewState.step1.characterImage?.path || previewState.step1.characterImage?.previewUrl || null,
-          productImagePath: previewState.step1.productImage?.path || previewState.step1.productImage?.previewUrl || null
-        } : null,
-        step2: previewState.step2 ? {
-          status: previewState.status?.includes('step2') ? 'processing' : (frameLibrary.length > 0 ? 'completed' : null),
-          wearingPrompt: previewState.step1?.wearingPrompt || null,
-          holdingPrompt: previewState.step1?.holdingPrompt || null,
-          wearingImagePath: previewState.step2.images?.wearing || previewState.step2.wearingImagePath || null,
-          holdingImagePath: previewState.step2.images?.holding || previewState.step2.holdingImagePath || null,
-          frameLibrary,
-          progress: {
-            totalFrames: previewState.step2.imageCount || frameLibrary.length,
-            completedFrames: previewState.step2.completedCount || frameLibrary.filter((item) => item.imagePath).length
-          },
-          error: previewState.step2.error || null
-        } : null,
-        step3: previewState.step3 ? {
-          videoScripts: previewState.step3.videoScripts || [],
-          hashtags: previewState.step3.hashtags || [],
-          voiceoverScript: previewState.step3.voiceoverScript || ''
-        } : null,
-        step4: previewState.step4 ? {
-          segmentVideos,
-          error: previewState.step4.error || null
-        } : null,
-        step5: previewState.step5 ? {
-          voiceoverText: previewState.step5.ttsText || previewState.step5.voiceoverText || ''
-        } : null
-      };
-      flowStates.set(flowId, flowState);
+      console.warn('[affiliate-status] flow state not in memory; resume required', { flowId, status: session.status });
+      return res.status(409).json({
+        success: false,
+        error: 'Flow not active in memory. Resume required.',
+        requiresResume: true,
+        flowId,
+        sessionStatus: session.status,
+        updatedAt: session.updatedAt
+      });
     }
   }
 

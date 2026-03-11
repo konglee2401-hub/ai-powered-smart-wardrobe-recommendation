@@ -75,6 +75,11 @@ const VideoPipelinePreferencesSchema = new mongoose.Schema({
         notes: 'Default public sub-video library source for mashup and shorts automation.',
       }]),
     },
+    subtitleDictionary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      description: 'Customizable subtitle text pools by template type and theme. Null = use default service dictionary.',
+    },
     composerDefaults: {
       type: ComposerDefaultsSchema,
       default: () => ({

@@ -28,3 +28,20 @@ export async function captureGenerationSession(sessionId, payload = {}) {
   const response = await axiosInstance.post(`/debug-sessions/${sessionId}/capture`, payload);
   return response.data;
 }
+
+export async function resumeSession(sessionId, flowType = 'video-generation') {
+  // Route resume call based on flow type
+  let endpoint;
+  
+  if (flowType === 'image-generation') {
+    endpoint = `/imageGen/resume/${sessionId}`;
+  } else {
+    // Default to affiliate video tiktok resume endpoint for video/one-click flows
+    endpoint = `/ai/affiliate-video-tiktok/resume/${sessionId}`;
+  }
+
+  const response = await axiosInstance.post(endpoint, {
+    resumeIntent: 'fe-manual-resume',
+  });
+  return response.data;
+}

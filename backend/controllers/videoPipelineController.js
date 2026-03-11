@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Video Pipeline Controller
  *
  * Controller dedicated to the unified operator workspace. Each endpoint maps
@@ -220,6 +220,11 @@ class VideoPipelineController {
     res.json(result);
   });
 
+  static triggerPublishSchedulerNow = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.triggerPublishSchedulerNow();
+    res.json(result);
+  });
+
   static getConnections = asyncHandler(async (_req, res) => {
     const result = await videoPipelineService.getConnections();
     res.json(result);
@@ -293,6 +298,20 @@ class VideoPipelineController {
     }
     res.json(result);
   });
+
+  /**
+   * Get transcript for a source video
+   * Useful for reviewing YouTube transcripts before production
+   */
+  static getVideoTranscript = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+    const result = await videoPipelineService.getVideoTranscript(videoId);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    res.json(result);
+  });
 }
 
 export default VideoPipelineController;
+

@@ -7,10 +7,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import fs from 'fs';
 import path from 'path';
+import subtitleDictionaryService from './subtitleDictionaryService.js';
 
 class AutoSubtitleService {
   constructor() {
-    this.client = new Anthropic();
+    this.disabled = !process.env.ANTHROPIC_API_KEY;
+    this.client = this.disabled ? null : new Anthropic();
     this.model = 'claude-3-5-sonnet-20241022';
   }
 
@@ -20,11 +22,29 @@ class AutoSubtitleService {
    */
   async generateAffiliateSubtitles(videoContext, options = {}) {
     try {
+      if (this.disabled) {
+        const fallback = this._generateFallbackSubtitles(videoContext, options);
+        return {
+          success: true,
+          subtitles: fallback,
+          format: 'json',
+          duration: options.duration || 15,
+          platform: options.platform || 'youtube-shorts',
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            provider: 'fallback',
+            reason: 'anthropic-disabled',
+          },
+        };
+      }
+
       const {
         duration = 15,
         affiliateKeywords = [],
         platform = 'youtube-shorts', // youtube-shorts, tiktok, instagram-reels
-        style = 'engaging' // engaging, professional, casual
+        style = 'engaging', // engaging, professional, casual
+        templateName = 'reaction',
+        theme = 'general'
       } = options;
 
       const prompt = this._buildSubtitlePrompt(
@@ -108,8 +128,8 @@ class AutoSubtitleService {
       let vttContent = 'WEBVTT\n\n';
       
       subtitles.forEach(sub => {
-        const startTime = this._formatTime(sub.startTime);
-        const endTime = this._formatTime(sub.endTime);
+        const startTime = this._formatTime(sub.startTime, true);
+        const endTime = this._formatTime(sub.endTime, true);
         
         vttContent += `${startTime} --> ${endTime}\n`;
         vttContent += `${sub.text}\n\n`;
@@ -310,39 +330,79 @@ Generate compelling captions that maximize conversion for affiliate marketing.`;
   }
 
   _generateFallbackSubtitles(content, options = {}) {
-    const { duration = 15 } = options;
-    const segmentCount = Math.max(3, Math.ceil(duration / 5));
-    const segmentDuration = duration / segmentCount;
+    const { 
+      duration = 15,
+      templateName = 'reaction',
+      theme = 'general'
+    } = options;
 
-    const fallbackTexts = [
-      '👀 CHECK THIS OUT',
-      '🔥 EXCLUSIVE DEAL',
-      '💰 LIMITED TIME',
-      '🎯 BEST PRICE',
-      '💳 CLICK LINK',
-      '✨ GET DISCOUNT',
-      '🏆 TOP CHOICE',
-      '⚡ ACT FAST'
-    ];
+    // Use intelligent subtitle dictionary instead of hardcoded marketing text
+    let subtitles = subtitleDictionaryService.generateFallbackSubtitles(
+      duration,
+      templateName,
+      theme
+    );
 
-    return Array.from({ length: segmentCount }).map((_, idx) => ({
-      index: idx + 1,
-      startTime: Math.floor(idx * segmentDuration),
-      endTime: Math.floor((idx + 1) * segmentDuration),
-      text: fallbackTexts[idx % fallbackTexts.length],
-      duration: segmentDuration,
-      isAffiliateTerm: true,
-      isCallout: true
-    }));
+    // SANITIZE: Remove phrases that don't fit this template
+    const sanitizedSubtitles = subtitles.map(sub => ({
+      ...sub,
+      text: this._sanitizeSubtitleText(sub.text, templateName)
+    })).filter(sub => sub.text.trim().length > 0);
+
+    return sanitizedSubtitles.length > 0 ? sanitizedSubtitles : subtitles;
   }
 
-  _formatTime(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
+  /**
+   * Remove phrases that don't fit the template
+   */
+  _sanitizeSubtitleText(text, templateName) {
+    // Reaction/Meme templates (humor) should NOT use marketing phrases
+    if (['reaction', 'meme'].includes(templateName)) {
+      const marketingPhrases = [
+        'CHECK THIS OUT',
+        'GET YOURS NOW',
+        'LIMITED OFFER',
+        'BUY NOW',
+        'CLICK HERE',
+        'MUST HAVE',
+        'EXCLUSIVE DEAL',
+        'SHOP NOW'
+      ];
+      
+      let sanitized = text;
+      for (const phrase of marketingPhrases) {
+        const regex = new RegExp(`\\b${phrase}\\b`, 'gi');
+        sanitized = sanitized.replace(regex, '');
+      }
+      return sanitized;
+    }
 
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+    // Product/Marketing templates should NOT use humor phrases alone
+    if (['marketing', 'highlight', 'highlight-pip'].includes(templateName)) {
+      const humorPhrases = [
+        'HILARIOUS', 'TOO FUNNY', 'CAN\'T STOP LAUGHING', 'MEME', 'RELATABLE'
+      ];
+      
+      let sanitized = text;
+      for (const phrase of humorPhrases) {
+        const regex = new RegExp(`\\b${phrase}\\b`, 'gi');
+        sanitized = sanitized.replace(regex, '');
+      }
+      return sanitized;
+    }
+
+    return text;
+  }
+
+  _formatTime(seconds = 0, useDot = false) {
+    const safeSeconds = Math.max(0, Number(seconds) || 0);
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const secs = Math.floor(safeSeconds % 60);
+    const ms = Math.floor((safeSeconds % 1) * 1000);
+
+    const stamp = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+    return useDot ? stamp.replace(',', '.') : stamp;
   }
 }
 

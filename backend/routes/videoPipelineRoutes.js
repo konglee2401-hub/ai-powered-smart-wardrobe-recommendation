@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Unified video pipeline routes used by the merged Shorts/Reels + Production UI.
  * The route group intentionally mirrors the operator workflow:
  * dashboard -> sources -> channels -> videos -> jobs -> publish -> settings
@@ -32,6 +32,7 @@ router.post('/videos/upload-pending', VideoPipelineController.uploadPendingVideo
 router.post('/videos/trigger-pending-downloads', VideoPipelineController.triggerPendingDownloads);
 router.post('/videos/:videoId/upload', VideoPipelineController.uploadVideo);
 router.delete('/videos/:videoId', VideoPipelineController.deleteVideo);
+router.get('/videos/:videoId/transcript', VideoPipelineController.getVideoTranscript);
 router.get('/source-videos', VideoPipelineController.listVideos);
 router.post('/source-videos/queue', VideoPipelineController.queueVideos);
 router.post('/source-videos/queue-folder', VideoPipelineController.queueVideosToFolder);
@@ -52,6 +53,7 @@ router.post('/jobs/:queueId/start', VideoPipelineController.startJob);
 router.post('/jobs/:queueId/publish', VideoPipelineController.publishJob);
 router.post('/jobs/:queueId/publish-youtube', VideoPipelineController.publishToYoutubeAccounts);
 router.get('/publish-accounts', VideoPipelineController.getPublishAccounts);
+router.post('/publish/run-now', VideoPipelineController.triggerPublishSchedulerNow);
 router.get('/connections', VideoPipelineController.getConnections);
 router.post('/connections', VideoPipelineController.addConnection);
 router.post('/connections/:accountId/verify', VideoPipelineController.verifyConnection);
@@ -62,3 +64,4 @@ router.get('/settings/scheduler-runtime', VideoPipelineController.getSchedulerRu
 router.put('/settings', VideoPipelineController.saveSettings);
 
 export default router;
+

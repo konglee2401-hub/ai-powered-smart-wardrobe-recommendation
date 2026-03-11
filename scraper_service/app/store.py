@@ -123,6 +123,59 @@ def upsert_video(payload):
     return normalize(doc)
 
 
+def update_video_transcript(video_id, transcript_srt, transcript_language='mixed'):
+    """
+    Update video with fetched transcript
+    
+    Args:
+        video_id: MongoDB ObjectId of video
+        transcript_srt: SRT formatted transcript text
+        transcript_language: Language of transcript (default: 'mixed' for vi/en)
+    
+    Returns:
+        Normalized video document
+    """
+    doc = videos.find_one_and_update(
+        {'_id': oid(video_id)},
+        {
+            '$set': {
+                'transcript.srt': transcript_srt if transcript_srt else None,
+                'transcript.language': transcript_language,
+                'transcript.fetchedAt': now_utc(),
+                'transcript.fetchError': None,
+                'updatedAt': now_utc(),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    return normalize(doc)
+
+
+def update_video_transcript_error(video_id, error_message):
+    """
+    Store transcript fetch error for later retry/debugging
+    
+    Args:
+        video_id: MongoDB ObjectId of video
+        error_message: Error string (truncated to 500 chars)
+    
+    Returns:
+        Normalized video document
+    """
+    doc = videos.find_one_and_update(
+        {'_id': oid(video_id)},
+        {
+            '$set': {
+                'transcript.fetchError': error_message[:500] if error_message else None,
+                'transcript.fetchedAt': now_utc(),
+                'updatedAt': now_utc(),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    return normalize(doc)
+
+
 def log_job(job_type, status, **kwargs):
     base_keys = {'topic', 'platform', 'itemsFound', 'itemsDownloaded', 'duration', 'error'}
     extra = {k: v for k, v in kwargs.items() if k not in base_keys}

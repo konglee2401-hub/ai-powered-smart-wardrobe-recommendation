@@ -1,6 +1,9 @@
 import axios from 'axios';
 import Replicate from 'replicate';
 import { IMAGE_PROVIDERS } from '../config/imageProviders.js';
+import SessionLogService from '../services/sessionLogService.js';
+import workflowStateService from '../services/workflowStateService.js';
+import SessionLog from '../models/SessionLog.js';
 
 // ==================== GET PROVIDERS ====================
 
@@ -340,3 +343,63 @@ export const browserGenerateImages = async (req, res) => {
     });
   }
 };
+
+// ==================== RESUME IMAGE GENERATION ====================
+
+export const resumeImageGeneration = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    const resumeIntent = req.body?.resumeIntent || '';
+    if (resumeIntent !== 'fe-manual-resume') {
+      console.warn('[imageGen-resume] blocked: missing explicit FE resume intent', { sessionId, resumeIntent });
+      return res.status(400).json({ success: false, error: 'Resume requires explicit FE intent', sessionId });
+    }
+
+    // Load workflow state from service (cache or DB)
+    const workflowState = await workflowStateService.loadWorkflowState(sessionId);
+    if (!workflowState || Object.keys(workflowState).length === 0) {
+      console.warn('[imageGen-resume] no workflow state found', { sessionId });
+      return res.status(404).json({ success: false, error: 'No resumable workflow state found', sessionId });
+    }
+
+    // Validate workflow state is resumable
+    const resumability = workflowStateService.isResumable(workflowState, 'image-generation');
+    if (!resumability.resumable) {
+      console.warn('[imageGen-resume] blocked: workflow not resumable', { sessionId, reason: resumability.reason });
+      return res.status(409).json({ 
+        success: false, 
+        error: `Workflow is not resumable: ${resumability.reason}`, 
+        sessionId 
+      });
+    }
+
+    // Cache the state for active generation
+    workflowStateService.setFlowState(sessionId, workflowState);
+
+    // Derive the resume target
+    const resume = workflowStateService.deriveResumeTarget(workflowState, 'image-generation');
+    console.log('[imageGen-resume] restored flow state', { sessionId, status: workflowState.status, reason: resume.reason });
+
+    // Build response
+    const response = workflowStateService.createResumeResponse({
+      sessionId,
+      workflowState,
+      resume,
+      dbStatus: workflowState.status
+    });
+
+    return res.json(response);
+
+  } catch (error) {
+    console.error('[imageGen-resume] error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to resume image generation'
+    });
+  }
+};
+

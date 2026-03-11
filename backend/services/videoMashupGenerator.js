@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import AutoSubtitleService from './autoSubtitleService.js';
+import TemplateSelectionEngine from './templateSelectionEngine.js';
 import { VIDEO_FACTORY_BASE_TEMPLATES, VIDEO_FACTORY_TEMPLATE_SEEDS, VIDEO_FACTORY_TEMPLATES } from './videoFactoryTemplateCatalog.js';
 
 const execFileAsync = promisify(execFile);
@@ -112,6 +113,7 @@ class VideoMashupGenerator {
     this.outputDir = path.join(this.projectRoot, 'media', 'mashups');
     this.tempDir = path.join(this.projectRoot, 'media', 'temp');
     this.factoryCacheDir = path.join(this.projectRoot, 'media', 'video-factory-cache');
+    this.defaultWatermarkPath = path.join(this.projectRoot, 'assets', 'watermark', 'Logo-KG.png');
     this.ffmpegPath = this._findFFmpegPath();
     this.ffprobePath = this._findFFprobePath();
     this.subtitleService = new AutoSubtitleService();
@@ -156,6 +158,21 @@ class VideoMashupGenerator {
         fs.mkdirSync(dir, { recursive: true });
       }
     });
+  }
+
+  resolveWatermarkPath(candidate = '') {
+    if (candidate) {
+      const resolved = path.isAbsolute(candidate) ? candidate : path.join(this.projectRoot, candidate);
+      if (fs.existsSync(resolved)) {
+        return resolved;
+      }
+    }
+
+    if (this.defaultWatermarkPath && fs.existsSync(this.defaultWatermarkPath)) {
+      return this.defaultWatermarkPath;
+    }
+
+    return '';
   }
 
   listTemplates() {
@@ -464,6 +481,8 @@ class VideoMashupGenerator {
       subtitleStyle = 'engaging',
       platform = 'youtube-shorts',
       subtitleOutputPath = '',
+      templateName = 'reaction',
+      theme = 'general',
     } = options;
 
     if (subtitleFilePath && fs.existsSync(subtitleFilePath)) {
@@ -492,10 +511,12 @@ class VideoMashupGenerator {
           affiliateKeywords,
           platform,
           style: subtitleStyle,
+          templateName,
+          theme,
         });
         subtitles = generated.subtitles || [];
       } catch {
-        subtitles = this.buildSubtitlesFromText(videoContext || 'AI video factory clip', duration);
+        subtitles = this.buildSubtitlesFromText(videoContext || 'AI video factory clip', duration, templateName, theme);
       }
     }
 
@@ -529,7 +550,7 @@ class VideoMashupGenerator {
     };
   }
 
-  buildSubtitlesFromText(text, duration = 30) {
+  buildSubtitlesFromText(text, duration = 30, templateName = 'reaction', theme = 'general') {
     const words = String(text || '')
       .split(/\s+/)
       .map((item) => item.trim())
@@ -699,7 +720,16 @@ class VideoMashupGenerator {
   }
 
   buildVideoFilterGraph(job) {
-    const { template, canvas, memeOverlayIndex, subtitleFilePath, videoInputs } = job;
+    const {
+      template,
+      canvas,
+      memeOverlayIndex,
+      subtitleFilePath,
+      videoInputs,
+      watermarkIndex,
+      watermarkPath,
+      watermarkOpacity,
+    } = job;
     const graph = this.buildBaseVideoGraph(template, canvas, videoInputs.length);
     const filterParts = [...graph.filterParts];
     let currentLabel = graph.outputLabel;
@@ -728,6 +758,21 @@ class VideoMashupGenerator {
         `[${currentLabel}]subtitles='${escapedPath}':force_style='FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=${marginBottom}'[final_v]`
       );
       currentLabel = 'final_v';
+    }
+
+    if (watermarkIndex != null && watermarkPath) {
+      const watermarkWidth = clampNumber(
+        job.watermarkWidth || template.overlay?.watermarkWidth,
+        80,
+        canvas.width,
+        Math.round(canvas.width * 0.16)
+      );
+      const opacity = clampNumber(watermarkOpacity ?? template.overlay?.watermarkOpacity, 0.1, 1, 0.85);
+      const margin = clampNumber(template.canvas?.safeMargin, 0, 200, 36);
+
+      filterParts.push(`[${watermarkIndex}:v]scale=${watermarkWidth}:-1:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opacity}[wm]`);
+      filterParts.push(`[${currentLabel}][wm]overlay=${margin}:${margin}[with_watermark]`);
+      currentLabel = 'with_watermark';
     }
 
     return {
@@ -812,6 +857,14 @@ class VideoMashupGenerator {
       args.push('-i', job.memeOverlayPath);
     }
 
+    if (job.watermarkPath) {
+      const isImage = IMAGE_EXTENSIONS.has(path.extname(job.watermarkPath).toLowerCase());
+      if (isImage) {
+        args.push('-loop', '1');
+      }
+      args.push('-i', job.watermarkPath);
+    }
+
     if (job.backgroundAudioPath) {
       args.push('-stream_loop', '-1', '-i', job.backgroundAudioPath);
     }
@@ -857,7 +910,7 @@ class VideoMashupGenerator {
       quality = 'high',
       aspectRatio = '9:16',
       audioSource = 'main',
-      templateName = DEFAULT_TEMPLATE_NAME,
+      templateName,
       templateOverrides = {},
       outputPath = '',
       outputFileName = '',
@@ -865,6 +918,10 @@ class VideoMashupGenerator {
       backgroundAudioVolume = config.audioVolume ?? 0.18,
       memeOverlayPath = '',
       memeOverlayWindow = null,
+      watermarkEnabled = false,
+      watermarkPath = '',
+      watermarkOpacity,
+      watermarkWidth,
       subtitleMode = 'none',
       highlightDetection = {},
       subtitleFilePath = '',
@@ -872,6 +929,8 @@ class VideoMashupGenerator {
       videoContext = '',
       affiliateKeywords = [],
       clipExtraction = {},
+      contentType = 'general',
+      theme,
     } = config;
 
     if (!mainVideoPath || !fs.existsSync(mainVideoPath)) {
@@ -882,7 +941,25 @@ class VideoMashupGenerator {
       throw new Error(`Sub video not found: ${subVideoPath}`);
     }
 
-    const template = await this.loadTemplate(templateName, templateOverrides);
+    // 🧠 SMART TEMPLATE SELECTION
+    let selectedTemplateInfo = {};
+    let finalTemplateName = templateName;
+    let finalTheme = theme;
+
+    if (!templateName) {
+      selectedTemplateInfo = TemplateSelectionEngine.selectTemplate(contentType, { templateName, theme });
+      finalTemplateName = selectedTemplateInfo.templateName;
+      finalTheme = selectedTemplateInfo.subtitleTheme;
+      console.log(`[Template Selection] Content: ${contentType} → Template: ${finalTemplateName} (Theme: ${finalTheme})`);
+    } else {
+      const validation = TemplateSelectionEngine.validateCombination(templateName, contentType);
+      if (validation.warning) {
+        console.warn(validation.warning);
+      }
+      finalTheme = theme || TemplateSelectionEngine.TEMPLATE_MAPPING[contentType]?.subtitleTheme || 'general';
+    }
+
+    const template = await this.loadTemplate(finalTemplateName || DEFAULT_TEMPLATE_NAME, templateOverrides);
     if (memeOverlayWindow) {
       template.meme = {
         ...(template.meme || {}),
@@ -929,6 +1006,8 @@ class VideoMashupGenerator {
       affiliateKeywords,
       platform: config.platform || 'youtube-shorts',
       subtitleStyle: config.subtitleStyle || 'engaging',
+      templateName: finalTemplateName,
+      theme: finalTheme,
     }, resolvedDuration);
 
     if (!subtitleResult.success) {
@@ -960,9 +1039,14 @@ class VideoMashupGenerator {
       })),
     ];
 
-    const memeOverlayIndex = memeOverlayPath && fs.existsSync(memeOverlayPath) ? videoInputs.length : null;
+    const resolvedWatermarkPath = watermarkEnabled ? this.resolveWatermarkPath(watermarkPath) : '';
+    const hasMemeOverlay = Boolean(memeOverlayPath && fs.existsSync(memeOverlayPath));
+    const hasWatermark = Boolean(resolvedWatermarkPath);
+
+    const memeOverlayIndex = hasMemeOverlay ? videoInputs.length : null;
+    const watermarkIndex = hasWatermark ? videoInputs.length + (hasMemeOverlay ? 1 : 0) : null;
     const backgroundAudioIndex = backgroundAudioPath && fs.existsSync(backgroundAudioPath)
-      ? videoInputs.length + (memeOverlayIndex != null ? 1 : 0)
+      ? videoInputs.length + (hasMemeOverlay ? 1 : 0) + (hasWatermark ? 1 : 0)
       : null;
 
     return {
@@ -976,6 +1060,10 @@ class VideoMashupGenerator {
       backgroundAudioVolume,
       memeOverlayPath: memeOverlayPath && fs.existsSync(memeOverlayPath) ? memeOverlayPath : '',
       memeOverlayIndex,
+      watermarkPath: resolvedWatermarkPath,
+      watermarkIndex,
+      watermarkOpacity,
+      watermarkWidth,
       backgroundAudioIndex,
       subtitleFilePath: subtitleResult.subtitleFilePath || '',
       outputPath: resolvedOutputPath,
@@ -1000,6 +1088,7 @@ class VideoMashupGenerator {
         subtitleMode,
         hasBackgroundAudio: Boolean(backgroundAudioPath && fs.existsSync(backgroundAudioPath)),
         hasMemeOverlay: Boolean(memeOverlayPath && fs.existsSync(memeOverlayPath)),
+        hasWatermark,
         audioSource,
       },
     };
@@ -1271,6 +1360,3 @@ class VideoMashupGenerator {
 }
 
 export default new VideoMashupGenerator();
-
-
-

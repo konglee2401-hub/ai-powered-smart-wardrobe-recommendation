@@ -28,6 +28,7 @@ export default function SetupAuthentication() {
   const [active, setActive] = useState('google-flow');
   const [gfStatus, setGfStatus] = useState(null);
   const [cgptStatus, setCgptStatus] = useState(null);
+  const [grokStatus, setGrokStatus] = useState(null);
   const [gdCreds, setGdCreds] = useState({ clientId: '', clientSecret: '', redirectUri: '' });
   const [ytCreds, setYtCreds] = useState({ clientId: '', clientSecret: '', redirectUri: '' });
   const [saving, setSaving] = useState(false);
@@ -41,12 +42,14 @@ export default function SetupAuthentication() {
 
   const loadStatuses = async () => {
     try {
-      const [gf, cg] = await Promise.all([
+      const [gf, cg, gr] = await Promise.all([
         axiosInstance.get('/auth-setup/status/google-flow-session'),
         axiosInstance.get('/auth-setup/status/chatgpt-session'),
+        axiosInstance.get('/auth-setup/status/grok-session'),
       ]);
       setGfStatus(gf.data);
       setCgptStatus(cg.data);
+      setGrokStatus(gr.data);
     } catch {}
   };
 
@@ -143,7 +146,7 @@ export default function SetupAuthentication() {
         // Show log viewer with the session ID
         setLogSessionId(response.data.sessionId);
         setLogViewerVisible(true);
-        setMessage('ðŸ“‹ Log viewer opened - monitoring auto-login process...');
+        setMessage('📋 Log viewer opened - monitoring auto-login process...');
         // Check status after auto-login completes
         setTimeout(loadStatuses, 5000);
       } else {
@@ -152,6 +155,27 @@ export default function SetupAuthentication() {
       }
     } catch (error) {
       setMessage('Error starting auto-login: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const runGrokLogin = async (mode, usePlaywright = false) => {
+    setMessage('');
+    try {
+      const url = `/auth-setup/run/grok-auto-login?mode=${mode || ''}${usePlaywright ? '&playwright=true' : ''}`;
+      const response = await axiosInstance.post(url);
+      if (response.data?.sessionId) {
+        // Show log viewer with the session ID
+        setLogSessionId(response.data.sessionId);
+        setLogViewerVisible(true);
+        setMessage(`📋 Log viewer opened - monitoring Grok process ${usePlaywright ? '(Playwright)' : '(Puppeteer)'}...`);
+        // Check status after process completes
+        setTimeout(loadStatuses, 5000);
+      } else {
+        setMessage('Grok process started');
+        setTimeout(loadStatuses, 4000);
+      }
+    } catch (error) {
+      setMessage('Error starting Grok process: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -222,6 +246,12 @@ export default function SetupAuthentication() {
               description={t('authSetup.sections.chatgpt.desc')}
               active={active === 'chatgpt'}
               onClick={() => setActive('chatgpt')}
+            />
+            <SectionCard
+              title="Grok AI"
+              description="Auto-login & session management"
+              active={active === 'grok'}
+              onClick={() => setActive('grok')}
             />
             <SectionCard
               title={t('authSetup.sections.drive.title')}
@@ -307,6 +337,60 @@ export default function SetupAuthentication() {
                     )}
                   </div>
                   <div className="text-sm text-gray-400">{t('authSetup.chatgpt.verifyNote')} {cgptStatus?.path || 'backend/data/chatgpt-profiles/default/session.json'}</div>
+                </div>
+              )}
+
+              {active === 'grok' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-lg font-semibold">🤖 Grok AI Authentication</div>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => runGrokLogin()} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs flex items-center gap-1">
+                        <Play className="w-4 h-4" /> Auto-Login
+                      </button>
+                      <button onClick={() => runGrokLogin('refresh')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1">
+                        <RefreshCw className="w-4 h-4" /> Refresh
+                      </button>
+                      <button onClick={() => runGrokLogin('validate')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">
+                        Validate
+                      </button>
+                      <button onClick={() => runGrokLogin('capture')} className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">
+                        Capture (Puppeteer)
+                      </button>
+                      <button onClick={() => runGrokLogin('capture', true)} className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-xs" title="Better Cloudflare handling">
+                        🎭 Capture (Playwright)
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-300">
+                    Manage Grok AI authentication, sessions, and browser automation. Use capture to initiate manual login through browser, auto-login to restore from saved session.
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span>Session Status:</span>
+                    {grokStatus?.exists ? (
+                      <span className="flex items-center gap-1 text-green-400">
+                        <CheckCircle className="w-4 h-4" /> Session Present
+                        {grokStatus?.meta?.mtime && <span className="text-xs text-gray-400 ml-2">({new Date(grokStatus.meta.mtime).toLocaleDateString()})</span>}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-red-400"><AlertCircle className="w-4 h-4" /> No Session</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Session file: {grokStatus?.path || 'backend/.sessions/grok-session-complete.json'}
+                  </div>
+                  
+                  <div className="p-3 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
+                    <div className="font-semibold text-blue-300 mb-2">💡 How it works:</div>
+                    <ul className="list-disc list-inside text-blue-300 space-y-1 text-xs">
+                      <li><strong>Capture:</strong> Open browser and perform manual login - session will be auto-saved</li>
+                      <li><strong>Capture (Playwright):</strong> Better for Cloudflare bypass - use if Puppeteer fails</li>
+                      <li><strong>Auto-Login:</strong> Restore saved session automatically (fastest)</li>
+                      <li><strong>Refresh:</strong> Update/refresh existing session tokens</li>
+                      <li><strong>Validate:</strong> Check if current session is valid and working</li>
+                      <li>All operations show real-time progress in the log viewer</li>
+                    </ul>
+                  </div>
                 </div>
               )}
 

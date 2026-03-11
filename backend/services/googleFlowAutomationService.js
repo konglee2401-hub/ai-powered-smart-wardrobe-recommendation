@@ -426,6 +426,13 @@ class GoogleFlowAutomationService {
 
   _classifyGenerationFailure(error) {
     const message = error?.message || '';
+    if (error?.code === 'insufficient_credits' || /insufficient credits|out of credits|no credits/i.test(message)) {
+      return {
+        errorCode: 'insufficient_credits',
+        actionRequired: 'purchase_credits'
+      };
+    }
+
     if (/reCAPTCHA evaluation failed/i.test(message)) {
       return {
         errorCode: 'google_flow_recaptcha_failed',
@@ -1881,6 +1888,23 @@ class GoogleFlowAutomationService {
     await this.page.waitForTimeout(600);
   }
 
+  async _detectVideoCreditsExhausted() {
+    try {
+      return await this.page.evaluate(() => {
+        const alertIcon = document.querySelector('img[src*="flow_alert_sphere.svg"]');
+        if (!alertIcon) return false;
+        const root = alertIcon.closest('div')?.parentElement || document;
+        const candidates = Array.from(root.querySelectorAll('button[type="button"]'));
+        const videoButton = candidates.find((btn) => (btn.textContent || '').toLowerCase().includes('video'));
+        if (!videoButton) return false;
+        const hasOverlay = Boolean(videoButton.querySelector('[data-type="button-overlay"]'));
+        return hasOverlay;
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+
   async generateVideo(videoPrompt, primaryImagePath, secondaryImagePath, options = {}) {
     if (this.debugMode) {
       console.log('\n?? [DEBUG] generateVideo() is disabled (debug mode)');
@@ -2000,6 +2024,12 @@ class GoogleFlowAutomationService {
       }
 
       await reportProgress('enter-prompt-complete', { promptLength: videoPrompt?.length || 0 });
+      const creditBlocked = await this._detectVideoCreditsExhausted();
+      if (creditBlocked) {
+        const creditError = new Error('Insufficient credits for video generation');
+        creditError.code = 'insufficient_credits';
+        throw creditError;
+      }
       await reportProgress('submit-prompt-start');
       this._resetGenerationApiState();
       const submitted = await this._delegateSubmitPrompt();
@@ -2072,6 +2102,4 @@ class GoogleFlowAutomationService {
 }
 
 export default GoogleFlowAutomationService;
-
-
 

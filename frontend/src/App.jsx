@@ -11,6 +11,7 @@ import {
 import { Toaster } from 'react-hot-toast';
 
 import Navbar from './components/Navbar';
+import { NavbarCollapseProvider } from './context/NavbarCollapseContext';
 import { pageRoutes, redirectRoutes } from './config/appRoutes';
 
 function PageTitle() {
@@ -105,36 +106,38 @@ function App() {
   );
 
   return (
-    <Router>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 2400,
-          style: toasterStyle,
-        }}
-      />
-      <Routes>
-        <Route element={<PageLayout theme={theme} onToggleTheme={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))} />}>
-          {pageRoutes.map(({ path, Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={(
-                <Suspense fallback={<RouteFallback />}>
-                  <Component />
-                </Suspense>
-              )}
-            />
+    <NavbarCollapseProvider>
+      <Router>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 2400,
+            style: toasterStyle,
+          }}
+        />
+        <Routes>
+          <Route element={<PageLayout theme={theme} onToggleTheme={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))} />}>
+            {pageRoutes.map(({ path, Component }) => (
+              <Route
+                key={path}
+                path={path}
+                element={(
+                  <Suspense fallback={<RouteFallback />}>
+                    <Component />
+                  </Suspense>
+                )}
+              />
+            ))}
+          </Route>
+
+          {redirectRoutes.map(({ path, to }) => (
+            <Route key={path} path={path} element={<Navigate to={to} replace />} />
           ))}
-        </Route>
 
-        {redirectRoutes.map(({ path, to }) => (
-          <Route key={path} path={path} element={<Navigate to={to} replace />} />
-        ))}
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </NavbarCollapseProvider>
   );
 }
 
