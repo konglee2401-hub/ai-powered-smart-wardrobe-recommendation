@@ -86,6 +86,7 @@ export function mergePublishUploadConfig(uploadConfig = {}, generated = {}) {
   if (!hasProp('description') && generated.description) merged.description = generated.description;
   if (!hasProp('tags') && Array.isArray(generated.tags)) merged.tags = generated.tags;
   if (!hasProp('hashtags') && Array.isArray(generated.hashtags)) merged.hashtags = generated.hashtags;
+  if (!hasProp('visibility') && generated.visibility) merged.visibility = generated.visibility;
 
   return merged;
 }

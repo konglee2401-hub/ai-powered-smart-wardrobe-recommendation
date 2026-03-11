@@ -38,8 +38,15 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
   const isLightTheme = theme === 'light';
   const { shouldCollapseNavbar } = useContext(NavbarCollapseContext) || {};
 
-  // Force collapse when in video-pipeline
-  const effectiveIsCollapsed = isCollapsed || shouldCollapseNavbar;
+  // Initialize collapse state based on shouldCollapseNavbar, but allow user to override
+  useEffect(() => {
+    if (shouldCollapseNavbar && !isCollapsed) {
+      setIsCollapsed(true);
+    }
+  }, [shouldCollapseNavbar]);
+
+  // User can toggle regardless of shouldCollapseNavbar
+  const effectiveIsCollapsed = isCollapsed;
 
   const generationSubmenuPaths = useMemo(
     () => ['/', '/video-generation', '/voice-over', '/generate/one-click'],

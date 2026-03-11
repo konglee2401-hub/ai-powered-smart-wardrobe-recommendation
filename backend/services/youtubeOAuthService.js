@@ -10,6 +10,7 @@
  * - YOUTUBE_OAUTH_REDIRECT_URI
  */
 
+import fs from 'fs';
 import { google } from 'googleapis';
 import SocialMediaAccount from '../models/SocialMediaAccount.js';
 
@@ -304,6 +305,65 @@ class YouTubeOAuthService {
     } catch (error) {
       console.error(`❌ Failed to get access token: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Upload a video to YouTube using OAuth credentials
+   * @param {Object} account - SocialMediaAccount
+   * @param {Object} videoData - { filePath|videoFilePath, title, description, tags, visibility }
+   */
+  async uploadVideo(account, videoData = {}) {
+    try {
+      const filePath = videoData.filePath || videoData.videoFilePath;
+      if (!filePath) {
+        return { success: false, error: 'Missing video file path' };
+      }
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: `Video file not found: ${filePath}` };
+      }
+
+      const accessToken = await this.getValidAccessToken(account);
+      this.oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: account.credentials?.refreshToken || undefined,
+      });
+
+      const youtube = google.youtube({ version: 'v3', auth: this.oauth2Client });
+      const title = videoData.title || 'Generated Video';
+      const description = videoData.description || '';
+      const tags = Array.isArray(videoData.tags) ? videoData.tags : [];
+      const visibility = videoData.visibility || 'public';
+
+      const response = await youtube.videos.insert({
+        part: ['snippet', 'status'],
+        requestBody: {
+          snippet: {
+            title,
+            description,
+            tags,
+          },
+          status: {
+            privacyStatus: visibility,
+          },
+        },
+        media: {
+          body: fs.createReadStream(filePath),
+        },
+      });
+
+      account.lastPostTime = new Date();
+      account.totalUploads = (account.totalUploads || 0) + 1;
+      await account.save();
+
+      return {
+        success: true,
+        videoId: response?.data?.id,
+        data: response?.data,
+      };
+    } catch (error) {
+      console.error(`❌ Upload failed: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
 }

@@ -5,6 +5,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  RefreshCcw,
   XCircle,
   Trash2,
   Plus,
@@ -125,6 +126,35 @@ export default function SocialAccountManager() {
       }
     } catch (err) {
       showNotification('error', `Connection failed: ${err.message}`);
+      setConnectingPlatform(null);
+    }
+  };
+
+  const handleReconnectYoutube = async (accountId) => {
+    try {
+      setConnectingPlatform(`youtube-${accountId}`);
+      const response = await fetch(`${API_URL}/shorts-reels/youtube/oauth/start`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to get OAuth URL');
+      }
+
+      if (data.authUrl) {
+        console.log('🔐 Opening OAuth in new tab...');
+        window.open(data.authUrl, '_blank', 'width=500,height=600');
+      } else {
+        throw new Error('No OAuth URL returned');
+      }
+    } catch (err) {
+      showNotification('error', `Reconnect failed: ${err.message}`);
+    } finally {
       setConnectingPlatform(null);
     }
   };
@@ -284,8 +314,10 @@ export default function SocialAccountManager() {
                       key={account._id}
                       account={account}
                       onDelete={() => setSelectedForDelete(account._id)}
+                      onReconnect={() => handleReconnectYoutube(account._id)}
                       statusPill={getStatusPill(account)}
                       getStatusPillClasses={getStatusPillClasses}
+                      isReconnecting={connectingPlatform === `youtube-${account._id}`}
                     />
                   ))}
                 </div>
@@ -311,7 +343,7 @@ export default function SocialAccountManager() {
 /**
  * Account Card Component
  */
-function AccountCard({ account, onDelete, statusPill, getStatusPillClasses }) {
+function AccountCard({ account, onDelete, onReconnect, statusPill, getStatusPillClasses, isReconnecting }) {
   return (
     <div className="video-pipeline-surface rounded-3xl border p-5 transition hover:border-opacity-80 flex flex-col h-full">
       <div className="space-y-4">
@@ -409,7 +441,16 @@ function AccountCard({ account, onDelete, statusPill, getStatusPillClasses }) {
         )}
 
         {/* Bottom Actions */}
-        <div className="mt-auto pt-3 border-t border-slate-200 flex justify-end">
+        <div className="mt-auto pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+          <button
+            onClick={onReconnect}
+            disabled={isReconnecting}
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100/60 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Reconnect account"
+          >
+            {isReconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+            Reconnect
+          </button>
           <button
             onClick={onDelete}
             disabled={!account.isActive}

@@ -9,11 +9,18 @@ i18n
   .use(initReactI18next)
   .init({
     resources: {
-      vi: { translation: vi },
-      en: { translation: en },
+      vi: {
+        translation: { ...vi },
+        productionHistory: vi.productionHistory,
+      },
+      en: {
+        translation: { ...en },
+        productionHistory: en.productionHistory,
+      },
     },
     fallbackLng: 'en',
     defaultNS: 'translation',
+    ns: ['translation', 'productionHistory'],
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],

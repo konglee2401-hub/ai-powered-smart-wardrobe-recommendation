@@ -8,6 +8,7 @@
  */
 
 import VideoPipelineJob from '../models/VideoPipelineJob.js';
+import notificationService from './notificationService.js';
 
 const PRIORITY_ORDER = { high: 1, normal: 2, low: 3 };
 
@@ -290,6 +291,48 @@ class VideoQueueService {
 
       await job.save();
 
+      if (oldStatus !== status) {
+        const title = job.videoConfig?.sourceTitle || job.title || queueId;
+        const notifyPayloads = {
+          processing: {
+            type: 'queue.processing',
+            title: 'Queue processing',
+            message: `${title} is processing`,
+            severity: 'info',
+            source: 'video-pipeline',
+          },
+          ready: {
+            type: 'queue.completed',
+            title: 'Mashup completed',
+            message: `${title} completed successfully`,
+            severity: 'success',
+            source: 'video-pipeline',
+          },
+          failed: {
+            type: 'queue.failed',
+            title: 'Mashup failed',
+            message: `${title} failed during processing`,
+            severity: 'error',
+            source: 'video-pipeline',
+          },
+          uploaded: {
+            type: 'publish.completed',
+            title: 'Publish completed',
+            message: `${title} published successfully`,
+            severity: 'success',
+            source: 'publish',
+          },
+        };
+        const notify = notifyPayloads[status];
+        if (notify) {
+          await notificationService.createNotification({
+            ...notify,
+            queueId,
+            meta: { queueId, status },
+          });
+        }
+      }
+
       return {
         success: true,
         oldStatus,
@@ -366,6 +409,19 @@ class VideoQueueService {
       });
 
       await job.save();
+
+      if (!willRetry) {
+        const title = job.videoConfig?.sourceTitle || job.title || queueId;
+        await notificationService.createNotification({
+          type: 'queue.failed',
+          title: 'Mashup failed',
+          message: `${title} failed: ${message}`,
+          severity: 'error',
+          source: 'video-pipeline',
+          queueId,
+          meta: { queueId, stage, message },
+        });
+      }
 
       return {
         success: true,

@@ -98,6 +98,7 @@ const DEFAULT_SETTINGS = {
     publishFilters: { status: 'ready', platform: '', source: '', recipe: '', channel: '', minViews: 0 },
     publishGapMinutes: 30,
     publishMaxPerRun: 20,
+    publishVisibility: 'public',
     publishAccountIds: [],
     templateSources: [],
   },
@@ -1167,6 +1168,19 @@ export default function VideoPipeline() {
     });
   };
 
+  const saveSettingsSection = async (sectionKey) => {
+    await runAction(`save-settings-${sectionKey}`, async () => {
+      const payload = {
+        discovery: settings.discovery || {},
+        production: settings.production || {},
+      };
+      const result = await videoPipelineApi.saveSettings(payload);
+      setSettings(result.settings || DEFAULT_SETTINGS);
+      toast.success(t('videoPipeline.settings_saved_section', { section: sectionKey }));
+      await Promise.allSettled([loadSettings(), loadSchedulerRuntime()]);
+    });
+  };
+
   const retryFailedQueueJobs = async () => {
     await runAction('retry-failed-jobs', async () => {
       const result = await videoPipelineApi.retryFailedJobs({ maxRetries: 3 });
@@ -1405,7 +1419,7 @@ export default function VideoPipeline() {
       {activeSection === 'settings' ? (
         <button onClick={saveSettings} className={getActionButtonClass('violet')} disabled={Boolean(busyAction)}>
           <CheckCircle2 className="h-4 w-4" />
-          {t('videoPipeline.save_settings')}
+          {t('videoPipeline.save_all')}
         </button>
       ) : null}
       {activeSection === 'queue' ? (
@@ -2038,7 +2052,7 @@ export default function VideoPipeline() {
                 >
                   {t('videoPipeline.previous')}
                 </button>
-                <select value={videoPagination.limit} onChange={(e) => { setVideoPagination((prev) => ({ ...prev, limit: Number(e.target.value), page: 1 })); loadVideos(1); }} className={INPUT_CLASS + ' w-16 text-[11px] h-[34px]'}>
+                <select value={videoPagination.limit} onChange={(e) => { setVideoPagination((prev) => ({ ...prev, limit: Number(e.target.value), page: 1 })); loadVideos(1); }} className={INPUT_CLASS + ' !w-20 !min-w-[80px] !max-w-[96px] text-[11px] h-[34px]'}>
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
@@ -2071,7 +2085,7 @@ export default function VideoPipeline() {
                     <th className="px-3 py-2.5 w-20">{t('videoPipeline.views_header')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.download_header')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.drive_header')}</th>
-                    <th className="px-3 py-2.5">{t('videoPipeline.mashup_publish_header')}</th>
+                    <th className="px-3 py-2.5">{t('videoPipeline.mashup')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.actions_header')}</th>
                   </tr>
                 </thead>
@@ -2083,17 +2097,19 @@ export default function VideoPipeline() {
                       <td className="px-3 py-2.5"><p className="font-medium text-white">{item.title || item.videoId}</p><p className="mt-1 break-all text-xs text-slate-500">{item.channelName || item.videoId}</p></td>
                       <td className="px-3 py-2.5"><SourcePill source={item.sourceKey} /></td>
                       <td className="px-3 py-2.5 text-slate-200">{formatNumber(item.views || 0)}</td>
-                      <td className="px-3 py-2.5"><StatusPill tone={toneFromStatus(item.downloadStatus)}>{item.downloadStatus}</StatusPill></td>
-                      <td className="px-3 py-2.5"><StatusPill tone={toneFromStatus(item.driveSync?.status)}>{item.driveSync?.status || 'pending'}</StatusPill></td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-col gap-1.5">
-                          <StatusPill tone={toneFromStatus(item.production?.queueStatus || 'idle')}>
-                            {item.production?.queueStatus || 'idle'}
-                          </StatusPill>
-                          <StatusPill tone={item.publishing?.totalPublished > 0 ? 'emerald' : toneFromStatus('not yet')}>
-                            {item.publishing?.totalPublished > 0 ? t('videoPipeline.published') : t('videoPipeline.not_yet')}
-                          </StatusPill>
+                          <StatusPill tone={toneFromStatus(item.downloadStatus)}>{item.downloadStatus}</StatusPill>
+                          {item.localMissing ? (
+                            <StatusPill tone="rose">missing local</StatusPill>
+                          ) : null}
                         </div>
+                      </td>
+                      <td className="px-3 py-2.5"><StatusPill tone={toneFromStatus(item.driveSync?.status)}>{item.driveSync?.status || 'pending'}</StatusPill></td>
+                      <td className="px-3 py-2.5">
+                        <StatusPill tone={toneFromStatus(item.production?.queueStatus || 'idle')}>
+                          {item.production?.queueStatus || 'idle'}
+                        </StatusPill>
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-2">
@@ -2109,7 +2125,7 @@ export default function VideoPipeline() {
                             <Layers3 className="h-3.5 w-3.5" />
                             {t('videoPipeline.add_to_queue')}
                           </button>
-                          {item.downloadStatus !== 'done' ? (
+                          {item.downloadStatus !== 'done' || item.localMissing ? (
                             <button onClick={() => redownloadVideo(item.id)} className={getActionButtonClass('amber', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
                               {t('videoPipeline.re_download_button')}
                             </button>
@@ -2748,7 +2764,17 @@ export default function VideoPipeline() {
         <section className="space-y-4">
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
             <section className={`${SURFACE_CARD_CLASS} p-5`}>
-              <SectionHeader title={t('videoPipeline.discovery_settings')} subtitle={t('videoPipeline.readable_schedules_and_shared_limits_live_here_source_regist')} />
+              <SectionHeader
+                title={t('videoPipeline.discovery_settings')}
+                subtitle={t('videoPipeline.readable_schedules_and_shared_limits_live_here_source_regist')}
+                actions={(
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => saveSettingsSection('discovery')} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                      {t('videoPipeline.save_discovery_settings')}
+                    </button>
+                  </div>
+                )}
+              />
               <div className="mt-4 space-y-4">
                 <ScheduleEditor title={t('videoPipeline.discover_run')} subtitle={t('videoPipeline.how_often_the_discovery_step_should_scan_source_definitions')} value={settings.discovery?.discoverSchedule} onChange={(value) => updateSettings('discovery', 'discoverSchedule', value)} />
                 <ScheduleEditor title={t('videoPipeline.scan_channels_videos')} subtitle={t('videoPipeline.how_often_saved_channels_should_be_revisited_for_new_videos')} value={settings.discovery?.scanSchedule} onChange={(value) => updateSettings('discovery', 'scanSchedule', value)} />
@@ -2764,6 +2790,9 @@ export default function VideoPipeline() {
                 subtitle={t('videoPipeline.queue_scanning_schedule_is_configured_here_while_runtime_con')}
                 actions={(
                   <div className="flex flex-wrap gap-2">
+                    <button onClick={() => saveSettingsSection('scheduler')} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                      {t('videoPipeline.save_scheduler_settings')}
+                    </button>
                     <button onClick={triggerQueueScannerNow} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>{t('videoPipeline.scan_now_3')}</button>
                   </div>
                 )}
@@ -2798,18 +2827,21 @@ export default function VideoPipeline() {
           </section>
 
           <section className={`${SURFACE_CARD_CLASS} p-5`}>
-            <SectionHeader
-              title={t('videoPipeline.publish_scheduler_settings')}
-              subtitle={t('videoPipeline.publish_scheduler_desc')}
-              actions={(
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={triggerPublishSchedulerNow} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction) || !hasSelectedPublishAccounts}>{t('videoPipeline.publish_now')}</button>
-                </div>
-              )}
-            />
+              <SectionHeader
+                title={t('videoPipeline.publish_scheduler_settings')}
+                subtitle={t('videoPipeline.publish_scheduler_desc')}
+                actions={(
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => saveSettingsSection('publish')} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                      {t('videoPipeline.save_publish_settings')}
+                    </button>
+                    <button onClick={triggerPublishSchedulerNow} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction) || !hasSelectedPublishAccounts}>{t('videoPipeline.publish_now')}</button>
+                  </div>
+                )}
+              />
             <div ref={publishSchedulerSettingsRef} id="publish-scheduler-settings" className={`mt-4 space-y-4 ${publishSettingsFocus ? 'rounded-2xl ring-2 ring-emerald-300/40 p-3' : ''}`}>
               <ScheduleEditor title={t('videoPipeline.publish_scheduler')} subtitle={t('videoPipeline.publish_scheduler_desc')} value={publishScheduler} onChange={(value) => updateSettings('production', 'publishScheduler', value)} />
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                 <label className="space-y-2 text-xs text-slate-400">
                   <span>{t('videoPipeline.publish_gap_minutes_label')}</span>
                   <input type="number" min="1" value={settings.production?.publishGapMinutes ?? 30} onChange={(e) => updateSettings('production', 'publishGapMinutes', Math.max(1, Number(e.target.value) || 1))} className={INPUT_CLASS} />
@@ -2817,6 +2849,14 @@ export default function VideoPipeline() {
                 <label className="space-y-2 text-xs text-slate-400">
                   <span>{t('videoPipeline.publish_max_per_run_label')}</span>
                   <input type="number" min="1" value={settings.production?.publishMaxPerRun ?? 20} onChange={(e) => updateSettings('production', 'publishMaxPerRun', Math.max(1, Number(e.target.value) || 1))} className={INPUT_CLASS} />
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.publish_visibility_label')}</span>
+                  <select value={settings.production?.publishVisibility || 'public'} onChange={(e) => updateSettings('production', 'publishVisibility', e.target.value)} className={INPUT_CLASS}>
+                    <option value="public">{t('videoPipeline.visibility_public')}</option>
+                    <option value="unlisted">{t('videoPipeline.visibility_unlisted')}</option>
+                    <option value="private">{t('videoPipeline.visibility_private')}</option>
+                  </select>
                 </label>
                 <label className="space-y-2 text-xs text-slate-400">
                   <span>{t('videoPipeline.publish_filter_status')}</span>

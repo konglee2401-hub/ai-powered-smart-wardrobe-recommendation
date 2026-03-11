@@ -12,9 +12,53 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const VIDEO_MIME_PREFIX = 'video/';
 const MANIFEST_CACHE_TTL_MS = 15 * 60 * 1000;
 const DOWNLOAD_CACHE_DIR = path.join(BACKEND_ROOT, 'media', 'video-factory-cache', 'public-drive');
+const DISK_CACHE_DIR = path.join(DOWNLOAD_CACHE_DIR, 'manifests');
+const DISK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const manifestCache = new Map();
 const selectionHistoryCache = new Map(); // Track last selected videos per source
 const MAX_HISTORY_SIZE = 50; // Track last 50 selections
+
+function buildManifestCacheKey(folderId, maxDepth, maxFolders) {
+  return `${folderId}:${maxDepth}:${maxFolders}`;
+}
+
+function getManifestCachePath(folderId, maxDepth, maxFolders) {
+  const safeFolderId = String(folderId || 'unknown').replace(/[^A-Za-z0-9_-]/g, '');
+  const key = buildManifestCacheKey(safeFolderId, maxDepth, maxFolders)
+    .replace(/[:]/g, '-')
+    .slice(0, 120);
+  return path.join(DISK_CACHE_DIR, `${key}.json`);
+}
+
+function resolveDiskCacheTtlMs(options = {}) {
+  if (Number.isFinite(options.cacheTtlMs)) return Math.max(0, Number(options.cacheTtlMs));
+  if (Number.isFinite(options.cacheTtlHours)) return Math.max(0, Number(options.cacheTtlHours) * 60 * 60 * 1000);
+  if (Number.isFinite(options.cacheTtlMinutes)) return Math.max(0, Number(options.cacheTtlMinutes) * 60 * 1000);
+  return DISK_CACHE_TTL_MS;
+}
+
+async function readManifestFromDisk(folderId, maxDepth, maxFolders, options = {}) {
+  if (options.disableDiskCache) return null;
+  const cachePath = getManifestCachePath(folderId, maxDepth, maxFolders);
+  try {
+    const raw = await fs.readFile(cachePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed?.data) return null;
+    const ttlMs = resolveDiskCacheTtlMs(options);
+    if (ttlMs > 0 && parsed.createdAt && (Date.now() - parsed.createdAt) > ttlMs) {
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+async function writeManifestToDisk(folderId, maxDepth, maxFolders, data) {
+  const cachePath = getManifestCachePath(folderId, maxDepth, maxFolders);
+  await fs.mkdir(DISK_CACHE_DIR, { recursive: true });
+  await fs.writeFile(cachePath, JSON.stringify({ createdAt: Date.now(), data }, null, 2));
+}
 
 function addToSelectionHistory(sourceId, file, maxSize = MAX_HISTORY_SIZE) {
   if (!selectionHistoryCache.has(sourceId)) {
@@ -70,15 +114,16 @@ function normalizeEntry(entry = {}) {
 
 function themeFromName(name = '') {
   const normalized = String(name || '').toLowerCase();
-  if (/animal|funny|pet/.test(normalized)) return 'funny-animal';
-  if (/affirmation/.test(normalized)) return 'affirmation';
-  if (/motivat|emotional/.test(normalized)) return 'motivation';
-  if (/motherhood|mom|parent/.test(normalized)) return 'motherhood';
-  if (/fitness/.test(normalized)) return 'fitness';
-  if (/health/.test(normalized)) return 'health';
-  if (/product|winning/.test(normalized)) return 'product';
-  if (/ai-avatar/.test(normalized)) return 'ai-avatar';
-  if (/luxury|lifestyle|car/.test(normalized)) return 'luxury';
+  if (/animal|funny|pet|cat|dog|cute|hài|động vật|thú cưng|mèo|chó/.test(normalized)) return 'funny-animal';
+  if (/affirmation|khẳng định|tự tin/.test(normalized)) return 'affirmation';
+  if (/motivat|emotional|inspir|truyền cảm hứng|động lực/.test(normalized)) return 'motivation';
+  if (/motherhood|mom|parent|mẹ|mẫu thân|phụ huynh/.test(normalized)) return 'motherhood';
+  if (/fitness|gym|workout|tập gym|thể hình/.test(normalized)) return 'fitness';
+  if (/health|wellness|sức khỏe|y tế/.test(normalized)) return 'health';
+  if (/product|winning|deal|sản phẩm|review/.test(normalized)) return 'product';
+  if (/ai-avatar|avatar/.test(normalized)) return 'ai-avatar';
+  if (/luxury|lifestyle|car|xe|sang trọng/.test(normalized)) return 'luxury';
+  if (/viral|trend|trending|shorts|reels/.test(normalized)) return 'viral';
   return 'general';
 }
 
@@ -93,6 +138,7 @@ function recommendedTemplateGroups(theme = 'general') {
     product: ['marketing', 'shorts', 'highlight'],
     'ai-avatar': ['shorts', 'reaction', 'highlight'],
     luxury: ['marketing', 'cinematic', 'shorts'],
+    viral: ['viral', 'shorts', 'highlight'],
     general: ['reaction', 'highlight', 'shorts'],
   };
   return matrix[theme] || matrix.general;
@@ -155,7 +201,8 @@ function resolveTemplateGroup(templateName = '') {
   return 'reaction';
 }
 
-function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}) {
+function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}, options = {}) {
+  const { ignoreRecent = false, allowMissingMime = false } = options;
   const templateGroup = resolveTemplateGroup(context.templateName);
   const desiredThemes = collectThemeHints(context);
   const fileThemes = Array.from(new Set([
@@ -163,7 +210,9 @@ function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}
     ...normalizeThemeHints(file.path || []),
   ].filter(Boolean)));
 
-  let score = file.mimeType?.startsWith(VIDEO_MIME_PREFIX) ? 20 : -100;
+  const isVideoByMime = Boolean(file.mimeType?.startsWith(VIDEO_MIME_PREFIX));
+  const isVideoByName = /\.(mp4|mov|m4v|mkv|webm|avi|flv|wmv)$/i.test(file.name || '');
+  let score = (isVideoByMime || (allowMissingMime && isVideoByName)) ? 20 : -100;
   
   // Template group matching
   if (file.recommendedTemplateGroups?.includes(templateGroup)) score += 25;
@@ -182,17 +231,16 @@ function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}
   if (file.path?.length) score += Math.min(file.path.length, 6);
   if (/reel|short|clip|video/i.test(file.name || '')) score += 2;
 
-  // Folder diversity bonus - prefer videos from different folders
+  // Folder diversity penalty - keep it small (folderCounts is size, not selection count)
   const sourceFolder = file.path?.[0];
   if (sourceFolder && folderCounts[sourceFolder]) {
-    // Penalize files from folders that have many candidates already selected
-    const folderSelectCount = folderCounts[sourceFolder];
-    if (folderSelectCount > 2) score -= folderSelectCount * 3;
-    else if (folderSelectCount > 0) score -= folderSelectCount;
+    const folderSize = folderCounts[sourceFolder];
+    const penalty = Math.min(10, Math.floor(Math.log10(folderSize + 1) * 4));
+    score -= penalty;
   }
 
   // Recent selection penalty - avoid picking same video too soon
-  if (isRecentlySelected(sourceId, file.id, 60)) {
+  if (!ignoreRecent && isRecentlySelected(sourceId, file.id, 60)) {
     score -= 999; // Severely penalize recently selected
   }
 
@@ -281,10 +329,18 @@ class PublicDriveFolderIngestService {
 
     const maxDepth = Math.min(Math.max(Number(options.maxDepth ?? input.maxDepth ?? 3) || 3, 1), 6);
     const maxFolders = Math.min(Math.max(Number(options.maxFolders ?? input.maxFolders ?? 60) || 60, 1), 200);
-    const cacheKey = `${folderId}:${maxDepth}:${maxFolders}`;
+    const cacheKey = buildManifestCacheKey(folderId, maxDepth, maxFolders);
     const cached = manifestCache.get(cacheKey);
     if (cached && (Date.now() - cached.createdAt) < MANIFEST_CACHE_TTL_MS) {
       return cached.data;
+    }
+
+    if (!options.forceRefresh) {
+      const diskCached = await readManifestFromDisk(folderId, maxDepth, maxFolders, options);
+      if (diskCached) {
+        manifestCache.set(cacheKey, { createdAt: Date.now(), data: diskCached });
+        return diskCached;
+      }
     }
 
     const rootPage = await this.fetchFolderPage(folderId);
@@ -399,6 +455,7 @@ class PublicDriveFolderIngestService {
     };
 
     manifestCache.set(cacheKey, { createdAt: Date.now(), data: manifest });
+    await writeManifestToDisk(folderId, maxDepth, maxFolders, manifest);
     return manifest;
   }
 
@@ -424,14 +481,27 @@ class PublicDriveFolderIngestService {
     });
 
     // Score all candidates
-    const ranked = files
-      .map((file) => ({ 
-        file, 
+    let ranked = files
+      .map((file) => ({
+        file,
         score: scoreFileCandidate(file, context, sourceId, folderCounts),
         folder: file.path?.[0] || 'root'
       }))
       .filter((item) => item.score > -100) // Filter out severely penalized items
       .sort((left, right) => right.score - left.score);
+
+    let usedFallback = false;
+    if (!ranked.length) {
+      ranked = files
+        .map((file) => ({
+          file,
+          score: scoreFileCandidate(file, context, sourceId, folderCounts, { ignoreRecent: true, allowMissingMime: true }),
+          folder: file.path?.[0] || 'root'
+        }))
+        .filter((item) => item.score > -100)
+        .sort((left, right) => right.score - left.score);
+      usedFallback = ranked.length > 0;
+    }
 
     if (!ranked.length) {
       return { success: false, error: 'Could not rank any suitable sub-video candidate' };
@@ -490,6 +560,7 @@ class PublicDriveFolderIngestService {
       candidates: shortlist.map((c) => c.file),
       folderDiversity: uniqueFolders.length,
       selectedFolder: finalPicked.folder,
+      usedFallback,
       templateGroup: resolveTemplateGroup(context.templateName),
       desiredThemes: collectThemeHints(context),
     };
@@ -551,7 +622,10 @@ class PublicDriveFolderIngestService {
       folderId: source.folderId,
       maxDepth: source.maxDepth || 3,
       maxFolders: source.maxFolders || 60,
-    }, source);
+    }, {
+      ...source,
+      cacheTtlHours: source.cacheTtlHours ?? 24,
+    });
 
     const selected = this.selectBestSubVideo(manifest, {
       ...context,

@@ -9,10 +9,14 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 import Navbar from './components/Navbar';
 import { NavbarCollapseProvider } from './context/NavbarCollapseContext';
 import { pageRoutes, redirectRoutes } from './config/appRoutes';
+import notificationApi from './services/notificationApi';
+import { connectNotificationSocket, disconnectNotificationSocket } from './services/notificationClient';
+import useNotificationStore from './stores/useNotificationStore';
 
 function PageTitle() {
   useEffect(() => {
@@ -74,6 +78,8 @@ function RouteFallback() {
 }
 
 function App() {
+  const setNotifications = useNotificationStore((state) => state.setNotifications);
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark';
     const initialTheme = window.localStorage.getItem('smart-wardrobe-theme') || 'dark';
@@ -85,6 +91,29 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     window.localStorage.setItem('smart-wardrobe-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    let isMounted = true;
+    notificationApi.list({ limit: 80 }).then((data) => {
+      if (!isMounted) return;
+      setNotifications(data.items || [], data.unreadCount || 0);
+    }).catch(() => {});
+
+    const socket = connectNotificationSocket({
+      onNotify: (payload) => {
+        addNotification(payload);
+        const title = payload?.title || 'Notification';
+        const message = payload?.message || payload?.type || '';
+        toast(message ? `${title}: ${message}` : title);
+      },
+    });
+
+    return () => {
+      isMounted = false;
+      socket?.off('notify');
+      disconnectNotificationSocket();
+    };
+  }, [setNotifications, addNotification]);
 
   const toasterStyle = useMemo(
     () => (theme === 'light'
@@ -142,4 +171,3 @@ function App() {
 }
 
 export default App;
-

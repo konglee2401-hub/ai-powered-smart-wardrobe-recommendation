@@ -102,7 +102,7 @@ function buildQueuePublishMetadata(queueItem = {}) {
     });
 }
 
-async function publishLegacyAccounts(queueId, queueItem, legacyAccountIds = [], youtubePublishType = 'shorts') {
+async function publishLegacyAccounts(queueId, queueItem, legacyAccountIds = [], youtubePublishType = 'shorts', visibility = 'public') {
   if (!legacyAccountIds.length) return { success: false, results: [], successful: 0, failed: 0 };
 
   const videoPath =
@@ -115,7 +115,7 @@ async function publishLegacyAccounts(queueId, queueItem, legacyAccountIds = [], 
   }
 
   const publishMetadata = buildQueuePublishMetadata(queueItem);
-  const mergedUploadConfig = mergePublishUploadConfig({ youtubePublishType }, publishMetadata);
+  const mergedUploadConfig = mergePublishUploadConfig({ youtubePublishType, visibility }, publishMetadata);
 
   const results = [];
 
@@ -154,7 +154,7 @@ async function publishLegacyAccounts(queueId, queueItem, legacyAccountIds = [], 
   };
 }
 
-async function publishOAuthAccounts(queueId, queueItem, oauthAccounts = []) {
+async function publishOAuthAccounts(queueId, queueItem, oauthAccounts = [], visibility = 'public') {
   if (!oauthAccounts.length) return { success: false, results: [], successful: 0, failed: 0 };
 
   const videoPath = queueItem.videoConfig?.outputPath || queueItem.videoConfig?.videoPath;
@@ -171,7 +171,7 @@ async function publishOAuthAccounts(queueId, queueItem, oauthAccounts = []) {
         title: queueItem.videoConfig?.sourceTitle || queueItem.title || 'Generated Video',
         description: '',
         tags: [],
-        visibility: 'private',
+        visibility,
         thumbnail: null,
       });
 
@@ -262,6 +262,7 @@ class PublishSchedulerCronJob {
           filters: normalizeFilters(settings.publishFilters || DEFAULT_FILTERS),
           accountIds: Array.isArray(settings.publishAccountIds) ? settings.publishAccountIds : [],
           youtubePublishType: settings.youtubePublishType || 'shorts',
+          visibility: settings.publishVisibility || 'public',
         };
 
         if (settings.publishEnabled) {
@@ -415,7 +416,7 @@ class PublishSchedulerCronJob {
   }
 
   async publishReadyJobs() {
-    const { filters, gapMinutes, accountIds, youtubePublishType, maxPerRun } = this.publishConfig;
+    const { filters, gapMinutes, accountIds, youtubePublishType, maxPerRun, visibility } = this.publishConfig;
 
     if (!Array.isArray(accountIds) || accountIds.length === 0) {
       return { success: false, error: 'No publish accounts configured' };
@@ -511,8 +512,8 @@ class PublishSchedulerCronJob {
       }
 
       const queueItem = queueResult.queueItem;
-      const legacyResult = await publishLegacyAccounts(job.queueId, queueItem, legacyAccountIds, youtubePublishType);
-      const oauthResult = await publishOAuthAccounts(job.queueId, queueItem, oauthAccounts);
+      const legacyResult = await publishLegacyAccounts(job.queueId, queueItem, legacyAccountIds, youtubePublishType, visibility);
+      const oauthResult = await publishOAuthAccounts(job.queueId, queueItem, oauthAccounts, visibility);
 
       if (legacyResult.success || oauthResult.success) {
         await VideoQueueService.updateQueueStatus(job.queueId, 'uploaded');

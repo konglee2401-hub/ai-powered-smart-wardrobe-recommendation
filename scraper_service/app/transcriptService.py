@@ -20,6 +20,8 @@ class TranscriptService:
     
     # Preferred languages: Vietnamese first, then English, then Hindi, then auto-detect
     DEFAULT_LANGUAGES = ['vi', 'en', 'hi']
+    RATE_LIMIT_COOLDOWN_SEC = 2 * 60 * 60  # 2 hours
+    _rate_limit_cache = {}
     
     @staticmethod
     def _format_timestamp(seconds: float) -> str:
@@ -33,7 +35,7 @@ class TranscriptService:
         return f'{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}'
     
     @staticmethod
-    def _fetch_raw_transcript(video_id: str, languages: list = None, retry_count: int = 0) -> list:
+    def _fetch_raw_transcript(video_id: str, languages: list = None, retry_count: int = 0):
         """
         Fetch raw transcript from YouTube using list_transcripts + find methods
         
@@ -43,17 +45,23 @@ class TranscriptService:
             retry_count: Current retry attempt (internal)
         
         Returns:
-            List of transcript snippets or empty list if fetch fails
+            (transcript_snippets, error_code)
+            - transcript_snippets: list of snippets or []
+            - error_code: None | 'rate_limited' | 'not_found' | 'fatal'
             
         Note: YouTube enforces strict rate limiting (429 errors) on transcript API calls.
         Production use at scale requires IP rotation or proxy service.
         """
         if not languages:
             languages = TranscriptService.DEFAULT_LANGUAGES
+
+        # Skip if recently rate-limited
+        last_limited = TranscriptService._rate_limit_cache.get(video_id)
+        if last_limited and (time.time() - last_limited) < TranscriptService.RATE_LIMIT_COOLDOWN_SEC:
+            print(f'[TranscriptService] Skipping transcript fetch for {video_id} (rate-limit cooldown)')
+            return [], 'rate_limited'
         
         try:
-            # Long initial delay to avoid rate limiting
-            time.sleep(2)
             print(f'[TranscriptService] Listing available transcripts for {video_id}...')
             
             # Get available transcripts
@@ -63,41 +71,40 @@ class TranscriptService:
             for lang_code in languages:
                 try:
                     print(f'[TranscriptService] Attempting {lang_code}...')
-                    time.sleep(3)  # Longer delay between language attempts
                     
                     # Find transcript for language (checks both manually created and auto-generated)
                     transcript_obj = transcript_list.find_transcript([lang_code])
                     print(f'[TranscriptService] ✅ Found {lang_code}: {transcript_obj.language}')
                     
-                    # Fetch the actual transcript with long delays
-                    time.sleep(5)
+                    # Fetch the actual transcript
                     transcript_data = transcript_obj.fetch()
                     print(f'[TranscriptService] ✅ Fetched {lang_code} - {len(transcript_data)} snippets')
                     
-                    return TranscriptService._normalize_snippets(transcript_data)
+                    return TranscriptService._normalize_snippets(transcript_data), None
                 
                 except Exception as find_error:
                     error_str = str(find_error)
                     
                     # Handle rate limiting (429)
                     if '429' in error_str or 'Too Many Requests' in error_str:
-                        if retry_count < 2:
-                            print(f'[TranscriptService] Rate limited (429). Waiting 30 seconds before retry...')
-                            time.sleep(30)
-                            return TranscriptService._fetch_raw_transcript(video_id, languages, retry_count + 1)
-                        else:
-                            print(f'[TranscriptService] Rate limited after {retry_count} retries - giving up')
-                            return []
+                        TranscriptService._rate_limit_cache[video_id] = time.time()
+                        print(f'[TranscriptService] Rate limited (429). Skipping transcript fetch for this video.')
+                        return [], 'rate_limited'
                     
                     # Log other language not found errors
-                    print(f'[TranscriptService] {lang_code} unavailable: {error_str[:80]}')
+                    print(f'[TranscriptService] {lang_code} unavailable for {video_id}: {error_str[:120]}')
             
             print(f'[TranscriptService] No transcripts found for requested languages')
-            return []
+            return [], 'not_found'
         
         except Exception as e:
-            print(f'[TranscriptService] Fatal error: {str(e)[:200]}')
-            return []
+            error_str = str(e)
+            if '429' in error_str or 'Too Many Requests' in error_str:
+                TranscriptService._rate_limit_cache[video_id] = time.time()
+                print(f'[TranscriptService] Rate limited (429). Skipping transcript fetch for this video.')
+                return [], 'rate_limited'
+            print(f'[TranscriptService] Fatal error: {error_str[:200]}')
+            return [], 'fatal'
     
     @staticmethod
     def _normalize_snippets(transcript: list) -> list:
@@ -194,9 +201,20 @@ class TranscriptService:
         
         try:
             # Fetch raw transcript
-            raw_transcript = TranscriptService._fetch_raw_transcript(video_id, languages)
+            raw_transcript, error_code = TranscriptService._fetch_raw_transcript(video_id, languages)
             
             if not raw_transcript:
+                if error_code == 'rate_limited':
+                    return {
+                        'success': False,
+                        'videoId': video_id,
+                        'transcript': None,
+                        'format': output_format,
+                        'language': None,
+                        'error': 'rate_limited',
+                        'snippetCount': 0,
+                        'skipped': True
+                    }
                 return {
                     'success': False,
                     'videoId': video_id,

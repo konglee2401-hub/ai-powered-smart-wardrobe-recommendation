@@ -53,6 +53,7 @@ import authSetupRoutes from './routes/authSetupRoutes.js';
 import characterRoutes from './routes/characterRoutes.js';
 import videoPipelineRoutes from './routes/videoPipelineRoutes.js';
 import socialMediaRoutes from './routes/socialMediaRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import ProgressEmitter from './services/ProgressEmitter.js';
 import queueScannerCronJob from './services/queueScannerCronJob.js';
 import publishSchedulerCronJob from './services/publishSchedulerCronJob.js';
@@ -199,6 +200,7 @@ app.use('/api/auth-setup', authSetupRoutes);
 app.use('/api/characters', characterRoutes);
 app.use('/api/video-pipeline', videoPipelineRoutes);
 app.use('/api/social-media', socialMediaRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(errorHandler);
 

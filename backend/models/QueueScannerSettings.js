@@ -107,6 +107,11 @@ const queueScannerSettingsSchema = new mongoose.Schema({
   publishAccountIds: {
     type: [String],
     default: []
+  },
+  publishVisibility: {
+    type: String,
+    enum: ['public', 'unlisted', 'private'],
+    default: 'public'
   }
 }, { timestamps: true });
 

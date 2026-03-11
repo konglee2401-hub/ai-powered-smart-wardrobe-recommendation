@@ -545,6 +545,36 @@ function resolveBackendPath(candidate = '') {
   return backendPath;
 }
 
+async function triggerPythonRedownload(videoId) {
+  if (!videoId) return { success: false, error: 'Missing videoId' };
+  try {
+    const response = await axios.post(`${PY_SERVICE_BASE}/api/shorts-reels/videos/${videoId}/re-download`, null, {
+      timeout: 120000,
+    });
+    const upstreamData = response?.data || {};
+    if (upstreamData && typeof upstreamData === 'object' && upstreamData.success === false) {
+      return {
+        success: false,
+        error: upstreamData.error || upstreamData.message || 'Scraper service rejected the re-download request',
+        upstream: PY_SERVICE_BASE,
+        data: upstreamData,
+      };
+    }
+    return {
+      success: true,
+      message: upstreamData.message || 'Re-download triggered',
+      upstream: PY_SERVICE_BASE,
+      data: upstreamData,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Scraper service unavailable',
+      upstream: PY_SERVICE_BASE,
+    };
+  }
+}
+
 function resolveAssetLocalPath(asset = {}) {
   const candidate = asset?.localStorage?.path || asset?.storage?.localPath || '';
   if (!candidate) return '';
@@ -1275,6 +1305,9 @@ class VideoPipelineService {
         sourceKey: item.source || item.platform,
         queueReady: item.downloadStatus === 'done',
         driveReady: item.driveSync?.status === 'uploaded',
+        localMissing: item.downloadStatus === 'done'
+          ? !fsSync.existsSync(resolveBackendPath(item.localPath || ''))
+          : false,
         channelName: item.channel?.name || '',
       })),
       count: totalCount,
@@ -2279,6 +2312,7 @@ class VideoPipelineService {
     const publishGapMinutes = Math.max(1, Number(queueScanner?.publishGapMinutes) || 30);
     const publishMaxPerRun = Math.max(1, Number(queueScanner?.publishMaxPerRun) || 20);
     const publishAccountIds = Array.isArray(queueScanner?.publishAccountIds) ? queueScanner.publishAccountIds : [];
+    const publishVisibility = queueScanner?.publishVisibility || 'public';
 
     return {
       success: true,
@@ -2303,6 +2337,7 @@ class VideoPipelineService {
           publishFilters,
           publishGapMinutes,
           publishMaxPerRun,
+          publishVisibility,
           publishAccountIds,
           templateSources,
           templateLibrary: normalizeTemplateLibrary(trendSetting.videoPipelinePreferences?.production?.templateLibrary),
@@ -2333,6 +2368,10 @@ class VideoPipelineService {
     const publishGapMinutes = Math.max(1, Number(production.publishGapMinutes) || 30);
     const publishMaxPerRun = Math.max(1, Number(production.publishMaxPerRun) || 20);
     const publishAccountIds = Array.isArray(production.publishAccountIds) ? production.publishAccountIds : [];
+    const publishVisibilityInput = String(production.publishVisibility || 'public').toLowerCase();
+    const publishVisibility = ['public', 'unlisted', 'private'].includes(publishVisibilityInput)
+      ? publishVisibilityInput
+      : 'public';
 
     const trendSetting = await TrendSetting.getOrCreateDefault();
     trendSetting.keywords = discovery.keywords || trendSetting.keywords;
@@ -2393,6 +2432,7 @@ class VideoPipelineService {
         publishMaxPerRun,
         publishFilters,
         publishAccountIds,
+        publishVisibility,
       },
       { upsert: true, new: true }
     );
@@ -2617,7 +2657,9 @@ class VideoPipelineService {
       // Fetch YouTube OAuth accounts from database
       const youtubeAccounts = await SocialMediaAccount.find({
         platform: 'youtube',
-      }).select('_id username displayName platform isActive isVerified platformData totalUploads lastPostTime');
+      }).select(
+        '_id username displayName platform isActive isVerified platformData totalUploads lastPostTime channelTitle channelId channelThumbnailUrl channelUrl channelCustomUrl'
+      );
 
       // Get legacy MultiAccountService accounts (singleton instance)
       const legacyAccounts = MultiAccountService.accounts || [];
@@ -2626,8 +2668,8 @@ class VideoPipelineService {
       const youtubeFormatted = youtubeAccounts.map(acc => ({
         id: acc._id.toString(),
         accountId: acc._id.toString(),
-        username: acc.username || acc.displayName,
-        displayName: acc.displayName,
+        username: acc.username || acc.displayName || acc.channelTitle,
+        displayName: acc.displayName || acc.channelTitle || acc.username,
         platform: 'youtube',
         source: 'oauth',
         isActive: acc.isActive,
@@ -2885,6 +2927,12 @@ class VideoPipelineService {
 
     const queueItem = queueResult.queueItem;
     const sourceVideoId = queueItem.metadata?.sourceVideoId || queueItem.videoConfig?.sourceVideoId || '';
+    await VideoQueueService.logProcess({
+      queueId,
+      stage: 'manual-start',
+      status: 'processing',
+      message: 'Manual start requested',
+    });
     if (queueItem.status === 'uploaded') {
       return { success: false, error: 'Uploaded jobs cannot be started again' };
     }
@@ -2911,13 +2959,74 @@ class VideoPipelineService {
 
     const mainVideo = await resolveVideoSelection(queueItem.videoConfig?.mainVideo || queueItem.videoConfig?.productionConfig?.manualMainVideo || null);
     let subVideo = await resolveVideoSelection(queueItem.videoConfig?.subVideo || queueItem.videoConfig?.productionConfig?.manualSubVideo || null);
-      let mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
+    let mainVideoPath = resolveBackendPath(mainVideo?.localPath || queueItem.videoConfig?.mainVideoPath || '');
+    let sourceVideoRecord = null;
+    if (mainVideoPath && !fsSync.existsSync(mainVideoPath)) {
+      mainVideoPath = '';
+    }
+    if (!mainVideoPath && sourceVideoId) {
+      try {
+        sourceVideoRecord = await TrendVideo.findById(sourceVideoId).lean();
+        const fallbackCandidate = resolveBackendPath(sourceVideoRecord?.localPath || sourceVideoRecord?.driveSync?.drivePath || '');
+        if (fallbackCandidate && fsSync.existsSync(fallbackCandidate)) {
+          mainVideoPath = fallbackCandidate;
+          await VideoPipelineJob.updateOne({ queueId }, { $set: { 'videoConfig.mainVideoPath': mainVideoPath } });
+          await VideoQueueService.logProcess({
+            queueId,
+            stage: 'main-video-fallback',
+            status: 'success',
+            message: `Recovered main video from TrendVideo localPath: ${mainVideoPath}`,
+          });
+        }
+      } catch (error) {
+        await VideoQueueService.logProcess({
+          queueId,
+          stage: 'main-video-fallback',
+          status: 'error',
+          message: `Failed to recover main video path from TrendVideo: ${error.message}`,
+        });
+      }
+    }
+    if (!mainVideoPath) {
+      const baseName = path.basename(queueItem.videoConfig?.mainVideoPath || '');
+      if (baseName) {
+        const processedCandidate = path.join(BACKEND_ROOT, 'media', 'processed-queue', baseName);
+        if (fsSync.existsSync(processedCandidate)) {
+          mainVideoPath = processedCandidate;
+          await VideoPipelineJob.updateOne({ queueId }, { $set: { 'videoConfig.mainVideoPath': mainVideoPath } });
+          await VideoQueueService.logProcess({
+            queueId,
+            stage: 'main-video-fallback',
+            status: 'success',
+            message: `Recovered main video from processed-queue: ${mainVideoPath}`,
+          });
+        }
+      }
+    }
     let subVideoPath = resolveBackendPath(subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '');
     let autoSelection = null;
     let autoSelectionSource = null;
 
     if (!mainVideoPath) {
-      const error = new Error('Mashup jobs require a main video input before manual start');
+      if (!sourceVideoRecord && sourceVideoId) {
+        sourceVideoRecord = await TrendVideo.findById(sourceVideoId).lean();
+      }
+      const sourceUrl = sourceVideoRecord?.url || queueItem.videoConfig?.sourceUrl || '';
+      if (sourceUrl && sourceVideoId) {
+        const redownloadResult = await triggerPythonRedownload(sourceVideoId);
+        await VideoQueueService.logProcess({
+          queueId,
+          stage: 'main-video-redownload',
+          status: redownloadResult.success ? 'processing' : 'error',
+          message: redownloadResult.success
+            ? `Triggered re-download for missing main video (source: ${sourceUrl})`
+            : `Failed to trigger re-download: ${redownloadResult.error}`,
+        });
+      }
+      const errorMessage = sourceUrl
+        ? 'Main video is missing locally; re-download triggered. Please retry after download completes.'
+        : 'Mashup jobs require a main video input before manual start';
+      const error = new Error(errorMessage);
       await VideoQueueService.recordError(queueId, error, 'validation', {
         retryEligible: false,
         manualInterventionRequired: true,
@@ -2935,7 +3044,20 @@ class VideoPipelineService {
       };
     }
 
+    await VideoQueueService.logProcess({
+      queueId,
+      stage: 'main-video',
+      status: 'success',
+      message: `Main video resolved: ${path.basename(mainVideoPath)}`,
+    });
+
     if (!subVideoPath) {
+      await VideoQueueService.logProcess({
+        queueId,
+        stage: 'auto-sub-video',
+        status: 'processing',
+        message: 'Resolving auto sub video',
+      });
       const autoSubVideoResult = await this.resolveAutomaticSubVideoInput(queueItem);
       if (!autoSubVideoResult.success) {
         const autoSubError = new Error(autoSubVideoResult.error || 'Automatic sub-video selection failed');
@@ -2976,7 +3098,16 @@ class VideoPipelineService {
         queueId,
         stage: 'auto-sub-video',
         status: 'success',
-        message: 'Auto-selected sub video ' + JSON.stringify(autoSubVideoResult.item?.name || 'Unnamed clip') + ' from ' + (autoSubVideoResult.source?.name || 'default library source'),
+        message: `Auto-selected sub video: ${autoSubVideoResult.item?.name || 'Unnamed clip'}`,
+      });
+    }
+
+    if (subVideoPath) {
+      await VideoQueueService.logProcess({
+        queueId,
+        stage: 'sub-video',
+        status: 'success',
+        message: `Sub video resolved: ${path.basename(subVideoPath)}`,
       });
     }
 

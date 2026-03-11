@@ -1,4 +1,5 @@
-﻿import React from 'react';
+import React from 'react';
+import NotificationBell from './NotificationBell';
 
 export default function PageHeaderBar({
   icon,
@@ -30,10 +31,14 @@ export default function PageHeaderBar({
             {meta ? <p className={`apple-header-meta mt-1 truncate text-[11px] text-gray-500 ${metaClassName}`}>{meta}</p> : null}
           </div>
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        <div className="flex shrink-0 items-center gap-2">
+          <NotificationBell />
+          {actions ? actions : null}
+        </div>
       </div>
     </div>
   );
 }
+
 
 

@@ -214,7 +214,14 @@ class CapCutAICaptionService extends BrowserService {
 
     const subtitleState = await this._getSubtitleState();
     if (subtitleState.empty) {
-      logStep('subtitle-empty', 'No subtitles detected (audio may be silent). Skipping style step.');
+      logStep('subtitle-empty', 'No subtitles detected (audio may be silent). Skipping CapCut styling/export.');
+      await this.saveSession({ reason: 'subtitle-empty', videoPath });
+      return {
+        success: true,
+        outputVideoPath: videoPath,
+        provider: 'capcut',
+        skipped: true,
+      };
     }
 
     if (applyStyle && !subtitleState.empty) {
@@ -266,6 +273,9 @@ class CapCutAICaptionService extends BrowserService {
   _logStep(stage, message) {
     if (typeof this._stepLogger === 'function') {
       this._stepLogger(stage, message);
+    }
+    if (stage && message) {
+      console.log(`[CapCut:${stage}] ${message}`);
     }
   }
 
@@ -386,14 +396,15 @@ class CapCutAICaptionService extends BrowserService {
   }
 
   async _waitForEditPage(timeoutMs) {
-    this._logStep('edit-detect', 'Checking edit page URL and Subtitles tab...');
+    this._logStep('edit-detect', 'Checking edit page URL and Subtitles panel...');
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const isEdit = await this.page.evaluate(() => {
         const urlOk = location.pathname.includes('/magic-tools/ai-captions/edit/');
         const subtitleTab = Array.from(document.querySelectorAll('.lv-tabs-header-title-text'))
-          .some((el) => el.textContent?.trim() === 'Subtitles');
-        return urlOk && subtitleTab;
+          .some((el) => (el.textContent || '').trim().toLowerCase() === 'subtitles');
+        const subtitlePanel = document.querySelector('.subtitlesPanel-PRxhhb, [class*="subtitlesPanel"]');
+        return urlOk && (subtitleTab || subtitlePanel);
       });
       if (isEdit) return true;
       await this.page.waitForTimeout(1000);
@@ -402,6 +413,7 @@ class CapCutAICaptionService extends BrowserService {
   }
 
   async _waitForPreviewReady(timeoutMs) {
+    this._logStep('preview-detect', 'Checking preview controls and duration...');
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const ready = await this.page.evaluate(() => {
@@ -409,17 +421,22 @@ class CapCutAICaptionService extends BrowserService {
         const playButton = document.querySelector('.playerButton-o8RC3o, [class*="playerButton"]');
         const totalTime = document.querySelector('.player-total-time-qH39jA, [class*="player-total-time"]');
         const totalText = (totalTime?.textContent || '').replace(/\s+/g, '');
-        const hasDuration = totalText && totalText !== '/00:00:00' && totalText !== '/00:00';
+        const currentTime = document.querySelector('.player-current-time-LYBjmc, [class*="player-current-time"]');
+        const currentText = (currentTime?.textContent || '').replace(/\s+/g, '');
+        const isZeroTime = (value) => !value || /^\/?0{1,2}:0{2}(:0{2})?$/.test(value);
+        const hasDuration = !isZeroTime(totalText);
+        const hasCurrent = !isZeroTime(currentText);
+        const hasTimeUi = hasDuration || hasCurrent || !!totalTime || !!currentTime;
         const canvas = document.querySelector('#video-editor-canvas');
         return {
           hasPreview: !!preview,
           hasPlay: !!playButton,
-          hasDuration,
+          hasTimeUi,
           hasCanvas: !!canvas,
         };
       });
 
-      if (ready.hasPreview && ready.hasPlay && ready.hasDuration && ready.hasCanvas) {
+      if (ready.hasPreview && ready.hasPlay && (ready.hasTimeUi || ready.hasCanvas)) {
         return true;
       }
 
@@ -537,11 +554,11 @@ class CapCutAICaptionService extends BrowserService {
     const options = [label, ...synonyms, 'Auto detect', 'Auto Detect', 'AT'];
     const picked = await this._clickByText(options);
     if (!picked) {
-      this._logStep('language-select', 'Could not find Vietnamese option in language list.');
+      this._logStep('language-select', `Could not find "${label}" option in language list.`);
       return false;
     }
 
-    this._logStep('language-select', 'Selected Vietnamese spoken language.');
+    this._logStep('language-select', `Selected spoken language: ${label}`);
     await this.page.waitForTimeout(500);
     return true;
   }

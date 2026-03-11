@@ -20,7 +20,6 @@ import VideoPipelineLayout from '../components/VideoPipelineLayout';
 import GalleryPicker from '../components/GalleryPicker';
 import videoPipelineApi from '../services/videoPipelineApi';
 import {
-import ModalPortal from '../components/ModalPortal';
   formatDate,
   getActionButtonClass,
   INPUT_CLASS,
@@ -50,6 +49,17 @@ const DEFAULT_TEMPLATES = [
   { value: 'highlight', label: 'Highlight', groupKey: 'highlight' },
   { value: 'meme', label: 'Meme', groupKey: 'meme' },
 ];
+
+const DEFAULT_REMASHUP_CONFIG = {
+  templateStrategy: 'random',
+  templateName: '',
+  manualSubVideo: null,
+  subtitleMode: 'auto',
+  capcutAutoCaption: true,
+  watermarkEnabled: true,
+  voiceoverEnabled: false,
+  startImmediately: true,
+};
 
 const buildTemplateOptions = (templates = []) =>
   templates.map((item) => ({
@@ -88,9 +98,7 @@ const resolveOutputPreview = (item = {}) => {
 };
 
 export default function ProductionHistory() {
-  const { i18n } = useTranslation();
-  const isVi = i18n.language?.startsWith('vi');
-  const tr = (vi, en) => (isVi ? vi : en);
+  const { t } = useTranslation('productionHistory');
 
   const [history, setHistory] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: HISTORY_LIMIT, total: 0, pages: 1 });
@@ -100,11 +108,7 @@ export default function ProductionHistory() {
   const [templates, setTemplates] = useState([]);
   const [remashupOpen, setRemashupOpen] = useState(false);
   const [remashupItem, setRemashupItem] = useState(null);
-  const [remashupConfig, setRemashupConfig] = useState({
-    templateName: '',
-    manualSubVideo: null,
-    startImmediately: true,
-  });
+  const [remashupConfig, setRemashupConfig] = useState(DEFAULT_REMASHUP_CONFIG);
   const [galleryPickerOpen, setGalleryPickerOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishAccounts, setPublishAccounts] = useState([]);
@@ -112,26 +116,28 @@ export default function ProductionHistory() {
   const [publishConfig, setPublishConfig] = useState({ title: '', description: '', tags: '', hashtags: '' });
   const [busyAction, setBusyAction] = useState('');
   const [previewItem, setPreviewItem] = useState(null);
+  const [selectedQueueIds, setSelectedQueueIds] = useState([]);
+  const [publishTargets, setPublishTargets] = useState([]);
 
   const navItems = useMemo(() => {
     const labels = {
-      history: tr('Lá»‹ch sá»­ sáº£n xuáº¥t', 'Production history'),
-      overview: tr('Tá»•ng quan', 'Overview'),
-      scraping: tr('Scraping', 'Scraping'),
-      videos: tr('Video', 'Videos'),
-      production: tr('Sáº£n xuáº¥t', 'Production'),
-      queue: tr('HÃ ng Ä‘á»£i', 'Queue'),
-      settings: tr('CÃ i Ä‘áº·t', 'Settings'),
+      history: t('navigation.history'),
+      overview: t('navigation.overview'),
+      scraping: t('navigation.scraping'),
+      videos: t('navigation.videos'),
+      production: t('navigation.production'),
+      queue: t('navigation.queue'),
+      settings: t('navigation.settings'),
     };
 
     const shortLabels = {
-      history: tr('LSX', 'HIS'),
-      overview: tr('TQ', 'OVW'),
-      scraping: tr('SCR', 'SCR'),
-      videos: tr('VID', 'VID'),
-      production: tr('PRO', 'PRO'),
-      queue: tr('QUE', 'QUE'),
-      settings: tr('SET', 'SET'),
+      history: t('navigation.historyShort'),
+      overview: t('navigation.overviewShort'),
+      scraping: t('navigation.scrapingShort'),
+      videos: t('navigation.videosShort'),
+      production: t('navigation.productionShort'),
+      queue: t('navigation.queueShort'),
+      settings: t('navigation.settingsShort'),
     };
 
     return NAV_SECTIONS.map((item) => ({
@@ -139,7 +145,7 @@ export default function ProductionHistory() {
       label: labels[item.id] || item.label,
       shortLabel: shortLabels[item.id] || item.label?.slice(0, 3),
     }));
-  }, [isVi]);
+  }, [t]);
 
   const templateOptions = useMemo(() => {
     const options = buildTemplateOptions(templates);
@@ -187,28 +193,46 @@ export default function ProductionHistory() {
   };
 
   const openRemashup = (item) => {
+    const productionConfig = item?.videoConfig?.productionConfig || {};
+    const mashupLog = item?.mashupLog || {};
+    const templateName = mashupLog?.templateName || productionConfig?.templateName || item?.templateName || '';
+    const templateStrategy = mashupLog?.templateStrategy || productionConfig?.templateStrategy || DEFAULT_REMASHUP_CONFIG.templateStrategy;
+
     setRemashupItem(item);
     setRemashupConfig({
-      templateName: item?.mashupLog?.templateName || item?.templateName || '',
-      manualSubVideo: null,
-      startImmediately: true,
+      ...DEFAULT_REMASHUP_CONFIG,
+      templateName,
+      templateStrategy,
+      subtitleMode: mashupLog?.subtitleMode || productionConfig?.subtitleMode || DEFAULT_REMASHUP_CONFIG.subtitleMode,
+      capcutAutoCaption: mashupLog?.capcutAutoCaption ?? productionConfig?.capcutAutoCaption ?? DEFAULT_REMASHUP_CONFIG.capcutAutoCaption,
+      watermarkEnabled: mashupLog?.watermarkEnabled ?? productionConfig?.watermarkEnabled ?? DEFAULT_REMASHUP_CONFIG.watermarkEnabled,
+      voiceoverEnabled: mashupLog?.voiceoverEnabled ?? productionConfig?.voiceoverEnabled ?? DEFAULT_REMASHUP_CONFIG.voiceoverEnabled,
     });
     setRemashupOpen(true);
   };
 
   const runRemashup = async () => {
     if (!remashupItem) return;
+    if (remashupConfig.templateStrategy === 'specific' && !remashupConfig.templateName) {
+      toast.error(t('messages.selectTemplate'));
+      return;
+    }
     setBusyAction(remashupItem.queueId);
     try {
       await videoPipelineApi.remashupJob(remashupItem.queueId, {
-        templateName: remashupConfig.templateName || undefined,
+        templateStrategy: remashupConfig.templateStrategy,
+        templateName: remashupConfig.templateStrategy === 'specific' ? remashupConfig.templateName || undefined : undefined,
         manualSubVideo: remashupConfig.manualSubVideo || null,
+        subtitleMode: remashupConfig.subtitleMode,
+        capcutAutoCaption: remashupConfig.subtitleMode === 'none' ? false : remashupConfig.capcutAutoCaption,
+        watermarkEnabled: remashupConfig.watermarkEnabled,
+        voiceoverEnabled: remashupConfig.voiceoverEnabled,
         startImmediately: remashupConfig.startImmediately,
       });
-      toast.success(tr('ÄÃ£ cháº¡y láº¡i mashup.', 'Re-mashup started.'));
+      toast.success(t('messages.remashupStarted'));
       setRemashupOpen(false);
       setRemashupItem(null);
-      setRemashupConfig({ templateName: '', manualSubVideo: null, startImmediately: true });
+      setRemashupConfig(DEFAULT_REMASHUP_CONFIG);
       loadHistory();
     } catch (error) {
       toast.error(error.message || 'Cannot re-mashup');
@@ -218,11 +242,11 @@ export default function ProductionHistory() {
   };
 
   const deleteItem = async (queueId) => {
-    if (!window.confirm(tr('XoÃ¡ production history nÃ y?', 'Delete this production history item?'))) return;
+    if (!window.confirm(t('messages.deleted'))) return;
     setBusyAction(queueId);
     try {
       await videoPipelineApi.deleteProductionHistoryItem(queueId);
-      toast.success(tr('ÄÃ£ xoÃ¡.', 'Deleted.'));
+      toast.success(t('messages.deleted'));
       loadHistory();
     } catch (error) {
       toast.error(error.message || 'Cannot delete history item');
@@ -231,49 +255,119 @@ export default function ProductionHistory() {
     }
   };
 
-  const openPublish = async (item) => {
-    setBusyAction(item.queueId);
+  const openPublishTargets = async (items) => {
+    if (!items?.length) return;
+    setBusyAction(items[0].queueId || 'publish');
     try {
-      const response = await videoPipelineApi.getConnections();
+      const response = await videoPipelineApi.getPublishAccounts();
       setPublishAccounts(response.accounts || []);
       setSelectedPublishAccounts([]);
-      const metadata = item?.publishMetadata || item?.metadata?.publishMetadata || item?.videoConfig?.publishMetadata || {};
+      const primary = items[0];
+      const metadata = primary?.publishMetadata || primary?.metadata?.publishMetadata || primary?.videoConfig?.publishMetadata || {};
       setPublishConfig({
-        title: metadata?.title || item?.sourceTitle || '',
+        title: metadata?.title || primary?.sourceTitle || '',
         description: metadata?.description || '',
         tags: (metadata?.tags || []).join(', '),
         hashtags: (metadata?.hashtags || []).join(' '),
       });
-      setRemashupItem(item);
+      setRemashupItem(primary);
+      setPublishTargets(items);
       setPublishOpen(true);
     } catch (error) {
-      toast.error(error.message || 'Cannot load connections');
+      toast.error(error.message || 'Cannot load accounts');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const openPublish = async (item) => {
+    await openPublishTargets([item]);
+  };
+
+  const openPublishSelection = async () => {
+    const selected = history.filter((item) => selectedQueueIds.includes(item.queueId));
+    const readyItems = selected.filter((item) => item.status === 'ready');
+    if (!readyItems.length) {
+      toast.error(t('messages.selectReadyVideos'));
+      return;
+    }
+    await openPublishTargets(readyItems);
+  };
+
+  const runRemashupSelection = async () => {
+    const selected = history.filter((item) => selectedQueueIds.includes(item.queueId));
+    if (!selected.length) {
+      toast.error(t('messages.selectAtLeastOne'));
+      return;
+    }
+    setBusyAction('remashup-selection');
+    try {
+      await Promise.all(
+        selected.map((item) =>
+          videoPipelineApi.remashupJob(item.queueId, {
+            templateName: undefined,
+            manualSubVideo: null,
+            startImmediately: true,
+          })
+        )
+      );
+      toast.success(t('messages.remashupStarted'));
+      setSelectedQueueIds([]);
+      loadHistory();
+    } catch (error) {
+      toast.error(error.message || 'Cannot re-mashup');
     } finally {
       setBusyAction('');
     }
   };
 
   const runPublish = async () => {
-    if (!remashupItem) return;
+    if (!publishTargets.length) return;
     if (!selectedPublishAccounts.length) {
-      toast.error(tr('Chá»n Ã­t nháº¥t 1 tÃ i khoáº£n.', 'Select at least one account.'));
+      toast.error(t('messages.selectAccounts'));
       return;
     }
-    setBusyAction(remashupItem.queueId);
+    setBusyAction(publishTargets[0].queueId || 'publish');
     try {
       const title = normalizeText(publishConfig.title);
       const description = normalizeText(publishConfig.description);
-      const tags = parseListInput(publishConfig.tags);
-      const hashtags = parseListInput(publishConfig.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
-      const uploadConfig = {};
-      if (title) uploadConfig.title = title;
-      if (description) uploadConfig.description = description;
-      if (tags.length) uploadConfig.tags = tags;
-      if (hashtags.length) uploadConfig.hashtags = hashtags;
+      const tags = publishConfig.tags
+        .split(',')
+        .map((item) => normalizeText(item))
+        .filter(Boolean);
+      const hashtags = publishConfig.hashtags
+        .split(' ')
+        .map((item) => normalizeText(item))
+        .filter(Boolean);
+      const accountIds = selectedPublishAccounts;
+      const videoMetadata = { title, description, tags, hashtags };
+      const publishResults = [];
 
-      await videoPipelineApi.publishJob(remashupItem.queueId, { accountIds: selectedPublishAccounts, uploadConfig });
-      toast.success(tr('ÄÃ£ gá»­i publish.', 'Publish triggered.'));
+      for (const target of publishTargets) {
+        const result = await videoPipelineApi.publishToYoutubeAccounts(target.queueId, {
+          accountIds,
+          videoMetadata,
+        });
+        publishResults.push({ queueId: target.queueId, result });
+      }
+
+      const successful = publishResults.filter((item) => item.result?.success).length;
+      const failed = publishResults.length - successful;
+
+      if (successful) {
+        setHistory((prev) => prev.map((item) => {
+          const matched = publishResults.find((entry) => entry.queueId === item.queueId && entry.result?.success);
+          return matched ? { ...item, status: 'uploaded' } : item;
+        }));
+        toast.success(tr(`Đã publish ${successful}/${publishResults.length}.`, `Published ${successful}/${publishResults.length}.`));
+      }
+
+      if (failed) {
+        toast.error(tr(`Có ${failed} publish thất bại.`, `${failed} publish failed.`));
+      }
       setPublishOpen(false);
+      setPublishTargets([]);
+      setSelectedQueueIds([]);
       setRemashupItem(null);
       loadHistory();
     } catch (error) {
@@ -291,33 +385,71 @@ export default function ProductionHistory() {
     loadHistory(pagination.page);
   }, [pagination.page]);
 
+  useEffect(() => {
+    setSelectedQueueIds((prev) => prev.filter((id) => history.some((item) => item.queueId === id)));
+  }, [history]);
+
+  const selectableQueueIds = useMemo(() => history.map((item) => item.queueId).filter(Boolean), [history]);
+  const allSelected = selectableQueueIds.length > 0 && selectedQueueIds.length === selectableQueueIds.length;
+  const publishableAccounts = useMemo(
+    () => (publishAccounts || []).filter((account) => account.isActive && account.isVerified),
+    [publishAccounts]
+  );
+  const toggleSelectQueueId = (queueId) => {
+    setSelectedQueueIds((prev) =>
+      prev.includes(queueId) ? prev.filter((id) => id != queueId) : [...prev, queueId]
+    );
+  };
+  const toggleSelectAll = () => {
+    setSelectedQueueIds((prev) => (prev.length === selectableQueueIds.length ? [] : selectableQueueIds));
+  };
+
   return (
-    <ModalPortal>
+
     <VideoPipelineLayout
-      title={tr('Lá»‹ch sá»­ production', 'Production history')}
-      subtitle={tr('Theo dÃµi chi tiáº¿t mashup, template, sub-video vÃ  scoring.', 'Track mashup details including template, sub-video, and scoring.')}
+      title={t('pageTitle')}
+      subtitle={t('pageSubtitle')}
       navItems={navItems}
       compactNav
       actions={(
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => loadHistory(pagination.page)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')} disabled={loading}>
             <RefreshCcw className="h-4 w-4" />
-            {tr('LÃ m má»›i', 'Refresh')}
+            {t('buttons.refresh')}
           </button>
           <Link to="/video-pipeline/production" className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-            {tr('Quay láº¡i Production', 'Back to Production')}
+            {t('buttons.backToProduction')}
           </Link>
         </div>
       )}
     >
       <section className={`${SURFACE_CARD_CLASS} p-5`}>
         <SectionHeader
-          title={tr('Danh sÃ¡ch production history', 'Production history list')}
-          subtitle={tr('Má»—i dÃ²ng lÃ  má»™t mashup job vá»›i template, sub selection vÃ  output.', 'Each row is a mashup job with template, sub selection, and output.')}
+          title={t('labels.list')}
+          subtitle={t('labels.listSubtitle')}
           actions={(
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span>{`${pagination.total || 0} ${tr('má»¥c', 'items')}`}</span>
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-400">
+              <span>{`${pagination.total || 0} ${t('labels.items')}`}</span>
               <StatusPill tone="sky">{`Page ${pagination.page}/${pagination.pages}`}</StatusPill>
+              {selectedQueueIds.length ? (
+                <StatusPill tone="indigo">{`${selectedQueueIds.length} ${t('labels.selected')}`}</StatusPill>
+              ) : null}
+              <button
+                type="button"
+                className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}
+                onClick={runRemashupSelection}
+                disabled={!selectedQueueIds.length || busyAction === 'remashup-selection'}
+              >
+                {t('buttons.remashupSelected')}
+              </button>
+              <button
+                type="button"
+                className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}
+                onClick={openPublishSelection}
+                disabled={!selectedQueueIds.length}
+              >
+                {t('buttons.publishSelected')}
+              </button>
             </div>
           )}
         />
@@ -327,20 +459,38 @@ export default function ProductionHistory() {
               <table className="min-w-[1320px] text-left text-sm">
                 <thead className="border-b border-white/10 text-xs uppercase tracking-[0.18em] text-slate-400">
                   <tr>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Output', 'Output')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Main', 'Main')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Sub', 'Sub')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Template', 'Template')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Phá»¥ Ä‘á»', 'Subtitle')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('Tráº¡ng thÃ¡i', 'Status')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('HoÃ n táº¥t', 'Completed')}</th>
-                  <th className="px-4 py-3 whitespace-nowrap">{tr('HÃ nh Ä‘á»™ng', 'Actions')}</th>
+                    <th className="px-4 py-3 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-white/20 bg-white/5 text-sky-400 focus:ring-sky-400/40"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        aria-label={t('messages.selectAllCheckbox')}
+                      />
+                    </th>
+                    <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.output')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.main')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.sub')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.template')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.subtitle')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.status')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.completed')}</th>
+                  <th className="px-4 py-3 whitespace-nowrap">{t('tableHeaders.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map((item) => (
                     <tr key={item.queueId} className="border-b border-white/5">
-                    <td className="px-4 py-3 align-top">
+                      <td className="px-4 py-3 align-top">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 text-sky-400 focus:ring-sky-400/40"
+                          checked={selectedQueueIds.includes(item.queueId)}
+                          onChange={() => toggleSelectQueueId(item.queueId)}
+                          aria-label={t('messages.selectCheckbox')}
+                        />
+                      </td>
+                      <td className="px-4 py-3 align-top">
                       <div className="flex w-[140px] flex-col gap-2">
                         <div className="h-16 w-24 overflow-hidden rounded-xl border border-white/10 bg-white/5">
                           {resolveOutputPreview(item) ? (
@@ -355,7 +505,7 @@ export default function ProductionHistory() {
                         </div>
                         <button onClick={() => setPreviewItem(item)} className={getActionButtonClass('sky', 'px-2 py-1 text-[10px]')} disabled={busyAction === item.queueId}>
                           <Eye className="h-3 w-3" />
-                          {tr('Preview', 'Preview')}
+                          {t('buttons.preview')}
                         </button>
                       </div>
                     </td>
@@ -394,7 +544,7 @@ export default function ProductionHistory() {
                     <td className="px-4 py-3 align-top">
                       <p className="text-xs font-semibold text-white">{item.mashupLog?.subtitleMode || item.videoConfig?.productionConfig?.subtitleMode || 'none'}</p>
                       <p className="mt-1 text-xs text-slate-500 leading-5 line-clamp-2">
-                        {normalizeText(item.mashupLog?.subtitleText || item.videoConfig?.productionConfig?.subtitleText || item.videoConfig?.productionConfig?.subtitleContext || '') || tr('KhÃ´ng cÃ³', 'N/A')}
+                        {normalizeText(item.mashupLog?.subtitleText || item.videoConfig?.productionConfig?.subtitleText || item.videoConfig?.productionConfig?.subtitleContext || '') || t('messages.noHistory')}
                       </p>
                     </td>
                     <td className="px-4 py-3 align-top">
@@ -410,19 +560,19 @@ export default function ProductionHistory() {
                       <div className="flex flex-wrap gap-2 whitespace-nowrap">
                         <button onClick={() => openDetails(item.queueId)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')} disabled={busyAction === item.queueId}>
                           <Eye className="h-4 w-4" />
-                          {tr('Chi tiáº¿t', 'Details')}
+                          {t('buttons.details')}
                         </button>
                         <button onClick={() => openRemashup(item)} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={busyAction === item.queueId}>
                           <Pencil className="h-4 w-4" />
-                          {tr('Re-mashup', 'Re-mashup')}
+                          {t('buttons.remashup')}
                         </button>
                         <button onClick={() => openPublish(item)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={busyAction === item.queueId}>
                           <Send className="h-4 w-4" />
-                          {tr('Publish', 'Publish')}
+                          {t('buttons.publish')}
                         </button>
                         <button onClick={() => deleteItem(item.queueId)} className={getActionButtonClass('amber', 'px-3 py-2 text-xs')} disabled={busyAction === item.queueId}>
                           <Trash2 className="h-4 w-4" />
-                          {tr('XoÃ¡', 'Delete')}
+                          {t('buttons.delete')}
                         </button>
                       </div>
                     </td>
@@ -431,7 +581,7 @@ export default function ProductionHistory() {
                 {!history.length ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-6 text-center text-sm text-slate-500">
-                      {tr('ChÆ°a cÃ³ dá»¯ liá»‡u.', 'No history yet.')}
+                      {t('messages.noHistory')}
                     </td>
                   </tr>
                 ) : null}
@@ -441,7 +591,7 @@ export default function ProductionHistory() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
-              {tr('Hiá»ƒn thá»‹ 20 má»¥c má»—i trang.', 'Showing 20 items per page.')}
+              {t('labels.morePages')}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -449,14 +599,14 @@ export default function ProductionHistory() {
                 className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}
                 disabled={pagination.page <= 1}
               >
-                {tr('Trang trÆ°á»›c', 'Prev')}
+                {t('buttons.prev')}
               </button>
               <button
                 onClick={() => setPagination((prev) => ({ ...prev, page: Math.min(prev.pages || 1, prev.page + 1) }))}
                 className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}
                 disabled={pagination.page >= pagination.pages}
               >
-                {tr('Trang sau', 'Next')}
+                {t('buttons.next')}
               </button>
             </div>
           </div>
@@ -467,11 +617,11 @@ export default function ProductionHistory() {
         <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className={`${SURFACE_CARD_CLASS} w-full max-w-3xl max-h-[80vh] overflow-hidden p-5`}>
             <SectionHeader
-              title={tr('Preview output', 'Preview output')}
+              title={t('modals.previewTitle')}
               subtitle={previewItem.queueId}
               actions={(
                 <button onClick={() => setPreviewItem(null)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-                  {tr('ÄÃ³ng', 'Close')}
+                  {t('buttons.close')}
                 </button>
               )}
             />
@@ -485,7 +635,7 @@ export default function ProductionHistory() {
             </div>
             {previewItem.completedDriveSync?.webViewLink ? (
               <a className="mt-3 inline-flex text-xs text-sky-200 underline-offset-2 hover:underline" href={previewItem.completedDriveSync.webViewLink} target="_blank" rel="noreferrer">
-                {tr('Má»Ÿ file Drive', 'Open Drive output')}
+                {t('modals.openDriveOutput')}
               </a>
             ) : null}
           </div>
@@ -500,13 +650,13 @@ export default function ProductionHistory() {
               subtitle={detailItem.queueId}
               actions={(
                 <button onClick={() => setDetailOpen(false)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-                  {tr('ÄÃ³ng', 'Close')}
+                  {t('buttons.close')}
                 </button>
               )}
             />
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className={SUBTLE_PANEL_CLASS}>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Main video', 'Main video')}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('labels.mainVideo')}</p>
                 <div className="mt-3 flex items-start gap-3">
                   {detailItem.mainThumbnail ? (
                     <img src={detailItem.mainThumbnail} alt="main" className="h-20 w-20 rounded-2xl object-cover" />
@@ -524,7 +674,7 @@ export default function ProductionHistory() {
                 </div>
               </div>
               <div className={SUBTLE_PANEL_CLASS}>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Sub video', 'Sub video')}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('labels.subVideo')}</p>
                 <div className="mt-3 flex items-start gap-3">
                   {detailItem.subThumbnail ? (
                     <img src={detailItem.subThumbnail} alt="sub" className="h-20 w-20 rounded-2xl object-cover" />
@@ -544,35 +694,35 @@ export default function ProductionHistory() {
             </div>
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className={SUBTLE_PANEL_CLASS}>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Template', 'Template')}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('labels.templateLabel')}</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-200">
-                  <p>{tr('TÃªn template:', 'Template:')} <span className="font-semibold text-white">{detailItem.mashupLog?.templateName || detailItem.videoConfig?.productionConfig?.templateName || 'reaction'}</span></p>
-                  <p>{tr('NhÃ³m:', 'Group:')} <span className="text-slate-300">{detailItem.mashupLog?.templateGroup || 'reaction'}</span></p>
-                  <p>{tr('Layout:', 'Layout:')} <span className="text-slate-300">{detailItem.mashupLog?.layout || detailItem.videoConfig?.productionConfig?.layout || '2-3-1-3'}</span></p>
-                  <p>{tr('Duration:', 'Duration:')} <span className="text-slate-300">{detailItem.mashupLog?.duration || detailItem.videoConfig?.productionConfig?.duration || 30}s</span></p>
-                  <p>{tr('Subtitle mode:', 'Subtitle mode:')} <span className="text-slate-300">{detailItem.mashupLog?.subtitleMode || detailItem.videoConfig?.productionConfig?.subtitleMode || 'none'}</span></p>
-                  <p>{tr('Subtitle text:', 'Subtitle text:')} <span className="text-slate-300">{normalizeText(detailItem.mashupLog?.subtitleText || detailItem.videoConfig?.productionConfig?.subtitleText || detailItem.videoConfig?.productionConfig?.subtitleContext || '') || tr('KhÃ´ng cÃ³', 'N/A')}</span></p>
+                  <p>{t('labels.template')} <span className="font-semibold text-white">{detailItem.mashupLog?.templateName || detailItem.videoConfig?.productionConfig?.templateName || 'reaction'}</span></p>
+                  <p>{t('labels.group')} <span className="text-slate-300">{detailItem.mashupLog?.templateGroup || 'reaction'}</span></p>
+                  <p>{t('labels.layout')} <span className="text-slate-300">{detailItem.mashupLog?.layout || detailItem.videoConfig?.productionConfig?.layout || '2-3-1-3'}</span></p>
+                  <p>{t('labels.duration')} <span className="text-slate-300">{detailItem.mashupLog?.duration || detailItem.videoConfig?.productionConfig?.duration || 30}s</span></p>
+                  <p>{t('labels.subtitleMode')} <span className="text-slate-300">{detailItem.mashupLog?.subtitleMode || detailItem.videoConfig?.productionConfig?.subtitleMode || 'none'}</span></p>
+                  <p>{t('labels.subtitleText')} <span className="text-slate-300">{normalizeText(detailItem.mashupLog?.subtitleText || detailItem.videoConfig?.productionConfig?.subtitleText || detailItem.videoConfig?.productionConfig?.subtitleContext || '') || t('messages.noHistory')}</span></p>
                 </div>
               </div>
               <div className={SUBTLE_PANEL_CLASS}>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Sub selection', 'Sub selection')}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('modals.subSelection')}</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-200">
-                  <p>{tr('CÆ¡ cháº¿:', 'Method:')} <span className="text-slate-300">{detailItem.mashupLog?.selection?.method || getSubSelectionLabel(detailItem.mashupLog)}</span></p>
+                  <p>{t('labels.method')} <span className="text-slate-300">{detailItem.mashupLog?.selection?.method || getSubSelectionLabel(detailItem.mashupLog)}</span></p>
                   {detailItem.mashupLog?.selection?.sourceName ? (
-                    <p>{tr('Nguá»“n:', 'Source:')} <span className="text-slate-300">{detailItem.mashupLog.selection.sourceName}</span></p>
+                    <p>{t('labels.source')} <span className="text-slate-300">{detailItem.mashupLog.selection.sourceName}</span></p>
                   ) : null}
                   {detailItem.mashupLog?.selection?.score != null ? (
-                    <p>{tr('Äiá»ƒm:', 'Score:')} <span className="text-slate-300">{detailItem.mashupLog.selection.score}</span></p>
+                    <p>{t('labels.score')} <span className="text-slate-300">{detailItem.mashupLog.selection.score}</span></p>
                   ) : null}
                   {detailItem.mashupLog?.selection?.desiredThemes?.length ? (
-                    <p>{tr('Theme hint:', 'Theme hints:')} <span className="text-slate-300">{detailItem.mashupLog.selection.desiredThemes.join(', ')}</span></p>
+                    <p>{t('labels.themeHints')} <span className="text-slate-300">{detailItem.mashupLog.selection.desiredThemes.join(', ')}</span></p>
                   ) : null}
                 </div>
               </div>
             </div>
             {detailItem.mashupLog?.selection?.candidates?.length ? (
               <div className={`${SUBTLE_PANEL_CLASS} mt-4`}>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Top candidates', 'Top candidates')}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('modals.topCandidates')}</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-200">
                   {detailItem.mashupLog.selection.candidates.map((candidate) => (
                     <div key={candidate.id || candidate.name} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
@@ -584,12 +734,12 @@ export default function ProductionHistory() {
               </div>
             ) : null}
             <div className={`${SUBTLE_PANEL_CLASS} mt-4`}>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{tr('Output', 'Output')}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t('modals.output')}</p>
               <div className="mt-3 space-y-2 text-sm text-slate-200">
-                <p>{tr('Output path:', 'Output path:')} <span className="text-slate-400">{detailItem.videoConfig?.outputPath || detailItem.videoConfig?.videoPath || 'N/A'}</span></p>
+                <p>{t('labels.outputPath')} <span className="text-slate-400">{detailItem.videoConfig?.outputPath || detailItem.videoConfig?.videoPath || 'N/A'}</span></p>
                 {detailItem.videoConfig?.completedDriveSync?.webViewLink ? (
                   <a className="text-sky-200 underline-offset-2 hover:underline" href={detailItem.videoConfig.completedDriveSync.webViewLink} target="_blank" rel="noreferrer">
-                    {tr('Má»Ÿ file Drive', 'Open Drive output')}
+                    {t('modals.openDriveOutput')}
                   </a>
                 ) : null}
               </div>
@@ -599,47 +749,112 @@ export default function ProductionHistory() {
       ) : null}
 
       {remashupOpen && remashupItem ? (
-        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-slate-950/70 p-4">
+        <div className="fixed inset-0 z-50 app-layer-modal flex items-center justify-center bg-slate-950/70 p-4">
           <div className={`${SURFACE_CARD_CLASS} w-full max-w-3xl p-6`}>
             <SectionHeader
-              title={tr('Re-mashup job', 'Re-mashup job')}
+              title={t('modals.remashupTitle')}
               subtitle={remashupItem.queueId}
               actions={(
                 <button onClick={() => setRemashupOpen(false)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-                  {tr('ÄÃ³ng', 'Close')}
+                  {t('buttons.close')}
                 </button>
               )}
             />
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-2 text-xs text-slate-400">
-                {tr('Template', 'Template')}
+                {t('labels.templateStrategy')}
+                <select
+                  value={remashupConfig.templateStrategy}
+                  onChange={(event) => setRemashupConfig((prev) => ({ ...prev, templateStrategy: event.target.value }))}
+                  className={INPUT_CLASS}
+                >
+                  <option value="random">{t('options.random')}</option>
+                  <option value="weighted">{t('options.weighted')}</option>
+                  <option value="ai_suggested">{t('options.aiSuggested')}</option>
+                  <option value="specific">{t('options.specific')}</option>
+                </select>
+              </label>
+              <label className="space-y-2 text-xs text-slate-400">
+                {t('labels.subVideo')}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRemashupConfig((prev) => ({ ...prev, manualSubVideo: null }))}
+                    className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}
+                  >
+                    {t('buttons.autoSelection')}
+                  </button>
+                  <button onClick={() => setGalleryPickerOpen(true)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>
+                    {t('buttons.pickFromGallery')}
+                  </button>
+                  {remashupConfig.manualSubVideo ? (
+                    <button onClick={() => setRemashupConfig((prev) => ({ ...prev, manualSubVideo: null }))} className={getActionButtonClass('amber', 'px-3 py-2 text-xs')}>
+                      {t('buttons.clear')}
+                    </button>
+                  ) : null}
+                </div>
+                <div className={`${SUBTLE_PANEL_CLASS} mt-2`}>
+                  <p className="text-sm text-white">{remashupConfig.manualSubVideo?.name || t('buttons.autoSelection')}</p>
+                  <p className="mt-1 text-xs text-slate-500">{remashupConfig.manualSubVideo?.assetId || 'Uses auto selection rules'}</p>
+                </div>
+              </label>
+            </div>
+            {remashupConfig.templateStrategy === 'specific' ? (
+              <label className="mt-4 space-y-2 text-xs text-slate-400">
+                {t('labels.specificTemplate')}
                 <select
                   value={remashupConfig.templateName}
                   onChange={(event) => setRemashupConfig((prev) => ({ ...prev, templateName: event.target.value }))}
                   className={INPUT_CLASS}
                 >
+                  <option value="" disabled>{t('placeholders.selectTemplate')}</option>
                   {templateOptions.map((item) => (
                     <option key={item.value} value={item.value}>{item.label}</option>
                   ))}
                 </select>
               </label>
+            ) : null}
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-2 text-xs text-slate-400">
-                {tr('Sub video', 'Sub video')}
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setGalleryPickerOpen(true)} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>
-                    {tr('Chá»n tá»« gallery', 'Pick from gallery')}
-                  </button>
-                  {remashupConfig.manualSubVideo ? (
-                    <button onClick={() => setRemashupConfig((prev) => ({ ...prev, manualSubVideo: null }))} className={getActionButtonClass('amber', 'px-3 py-2 text-xs')}>
-                      {tr('Bá» chá»n', 'Clear')}
-                    </button>
-                  ) : null}
-                </div>
-                <div className={`${SUBTLE_PANEL_CLASS} mt-2`}>
-                  <p className="text-sm text-white">{remashupConfig.manualSubVideo?.name || tr('Auto selection', 'Auto selection')}</p>
-                  <p className="mt-1 text-xs text-slate-500">{remashupConfig.manualSubVideo?.assetId || tr('Sá»­ dá»¥ng rule tá»± Ä‘á»™ng', 'Uses auto selection rules')}</p>
-                </div>
+                {t('labels.subtitle')}
+                <select
+                  value={remashupConfig.subtitleMode}
+                  onChange={(event) => setRemashupConfig((prev) => ({ ...prev, subtitleMode: event.target.value }))}
+                  className={INPUT_CLASS}
+                >
+                  <option value="auto">{t('options.auto')}</option>
+                  <option value="none">{t('options.none')}</option>
+                </select>
               </label>
+              <div className={`${SUBTLE_PANEL_CLASS} flex flex-col gap-3`}>
+                <label className="flex items-center gap-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={remashupConfig.capcutAutoCaption}
+                    onChange={(event) => setRemashupConfig((prev) => ({ ...prev, capcutAutoCaption: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                    disabled={remashupConfig.subtitleMode === 'none'}
+                  />
+                  {t('modals.capcutAutoCaption')}
+                </label>
+                <label className="flex items-center gap-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={remashupConfig.watermarkEnabled}
+                    onChange={(event) => setRemashupConfig((prev) => ({ ...prev, watermarkEnabled: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('modals.watermark')}
+                </label>
+                <label className="flex items-center gap-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={remashupConfig.voiceoverEnabled}
+                    onChange={(event) => setRemashupConfig((prev) => ({ ...prev, voiceoverEnabled: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('modals.voiceover')}
+                </label>
+              </div>
             </div>
             <label className={`${SUBTLE_PANEL_CLASS} mt-4 flex items-center gap-3 text-sm text-slate-200`}>
               <input
@@ -648,12 +863,19 @@ export default function ProductionHistory() {
                 onChange={(event) => setRemashupConfig((prev) => ({ ...prev, startImmediately: event.target.checked }))}
                 className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
               />
-              {tr('Render ngay sau khi reset', 'Render immediately after reset')}
+              {t('modals.renderImmediately')}
             </label>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={runRemashup} className={getActionButtonClass('violet')} disabled={busyAction === remashupItem.queueId}>
+              <button
+                onClick={runRemashup}
+                className={getActionButtonClass('violet')}
+                disabled={
+                  busyAction === remashupItem.queueId
+                  || (remashupConfig.templateStrategy === 'specific' && !remashupConfig.templateName)
+                }
+              >
                 <Clapperboard className="h-4 w-4" />
-                {tr('Cháº¡y láº¡i mashup', 'Run re-mashup')}
+                {t('buttons.runRemashup')}
               </button>
             </div>
           </div>
@@ -664,36 +886,36 @@ export default function ProductionHistory() {
         <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-slate-950/70 p-4">
           <div className={`${SURFACE_CARD_CLASS} w-full max-w-2xl p-6`}>
             <SectionHeader
-              title={tr('Publish job', 'Publish job')}
+              title={t('modals.publishTitle')}
               subtitle={remashupItem.queueId}
               actions={(
                 <button onClick={() => setPublishOpen(false)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-                  {tr('ÄÃ³ng', 'Close')}
+                  {t('buttons.close')}
                 </button>
               )}
             />
             <div className="mt-4 grid grid-cols-1 gap-3">
               <label className="space-y-2 text-xs text-slate-400">
-                {tr('TiÃªu Ä‘á»', 'Title')}
+                 {t('labels.title')}
                 <input
                   value={publishConfig.title}
                   onChange={(event) => setPublishConfig((prev) => ({ ...prev, title: event.target.value }))}
                   className={INPUT_CLASS}
-                  placeholder={tr('Nháº­p tiÃªu Ä‘á» video', 'Enter video title')}
+                  placeholder={t('placeholders.enterTitle')}
                 />
               </label>
               <label className="space-y-2 text-xs text-slate-400">
-                {tr('MÃ´ táº£', 'Description')}
+                 {t('labels.description')}
                 <textarea
                   value={publishConfig.description}
                   onChange={(event) => setPublishConfig((prev) => ({ ...prev, description: event.target.value }))}
                   className={`${INPUT_CLASS} min-h-[88px]`}
-                  placeholder={tr('MÃ´ táº£ hoáº·c rule publish', 'Description or publish notes')}
+                  placeholder={t('placeholders.enterDescription')}
                 />
               </label>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="space-y-2 text-xs text-slate-400">
-                  {tr('Hashtag', 'Hashtags')}
+                   {t('labels.hashtags')}
                   <input
                     value={publishConfig.hashtags}
                     onChange={(event) => setPublishConfig((prev) => ({ ...prev, hashtags: event.target.value }))}
@@ -702,7 +924,7 @@ export default function ProductionHistory() {
                   />
                 </label>
                 <label className="space-y-2 text-xs text-slate-400">
-                  {tr('Tag', 'Tags')}
+                   {t('labels.tags')}
                   <input
                     value={publishConfig.tags}
                     onChange={(event) => setPublishConfig((prev) => ({ ...prev, tags: event.target.value }))}
@@ -713,34 +935,34 @@ export default function ProductionHistory() {
               </div>
             </div>
             <div className="mt-4 space-y-2">
-              {(publishAccounts || []).map((account) => (
-                <label key={account.id} className={`${SUBTLE_PANEL_CLASS} flex items-center gap-3 text-sm text-slate-200`}>
+              {publishableAccounts.map((account) => (
+                <label key={account.accountId} className={`${SUBTLE_PANEL_CLASS} flex items-center gap-3 text-sm text-slate-200`}>
                   <input
                     type="checkbox"
-                    checked={selectedPublishAccounts.includes(account.id)}
+                    checked={selectedPublishAccounts.includes(account.accountId)}
                     onChange={(event) => {
                       setSelectedPublishAccounts((prev) => (
                         event.target.checked
-                          ? [...prev, account.id]
-                          : prev.filter((id) => id !== account.id)
+                          ? [...prev, account.accountId]
+                          : prev.filter((id) => id !== account.accountId)
                       ));
                     }}
                     className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
                   />
                   <div>
-                    <p className="text-sm font-semibold text-white">{account.displayName || account.username || account.id}</p>
+                    <p className="text-sm font-semibold text-white">{account.channelInfo?.title || account.displayName || account.username || account.accountId}</p>
                     <p className="text-xs text-slate-500">{account.platform}</p>
                   </div>
                 </label>
               ))}
-              {!publishAccounts?.length ? (
-                <p className="text-sm text-slate-500">{tr('ChÆ°a cÃ³ account publish.', 'No publish accounts available.')}</p>
+              {!publishableAccounts.length ? (
+                <p className="text-sm text-slate-500">{t('messages.noPublishAccounts')}</p>
               ) : null}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={runPublish} className={getActionButtonClass('emerald')} disabled={busyAction === remashupItem.queueId}>
                 <Send className="h-4 w-4" />
-                {tr('Publish', 'Publish')}
+                {t('buttons.publish')}
               </button>
             </div>
           </div>
@@ -753,7 +975,7 @@ export default function ProductionHistory() {
         onSelect={(item) => {
           const localPath = item.localStorage?.path || item.storage?.localPath || '';
           if (!localPath) {
-            toast.error(tr('Asset chÆ°a cÃ³ local path Ä‘á»ƒ mashup.', 'Selected asset has no local path.'));
+            toast.error(t('messages.noAssetLocalPath'));
             return;
           }
           setRemashupConfig((prev) => ({
@@ -768,13 +990,13 @@ export default function ProductionHistory() {
             },
           }));
           setGalleryPickerOpen(false);
-          toast.success(tr('ÄÃ£ chá»n sub video.', 'Sub video selected.'));
+          toast.success(t('messages.subVideoSelected'));
         }}
         assetType="video"
-        title={tr('Chá»n sub video tá»« gallery', 'Pick sub video from gallery')}
+        title={t('buttons.pickFromGallery')}
       />
     </VideoPipelineLayout>
-    </ModalPortal>
+
   );
 }
 
