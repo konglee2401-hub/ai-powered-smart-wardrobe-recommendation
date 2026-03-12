@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  ArchiveRestore,
   CheckCircle2,
   Clapperboard,
   Download,
@@ -1123,6 +1124,13 @@ export default function VideoPipeline() {
     await runAction(`start-job-${queueId}`, async () => {
       const result = await videoPipelineApi.startJob(queueId);
       toast.success(result.message || t('videoPipeline.job_started_manually'));
+      await Promise.allSettled([loadJobs(), loadQueueRuntime(), loadDashboard(), loadProductionOverview()]);
+    });
+  };
+  const forceRetryJob = async (queueId) => {
+    await runAction(`force-retry-${queueId}`, async () => {
+      await videoPipelineApi.forceRetryJob(queueId);
+      toast.success(t('videoPipeline.force_retry_queued'));
       await Promise.allSettled([loadJobs(), loadQueueRuntime(), loadDashboard(), loadProductionOverview()]);
     });
   };
@@ -2613,10 +2621,17 @@ export default function VideoPipeline() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => toggleLogs(job.queueId)} className={getActionButtonClass('sky', 'px-3 py-1.5 text-xs')}>{jobLogs[job.queueId] ? t('videoPipeline.hide_logs') : t('videoPipeline.view_logs')}</button>
+                          <button onClick={() => navigate(sectionPath('production') + `?search=${encodeURIComponent(job.queueId)}`)} className={getActionButtonClass('violet', 'px-3 py-1.5 text-xs')}><ArchiveRestore className="h-3.5 w-3.5" />{t('videoPipeline.view_history')}</button>
                           {job.canManualStart ? (
                             <button onClick={() => startJob(job.queueId)} className={getActionButtonClass(job.queueControl?.executionState === 'manual-review' ? 'amber' : 'violet', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
                               <Clapperboard className="h-3.5 w-3.5" />
                               {queueActionLabel(job, t)}
+                            </button>
+                          ) : null}
+                          {job.status === 'failed' ? (
+                            <button onClick={() => forceRetryJob(job.queueId)} className={getActionButtonClass('rose', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
+                              <RefreshCcw className="h-3.5 w-3.5" />
+                              {t('videoPipeline.force_retry')}
                             </button>
                           ) : null}
                           {job.status === 'ready' ? <button onClick={() => publishJob(job.queueId)} className={getActionButtonClass('emerald', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}><Send className="h-3.5 w-3.5" />{t('videoPipeline.publish_2')}</button> : null}
@@ -3001,6 +3016,8 @@ export default function VideoPipeline() {
     </VideoPipelineLayout>
   );
 }
+
+
 
 
 

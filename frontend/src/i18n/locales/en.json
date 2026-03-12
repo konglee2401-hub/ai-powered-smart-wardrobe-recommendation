@@ -1150,6 +1150,8 @@
     "idle": "Idle",
     "idle_2": "Idle",
     "manual_retry": "Manual retry",
+    "force_retry": "Force retry",
+    "force_retry_queued": "Job moved back to pending.",
     "manual_start": "Manual start",
     "await_auto_retry": "Await auto retry",
     "ready_to_publish": "Ready to publish",
@@ -1443,6 +1445,7 @@
     "retry": "Retry",
     "hide_logs": "Hide Logs",
     "view_logs": "View Logs",
+    "view_history": "View History",
     "publish_2": "Publish",
     "youtube": "YouTube",
     "retry_stopped": "Retry stopped",
@@ -1741,3 +1744,4 @@
     }
   }
 }
+
