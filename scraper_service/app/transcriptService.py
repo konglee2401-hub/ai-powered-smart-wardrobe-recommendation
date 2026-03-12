@@ -10,7 +10,7 @@ For production use at scale, consider using a dedicated proxy service.
 
 import re
 import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 
@@ -21,7 +21,80 @@ class TranscriptService:
     # Preferred languages: Vietnamese first, then English, then Hindi, then auto-detect
     DEFAULT_LANGUAGES = ['vi', 'en', 'hi']
     RATE_LIMIT_COOLDOWN_SEC = 2 * 60 * 60  # 2 hours
-    _rate_limit_cache = {}
+    _rate_limit_cache = {}  # In-memory cache for fast checks
+    _db_collection = None  # Will be set when db is available
+    
+    @staticmethod
+    def set_db_collection(db_collection):
+        """Set MongoDB collection for persistent cache storage"""
+        TranscriptService._db_collection = db_collection
+    
+    @staticmethod
+    def _get_rate_limit_record():
+        """Get global rate limit record from DB"""
+        if not TranscriptService._db_collection:
+            return None
+        try:
+            # Use a single document to track overall rate limiting status
+            record = TranscriptService._db_collection.find_one({'_id': 'transcript_rate_limit_state'})
+            return record
+        except Exception as e:
+            print(f'[TranscriptService] Error reading rate limit record: {e}')
+            return None
+    
+    @staticmethod
+    def _set_rate_limit_record(timestamp):
+        """Save rate limit timestamp to DB"""
+        if not TranscriptService._db_collection:
+            return False
+        try:
+            TranscriptService._db_collection.update_one(
+                {'_id': 'transcript_rate_limit_state'},
+                {
+                    '$set': {
+                        'lastRateLimitedAt': datetime.utcfromtimestamp(timestamp),
+                        'cooldownExpiresAt': datetime.utcfromtimestamp(timestamp + TranscriptService.RATE_LIMIT_COOLDOWN_SEC),
+                        'updatedAt': datetime.utcnow()
+                    }
+                },
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f'[TranscriptService] Error saving rate limit record: {e}')
+            return False
+    
+    @staticmethod
+    def _is_rate_limited():
+        """
+        Check if we're currently in rate limit cooldown.
+        Checks both in-memory cache (fast) and DB (persistent)
+        
+        Returns: (is_limited: bool, expires_at: timestamp or None)
+        """
+        # Check in-memory cache first (faster)
+        now = time.time()
+        
+        # Get from DB for persistent state
+        db_record = TranscriptService._get_rate_limit_record()
+        if db_record:
+            expires_at = db_record.get('cooldownExpiresAt')
+            if expires_at:
+                expires_timestamp = expires_at.timestamp() if hasattr(expires_at, 'timestamp') else expires_at
+                if now < expires_timestamp:
+                    print(f'[TranscriptService] Rate limit cooldown active (expires in {int(expires_timestamp - now)}s)')
+                    return True, expires_timestamp
+                else:
+                    # Cooldown expired, clean up DB record
+                    try:
+                        TranscriptService._db_collection.update_one(
+                            {'_id': 'transcript_rate_limit_state'},
+                            {'$unset': {'lastRateLimitedAt': '', 'cooldownExpiresAt': ''}}
+                        )
+                    except Exception:
+                        pass
+        
+        return False, None
     
     @staticmethod
     def _format_timestamp(seconds: float) -> str:
@@ -55,10 +128,11 @@ class TranscriptService:
         if not languages:
             languages = TranscriptService.DEFAULT_LANGUAGES
 
-        # Skip if recently rate-limited
-        last_limited = TranscriptService._rate_limit_cache.get(video_id)
-        if last_limited and (time.time() - last_limited) < TranscriptService.RATE_LIMIT_COOLDOWN_SEC:
-            print(f'[TranscriptService] Skipping transcript fetch for {video_id} (rate-limit cooldown)')
+        # ⚠️ Check if we're in rate-limit cooldown (persistent check)
+        is_limited, expires_at = TranscriptService._is_rate_limited()
+        if is_limited:
+            minutes_left = int((expires_at - time.time()) / 60) if expires_at else 120
+            print(f'[TranscriptService] Rate-limit cooldown active - skipping transcript fetch for {video_id} ({minutes_left}min remaining)')
             return [], 'rate_limited'
         
         try:
@@ -87,8 +161,10 @@ class TranscriptService:
                     
                     # Handle rate limiting (429)
                     if '429' in error_str or 'Too Many Requests' in error_str:
-                        TranscriptService._rate_limit_cache[video_id] = time.time()
-                        print(f'[TranscriptService] Rate limited (429). Skipping transcript fetch for this video.')
+                        timestamp = time.time()
+                        TranscriptService._rate_limit_cache['_global_'] = timestamp
+                        TranscriptService._set_rate_limit_record(timestamp)
+                        print(f'[TranscriptService] 🛑 Rate limited (429). Starting 2-hour cooldown.')
                         return [], 'rate_limited'
                     
                     # Log other language not found errors
@@ -100,8 +176,10 @@ class TranscriptService:
         except Exception as e:
             error_str = str(e)
             if '429' in error_str or 'Too Many Requests' in error_str:
-                TranscriptService._rate_limit_cache[video_id] = time.time()
-                print(f'[TranscriptService] Rate limited (429). Skipping transcript fetch for this video.')
+                timestamp = time.time()
+                TranscriptService._rate_limit_cache['_global_'] = timestamp
+                TranscriptService._set_rate_limit_record(timestamp)
+                print(f'[TranscriptService] 🛑 Rate limited (429) from list_transcripts. Starting 2-hour cooldown.')
                 return [], 'rate_limited'
             print(f'[TranscriptService] Fatal error: {error_str[:200]}')
             return [], 'fatal'

@@ -11,6 +11,7 @@ from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STA
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize, log_job
 from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records, reset_orphaned_downloads
+from .transcriptService import TranscriptService
 
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
@@ -37,6 +38,11 @@ def build_playboard_manual_topic_label(config: dict | None = None) -> str:
 async def startup_event():
     ensure_indexes()
     get_or_create_settings()
+    
+    # Initialize TranscriptService with database collection for persistent rate-limit cache
+    TranscriptService.set_db_collection(logs)
+    print('[startup] TranscriptService initialized with persistent rate-limit cache')
+    
     reset_result = await reset_orphaned_downloads()
     if reset_result.get('reset'):
         print(f"[startup] reset orphaned download states: {reset_result}")
