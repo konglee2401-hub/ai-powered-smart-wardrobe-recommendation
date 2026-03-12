@@ -34,7 +34,7 @@ export async function resumeSession(sessionId, flowType = 'video-generation') {
   let endpoint;
   
   if (flowType === 'image-generation') {
-    endpoint = `/imageGen/resume/${sessionId}`;
+    endpoint = `/image-gen/resume/${sessionId}`;
   } else {
     // Default to affiliate video tiktok resume endpoint for video/one-click flows
     endpoint = `/ai/affiliate-video-tiktok/resume/${sessionId}`;
