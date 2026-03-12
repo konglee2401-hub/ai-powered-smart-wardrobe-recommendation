@@ -1316,6 +1316,7 @@
     "not_yet": "Not yet",
     "add_to_queue": "Add to Queue",
     "compose": "Compose",
+    "delete": "Delete",
     "delete_video_and_all_related_data": "Delete video and all related data",
     "eligible": "Eligible",
     "downloaded_source_videos_available_for_production": "Downloaded source videos available for production",
