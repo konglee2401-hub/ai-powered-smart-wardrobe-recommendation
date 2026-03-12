@@ -516,7 +516,6 @@ ${finalPositive}`;
         </div>
       )}
     </div>
-    </div>
   );
 };
 
