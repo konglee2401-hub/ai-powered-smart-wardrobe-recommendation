@@ -445,7 +445,63 @@
     "title": "Performance Optimizer"
   },
   "aiProviders": {
-    "title": "AI Provider Manager"
+    "title": "AI Providers",
+    "subtitle": "Manage API keys, settings, and test provider performance",
+    "tabs": {
+      "manage": "Manage",
+      "test": "Test",
+      "sync": "Sync"
+    },
+    "searchPlaceholder": "Search providers...",
+    "categories": {
+      "analysis": "Analysis",
+      "image": "Image",
+      "video": "Video"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "loading": {
+      "providers": "Loading providers..."
+    },
+    "empty": {
+      "noProviders": "No providers found",
+      "selectProvider": "Select a provider to view details",
+      "noTests": "No test results yet"
+    },
+    "message": {
+      "keysSynced": "Keys synced successfully"
+    },
+    "manage": {
+      "details": "Provider Details",
+      "description": "Description",
+      "noDescription": "No description",
+      "capabilities": "Capabilities",
+      "capabilityAnalysis": "Analysis",
+      "capabilityImage": "Image Generation",
+      "capabilityVideo": "Video"
+    },
+    "test": {
+      "title": "Test Results",
+      "modeLabel": "Test Mode",
+      "modeLightweight": "Lightweight (Fast)",
+      "modeFull": "Full Testing",
+      "testAll": "Test All",
+      "totalTests": "Total Tests",
+      "successful": "Successful",
+      "failed": "Failed",
+      "statusSuccess": "Success",
+      "statusFailed": "Failed"
+    },
+    "sync": {
+      "title": "Sync API Keys",
+      "subtitle": "Synchronize API keys from .env to database",
+      "sync": "Sync Keys",
+      "syncing": "Syncing...",
+      "success": "Sync completed successfully",
+      "error": "Failed to sync keys"
+    }
   },
   "common": {
     "required": "Required",
@@ -1556,7 +1612,9 @@
     "save_discovery_settings": "Save discovery",
     "save_scheduler_settings": "Save scheduler",
     "save_publish_settings": "Save publish",
-    "settings_saved_section": "Settings saved"
+    "settings_saved_section": "Settings saved",
+    "every_x_minutes": "Every X minutes",
+    "run_every_minutes": "Run every (minutes)"
   },
   "productionHistory": {
     "pageTitle": "Production history",

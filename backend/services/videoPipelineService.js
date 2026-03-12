@@ -200,6 +200,11 @@ function buildHumanScheduleLabel(schedule = {}) {
     return `Every day at ${normalizeClockValue(schedule.dailyTime || '09:00')}`;
   }
 
+  if (schedule.mode === 'minutes') {
+    const minutes = Math.max(1, Number(schedule.everyMinutes) || 1);
+    return minutes === 1 ? 'Every minute' : `Every ${minutes} minutes`;
+  }
+
   const hours = Math.max(1, Number(schedule.everyHours) || 1);
   return hours === 1 ? 'Every hour' : `Every ${hours} hours`;
 }
@@ -288,16 +293,23 @@ function normalizeProductionSchedule(input = {}) {
   const enabled = input.enabled !== false;
   const mode = input.mode || (enabled ? 'hourly' : 'manual');
   const everyHours = Math.max(1, Number(input.everyHours) || 1);
+  const everyMinutes = Math.max(1, Number(input.everyMinutes) || 15);
   const dailyTime = normalizeClockValue(input.dailyTime || '09:00');
-  const label = buildHumanScheduleLabel({ enabled, mode, everyHours, dailyTime });
+  const label = buildHumanScheduleLabel({ enabled, mode, everyHours, everyMinutes, dailyTime });
+  const intervalMinutes = mode === 'daily'
+    ? 24 * 60
+    : mode === 'minutes'
+      ? everyMinutes
+      : everyHours * 60;
 
   return {
     enabled,
     mode,
     everyHours,
+    everyMinutes,
     dailyTime,
     label,
-    intervalMinutes: mode === 'daily' ? 24 * 60 : everyHours * 60,
+    intervalMinutes,
   };
 }
 
@@ -2299,6 +2311,7 @@ class VideoPipelineService {
       enabled: queueScanner?.enabled || false,
       mode: queueScanner?.scheduleMode || (queueScanner?.enabled ? 'hourly' : 'manual'),
       everyHours: queueScanner?.everyHours || Math.max(1, Math.round((queueScanner?.intervalMinutes || 60) / 60)),
+      everyMinutes: queueScanner?.everyMinutes || Math.max(1, Number(queueScanner?.intervalMinutes || 60)),
       dailyTime: queueScanner?.dailyTime || '09:00',
     });
 
@@ -2306,6 +2319,7 @@ class VideoPipelineService {
       enabled: queueScanner?.publishEnabled ?? false,
       mode: queueScanner?.publishScheduleMode || (queueScanner?.publishEnabled ? 'daily' : 'manual'),
       everyHours: queueScanner?.publishEveryHours || Math.max(1, Math.round((queueScanner?.publishIntervalMinutes || 1440) / 60)),
+      everyMinutes: queueScanner?.publishEveryMinutes || Math.max(1, Number(queueScanner?.publishIntervalMinutes || 1440)),
       dailyTime: queueScanner?.publishDailyTime || '09:00',
     });
     const publishFilters = normalizePublishFilters(queueScanner?.publishFilters || {});
@@ -2417,6 +2431,7 @@ class VideoPipelineService {
         intervalMinutes: scheduler.intervalMinutes,
         scheduleMode: scheduler.mode,
         everyHours: scheduler.everyHours,
+        everyMinutes: scheduler.everyMinutes,
         dailyTime: scheduler.dailyTime,
         scheduleLabel: scheduler.label,
         autoPublish: production.autoPublish ?? false,
@@ -2426,6 +2441,7 @@ class VideoPipelineService {
         publishIntervalMinutes: publishScheduler.intervalMinutes,
         publishScheduleMode: publishScheduler.mode,
         publishEveryHours: publishScheduler.everyHours,
+        publishEveryMinutes: publishScheduler.everyMinutes,
         publishDailyTime: publishScheduler.dailyTime,
         publishScheduleLabel: publishScheduler.label,
         publishGapMinutes,
@@ -3006,6 +3022,7 @@ class VideoPipelineService {
     let subVideoPath = resolveBackendPath(subVideo?.localPath || queueItem.videoConfig?.subVideoPath || '');
     let autoSelection = null;
     let autoSelectionSource = null;
+    let processingMarked = false;
 
     if (!mainVideoPath) {
       if (!sourceVideoRecord && sourceVideoId) {
@@ -3050,6 +3067,24 @@ class VideoPipelineService {
       status: 'success',
       message: `Main video resolved: ${path.basename(mainVideoPath)}`,
     });
+
+    // Mark processing early so UI doesn't keep it in pending while heavy steps run
+    if (queueItem.status !== 'processing') {
+      await VideoQueueService.updateQueueStatus(queueId, 'processing', {
+        lastRetryAt: new Date(),
+        metadata: {
+          ...(queueItem.metadata || {}),
+        },
+      });
+      await updateTrendVideoProductionSnapshot(sourceVideoId, {
+        queueStatus: 'processing',
+        queueId,
+        recipe,
+        lastQueuedAt: queueItem.videoConfig?.lastQueuedAt || queueItem.createdAt || new Date(),
+        lastError: '',
+      });
+      processingMarked = true;
+    }
 
     if (!subVideoPath) {
       await VideoQueueService.logProcess({
@@ -3112,6 +3147,8 @@ class VideoPipelineService {
     }
 
       const productionConfig = queueItem.videoConfig?.productionConfig || {};
+      const originalMainVideoPath = mainVideoPath;
+      let captionedVideoPath = '';
       let capcutSubtitleResult = null;
       try {
         const shouldUseCapCut = await shouldUseCapCutCaptions({
@@ -3142,8 +3179,8 @@ class VideoPipelineService {
           });
 
           if (capcutSubtitleResult?.outputVideoPath) {
-            mainVideoPath = capcutSubtitleResult.outputVideoPath;
-            productionConfig.captionedVideoPath = mainVideoPath;
+            captionedVideoPath = capcutSubtitleResult.outputVideoPath;
+            productionConfig.captionedVideoPath = captionedVideoPath;
             productionConfig.subtitleProvider = 'capcut';
             productionConfig.subtitleMode = 'none';
             productionConfig.subtitleText = '';
@@ -3152,7 +3189,7 @@ class VideoPipelineService {
               queueId,
               stage: 'capcut-captions',
               status: 'success',
-              message: `CapCut captioned video saved: ${mainVideoPath}`,
+              message: `CapCut captioned video saved (temporary): ${captionedVideoPath}`,
             });
           }
         }
@@ -3166,6 +3203,7 @@ class VideoPipelineService {
       }
 
       const templateName = productionConfig.templateName || 'reaction';
+      const mashupMainVideoPath = captionedVideoPath || mainVideoPath;
       const templateGroup = resolveTemplateGroup(templateName);
       const mashupLog = {
         recipe,
@@ -3232,20 +3270,32 @@ class VideoPipelineService {
       }),
     });
 
-    await VideoQueueService.updateQueueStatus(queueId, 'processing', {
-      lastRetryAt: new Date(),
-      metadata: {
-        ...(queueItem.metadata || {}),
-        mashupLog,
-      },
-    });
-    await updateTrendVideoProductionSnapshot(sourceVideoId, {
-      queueStatus: 'processing',
-      queueId,
-      recipe,
-      lastQueuedAt: queueItem.videoConfig?.lastQueuedAt || queueItem.createdAt || new Date(),
-      lastError: '',
-    });
+    if (processingMarked) {
+      await VideoPipelineJob.updateOne(
+        { queueId },
+        {
+          $set: {
+            lastRetryAt: new Date(),
+            'metadata.mashupLog': mashupLog,
+          },
+        }
+      );
+    } else {
+      await VideoQueueService.updateQueueStatus(queueId, 'processing', {
+        lastRetryAt: new Date(),
+        metadata: {
+          ...(queueItem.metadata || {}),
+          mashupLog,
+        },
+      });
+      await updateTrendVideoProductionSnapshot(sourceVideoId, {
+        queueStatus: 'processing',
+        queueId,
+        recipe,
+        lastQueuedAt: queueItem.videoConfig?.lastQueuedAt || queueItem.createdAt || new Date(),
+        lastError: '',
+      });
+    }
 
     try {
       const outputDir = path.join(BACKEND_ROOT, 'media', 'mashups');
@@ -3268,7 +3318,7 @@ class VideoPipelineService {
       }
 
       const renderResult = await VideoMashupService.generateMashupVideo({
-        mainVideoPath,
+        mainVideoPath: mashupMainVideoPath,
         templateVideoPath: subVideoPath,
         outputPath,
         duration: Number(productionConfig.duration) || 30,
@@ -3304,6 +3354,25 @@ class VideoPipelineService {
           lastError: renderResult.error || 'Mashup render failed',
         });
         return { success: false, error: renderResult.error || 'Mashup render failed' };
+      }
+
+      if (captionedVideoPath && captionedVideoPath !== originalMainVideoPath) {
+        try {
+          await fs.unlink(captionedVideoPath);
+          await VideoQueueService.logProcess({
+            queueId,
+            stage: 'capcut-cleanup',
+            status: 'success',
+            message: `Removed temporary captioned video: ${captionedVideoPath}`,
+          });
+        } catch (cleanupError) {
+          await VideoQueueService.logProcess({
+            queueId,
+            stage: 'capcut-cleanup',
+            status: 'failed',
+            message: cleanupError.message || 'Failed to remove temporary captioned video',
+          });
+        }
       }
 
       let completedDriveSync = {
@@ -3358,7 +3427,8 @@ class VideoPipelineService {
         ...(queueItem.videoConfig || {}),
         mainVideo,
         subVideo,
-        mainVideoPath,
+        mainVideoPath: originalMainVideoPath,
+        mashupMainVideoPath,
         subVideoPath,
         outputPath,
         videoPath: outputPath,

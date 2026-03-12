@@ -89,12 +89,12 @@ const DEFAULT_SETTINGS = {
     scanSchedule: { enabled: true, mode: 'daily', everyHours: 24, dailyTime: '08:30', label: 'Every day at 08:30' },
   },
   production: {
-    scheduler: { enabled: false, mode: 'manual', everyHours: 1, dailyTime: '09:00', label: 'Manual only' },
+    scheduler: { enabled: false, mode: 'manual', everyHours: 1, everyMinutes: 15, dailyTime: '09:00', label: 'Manual only' },
     schedulerEnabled: false,
     autoPublish: false,
     defaultPlatform: 'youtube',
     youtubePublishType: 'shorts',
-    publishScheduler: { enabled: false, mode: 'manual', everyHours: 1, dailyTime: '09:00', label: 'Manual only' },
+    publishScheduler: { enabled: false, mode: 'manual', everyHours: 1, everyMinutes: 60, dailyTime: '09:00', label: 'Manual only' },
     publishFilters: { status: 'ready', platform: '', source: '', recipe: '', channel: '', minViews: 0 },
     publishGapMinutes: 30,
     publishMaxPerRun: 20,
@@ -203,7 +203,7 @@ function ScheduleEditor({ title, subtitle, value, onChange }) {
   const { t, i18n } = useTranslation();
   const isVi = (i18n.language || 'en').toLowerCase().startsWith('vi');
   const tr = (vi, en) => (isVi ? vi : en);
-  const schedule = value || { enabled: false, mode: 'manual', everyHours: 1, dailyTime: '09:00', label: 'Manual only' };
+  const schedule = value || { enabled: false, mode: 'manual', everyHours: 1, everyMinutes: 15, dailyTime: '09:00', label: 'Manual only' };
 
   return (
     <div className={`${SUBTLE_PANEL_CLASS} rounded-[26px]`}>
@@ -226,6 +226,7 @@ function ScheduleEditor({ title, subtitle, value, onChange }) {
           <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t('videoPipeline.mode')}</span>
           <select value={schedule.mode} onChange={(event) => onChange({ ...schedule, mode: event.target.value })} className={INPUT_CLASS}>
             <option value="manual">{t('videoPipeline.manual_only')}</option>
+            <option value="minutes">{t('videoPipeline.every_x_minutes')}</option>
             <option value="hourly">{t('videoPipeline.every_x_hours')}</option>
             <option value="daily">{t('videoPipeline.every_day_at_time')}</option>
           </select>
@@ -235,6 +236,13 @@ function ScheduleEditor({ title, subtitle, value, onChange }) {
           <p>{schedule.label || t('videoPipeline.manual_only_2')}</p>
         </div>
       </div>
+
+      {schedule.mode === 'minutes' ? (
+        <div className="mt-3">
+          <label className="text-xs text-slate-400">{t('videoPipeline.run_every_minutes')}</label>
+          <input type="number" min="1" max="1440" value={schedule.everyMinutes || 1} onChange={(event) => onChange({ ...schedule, everyMinutes: Number(event.target.value) || 1 })} className={`${INPUT_CLASS} mt-2 max-w-[220px]`} />
+        </div>
+      ) : null}
 
       {schedule.mode === 'hourly' ? (
         <div className="mt-3">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, Check, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import useNotificationStore from '../stores/useNotificationStore';
@@ -21,6 +22,7 @@ export default function NotificationBell() {
   const [queueFilter, setQueueFilter] = useState('');
   const [panelStyle, setPanelStyle] = useState({});
   const anchorRef = useRef(null);
+  const panelRef = useRef(null);
 
   const unreadIds = useMemo(() => items.filter((item) => !item.readAt).map((item) => item.id), [items]);
   const queueOptions = useMemo(() => {
@@ -68,6 +70,17 @@ export default function NotificationBell() {
     return () => window.removeEventListener('resize', updatePosition);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleClickOutside = (event) => {
+      if (anchorRef.current?.contains(event.target)) return;
+      if (panelRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -88,9 +101,10 @@ export default function NotificationBell() {
         ) : null}
       </button>
 
-      {open ? (
+      {open ? createPortal(
         <div
-          className={`fixed z-[9999] mt-2 w-[340px] max-w-[85vw] overflow-hidden rounded-2xl border shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur ${
+          ref={panelRef}
+          className={`fixed z-[99999] mt-2 w-[340px] max-w-[85vw] overflow-hidden rounded-2xl border shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur ${
             isLight
               ? 'border-slate-200 bg-white/95 text-slate-900'
               : 'border-white/10 bg-slate-950/95 text-slate-100'
@@ -201,7 +215,8 @@ export default function NotificationBell() {
               <div className={`px-4 py-6 text-center text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>No notifications yet.</div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

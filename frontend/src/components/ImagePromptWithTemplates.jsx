@@ -263,6 +263,7 @@ const ImagePromptWithTemplates = ({
           productFocus={productFocus}
           />
         </div>
+      )}
     </div>
   );
 };

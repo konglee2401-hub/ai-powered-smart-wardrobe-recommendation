@@ -25,7 +25,7 @@ const queueScannerSettingsSchema = new mongoose.Schema({
   },
   scheduleMode: {
     type: String,
-    enum: ['manual', 'hourly', 'daily'],
+    enum: ['manual', 'hourly', 'daily', 'minutes'],
     default: 'hourly'
   },
   everyHours: {
@@ -33,6 +33,12 @@ const queueScannerSettingsSchema = new mongoose.Schema({
     default: 1,
     min: 1,
     max: 24
+  },
+  everyMinutes: {
+    type: Number,
+    default: 15,
+    min: 1,
+    max: 1440
   },
   dailyTime: {
     type: String,
@@ -71,7 +77,7 @@ const queueScannerSettingsSchema = new mongoose.Schema({
   },
   publishScheduleMode: {
     type: String,
-    enum: ['manual', 'hourly', 'daily'],
+    enum: ['manual', 'hourly', 'daily', 'minutes'],
     default: 'daily'
   },
   publishEveryHours: {
@@ -79,6 +85,12 @@ const queueScannerSettingsSchema = new mongoose.Schema({
     default: 24,
     min: 1,
     max: 24
+  },
+  publishEveryMinutes: {
+    type: Number,
+    default: 60,
+    min: 1,
+    max: 1440
   },
   publishDailyTime: {
     type: String,

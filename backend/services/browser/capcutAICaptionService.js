@@ -462,7 +462,16 @@ class CapCutAICaptionService extends BrowserService {
 
   async _openStyleTab() {
     this._logStep('style-tab', 'Clicking Style tab...');
-    const clicked = await this._clickByText(['Style']);
+    const clicked = await this.page.evaluate(() => {
+      const tabs = Array.from(document.querySelectorAll('[role="tab"], .lv-tabs-header-title'));
+      const target = tabs.find((el) => /style/i.test(el.textContent || ''));
+      if (target) {
+        target.scrollIntoView({ block: 'center', inline: 'center' });
+        (target instanceof HTMLElement ? target : target?.closest('button'))?.click();
+        return true;
+      }
+      return false;
+    });
     if (!clicked) {
       throw new Error('Style tab not found. Expected tab text "Style".');
     }
@@ -471,7 +480,20 @@ class CapCutAICaptionService extends BrowserService {
 
   async _applyCaptionStyle(timeoutMs) {
     this._logStep('style-try', 'Clicking Try it button...');
-    const clicked = await this._clickByText(['Try it']);
+    const clicked = await this.page.evaluate(() => {
+      const normalize = (value) =>
+        (value || '').toString().trim().toLowerCase();
+      const panels = Array.from(document.querySelectorAll('[role="tabpanel"], .stylePanel-JnekWw'));
+      const activePanel = panels.find((el) => el.getAttribute('aria-hidden') !== 'true') || document;
+      const buttons = Array.from(activePanel.querySelectorAll('button'));
+      const target = buttons.find((btn) => normalize(btn.textContent) === 'try it');
+      if (target) {
+        target.scrollIntoView({ block: 'center', inline: 'center' });
+        target.click();
+        return true;
+      }
+      return false;
+    });
     if (!clicked) {
       throw new Error('Try it button not found. Expected text "Try it".');
     }
@@ -483,6 +505,7 @@ class CapCutAICaptionService extends BrowserService {
     this._logStep('export-button', 'Clicking Export button...');
     const clicked = await this._clickBySelectorOrText([
       '.captions-quick-edit-page-export-btn',
+      '[class*="export-btn"]',
       'button',
     ], ['Export']);
     if (!clicked) {
@@ -490,6 +513,16 @@ class CapCutAICaptionService extends BrowserService {
     }
     await this._waitForSelectorVisible('.captions-quick-edit-page-export', 30000);
     this._logStep('export-modal', 'Export modal detected.');
+    this._logStep('export-download', 'Selecting Download in export menu...');
+    const downloadClicked = await this._clickBySelectorOrText(
+      ['.download-more-video-dsnuYX button', '.button-qchiac', '.lv_share-choosePage-download-btn-iWRAuU button', 'button'],
+      ['Download']
+    );
+    if (!downloadClicked) {
+      throw new Error('Download option not found in export menu.');
+    }
+    await this._waitForSelectorVisible('.material-export-modal-content-HnAboT, .material-export-modal-container-vB7uXU', 30000);
+    this._logStep('export-settings-modal', 'Export settings modal detected.');
   }
 
   async _configureExportSettings({ resolution = '1080p', fps = '60fps' }) {
@@ -502,11 +535,11 @@ class CapCutAICaptionService extends BrowserService {
   async _startExport() {
     this._logStep('export-confirm', 'Confirming export...');
     const clicked = await this._clickBySelectorOrText(
-      ['.button-qchiac', '.download-more-video-dsnuYX button', '.material-export-modal-content-HnAboT button'],
-      ['Export', 'Download']
+      ['#export-confirm-button', '.material-export-modal-footer-fG_c5x button', '.material-export-modal-content-HnAboT button'],
+      ['Export']
     );
     if (!clicked) {
-      throw new Error('Export confirm button not found. Expected selector .button-qchiac or text "Download/Export".');
+      throw new Error('Export confirm button not found. Expected selector #export-confirm-button or text "Export".');
     }
   }
 
@@ -584,7 +617,8 @@ class CapCutAICaptionService extends BrowserService {
         const normalizedTarget = normalize(target);
         const match = candidates.find((el) => normalize(el.textContent) === normalizedTarget);
         if (match) {
-          match.click();
+          const clickable = match.closest('button,[role="button"],a') || match;
+          clickable.click();
           return true;
         }
       }
@@ -593,7 +627,8 @@ class CapCutAICaptionService extends BrowserService {
         const normalizedTarget = normalize(target);
         const match = candidates.find((el) => normalize(el.textContent).includes(normalizedTarget));
         if (match) {
-          match.click();
+          const clickable = match.closest('button,[role="button"],a') || match;
+          clickable.click();
           return true;
         }
       }
@@ -673,7 +708,12 @@ class CapCutAICaptionService extends BrowserService {
       try {
         const handle = await this.page.$(selector);
         if (handle) {
-          await handle.click();
+          try {
+            await this.page.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }), handle);
+          } catch {
+            // ignore
+          }
+          await handle.click({ delay: 50 });
           return true;
         }
       } catch {

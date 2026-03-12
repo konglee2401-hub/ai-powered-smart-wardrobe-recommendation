@@ -16,7 +16,6 @@ import {
 } from '../utils/advancedPromptEngineering';
 import PromptLayeringDialog from './PromptLayeringDialog';
 import { generateAdvancedPrompt } from '../utils/advancedPromptBuilder';
-import ModalPortal from './ModalPortal';
 
 const getStep3SmartDefaults = (useCase, scene = 'studio') => {
   switch (useCase) {
@@ -360,7 +359,6 @@ ${finalPositive}`;
   }, [promptLayering]);
 
   return (
-    <ModalPortal>
     <div className="w-full h-full flex flex-col min-h-0">
       <section className="apple-surface-panel flex min-h-0 flex-1 min-w-0 flex-col rounded-[2rem] p-3 overflow-hidden">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -518,7 +516,7 @@ ${finalPositive}`;
         </div>
       )}
     </div>
-    </ModalPortal>
+    </div>
   );
 };
 
