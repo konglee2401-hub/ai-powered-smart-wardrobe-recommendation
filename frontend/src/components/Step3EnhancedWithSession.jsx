@@ -361,8 +361,8 @@ ${finalPositive}`;
 
   return (
     <ModalPortal>
-    <div className="w-full">
-      <section className="apple-surface-panel flex min-h-[640px] min-w-0 flex-col rounded-[2rem] p-3">
+    <div className="w-full h-full flex flex-col min-h-0">
+      <section className="apple-surface-panel flex min-h-0 flex-1 min-w-0 flex-col rounded-[2rem] p-3 overflow-hidden">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
               <Wand2 className="h-5 w-5 text-amber-300" />
@@ -450,7 +450,7 @@ ${finalPositive}`;
               </div>
             </div>
           ) : (
-            <div className="flex min-h-[420px] items-center justify-center rounded-[1.8rem] bg-white/[0.03]">
+            <div className="flex min-h-0 flex-1 items-center justify-center rounded-[1.8rem] bg-white/[0.03]">
               <div className="text-center">
                 <Wand2 className="mx-auto mb-3 h-12 w-12 text-slate-500" />
                 <p className="font-medium text-slate-300">Select style options on the left</p>

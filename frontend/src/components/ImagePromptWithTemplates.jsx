@@ -103,10 +103,10 @@ const ImagePromptWithTemplates = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full h-full flex flex-col min-h-0">
       {/* TEMPLATE MODE */}
       {mode === 'template' && (
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto">
           <div className="rounded-[1.5rem] bg-sky-400/10 p-4">
             <p className="text-xs text-blue-300">
               âœ¨ Select a template and customize its fields to generate an image prompt based on your selections.
@@ -248,7 +248,8 @@ const ImagePromptWithTemplates = ({
 
       {/* STEP 3 MODE */}
       {mode === 'step3' && (
-        <Step3EnhancedWithSession
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Step3EnhancedWithSession
           characterImage={characterImage}
           productImage={productImage}
           selectedOptions={selectedOptions}
@@ -260,8 +261,8 @@ const ImagePromptWithTemplates = ({
           analysis={analysis}
           characterDescription={characterDescription}
           productFocus={productFocus}
-        />
-      )}
+          />
+        </div>
     </div>
   );
 };
