@@ -44,15 +44,17 @@ backend/data/google-flow-profiles/
 backend/data/sessions/chatgpt-session.json
 backend/data/sessions/google-flow-session.json
 backend/data/*.json
-backend/scripts/auth/data/**/session.json
-backend/scripts/auth/data/**/*.json
 backend/data/
+backend/scripts/auth/data/
+backend/scripts/auth/
 *-session.json
 *-sessions.json
 session.json
 sessions.json
 **/session.json
 **/sessions.json
+**.json.backup
+**.json.bak
 
 # Environment and config
 coverage/
