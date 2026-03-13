@@ -1,7 +1,14 @@
 import express from 'express';
 import SessionLog from '../models/SessionLog.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 /**
  * POST /api/sessions/create
@@ -394,6 +401,7 @@ router.post('/:sessionId/capture', async (req, res) => {
       metricStage,
       totalDuration,
       error,
+      workflowState,
     } = req.body || {};
 
     let session = await SessionLog.findOne({ sessionId });
@@ -433,6 +441,15 @@ router.post('/:sessionId/capture', async (req, res) => {
       session.analysis = {
         ...(session.analysis || {}),
         ...analysis,
+      };
+    }
+
+    if (workflowState && typeof workflowState === 'object') {
+      session.workflowState = {
+        ...workflowState,
+        sessionId,
+        flowType,
+        status: status || workflowState.status || 'in-progress',
       };
     }
 

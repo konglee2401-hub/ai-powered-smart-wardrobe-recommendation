@@ -1,4 +1,4 @@
-﻿import React, { lazy } from 'react';
+import React, { lazy } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -33,7 +33,6 @@ const PromptBuilder = lazy(() => import('../pages/PromptBuilder'));
 const PromptTemplateManager = lazy(() => import('../pages/PromptTemplateManager'));
 const VideoScriptGenerator = lazy(() => import('../pages/VideoScriptGenerator'));
 const Dashboard = lazy(() => import('../pages/Dashboard'));
-const Login = lazy(() => import('../pages/Login'));
 const OptionsManagement = lazy(() => import('../pages/OptionsManagement'));
 const BatchProcessingPage = lazy(() => import('../pages/BatchProcessingPage'));
 const GalleryPage = lazy(() => import('../pages/GalleryPage'));
@@ -44,6 +43,8 @@ const AIProviderManager = lazy(() => import('../pages/AIProviderManager'));
 const VideoPipeline = lazy(() => import('../pages/VideoPipeline'));
 const ProductionHistory = lazy(() => import('../pages/ProductionHistory'));
 const SocialAccountManager = lazy(() => import('../pages/SocialAccountManager'));
+const Profile = lazy(() => import('../pages/Profile'));
+const PlanManager = lazy(() => import('../pages/PlanManager'));
 
 export const pageRoutes = [
   { path: '/', Component: ImageGenerationPage, contentClassName: 'overflow-hidden' },
@@ -61,7 +62,6 @@ export const pageRoutes = [
   { path: '/prompt-templates', Component: PromptTemplateManager },
   { path: '/video-script-generator', Component: VideoScriptGenerator },
   { path: '/dashboard', Component: Dashboard },
-  { path: '/login', Component: Login },
   { path: '/options', Component: OptionsManagement },
   { path: '/batch', Component: BatchProcessingPage },
   { path: '/gallery', Component: GalleryPage },
@@ -71,6 +71,7 @@ export const pageRoutes = [
   { path: '/admin/providers', Component: AIProviderManager },
   { path: '/video-pipeline', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/video-pipeline/:section', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
+  { path: '/video-pipeline/history', Component: ProductionHistory, contentClassName: 'overflow-hidden' },
   { path: '/video-production', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/video-production/history', Component: ProductionHistory, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/dashboard', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
@@ -79,6 +80,9 @@ export const pageRoutes = [
   { path: '/shorts-reels/logs', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/shorts-reels/settings', Component: VideoPipeline, contentClassName: 'overflow-hidden' },
   { path: '/settings/social-accounts', Component: SocialAccountManager },
+  { path: '/profile', Component: Profile },
+  { path: '/plan', Component: PlanManager },
+  { path: '/admin/plans', Component: PlanManager },
 ];
 
 export const redirectRoutes = [
@@ -124,8 +128,13 @@ export const navGroups = [
       { path: '/options', labelKey: 'navbar.options', icon: Settings },
       { path: '/setup-authentication', labelKey: 'navbar.setupAuthentication', icon: Gauge },
       { path: '/admin/providers', labelKey: 'navbar.aiProviders', icon: Zap },
+      { path: '/admin/plans', label: 'Plans', icon: Layers },
       { path: '/settings/social-accounts', label: 'Social Accounts', icon: Globe },
     ],
   },
 ];
+
+
+
+
 

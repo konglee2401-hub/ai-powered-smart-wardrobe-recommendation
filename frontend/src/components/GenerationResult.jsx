@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ModalPortal from './ModalPortal';
+import AIImage from './AIImage';
 import {
   Copy,
   Download,
@@ -64,11 +65,15 @@ function GenerationLoadingSkeleton() {
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
               <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="mt-2 aspect-[4/5] animate-pulse rounded-[1rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(226,239,250,0.28))]" />
+              <div className="mt-2 aspect-[4/5]">
+                <AIImage className="h-full w-full rounded-[1rem]" />
+              </div>
             </div>
             <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
               <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="mt-2 aspect-[4/5] animate-pulse rounded-[1rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(226,239,250,0.28))]" />
+              <div className="mt-2 aspect-[4/5]">
+                <AIImage className="h-full w-full rounded-[1rem]" />
+              </div>
             </div>
           </div>
         </section>
@@ -99,7 +104,9 @@ function GenerationLoadingSkeleton() {
             <div className="h-8 w-24 animate-pulse rounded-full bg-white/[0.08]" />
           </div>
           <div className="overflow-hidden rounded-[1.4rem] bg-slate-950/60">
-            <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(226,239,250,0.28))]" />
+            <div className="aspect-[4/5] w-full">
+              <AIImage className="h-full w-full rounded-[1rem]" />
+            </div>
           </div>
           <div className="mt-3 rounded-[1.25rem] bg-white/[0.04] p-3">
             <div className="flex items-start justify-between gap-3">
@@ -114,7 +121,9 @@ function GenerationLoadingSkeleton() {
             {Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="rounded-[1.2rem] bg-white/[0.03] p-2">
                 <div className="overflow-hidden rounded-[1rem] bg-slate-950/60">
-                  <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(226,239,250,0.28))]" />
+                  <div className="aspect-[4/5] w-full">
+              <AIImage className="h-full w-full rounded-[1rem]" />
+            </div>
                 </div>
                 <div className="mt-2 flex items-start justify-between gap-2">
                   <div className="h-3 w-24 animate-pulse rounded-full bg-white/[0.08]" />

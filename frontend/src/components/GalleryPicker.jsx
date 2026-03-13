@@ -216,7 +216,9 @@ const GalleryPicker = ({
         params.append('query', filters.search);
       }
 
-      const response = await fetch(`${apiUrl}/assets/gallery?${params}`);
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const response = await fetch(`${apiUrl}/assets/gallery?${params}`, { headers });
       
       if (!response.ok) {
         throw new Error('Failed to fetch gallery items');

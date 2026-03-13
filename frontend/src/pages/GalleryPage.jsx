@@ -12,6 +12,7 @@ import {
 
 import GalleryManagement from '../components/GalleryManagement';
 import PageHeaderBar from '../components/PageHeaderBar';
+import { getAuthHeaders } from '../services/authHeaders';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const STORAGE_TOTAL_GB = 100;
@@ -62,7 +63,11 @@ export default function GalleryPage() {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const response = await fetch(`${API_BASE}/admin/stats/assets`);
+        const response = await fetch(`${API_BASE}/admin/stats/assets`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const data = await response.json();
         if (!data.success) throw new Error(data.message || 'Failed to load asset stats');
 
@@ -129,7 +134,7 @@ export default function GalleryPage() {
     try {
       const response = await fetch(`${API_BASE}/admin/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(body)
       });
       const data = await response.json();
@@ -137,7 +142,11 @@ export default function GalleryPage() {
         throw new Error(data.error || 'Maintenance action failed');
       }
       await (async () => {
-        const statsResponse = await fetch(`${API_BASE}/admin/stats/assets`);
+        const statsResponse = await fetch(`${API_BASE}/admin/stats/assets`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const statsData = await statsResponse.json();
         if (statsData.success) {
           const byCategory = statsData.stats?.byCategory || {};

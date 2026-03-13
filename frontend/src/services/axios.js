@@ -24,7 +24,7 @@ const requestRetryCount = new Map();
 axiosInstance.interceptors.request.use(
   (config) => {
     // Add authentication token if exists
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -121,6 +121,9 @@ axiosInstance.interceptors.response.use(
       case 401: // Unauthorized
         console.warn('[Unauthorized] Redirecting to login...');
         localStorage.removeItem('token');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
         
         // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {

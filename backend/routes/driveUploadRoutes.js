@@ -7,7 +7,15 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import driveService from '../services/googleDriveOAuth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
 
@@ -106,7 +114,6 @@ router.get('/auth-callback', async (req, res) => {
     const result = await driveService.handleAuthCallback(code);
     
     // 💫 CRITICAL: Verify token was actually saved to disk before reporting success
-    const fs = require('fs');
     const tokenPath = path.join(__dirname, '../config/drive-token.json');
     if (!fs.existsSync(tokenPath)) {
       console.error('❌ Token callback succeeded but token file not found');
@@ -183,6 +190,12 @@ router.post('/auth-callback', async (req, res) => {
     });
   }
 });
+
+// Protected routes below
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 /**
  * POST /api/drive/init-folders

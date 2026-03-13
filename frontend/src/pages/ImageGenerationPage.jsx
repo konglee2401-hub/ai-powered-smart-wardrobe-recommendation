@@ -1,4 +1,4 @@
-﻿/**
+/**
  * K-Creative Studio - Enhanced Virtual Try-On
  * - Step 1: Upload images (Character + Product)
  * - Step 2: AI Analysis with breakdown & extraction
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI, affiliateVideoTiktokAPI } from '../services/api';
+import { getAuthHeaders } from '../services/authHeaders';
 
 // Import Google Drive API
 import driveAPI from '../services/driveAPI';
@@ -41,7 +42,7 @@ import ScenePickerModal from '../components/ScenePickerModal';
 import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import PageHeaderBar from '../components/PageHeaderBar';
 import { STYLE_CATEGORIES } from '../components/Step3Enhanced';
-import { captureGenerationSession } from '../services/generationSessionsService';
+import { captureGenerationSession, resumeSession, getGenerationSessions, getGenerationSessionDetail } from '../services/generationSessionsService';
 import {
   IMAGE_STUDIO_USE_CASES,
   getImageUseCaseLabel,
@@ -64,14 +65,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // Use cases
 const USE_CASES = [
-  { value: 'change-clothes', label: 'changeClothes', description: 'M?c s?n ph?m lï¿½n ngu?i m?u' },
-  { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nhï¿½n v?t c?m s?n ph?m trï¿½n tay' },
+  { value: 'change-clothes', label: 'changeClothes', description: 'M?c s?n ph?m l�n ngu?i m?u' },
+  { value: 'character-holding-product', label: 'characterHoldingProduct', description: 'Nh�n v?t c?m s?n ph?m tr�n tay' },
   { value: 'affiliate-video-tiktok', label: 'affiliateVideoTikTok', description: 'Video affiliate TikTok 9:16 (lu?ng Step 1 + Step 2)' },
   { value: 'ecommerce-product', label: 'ecommerce', description: '?nh s?n ph?m thuong m?i' },
-  { value: 'social-media', label: 'socialMedia', description: 'Bï¿½i dang m?ng xï¿½ h?i' },
-  { value: 'fashion-editorial', label: 'editorial', description: 'Bï¿½i bï¿½o th?i trang chuyï¿½n nghi?p' },
-  { value: 'lifestyle-scene', label: 'lifestyle', description: 'C?nh s?ng hï¿½ng ngï¿½y' },
-  { value: 'before-after', label: 'beforeAfter', description: 'So sï¿½nh tru?c/sau' },
+  { value: 'social-media', label: 'socialMedia', description: 'B�i dang m?ng x� h?i' },
+  { value: 'fashion-editorial', label: 'editorial', description: 'B�i b�o th?i trang chuy�n nghi?p' },
+  { value: 'lifestyle-scene', label: 'lifestyle', description: 'C?nh s?ng h�ng ng�y' },
+  { value: 'before-after', label: 'beforeAfter', description: 'So s�nh tru?c/sau' },
 ];
 
 const ACTIVE_IMAGE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
@@ -84,12 +85,12 @@ const ACTIVE_IMAGE_USE_CASES = IMAGE_STUDIO_USE_CASES.length > 0
 
 // Focus options
 const FOCUS_OPTIONS = [
-  { value: 'full-outfit', label: 'fullOutfit', description: 'Toï¿½n b? trang ph?c' },
-  { value: 'top', label: 'top', description: 'Ph?n trï¿½n (ï¿½o)' },
-  { value: 'bottom', label: 'bottom', description: 'Ph?n du?i (qu?n/vï¿½y)' },
-  { value: 'shoes', label: 'shoes', description: 'Giï¿½y' },
+  { value: 'full-outfit', label: 'fullOutfit', description: 'To�n b? trang ph?c' },
+  { value: 'top', label: 'top', description: 'Ph?n tr�n (�o)' },
+  { value: 'bottom', label: 'bottom', description: 'Ph?n du?i (qu?n/v�y)' },
+  { value: 'shoes', label: 'shoes', description: 'Gi�y' },
   { value: 'accessories', label: 'accessories', description: 'Ph? ki?n' },
-  { value: 'specific-item', label: 'specific', description: 'Mï¿½n d? c? th?' },
+  { value: 'specific-item', label: 'specific', description: 'M�n d? c? th?' },
 ];
 
 const USE_CASE_DISPLAY_LABELS = {
@@ -114,6 +115,31 @@ const FOCUS_DISPLAY_LABELS = {
 
 const getUseCaseDisplayLabel = (value) => getImageUseCaseLabel(value);
 const getFocusDisplayLabel = (value) => FOCUS_DISPLAY_LABELS[value] || value;
+
+const normalizePublicUrl = (value) => {
+  if (!value) return null;
+  const normalized = String(value).replace(/\\/g, '/');
+
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return normalized;
+  }
+
+  if (normalized.startsWith('/')) {
+    return API_BASE_URL.replace('/api', '') + normalized;
+  }
+
+  const uploadsIndex = normalized.indexOf('/uploads/');
+  if (uploadsIndex >= 0) {
+    return API_BASE_URL.replace('/api', '') + normalized.slice(uploadsIndex);
+  }
+
+  const tempIndex = normalized.indexOf('/temp/');
+  if (tempIndex >= 0) {
+    return API_BASE_URL.replace('/api', '') + normalized.slice(tempIndex);
+  }
+
+  return API_BASE_URL.replace('/api', '') + '/' + normalized;
+};
 
 const normalizeAssetUrl = (url) => {
   if (!url) return null;
@@ -172,7 +198,33 @@ function ProviderGlyph({ providerId }) {
   const glyphClass = 'h-[18px] w-[18px]';
 
   if (providerId === 'google-flow') {
-    return (
+    const handleQuickResume = async (session) => {
+    if (!session?.sessionId) return;
+
+    setRecentResumeId(session.sessionId);
+    try {
+      const response = await resumeSession(session.sessionId, 'image-generation');
+      if (!response?.success) {
+        return;
+      }
+
+      const workflowState = response.workflowState;
+      setSelectedFlowId(response.sessionId || session.sessionId);
+      applyResumeWorkflowState(workflowState, response);
+
+      if (workflowState?.inputs) {
+        await hydrateStoredImages(workflowState.inputs);
+      }
+
+      autoResumeRef.current = { nextStep: response.nextStep };
+    } catch (error) {
+      console.error('?? Quick resume failed:', error);
+    } finally {
+      setRecentResumeId(null);
+    }
+  };
+
+  return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
         <path d="M5 12c0-3.5 2.4-6 6-6 1.8 0 3.3.6 4.5 1.8" />
         <path d="M19 12c0 3.5-2.4 6-6 6-1.8 0-3.3-.6-4.5-1.8" />
@@ -532,9 +584,9 @@ const getUploadInstructions = (useCase) => {
       hint: 'Character holds product; character is 60% focus, product is 40% focus'
     },
     'affiliate-video-tiktok': {
-      character: 'KOL/creator rï¿½ m?t vï¿½ toï¿½n thï¿½n ho?c n?a thï¿½n',
-      product: 'S?n ph?m dï¿½ng d? quay affiliate TikTok',
-      hint: 'Use case nï¿½y ch?y lu?ng Affiliate TikTok Step 1 (analyze) + Step 2 (generate wearing/holding)'
+      character: 'KOL/creator r� m?t v� to�n th�n ho?c n?a th�n',
+      product: 'S?n ph?m d�ng d? quay affiliate TikTok',
+      hint: 'Use case n�y ch?y lu?ng Affiliate TikTok Step 1 (analyze) + Step 2 (generate wearing/holding)'
     },
     'ecommerce-product': {
       character: 'Optional: person for scale/styling reference',
@@ -628,6 +680,11 @@ export default function ImageGenerationPage() {
   const [analysisRaw, setAnalysisRaw] = useState(null);
   const [generatedPrompt, setGeneratedPrompt] = useState(null);
   const [generatedImages, setGeneratedImages] = useState([]);
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [recentSessionsLoading, setRecentSessionsLoading] = useState(false);
+  const [recentResumeId, setRecentResumeId] = useState(null);
+  const autoResumeRef = useRef(null);
+
 
   // Store images for generation step
   const [storedImages, setStoredImages] = useState({ character: null, product: null });
@@ -713,6 +770,77 @@ export default function ImageGenerationPage() {
     { id: 'bfl', label: 'BFL FLUX.2 Klein', description: 'High quality, virtual try-on' },
   ];
 
+  const formatSessionTime = (value) => {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  const extractSessionPreview = (session) => {
+    const detail = session?.detail || session;
+    const workflowState = detail?.workflowState || {};
+    const artifacts = detail?.artifacts || {};
+
+    const outputCandidates = []
+      .concat(artifacts.generatedImagePaths || [])
+      .concat(artifacts.generatedImages || [])
+      .concat(workflowState.images || []);
+
+    const outputUrl = outputCandidates.length ? outputCandidates[outputCandidates.length - 1] : null;
+
+    const characterInput = artifacts.characterImagePath || workflowState.inputs?.character?.url || workflowState.inputs?.character;
+    const productInput = artifacts.productImagePath || workflowState.inputs?.product?.url || workflowState.inputs?.product;
+
+    const inputs = [characterInput, productInput].filter(Boolean);
+
+    const previewItems = [];
+    if (inputs.length) {
+      inputs.forEach((item) => previewItems.push({ type: 'input', url: normalizePublicUrl(item) }));
+    }
+    if (outputUrl) {
+      previewItems.push({ type: 'output', url: normalizePublicUrl(outputUrl) });
+    }
+
+    return previewItems.slice(0, 3);
+  };
+
+  const loadRecentSessions = useCallback(async () => {
+    setRecentSessionsLoading(true);
+    try {
+      const response = await getGenerationSessions({
+        page: 1,
+        limit: 5,
+        flowType: 'image-generation',
+        status: 'all'
+      });
+      const list = response?.data || [];
+      const detailResults = await Promise.all(list.map(async (item) => {
+        try {
+          const detail = await getGenerationSessionDetail(item.sessionId);
+          return { ...item, detail: detail.data || null };
+        } catch (error) {
+          return { ...item, detail: null };
+        }
+      }));
+      setRecentSessions(detailResults);
+    } catch (error) {
+      console.warn('?? Could not load recent sessions:', error);
+      setRecentSessions([]);
+    } finally {
+      setRecentSessionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentSessions();
+  }, [loadRecentSessions]);
+
   // Load options
   useEffect(() => {
     const loadOptions = async () => {
@@ -720,7 +848,11 @@ export default function ImageGenerationPage() {
         const options = await aiOptionsAPI.getAllOptions();
         setPromptOptions(options);
 
-        const sceneResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const sceneResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const sceneData = await sceneResponse.json();
         if (sceneData?.success) {
           setSceneOptions(sceneData.data || []);
@@ -776,7 +908,7 @@ export default function ImageGenerationPage() {
           console.log(`? Image loaded: ${blob.size} bytes, type: ${blob.type}`);
           const file = new File([blob], item.name || 'character-from-gallery.jpg', { type: blob.type || 'image/jpeg' });
           const preview = URL.createObjectURL(file);
-          setCharacterImage({ file, preview });
+          setCharacterImage({ file, preview, source: 'gallery', assetId: item.assetId || null, name: item.name || file.name, sourceUrl: selectedUrl });
           console.log(`? Character image updated with preview`);
         })
         .catch(err => {
@@ -805,8 +937,9 @@ export default function ImageGenerationPage() {
           console.log(`? Image loaded: ${blob.size} bytes, type: ${blob.type}`);
           const file = new File([blob], item.name || 'product-from-gallery.jpg', { type: blob.type || 'image/jpeg' });
           const preview = URL.createObjectURL(file);
-          setProductImage({ file, preview });
-          console.log(`? Product image updated with preview`);
+          const assetId = item.assetId || item.id || item._id || null;  // ?? Use id or _id as fallback for assetId
+          setProductImage({ file, preview, source: 'gallery', assetId, name: item.name || file.name, sourceUrl: selectedUrl });
+          console.log(`? Product image updated with preview - assetId: ${assetId}`);
         })
         .catch(err => {
           console.error('? Failed to load gallery image:', err);
@@ -865,6 +998,237 @@ export default function ImageGenerationPage() {
     }
   };
 
+  const ensureImageSession = useCallback(async (currentFlowId) => {
+    if (currentFlowId || selectedFlowId) {
+      return currentFlowId || selectedFlowId;
+    }
+
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    const sessionResponse = await fetch('/api/sessions/create', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        flowType: 'image-generation',
+        useCase: useCase
+      })
+    });
+
+    if (!sessionResponse.ok) {
+      throw new Error('Session creation failed: ' + sessionResponse.status);
+    }
+
+    const sessionData = await sessionResponse.json();
+    const flowId = sessionData.data?.flowId || sessionData.data?.sessionId;
+
+    if (flowId) {
+      setSelectedFlowId(flowId);
+    }
+
+    return flowId;
+  }, [selectedFlowId, useCase]);
+
+  const buildImageWorkflowState = useCallback((overrides = {}) => {
+    const characterInput = selectedCharacter
+      ? {
+          source: 'character-profile',
+          id: selectedCharacter._id || selectedCharacter.id,
+          name: selectedCharacter.name,
+          alias: selectedCharacter.alias,
+          url: selectedCharacter.portraitUrl
+        }
+      : characterImage
+        ? {
+            source: characterImage.source || 'upload',
+            assetId: characterImage.assetId || null,
+            name: characterImage.name || characterImage.file?.name || null,
+            url: characterImage.sourceUrl || characterImage.preview || null
+          }
+        : null;
+
+    const productInput = productImage
+      ? {
+          source: productImage.source || 'upload',
+          assetId: productImage.assetId || null,
+          name: productImage.name || productImage.file?.name || null,
+          url: productImage.sourceUrl || productImage.preview || null
+        }
+      : null;
+
+    return {
+      flowType: 'image-generation',
+      status: overrides.status || 'in-progress',
+      currentStep: overrides.currentStep || currentStep,
+      analysis: overrides.analysis !== undefined ? overrides.analysis : analysis,
+      prompt: overrides.prompt !== undefined ? overrides.prompt : (generatedPrompt?.positive || null),
+      negativePrompt: overrides.negativePrompt !== undefined ? overrides.negativePrompt : (generatedPrompt?.negative || null),
+      selectedOptions: overrides.selectedOptions || selectedOptions,
+      images: overrides.images || generatedImages,
+      characterDescription: overrides.characterDescription || characterDescription,
+      inputs: {
+        useCase,
+        productFocus,
+        aspectRatio,
+        character: overrides.characterInput || characterInput,
+        product: overrides.productInput || productInput
+      }
+    };
+  }, [analysis, generatedPrompt, selectedOptions, generatedImages, characterDescription, characterImage, productImage, selectedCharacter, currentStep, useCase, productFocus, aspectRatio]);
+
+  const hydrateStoredImages = useCallback(async (inputs = {}) => {
+    const nextStored = {};
+    const getUrl = (value) => (typeof value === 'string' ? value : value?.url);
+    const isRestorableUrl = (url) => url && !url.startsWith('blob:');
+
+    const characterUrl = getUrl(inputs.character);
+    if (isRestorableUrl(characterUrl)) {
+      try {
+        const file = await urlToFile(characterUrl, inputs.character?.name || 'character-reference.jpg');
+        const base64 = await fileToBase64(file);
+        nextStored.character = base64;
+        setCharacterImage((prev) => prev?.file ? prev : ({
+          file,
+          preview: characterUrl,
+          source: inputs.character?.source || 'resume',
+          assetId: inputs.character?.assetId || null,
+          name: inputs.character?.name || file.name,
+          sourceUrl: characterUrl
+        }));
+      } catch (error) {
+        console.warn('?? Resume: failed to hydrate character image', error);
+      }
+    }
+
+    const productUrl = getUrl(inputs.product);
+    if (isRestorableUrl(productUrl)) {
+      try {
+        const file = await urlToFile(productUrl, inputs.product?.name || 'product-reference.jpg');
+        const base64 = await fileToBase64(file);
+        nextStored.product = base64;
+        setProductImage((prev) => prev?.file ? prev : ({
+          file,
+          preview: productUrl,
+          source: inputs.product?.source || 'resume',
+          assetId: inputs.product?.assetId || null,
+          name: inputs.product?.name || file.name,
+          sourceUrl: productUrl
+        }));
+      } catch (error) {
+        console.warn('?? Resume: failed to hydrate product image', error);
+      }
+    }
+
+    if (Object.keys(nextStored).length > 0) {
+      setStoredImages((prev) => ({ ...prev, ...nextStored }));
+    }
+  }, [setCharacterImage, setProductImage, setStoredImages]);
+
+  const applyResumeWorkflowState = useCallback((workflowState, resume) => {
+    if (!workflowState) return;
+
+    if (workflowState.selectedOptions) {
+      setSelectedOptions(workflowState.selectedOptions);
+    }
+
+    if (workflowState.analysis) {
+      setAnalysis(workflowState.analysis);
+      setAnalysisRaw(workflowState.analysis);
+    }
+
+    if (workflowState.prompt) {
+      setGeneratedPrompt({
+        positive: workflowState.prompt,
+        negative: workflowState.negativePrompt || ''
+      });
+    }
+
+    if (Array.isArray(workflowState.images)) {
+      setGeneratedImages(workflowState.images);
+    }
+
+    if (workflowState.characterDescription) {
+      setCharacterDescription(workflowState.characterDescription);
+    }
+
+    const resumeStep = (() => {
+      if (workflowState.images?.length) return 4;
+      if (workflowState.prompt) return 4;
+      if (workflowState.analysis) return 2;
+      if (resume?.nextStep === 1) return 1;
+      if (resume?.nextStep === 2) return 3;
+      if (resume?.nextStep === 3) return 4;
+      return workflowState.currentStep || 1;
+    })();
+
+    setCurrentStep(resumeStep);
+  }, [setSelectedOptions, setAnalysis, setAnalysisRaw, setGeneratedPrompt, setGeneratedImages, setCharacterDescription, setCurrentStep]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resumeSessionId = params.get('resumeSessionId');
+    if (!resumeSessionId) return undefined;
+
+    let cancelled = false;
+
+    const runResume = async () => {
+      try {
+        const response = await resumeSession(resumeSessionId, 'image-generation');
+        if (!response?.success || cancelled) return;
+
+        const workflowState = response.workflowState;
+        setSelectedFlowId(response.sessionId || resumeSessionId);
+        applyResumeWorkflowState(workflowState, response);
+
+        if (workflowState?.inputs) {
+          await hydrateStoredImages(workflowState.inputs);
+        }
+
+        params.delete('resumeSessionId');
+        params.delete('flowType');
+        const next = params.toString();
+        const nextUrl = next ? window.location.pathname + '?' + next : window.location.pathname;
+        window.history.replaceState({}, '', nextUrl);
+      } catch (error) {
+        console.error('?? Resume failed:', error);
+      }
+    };
+
+    runResume();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyResumeWorkflowState, hydrateStoredImages]);
+
+  useEffect(() => {
+    const pending = autoResumeRef.current;
+    if (!pending) return;
+
+    if (pending.nextStep === 1) {
+      autoResumeRef.current = null;
+      return;
+    }
+
+    if (pending.nextStep === 2) {
+      if (analysis?.analysis && !generatedPrompt?.positive && !isLoading) {
+        autoResumeRef.current = null;
+        handleBuildPrompt();
+      }
+      return;
+    }
+
+    if (pending.nextStep === 3) {
+      if (generatedPrompt?.positive && generatedImages.length === 0 && !isGenerating) {
+        autoResumeRef.current = null;
+        handleStartGeneration();
+      }
+    }
+  }, [analysis, generatedPrompt, generatedImages, isLoading, isGenerating]);
+
   // ============================================================
   // ACTIONS
   // ============================================================
@@ -890,6 +1254,12 @@ export default function ImageGenerationPage() {
         const flowId = `affiliate-${Date.now()}`;
         console.log('?? Using affiliate TikTok service flow (Step 1 + Step 2):', flowId);
 
+        // ?? Determine image sources to avoid recreating assets
+        const imageSource = {
+          character: selectedCharacter ? 'character-profile' : 'upload',
+          product: productImage?.source === 'gallery' ? 'gallery' : 'upload'
+        };
+
         const step1Response = await affiliateVideoTiktokAPI.step1Analyze(
           effectiveCharacterFile,
           productImage.file,
@@ -906,7 +1276,10 @@ export default function ImageGenerationPage() {
             hairstyle: selectedOptions.hairstyle || '',
             makeup: selectedOptions.makeup || '',
             selectedCharacter,
-            optionsLibrary: groupedPromptOptions
+            optionsLibrary: groupedPromptOptions,
+            imageSource,  // ?? Pass source information to backend
+            characterProfileId: selectedCharacter?._id,  // ?? Pass character ID for asset lookup
+            productAssetId: productImage?.assetId  // ?? Pass product asset ID
           }
         );
 
@@ -1088,6 +1461,40 @@ export default function ImageGenerationPage() {
           character: charBase64,
           product: prodBase64
         });
+        
+        try {
+          const flowId = await ensureImageSession(selectedFlowId);
+          if (flowId) {
+            await captureGenerationSession(flowId, {
+              flowType: 'image-generation',
+              useCase,
+              status: 'in-progress',
+              workflowState: buildImageWorkflowState({
+                currentStep: 2,
+                analysis: analysisWithParsing
+              }),
+              analysis: {
+                analysisResult: {
+                  provider: browserProvider,
+                  duration,
+                  productFocus,
+                  aspectRatio
+                }
+              },
+              log: {
+                category: 'image-generation',
+                message: 'Analysis completed',
+                details: {
+                  provider: browserProvider,
+                  duration,
+                  useCase
+                }
+              }
+            });
+          }
+        } catch (sessionError) {
+          console.warn('?? Could not capture analysis session (non-blocking):', sessionError.message);
+        }
         
         // ?? NEW: Save Grok conversation ID for reuse in generation step
         if (analysisResponse.data.grokConversationId) {
@@ -1388,6 +1795,39 @@ export default function ImageGenerationPage() {
       if (response.success && response.data?.prompt) {
         console.log('? Prompt built successfully');
         setGeneratedPrompt(response.data.prompt);
+
+        try {
+          const flowId = await ensureImageSession(selectedFlowId);
+          if (flowId) {
+            const promptText = response.data.prompt?.positive || response.data.prompt;
+            await captureGenerationSession(flowId, {
+              flowType: 'image-generation',
+              useCase,
+              status: 'in-progress',
+              workflowState: buildImageWorkflowState({
+                currentStep: 3,
+                prompt: promptText,
+                negativePrompt: response.data.prompt?.negative || ''
+              }),
+              analysis: {
+                promptBuild: {
+                  provider: browserProvider,
+                  promptLength: promptText ? String(promptText).length : 0
+                }
+              },
+              log: {
+                category: 'image-generation',
+                message: 'Prompt built',
+                details: {
+                  provider: browserProvider
+                }
+              }
+            });
+          }
+        } catch (sessionError) {
+          console.warn('?? Could not capture prompt session (non-blocking):', sessionError.message);
+        }
+
         // Move to Step 4 ONLY after successful prompt generation
         setCurrentStep(4);
       } else {
@@ -1448,55 +1888,42 @@ export default function ImageGenerationPage() {
     let flowId = null;
 
     try {
-      // ?? NEW: Initialize backend session to get flowId
-      console.log('\n?? Initializing backend session...');
       try {
-        const sessionResponse = await fetch('/api/sessions/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        flowId = await ensureImageSession(selectedFlowId);
+        if (flowId) {
+          await captureGenerationSession(flowId, {
             flowType: 'image-generation',
-            useCase: useCase
-          })
-        });
-
-        if (!sessionResponse.ok) {
-          throw new Error(`Session creation failed: ${sessionResponse.status}`);
+            useCase,
+            status: 'in-progress',
+            workflowState: buildImageWorkflowState({
+              currentStep: 4,
+              prompt: generatedPrompt?.positive || null
+            }),
+            analysis: {
+              generationRequest: {
+                activeMode,
+                generationProvider,
+                aspectRatio,
+                imageCount,
+                hasReferenceImage: !!referenceImage?.file,
+                hasCustomPrompt: !!customPrompt,
+                selectedOptions,
+                selectedCharacter
+              }
+            },
+            log: {
+              category: 'image-generation',
+              message: 'Image generation requested',
+              details: {
+                provider: generationProvider,
+                imageCount,
+                aspectRatio
+              }
+            }
+          });
         }
-
-        const sessionData = await sessionResponse.json();
-        flowId = sessionData.data?.flowId || sessionData.data?.sessionId;
-        console.log(`? Session created: ${flowId}`);
-        setSelectedFlowId(flowId);  // Enable Preview Session button
-        await captureGenerationSession(flowId, {
-          flowType: 'image-generation',
-          useCase,
-          status: 'in-progress',
-          analysis: {
-            generationRequest: {
-              activeMode,
-              generationProvider,
-              aspectRatio,
-              imageCount,
-              hasReferenceImage: !!referenceImage?.file,
-              hasCustomPrompt: !!customPrompt,
-              selectedOptions,
-              selectedCharacter,
-            },
-          },
-          log: {
-            category: 'image-generation',
-            message: 'Image generation requested',
-            details: {
-              provider: generationProvider,
-              imageCount,
-              aspectRatio,
-            },
-          },
-        });
       } catch (sessionError) {
-        console.warn(`?? Could not create backend session (non-blocking):`, sessionError.message);
-        // Continue without session logging
+        console.warn('?? Could not create backend session (non-blocking):', sessionError.message);
       }
 
       const finalPrompt = generatedPrompt.positive + (customPrompt ? '\n' + customPrompt : '');
@@ -1579,6 +2006,7 @@ export default function ImageGenerationPage() {
         setGenerationError(null);  // ?? Clear error on success
         setRetryable(false);  // ?? Clear retry flag
         setGeneratedImages(response.data.generatedImages);
+        loadRecentSessions();
         if (flowId) {
           await captureGenerationSession(flowId, {
             flowType: 'image-generation',
@@ -1773,9 +2201,14 @@ export default function ImageGenerationPage() {
           for (const imageUrl of successfulUploads) {
             // Extract filename from URL if it's a local path
             const filename = imageUrl.split('/').pop() || imageUrl;
+            const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (accessToken) {
+              headers.Authorization = `Bearer ${accessToken}`;
+            }
             await fetch('/api/v1/browser-automation/delete-temp-file', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({ filename })
             });
             console.log(`???  Removed temp file: ${filename}`);
@@ -1867,7 +2300,7 @@ export default function ImageGenerationPage() {
   const handleImageFileSelection = (event, setter) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setter({ file, preview: URL.createObjectURL(file) });
+    setter({ file, preview: URL.createObjectURL(file), source: 'upload', name: file.name, size: file.size, type: file.type });
     event.target.value = '';
   };
 
@@ -1946,7 +2379,7 @@ export default function ImageGenerationPage() {
           {activeMode === 'browser' && (
             <div className="flex flex-col gap-2">
               {PROVIDERS.map((provider) => (
-                <Tooltip key={provider.id} content={`${provider.label} Â· ${provider.description}`}>
+                <Tooltip key={provider.id} content={`${provider.label} · ${provider.description}`}>
                   <button
                     onClick={() => setBrowserProvider(provider.id)}
                     className={`rounded-2xl border p-2.5 transition-all ${
@@ -1972,11 +2405,11 @@ export default function ImageGenerationPage() {
           </div>
 
           {/* ==================== LEFT SIDEBAR: Options ==================== */}
-          <div className={`${currentStep === 2 ? 'w-[184px] xl:w-[198px]' : currentStep === 3 ? 'w-[198px]' : 'w-[250px] xl:w-[300px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} generation-content-plain flex min-h-0 flex-col flex-shrink-0 overflow-hidden transition-all duration-300`}>
+          <div className={`${currentStep === 2 ? 'w-[184px] xl:w-[198px]' : currentStep === 3 ? 'w-[198px]' : 'w-[360px] xl:w-[420px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} generation-content-plain flex min-h-0 flex-col flex-shrink-0 overflow-hidden transition-all duration-300`}>
           <div className={`step1-sidebar-scroll min-h-0 flex-1 space-y-3 ${currentStep === 1 ? 'overflow-y-auto overflow-x-hidden' : 'overflow-y-auto'}`}>
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
-
+              <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,0.9fr)] gap-2">
                 <div className="space-y-3">
                   <section className={step1SectionClass}>
                     <div className="mb-2 flex items-center gap-2">
@@ -1988,12 +2421,12 @@ export default function ImageGenerationPage() {
                         <h3 className="text-sm font-semibold text-white">Use case</h3>
                       </div>
                     </div>
-                    <div className="step1-option-grid grid grid-cols-2 gap-1.5">
+                    <div className="step1-option-grid grid grid-cols-1 gap-1.5">
                       {ACTIVE_IMAGE_USE_CASES.map((uc) => (
                         <button
                           key={uc.value}
                           onClick={() => setUseCase(uc.value)}
-                          className={`${getSectionOptionChipClass(useCase === uc.value, 'warm')} min-h-[38px] px-1.5 py-1.5`}
+                          className={getSectionOptionChipClass(useCase === uc.value, 'warm') + ' min-h-[38px] px-1.5 py-1.5'}
                         >
                           <span className="block min-w-0 truncate">{getUseCaseDisplayLabel(uc.value)}</span>
                         </button>
@@ -2011,12 +2444,12 @@ export default function ImageGenerationPage() {
                         <h3 className="text-sm font-semibold text-white">Product focus</h3>
                       </div>
                     </div>
-                    <div className="step1-option-grid grid grid-cols-2 gap-1.5">
+                    <div className="step1-option-grid grid grid-cols-1 gap-1.5">
                       {FOCUS_OPTIONS.map((opt) => (
                         <button
                           key={opt.value}
                           onClick={() => setProductFocus(opt.value)}
-                          className={`${getSectionOptionChipClass(productFocus === opt.value, 'cool')} min-h-[38px] px-1.5 py-1.5`}
+                          className={getSectionOptionChipClass(productFocus === opt.value, 'cool') + ' min-h-[38px] px-1.5 py-1.5'}
                         >
                           <span className="block min-w-0 truncate">{getFocusDisplayLabel(opt.value)}</span>
                         </button>
@@ -2024,8 +2457,76 @@ export default function ImageGenerationPage() {
                     </div>
                   </section>
                 </div>
-            )}
 
+                <section className={step1SectionClass + ' px-2 py-2'}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">History</p>
+                    <button
+                      type="button"
+                      onClick={loadRecentSessions}
+                      disabled={recentSessionsLoading}
+                      className="rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.08] hover:text-slate-100 disabled:cursor-not-allowed disabled:text-slate-500"
+                    >
+                      {recentSessionsLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+                  </div>
+
+                  {recentSessions.length === 0 && !recentSessionsLoading && (
+                    <div className="text-[11px] text-slate-500">No recent sessions.</div>
+                  )}
+
+                  <div className="space-y-2">
+                    {recentSessions.map((session) => {
+                      const detail = session.detail || session;
+                      const previewItems = extractSessionPreview(session);
+                      const status = detail?.status || session.status;
+                      const statusTone = status === 'completed' ? 'bg-emerald-500/20 text-emerald-200'
+                        : status === 'failed' ? 'bg-rose-500/20 text-rose-200'
+                        : 'bg-amber-500/20 text-amber-200';
+                      return (
+                        <div key={session.sessionId} className="rounded-xl border border-slate-800/80 bg-slate-950/60 px-2 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={"rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] " + statusTone}>
+                              {status || 'unknown'}
+                            </span>
+                            {(status === 'in-progress' || status === 'failed') && (
+                              <button
+                                type="button"
+                                onClick={() => handleQuickResume(session)}
+                                disabled={recentResumeId === session.sessionId}
+                                className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold text-cyan-200 transition hover:bg-cyan-500/18 hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-slate-500"
+                              >
+                                {recentResumeId === session.sessionId ? 'resuming...' : 'resume'}
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center gap-1">
+                            {previewItems.length ? (
+                              previewItems.map((item, index) => (
+                                <div key={index} className="relative h-9 w-9 overflow-hidden rounded-lg border border-slate-800/80 bg-black/40">
+                                  {item.url ? (
+                                    <img src={item.url} alt="preview" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-500">N/A</div>
+                                  )}
+                                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[8px] text-slate-200">{item.type === 'output' ? 'OUT' : 'IN'}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-[10px] text-slate-500">No preview</div>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2 text-[9px] text-slate-400">
+                            <span className="truncate">{session.sessionId}</span>
+                            <span className="shrink-0">{formatSessionTime(detail?.updatedAt || detail?.createdAt || session.createdAt)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+            )}
             {/* Step 2: Image Previews */}
             {currentStep === 2 && (characterPreviewSrc || productImage) && (
               <div>
@@ -2139,7 +2640,7 @@ export default function ImageGenerationPage() {
                                   <span className="flex w-full items-center justify-between gap-2">
                                     {selectedOptions[key] === opt.value ? (
                                       <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-950/15 text-[9px] font-bold">
-                                        âœ“
+                                        ✓
                                       </span>
                                     ) : null}
                                     <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
@@ -2888,6 +3389,8 @@ export default function ImageGenerationPage() {
     </div>
   );
 }
+
+
 
 
 

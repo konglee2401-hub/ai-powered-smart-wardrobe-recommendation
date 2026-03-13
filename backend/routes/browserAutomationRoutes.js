@@ -3,6 +3,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { analyzeBrowser, generateImageBrowser, generateVideoBrowser, generateVideo, analyzeAndGenerate, analyzeWithBrowser, generateWithBrowser, generateMultiVideoSequence, serveGeneratedImage } from '../controllers/browserAutomationController.js';
+import { protect } from '../middleware/auth.js';
+import { requireApiAccess, enforceBrowserAutomationAccess } from '../middleware/permissions.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
 
 const router = express.Router();
 
@@ -16,31 +19,35 @@ const upload = multer({
   }
 });
 
+router.use(protect);
+router.use(requireApiAccess('browser-automation'));
+router.use(requireActiveSubscription);
+
 router.post('/analyze', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'clothingImage', maxCount: 1 }
-]), analyzeBrowser);
+]), enforceBrowserAutomationAccess(), analyzeBrowser);
 
 // NEW: Browser Analysis - Step 2 of VTO flow (analysis only, no generation)
 router.post('/analyze-browser', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
-]), analyzeWithBrowser);
+]), enforceBrowserAutomationAccess(), analyzeWithBrowser);
 
 // NEW: Browser Generation - Step 5 of VTO flow (generation only)
-router.post('/generate-browser', generateWithBrowser);
+router.post('/generate-browser', enforceBrowserAutomationAccess(), generateWithBrowser);
 
 router.post('/generate-image-browser', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
-]), generateImageBrowser);
+]), enforceBrowserAutomationAccess(), consumeGeneration('image'), generateImageBrowser);
 
 router.post('/generate-image', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
-]), analyzeAndGenerate);
+]), enforceBrowserAutomationAccess(), consumeGeneration('image'), analyzeAndGenerate);
 
-router.post('/generate-video', generateVideoBrowser);
+router.post('/generate-video', enforceBrowserAutomationAccess(), consumeGeneration('video'), generateVideoBrowser);
 
 // 💫 NEW: Download video endpoint
 router.get('/download-video/:filename', (req, res) => {
@@ -147,10 +154,10 @@ router.post('/delete-temp-file', (req, res) => {
 });
 
 // 💫 NEW: Video generation endpoint for Google Flow (supports image uploads)
-router.post('/generate-video-with-provider', generateVideo);
+router.post('/generate-video-with-provider', enforceBrowserAutomationAccess(), consumeGeneration('video'), generateVideo);
 
 // 💫 NEW: Multi-video generation endpoint with content use cases
-router.post('/generate-multi-video-sequence', generateMultiVideoSequence);
+router.post('/generate-multi-video-sequence', enforceBrowserAutomationAccess(), consumeGeneration('video'), generateMultiVideoSequence);
 
 // 📸 NEW: Serve generated images endpoint
 router.get('/generated-image/:id', serveGeneratedImage);

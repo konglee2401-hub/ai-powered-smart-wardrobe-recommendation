@@ -849,6 +849,15 @@
       "maleSlow": "Male - Slow",
       "maleNormal": "Male - Normal",
       "maleFast": "Male - Fast"
+    },
+    "sessionStatus": {
+      "success": "Success",
+      "failed": "Failed",
+      "processing": "Processing",
+      "stillProcessing": "Still processing",
+      "resumeRequired": "Resume required",
+      "resume": "Resume",
+      "resuming": "Resuming..."
     }
   },
   "authSetup": {
@@ -1128,7 +1137,9 @@
     "cloned_name": "Cloned: {{name}}",
     "activated_assignments_for_name": "Activated assignments for: {{name}}",
     "synced_hardcoded_prompts": "Synced {{count}} hardcoded prompts",
-    "tokens_count": "{{count}} tokens"
+    "tokens_count": "{{count}} tokens",
+    "core_hint_en": "Core templates cannot be deleted. To tweak wording, clone it and reassign in Active Assignment. For placeholder source = option, let the system inject existing options instead of typing manually.",
+    "core_hint_vi": "Core templates cannot be deleted. To tweak wording, clone it and reassign in Active Assignment. For placeholder source = option, let the system inject existing options instead of typing manually."
   },
   "videoPipeline": {
     "enabled": "Enabled",
@@ -1600,6 +1611,8 @@
     "publish_scheduler_settings": "Publish scheduler settings",
     "default_platform": "Default platform",
     "youtube_publish_type": "YouTube publish type",
+    "nvenc_encode": "Use hardware encoding (Intel QSV / NVIDIA NVENC)",
+    "nvenc_encode_hint": "Auto-selects the fastest available hardware encoder. Falls back to CPU if unavailable.",
     "publish_gap_minutes_label": "Publish gap (minutes)",
     "publish_max_per_run_label": "Max jobs per run",
     "publish_filter_status": "Status filter",

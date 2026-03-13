@@ -172,12 +172,17 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     navigator.clipboard.writeText(logText);
   };
 
+  const getAuthHeaders = () => {
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  };
+
   // Kill a running process attached to this session
   const killSession = async () => {
     try {
       await fetch('/api/auth-setup/run/kill-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) , ...getAuthHeaders() },
         body: JSON.stringify({ sessionId: activeSession, signal: 'SIGTERM' })
       });
       setProcessRunning(false);
@@ -191,7 +196,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     try {
       await fetch('/api/auth-setup/run/session-stdin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) , ...getAuthHeaders() },
         body: JSON.stringify({ sessionId: activeSession, data: '\n' })
       });
     } catch (e) {
@@ -202,7 +207,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
   const runAutoLogin = async (mode) => {
     try {
       const url = `/api/auth-setup/run/chatgpt-auto-login${mode?('?mode='+mode):''}`;
-      const r = await fetch(url, { method: 'POST' });
+      const r = await fetch(url, { method: 'POST', headers: { ...getAuthHeaders() } });
       const j = await r.json();
       if (j.success && j.sessionId) {
         setActiveSession(j.sessionId);
@@ -223,7 +228,7 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
       const args = argsText ? argsText.split(' ').filter(Boolean) : [];
       const r = await fetch('/api/auth-setup/run/command', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) },
+        headers: { 'Content-Type': 'application/json', ...(adminKey?{ 'x-admin-key': adminKey }:{}) , ...getAuthHeaders() },
         body: JSON.stringify({ command, args, cwd })
       });
       const j = await r.json();

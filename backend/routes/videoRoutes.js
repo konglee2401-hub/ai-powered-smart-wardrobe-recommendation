@@ -2,10 +2,16 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 import { VideoGenerationOrchestrator } from '../services/videoGenerationOrchestrator.js';
 import VideoGeneration from '../models/VideoGeneration.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({

@@ -142,9 +142,14 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
     setStep3RerunLoading(true);
     setStep3RerunError(null);
     try {
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
       const response = await fetch('/api/ai/affiliate-video-tiktok/step-3-deep-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           flowId: effectiveFlowId,
           scriptTemplateId: step3TemplateId || 'auto'
@@ -189,7 +194,7 @@ function SessionLogModal({ isOpen, onClose, sessionId, flowId }) {
 
   return (
     <ModalPortal>
-    <div className={`apple-typography fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)]' : 'bg-black/70'}`}>
+    <div className={`apple-typography fixed inset-0 app-layer-modal flex items-center justify-center p-4 backdrop-blur-sm ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)]' : 'bg-black/70'}`}>
       <div className={`flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border shadow-2xl ${isLightTheme ? 'studio-card-shell border-white/50' : 'border-slate-700 bg-slate-950'}`}>
         <div className="flex items-start justify-between border-b border-slate-800 bg-slate-950/95 px-6 py-5">
           <div>

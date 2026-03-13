@@ -17,6 +17,11 @@ import { pageRoutes, redirectRoutes } from './config/appRoutes';
 import notificationApi from './services/notificationApi';
 import { connectNotificationSocket, disconnectNotificationSocket } from './services/notificationClient';
 import useNotificationStore from './stores/useNotificationStore';
+import useAuthStore from './stores/useAuthStore';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+
+const PUBLIC_ROUTES = ['/login', '/register'];
 
 function PageTitle() {
   useEffect(() => {
@@ -50,7 +55,7 @@ function PageLayout({ theme, onToggleTheme }) {
       <PageTitle />
       <div className="app-shell-stage lg:flex lg:h-full lg:overflow-hidden">
         <Navbar theme={theme} onToggleTheme={onToggleTheme} />
-        <main className={`app-main min-h-0 flex-1 min-w-0 pt-14 lg:-ml-px lg:h-full lg:pt-0 ${contentClassName}`}>
+        <main className={`app-main relative min-h-0 flex-1 min-w-0 pt-14 lg:-ml-px lg:h-full lg:pt-0 ${contentClassName}`}>
           <div className="app-main-glow app-main-glow-top" />
           <div className="app-main-glow app-main-glow-bottom" />
           <div className="apple-page apple-typography">
@@ -80,6 +85,7 @@ function RouteFallback() {
 function App() {
   const setNotifications = useNotificationStore((state) => state.setNotifications);
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const token = useAuthStore((state) => state.token);
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark';
     const initialTheme = window.localStorage.getItem('smart-wardrobe-theme') || 'dark';
@@ -134,6 +140,28 @@ function App() {
     [theme],
   );
 
+  const AuthGate = ({ children }) => {
+    const location = useLocation();
+    const isPublic = PUBLIC_ROUTES.some((path) =>
+      matchPath({ path, end: true }, location.pathname),
+    );
+
+    if (isPublic) {
+      if (token) {
+        const next = new URLSearchParams(location.search).get('next');
+        return <Navigate to={next || '/dashboard'} replace />;
+      }
+      return children;
+    }
+
+    if (!token) {
+      const next = `${location.pathname}${location.search || ''}`;
+      return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+    }
+
+    return children;
+  };
+
   return (
     <NavbarCollapseProvider>
       <Router>
@@ -145,7 +173,32 @@ function App() {
           }}
         />
         <Routes>
-          <Route element={<PageLayout theme={theme} onToggleTheme={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))} />}>
+          <Route
+            path="/login"
+            element={(
+              <AuthGate>
+                <Suspense fallback={<RouteFallback />}>
+                  <Login />
+                </Suspense>
+              </AuthGate>
+            )}
+          />
+          <Route
+            path="/register"
+            element={(
+              <AuthGate>
+                <Suspense fallback={<RouteFallback />}>
+                  <Signup />
+                </Suspense>
+              </AuthGate>
+            )}
+          />
+
+          <Route element={(
+            <AuthGate>
+              <PageLayout theme={theme} onToggleTheme={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))} />
+            </AuthGate>
+          )}>
             {pageRoutes.map(({ path, Component }) => (
               <Route
                 key={path}

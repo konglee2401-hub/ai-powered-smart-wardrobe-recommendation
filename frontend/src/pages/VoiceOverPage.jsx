@@ -1,4 +1,4 @@
-﻿/**
+/**
  * VoiceOverPage - Main page for TTS voiceover generation
  * Implements 3-step flow: Video Upload > Script Generation > Audio Generation
  */
@@ -14,9 +14,9 @@ import { useTranslation } from 'react-i18next';
 import PageHeaderBar from '../components/PageHeaderBar';
 
 const STEPS = [
-  { id: 1, name: 'Upload Videos', icon: 'ðŸ“¹' },
-  { id: 2, name: 'Generate Script', icon: 'âœï¸' },
-  { id: 3, name: 'Generate Audio', icon: 'ðŸŽ™ï¸' },
+  { id: 1, name: 'Upload Videos', icon: '📹' },
+  { id: 2, name: 'Generate Script', icon: '✍️' },
+  { id: 3, name: 'Generate Audio', icon: '🎙️' },
 ];
 
 export default function VoiceOverPage() {
@@ -75,9 +75,15 @@ export default function VoiceOverPage() {
   const ensureSession = async () => {
     if (flowId) return flowId;
 
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
     const sessionResponse = await fetch('/api/sessions/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         flowType: 'voice-generation',
         useCase: selectedStyle,
@@ -279,4 +285,6 @@ export default function VoiceOverPage() {
     </div>
   );
 }
+
+
 

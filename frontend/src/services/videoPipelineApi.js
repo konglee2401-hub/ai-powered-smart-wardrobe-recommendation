@@ -1,4 +1,4 @@
-import apiClient from '../config/api';
+import apiClient from './axios';
 
 /**
  * Unified frontend API client for the merged video pipeline workspace.
@@ -66,6 +66,7 @@ export const videoPipelineApi = {
   getQueueRuntime: (params = {}) => unwrap(apiClient.get(`${PIPELINE_BASE}/jobs/runtime`, { params })),
   getJobLogs: (queueId) => unwrap(apiClient.get(`${PIPELINE_BASE}/jobs/${queueId}/logs`)),
   startJob: (queueId) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/start`)),
+  forceRetryJob: (queueId, payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/force-retry`, payload)),
   publishJob: (queueId, payload) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/publish`, payload)),
   publishToYoutubeAccounts: (queueId, payload) => unwrap(apiClient.post(`${PIPELINE_BASE}/jobs/${queueId}/publish-youtube`, payload)),
   getPublishAccounts: () => unwrap(apiClient.get(`${PIPELINE_BASE}/publish-accounts`)),

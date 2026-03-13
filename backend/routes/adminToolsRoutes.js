@@ -3,9 +3,14 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Asset from '../models/Asset.js';
+import { protect } from '../middleware/auth.js';
+import { requireRole } from '../middleware/permissions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
+
+router.use(protect);
+router.use(requireRole('admin'));
 
 /**
  * Helper: Execute Node script and capture output

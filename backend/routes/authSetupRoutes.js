@@ -8,11 +8,15 @@ import { randomUUID } from 'crypto';
 import OAuthCredentials from '../models/OAuthCredentials.js';
 import { google } from 'googleapis';
 import LogStreamingService from '../services/logs/LogStreamingService.js';
+import { protect } from '../middleware/auth.js';
+import { requireRole } from '../middleware/permissions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = express.Router();
+router.use(protect);
+router.use(requireRole('admin'));
 
 // Helper: admin API key enforcement
 function checkAdminKey(req, res) {

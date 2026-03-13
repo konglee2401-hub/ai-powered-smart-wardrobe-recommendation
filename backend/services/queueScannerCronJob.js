@@ -16,8 +16,11 @@ import MultiAccountService from './multiAccountService.js';
 import QueueScannerSettings from '../models/QueueScannerSettings.js';
 import Asset from '../models/Asset.js';
 import TrendVideo from '../models/TrendVideo.js';
+import TrendSetting from '../models/TrendSetting.js';
 import driveService from './googleDriveOAuth.js';
 import { buildPublishMetadata, mergePublishUploadConfig } from './publishMetadataGenerator.js';
+import publicDriveFolderIngestService from './publicDriveFolderIngestService.js';
+import { normalizeSubVideoLibrarySources } from '../utils/subVideoLibrary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const googleDriveIntegration = new GoogleDriveIntegration();
@@ -328,14 +331,65 @@ class QueueScannerCronJob {
           const sourceAsset = await this.ensureSourceAsset(queueVideo, enrichedMetadata);
           const sourceVideo = await this.ensureSourceVideo(queueVideo, enrichedMetadata, sourceAsset);
 
-          // 1. Get random sub-video from sub-videos folder
-          const subVideoResult = await googleDriveIntegration.getRandomSubVideo();
-          if (!subVideoResult.success) {
-            throw new Error('No sub-videos available');
+          // 1. Resolve sub-video from library sources (Drive/public) first, fallback to local sub-videos
+          let subVideo = null;
+          let subVideoMeta = {
+            selectionMethod: 'random',
+            sourceKey: 'local-sub',
+            sourceType: 'local-folder',
+            sourceName: 'local sub-videos',
+          };
+
+          try {
+            const trendSetting = await TrendSetting.getOrCreateDefault(null);
+            const productionPrefs = trendSetting?.videoPipelinePreferences?.production || {};
+            const sources = normalizeSubVideoLibrarySources(productionPrefs.subVideoLibrarySources)
+              .filter((item) => item.enabled !== false);
+
+            if (sources.length) {
+              const selectionContext = {
+                templateName: 'reaction',
+                aspectRatio: '9:16',
+                sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+                subtitleContext: '',
+                affiliateKeywords: [],
+              };
+
+              const orderedSources = [...sources].sort((left, right) => Number(right.isDefault === true) - Number(left.isDefault === true));
+              for (const source of orderedSources) {
+                const resolved = await publicDriveFolderIngestService.resolveSubVideoFromSource(source, selectionContext);
+                if (resolved?.success && resolved?.item?.localPath) {
+                  subVideo = {
+                    name: resolved.item.name,
+                    path: resolved.item.localPath,
+                  };
+                  subVideoMeta = {
+                    selectionMethod: 'library',
+                    sourceKey: source.key || source.folderId || 'public-drive',
+                    sourceType: source.sourceType || 'public-drive-folder',
+                    sourceName: source.name || source.key || 'Public library',
+                    assetId: resolved.item.assetId || '',
+                    theme: resolved.item.theme || '',
+                    recommendedTemplateGroups: resolved.item.recommendedTemplateGroups || [],
+                    selection: resolved.selection || null,
+                  };
+                  console.log(`✓ Selected sub-video from library: ${subVideo.name}`);
+                  break;
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`⚠️ Library sub-video selection failed: ${error.message}`);
           }
 
-          const { file: subVideo } = subVideoResult;
-          console.log(`✓ Selected sub-video: ${subVideo.name}`);
+          if (!subVideo) {
+            const subVideoResult = await googleDriveIntegration.getRandomSubVideo();
+            if (!subVideoResult.success) {
+              throw new Error('No sub-videos available');
+            }
+            subVideo = subVideoResult.file;
+            console.log(`✓ Selected sub-video (local fallback): ${subVideo.name}`);
+          }
 
           // 2. Generate mashup
           const mashupResult = await videoMashupGenerator.generateMashup(
@@ -388,23 +442,23 @@ class QueueScannerCronJob {
               url: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
             },
             subVideo: {
-              selectionMethod: 'random',
-              assetId: '',
+              selectionMethod: subVideoMeta.selectionMethod || 'random',
+              assetId: subVideoMeta.assetId || '',
               name: subVideo?.name || '',
               path: subVideo?.path || '',
-              sourceKey: 'local-sub',
-              sourceType: 'local',
-              theme: '',
+              sourceKey: subVideoMeta.sourceKey || 'local-sub',
+              sourceType: subVideoMeta.sourceType || 'local',
+              theme: subVideoMeta.theme || '',
             },
             selection: {
-              method: 'random',
-              sourceKey: 'local-sub',
-              sourceType: 'local-folder',
-              sourceName: 'local sub-videos',
+              method: subVideoMeta.selectionMethod || 'random',
+              sourceKey: subVideoMeta.sourceKey || 'local-sub',
+              sourceType: subVideoMeta.sourceType || 'local-folder',
+              sourceName: subVideoMeta.sourceName || 'local sub-videos',
               templateGroup: 'reaction',
-              desiredThemes: [],
-              score: null,
-              candidates: [],
+              desiredThemes: subVideoMeta.selection?.desiredThemes || [],
+              score: subVideoMeta.selection?.score ?? null,
+              candidates: subVideoMeta.selection?.candidates || [],
             },
           };
           const queueResult = await VideoQueueService.addToQueue({

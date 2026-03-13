@@ -735,6 +735,19 @@ export const affiliateVideoTiktokAPI = {
       formData.append('selectedCharacter', JSON.stringify(options.selectedCharacter));
     }
 
+    // ?? Pass image source metadata to backend
+    if (options.imageSource) {
+      formData.append('imageSource', JSON.stringify(options.imageSource));
+    }
+
+    if (options.characterProfileId) {
+      formData.append('characterProfileId', options.characterProfileId);
+    }
+
+    if (options.productAssetId) {
+      formData.append('productAssetId', options.productAssetId);
+    }
+
     return api.postFormData('/ai/affiliate-video-tiktok/step-1-analyze', formData);
   },
 

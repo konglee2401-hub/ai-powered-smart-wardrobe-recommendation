@@ -4,12 +4,19 @@ import fs from 'fs';
 import PromptOption from '../models/PromptOption.js';
 import Asset from '../models/Asset.js';
 import GoogleDriveService from '../services/googleDriveService.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 import {
   generateSceneLockPromptWithChatGPT,
   generateSceneLockImagesWithGoogleFlow
 } from '../services/sceneLockService.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 
 const SCENE_LOCK_ASPECTS = ['16:9', '9:16'];

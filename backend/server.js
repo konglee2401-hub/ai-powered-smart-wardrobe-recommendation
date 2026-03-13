@@ -12,6 +12,10 @@ import { printServicesSummary, initKeyManager } from './utils/keyManager.js';
 import LogStreamingService from './services/logs/LogStreamingService.js';
 import authRoutes from './routes/authRoutes.js';
 import testAuthRoutes from './routes/testAuthRoutes.js';
+import adminAccessRoutes from './routes/adminAccessRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import planRoutes from './routes/planRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import clothingRoutes from './routes/clothingRoutes.js';
 import outfitRoutes from './routes/outfitRoutes.js';
 import pipelineRoutes from './routes/pipelineRoutes.js';
@@ -58,12 +62,16 @@ import ProgressEmitter from './services/ProgressEmitter.js';
 import queueScannerCronJob from './services/queueScannerCronJob.js';
 import publishSchedulerCronJob from './services/publishSchedulerCronJob.js';
 import { seedProviders } from './scripts/seed/seedProviders.js';
+import { ensureDefaultAdmin, ensureDefaultUser } from './services/adminSeedService.js';
+import { getSystemSettings } from './services/accessControlService.js';
+import { seedSubscriptionPlans } from './services/subscriptionPlanSeedService.js';
 
 import { UPLOAD_DIR } from './utils/uploadConfig.js';
 import * as modelSyncService from './services/modelSyncService.js';
 import './services/cleanupService.js'; // Auto-cleanup temp files
 
 dotenv.config();
+dotenv.config({ path: '.env.tunnel', override: true });
 const app = express();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +80,16 @@ const __dirname = path.dirname(__filename);
 connectDB().then(async () => {
   // Auto-sync models after DB connection
   await seedProviders(); // Ensure providers exist first
+  await getSystemSettings();
+  await seedSubscriptionPlans();
+  const adminSeed = await ensureDefaultAdmin();
+  if (adminSeed?.created) {
+    console.log(`✅ Default admin created: ${adminSeed.email}`);
+  }
+  const userSeed = await ensureDefaultUser();
+  if (userSeed?.created) {
+    console.log(`✅ Default user created: ${userSeed.email}`);
+  }
   modelSyncService.autoSyncOnStartup(); // Only one sync - runs after 5s
   queueScannerCronJob.loadScheduleSettings().catch((error) => {
     console.warn('[queue-scanner] Failed to load schedule settings:', error.message);
@@ -157,6 +175,10 @@ app.get('/api/v1/browser-automation/serve-image/:filename', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin-access', adminAccessRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/test', testAuthRoutes);
 app.use('/api/clothes', clothingRoutes);
 app.use('/api/outfits', outfitRoutes);

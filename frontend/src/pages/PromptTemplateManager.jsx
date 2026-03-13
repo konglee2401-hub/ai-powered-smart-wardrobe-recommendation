@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Copy, Database, Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2 } from 'lucide-react';
 import PageHeaderBar from '../components/PageHeaderBar';
 import promptTemplateService from '../services/promptTemplateService';
@@ -94,7 +95,7 @@ function Chip({ children, tone = 'slate' }) {
   return <span className={`rounded border px-2 py-1 text-[11px] ${styles[tone]}`}>{children}</span>;
 }
 
-function MiniLocationEditor({ title, value, onChange, suggestions = [] }) {
+function MiniLocationEditor({ title, value, onChange, suggestions = [], t }) {
   const update = (index, key, nextValue) => onChange(value.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: nextValue } : item));
   const add = (preset = EMPTY_LOCATION) => onChange([...(value || []), { ...preset }]);
   const remove = (index) => onChange(value.filter((_, itemIndex) => itemIndex !== index));
@@ -128,6 +129,8 @@ function MiniLocationEditor({ title, value, onChange, suggestions = [] }) {
 }
 
 export default function PromptTemplateManager() {
+  const { t, i18n } = useTranslation();
+  const isVi = String(i18n.language || '').toLowerCase().startsWith('vi');
   const [templates, setTemplates] = useState([]);
   const [metadata, setMetadata] = useState({ optionCategories: [], templateTypes: [], locations: [] });
   const [selectedId, setSelectedId] = useState(null);
@@ -343,8 +346,8 @@ export default function PromptTemplateManager() {
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
-                      <MiniLocationEditor title={t('promptTemplateManager.catalog_usage')} value={form.usedInPages} onChange={(value) => setFormValue('usedInPages', value)} suggestions={metadata.locations || []} />
-                      <MiniLocationEditor title={t('promptTemplateManager.active_assignment')} value={form.assignmentTargets} onChange={(value) => setFormValue('assignmentTargets', value)} suggestions={metadata.locations || []} />
+                      <MiniLocationEditor title={t('promptTemplateManager.catalog_usage')} value={form.usedInPages} onChange={(value) => setFormValue('usedInPages', value)} suggestions={metadata.locations || []} t={t} />
+                      <MiniLocationEditor title={t('promptTemplateManager.active_assignment')} value={form.assignmentTargets} onChange={(value) => setFormValue('assignmentTargets', value)} suggestions={metadata.locations || []} t={t} />
                     </div>
                   </div>
 
@@ -376,13 +379,9 @@ export default function PromptTemplateManager() {
 
                     <div className="rounded-xl border border-sky-800/40 bg-sky-950/20 p-3 text-xs leading-6 text-sky-100/80">
   {isVi ? (
-    <>
-      Template core không thể xóa. Muốn chỉnh wording từng câu, hãy clone rồi gán lại ở phần <span className="font-semibold text-sky-200">Active Assignment</span>. Với placeholder source = <span className="font-mono text-sky-200">option</span>, nên để hệ thống bơm từ option hiện có thay vì nhập tay.
-    </>
+    <span>{t('promptTemplateManager.core_hint_vi')}</span>
   ) : (
-    <>
-      Core templates cannot be deleted. To tweak wording, clone it and reassign in <span className="font-semibold text-sky-200">Active Assignment</span>. For placeholder source = <span className="font-mono text-sky-200">option</span>, let the system inject existing options instead of typing manually.
-    </>
+    <span>{t('promptTemplateManager.core_hint_en')}</span>
   )}
 </div>
                   </div>

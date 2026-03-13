@@ -6,6 +6,11 @@ import mongoose from 'mongoose';
  * here so operators can validate folder connectivity without opening raw config.
  */
 const DriveTemplateSourceSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   name: {
     type: String,
     required: true,
@@ -15,7 +20,6 @@ const DriveTemplateSourceSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    unique: true,
   },
   folderPath: {
     type: String,
@@ -45,6 +49,7 @@ const DriveTemplateSourceSchema = new mongoose.Schema({
 });
 
 DriveTemplateSourceSchema.index({ enabled: 1, healthStatus: 1, updatedAt: -1 });
+DriveTemplateSourceSchema.index({ userId: 1, folderId: 1 }, { unique: true, sparse: true });
 
 const DriveTemplateSource =
   mongoose.models.DriveTemplateSource || mongoose.model('DriveTemplateSource', DriveTemplateSourceSchema);

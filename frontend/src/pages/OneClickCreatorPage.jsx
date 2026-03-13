@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, unifiedFlowAPI, browserAutomationAPI, promptsAPI, aiOptionsAPI } from '../services/api';
+import { getAuthHeaders } from '../services/authHeaders';
 import promptTemplateService from '../services/promptTemplateService';
 import { buildLanguageAwarePrompt } from '../services/languageAwarePromptService.js';
 import GalleryPicker from '../components/GalleryPicker';
@@ -688,6 +689,18 @@ export default function OneClickCreatorPage() {
     return option ? t(option.labelKey) : value;
   };
 
+  // Get template title in current language
+  const getTemplateTitle = (template, language = 'vi') => {
+    const isVi = (language || 'vi').toLowerCase().startsWith('vi');
+    return isVi ? template.titleVi : template.titleEn;
+  };
+
+  // Get template description in current language
+  const getTemplateDescription = (template, language = 'vi') => {
+    const isVi = (language || 'vi').toLowerCase().startsWith('vi');
+    return isVi ? template.descriptionVi : template.descriptionEn;
+  };
+
   // Get translated workflow steps
   const getWorkflowSteps = () => {
     const workflowMap = {
@@ -738,6 +751,7 @@ export default function OneClickCreatorPage() {
   
   // 🎯 Track image source: gallery or file upload (to skip Drive upload for gallery images)
   const [imageSource, setImageSource] = useState({ character: 'upload', product: 'upload' }); // 'upload' or 'gallery'
+  const [inputAssetRefs, setInputAssetRefs] = useState({ character: null, product: null, scene: null });
 
   // Settings
   const [useCase, setUseCase] = useState('affiliate-video-tiktok');
@@ -767,6 +781,7 @@ export default function OneClickCreatorPage() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [resumingSessionId, setResumingSessionId] = useState(null);
   const [resumeRequiredFlows, setResumeRequiredFlows] = useState(() => new Set());
+  const [resumeStateByFlowId, setResumeStateByFlowId] = useState({});
   const [recentAffiliateSessions, setRecentAffiliateSessions] = useState([]);
   const [recentAffiliateSessionsLoading, setRecentAffiliateSessionsLoading] = useState(false);
   const pollingStopsRef = useRef(new Map());
@@ -800,7 +815,11 @@ export default function OneClickCreatorPage() {
   useEffect(() => {
     const loadSceneOptions = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const data = await response.json();
         if (data?.success) {
           const scenes = data.data || [];
@@ -1094,7 +1113,24 @@ export default function OneClickCreatorPage() {
       const items = (data?.data || [])
         .filter((session) => ['affiliate-tiktok', 'one-click'].includes(session.flowType))
         .filter((session) => String(session.sessionId || '').startsWith('flow-'));
-      setRecentAffiliateSessions(items);
+      const enriched = await Promise.allSettled(
+        items.map(async (session) => {
+          try {
+            const statusData = await api.get('/ai/affiliate-video-tiktok/status/' + session.sessionId);
+            const sessionStatus =
+              statusData?.sessionStatus ||
+              statusData?.status ||
+              statusData?.data?.sessionStatus ||
+              statusData?.data?.status ||
+              null;
+            return { ...session, sessionStatus };
+          } catch {
+            return session;
+          }
+        })
+      );
+      const merged = enriched.map((result, idx) => (result.status === 'fulfilled' ? result.value : items[idx]));
+      setRecentAffiliateSessions(merged);
     } catch (error) {
       console.warn('Failed to load recent affiliate sessions:', error.message);
       setRecentAffiliateSessions([]);
@@ -1110,9 +1146,25 @@ export default function OneClickCreatorPage() {
     try {
       try {
         await api.post('/ai/affiliate-video-tiktok/resume/' + flowId, { resumeIntent: 'fe-manual-resume' });
+        setResumeStateByFlowId((prev) => {
+          if (!prev[flowId]) return prev;
+          const next = { ...prev };
+          delete next[flowId];
+          return next;
+        });
       } catch (error) {
         const status = error?.response?.status;
-        throw new Error('Resume failed' + (status ? ' (' + status + ')' : ''));
+        const resumeError = error?.response?.data?.error || error?.response?.data?.message || error?.message || '';
+        const lowered = String(resumeError).toLowerCase();
+        const matchedState = lowered.includes('still-processing')
+          ? 'still-processing'
+          : lowered.includes('processing')
+            ? 'processing'
+            : null;
+        if (matchedState) {
+          setResumeStateByFlowId((prev) => ({ ...prev, [flowId]: matchedState }));
+        }
+        throw new Error(resumeError || ('Resume failed' + (status ? ' (' + status + ')' : '')));
       }
 
       const statusData = await fetchAffiliateFlowStatus(flowId);
@@ -1122,6 +1174,12 @@ export default function OneClickCreatorPage() {
       setResumeRequiredFlows((prev) => {
         const next = new Set(prev);
         next.delete(flowId);
+        return next;
+      });
+      setResumeStateByFlowId((prev) => {
+        if (!prev[flowId]) return prev;
+        const next = { ...prev };
+        delete next[flowId];
         return next;
       });
       const nextSession = hydrateAffiliateSessionFromStatus(statusData, sessionIdOverride || flowId);
@@ -1395,6 +1453,7 @@ export default function OneClickCreatorPage() {
         },
         disableSceneReferenceTransfer: false,
         imageSource: imageSource,  // 🎯 Pass image source tracking to skip Drive upload for gallery images
+        inputAssetRefs,
         useShortPrompt
       };
       
@@ -1415,9 +1474,14 @@ export default function OneClickCreatorPage() {
       let keepPollingAlive = false;
 
       try {
+        const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
         const mainFlowResponse = await fetch('/api/ai/affiliate-video-tiktok', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload),
           signal: controller.signal  // 🕐 Abort after 20 minutes
         });
@@ -1470,9 +1534,15 @@ export default function OneClickCreatorPage() {
     try {
       console.log(`\n📝 Initializing backend session for Session #${sessionNumber}...`);
       
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch('/api/sessions/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           flowType: 'one-click',
           useCase: useCase
@@ -2022,6 +2092,7 @@ export default function OneClickCreatorPage() {
       if (!result) return;
       setCharacterImage(result);
       setImageSource((prev) => ({ ...prev, character: 'upload' }));
+      setInputAssetRefs((prev) => ({ ...prev, character: null }));
     });
   };
 
@@ -2030,6 +2101,7 @@ export default function OneClickCreatorPage() {
       if (!result) return;
       setProductImage(result);
       setImageSource((prev) => ({ ...prev, product: 'upload' }));
+      setInputAssetRefs((prev) => ({ ...prev, product: null }));
     });
   };
 
@@ -2038,6 +2110,7 @@ export default function OneClickCreatorPage() {
       if (!result) return;
       setSceneImage(result);
       setSceneImageMode('custom');
+      setInputAssetRefs((prev) => ({ ...prev, scene: null }));
     });
   };
 
@@ -2353,9 +2426,9 @@ export default function OneClickCreatorPage() {
                             : 'border-white/10 bg-white/5 text-slate-200 hover:border-amber-300/50'
                         }`}
                       >
-                        <div className="font-semibold">{template.title}</div>
+                        <div className="font-semibold">{getTemplateTitle(template, i18n.language)}</div>
                         <div className="mt-1 text-[10px] text-slate-400 group-hover:text-slate-300">
-                          {template.description}
+                          {getTemplateDescription(template, i18n.language)}
                         </div>
                       </button>
                     ))}
@@ -2713,18 +2786,65 @@ export default function OneClickCreatorPage() {
                   </div>
                 ) : (
                   <div className="grid max-h-[360px] gap-3 overflow-y-auto pr-1">
-                    {recentAffiliateSessions.map((session) => (
-                      <div key={session.sessionId} className="studio-card-shell flex min-h-[76px] items-start justify-between gap-4 rounded-2xl border px-4 py-5">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-slate-800 break-all">{session.sessionId}</div>
-                          <div className="mt-2 text-xs text-slate-500 leading-6">
+                    {recentAffiliateSessions.map((session) => {
+                      const resumeState = resumeStateByFlowId[session.sessionId];
+                      const statusValue = String(resumeState || session.sessionStatus || session.status || '').toLowerCase();
+                      const isSuccess = ['completed', 'success', 'succeeded'].includes(statusValue);
+                      const isFailed = ['failed', 'error', 'cancelled'].includes(statusValue);
+                      const isProcessing = ['processing', 'running', 'in-progress', 'pending', 'still-processing'].includes(statusValue);
+                      const isStillProcessing = statusValue === 'still-processing';
+                      const requiresResume = resumeRequiredFlows.has(session.sessionId) || statusValue === 'requires-resume';
+                      const canResume = !isSuccess && (requiresResume || isFailed) && !isProcessing;
+                      const statusTone = isSuccess
+                        ? 'border-emerald-300/80 bg-emerald-50/80 ring-1 ring-emerald-200/70'
+                        : isFailed
+                          ? 'border-rose-300/80 bg-rose-50/80 ring-1 ring-rose-200/70'
+                          : 'border-slate-200/80 bg-white/80 ring-1 ring-slate-200/60';
+                      const accentTone = isSuccess
+                        ? 'bg-emerald-400/80'
+                        : isFailed
+                          ? 'bg-rose-400/80'
+                          : 'bg-slate-300/80';
+
+                      return (
+                      <div
+                        key={session.sessionId}
+                        className={`studio-card-shell flex min-h-[76px] items-center justify-between gap-4 rounded-2xl border px-3 py-3 shadow-sm ${statusTone}`}
+                      >
+                        <div className={`self-stretch w-1.5 rounded-full ${accentTone}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-slate-800 break-all">{session.sessionId}</div>
+                            {isSuccess ? (
+                              <span className="inline-flex items-center rounded-full border border-emerald-300/50 bg-emerald-100/70 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                {t('oneClickCreator.sessionStatus.success')}
+                              </span>
+                            ) : null}
+                            {isFailed ? (
+                              <span className="inline-flex items-center rounded-full border border-rose-300/60 bg-rose-100/70 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                {t('oneClickCreator.sessionStatus.failed')}
+                              </span>
+                            ) : null}
+                            {isStillProcessing ? (
+                              <span className="inline-flex items-center rounded-full border border-amber-300/60 bg-amber-100/70 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                {t('oneClickCreator.sessionStatus.stillProcessing')}
+                              </span>
+                            ) : null}
+                            {isProcessing && !isStillProcessing && !isSuccess && !isFailed ? (
+                              <span className="inline-flex items-center rounded-full border border-slate-300/60 bg-slate-100/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {t('oneClickCreator.sessionStatus.processing')}
+                              </span>
+                            ) : null}
+                            {requiresResume ? (
+                              <span className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-200/40 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                {t('oneClickCreator.sessionStatus.resumeRequired')}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500 leading-5">
                             {session.flowType} - {session.status} - {session.updatedAt ? new Date(session.updatedAt).toLocaleString() : ''}
                           </div>
-                        {resumeRequiredFlows.has(session.sessionId) ? (
-                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-200/40 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                            Resume required
-                          </div>
-                        ) : null}
+                        {resumeRequiredFlows.has(session.sessionId) ? null : null}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -2737,17 +2857,20 @@ export default function OneClickCreatorPage() {
                         >
                           View
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => resumeAffiliateSession(session.sessionId)}
-                          disabled={resumingSessionId === session.sessionId}
-                          className="apple-option-chip inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {resumingSessionId === session.sessionId ? 'Resuming...' : 'Resume'}
-                        </button>
+                        {canResume ? (
+                          <button
+                            type="button"
+                            onClick={() => resumeAffiliateSession(session.sessionId)}
+                            disabled={resumingSessionId === session.sessionId}
+                            className="apple-option-chip inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {resumingSessionId === session.sessionId ? t('oneClickCreator.sessionStatus.resuming') : t('oneClickCreator.sessionStatus.resume')}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                   </div>
                 )}
               </div>
@@ -2790,6 +2913,7 @@ export default function OneClickCreatorPage() {
           setSelectedCharacterProfile(c);
           setCharacterImage(c.portraitUrl);
           setImageSource(prev => ({ ...prev, character: 'character-profile' }));
+          setInputAssetRefs(prev => ({ ...prev, character: { source: 'character-profile', characterId: c?.id || c?._id || null, name: c?.name || null, alias: c?.alias || null, portraitUrl: c?.portraitUrl || null } }));
           setShowCharacterSelector(false);
         }}
       />
@@ -2802,6 +2926,13 @@ export default function OneClickCreatorPage() {
         }}
         onSelect={(imageData) => {
           const resolvedImageUrl = imageData?.resolvedUrl || imageData?.thumbnail || imageData?.url;
+          const assetRef = {
+            source: 'gallery',
+            assetId: imageData?.assetId || null,
+            url: resolvedImageUrl,
+            thumbnail: imageData?.thumbnail || null,
+            name: imageData?.name || null
+          };
           if (!imageData || !resolvedImageUrl) {
             console.error('Invalid image data from gallery:', imageData);
             alert(t('oneClickCreator.imageMissingUrl'));
@@ -2815,9 +2946,11 @@ export default function OneClickCreatorPage() {
           if (galleryPickerFor === 'character') {
             setCharacterImage(resolvedImageUrl);
             setImageSource(prev => ({ ...prev, character: 'gallery' }));
+            setInputAssetRefs(prev => ({ ...prev, character: assetRef }));
           } else if (galleryPickerFor === 'product') {
             setProductImage(resolvedImageUrl);
             setImageSource(prev => ({ ...prev, product: 'gallery' }));
+            setInputAssetRefs(prev => ({ ...prev, product: assetRef }));
           }
 
           setShowGalleryPicker(false);
@@ -2857,6 +2990,13 @@ export default function OneClickCreatorPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
 
 
 

@@ -37,6 +37,9 @@ import SessionLog from '../models/SessionLog.js';
  */
 export async function executeAffiliateVideoTikTokEndpoint(req, res) {
   try {
+    if (req.user && req.user.role !== 'admin') {
+      req.body.userId = req.user._id?.toString?.() || req.user.id;
+    }
     console.log('\n🎬 AFFILIATE VIDEO TIKTOK ENDPOINT: Processing request...');
     
     // 💫 ENHANCED: Support both multipart/form-data (files) and JSON (base64 strings)
@@ -127,7 +130,10 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       style = 'minimalist',
       colorPalette = 'neutral',
       cameraAngle = 'eye-level',
-      useShortPrompt = false
+      useShortPrompt = false,
+      imageSource = null,  // ?? NEW: Image source metadata
+      characterProfileId = null,  // ?? NEW: Character profile ID
+      productAssetId = null  // ?? NEW: Product asset ID
     } = req.body;
 
     // Validate parameters
@@ -164,6 +170,11 @@ export async function executeAffiliateVideoTikTokEndpoint(req, res) {
       videoProvider,
       useShortPrompt: typeof useShortPrompt === 'string' ? useShortPrompt.toLowerCase() === 'true' : Boolean(useShortPrompt)
     };
+
+    // ?? NEW: Pass image source metadata to flow service
+    req.body.imageSource = imageSource;
+    req.body.characterProfileId = characterProfileId;
+    req.body.productAssetId = productAssetId;
 
     // 💫 Pass buffers and names to the flow service
     const flowReq = {
@@ -801,7 +812,7 @@ export async function getAffiliateVideoSessionStatusEndpoint(req, res) {
     }
 
     const session = await SessionLog.findOne({ sessionId: flowId })
-      .select('sessionId status updatedAt completedAt error');
+      .select('sessionId status updatedAt createdAt completedAt error workflowState');
 
     if (!session) {
       return res.status(404).json({
@@ -810,6 +821,28 @@ export async function getAffiliateVideoSessionStatusEndpoint(req, res) {
         status: 'not-found',
         error: 'Session not found in DB'
       });
+    }
+
+    const staleMinutes = Math.max(1, Number(process.env.WORKFLOW_STALE_MINUTES || 45));
+    if (session.status === 'in-progress') {
+      const lastUpdatedAt = new Date(session.updatedAt || session.createdAt || Date.now()).getTime();
+      if (Date.now() - lastUpdatedAt > staleMinutes * 60 * 1000) {
+        const staleMessage = `Marked failed after ${staleMinutes} minutes without updates`;
+        session.status = 'failed';
+        session.error = { ...(session.error || {}), message: staleMessage, timestamp: new Date() };
+        session.updatedAt = new Date();
+        if (session.workflowState && typeof session.workflowState === 'object') {
+          session.workflowState.status = 'failed';
+          session.workflowState.updatedAt = new Date().toISOString();
+          session.workflowState.staleFailure = {
+            message: staleMessage,
+            staleMinutes,
+            lastUpdatedAt: new Date(lastUpdatedAt).toISOString(),
+            detectedAt: new Date().toISOString()
+          };
+        }
+        await session.save();
+      }
     }
 
     return res.json({
@@ -834,3 +867,8 @@ export default {
   getAffiliateVideoPreviewEndpoint,
   getAffiliateVideoSessionStatusEndpoint
 };
+
+
+
+
+

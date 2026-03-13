@@ -1,5 +1,4 @@
-﻿import React from 'react';
-import { createPortal } from 'react-dom';
+import React from 'react';
 import ModalPortal from './ModalPortal';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -67,8 +66,9 @@ export default function ScenePickerModal({
     return scene.previewImage;
   };
 
-  return createPortal(
-    <div className={`apple-typography fixed inset-0 app-layer-modal overflow-y-auto ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)] backdrop-blur-md' : 'bg-black/70'}`}>
+  return (
+    <ModalPortal>
+      <div className={`apple-typography fixed inset-0 app-layer-modal overflow-y-auto ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)] backdrop-blur-md' : 'bg-black/70'}`}>
       <div className="flex min-h-full items-start justify-center p-4 py-6">
         <div className={`w-full max-w-[1440px] rounded-xl p-4 ${isLightTheme ? 'studio-card-shell border border-white/50' : 'border border-gray-700 bg-gray-900'}`}>
           <div className="mb-4 flex items-center justify-between">
@@ -142,9 +142,13 @@ export default function ScenePickerModal({
           </div>
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
+    </ModalPortal>
   );
 }
+
+
+
+
 
 

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -20,6 +20,8 @@ import PageHeaderBar from '../components/PageHeaderBar';
 import ScenePickerModal from '../components/ScenePickerModal';
 import driveAPI from '../services/driveAPI';
 import { browserAutomationAPI } from '../services/api';
+import { getAuthHeaders } from '../services/authHeaders';
+import { VIDEO_SCRIPT_TEMPLATES } from '../constants/videoScriptTemplates';
 import {
   captureGenerationSession,
   getGenerationSessionDetail,
@@ -50,36 +52,51 @@ const ASPECTS = [
   { id: '9:16', label: '9:16', metaKey: 'videoGeneration.aspect.vertical' },
 ];
 
-const USE_CASES = [
-  {
-    id: 'motion-showcase',
-    labelKey: 'videoGeneration.useCases.motionShowcase.label',
-    summaryKey: 'videoGeneration.useCases.motionShowcase.summary',
-    prompt:
-      'Start from the first frame, move with controlled camera motion, preserve the subject identity, and land naturally on the end frame with a polished commercial finish.',
-  },
-  {
-    id: 'fashion-beat',
-    labelKey: 'videoGeneration.useCases.fashionBeat.label',
-    summaryKey: 'videoGeneration.useCases.fashionBeat.summary',
-    prompt:
-      'Create a premium fashion micro-scene with subtle pose variation, elegant camera motion, and a strong visual payoff that matches the ending frame.',
-  },
-  {
-    id: 'product-demo',
-    labelKey: 'videoGeneration.useCases.productDemo.label',
-    summaryKey: 'videoGeneration.useCases.productDemo.summary',
-    prompt:
-      'Highlight the product clearly while keeping the action believable. Emphasize interaction, readable composition, and a final frame that feels like a strong product hero shot.',
-  },
-  {
-    id: 'scene-transition',
-    labelKey: 'videoGeneration.useCases.sceneTransition.label',
-    summaryKey: 'videoGeneration.useCases.sceneTransition.summary',
-    prompt:
-      'Keep the environment stable and production-ready. Use the scene reference as the anchor for lighting, geometry, and atmosphere while moving smoothly from start to end frame.',
-  },
-];
+// ?? Helper: Get language-aware title
+const getTemplateTitle = (template, language = 'vi') => {
+  const isVi = (language || 'vi').toLowerCase().startsWith('vi');
+  return isVi ? template.titleVi : template.titleEn;
+};
+
+// ?? Helper: Get language-aware description
+const getTemplateDescription = (template, language = 'vi') => {
+  const isVi = (language || 'vi').toLowerCase().startsWith('vi');
+  return isVi ? template.descriptionVi : template.descriptionEn;
+};
+
+// ?? Helper: Generate default prompts for video script templates
+const generateScriptPrompt = (template) => {
+  const motionPrompts = {
+    'auto': 'Create natural, engaging motion that connects the start and end frames smoothly.',
+    'review-boc-phot-nguoc': 'Start by revealing a concern or problem, then provide convincing evidence that proves it wrong. Build trust through the reveal.',
+    'review-chuyen-gia-ky-thuat': 'Analyze technical details, break down structure, and demonstrate performance. Be authoritative and precise.',
+    'review-nguoi-dung-thuc-te': 'Show genuine user experience and authentic reaction. Highlight pain points and real results.',
+    'review-unboxing-can-canh': 'Unbox carefully with close-up details. Emphasize premium materials and craftsmanship through sensory presentation.',
+    'problem-solution-3-buoc': 'State the problem clearly, show the solution in action, and deliver the result directly.',
+    'before-after-transformation': 'Show the before state, then dramatically transition to the after state to emphasize the transformation.',
+    'kol-ai-persona-launch': 'Introduce an AI persona character with clear personality and characteristics. Make them engaging and persuasive.',
+    'ai-tool-workflow-demo': 'Demonstrate the tool workflow from input to output step-by-step. Be clear and practical.',
+    'ai-tool-strategy-pitch': 'Present the tool system as a business strategy or system. Focus on strategic value.',
+    'kol-ai-dancing-outfit': 'Show the AI character dancing or moving with the outfit to showcase fit and style in motion.',
+    'social-proof-ugc-montage': 'Create a montage effect with multiple perspectives to suggest many users are satisfied.',
+    'price-anchor-value-stack': 'Display premium value first, then reveal the actual price to create perceived savings.',
+    'countdown-deal-urgent': 'Use countdown elements and urgency messaging to encourage immediate action.',
+    'myth-vs-fact': 'Debunk common misconceptions with clear facts to build credibility and trust.'
+  };
+  
+  return motionPrompts[template.id] || `Create an engaging video based on the ${template.titleEn} style: ${template.descriptionEn}`;
+};
+
+// ?? Transform VIDEO_SCRIPT_TEMPLATES to match USE_CASES format
+const USE_CASES = VIDEO_SCRIPT_TEMPLATES.map((template) => ({
+  id: template.id,
+  labelKey: null, // Use title directly since templates don't have i18n keys
+  titleVi: template.titleVi,
+  titleEn: template.titleEn,
+  descriptionVi: template.descriptionVi,
+  descriptionEn: template.descriptionEn,
+  prompt: generateScriptPrompt(template),
+}));
 
 function normalizeAssetUrl(url) {
   if (!url) return null;
@@ -310,7 +327,11 @@ export default function VideoGenerationPage() {
     let ignore = false;
     const loadScenes = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`);
+        const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const payload = await response.json();
         if (ignore || !payload?.success) return;
         const scenes = payload.data || [];
@@ -483,9 +504,15 @@ export default function VideoGenerationPage() {
     let flowId = null;
 
     try {
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const sessionResponse = await fetch('/api/sessions/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ flowType: 'video-generation', useCase: selectedUseCase }),
       });
       if (!sessionResponse.ok) throw new Error(`Session creation failed: ${sessionResponse.status}`);
@@ -673,27 +700,34 @@ export default function VideoGenerationPage() {
             <section className={`${PANEL_CLASS} space-y-2`}>
               <div className="video-panel-head">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{t('videoGeneration.template')}</p>
-                <span className="apple-field-pill apple-field-pill-optional">4</span>
+                <span className="apple-field-pill apple-field-pill-optional">{USE_CASES.length}</span>
               </div>
 
               <div className="space-y-2">
-                {USE_CASES.map((useCase) => (
-                  <button
-                    key={useCase.id}
-                    type="button"
-                    title={t(useCase.summaryKey)}
-                    onClick={() => {
-                      setSelectedUseCase(useCase.id);
-                      setPromptDraft(useCase.prompt);
-                    }}
-                    className={`video-template-chip apple-option-chip apple-option-chip-warm w-full rounded-[1.05rem] border px-3 py-3 text-left transition ${selectedUseCase === useCase.id ? 'apple-option-chip-selected' : 'text-slate-300'}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-semibold">{t(useCase.labelKey)}</p>
-                      <Wand2 className="h-4 w-4 text-amber-300" />
-                    </div>
-                  </button>
-                ))}
+                {USE_CASES.map((useCase) => {
+                  const templateTitle = getTemplateTitle(useCase, i18n.language);
+                  const templateDescription = getTemplateDescription(useCase, i18n.language);
+                  return (
+                    <button
+                      key={useCase.id}
+                      type="button"
+                      title={templateDescription}
+                      onClick={() => {
+                        setSelectedUseCase(useCase.id);
+                        setPromptDraft(useCase.prompt);
+                      }}
+                      className={`video-template-chip apple-option-chip apple-option-chip-warm w-full rounded-[1.05rem] border px-3 py-3 text-left transition ${selectedUseCase === useCase.id ? 'apple-option-chip-selected' : 'text-slate-300'}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-semibold">{templateTitle}</p>
+                          <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{templateDescription}</p>
+                        </div>
+                        <Wand2 className="h-4 w-4 text-amber-300 flex-shrink-0 mt-0.5" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
@@ -915,7 +949,7 @@ export default function VideoGenerationPage() {
                       type="button"
                       onClick={() => hydrateFromSession(sessionId)}
                       className={`video-recent-item w-full text-left transition ${isActive ? 'video-recent-item-active' : ''}`}
-                      title={`${USE_CASES.find((item) => item.id === request.useCase) ? t(USE_CASES.find((item) => item.id === request.useCase).labelKey) : t('videoGeneration.session')} • ${formatDate(session.updatedAt || session.createdAt, i18n.language || undefined, t)}`}
+                      title={`${USE_CASES.find((item) => item.id === request.useCase) ? t(USE_CASES.find((item) => item.id === request.useCase).labelKey) : t('videoGeneration.session')} � ${formatDate(session.updatedAt || session.createdAt, i18n.language || undefined, t)}`}
                     >
                       <div className="video-recent-thumb overflow-hidden rounded-[1rem] border border-white/10 bg-slate-950/45">
                         {previewUrl ? (
@@ -1001,4 +1035,5 @@ export default function VideoGenerationPage() {
     </div>
   );
 }
+
 

@@ -7,6 +7,11 @@ import { API_BASE_URL } from '../config/api.js';
 
 const SESSION_ENDPOINT = `${API_BASE_URL}/sessions`;
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export class SessionHistoryService {
   /**
    * Create new session
@@ -16,7 +21,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(sessionData)
       });
@@ -41,7 +47,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(updates)
       });
@@ -66,7 +73,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         }
       });
 
@@ -95,7 +103,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/user/${userId}?${params}`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         }
       });
 
@@ -117,7 +126,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/analysis`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(analysisData)
       });
@@ -141,7 +151,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/prompt-variations`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(variations)
       });
@@ -164,7 +175,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/prompt-enhancement`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(enhancementData)
       });
@@ -188,7 +200,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/generation`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(generationData)
       });
@@ -211,7 +224,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/statistics`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         }
       });
 
@@ -233,7 +247,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}`, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         }
       });
 
@@ -255,7 +270,8 @@ export class SessionHistoryService {
       const response = await fetch(`${SESSION_ENDPOINT}/${sessionId}/export`, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         }
       });
 

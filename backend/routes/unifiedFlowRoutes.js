@@ -1,5 +1,7 @@
 import express from 'express';
-import { protect, optionalAuth } from '../middleware/auth.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess, enforceAiProviderAccess, enforceBrowserAutomationAccess } from '../middleware/permissions.js';
 import { upload } from '../utils/uploadConfig.js';
 import {
   analyzeUnifiedEndpoint,
@@ -15,10 +17,14 @@ import {
 } from '../controllers/browserAutomationController.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 // Unified analysis and generation (primary endpoint)
 router.post('/analyze',
-  optionalAuth,
+  enforceAiProviderAccess(),
   upload.fields([
     { name: 'characterImage', maxCount: 1 },
     { name: 'productImage', maxCount: 1 }
@@ -27,7 +33,7 @@ router.post('/analyze',
 );
 
 // Unified image generation (can be called separately if prompt is pre-built)
-router.post('/generate', optionalAuth, generateUnifiedEndpoint);
+router.post('/generate', enforceAiProviderAccess(), consumeGeneration('image'), generateUnifiedEndpoint);
 
 // ============================================
 // Browser Automation Routes
@@ -35,7 +41,7 @@ router.post('/generate', optionalAuth, generateUnifiedEndpoint);
 
 // Browser-based analysis
 router.post('/browser/analyze',
-  optionalAuth,
+  enforceBrowserAutomationAccess(),
   upload.fields([
     { name: 'characterImage', maxCount: 1 },
     { name: 'clothingImage', maxCount: 1 }
@@ -44,10 +50,10 @@ router.post('/browser/analyze',
 );
 
 // Browser-based image generation
-router.post('/browser/generate-image', optionalAuth, generateImageBrowser);
+router.post('/browser/generate-image', enforceBrowserAutomationAccess(), consumeGeneration('image'), generateImageBrowser);
 
 // Browser-based video generation
-router.post('/browser/generate-video', optionalAuth, generateVideoBrowser);
+router.post('/browser/generate-video', enforceBrowserAutomationAccess(), consumeGeneration('video'), generateVideoBrowser);
 
 
 
@@ -56,9 +62,9 @@ router.post('/browser/generate-video', optionalAuth, generateVideoBrowser);
 // ============================================
 
 // Submit feedback
-router.post('/:flowId/feedback', optionalAuth, submitFeedback);
+router.post('/:flowId/feedback', submitFeedback);
 
 // Delete flow
-router.delete('/:flowId', optionalAuth, deleteFlow);
+router.delete('/:flowId', deleteFlow);
 
 export default router;

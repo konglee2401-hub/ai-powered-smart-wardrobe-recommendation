@@ -21,6 +21,8 @@ import {
 import LogoKG from '../assets/Logo-KG.png';
 import { navGroups } from '../config/appRoutes';
 import { NavbarCollapseContext } from '../context/NavbarCollapseContext';
+import UserMenu from './UserMenu';
+import useAuthStore from '../stores/useAuthStore';
 
 const baseLinkClass =
   'group flex items-center gap-2 rounded-[0.95rem] px-2 py-1.5 text-[13px] transition-all duration-300 border border-transparent';
@@ -28,6 +30,7 @@ const baseLinkClass =
 export default function Navbar({ theme = 'light', onToggleTheme }) {
   const location = useLocation();
   const { t, i18n } = useTranslation();
+  const access = useAuthStore((state) => state.access);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -101,6 +104,19 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
     [t],
   );
 
+  const menuPermissions = access?.permissions?.menu || [];
+  const hasMenuAccess = (key) => menuPermissions.includes('*') || menuPermissions.includes(key);
+
+  const mapPathToMenuKey = (path) => {
+    if (['/', '/video-generation', '/voice-over', '/generate/one-click'].includes(path)) return 'generation';
+    if (path.startsWith('/video-pipeline') || path.startsWith('/video-production') || path.startsWith('/shorts-reels')) return 'video-pipeline';
+    if (path.startsWith('/prompt-templates')) return 'prompt-templates';
+    if (path.startsWith('/gallery')) return 'gallery';
+    if (path.startsWith('/analytics') || path.startsWith('/stats')) return 'analytics';
+    if (path.startsWith('/options') || path.startsWith('/setup-authentication') || path.startsWith('/admin') || path.startsWith('/settings')) return 'settings';
+    return null;
+  };
+
   const renderLink = (item) => {
     const Icon = item.icon;
     const isActive = isNavItemActive(item);
@@ -132,6 +148,9 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
   };
 
   const renderGenerationSubmenu = () => {
+    if (menuPermissions.length && !hasMenuAccess('generation')) {
+      return null;
+    }
     if (effectiveIsCollapsed) {
       return (
         <button
@@ -258,7 +277,14 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
           <div className="flex-1 space-y-3 overflow-y-auto px-2 py-2.5">
             {renderGenerationSubmenu()}
             {localizedNavGroups.map((group) => {
-              const filteredItems = group.items.filter((item) => !generationSubmenuPaths.includes(item.path));
+              const filteredItems = group.items
+                .filter((item) => !generationSubmenuPaths.includes(item.path))
+                .filter((item) => {
+                  const key = mapPathToMenuKey(item.path);
+                  if (!key) return true;
+                  if (!menuPermissions.length) return true;
+                  return hasMenuAccess(key);
+                });
 
               if (!filteredItems.length) return null;
 
@@ -276,48 +302,59 @@ export default function Navbar({ theme = 'light', onToggleTheme }) {
           </div>
 
           <div className="space-y-2 p-2">
-            <button
-              onClick={onToggleTheme}
-              className={`w-full rounded-2xl border border-transparent px-3 py-2.5 text-sm transition ${
-                isLightTheme ? 'bg-slate-900/[0.04] hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] hover:bg-white/[0.1]'
-              } ${
-                effectiveIsCollapsed ? `flex items-center justify-center gap-2 px-2 ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}` : `flex items-center justify-between ${isLightTheme ? 'text-slate-900' : 'text-slate-100'}`
-              }`}
-              title={effectiveIsCollapsed ? `Switch to ${isLightTheme ? 'dark' : 'light'} mode` : ''}
-            >
-              <span className="flex items-center gap-2">
-                {isLightTheme ? <MoonStar className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
-                {!effectiveIsCollapsed && <span>{isLightTheme ? 'Light mode' : 'Dark mode'}</span>}
-              </span>
-              {!effectiveIsCollapsed && (
-                <span className={`font-semibold ${isLightTheme ? 'text-slate-600' : 'text-violet-100'}`}>
-                  {isLightTheme ? 'LIGHT' : 'DARK'}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={toggleLanguage}
-              className={`w-full rounded-2xl border border-transparent px-3 py-2.5 text-sm transition ${
-                isLightTheme ? 'bg-slate-900/[0.04] text-slate-900 hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] text-slate-100 hover:bg-white/[0.1]'
-              } ${
-                isCollapsed ? 'flex items-center justify-center gap-2 px-2' : 'flex items-center justify-between'
-              }`}
-              title={isCollapsed ? `Switch Language (${currentLangLabel})` : ''}
-            >
-              <span className="flex items-center gap-2">
-                <Globe className="h-4 w-4" />
-                {!isCollapsed && <span>{t('language.switchLanguage')}</span>}
-              </span>
-              <span className={`font-semibold ${isLightTheme ? 'text-slate-600' : 'text-violet-100'}`}>
-                {currentLangLabel}
-              </span>
-            </button>
+            {effectiveIsCollapsed ? (
+              <>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    onClick={onToggleTheme}
+                    className={`rounded-2xl border border-transparent px-2.5 py-2 text-xs transition ${
+                      isLightTheme ? 'bg-slate-900/[0.04] hover:bg-slate-900/[0.08] text-slate-900' : 'bg-white/[0.05] hover:bg-white/[0.1] text-slate-100'
+                    } flex items-center justify-center gap-2`}
+                    title={`Switch to ${isLightTheme ? 'dark' : 'light'} mode`}
+                  >
+                    {isLightTheme ? <MoonStar className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={toggleLanguage}
+                    className={`rounded-2xl border border-transparent px-2.5 py-2 text-xs transition ${
+                      isLightTheme ? 'bg-slate-900/[0.04] text-slate-900 hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] text-slate-100 hover:bg-white/[0.1]'
+                    } flex items-center justify-center gap-2`}
+                    title={`Switch Language (${currentLangLabel})`}
+                  >
+                    <span className="text-[11px] font-semibold tracking-[0.18em]">{currentLangLabel}</span>
+                  </button>
+                </div>
+                <div className="flex justify-center pt-1">
+                  <UserMenu compact />
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <UserMenu compact />
+                <button
+                  onClick={onToggleTheme}
+                  className={`rounded-2xl border border-transparent px-2.5 py-2 text-xs transition ${
+                    isLightTheme ? 'bg-slate-900/[0.04] hover:bg-slate-900/[0.08] text-slate-900' : 'bg-white/[0.05] hover:bg-white/[0.1] text-slate-100'
+                  } flex items-center justify-center gap-2`}
+                  title={`Switch to ${isLightTheme ? 'dark' : 'light'} mode`}
+                >
+                  {isLightTheme ? <MoonStar className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+                  <span>{isLightTheme ? 'Light' : 'Dark'}</span>
+                </button>
+                <button
+                  onClick={toggleLanguage}
+                  className={`rounded-2xl border border-transparent px-2.5 py-2 text-xs transition ${
+                    isLightTheme ? 'bg-slate-900/[0.04] text-slate-900 hover:bg-slate-900/[0.08]' : 'bg-white/[0.05] text-slate-100 hover:bg-white/[0.1]'
+                  } flex items-center justify-center gap-2`}
+                  title={`Switch Language (${currentLangLabel})`}
+                >
+                  <span className="text-[11px] font-semibold tracking-[0.18em]">{currentLangLabel}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
     </>
   );
 }
-
-
-

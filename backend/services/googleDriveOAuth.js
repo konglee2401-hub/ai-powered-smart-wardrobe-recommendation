@@ -393,6 +393,8 @@ class GoogleDriveOAuthService {
 
     const authUrl = auth.generateAuthUrl({
       access_type: 'offline',
+      response_type: 'code',
+      prompt: 'consent',
       scope: scopes,
     });
     
@@ -1092,7 +1094,11 @@ class GoogleDriveOAuthService {
   async listFiles(folderId = null, pageSize = 50) {
     try {
       if (!this.initialized) {
-        await this.authenticate();
+        const authResult = await this.authenticate();
+        if (!authResult?.authenticated || !this.drive) {
+          console.warn('Google Drive not authenticated. Returning empty list.');
+          return [];
+        }
       }
 
       const response = await this.drive.files.list({

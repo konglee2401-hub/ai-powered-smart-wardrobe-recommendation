@@ -1,5 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useState } from 'react';
 import { X, UserRound } from 'lucide-react';
 import { characterAPI } from '../services/api';
 import ModalPortal from './ModalPortal';
@@ -15,8 +14,9 @@ export default function CharacterSelectorModal({ open, onClose, onSelect }) {
 
   if (!open) return null;
 
-  return createPortal(
-    <div className={`apple-typography fixed inset-0 app-layer-modal flex items-center justify-center p-4 ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)] backdrop-blur-md' : 'bg-black/70'}`}>
+  return (
+    <ModalPortal>
+      <div className={`apple-typography fixed inset-0 app-layer-modal flex items-center justify-center p-4 ${isLightTheme ? 'bg-[rgba(145,167,193,0.28)] backdrop-blur-md' : 'bg-black/70'}`}>
       <div className={`w-full max-w-5xl max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl ${isLightTheme ? 'studio-card-shell border border-white/50' : 'bg-[#1a1e2a] border border-slate-700'}`}>
         <div className={`p-4 border-b flex items-center justify-between ${isLightTheme ? 'border-white/45 bg-white/10' : 'border-slate-700'}`}>
           <h3 className={`font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>Select Character</h3>
@@ -47,9 +47,13 @@ export default function CharacterSelectorModal({ open, onClose, onSelect }) {
           ))}
         </div>
       </div>
-    </div>,
-    document.body
+      </div>
+    </ModalPortal>
   );
 }
+
+
+
+
 
 

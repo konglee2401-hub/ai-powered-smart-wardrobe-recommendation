@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import GalleryPicker from '../components/GalleryPicker';
 import VideoPipelineLayout from '../components/VideoPipelineLayout';
 import YoutubePublishDialog from '../components/YoutubePublishDialog';
+import ModalPortal from '../components/ModalPortal';
 import videoPipelineApi from '../services/videoPipelineApi';
 import {
   formatDate,
@@ -102,6 +103,19 @@ const DEFAULT_SETTINGS = {
     publishVisibility: 'public',
     publishAccountIds: [],
     templateSources: [],
+    composerDefaults: {
+      recipe: 'mashup',
+      platform: 'youtube',
+      duration: 30,
+      aspectRatio: '9:16',
+      layout: '2-3-1-3',
+      subtitleMode: 'auto',
+      watermarkEnabled: true,
+      voiceoverEnabled: false,
+      templateStrategy: 'random',
+      youtubePublishType: 'shorts',
+      encoder: 'auto',
+    },
   },
 };
 
@@ -129,6 +143,7 @@ const DEFAULT_COMPOSER = {
   voiceoverEnabled: false,
   templateStrategy: 'random',
   youtubePublishType: 'shorts',
+  encoder: 'auto',
 };
 
 const DEFAULT_MANUAL_SELECTIONS = {
@@ -691,7 +706,13 @@ export default function VideoPipeline() {
     const accounts = (result.accounts || []).map(normalizePublishAccount);
     setConnections({ accounts, stats: getPublishStats(accounts) });
   };
-  const loadSettings = async () => setSettings((await videoPipelineApi.getSettings()).settings || DEFAULT_SETTINGS);
+  const loadSettings = async () => {
+    const nextSettings = (await videoPipelineApi.getSettings()).settings || DEFAULT_SETTINGS;
+    setSettings(nextSettings);
+    if (nextSettings.production?.composerDefaults) {
+      setComposer({ ...DEFAULT_COMPOSER, ...nextSettings.production.composerDefaults });
+    }
+  };
   const loadSchedulerRuntime = async () => setSchedulerRuntime((await videoPipelineApi.getSchedulerRuntimeStatus()).data || null);
   const loadProductionOverview = async (sourceKey = productionBatch.sourceKey) =>
     setProductionOverview(await videoPipelineApi.getProductionOverview(sourceKey ? { sourceKey } : {}));
@@ -992,6 +1013,7 @@ export default function VideoPipeline() {
           voiceoverEnabled: composer.voiceoverEnabled,
           templateStrategy: composer.templateStrategy,
           youtubePublishType: composer.youtubePublishType,
+          encoder: composer.encoder,
           manualMainVideo: manualSelections.main,
           manualSubVideo: manualSelections.sub,
         },
@@ -1044,6 +1066,7 @@ export default function VideoPipeline() {
           voiceoverEnabled: composer.voiceoverEnabled,
           templateStrategy: composer.templateStrategy,
           youtubePublishType: composer.youtubePublishType,
+          encoder: composer.encoder,
         },
       });
 
@@ -1427,7 +1450,7 @@ export default function VideoPipeline() {
         </button>
       ) : null}
       {activeSection === 'production' ? (
-        <Link to="/video-production/history" className={getActionButtonClass('violet')}>
+        <Link to="/video-pipeline/history" className={getActionButtonClass('violet')}>
           <Clapperboard className="h-4 w-4" />
           {t('videoPipeline.production_history')}
         </Link>
@@ -1478,39 +1501,41 @@ export default function VideoPipeline() {
         </div>
       ) : null}
       {previewItem ? (
-        <div className="fixed inset-0 app-layer-modal app-layer-modal-top flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className={`${SURFACE_CARD_CLASS} w-full max-w-3xl max-h-[80vh] overflow-hidden p-5`}>
-            <SectionHeader
-              title={t('videoPipeline.preview_output')}
-              subtitle={previewItem.queueId}
-              actions={(
-                <button onClick={() => setPreviewItem(null)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
-                  {t('videoPipeline.close')}
-                </button>
-              )}
+  <ModalPortal>
+    <div className="fixed inset-0 app-layer-modal app-layer-modal-top video-pipeline-modal-light flex items-center justify-center bg-slate-100/70 p-4 backdrop-blur-sm">
+      <div className={`${SURFACE_CARD_CLASS} w-full max-w-3xl max-h-[80vh] overflow-hidden p-5`}>
+        <SectionHeader
+          title={t('videoPipeline.preview_output')}
+          subtitle={previewItem.queueId}
+          actions={(
+            <button onClick={() => setPreviewItem(null)} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}>
+              {t('videoPipeline.close')}
+            </button>
+          )}
+        />
+        <div className="mt-3 max-h-[60vh] overflow-hidden">
+          {(previewItem.status === 'completed' || previewItem.outputPath || previewItem.completedDriveSync?.status === 'uploaded') ? (
+            <video
+              src={resolveOutputPreview(previewItem)}
+              className="w-full max-h-[60vh] rounded-2xl border border-white/10 bg-black object-contain"
+              controls
+              preload="metadata"
             />
-            <div className="mt-3 max-h-[60vh] overflow-hidden">
-              {(previewItem.status === 'completed' || previewItem.outputPath || previewItem.completedDriveSync?.status === 'uploaded') ? (
-                <video
-                  src={resolveOutputPreview(previewItem)}
-                  className="w-full max-h-[60vh] rounded-2xl border border-white/10 bg-black object-contain"
-                  controls
-                  preload="metadata"
-                />
-              ) : (
-                <div className="flex h-[260px] items-center justify-center rounded-2xl border border-white/10 bg-slate-950/70 text-sm text-slate-300">
-                  {t('videoPipeline.processing_3')}
-                </div>
-              )}
+          ) : (
+            <div className="flex h-[260px] items-center justify-center rounded-2xl border border-white/10 bg-slate-100/70 text-sm text-slate-300">
+              {t('videoPipeline.processing_3')}
             </div>
-            {previewItem.completedDriveSync?.webViewLink ? (
-              <a className="mt-3 inline-flex text-xs text-sky-200 underline-offset-2 hover:underline" href={previewItem.completedDriveSync.webViewLink} target="_blank" rel="noreferrer">
-                {t('videoPipeline.open_drive_output')}
-              </a>
-            ) : null}
-          </div>
+          )}
         </div>
-      ) : null}
+        {previewItem.completedDriveSync?.webViewLink ? (
+          <a className="mt-3 inline-flex text-xs text-sky-200 underline-offset-2 hover:underline" href={previewItem.completedDriveSync.webViewLink} target="_blank" rel="noreferrer">
+            {t('videoPipeline.open_drive_output')}
+          </a>
+        ) : null}
+      </div>
+    </div>
+  </ModalPortal>
+) : null}
       <section className={`${SURFACE_CARD_CLASS} video-pipeline-section-hero ${activeSection === 'videos' ? 'p-4 lg:p-5' : 'p-5 lg:p-6'}`}>
         <div className={`grid gap-5 ${showHeroStats ? (activeSection === 'videos' ? 'xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] xl:items-start' : activeSection === 'publish' ? 'min-[968px]:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)] min-[968px]:items-start' : 'xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start') : ''}`}>
           <div className="min-w-0">
@@ -2230,7 +2255,7 @@ export default function VideoPipeline() {
               title={t('videoPipeline.recent_production_history')}
               subtitle={t('videoPipeline.latest_mashup_jobs_output_sync_state_and_readiness_for_downs')}
               actions={(
-                <Link to="/video-production/history" className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>
+                <Link to="/video-pipeline/history" className={getActionButtonClass('sky', 'px-3 py-2 text-xs')}>
                   {t('videoPipeline.open_full_history')}
                 </Link>
               )}
@@ -2834,6 +2859,25 @@ export default function VideoPipeline() {
                   <span>{t('videoPipeline.youtube_publish_type')}</span>
                   <select value={settings.production?.youtubePublishType || 'shorts'} onChange={(e) => updateSettings('production', 'youtubePublishType', e.target.value)} className={INPUT_CLASS}><option value="shorts">YouTube Shorts</option><option value="video">YouTube Video</option></select>
                 </label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-start gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={(settings.production?.composerDefaults?.encoder || 'auto') !== 'libx264'}
+                    onChange={(e) => {
+                      const encoder = e.target.checked ? 'auto' : 'libx264';
+                      updateSettings('production', 'composerDefaults', {
+                        ...(settings.production?.composerDefaults || DEFAULT_COMPOSER),
+                        encoder,
+                      });
+                      setComposer((prev) => ({ ...prev, encoder }));
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-200">{t('videoPipeline.nvenc_encode')}</p>
+                    <p className="text-[11px] text-slate-400">{t('videoPipeline.nvenc_encode_hint')}</p>
+                  </div>
+                </label>
                 <div className={`${SUBTLE_PANEL_CLASS} space-y-3`}>
                   <div className="flex flex-wrap gap-2 text-xs text-slate-400">
                     <StatusPill tone={schedulerRuntime?.scheduleConfig?.enabled ? 'emerald' : 'amber'}>{schedulerRuntime?.scheduleConfig?.enabled ? t('videoPipeline.scheduler_enabled_2') : t('videoPipeline.scheduler_disabled')}</StatusPill>
@@ -3016,6 +3060,7 @@ export default function VideoPipeline() {
     </VideoPipelineLayout>
   );
 }
+
 
 
 

@@ -4,6 +4,7 @@ import AIProvider from '../models/AIProvider.js';
 import AIModel from '../models/AIModel.js';
 // Correct import: use the main service logic, not the simplified script
 import { syncModelsWithDB } from '../services/modelSyncService.js';
+import { resolveEffectiveAccess } from '../services/accessControlService.js';
 import { getKeyManager } from '../utils/keyManager.js';
 
 // ============================================
@@ -19,9 +20,18 @@ export async function getProvidersWithModels(req, res) {
     const providers = await AIProvider.find().sort({ priority: 1, name: 1 });
     const models = await AIModel.find().sort({ 'status.performanceScore': -1 });
 
+    let allowedProviders = null;
+    if (req.user) {
+      const access = await resolveEffectiveAccess(req.user);
+      if (access.allowedAIProviders?.mode === 'list') {
+        allowedProviders = new Set(access.allowedAIProviders.providers.map(p => p.toLowerCase()));
+      }
+    }
+
     const modelsByProvider = {};
     models.forEach(model => {
       const providerId = model.provider?.toLowerCase() || 'unknown';
+      if (allowedProviders && !allowedProviders.has(providerId)) return;
       if (!modelsByProvider[providerId]) {
         modelsByProvider[providerId] = [];
       }
@@ -29,7 +39,9 @@ export async function getProvidersWithModels(req, res) {
     });
 
     // Merge data with keys from database
-    const providerList = providers.map(p => {
+    const providerList = providers
+      .filter(p => !allowedProviders || allowedProviders.has(p.providerId?.toLowerCase()))
+      .map(p => {
       const apiKeysCount = p.apiKeys ? p.apiKeys.length : 0;
 
       return {

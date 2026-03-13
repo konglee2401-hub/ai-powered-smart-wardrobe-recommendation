@@ -7,6 +7,11 @@ import mongoose from 'mongoose';
  * Python scraper API at page-render time.
  */
 const TrendChannelSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   platform: {
     type: String,
     enum: ['youtube', 'facebook', 'dailyhaha', 'douyin', 'playboard', 'other'],
@@ -75,7 +80,7 @@ const TrendChannelSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-TrendChannelSchema.index({ platform: 1, channelId: 1 }, { unique: true });
+TrendChannelSchema.index({ userId: 1, platform: 1, channelId: 1 }, { unique: true, sparse: true });
 TrendChannelSchema.index({ isActive: 1, priority: -1, subscriberCount: -1 });
 
 // Always register with explicit collection name

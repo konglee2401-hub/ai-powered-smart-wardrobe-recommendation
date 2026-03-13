@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Globe,
   Play,
@@ -35,7 +35,7 @@ export default function SocialAccountManager() {
 
   // Load accounts on mount
   useEffect(() => {
-    console.log('ðŸ“± Loading YouTube channels...');
+    console.log('📱 Loading social media accounts...');
     loadAccounts();
   }, []);
 
@@ -57,6 +57,17 @@ export default function SocialAccountManager() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    if (connected === 'facebook') {
+      const pages = params.get('pages');
+      const message = pages
+        ? `Facebook connected successfully (${pages} pages)`
+        : 'Facebook connected successfully';
+      showNotification('success', message);
+      loadAccounts();
+      setConnectingPlatform(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     if (oauthError) {
       const errorMessages = {
         'access_denied': 'You cancelled the OAuth consent',
@@ -69,6 +80,8 @@ export default function SocialAccountManager() {
       setConnectingPlatform(null);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    
   }, []);
 
   const loadAccounts = async () => {
@@ -76,24 +89,31 @@ export default function SocialAccountManager() {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch(`${API_URL}/social-media?platform=youtube`, {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      
+      const response = await fetch(`${API_URL}/social-media`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
-      console.log('ðŸ“Š Channels response status:', response.status);
+      console.log('📊 Channels response status:', response.status);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('âŒ Error response:', errorData);
+        console.error('❌ Error response:', errorData);
         throw new Error(errorData.error || errorData.message || `Failed to load channels (${response.status})`);
       }
       
       const data = await response.json();
       setAccounts(data.accounts || []);
-      console.log(`âœ… Loaded ${data.total || 0} YouTube channels`);
+      console.log(`✅ Loaded ${data.total || 0} YouTube channels`);
     } catch (err) {
       setError(err.message);
       console.error('Error loading accounts:', err);
@@ -105,11 +125,18 @@ export default function SocialAccountManager() {
   const handleConnectYoutube = async () => {
     try {
       setConnectingPlatform('youtube');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      
       const response = await fetch(`${API_URL}/shorts-reels/youtube/oauth/start`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
       
       const data = await response.json();
@@ -119,7 +146,7 @@ export default function SocialAccountManager() {
       }
       
       if (data.authUrl) {
-        console.log('ðŸ” Opening OAuth in new tab...');
+        console.log('🔐 Opening OAuth in new tab...');
         window.open(data.authUrl, '_blank', 'width=500,height=600');
       } else {
         throw new Error('No OAuth URL returned');
@@ -130,14 +157,22 @@ export default function SocialAccountManager() {
     }
   };
 
-  const handleReconnectYoutube = async (accountId) => {
+
+  const handleConnectFacebook = async () => {
     try {
-      setConnectingPlatform(`youtube-${accountId}`);
-      const response = await fetch(`${API_URL}/shorts-reels/youtube/oauth/start`, {
+      setConnectingPlatform('facebook');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      
+      const response = await fetch(`${API_URL}/social-media/facebook/oauth/start`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       const data = await response.json();
@@ -147,7 +182,40 @@ export default function SocialAccountManager() {
       }
 
       if (data.authUrl) {
-        console.log('🔐 Opening OAuth in new tab...');
+        window.open(data.authUrl, '_blank', 'width=500,height=600');
+      } else {
+        throw new Error('No OAuth URL returned');
+      }
+    } catch (err) {
+      showNotification('error', `Connection failed: ${err.message}`);
+      setConnectingPlatform(null);
+    }
+  };
+  const handleReconnectYoutube = async (accountId) => {
+    try {
+      setConnectingPlatform(`youtube-${accountId}`);
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+      
+      const response = await fetch(`${API_URL}/shorts-reels/youtube/oauth/start`, {
+        method: 'GET',
+        headers
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to get OAuth URL');
+      }
+
+      if (data.authUrl) {
+        console.log('?? Opening OAuth in new tab...');
         window.open(data.authUrl, '_blank', 'width=500,height=600');
       } else {
         throw new Error('No OAuth URL returned');
@@ -164,10 +232,11 @@ export default function SocialAccountManager() {
 
     try {
       setIsDeleting(true);
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
       const response = await fetch(`${API_URL}/social-media/youtube/${accountId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${accessToken}`
         }
       });
 
@@ -214,6 +283,7 @@ export default function SocialAccountManager() {
 
   const youtubeAccounts = accounts.filter(acc => acc.platform === 'youtube');
 
+  const facebookAccounts = accounts.filter(acc => acc.platform === 'facebook');
   const getStatusPillClasses = (tone) => {
     const toneMap = {
       emerald: 'bg-emerald-100/60 border-emerald-300/50 text-emerald-700',
@@ -245,7 +315,7 @@ export default function SocialAccountManager() {
                 ? 'border-emerald-300/40 bg-emerald-100/40 text-emerald-900'
                 : 'border-amber-300/40 bg-amber-100/40 text-amber-900'
             }`}>
-              {message.type === 'success' ? '✅' : '⚠️'} {message.text}
+              {message.type === 'success' ? '?' : '??'} {message.text}
             </div>
           )}
 
@@ -298,7 +368,7 @@ export default function SocialAccountManager() {
                 <div className="video-pipeline-surface rounded-3xl border flex items-center justify-center py-16">
                   <div className="text-center">
                     <Loader2 className="h-6 w-6 animate-spin text-sky-500 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-slate-600">Loading YouTube channels...</p>
+                    <p className="text-sm font-medium text-slate-600">Loading social media accounts...</p>
                   </div>
                 </div>
               ) : youtubeAccounts.length === 0 ? (
@@ -318,6 +388,70 @@ export default function SocialAccountManager() {
                       statusPill={getStatusPill(account)}
                       getStatusPillClasses={getStatusPillClasses}
                       isReconnecting={connectingPlatform === `youtube-${account._id}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Facebook Section */}
+          <div className="space-y-4">
+            {/* Section Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-sky-500/20 p-2">
+                  <Globe className="h-5 w-5 text-sky-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Facebook Pages</h2>
+                  <p className="mt-1 text-xs text-slate-500">Connect your Facebook pages for Reels publishing</p>
+                </div>
+              </div>
+              <button
+                onClick={handleConnectFacebook}
+                disabled={connectingPlatform === 'facebook'}
+                className="flex items-center gap-2 rounded-2xl border border-sky-300/50 bg-sky-100/50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-200/50 disabled:opacity-50"
+              >
+                {connectingPlatform === 'facebook' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Connect Page
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Accounts Grid */}
+            <div className="video-pipeline-shell">
+              {isLoading ? (
+                <div className="video-pipeline-surface rounded-3xl border flex items-center justify-center py-16">
+                  <div className="text-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-sky-500 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-600">Loading social media accounts...</p>
+                  </div>
+                </div>
+              ) : facebookAccounts.length === 0 ? (
+                <div className="video-pipeline-surface rounded-3xl border px-6 py-12 text-center">
+                  <Users className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-slate-700">No Facebook pages connected yet</p>
+                  <p className="mt-1 text-xs text-slate-500">Click "Connect Page" to link your first Facebook page</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {facebookAccounts.map(account => (
+                    <AccountCard
+                      key={account._id}
+                      account={account}
+                      onDelete={() => setSelectedForDelete(account._id)}
+                      onReconnect={handleConnectFacebook}
+                      statusPill={getStatusPill(account)}
+                      getStatusPillClasses={getStatusPillClasses}
+                      isReconnecting={connectingPlatform === 'facebook'}
                     />
                   ))}
                 </div>
@@ -344,14 +478,18 @@ export default function SocialAccountManager() {
  * Account Card Component
  */
 function AccountCard({ account, onDelete, onReconnect, statusPill, getStatusPillClasses, isReconnecting }) {
+  const platformConfig = account.platform === 'facebook'
+    ? { icon: <Globe className="h-5 w-5 text-sky-500" />, bg: 'bg-sky-500/20' }
+    : { icon: <Youtube className="h-5 w-5 text-rose-500" />, bg: 'bg-rose-500/20' };
+
   return (
     <div className="video-pipeline-surface rounded-3xl border p-5 transition hover:border-opacity-80 flex flex-col h-full">
       <div className="space-y-4">
         
         {/* Header with Icon and Status */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex-shrink-0 rounded-2xl bg-rose-500/20 p-2">
-            <Youtube className="h-5 w-5 text-rose-500" />
+          <div className={`flex-shrink-0 rounded-2xl ${platformConfig.bg} p-2`}>
+            {platformConfig.icon}
           </div>
           <div className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-bold uppercase tracking-wider ${getStatusPillClasses(statusPill.tone)}`}>
             {statusPill.icon}
@@ -520,5 +658,8 @@ function DeleteConfirmationModal({ accountId, isDeleting, onConfirm, onCancel })
     </ModalPortal>
   );
 }
+
+
+
 
 

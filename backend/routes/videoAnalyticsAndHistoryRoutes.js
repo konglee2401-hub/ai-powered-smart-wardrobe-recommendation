@@ -1,5 +1,7 @@
 import express from 'express';
 import { protect } from '../middleware/auth.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
 import VideoGeneration from '../models/VideoGeneration.js';
 import PromptSuggestor from '../services/PromptSuggestor.js';
 import VideoSessionManager from '../services/VideoSessionManager.js';
@@ -7,13 +9,17 @@ import fs from 'fs';
 import path from 'path';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('video-pipeline'));
+router.use(requireApiAccess('video-pipeline'));
 const promptSuggestor = new PromptSuggestor();
 
 /**
  * GET /api/v1/video/history
  * Get user's video generation history
  */
-router.get('/history', protect, async (req, res) => {
+router.get('/history', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const { userId } = req.user;
     const { limit = 50, offset = 0, filter = 'all' } = req.query;
@@ -47,7 +53,7 @@ router.get('/history', protect, async (req, res) => {
  * GET /api/v1/video/:id
  * Get specific video generation details
  */
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const video = await VideoGeneration.findById(req.params.id);
 
@@ -65,7 +71,7 @@ router.get('/:id', protect, async (req, res) => {
  * POST /api/v1/video/:id/feedback
  * Submit rating and feedback for a video
  */
-router.post('/:id/feedback', protect, async (req, res) => {
+router.post('/:id/feedback', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const { rating, notes } = req.body;
 
@@ -88,7 +94,7 @@ router.post('/:id/feedback', protect, async (req, res) => {
  * DELETE /api/v1/video/:id
  * Delete a video generation and associated files
  */
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const video = await VideoGeneration.findById(req.params.id);
     if (!video || video.userId.toString() !== req.user.userId) {
@@ -127,7 +133,7 @@ router.delete('/:id', protect, async (req, res) => {
  * GET /api/v1/video/analytics
  * Get analytics data for dashboard
  */
-router.get('/analytics', protect, async (req, res) => {
+router.get('/analytics', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const { userId } = req.user;
 
@@ -245,7 +251,7 @@ router.post('/suggestions', async (req, res) => {
  * POST /api/v1/video/extract-frame
  * Extract last frame from generated video
  */
-router.post('/extract-frame', protect, async (req, res) => {
+router.post('/extract-frame', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const { sessionId, videoUrl, videoIndex, framePosition = 'last-frame' } = req.body;
 
@@ -359,7 +365,7 @@ router.get('/session/:sessionId', async (req, res) => {
  * POST /api/v1/video/compose-segments
  * Compose multiple video segments into a single video
  */
-router.post('/compose-segments', protect, async (req, res) => {
+router.post('/compose-segments', protect, requireMenuAccess('video-pipeline'), requireApiAccess('video-pipeline'), async (req, res) => {
   try {
     const { videoUrls, outputFilename } = req.body;
 

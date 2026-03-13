@@ -162,6 +162,7 @@ class VideoQueueService {
         scheduleTime = null,
         accountIds = [],
         metadata = {},
+        userId = null,
       } = config || {};
 
       if (!videoConfig) {
@@ -170,6 +171,7 @@ class VideoQueueService {
 
       const queueId = createQueueId();
       const job = await VideoPipelineJob.create({
+        userId: userId || undefined,
         queueId,
         videoConfig,
         platform,

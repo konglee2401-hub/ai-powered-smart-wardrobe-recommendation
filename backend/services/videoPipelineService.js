@@ -29,7 +29,6 @@ import VideoMashupService from './videoMashupService.js';
 import CapCutAICaptionService from './browser/capcutAICaptionService.js';
 import youtubeOAuthService from './youtubeOAuthService.js';
 import publicDriveFolderIngestService, {
-  extractFolderId as extractPublicDriveFolderId,
   resolveTemplateGroup,
   themeFromName,
   recommendedTemplateGroups,
@@ -38,12 +37,31 @@ import queueScannerCronJob from './queueScannerCronJob.js';
 import publishSchedulerCronJob from './publishSchedulerCronJob.js';
 import GoogleDriveIntegration from './googleDriveIntegration.js';
 import { buildPublishMetadata, mergePublishUploadConfig } from './publishMetadataGenerator.js';
+import { DEFAULT_SUB_VIDEO_LIBRARY_SOURCE, normalizeSubVideoLibrarySources } from '../utils/subVideoLibrary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, '..');
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
 const CAPCUT_EXPORT_DIR = path.join(BACKEND_ROOT, 'media', 'temp', 'capcut-exports');
 const googleDriveIntegration = new GoogleDriveIntegration();
+
+const resolveUserContext = (context = {}) => {
+  const userId = context.userId || context.user?._id?.toString?.() || context.user?.id || null;
+  const isAdmin = context.isAdmin ?? context.user?.role === 'admin';
+  return { userId, isAdmin };
+};
+
+const scopeQuery = (query = {}, context = {}) => {
+  const { userId, isAdmin } = resolveUserContext(context);
+  if (!userId || isAdmin) return { ...query };
+  return { ...query, userId };
+};
+
+const scopeCreate = (payload = {}, context = {}) => {
+  const { userId, isAdmin } = resolveUserContext(context);
+  if (!userId || isAdmin) return { ...payload };
+  return { ...payload, userId };
+};
 
 async function shouldUseCapCutCaptions({ productionConfig = {}, queueItem = {}, sourceVideoId = '' }) {
   if (!productionConfig) return false;
@@ -165,6 +183,7 @@ function buildProductionPayload(video, recipe, productionConfig = {}) {
       memeOverlayWindow: { startTime: 4, endTime: 6 },
       highlightDetection: { enabled: false, source: 'sub', maxHighlights: 3, clipDuration: 6 },
       clipExtraction: { enabled: false, segmentDuration: 20, maxClips: 24 },
+      encoder: 'auto',
       watermarkEnabled: false,
       voiceoverEnabled: false,
       outputDriveFolder: 'Videos/Completed',
@@ -353,6 +372,7 @@ function normalizeComposerDefaults(input = {}) {
     subtitleMode: ['auto', 'none', 'manual'],
     youtubePublishType: ['shorts', 'video'],
     highlightSource: ['main', 'sub'],
+    encoder: ['nvenc', 'h264_nvenc', 'qsv', 'h264_qsv', 'libx264', 'auto'],
   };
   const pick = (value, fallback, values) => (values.includes(value) ? value : fallback);
 
@@ -378,6 +398,7 @@ function normalizeComposerDefaults(input = {}) {
     clipExtractionEnabled: input.clipExtractionEnabled === true,
     clipSegmentDuration: clampNumber(input.clipSegmentDuration, 20, 3, 120),
     clipMaxClips: clampNumber(input.clipMaxClips, 24, 1, 100),
+    encoder: pick(String(input.encoder || ''), 'auto', allowed.encoder),
   };
 }
 
@@ -393,66 +414,6 @@ function normalizeTemplateLibrary(input = {}) {
   };
 }
 
-const DEFAULT_SUB_VIDEO_LIBRARY_SOURCE = Object.freeze({
-  key: 'public-video-reels',
-  name: 'Public Video Reels Library',
-  sourceType: 'public-drive-folder',
-  url: 'https://drive.google.com/drive/folders/1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A',
-  folderId: '1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A',
-  enabled: true,
-  isDefault: true,
-  maxDepth: 3,
-  visibility: 'public-web',
-  themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'],
-  recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'],
-  notes: 'Default public sub-video library source for mashup and shorts automation.',
-});
-
-function normalizeSubVideoLibrarySources(input = []) {
-  const items = Array.isArray(input) ? input : [];
-  const normalized = [];
-  const seen = new Set();
-
-  for (const item of items) {
-    const key = String(item?.key || item?.folderId || item?.url || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 80);
-    const folderId = extractPublicDriveFolderId(item?.folderId || item?.url || '');
-    const dedupeKey = key || folderId || String(item?.url || '').trim();
-    if (!dedupeKey || seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    normalized.push({
-      key: key || DEFAULT_SUB_VIDEO_LIBRARY_SOURCE.key,
-      name: String(item?.name || '').trim() || 'Sub-video library source',
-      sourceType: String(item?.sourceType || 'public-drive-folder').trim() || 'public-drive-folder',
-      url: String(item?.url || '').trim(),
-      folderId,
-      enabled: item?.enabled !== false,
-      isDefault: item?.isDefault === true,
-      maxDepth: Math.min(6, Math.max(1, Number(item?.maxDepth) || 3)),
-      visibility: String(item?.visibility || 'public-web').trim() || 'public-web',
-      themeHints: Array.from(new Set((Array.isArray(item?.themeHints) ? item.themeHints : [])
-        .map((value) => String(value || '').trim())
-        .filter(Boolean))).slice(0, 12),
-      recommendedTemplateGroups: Array.from(new Set((Array.isArray(item?.recommendedTemplateGroups) ? item.recommendedTemplateGroups : [])
-        .map((value) => String(value || '').trim())
-        .filter(Boolean))).slice(0, 12),
-      notes: String(item?.notes || '').trim(),
-    });
-  }
-
-  const withDefault = normalized.length ? normalized : [{ ...DEFAULT_SUB_VIDEO_LIBRARY_SOURCE }];
-  const hasDefault = withDefault.some((item) => item.isDefault && item.enabled !== false);
-
-  return withDefault.map((item, index) => ({
-    ...item,
-    isDefault: hasDefault ? item.isDefault === true : index === 0,
-  }));
-}
 
 function sourceUploadMethod(sourceKey = '') {
   const normalized = String(sourceKey || '').toLowerCase();
@@ -807,7 +768,7 @@ async function clearTrendVideoProductionSnapshot(videoId, queueId) {
   return video;
 }
 
-async function upsertGeneratedVideoAsset(payload = {}) {
+async function upsertGeneratedVideoAsset(payload = {}, context = {}) {
   const {
     queueId,
     outputPath,
@@ -835,7 +796,7 @@ async function upsertGeneratedVideoAsset(payload = {}) {
     fileSize: stats.size,
     assetType: 'video',
     assetCategory: 'generated-video',
-    userId: 'anonymous',
+    userId: resolveUserContext(context).userId || 'anonymous',
     sessionId: 'video-pipeline',
     storage: {
       location: synced ? 'google-drive' : 'local',
@@ -883,7 +844,7 @@ async function upsertGeneratedVideoAsset(payload = {}) {
     status: 'active',
   };
 
-  const existing = await Asset.findOne({ assetId });
+  const existing = await Asset.findOne(scopeQuery({ assetId }, context));
   if (existing) {
     Object.assign(existing, assetPayload);
     await existing.save();
@@ -929,7 +890,9 @@ class VideoPipelineService {
    * Dashboard data is intentionally small and aggregated so the overview tab
    * can render quickly without needing to preload the large video tables.
    */
-  async getDashboard() {
+  async getDashboard(context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    const scope = (query) => scopeQuery(query, context);
     const [
       queueStats,
       accountStats,
@@ -950,19 +913,19 @@ class VideoPipelineService {
       await Promise.all([
         VideoQueueService.getQueueStats(),
         Promise.resolve(MultiAccountService.getAccountStats()),
-        TrendSourceConfig.ensureDefaults(),
-        TrendVideo.countDocuments(),
-        TrendVideo.countDocuments({ 'driveSync.status': 'uploaded' }),
-        TrendVideo.countDocuments({ 'production.queueStatus': 'queued' }),
-        TrendChannel.countDocuments(),
-        DriveTemplateSource.find({}).sort({ updatedAt: -1 }).lean(),
-        VideoPipelineJob.countDocuments({ contentType: 'mashup', status: { $in: ['ready', 'uploaded'] } }),
-        VideoPipelineJob.countDocuments({ contentType: 'mashup', status: 'failed' }),
-        Asset.countDocuments({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' }),
-        TrendVideo.countDocuments({ downloadStatus: 'pending' }),
-        TrendVideo.countDocuments({ downloadStatus: 'downloading' }),
-        TrendVideo.countDocuments({ downloadStatus: 'done' }),
-        TrendVideo.countDocuments({ downloadStatus: 'failed' }),
+        TrendSourceConfig.ensureDefaults(isAdmin ? null : userId),
+        TrendVideo.countDocuments(scope({})),
+        TrendVideo.countDocuments(scope({ 'driveSync.status': 'uploaded' })),
+        TrendVideo.countDocuments(scope({ 'production.queueStatus': 'queued' })),
+        TrendChannel.countDocuments(scope({})),
+        DriveTemplateSource.find(scope({})).sort({ updatedAt: -1 }).lean(),
+        VideoPipelineJob.countDocuments(scope({ contentType: 'mashup', status: { $in: ['ready', 'uploaded'] } })),
+        VideoPipelineJob.countDocuments(scope({ contentType: 'mashup', status: 'failed' })),
+        Asset.countDocuments(scope({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' })),
+        TrendVideo.countDocuments(scope({ downloadStatus: 'pending' })),
+        TrendVideo.countDocuments(scope({ downloadStatus: 'downloading' })),
+        TrendVideo.countDocuments(scope({ downloadStatus: 'done' })),
+        TrendVideo.countDocuments(scope({ downloadStatus: 'failed' })),
       ]);
 
     return {
@@ -995,10 +958,12 @@ class VideoPipelineService {
    * videos themselves. This API joins provider definitions with Mongo counts
    * so the Sources tab can manage config and health in one place.
    */
-  async listSources() {
-    const sourceConfigs = await TrendSourceConfig.ensureDefaults();
+  async listSources(context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    const sourceConfigs = await TrendSourceConfig.ensureDefaults(isAdmin ? null : userId);
     const [videoStats, channelStats] = await Promise.all([
       TrendVideo.aggregate([
+        ...(userId && !isAdmin ? [{ $match: { userId } }] : []),
         {
           $group: {
             _id: { $ifNull: ['$source', '$platform'] },
@@ -1012,6 +977,7 @@ class VideoPipelineService {
         },
       ]),
       TrendChannel.aggregate([
+        ...(userId && !isAdmin ? [{ $match: { userId } }] : []),
         {
           $group: {
             _id: {
@@ -1061,20 +1027,21 @@ class VideoPipelineService {
    * Creates an operator-defined source config. Default system sources are
    * seeded automatically and are protected from deletion separately.
    */
-  async createSource(payload = {}) {
-    await TrendSourceConfig.ensureDefaults();
+  async createSource(payload = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    await TrendSourceConfig.ensureDefaults(isAdmin ? null : userId);
 
     const key = slugifySourceKey(payload.key || payload.provider || payload.name);
     if (!key) {
       return { success: false, error: 'Source key or name is required' };
     }
 
-    const existing = await TrendSourceConfig.findOne({ key });
+    const existing = await TrendSourceConfig.findOne(scopeQuery({ key }, context));
     if (existing) {
       return { success: false, error: `Source key already exists: ${key}` };
     }
 
-    const source = await TrendSourceConfig.create({
+    const source = await TrendSourceConfig.create(scopeCreate({
       key,
       name: payload.name || key,
       provider: payload.provider || key,
@@ -1095,7 +1062,7 @@ class VideoPipelineService {
         minTotalVideos: Number(payload.channelCriteria?.minTotalVideos) || 0,
       },
       metadata: payload.metadata || {},
-    });
+    }, context));
 
     return {
       success: true,
@@ -1111,10 +1078,11 @@ class VideoPipelineService {
    * Updates a source config. Default providers remain editable for thresholds
    * and URLs, but their identity and deletion rules stay protected.
    */
-  async updateSource(sourceId, payload = {}) {
-    await TrendSourceConfig.ensureDefaults();
+  async updateSource(sourceId, payload = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    await TrendSourceConfig.ensureDefaults(isAdmin ? null : userId);
 
-    const source = await TrendSourceConfig.findById(sourceId);
+    const source = await TrendSourceConfig.findOne(scopeQuery({ _id: sourceId }, context));
     if (!source) {
       return { success: false, error: 'Source not found' };
     }
@@ -1155,10 +1123,11 @@ class VideoPipelineService {
    * Deletes a custom source config. Seeded sources are intentionally protected
    * so the operator always has the baseline provider registry available.
    */
-  async deleteSource(sourceId) {
-    await TrendSourceConfig.ensureDefaults();
+  async deleteSource(sourceId, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    await TrendSourceConfig.ensureDefaults(isAdmin ? null : userId);
 
-    const source = await TrendSourceConfig.findById(sourceId);
+    const source = await TrendSourceConfig.findOne(scopeQuery({ _id: sourceId }, context));
     if (!source) {
       return { success: false, error: 'Source not found' };
     }
@@ -1175,10 +1144,10 @@ class VideoPipelineService {
    * Channels are read directly from Mongo so the Channels tab no longer
    * depends on a scraper proxy response just to render the table.
    */
-  async listChannels(filters = {}) {
+  async listChannels(filters = {}, context = {}) {
     const { source = '', platform = '', search = '', status = '', limit = 100 } = filters;
 
-    const query = {};
+    const query = scopeQuery({}, context);
     if (platform) query.platform = platform;
     if (source) {
       query.$or = [
@@ -1205,7 +1174,7 @@ class VideoPipelineService {
     const channelIds = items.map((item) => item._id);
     const videoStats = channelIds.length
       ? await TrendVideo.aggregate([
-        { $match: { channel: { $in: channelIds } } },
+        { $match: scopeQuery({ channel: { $in: channelIds } }, context) },
         {
           $group: {
             _id: '$channel',
@@ -1252,7 +1221,7 @@ class VideoPipelineService {
    * Source videos are the discovered media assets that can move to Drive and
    * then into production. This API backs the dedicated Videos tab.
    */
-  async listSourceVideos(filters = {}) {
+  async listSourceVideos(filters = {}, context = {}) {
     const {
       source = '',
       platform = '',
@@ -1264,7 +1233,7 @@ class VideoPipelineService {
       offset = 0,
     } = filters;
 
-    const query = {};
+    const query = scopeQuery({}, context);
     if (platform) query.platform = platform;
     if (source) {
       if (source.toLowerCase() === 'playboard') {
@@ -1330,8 +1299,8 @@ class VideoPipelineService {
    * Uploads one discovered video to Drive (or local fallback when Drive is not
    * configured) and writes the resulting sync state onto TrendVideo.
    */
-  async uploadSourceVideo(videoId) {
-    const video = await TrendVideo.findById(videoId);
+  async uploadSourceVideo(videoId, context = {}) {
+    const video = await TrendVideo.findOne(scopeQuery({ _id: videoId }, context));
     if (!video) {
       return { success: false, error: 'Video not found' };
     }
@@ -1457,7 +1426,8 @@ class VideoPipelineService {
    * Production jobs remain stored centrally in Mongo. Each source video gets
    * its latest queue linkage mirrored back onto TrendVideo for quick UI joins.
    */
-  async queueSourceVideos(payload = {}) {
+  async queueSourceVideos(payload = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
     const {
       videoIds = [],
       recipe = 'mashup',
@@ -1476,7 +1446,7 @@ class VideoPipelineService {
     };
 
     const videos = Array.isArray(videoIds) && videoIds.length
-      ? await TrendVideo.find({ _id: { $in: videoIds } })
+      ? await TrendVideo.find(scopeQuery({ _id: { $in: videoIds } }, context))
       : [];
 
     if (!videos.length && !(manualMainVideo && manualSubVideo)) {
@@ -1486,6 +1456,7 @@ class VideoPipelineService {
     const queued = [];
     if (!videos.length && manualMainVideo && manualSubVideo) {
       const queueResult = await VideoQueueService.addToQueue({
+        userId: userId || undefined,
         videoConfig: buildProductionPayload(null, recipe, effectiveProductionConfig),
         platform,
         contentType: recipe,
@@ -1513,6 +1484,7 @@ class VideoPipelineService {
 
     for (const video of videos) {
       const queueResult = await VideoQueueService.addToQueue({
+        userId: userId || undefined,
         videoConfig: buildProductionPayload(video, recipe, effectiveProductionConfig),
         platform,
         contentType: recipe,
@@ -1559,13 +1531,13 @@ class VideoPipelineService {
    * Adds downloaded source videos into the legacy Queue folder so the
    * queue-scanner cron job can auto-generate mashups.
    */
-  async queueSourceVideosToFolder(payload = {}) {
+  async queueSourceVideosToFolder(payload = {}, context = {}) {
     const { videoIds = [] } = payload;
     if (!Array.isArray(videoIds) || videoIds.length === 0) {
       return { success: false, error: 'Select at least one source video to queue' };
     }
 
-    const videos = await TrendVideo.find({ _id: { $in: videoIds } }).lean();
+    const videos = await TrendVideo.find(scopeQuery({ _id: { $in: videoIds } }, context)).lean();
     if (!videos.length) {
       return { success: false, error: 'No matching source videos found' };
     }
@@ -1637,12 +1609,16 @@ class VideoPipelineService {
    * Jobs drive the queue/processing surface and are enriched with source video
    * labels here so the UI does not need to join across multiple requests.
    */
-  async listJobs(filters = {}) {
+  async listJobs(filters = {}, context = {}) {
     const { status = '', limit = 100 } = filters;
     const jobsResult = await VideoQueueService.getAllQueueItems(limit);
     if (!jobsResult.success) return jobsResult;
 
     let items = jobsResult.items || [];
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      items = items.filter((item) => String(item.userId || '') === String(userId));
+    }
     if (status) {
       items = items.filter((item) => item.status === status);
     }
@@ -1652,7 +1628,7 @@ class VideoPipelineService {
       .filter(Boolean);
 
     const sources = sourceIds.length
-      ? await TrendVideo.find({ _id: { $in: sourceIds } }).lean()
+      ? await TrendVideo.find(scopeQuery({ _id: { $in: sourceIds } }, context)).lean()
       : [];
 
     const sourceMap = new Map(sources.map((item) => [String(item._id), item]));
@@ -1668,15 +1644,30 @@ class VideoPipelineService {
       };
     });
 
+    const statsResult = await VideoQueueService.getQueueStats();
+    const stats = statsResult.stats || {};
+    const scopedStats = !userId || isAdmin
+      ? stats
+      : items.reduce(
+          (acc, item) => {
+            acc.total = (acc.total || 0) + 1;
+            acc.byStatus = acc.byStatus || {};
+            acc.byStatus[item.status] = (acc.byStatus[item.status] || 0) + 1;
+            return acc;
+          },
+          {}
+        );
+
     return {
       success: true,
       items: enriched,
       count: enriched.length,
-      stats: (await VideoQueueService.getQueueStats()).stats,
+      stats: scopedStats,
     };
   }
 
-  async getQueueRuntime(timeoutMinutes = 30) {
+  async getQueueRuntime(timeoutMinutes = 30, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
     const [statsResult, runtimeResult] = await Promise.all([
       VideoQueueService.getQueueStats(),
       VideoQueueService.getQueueRuntime(timeoutMinutes),
@@ -1685,16 +1676,23 @@ class VideoPipelineService {
     if (!statsResult.success) return statsResult;
     if (!runtimeResult.success) return runtimeResult;
 
+    const scopedRuntime = !userId || isAdmin
+      ? (runtimeResult.runtime || {})
+      : {
+          ...(runtimeResult.runtime || {}),
+          activeJobs: (runtimeResult.runtime?.activeJobs || []).filter((job) => String(job.userId || '') === String(userId)),
+        };
+
     return {
       success: true,
       stats: statsResult.stats || {},
-      runtime: runtimeResult.runtime || {},
+      runtime: scopedRuntime,
     };
   }
 
-  async getProductionOverview(filters = {}) {
-    const sourceQuery = buildSourceVideoQuery(filters.sourceKey);
-    const jobQuery = buildProductionJobQuery(filters.sourceKey);
+  async getProductionOverview(filters = {}, context = {}) {
+    const sourceQuery = scopeQuery(buildSourceVideoQuery(filters.sourceKey), context);
+    const jobQuery = scopeQuery(buildProductionJobQuery(filters.sourceKey), context);
     const pendingDriveSyncQuery = Object.keys(sourceQuery).length
       ? {
           downloadStatus: 'done',
@@ -1737,7 +1735,7 @@ class VideoPipelineService {
         { $match: jobQuery },
         { $group: { _id: '$status', total: { $sum: 1 } } },
       ]),
-      Asset.countDocuments({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' }),
+      Asset.countDocuments(scopeQuery({ assetCategory: 'generated-video', projectId: 'video-pipeline', status: 'active' }, context)),
       VideoPipelineJob.find(jobQuery).sort({ updatedAt: -1 }).limit(12).lean(),
     ]);
 
@@ -1782,12 +1780,12 @@ class VideoPipelineService {
     };
   }
 
-  async getProductionHistory(filters = {}) {
+  async getProductionHistory(filters = {}, context = {}) {
     const page = Math.max(1, Number(filters.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(filters.limit) || 20));
     const status = String(filters.status || '').trim();
     const sourceKey = String(filters.sourceKey || '').trim();
-    const query = buildProductionJobQuery(sourceKey);
+    const query = scopeQuery(buildProductionJobQuery(sourceKey), context);
 
     if (status) query.status = status;
 
@@ -1804,7 +1802,7 @@ class VideoPipelineService {
       .map((job) => job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '')
       .filter(Boolean);
     const sources = sourceIds.length
-      ? await TrendVideo.find({ _id: { $in: sourceIds } }).lean()
+      ? await TrendVideo.find(scopeQuery({ _id: { $in: sourceIds } }, context)).lean()
       : [];
     const sourceMap = new Map(sources.map((item) => [String(item._id), item]));
 
@@ -1850,14 +1848,14 @@ class VideoPipelineService {
     };
   }
 
-  async getProductionHistoryItem(queueId) {
-    const job = await VideoPipelineJob.findOne({ queueId }).lean();
+  async getProductionHistoryItem(queueId, context = {}) {
+    const job = await VideoPipelineJob.findOne(scopeQuery({ queueId }, context)).lean();
     if (!job) {
       return { success: false, error: `Queue item not found: ${queueId}` };
     }
 
     const sourceId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
-    const source = sourceId ? await TrendVideo.findById(sourceId).lean() : null;
+    const source = sourceId ? await TrendVideo.findOne(scopeQuery({ _id: sourceId }, context)).lean() : null;
     const mashupLog = buildMashupLog(job);
     const mainThumbnail = job.videoConfig?.sourceThumbnail || source?.thumbnail || '';
     const subThumbnail = resolveSubThumbnail(job, mashupLog);
@@ -1877,8 +1875,8 @@ class VideoPipelineService {
     };
   }
 
-  async deleteProductionHistoryItem(queueId) {
-    const job = await VideoPipelineJob.findOne({ queueId });
+  async deleteProductionHistoryItem(queueId, context = {}) {
+    const job = await VideoPipelineJob.findOne(scopeQuery({ queueId }, context));
     if (!job) {
       return { success: false, error: `Queue item not found: ${queueId}` };
     }
@@ -1904,24 +1902,26 @@ class VideoPipelineService {
     }
 
     if (assetId) {
-      await Asset.updateOne({ assetId }, { $set: { status: 'deleted' } });
+      await Asset.updateOne(scopeQuery({ assetId }, context), { $set: { status: 'deleted' } });
     }
 
     const sourceVideoId = job.videoConfig?.sourceVideoId || job.metadata?.sourceVideoId || '';
     await clearTrendVideoProductionSnapshot(sourceVideoId, queueId);
 
-    await VideoPipelineJob.deleteOne({ queueId });
+    await VideoPipelineJob.deleteOne(scopeQuery({ queueId }, context));
 
     return { success: true, message: 'Production history item deleted' };
   }
 
-  async remashupJob(queueId, payload = {}) {
-    const job = await VideoPipelineJob.findOne({ queueId });
+  async remashupJob(queueId, payload = {}, context = {}) {
+    const job = await VideoPipelineJob.findOne(scopeQuery({ queueId }, context));
     if (!job) {
+      console.warn('[video-pipeline] remashup not found', { queueId, userId: resolveUserContext(context).userId });
       return { success: false, error: `Queue item not found: ${queueId}` };
     }
 
     if (job.contentType !== 'mashup') {
+      console.warn('[video-pipeline] remashup rejected (not mashup)', { queueId, contentType: job.contentType });
       return { success: false, error: 'Only mashup jobs can be re-rendered' };
     }
 
@@ -1958,6 +1958,9 @@ class VideoPipelineService {
     };
     if (!productionConfig.subtitleMode) {
       productionConfig.subtitleMode = 'auto';
+    }
+    if (!productionConfig.encoder) {
+      productionConfig.encoder = 'auto';
     }
 
     if (payload.templateName) {
@@ -2194,15 +2197,63 @@ class VideoPipelineService {
     };
   }
 
-  async retryFailedJobs(maxRetries = 3) {
+  async retryFailedJobs(maxRetries = 3, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      return { success: false, error: 'Not authorized to retry global batch' };
+    }
     return VideoQueueService.retryFailedBatch(maxRetries);
   }
 
-  async releaseStaleJobs(timeoutMinutes = 30) {
+  async forceRetryJob(queueId, options = {}, context = {}) {
+    try {
+      const job = await VideoPipelineJob.findOne(scopeQuery({ queueId }, context));
+      if (!job) {
+        return { success: false, error: `Queue item not found: ${queueId}` };
+      }
+
+      const now = new Date();
+      job.status = 'pending';
+      job.lastRetryAt = now;
+      job.metadata = {
+        ...(job.metadata || {}),
+        queueControl: {
+          ...(job.metadata?.queueControl || {}),
+          retryEligible: true,
+          retryStopped: false,
+          retryStoppedReason: '',
+          retryStoppedAt: null,
+          manualInterventionRequired: false,
+          nextAction: 'auto-retry',
+          lastFailureAt: job.metadata?.queueControl?.lastFailureAt || now.toISOString(),
+        },
+      };
+      job.processLogs.push({
+        stage: 'manual-retry',
+        status: 'warning',
+        message: options.message || 'Manually reset failed job to pending for retry',
+        timestamp: now,
+      });
+      await job.save();
+
+      return VideoQueueService.getQueueItem(queueId);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+  async releaseStaleJobs(timeoutMinutes = 30, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      return { success: false, error: 'Not authorized to release global stale jobs' };
+    }
     return VideoQueueService.releaseStaleJobs(timeoutMinutes);
   }
 
-  async clearQueueJobs(payload = {}) {
+  async clearQueueJobs(payload = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      return { success: false, error: 'Not authorized to clear global queue' };
+    }
     const statusFilter = String(payload.statusFilter || '').trim() || null;
     const force = payload.force === true;
 
@@ -2274,23 +2325,46 @@ class VideoPipelineService {
     return { success: true, result, message: 'Publish scheduler triggered.' };
   }
 
-  async getConnections() {
+  async getConnections(context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    const allAccounts = MultiAccountService.getAllAccounts().accounts || [];
+    const scopedAccounts = userId && !isAdmin
+      ? allAccounts.filter((acc) => String(acc.userId || '') === String(userId))
+      : allAccounts;
     return {
       success: true,
-      accounts: MultiAccountService.getAllAccounts().accounts || [],
+      accounts: scopedAccounts,
       stats: MultiAccountService.getAccountStats().stats || {},
     };
   }
 
-  async addConnection(payload = {}) {
+  async addConnection(payload = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      payload.userId = userId;
+    }
     return MultiAccountService.addAccount(payload);
   }
 
-  async verifyConnection(accountId) {
+  async verifyConnection(accountId, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      const account = MultiAccountService.getRawAccount(accountId);
+      if (!account || String(account.userId || '') !== String(userId)) {
+        return { success: false, error: 'Not authorized to verify this account' };
+      }
+    }
     return MultiAccountService.verifyAccountConnection(accountId);
   }
 
-  async deleteConnection(accountId) {
+  async deleteConnection(accountId, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      const account = MultiAccountService.getRawAccount(accountId);
+      if (!account || String(account.userId || '') !== String(userId)) {
+        return { success: false, error: 'Not authorized to delete this account' };
+      }
+    }
     return MultiAccountService.deleteAccount(accountId);
   }
 
@@ -2298,11 +2372,12 @@ class VideoPipelineService {
    * Settings now return human-readable schedule descriptors. The frontend no
    * longer needs to expose raw cron strings just to edit a daily schedule.
    */
-  async getSettings() {
+  async getSettings(context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
     const [trendSetting, queueScanner, templateSources] = await Promise.all([
-      TrendSetting.getOrCreateDefault(),
-      QueueScannerSettings.findOne({ key: 'default' }).lean(),
-      DriveTemplateSource.find({}).sort({ updatedAt: -1 }).lean(),
+      TrendSetting.getOrCreateDefault(isAdmin ? null : userId),
+      QueueScannerSettings.findOne(scopeQuery({ key: 'default' }, context)).lean(),
+      DriveTemplateSource.find(scopeQuery({}, context)).sort({ updatedAt: -1 }).lean(),
     ]);
 
     const discoverSchedule = cronToReadableSchedule(trendSetting.cronTimes?.discover, '07:00');
@@ -2367,7 +2442,7 @@ class VideoPipelineService {
    * Saves readable settings back into the legacy storage shape used by the
    * worker and discovery layer while preserving one payload shape for the UI.
    */
-  async saveSettings(payload = {}) {
+  async saveSettings(payload = {}, context = {}) {
     const discovery = payload.discovery || {};
     const production = payload.production || {};
     const scheduler = normalizeProductionSchedule({
@@ -2387,7 +2462,8 @@ class VideoPipelineService {
       ? publishVisibilityInput
       : 'public';
 
-    const trendSetting = await TrendSetting.getOrCreateDefault();
+    const { userId, isAdmin } = resolveUserContext(context);
+    const trendSetting = await TrendSetting.getOrCreateDefault(isAdmin ? null : userId);
     trendSetting.keywords = discovery.keywords || trendSetting.keywords;
     trendSetting.maxConcurrentDownload = discovery.maxConcurrentDownload ?? trendSetting.maxConcurrentDownload;
     trendSetting.minViewsFilter = discovery.minViewsFilter ?? trendSetting.minViewsFilter;
@@ -2424,8 +2500,9 @@ class VideoPipelineService {
     await trendSetting.save();
 
     await QueueScannerSettings.findOneAndUpdate(
-      { key: 'default' },
+      scopeQuery({ key: 'default' }, context),
       {
+        userId: isAdmin ? (userId || undefined) : userId || undefined,
         key: 'default',
         enabled: scheduler.enabled,
         intervalMinutes: scheduler.intervalMinutes,
@@ -2495,8 +2572,9 @@ class VideoPipelineService {
       for (const item of production.templateSources) {
         const health = normalizeTemplateHealth(item);
         const doc = await DriveTemplateSource.findOneAndUpdate(
-          { folderId: item.folderId },
+          scopeQuery({ folderId: item.folderId }, context),
           {
+            userId: isAdmin ? (userId || undefined) : userId || undefined,
             name: item.name || path.basename(item.folderPath || item.folderId),
             folderId: item.folderId,
             folderPath: item.folderPath || '',
@@ -2512,16 +2590,15 @@ class VideoPipelineService {
         keepIds.push(String(doc._id));
       }
 
-      await DriveTemplateSource.deleteMany({
-        _id: { $nin: keepIds },
-      });
+      await DriveTemplateSource.deleteMany(scopeQuery({ _id: { $nin: keepIds } }, context));
     }
 
-    return this.getSettings();
+    return this.getSettings(context);
   }
 
-  async resolveAutomaticSubVideoInput(queueItem = {}) {
-    const trendSetting = await TrendSetting.getOrCreateDefault();
+  async resolveAutomaticSubVideoInput(queueItem = {}, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    const trendSetting = await TrendSetting.getOrCreateDefault(isAdmin ? null : userId);
     const productionPreferences = trendSetting.videoPipelinePreferences?.production || {};
     const sources = normalizeSubVideoLibrarySources(productionPreferences.subVideoLibrarySources).filter((item) => item.enabled !== false);
 
@@ -2530,7 +2607,7 @@ class VideoPipelineService {
     }
 
     const productionConfig = queueItem.videoConfig?.productionConfig || {};
-    const context = {
+    const selectionContext = {
       templateName: productionConfig.templateName || 'reaction',
       aspectRatio: productionConfig.aspectRatio || '9:16',
       sourceTitle: queueItem.videoConfig?.sourceTitle || '',
@@ -2543,7 +2620,7 @@ class VideoPipelineService {
 
     for (const source of orderedSources) {
       try {
-        const resolved = await publicDriveFolderIngestService.resolveSubVideoFromSource(source, context);
+        const resolved = await publicDriveFolderIngestService.resolveSubVideoFromSource(source, selectionContext);
         if (resolved.success) {
           return {
             success: true,
@@ -2567,7 +2644,7 @@ class VideoPipelineService {
   /**
    * Publishes a completed queue item to one or more configured accounts.
    */
-  async analyzePublicSubVideoDriveFolder(payload = {}) {    try {
+  async analyzePublicSubVideoDriveFolder(payload = {}, _context = {}) {    try {
       return await publicDriveFolderIngestService.analyzePublicFolder(payload, payload || {});
     } catch (error) {
       return {
@@ -2577,12 +2654,16 @@ class VideoPipelineService {
     }
   }
 
-  async publishJob(queueId, payload = {}) {
+  async publishJob(queueId, payload = {}, context = {}) {
     const { accountIds = [], uploadConfig = {} } = payload;
     const queueResult = await VideoQueueService.getQueueItem(queueId);
     if (!queueResult.success) return queueResult;
 
     const queueItem = queueResult.queueItem;
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin && String(queueItem.userId || '') !== String(userId)) {
+      return { success: false, error: 'Not authorized to publish this job' };
+    }
     const videoPath =
       queueItem.videoConfig?.outputPath ||
       queueItem.videoConfig?.videoPath ||
@@ -2661,24 +2742,36 @@ class VideoPipelineService {
     };
   }
 
-  async getJobLogs(queueId) {
+  async getJobLogs(queueId, context = {}) {
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin) {
+      const queueResult = await VideoQueueService.getQueueItem(queueId);
+      if (!queueResult.success) return queueResult;
+      if (String(queueResult.queueItem?.userId || '') !== String(userId)) {
+        return { success: false, error: 'Not authorized to view logs' };
+      }
+    }
     return VideoQueueService.getProcessLogs(queueId);
   }
 
   /**
    * Get all available publishing accounts (YouTube OAuth + legacy MultiAccountService)
    */
-  async getPublishAccounts() {
+  async getPublishAccounts(context = {}) {
     try {
+      const { userId, isAdmin } = resolveUserContext(context);
       // Fetch YouTube OAuth accounts from database
-      const youtubeAccounts = await SocialMediaAccount.find({
+      const youtubeAccounts = await SocialMediaAccount.find(scopeQuery({
         platform: 'youtube',
-      }).select(
+      }, context)).select(
         '_id username displayName platform isActive isVerified platformData totalUploads lastPostTime channelTitle channelId channelThumbnailUrl channelUrl channelCustomUrl'
       );
 
       // Get legacy MultiAccountService accounts (singleton instance)
       const legacyAccounts = MultiAccountService.accounts || [];
+      const scopedLegacyAccounts = userId && !isAdmin
+        ? legacyAccounts.filter((acc) => String(acc.userId || '') === String(userId))
+        : legacyAccounts;
 
       // Format YouTube accounts
       const youtubeFormatted = youtubeAccounts.map(acc => ({
@@ -2703,7 +2796,7 @@ class VideoPipelineService {
       }));
 
       // Format legacy accounts
-      const legacyFormatted = legacyAccounts.map(acc => ({
+      const legacyFormatted = scopedLegacyAccounts.map(acc => ({
         id: acc.id || acc.accountId,
         accountId: acc.id || acc.accountId,
         username: acc.username || acc.email,
@@ -2733,9 +2826,10 @@ class VideoPipelineService {
   /**
    * Publish video to selected YouTube accounts via OAuth
    */
-  async publishToYoutubeAccounts(queueId, payload = {}) {
+  async publishToYoutubeAccounts(queueId, payload = {}, context = {}) {
     try {
       const { accountIds = [], videoMetadata = {} } = payload;
+      const { userId, isAdmin } = resolveUserContext(context);
 
       if (!accountIds || accountIds.length === 0) {
         return { success: false, error: 'At least one YouTube account must be selected' };
@@ -2748,6 +2842,9 @@ class VideoPipelineService {
       }
 
       const queueItem = queueResult.queueItem;
+      if (userId && !isAdmin && String(queueItem.userId || '') !== String(userId)) {
+        return { success: false, error: 'Not authorized to publish this job' };
+      }
       const videoPath = queueItem.videoConfig?.outputPath || queueItem.videoConfig?.videoPath;
 
       if (!videoPath) {
@@ -2760,7 +2857,7 @@ class VideoPipelineService {
       for (const accountId of accountIds) {
         try {
           // Fetch account from database
-          const account = await SocialMediaAccount.findById(accountId);
+          const account = await SocialMediaAccount.findOne(scopeQuery({ _id: accountId }, context));
 
           if (!account) {
             results.push({
@@ -2863,7 +2960,7 @@ class VideoPipelineService {
    * Stores an operator-uploaded video in local workspace storage and registers
    * a gallery asset so the same file can be picked later from the video picker.
    */
-  async uploadOperatorVideo(file, payload = {}) {
+  async uploadOperatorVideo(file, payload = {}, context = {}) {
     if (!file) {
       return { success: false, error: 'file is required' };
     }
@@ -2883,14 +2980,13 @@ class VideoPipelineService {
 
     await fs.writeFile(absolutePath, file.buffer);
 
-    const asset = await Asset.create({
+    const asset = await Asset.create(scopeCreate({
       assetId,
       filename: file.originalname || storedFileName,
       mimeType: file.mimetype || `${assetType}/octet-stream`,
       fileSize: file.size || file.buffer?.length || 0,
       assetType,
       assetCategory,
-      userId: 'anonymous',
       sessionId: 'video-pipeline',
       storage: {
         location: 'local',
@@ -2913,7 +3009,7 @@ class VideoPipelineService {
       },
       status: 'active',
       tags: ['video-pipeline', 'operator-upload', assetType, assetCategory, payload.slot || 'unassigned'],
-    });
+    }, context));
 
     return {
       success: true,
@@ -2935,13 +3031,17 @@ class VideoPipelineService {
    * Manual start allows operators to force a queued mashup job to render
    * immediately from the currently selected main/sub inputs.
    */
-  async startJob(queueId) {
+  async startJob(queueId, context = {}) {
     const queueResult = await VideoQueueService.getQueueItem(queueId);
     if (!queueResult.success) {
       return queueResult;
     }
 
     const queueItem = queueResult.queueItem;
+    const { userId, isAdmin } = resolveUserContext(context);
+    if (userId && !isAdmin && String(queueItem.userId || '') !== String(userId)) {
+      return { success: false, error: 'Not authorized to start this job' };
+    }
     const sourceVideoId = queueItem.metadata?.sourceVideoId || queueItem.videoConfig?.sourceVideoId || '';
     await VideoQueueService.logProcess({
       queueId,
@@ -3343,6 +3443,16 @@ class VideoPipelineService {
         clipExtraction: productionConfig.clipExtraction || {},
         additionalVideoPaths: productionConfig.additionalVideoPaths || [],
         contentType: inferredContentType, // Smart template selection
+        encoder: productionConfig.encoder,
+        nvencPreset: productionConfig.nvencPreset,
+        nvencTune: productionConfig.nvencTune,
+        nvencProfile: productionConfig.nvencProfile,
+        nvencRc: productionConfig.nvencRc,
+        nvencBitrate: productionConfig.nvencBitrate,
+        nvencMaxrate: productionConfig.nvencMaxrate,
+        nvencBufsize: productionConfig.nvencBufsize,
+        targetFps: productionConfig.targetFps,
+        gopSize: productionConfig.gopSize,
       });
 
       if (!renderResult.success) {
@@ -3410,7 +3520,7 @@ class VideoPipelineService {
         sourceVideoId,
         recipe,
         sourceTitle: queueItem.videoConfig?.sourceTitle || '',
-      });
+      }, { userId: queueItem.userId });
 
       const publishMetadata = buildPublishMetadata({
         sourceTitle: queueItem.videoConfig?.sourceTitle || queueItem.title || queueId,
@@ -3502,9 +3612,9 @@ class VideoPipelineService {
    * - Mashup queue entries
    * - Production snapshot from TrendVideo
    */
-  async deleteSourceVideo(videoId) {
+  async deleteSourceVideo(videoId, context = {}) {
     try {
-      const video = await TrendVideo.findById(videoId);
+      const video = await TrendVideo.findOne(scopeQuery({ _id: videoId }, context));
       if (!video) {
         return { success: false, error: 'Source video not found' };
       }
@@ -3672,9 +3782,9 @@ class VideoPipelineService {
     }
   }
 
-  async getVideoTranscript(videoId) {
+  async getVideoTranscript(videoId, context = {}) {
     try {
-      const video = await TrendVideo.findById(videoId).select('+transcript.srt');
+      const video = await TrendVideo.findOne(scopeQuery({ _id: videoId }, context)).select('+transcript.srt');
       if (!video) {
         return {
           success: false,
@@ -3706,3 +3816,4 @@ class VideoPipelineService {
 }
 
 export default new VideoPipelineService();
+

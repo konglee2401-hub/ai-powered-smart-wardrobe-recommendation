@@ -1,4 +1,7 @@
 import SocialMediaAccount from '../models/SocialMediaAccount.js';
+import axios from 'axios';
+import facebookOAuthService from '../services/facebookOAuthService.js';
+import facebookReelsService from '../services/facebookReelsService.js';
 import { validateRequest, handleError } from '../middleware/errorHandler.js';
 import youtubeOAuthService from '../services/youtubeOAuthService.js';
 
@@ -395,6 +398,173 @@ export const uploadVideoToYoutube = async (req, res) => {
       }
     });
   } catch (err) {
+    handleError(res, err);
+  }
+};
+
+
+// ==================== Facebook OAuth Methods ====================
+
+const facebookApiVersion = process.env.FACEBOOK_API_VERSION || 'v20.0';
+const facebookGraphBase = `https://graph.facebook.com/${facebookApiVersion}`;
+
+const fetchFacebookPages = async (userAccessToken) => {
+  const response = await axios.get(`${facebookGraphBase}/me/accounts`, {
+    params: {
+      access_token: userAccessToken,
+      fields: 'id,name,access_token,tasks'
+    }
+  });
+  return response.data?.data || [];
+};
+
+/**
+ * Start Facebook OAuth flow
+ * GET /api/social-media/facebook/oauth/start
+ */
+export const facebookOAuthStart = async (req, res) => {
+  try {
+    const authUrl = facebookOAuthService.getAuthUrl();
+    res.json({
+      success: true,
+      authUrl,
+      message: 'Redirect to the authUrl to connect your Facebook pages'
+    });
+  } catch (err) {
+    console.error('[Facebook OAuth Start Error]', err.message);
+    handleError(res, err);
+  }
+};
+
+/**
+ * Handle Facebook OAuth callback
+ * GET /api/social-media/facebook/oauth/callback?code=X
+ */
+export const facebookOAuthCallback = async (req, res) => {
+  try {
+    const { code, error, error_description } = req.query;
+
+    if (error) {
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=${error}&description=${error_description}`;
+      return res.redirect(frontendUrl);
+    }
+
+    if (!code) {
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=missing_code`;
+      return res.redirect(frontendUrl);
+    }
+
+    const tokenData = await facebookOAuthService.exchangeCodeForToken(code);
+    const userAccessToken = tokenData?.access_token;
+    const expiresIn = Number(tokenData?.expires_in || 0);
+    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
+
+    if (!userAccessToken) {
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=oauth_failed`;
+      return res.redirect(frontendUrl);
+    }
+
+    const pages = await fetchFacebookPages(userAccessToken);
+    const savedPages = [];
+
+    for (const page of pages) {
+      const account = await SocialMediaAccount.findOneAndUpdate(
+        { platform: 'facebook', accountId: page.id },
+        {
+          platform: 'facebook',
+          accountId: page.id,
+          accountName: page.name,
+          accountUrl: `https://facebook.com/${page.id}`,
+          credentials: {
+            accessToken: page.access_token,
+            expiresAt,
+            scope: [],
+            platformData: {
+              tasks: page.tasks || [],
+              connectedVia: 'facebook-oauth'
+            }
+          },
+          connectionStatus: 'connected',
+          isActive: true,
+          isVerified: true,
+          lastVerifiedAt: new Date(),
+          metadata: {
+            tasks: page.tasks || []
+          }
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+      savedPages.push(account);
+    }
+
+    const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?connected=facebook&pages=${savedPages.length}`;
+    return res.redirect(frontendUrl);
+  } catch (err) {
+    console.error('[Facebook OAuth Callback Error]', err.message);
+    const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/settings/social-accounts?error=callback_error`;
+    return res.redirect(frontendUrl);
+  }
+};
+
+/**
+ * Upload a video to Facebook Reels for a Page
+ * POST /api/social-media/facebook/:id/reels
+ * Body: { videoFilePath, videoUrl, description, title, videoState }
+ */
+export const uploadReelToFacebook = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { videoFilePath, videoUrl, description, title, videoState } = req.body;
+
+    if (!videoFilePath && !videoUrl) {
+      return res.status(400).json({ success: false, message: 'Missing videoFilePath or videoUrl' });
+    }
+
+    const account = await SocialMediaAccount.findById(id);
+    if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    if (account.platform !== 'facebook') {
+      return res.status(400).json({ success: false, message: 'Account is not a Facebook page' });
+    }
+    if (!account.isActive) {
+      return res.status(400).json({ success: false, message: 'Account is not active' });
+    }
+
+    const pageAccessToken = account.credentials?.accessToken;
+    if (!pageAccessToken) {
+      return res.status(400).json({ success: false, message: 'Missing page access token' });
+    }
+
+    const uploadSession = await facebookReelsService.createReelUploadSession(pageAccessToken);
+    const uploadUrl = uploadSession?.upload_url;
+    const videoId = uploadSession?.video_id;
+
+    if (!uploadUrl || !videoId) {
+      return res.status(400).json({ success: false, message: 'Failed to create upload session', data: uploadSession });
+    }
+
+    if (videoFilePath) {
+      await facebookReelsService.uploadLocalReel(uploadUrl, pageAccessToken, videoFilePath);
+    } else if (videoUrl) {
+      await facebookReelsService.uploadHostedReel(uploadUrl, pageAccessToken, videoUrl);
+    }
+
+    const finishResult = await facebookReelsService.finishReelUpload(pageAccessToken, videoId, {
+      description,
+      title,
+      videoState
+    });
+
+    account.recordPost();
+    await account.save();
+
+    res.json({
+      success: true,
+      message: 'Reel upload initiated',
+      videoId,
+      finishResult
+    });
+  } catch (err) {
+    console.error('[Facebook Reels Upload Error]', err.message);
     handleError(res, err);
   }
 };

@@ -9,6 +9,7 @@ import {
   AlertCircle, CheckCircle, Cloud, Zap, Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAuthHeaders } from '../services/authHeaders';
 
 const API_URL = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
@@ -26,9 +27,10 @@ export default function AssetManagementAdmin() {
 
   const loadData = async () => {
     try {
+      const authHeaders = getAuthHeaders();
       const [statsRes, healthRes] = await Promise.all([
-        fetch(`${API_URL}/admin/stats/assets`),
-        fetch(`${API_URL}/admin/asset-health`)
+        fetch(`${API_URL}/admin/stats/assets`, { headers: authHeaders }),
+        fetch(`${API_URL}/admin/asset-health`, { headers: authHeaders })
       ]);
 
       const statsData = await statsRes.json();
@@ -48,7 +50,7 @@ export default function AssetManagementAdmin() {
     try {
       const res = await fetch(`${API_URL}/admin/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(options)
       });
 

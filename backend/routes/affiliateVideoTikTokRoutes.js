@@ -28,8 +28,15 @@ import { buildStoryboardBlueprint, buildFrameGenerationPlan, buildSegmentPlannin
 import { extractLastFrame, concatenateVideos, isFfmpegAvailable } from '../services/videoContinuityService.js';
 import SessionLog from '../models/SessionLog.js';
 import { getVideoScriptTemplateById } from '../constants/videoScriptTemplates.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 const formatBytes = (bytes) => {
   const size = Number(bytes);
@@ -42,7 +49,7 @@ const formatBytes = (bytes) => {
   return `${value.toFixed(precision)} ${units[index]}`;
 };
 
-// 💾 Use workflowStateService for state management (replicas all state ops)
+// ?? Use workflowStateService for state management (replicas all state ops)
 
 function parseJsonField(value, fallback = null) {
   if (value == null || value === '') return fallback;
@@ -313,7 +320,7 @@ async function runStep2FrameGenerationJob(flowId, requestBody = {}) {
 }
 
 /**
- * 🔵 STEP 1: ANALYZE IMAGES
+ * ?? STEP 1: ANALYZE IMAGES
  * POST /api/ai/affiliate-video-tiktok/step-1-analyze
  * 
  * Input: characterImage, productImage, flowId
@@ -328,7 +335,7 @@ router.post('/step-1-analyze', upload.fields([
   let logger = null;
 
   try {
-    console.log(`\n🔵 STEP 1: ANALYZE [${flowId}]`);
+    console.log(`\n?? STEP 1: ANALYZE [${flowId}]`);
     
     // Initialize session logger
     console.log(`\n[INIT] Creating SessionLogService for ${flowId}...`);
@@ -340,7 +347,7 @@ router.post('/step-1-analyze', upload.fields([
     console.log(`[INIT] logger.init() returned: ${!!initResult}`);
     
     if (!initResult) {
-      console.error(`[INIT] ❌ logger.init() failed - logs may not persist to MongoDB`);
+      console.error(`[INIT] ? logger.init() failed - logs may not persist to MongoDB`);
     }
     
     console.log(`[INIT] Calling logger.startStage...`);
@@ -349,10 +356,10 @@ router.post('/step-1-analyze', upload.fields([
     
     console.log(`[INIT] Calling logger.info...`);
     await logger.info('Starting Step 1: Image Analysis', 'step-1-init');
-    console.log(`[INIT] ✅ Logger fully initialized`);
+    console.log(`[INIT] ? Logger fully initialized`);
 
     // ========== VALIDATE IMAGES ==========
-    console.log(`\n📋 Validating image uploads...`);
+    console.log(`\n?? Validating image uploads...`);
     if (!req.files) {
       const err = 'No files uploaded';
       await logger.error(err, 'step-1-validation');
@@ -374,64 +381,64 @@ router.post('/step-1-analyze', upload.fields([
     const characterFile = req.files.characterImage[0];
     const productFile = req.files.productImage[0];
     
-    console.log(`📸 Character: ${characterFile.originalname} (${characterFile.size} bytes)`);
-    console.log(`📦 Product: ${productFile.originalname} (${productFile.size} bytes)`);
+    console.log(`?? Character: ${characterFile.originalname} (${characterFile.size} bytes)`);
+    console.log(`?? Product: ${productFile.originalname} (${productFile.size} bytes)`);
     
     await logger.info(`Character image: ${characterFile.originalname} (${characterFile.size} bytes)`, 'step-1-files');
     await logger.info(`Product image: ${productFile.originalname} (${productFile.size} bytes)`, 'step-1-files');
 
     // ========== READ IMAGE BUFFERS ==========
-    console.log(`\n🔍 Reading image buffers...`);
+    console.log(`\n?? Reading image buffers...`);
     let characterImageBuffer = characterFile.buffer;
     let productImageBuffer = productFile.buffer;
     
     // If buffer is not available, read from disk (diskStorage mode)
     if (!characterImageBuffer && characterFile.path) {
-      console.log(`  📂 Reading character from disk: ${characterFile.path}`);
+      console.log(`  ?? Reading character from disk: ${characterFile.path}`);
       characterImageBuffer = fs.readFileSync(characterFile.path);
-      console.log(`  ✅ Character buffer loaded (${characterImageBuffer.length} bytes)`);
+      console.log(`  ? Character buffer loaded (${characterImageBuffer.length} bytes)`);
     }
     if (!productImageBuffer && productFile.path) {
-      console.log(`  📂 Reading product from disk: ${productFile.path}`);
+      console.log(`  ?? Reading product from disk: ${productFile.path}`);
       productImageBuffer = fs.readFileSync(productFile.path);
-      console.log(`  ✅ Product buffer loaded (${productImageBuffer.length} bytes)`);
+      console.log(`  ? Product buffer loaded (${productImageBuffer.length} bytes)`);
     }
 
     if (!characterImageBuffer) {
       const err = 'Failed to load character image buffer';
-      console.error(`❌ ${err}`);
+      console.error(`? ${err}`);
       await logger.error(err, 'step-1-buffer');
       throw new Error(err);
     }
 
     if (!productImageBuffer) {
       const err = 'Failed to load product image buffer';
-      console.error(`❌ ${err}`);
+      console.error(`? ${err}`);
       await logger.error(err, 'step-1-buffer');
       throw new Error(err);
     }
 
-    console.log(`✅ Both image buffers loaded successfully`);
+    console.log(`? Both image buffers loaded successfully`);
     await logger.info(`Image buffers loaded (character: ${characterImageBuffer.length}B, product: ${productImageBuffer.length}B)`, 'step-1-buffer');
 
     // ========== SAVE IMAGES TO TEMP ==========
-    console.log(`\n💾 Saving images to temp directory...`);
+    console.log(`\n?? Saving images to temp directory...`);
     const tempDir = path.join(process.cwd(), 'temp', 'step-1-analysis', flowId);
-    console.log(`  📁 Temp directory: ${tempDir}`);
+    console.log(`  ?? Temp directory: ${tempDir}`);
     
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
-      console.log(`  ✅ Temp directory created`);
+      console.log(`  ? Temp directory created`);
     }
 
     const characterImagePath = path.join(tempDir, 'character.jpg');
     const productImagePath = path.join(tempDir, 'product.jpg');
     
     fs.writeFileSync(characterImagePath, characterImageBuffer);
-    console.log(`  ✅ Character image saved: ${characterImagePath}`);
+    console.log(`  ? Character image saved: ${characterImagePath}`);
     
     fs.writeFileSync(productImagePath, productImageBuffer);
-    console.log(`  ✅ Product image saved: ${productImagePath}`);
+    console.log(`  ? Product image saved: ${productImagePath}`);
 
     // Verify files exist
     if (!fs.existsSync(characterImagePath)) {
@@ -441,7 +448,7 @@ router.post('/step-1-analyze', upload.fields([
       throw new Error(`Product image file not found after writing: ${productImagePath}`);
     }
     
-    console.log(`✅ Both images verified on disk`);
+    console.log(`? Both images verified on disk`);
     await logger.info(`Images saved to temp: character=${characterImagePath}, product=${productImagePath}`, 'step-1-save');
 
     // ========== BUILD ANALYSIS PROMPT ==========
@@ -559,7 +566,7 @@ router.post('/step-1-analyze', upload.fields([
 
   } catch (error) {
     const step1Duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.error(`\n❌ STEP 1 ERROR [${flowId}] after ${step1Duration}s:`, error.message);
+    console.error(`\n? STEP 1 ERROR [${flowId}] after ${step1Duration}s:`, error.message);
     console.error(`   Stack:`, error.stack);
     
     if (logger) {
@@ -582,13 +589,13 @@ router.post('/step-1-analyze', upload.fields([
 });
 
 /**
- * 🟢 STEP 2: GENERATE IMAGES
+ * ?? STEP 2: GENERATE IMAGES
  * POST /api/ai/affiliate-video-tiktok/step-2-generate-images
  * 
  * Input: characterImage, productImage, analysis, flowId
  * Output: { success, wearingImage, holdingImage, flowId, step_duration }
  */
-router.post('/step-2-generate-images', async (req, res) => {
+router.post('/step-2-generate-images', consumeGeneration('image'), async (req, res) => {
   const flowId = req.body.flowId;
 
   try {
@@ -842,7 +849,7 @@ router.post('/step-3-deep-analysis', async (req, res) => {
  * Input: segmentPlan, duration, flowId
  * Output: { success, videoPath, flowId, step_duration }
  */
-router.post('/step-4-generate-video', async (req, res) => {
+router.post('/step-4-generate-video', consumeGeneration('video'), async (req, res) => {
   const flowId = req.body.flowId;
   const startTime = Date.now();
   let logger = null;
@@ -1004,13 +1011,13 @@ router.post('/step-4-generate-video', async (req, res) => {
  * Input: voiceoverScript, voiceGender, voicePace, flowId
  * Output: { success, audioPath, audioBuffer, flowId, step_duration }
  */
-router.post('/step-5-generate-voiceover', async (req, res) => {
+router.post('/step-5-generate-voiceover', consumeGeneration('voice'), async (req, res) => {
   const flowId = req.body.flowId;
   const startTime = Date.now();
   let logger = null;
 
   try {
-    console.log(`\n🔵 STEP 5: GENERATE VOICEOVER [${flowId}]`);
+    console.log(`\n?? STEP 5: GENERATE VOICEOVER [${flowId}]`);
     
     if (!flowId) throw new Error('flowId is required');
 
@@ -1036,14 +1043,14 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
       .map(script => typeof script === 'object' ? script.voiceoverText || script.text || script.script || script.videoPrompt : script)
       .join(' ');
 
-    console.log(`🎤 Generating voiceover`);
+    console.log(`?? Generating voiceover`);
     console.log(`   Gender: ${voiceGender}`);
     console.log(`   Pace: ${voicePace}`);
     console.log(`   Language: ${language}`);
     console.log(`   Text length: ${voiceoverText.length} chars (${voiceoverText.split(' ').length} words)`);
     console.log(`   Text: ${voiceoverText.substring(0, 100)}...`);
 
-    // 💡 REUSE: Use TTSService
+    // ?? REUSE: Use TTSService
     const ttsService = new TTSService();
 
     // Map voice settings to TTS voice name
@@ -1069,7 +1076,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
     const audioPath = path.join(audioDir, audioFilename);
     fs.writeFileSync(audioPath, audioBuffer);
 
-    console.log(`✅ Voiceover generated: ${audioPath}`);
+    console.log(`? Voiceover generated: ${audioPath}`);
 
     const step5Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -1103,7 +1110,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
       duration: parseFloat(step5Duration)
     });
 
-    console.log(`✅ STEP 5 COMPLETE in ${step5Duration}s`);
+    console.log(`? STEP 5 COMPLETE in ${step5Duration}s`);
 
     res.json({
       success: true,
@@ -1114,7 +1121,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`❌ STEP 5 ERROR [${flowId}]:`, error.message);
+    console.error(`? STEP 5 ERROR [${flowId}]:`, error.message);
     if (logger) {
       await logger.error(error.message, 'step-5-error', { 
         stack: error.stack 
@@ -1132,7 +1139,7 @@ router.post('/step-5-generate-voiceover', async (req, res) => {
 });
 
 /**
- * 🟣 STEP 6: FINALIZE PACKAGE
+ * ?? STEP 6: FINALIZE PACKAGE
  * POST /api/ai/affiliate-video-tiktok/step-6-finalize
  * 
  * Input: flowId, uploadToDrive
@@ -1144,7 +1151,7 @@ router.post('/step-6-finalize', async (req, res) => {
   let logger = null;
 
   try {
-    console.log(`\n🟣 STEP 6: FINALIZE [${flowId}]`);
+    console.log(`\n?? STEP 6: FINALIZE [${flowId}]`);
     
     if (!flowId) throw new Error('flowId is required');
 
@@ -1165,19 +1172,19 @@ router.post('/step-6-finalize', async (req, res) => {
       throw new Error('Video not found. Please complete Steps 1-4 first.');
     }
 
-    console.log(`📦 Preparing final package...`);
+    console.log(`?? Preparing final package...`);
     console.log(`   Video: ${step4.videoPath}`);
     console.log(`   Audio: ${step5?.audioPath || 'not available'}`);
     console.log(`   Wearing image: ${step2.wearingImagePath}`);
     console.log(`   Holding image: ${step2.holdingImagePath}`);
     console.log(`   Product image: ${step2.productImagePath}`);
 
-    // 💡 TODO: Combine video + audio using FFmpeg
+    // ?? TODO: Combine video + audio using FFmpeg
     // For now, just prepare the package
     let finalizedVideoPath = step4.videoPath;
 
     if (step5?.audioPath && fs.existsSync(step5.audioPath)) {
-      console.log(`🎵 Audio available: ${step5.audioPath}`);
+      console.log(`?? Audio available: ${step5.audioPath}`);
       console.log(`   Size: ${fs.statSync(step5.audioPath).size} bytes`);
       // TODO: Merge video + audio
       // finalizedVideoPath = await combineVideoAndAudio(step4.videoPath, step5.audioPath);
@@ -1240,7 +1247,7 @@ router.post('/step-6-finalize', async (req, res) => {
       videoSegments: step4.segmentVideos || []
     };
 
-    console.log(`📦 Final package prepared successfully`);
+    console.log(`?? Final package prepared successfully`);
 
     const step6Duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -1295,10 +1302,10 @@ router.post('/step-6-finalize', async (req, res) => {
     });
 
     console.log(`\n${'='.repeat(80)}`);
-    console.log(`✅ STEP 6 COMPLETE in ${step6Duration}s`);
-    console.log(`✅ ENTIRE FLOW COMPLETED SUCCESSFULLY!`);
+    console.log(`? STEP 6 COMPLETE in ${step6Duration}s`);
+    console.log(`? ENTIRE FLOW COMPLETED SUCCESSFULLY!`);
     console.log(`${'='.repeat(80)}`);
-    console.log(`📊 FINAL SUMMARY:`);
+    console.log(`?? FINAL SUMMARY:`);
     console.log(`   Flow ID: ${flowId}`);
     console.log(`   Total Duration: ${totalDuration.toFixed(1)}s`);
     console.log(`   Step 1 (Analysis): ${flowState.step1?.duration.toFixed(1)}s`);
@@ -1307,7 +1314,7 @@ router.post('/step-6-finalize', async (req, res) => {
     console.log(`   Step 4 (Video Gen): ${flowState.step4?.duration.toFixed(1)}s`);
     console.log(`   Step 5 (Voiceover): ${flowState.step5?.duration.toFixed(1)}s`);
     console.log(`   Step 6 (Finalize): ${step6Duration}s`);
-    console.log(`\n📦 OUTPUT ARTIFACTS:`);
+    console.log(`\n?? OUTPUT ARTIFACTS:`);
     console.log(`   Video: ${finalPackage.video.path}`);
     console.log(`   Audio: ${finalPackage.audio.path}`);
     console.log(`   Wearing Image: ${finalPackage.images.wearing.path}`);
@@ -1333,7 +1340,7 @@ router.post('/step-6-finalize', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`❌ STEP 6 ERROR [${flowId}]:`, error.message);
+    console.error(`? STEP 6 ERROR [${flowId}]:`, error.message);
     if (logger) {
       await logger.error(error.message, 'step-6-error', { 
         stack: error.stack 
@@ -1351,7 +1358,7 @@ router.post('/step-6-finalize', async (req, res) => {
 });
 
 /**
- * 📊 GET PROGRESS
+ * ?? GET PROGRESS
  * GET /api/ai/affiliate-video-tiktok/progress/:flowId
  * 
  * Returns current progress and completed steps
@@ -1453,7 +1460,7 @@ router.get('/progress/:flowId', (req, res) => {
 });
 
 /**
- * 📋 GET STATUS
+ * ?? GET STATUS
  * GET /api/ai/affiliate-video-tiktok/status/:flowId
  * 
  * Returns complete flow status with outputs
@@ -1461,19 +1468,29 @@ router.get('/progress/:flowId', (req, res) => {
 router.get('/status/:flowId', async (req, res) => {
   const { flowId } = req.params;
 
-  const flowState = workflowStateService.getFlowState(flowId);
+  let flowState = workflowStateService.getFlowState(flowId);
   if (!flowState) {
     const session = await SessionLog.findOne({ sessionId: flowId }).select('status updatedAt workflowState');
     if (session?.workflowState) {
-      console.warn('[affiliate-status] flow state not in memory; resume required', { flowId, status: session.status });
-      return res.status(409).json({
-        success: false,
-        error: 'Flow not active in memory. Resume required.',
-        requiresResume: true,
-        flowId,
-        sessionStatus: session.status,
-        updatedAt: session.updatedAt
-      });
+      const storedWorkflowState = typeof session.workflowState === 'string'
+        ? parseJsonField(session.workflowState, null)
+        : session.workflowState;
+      const terminalStatuses = ['completed', 'failed', 'cancelled'];
+      const isTerminal = terminalStatuses.includes(session.status);
+
+      if (isTerminal && storedWorkflowState) {
+        flowState = storedWorkflowState;
+      } else {
+        console.warn('[affiliate-status] flow state not in memory; resume required', { flowId, status: session.status });
+        return res.status(409).json({
+          success: false,
+          error: 'Flow not active in memory. Resume required.',
+          requiresResume: true,
+          flowId,
+          sessionStatus: session.status,
+          updatedAt: session.updatedAt
+        });
+      }
     }
   }
 
@@ -1484,21 +1501,67 @@ router.get('/status/:flowId', async (req, res) => {
     });
   }
 
+  const staleMinutes = Math.max(1, Number(process.env.WORKFLOW_STALE_MINUTES || 45));
+  const processingStatus = String(flowState.status || '').toLowerCase();
+  if (processingStatus.includes('processing') || processingStatus.includes('generating')) {
+    const lastUpdated = flowState.updatedAt
+      || flowState.step4?.updatedAt || flowState.step4?.startedAt
+      || flowState.step3?.updatedAt || flowState.step3?.startedAt
+      || flowState.step2?.updatedAt || flowState.step2?.startedAt
+      || flowState.step1?.updatedAt || flowState.step1?.startedAt;
+    const lastUpdatedAt = lastUpdated ? new Date(lastUpdated).getTime() : 0;
+    if (lastUpdatedAt && Date.now() - lastUpdatedAt > staleMinutes * 60 * 1000) {
+      const stepOrder = ['step6', 'step5', 'step4', 'step3', 'step2', 'step1'];
+      const staleStep = stepOrder.find((stepKey) => {
+        const stepStatus = String(flowState[stepKey]?.status || '').toLowerCase();
+        return processingStatus.includes(stepKey) || stepStatus.includes('processing') || stepStatus.includes('generating');
+      });
+      const staleMessage = `Marked failed after ${staleMinutes} minutes without updates`;
+      flowState.status = 'failed';
+      flowState.updatedAt = new Date().toISOString();
+      flowState.staleFailure = {
+        step: staleStep,
+        message: staleMessage,
+        staleMinutes,
+        lastUpdatedAt: new Date(lastUpdatedAt).toISOString(),
+        detectedAt: new Date().toISOString()
+      };
+      if (staleStep) {
+        flowState[staleStep] = {
+          ...(flowState[staleStep] || {}),
+          status: 'failed',
+          error: staleMessage,
+          completedAt: new Date().toISOString()
+        };
+      }
+      await workflowStateService.persistWorkflowState(flowId, flowState, 'affiliate-tiktok');
+    }
+  }
+
   const buildMediaPreview = (filePath, extra = {}) => {
     if (!filePath) return null;
 
     const normalizedPath = String(filePath);
-    const exists = fs.existsSync(normalizedPath);
-    const stats = exists ? fs.statSync(normalizedPath) : null;
+    const isUrl = /^https?:\/\//i.test(normalizedPath);
+    const exists = isUrl ? true : fs.existsSync(normalizedPath);
+    const stats = !isUrl && exists ? fs.statSync(normalizedPath) : null;
     const ext = path.extname(normalizedPath || '').replace('.', '').toLowerCase();
     const tempRoot = path.join(process.cwd(), 'temp');
-    const relativeTempPath = normalizedPath.startsWith(tempRoot)
+    const uploadsRoot = path.join(process.cwd(), 'uploads');
+    const relativeTempPath = !isUrl && normalizedPath.startsWith(tempRoot)
       ? path.relative(tempRoot, normalizedPath).split(path.sep).join('/')
       : null;
+    const relativeUploadsPath = !isUrl && normalizedPath.startsWith(uploadsRoot)
+      ? path.relative(uploadsRoot, normalizedPath).split(path.sep).join('/')
+      : null;
+
+    const previewUrl = isUrl
+      ? normalizedPath
+      : (relativeTempPath ? `/temp/${relativeTempPath}` : (relativeUploadsPath ? `/uploads/${relativeUploadsPath}` : null));
 
     return {
       path: normalizedPath,
-      previewUrl: relativeTempPath ? `/temp/${relativeTempPath}` : null,
+      previewUrl,
       title: path.basename(normalizedPath),
       format: ext || null,
       sizeBytes: stats?.size || null,
@@ -1640,6 +1703,7 @@ function mapVoiceSettings(gender, pace) {
 }
 
 export default router;
+
 
 
 

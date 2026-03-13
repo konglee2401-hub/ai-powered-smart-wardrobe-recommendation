@@ -8,6 +8,11 @@ import mongoose from 'mongoose';
  * incrementally without duplicating queue logic.
  */
 const VideoPipelineJobSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   queueId: {
     type: String,
     required: true,

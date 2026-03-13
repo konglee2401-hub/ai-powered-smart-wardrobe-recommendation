@@ -4,8 +4,14 @@ import TrendSetting from '../models/TrendSetting.js';
 import { protect } from '../middleware/auth.js';
 import trendYoutubeUploadService from '../services/trendYoutubeUploadService.js';
 import youtubeOAuthService from '../services/youtubeOAuthService.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('video-pipeline'));
+router.use(requireApiAccess('video-pipeline'));
 const PY_SERVICE_BASE = process.env.TREND_AUTOMATION_PY_URL || 'http://localhost:8001';
 
 async function proxy(req, res, path) {

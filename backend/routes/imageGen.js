@@ -6,6 +6,9 @@ import {
   browserGenerateImages,
   resumeImageGeneration
 } from '../controllers/imageGenController.js';
+import { protect } from '../middleware/auth.js';
+import { requireApiAccess, requireMenuAccess, enforceAiProviderAccess } from '../middleware/permissions.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
 
 const router = express.Router();
 
@@ -20,6 +23,11 @@ const upload = multer({
   }
 });
 
+router.use(protect);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
+router.use(requireActiveSubscription);
+
 // Get available providers
 router.get('/providers', getProviders);
 
@@ -27,13 +35,13 @@ router.get('/providers', getProviders);
 router.post('/generate', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
-]), generateImages);
+]), enforceAiProviderAccess(), consumeGeneration('image'), generateImages);
 
 // Generate images via browser automation
 router.post('/browser-generate', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 }
-]), browserGenerateImages);
+]), enforceAiProviderAccess(), consumeGeneration('image'), browserGenerateImages);
 
 // Resume image generation
 router.post('/resume/:sessionId', resumeImageGeneration);

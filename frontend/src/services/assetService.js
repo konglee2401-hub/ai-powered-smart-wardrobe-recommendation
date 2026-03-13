@@ -5,6 +5,11 @@
 
 const ASSET_API_BASE = 'http://localhost:5000/api/assets';
 
+const getAuthHeaders = () => {
+  const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+};
+
 export const assetService = {
   /**
    * Create an asset record for an uploaded file
@@ -46,7 +51,8 @@ export const assetService = {
       const response = await fetch(`${ASSET_API_BASE}/create`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           filename,
@@ -96,6 +102,9 @@ export const assetService = {
 
       const response = await fetch(`${ASSET_API_BASE}/upload`, {
         method: 'POST',
+        headers: {
+          ...getAuthHeaders()
+        },
         body: formData
       });
 
@@ -119,7 +128,8 @@ export const assetService = {
       const response = await fetch(`${ASSET_API_BASE}/create`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           filename,
@@ -168,7 +178,11 @@ export const assetService = {
       const params = new URLSearchParams({ category, assetType: 'image' });
       if (sessionId) params.append('sessionId', sessionId);
 
-      const response = await fetch(`${ASSET_API_BASE}/by-category/${category}?${params}`);
+      const response = await fetch(`${ASSET_API_BASE}/by-category/${category}?${params}`, {
+        headers: {
+          ...getAuthHeaders()
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch assets');
@@ -197,7 +211,11 @@ export const assetService = {
         params.append('query', filters.search);
       }
 
-      const response = await fetch(`${ASSET_API_BASE}/gallery?${params}`);
+      const response = await fetch(`${ASSET_API_BASE}/gallery?${params}`, {
+        headers: {
+          ...getAuthHeaders()
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch gallery');
@@ -218,7 +236,8 @@ export const assetService = {
       const response = await fetch(`${ASSET_API_BASE}/${assetId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify(updates)
       });
@@ -240,7 +259,10 @@ export const assetService = {
   async toggleFavorite(assetId) {
     try {
       const response = await fetch(`${ASSET_API_BASE}/${assetId}/toggle-favorite`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders()
+        }
       });
 
       if (!response.ok) {
@@ -262,7 +284,8 @@ export const assetService = {
       const response = await fetch(`${ASSET_API_BASE}/${assetId}`, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({ deleteFile })
       });

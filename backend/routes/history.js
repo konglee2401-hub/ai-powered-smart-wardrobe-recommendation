@@ -1,15 +1,30 @@
 import express from 'express';
 import GeneratedImage from '../models/GeneratedImage.js';
 import GeneratedVideo from '../models/GeneratedVideo.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
+import { isAdmin } from '../services/accessControlService.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
+
+const resolveScopedUserId = (req, candidateUserId = null) => {
+  if (isAdmin(req.user)) {
+    return candidateUserId || null;
+  }
+  return req.user?._id?.toString?.() || req.user?.id || null;
+};
 
 // ==================== GET IMAGE HISTORY ====================
 
 router.get('/images', async (req, res) => {
   try {
     const {
-      userId = 'anonymous',
+      userId,
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
@@ -28,7 +43,8 @@ router.get('/images', async (req, res) => {
       filters.tags = { $in: tags.split(',') };
     }
 
-    const result = await GeneratedImage.getUserHistory(userId, {
+    const scopedUserId = resolveScopedUserId(req, userId);
+    const result = await GeneratedImage.getUserHistory(scopedUserId, {
       page: parseInt(page),
       limit: parseInt(limit),
       sortBy,
@@ -57,7 +73,8 @@ router.get('/images/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const images = await GeneratedImage.getSessionImages(sessionId);
+    const scopedUserId = resolveScopedUserId(req);
+    const images = await GeneratedImage.getSessionImages(sessionId, scopedUserId);
 
     res.json({
       success: true,
@@ -91,7 +108,10 @@ router.post('/images', async (req, res) => {
       });
     }
 
-    const image = await GeneratedImage.create(imageData);
+    const image = await GeneratedImage.create({
+      ...imageData,
+      userId: resolveScopedUserId(req, imageData.userId),
+    });
 
     res.status(201).json({
       success: true,
@@ -115,8 +135,8 @@ router.patch('/images/:id', async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    const image = await GeneratedImage.findByIdAndUpdate(
-      id,
+    const image = await GeneratedImage.findOneAndUpdate(
+      { _id: id, ...(isAdmin(req.user) ? {} : { userId: resolveScopedUserId(req) }) },
       { $set: updates },
       { new: true }
     );
@@ -149,8 +169,8 @@ router.delete('/images/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const image = await GeneratedImage.findByIdAndUpdate(
-      id,
+    const image = await GeneratedImage.findOneAndUpdate(
+      { _id: id, ...(isAdmin(req.user) ? {} : { userId: resolveScopedUserId(req) }) },
       { $set: { isDeleted: true } },
       { new: true }
     );
@@ -182,13 +202,14 @@ router.delete('/images/:id', async (req, res) => {
 router.get('/videos', async (req, res) => {
   try {
     const {
-      userId = 'anonymous',
+      userId,
       page = 1,
       limit = 20,
       status
     } = req.query;
 
-    const result = await GeneratedVideo.getUserVideos(userId, {
+    const scopedUserId = resolveScopedUserId(req, userId);
+    const result = await GeneratedVideo.getUserVideos(scopedUserId, {
       page: parseInt(page),
       limit: parseInt(limit),
       status
@@ -214,8 +235,10 @@ router.get('/videos', async (req, res) => {
 router.post('/videos', async (req, res) => {
   try {
     const videoData = req.body;
-
-    const video = await GeneratedVideo.create(videoData);
+    const video = await GeneratedVideo.create({
+      ...videoData,
+      userId: resolveScopedUserId(req, videoData.userId),
+    });
 
     res.status(201).json({
       success: true,

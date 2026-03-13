@@ -242,7 +242,24 @@ export function getFlowPreview(flowId) {
  */
 function updateFlowPreview(flowId, updates) {
   const current = flowPreviewStore.get(flowId) || {};
-  const updated = { ...current, ...updates, flowId, updatedAt: Date.now() };
+  const mergeStep = (key) => {
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) return current[key];
+    if (updates[key] == null) return updates[key];
+    return { ...(current[key] || {}), ...(updates[key] || {}) };
+  };
+
+  const updated = {
+    ...current,
+    ...updates,
+    step1: mergeStep('step1'),
+    step2: mergeStep('step2'),
+    step3: mergeStep('step3'),
+    step4: mergeStep('step4'),
+    step5: mergeStep('step5'),
+    step6: mergeStep('step6'),
+    flowId,
+    updatedAt: Date.now(),
+  };
   flowPreviewStore.set(flowId, updated);
   scheduleFlowPreviewPersist(flowId, updated);
 }
@@ -254,6 +271,69 @@ function pickLegacyFrameKeys(frameLibrary = []) {
     || hookStart;
 
   return { hookStart, showcaseEnd };
+}
+
+function persistFlowInput(flowId, sourcePath, label) {
+  if (!sourcePath) return null;
+  const normalizedPath = String(sourcePath);
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+  if (normalizedPath.includes(`${path.sep}uploads${path.sep}`)) {
+    return normalizedPath;
+  }
+
+  try {
+    const outputDir = path.join(process.cwd(), 'uploads', 'session-inputs', flowId);
+    fs.mkdirSync(outputDir, { recursive: true });
+    const ext = path.extname(normalizedPath) || '.jpg';
+    const safeLabel = String(label || 'input').replace(/[^a-z0-9\-_.]+/gi, '-');
+    const targetPath = path.join(outputDir, `${safeLabel}${ext}`);
+    if (!fs.existsSync(targetPath)) {
+      fs.copyFileSync(normalizedPath, targetPath);
+    }
+    return targetPath;
+  } catch (error) {
+    console.warn(`?? Failed to persist input (${label}): ${error.message}`);
+    return normalizedPath;
+  }
+}
+
+function normalizeInputAssetRefs(value) {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return value;
+}
+
+function resolveInputPreviewPath(assetRef, fallbackPath) {
+  if (!assetRef) return fallbackPath;
+  return (
+    assetRef.previewUrl ||
+    assetRef.url ||
+    assetRef.portraitUrl ||
+    assetRef.thumbnail ||
+    assetRef.resolvedUrl ||
+    fallbackPath
+  );
+}
+
+function shouldPersistInput(imageSource, assetRef, sourcePath) {
+  if (!sourcePath) return false;
+  if (/^https?:\/\//i.test(String(sourcePath))) return false;
+  const normalizedSource = String(imageSource || '').toLowerCase();
+  const assetSource = String(assetRef?.source || '').toLowerCase();
+  const hasAssetPreview = Boolean(resolveInputPreviewPath(assetRef, null));
+  if (assetSource && assetSource !== 'upload') return !hasAssetPreview;
+  if (['gallery', 'character-profile', 'character_profile', 'profile'].includes(normalizedSource)) {
+    return !hasAssetPreview;
+  }
+  return true;
 }
 
 function resolveFramePath(frameLibrary = [], frameKey) {
@@ -285,6 +365,7 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
   // ?? FIX: Accept flowId from request body if provided (for session continuity)
   // If not provided, generate new flowId
   const flowId = req.body.flowId || `flow-${Date.now()}`;
+  const effectiveUserId = req.body?.userId || req.user?._id?.toString?.() || req.user?.id || 'system';
   const tempDir = path.join(process.cwd(), 'temp', 'tiktok-flows', flowId);
   
   // Initialize session logging
@@ -367,9 +448,81 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       scriptTemplateId = 'auto',
       options = {},
       disableSceneReferenceTransfer = false,  // default false: allow auto scene locked image fallback
-      imageSource = { character: 'upload', product: 'upload' },  // ?? Track image source from frontend
+      imageSource: imageSourceStr = null,  // ?? NEW: Image source metadata (may be JSON string from formData)
+      characterProfileId = null,  // ?? NEW: Character profile ID for asset lookup
+      productAssetId = null,  // ?? NEW: Product asset ID for gallery lookup
       useShortPrompt = false
     } = req.body;
+    
+    // ?? NEW: Parse imageSource if it's a JSON string from formData
+    let imageSource = { character: 'upload', product: 'upload' };
+    if (imageSourceStr) {
+      try {
+        imageSource = typeof imageSourceStr === 'string' ? JSON.parse(imageSourceStr) : imageSourceStr;
+      } catch (parseError) {
+        console.warn(`⚠️  Could not parse imageSource JSON:`, parseError.message);
+      }
+    }
+    
+    // ?? NEW: Handle image source metadata to avoid recreating assets
+    const normalizedImageSource = {
+      character: String(imageSource?.character || 'upload').toLowerCase(),
+      product: String(imageSource?.product || 'upload').toLowerCase()
+    };
+
+    // ?? NEW: Determine skip policies based on image source
+    const skipCharacterDriveUpload = ['gallery', 'character-profile', 'character_profile', 'profile'].includes(normalizedImageSource.character);
+    const skipProductDriveUpload = ['gallery', 'character-profile', 'character_profile', 'profile'].includes(normalizedImageSource.product);
+    const disableSceneTransfer = typeof disableSceneReferenceTransfer === 'string'
+      ? disableSceneReferenceTransfer.toLowerCase() === 'true'
+      : Boolean(disableSceneReferenceTransfer);
+    const skipSceneReferenceNetworkTransfer = disableSceneTransfer;
+
+    // ?? Try to use character profile portrait instead of uploading base64
+    if (normalizedImageSource.character === 'character-profile' && characterProfileId && !characterFilePath) {
+      try {
+        const { default: CharacterProfile } = await import('../models/CharacterProfile.js');
+        const character = await CharacterProfile.findById(characterProfileId);
+        if (character?.portraitUrl) {
+          // Use portrait from character profile
+          const portraitPath = character.portraitUrl.replace(/^\/+/, '');
+          const normalizedPath = path.resolve(process.cwd(), portraitPath);
+          if (fs.existsSync(normalizedPath)) {
+            characterFilePath = normalizedPath;
+            console.log(`✅ Using character profile portrait: ${characterFilePath}`);
+          } else {
+            console.warn(`⚠️  Character portrait path not found on disk: ${normalizedPath}, will use uploaded base64`);
+          }
+        }
+      } catch (charError) {
+        console.warn(`⚠️  Could not resolve character profile portrait:`, charError.message);
+      }
+    }
+
+    // ?? Try to use product asset from gallery instead of uploading base64
+    if (normalizedImageSource.product === 'gallery' && productAssetId && !productFilePath) {
+      try {
+        const { default: Asset } = await import('../models/Asset.js');
+        const asset = await Asset.findById(productAssetId);
+        if (asset) {
+          // Try to get path from localStorage first, then fallback to storage.localPath
+          const assetLocalPath = asset.localStorage?.path || asset.storage?.localPath;
+          if (assetLocalPath) {
+            const normalizedPath = path.resolve(process.cwd(), assetLocalPath);
+            if (fs.existsSync(normalizedPath)) {
+              productFilePath = normalizedPath;
+              console.log(`✅ Using gallery asset: ${productFilePath}`);
+            } else {
+              console.warn(`⚠️  Asset path not found on disk: ${normalizedPath}, will use uploaded base64`);
+            }
+          } else {
+            console.warn(`⚠️  Asset has no local path stored, will use uploaded base64`);
+          }
+        }
+      } catch (assetError) {
+        console.warn(`⚠️  Could not resolve gallery asset:`, assetError.message);
+      }
+    }
     
     // ?? FIX: Convert base64 images to files if not already provided by Multer
     if (!characterFilePath && characterImageBase64) {
@@ -430,26 +583,17 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
       }
     }
 
-    // ?? NEW: Normalize image source and determine skip policies
+    // ?? VALIDATE: Ensure both paths exist
+    if (!characterFilePath) {
+      throw new Error(`? Character image not provided (no file upload or base64)`);
+    }
     if (!productFilePath) {
       throw new Error(`? Product image not provided (no file upload or base64)`);
     }
     
     console.log(`? Both images ready: character=${characterFilePath}, product=${productFilePath}`);
 
-    // ?? NEW: Normalize image source and determine skip policies
-    const normalizedImageSource = {
-      character: String(imageSource?.character || 'upload').toLowerCase(),
-      product: String(imageSource?.product || 'upload').toLowerCase()
-    };
-    const skipCharacterDriveUpload = normalizedImageSource.character === 'gallery';
-    const skipProductDriveUpload = normalizedImageSource.product === 'gallery';
-    const disableSceneTransfer = typeof disableSceneReferenceTransfer === 'string'
-      ? disableSceneReferenceTransfer.toLowerCase() === 'true'
-      : Boolean(disableSceneReferenceTransfer);
-    const skipSceneReferenceNetworkTransfer = disableSceneTransfer;
-
-    // Extract providers from options if not in body directly
+    // ?? Extract providers from options if not in body directly
     const finalImageProvider = options.imageProvider || imageProvider || 'bfl';
     const finalVideoProvider = options.videoProvider || videoProvider || 'grok';
     const providerClipDuration = getProviderClipDuration(finalVideoProvider);
@@ -553,8 +697,41 @@ export async function executeAffiliateVideoTikTokFlow(req, res) {
     console.log('\n?? STEP 1: ChatGPT Browser Automation Analysis...');
     const step1Start = Date.now();
     let step1Duration = '0';  // Will be calculated later
+    const inputAssetRefs = normalizeInputAssetRefs(req.body?.inputAssetRefs);
+    const characterAssetRef = inputAssetRefs?.character || null;
+    const productAssetRef = inputAssetRefs?.product || null;
+    const sceneAssetRef = inputAssetRefs?.scene || null;
+    const shouldPersistCharacter = shouldPersistInput(normalizedImageSource.character, characterAssetRef, characterFilePath);
+    const shouldPersistProduct = shouldPersistInput(normalizedImageSource.product, productAssetRef, productFilePath);
+    const shouldPersistScene = shouldPersistInput(sceneAssetRef?.source, sceneAssetRef, finalSceneImagePath);
+    const persistedCharacterPath = shouldPersistCharacter
+      ? persistFlowInput(flowId, characterFilePath, 'character')
+      : resolveInputPreviewPath(characterAssetRef, characterFilePath);
+    const persistedProductPath = shouldPersistProduct
+      ? persistFlowInput(flowId, productFilePath, 'product')
+      : resolveInputPreviewPath(productAssetRef, productFilePath);
+    const persistedScenePath = finalSceneImagePath
+      ? (shouldPersistScene
+        ? persistFlowInput(flowId, finalSceneImagePath, 'scene')
+        : resolveInputPreviewPath(sceneAssetRef, finalSceneImagePath))
+      : null;
 
-    console.log(`?? STEP 1 DETAILS: Analysis using ChatGPT Browser Automation`);
+    updateFlowPreview(flowId, {
+      step1: {
+        characterImagePath: persistedCharacterPath,
+        productImagePath: persistedProductPath,
+        sceneImagePath: persistedScenePath,
+        duration: Number(videoDuration) || 20,
+        imageSource: normalizedImageSource,
+        inputAssetRefs,
+      },
+    });
+
+    await logger.storeArtifacts({
+      characterImagePath: persistedCharacterPath,
+      productImagePath: persistedProductPath,
+    });
+
     console.log(`  Provider: ChatGPT (Browser Automation)`);
     console.log(`  Input 1: ${characterFilePath}`);
     console.log(`  Input 2: ${productFilePath}`);
@@ -1241,7 +1418,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           assetCategory: 'character-image',
           mimeType: 'image/jpeg',
           fileSize: fs.statSync(characterFilePath).size,
-          userId: 'system',
+          userId: effectiveUserId,
           sessionId: flowId,
           // ?? FIX: Add BOTH storage objects
           storage: {
@@ -1295,7 +1472,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           assetCategory: 'product-image',
           mimeType: 'image/jpeg',
           fileSize: fs.statSync(productFilePath).size,
-          userId: 'system',
+          userId: effectiveUserId,
           sessionId: flowId,
           // ?? FIX: Add BOTH storage objects
           storage: {
@@ -1590,11 +1767,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       images: imageResults.map((img) => img.screenshotPath)
     });
     await logger.storeArtifacts({
-      images: {
-        wearing: hookStart?.imagePath || null,
-        holding: showcaseEnd?.imagePath || null,
-        frameLibrary: imageResults.map((img) => img.screenshotPath)
-      }
+      generatedImagePaths: imageResults.map((img) => img.screenshotPath).filter(Boolean)
     });
 
     updateFlowPreview(flowId, {
@@ -2141,7 +2314,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       assemblyStatus: videoGenerationResult?.assemblyStatus || null
     });
     await logger.storeArtifacts({
-      videos: allGeneratedVideos.map((v) => ({ segment: v.segment, path: v.path, size: v.size || 0 }))
+      videoSegmentPaths: allGeneratedVideos.map((v) => v.path).filter(Boolean)
     });
 
     updateFlowPreview(flowId, {
@@ -2203,7 +2376,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           fileSize: fs.existsSync(imageResults[varIdx].screenshotPath) ? fs.statSync(imageResults[varIdx].screenshotPath).size : 0,
           assetType: 'image',
           assetCategory: 'generated-image',
-          userId: req.body.userId || 'system',
+          userId: effectiveUserId,
           sessionId: flowId,
           storage: {
             location: imageResults[varIdx].googleDriveId ? 'hybrid' : 'local',
@@ -2250,7 +2423,7 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
           fileSize: videoData.size || 0,
           assetType: 'video',
           assetCategory: 'generated-video',
-          userId: req.body.userId || 'system',
+          userId: effectiveUserId,
           sessionId: flowId,
           storage: {
             location: 'local',
@@ -2393,10 +2566,10 @@ CRITICAL: Return ONLY JSON, properly formatted, no markdown, no code blocks, no 
       });
 
       await logger.storeArtifacts({
-        characterImagePath: characterFilePath,
-        productImagePath: productFilePath,
+        characterImagePath: persistedCharacterPath || characterFilePath,
+        productImagePath: persistedProductPath || productFilePath,
         generatedImagePaths: generatedImagePaths,
-        videoSegmentPaths: savedAssets.videos
+        videoSegmentPaths: allGeneratedVideos.map((video) => video.path).filter(Boolean)
       });
       await logger.markCompleted();
       
@@ -3493,6 +3666,19 @@ Return as JSON with:
     `;
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

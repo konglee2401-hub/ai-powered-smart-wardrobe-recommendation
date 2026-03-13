@@ -1877,7 +1877,7 @@ export async function generateWithBrowser(req, res) {
         },
         
         syncStatus: 'pending',
-        userId: 'anonymous',
+        userId: req.user?._id || req.user?.id || 'anonymous',
         generatedAt: new Date()
       };
       

@@ -63,6 +63,25 @@ const QUALITY_PRESETS = {
   },
 };
 
+const NVENC_DEFAULTS = {
+  preset: 'p4',
+  tune: 'hq',
+  profile: 'high',
+  rc: 'vbr',
+};
+
+const QSV_DEFAULTS = {
+  preset: 'veryfast',
+  profile: 'high',
+};
+
+const RATE_PRESETS = {
+  low: { bitrate: '3M', maxrate: '4M', bufsize: '8M' },
+  medium: { bitrate: '5M', maxrate: '6M', bufsize: '10M' },
+  high: { bitrate: '8M', maxrate: '10M', bufsize: '20M' },
+  '4k': { bitrate: '16M', maxrate: '20M', bufsize: '32M' },
+};
+
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.bmp']);
 const DEFAULT_TEMPLATE_NAME = 'reaction';
 const FACTORY_TEMPLATE_MAP = Object.freeze({
@@ -117,6 +136,7 @@ class VideoMashupGenerator {
     this.ffmpegPath = this._findFFmpegPath();
     this.ffprobePath = this._findFFprobePath();
     this.subtitleService = new AutoSubtitleService();
+    this.hardwareEncoders = null;
     this.ensureDirectories();
   }
 
@@ -158,6 +178,27 @@ class VideoMashupGenerator {
         fs.mkdirSync(dir, { recursive: true });
       }
     });
+  }
+
+  async detectHardwareEncoders() {
+    if (this.hardwareEncoders != null) {
+      return this.hardwareEncoders;
+    }
+
+    try {
+      const { stdout, stderr } = await execFileAsync(this.ffmpegPath, ['-hide_banner', '-encoders'], {
+        maxBuffer: 5 * 1024 * 1024,
+      });
+      const output = `${stdout || ''}\n${stderr || ''}`;
+      this.hardwareEncoders = {
+        qsv: /h264_qsv/i.test(output),
+        nvenc: /h264_nvenc/i.test(output),
+      };
+      return this.hardwareEncoders;
+    } catch {
+      this.hardwareEncoders = { qsv: false, nvenc: false };
+      return this.hardwareEncoders;
+    }
   }
 
   resolveWatermarkPath(candidate = '') {
@@ -885,10 +926,48 @@ class VideoMashupGenerator {
       args.push('-an');
     }
 
+    const encoder = job.encoder === 'h264_qsv'
+      ? 'h264_qsv'
+      : job.encoder === 'h264_nvenc'
+        ? 'h264_nvenc'
+        : 'libx264';
+
+    args.push('-c:v', encoder);
+
+    if (encoder === 'h264_nvenc') {
+      args.push(
+        '-preset', job.nvenc?.preset || NVENC_DEFAULTS.preset,
+        '-tune', job.nvenc?.tune || NVENC_DEFAULTS.tune,
+        '-profile:v', job.nvenc?.profile || NVENC_DEFAULTS.profile,
+        '-rc:v', job.nvenc?.rc || NVENC_DEFAULTS.rc,
+        '-b:v', job.nvenc?.bitrate || RATE_PRESETS.high.bitrate,
+        '-maxrate', job.nvenc?.maxrate || RATE_PRESETS.high.maxrate,
+        '-bufsize', job.nvenc?.bufsize || RATE_PRESETS.high.bufsize
+      );
+    } else if (encoder === 'h264_qsv') {
+      args.push(
+        '-preset', job.qsv?.preset || QSV_DEFAULTS.preset,
+        '-profile:v', job.qsv?.profile || QSV_DEFAULTS.profile,
+        '-b:v', job.qsv?.bitrate || RATE_PRESETS.high.bitrate,
+        '-maxrate', job.qsv?.maxrate || RATE_PRESETS.high.maxrate,
+        '-bufsize', job.qsv?.bufsize || RATE_PRESETS.high.bufsize
+      );
+    } else {
+      args.push(
+        '-preset', job.qualityPreset.preset,
+        '-crf', String(job.qualityPreset.crf)
+      );
+    }
+
+    if (job.targetFps) {
+      args.push('-r', String(job.targetFps));
+    }
+
+    if (job.gopSize) {
+      args.push('-g', String(job.gopSize));
+    }
+
     args.push(
-      '-c:v', 'libx264',
-      '-preset', job.qualityPreset.preset,
-      '-crf', String(job.qualityPreset.crf),
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
       job.outputPath
@@ -931,6 +1010,16 @@ class VideoMashupGenerator {
       clipExtraction = {},
       contentType = 'general',
       theme,
+      encoder,
+      nvencPreset,
+      nvencTune,
+      nvencProfile,
+      nvencRc,
+      nvencBitrate,
+      nvencMaxrate,
+      nvencBufsize,
+      targetFps,
+      gopSize,
     } = config;
 
     if (!mainVideoPath || !fs.existsSync(mainVideoPath)) {
@@ -968,6 +1057,37 @@ class VideoMashupGenerator {
     }
 
     const qualityPreset = this.resolveQualityPreset(quality, aspectRatio);
+    const envEncoder = String(process.env.VIDEO_MASHUP_ENCODER || '').trim().toLowerCase();
+    const requestedEncoder = String(encoder || envEncoder || 'auto').trim().toLowerCase();
+    const hardware = await this.detectHardwareEncoders();
+    const resolvedEncoder = (() => {
+      if (['libx264', 'cpu'].includes(requestedEncoder)) return 'libx264';
+      if (['qsv', 'h264_qsv', 'intel'].includes(requestedEncoder)) return hardware.qsv ? 'h264_qsv' : 'libx264';
+      if (['nvenc', 'h264_nvenc', 'nvidia'].includes(requestedEncoder)) return hardware.nvenc ? 'h264_nvenc' : 'libx264';
+      if (requestedEncoder === 'auto' || !requestedEncoder) {
+        if (hardware.qsv) return 'h264_qsv';
+        if (hardware.nvenc) return 'h264_nvenc';
+        return 'libx264';
+      }
+      return 'libx264';
+    })();
+    const rateDefaults = RATE_PRESETS[qualityPreset.quality] || RATE_PRESETS.high;
+    const resolvedNvenc = {
+      preset: nvencPreset || NVENC_DEFAULTS.preset,
+      tune: nvencTune || NVENC_DEFAULTS.tune,
+      profile: nvencProfile || NVENC_DEFAULTS.profile,
+      rc: nvencRc || NVENC_DEFAULTS.rc,
+      bitrate: nvencBitrate || rateDefaults.bitrate,
+      maxrate: nvencMaxrate || rateDefaults.maxrate,
+      bufsize: nvencBufsize || rateDefaults.bufsize,
+    };
+    const resolvedQsv = {
+      preset: nvencPreset || QSV_DEFAULTS.preset,
+      profile: nvencProfile || QSV_DEFAULTS.profile,
+      bitrate: nvencBitrate || rateDefaults.bitrate,
+      maxrate: nvencMaxrate || rateDefaults.maxrate,
+      bufsize: nvencBufsize || rateDefaults.bufsize,
+    };
     const mainInfo = await this.getMediaInfo(mainVideoPath);
     const subInfo = await this.getMediaInfo(subVideoPath);
     const otherVideoPaths = ensureArray(additionalVideoPaths).filter((videoPath) => fs.existsSync(videoPath));
@@ -1081,6 +1201,11 @@ class VideoMashupGenerator {
       highlightDetection: highlightResult,
       subtitle: subtitleResult,
       clipExtraction,
+      encoder: resolvedEncoder,
+      nvenc: resolvedNvenc,
+      qsv: resolvedQsv,
+      targetFps: Number(targetFps) || null,
+      gopSize: Number(gopSize) || null,
       pipeline: {
         template: template.name,
         clipExtractionEnabled: Boolean(clipExtraction?.enabled),
@@ -1090,15 +1215,40 @@ class VideoMashupGenerator {
         hasMemeOverlay: Boolean(memeOverlayPath && fs.existsSync(memeOverlayPath)),
         hasWatermark,
         audioSource,
+        encoder: resolvedEncoder,
+        encoderRequested: requestedEncoder || 'auto',
+        nvencAvailable: hardware.nvenc,
+        qsvAvailable: hardware.qsv,
       },
     };
   }
 
   async renderFactoryJob(job) {
-    const renderPlan = this.buildRenderArgs(job);
-    await execFileAsync(this.ffmpegPath, renderPlan.args, {
-      maxBuffer: 20 * 1024 * 1024,
-    });
+    let renderPlan = this.buildRenderArgs(job);
+    try {
+      await execFileAsync(this.ffmpegPath, renderPlan.args, {
+        maxBuffer: 20 * 1024 * 1024,
+      });
+    } catch (error) {
+      const stderr = String(error?.stderr || error?.message || '');
+      const hardwareFailed = (job.encoder === 'h264_nvenc' || job.encoder === 'h264_qsv')
+        && /nvcuda\.dll|error while opening encoder|h264_nvenc|h264_qsv|qsv|mfx|no device|device failed/i.test(stderr);
+
+      if (!hardwareFailed) {
+        throw error;
+      }
+
+      // Fallback to CPU encode when hardware encoder is not available.
+      if (this.hardwareEncoders) {
+        if (job.encoder === 'h264_nvenc') this.hardwareEncoders.nvenc = false;
+        if (job.encoder === 'h264_qsv') this.hardwareEncoders.qsv = false;
+      }
+      const fallbackJob = { ...job, encoder: 'libx264' };
+      renderPlan = this.buildRenderArgs(fallbackJob);
+      await execFileAsync(this.ffmpegPath, renderPlan.args, {
+        maxBuffer: 20 * 1024 * 1024,
+      });
+    }
 
     if (!fs.existsSync(job.outputPath)) {
       throw new Error('Output video was not created');

@@ -9,6 +9,11 @@ import mongoose from 'mongoose';
  * 3. production queue / publish hand-off status
  */
 const TrendVideoSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   platform: {
     type: String,
     enum: ['youtube', 'facebook', 'dailyhaha', 'douyin', 'playboard', 'other'],
@@ -148,7 +153,7 @@ const TrendVideoSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-TrendVideoSchema.index({ platform: 1, videoId: 1 }, { unique: true });
+TrendVideoSchema.index({ userId: 1, platform: 1, videoId: 1 }, { unique: true, sparse: true });
 TrendVideoSchema.index({ topic: 1, downloadStatus: 1, discoveredAt: -1 });
 TrendVideoSchema.index({ 'driveSync.status': 1, 'production.queueStatus': 1, discoveredAt: -1 });
 TrendVideoSchema.index({ 'transcript.fetchedAt': 1 }, { sparse: true });

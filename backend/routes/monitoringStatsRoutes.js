@@ -1,11 +1,13 @@
 import express from 'express';
 import * as monitoringController from '../controllers/monitoringStatsController.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { requireRole } from '../middleware/permissions.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+router.use(requireRole('admin'));
 
 // Current and historical stats
 router.get('/current', monitoringController.getCurrentStats);

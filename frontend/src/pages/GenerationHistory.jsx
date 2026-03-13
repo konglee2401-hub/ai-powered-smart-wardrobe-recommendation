@@ -531,6 +531,12 @@ export default function GenerationHistory() {
   }
 
   async function handleResumeSession(sessionId, flowType) {
+    if (flowType === 'image-generation') {
+      const query = new URLSearchParams({ resumeSessionId: sessionId, flowType }).toString();
+      window.location.assign('/?' + query);
+      return;
+    }
+
     setResumingId(sessionId);
     try {
       const result = await resumeSession(sessionId, flowType);

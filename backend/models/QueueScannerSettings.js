@@ -7,10 +7,14 @@ import mongoose from 'mongoose';
  * machine value and the operator-facing summary.
  */
 const queueScannerSettingsSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true
+  },
   key: {
     type: String,
     default: 'default',
-    unique: true,
     index: true
   },
   enabled: {
@@ -126,6 +130,8 @@ const queueScannerSettingsSchema = new mongoose.Schema({
     default: 'public'
   }
 }, { timestamps: true });
+
+queueScannerSettingsSchema.index({ userId: 1, key: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('QueueScannerSettings', queueScannerSettingsSchema);
 

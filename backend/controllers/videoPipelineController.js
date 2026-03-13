@@ -12,24 +12,29 @@ const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
+const buildUserContext = (req) => ({
+  userId: req.user?._id?.toString?.() || req.user?.id || null,
+  isAdmin: req.user?.role === 'admin'
+});
+
 class VideoPipelineController {
-  static getDashboard = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.getDashboard();
+  static getDashboard = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getDashboard(buildUserContext(req));
     res.json(result);
   });
 
-  static listTemplates = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.listFactoryTemplates();
+  static listTemplates = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.listFactoryTemplates(buildUserContext(req));
     res.json(result);
   });
 
-  static listSources = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.listSources();
+  static listSources = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.listSources(buildUserContext(req));
     res.json(result);
   });
 
   static createSource = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.createSource(req.body || {});
+    const result = await videoPipelineService.createSource(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -37,7 +42,7 @@ class VideoPipelineController {
   });
 
   static updateSource = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.updateSource(req.params.sourceId, req.body || {});
+    const result = await videoPipelineService.updateSource(req.params.sourceId, req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -45,7 +50,7 @@ class VideoPipelineController {
   });
 
   static deleteSource = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.deleteSource(req.params.sourceId);
+    const result = await videoPipelineService.deleteSource(req.params.sourceId, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -53,17 +58,17 @@ class VideoPipelineController {
   });
 
   static listChannels = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.listChannels(req.query || {});
+    const result = await videoPipelineService.listChannels(req.query || {}, buildUserContext(req));
     res.json(result);
   });
 
   static listVideos = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.listSourceVideos(req.query || {});
+    const result = await videoPipelineService.listSourceVideos(req.query || {}, buildUserContext(req));
     res.json(result);
   });
 
   static queueVideos = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.queueSourceVideos(req.body || {});
+    const result = await videoPipelineService.queueSourceVideos(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -71,7 +76,7 @@ class VideoPipelineController {
   });
 
   static queueVideosToFolder = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.queueSourceVideosToFolder(req.body || {});
+    const result = await videoPipelineService.queueSourceVideosToFolder(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -79,12 +84,12 @@ class VideoPipelineController {
   });
 
   static uploadVideo = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.uploadSourceVideo(req.params.videoId);
+    const result = await videoPipelineService.uploadSourceVideo(req.params.videoId, buildUserContext(req));
     res.json(result);
   });
 
   static deleteVideo = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.deleteSourceVideo(req.params.videoId);
+    const result = await videoPipelineService.deleteSourceVideo(req.params.videoId, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -96,7 +101,7 @@ class VideoPipelineController {
    * gallery asset so production can reuse the same media later.
    */
   static uploadOperatorVideo = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.uploadOperatorVideo(req.file, req.body || {});
+    const result = await videoPipelineService.uploadOperatorVideo(req.file, req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -104,12 +109,12 @@ class VideoPipelineController {
   });
 
   static uploadPendingVideos = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.uploadPendingSourceVideos(req.body?.limit || req.query?.limit || 30);
+    const result = await videoPipelineService.uploadPendingSourceVideos(req.body?.limit || req.query?.limit || 30, buildUserContext(req));
     res.json(result);
   });
 
   static triggerPendingDownloads = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.triggerPendingDownloads(req.body?.limit || req.query?.limit || 200);
+    const result = await videoPipelineService.triggerPendingDownloads(req.body?.limit || req.query?.limit || 200, buildUserContext(req));
     if (!result.success) {
       return res.status(502).json(result);
     }
@@ -117,22 +122,22 @@ class VideoPipelineController {
   });
 
   static listJobs = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.listJobs(req.query || {});
+    const result = await videoPipelineService.listJobs(req.query || {}, buildUserContext(req));
     res.json(result);
   });
 
   static getProductionOverview = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getProductionOverview(req.query || {});
+    const result = await videoPipelineService.getProductionOverview(req.query || {}, buildUserContext(req));
     res.json(result);
   });
 
   static getProductionHistory = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getProductionHistory(req.query || {});
+    const result = await videoPipelineService.getProductionHistory(req.query || {}, buildUserContext(req));
     res.json(result);
   });
 
   static getProductionHistoryItem = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getProductionHistoryItem(req.params.queueId);
+    const result = await videoPipelineService.getProductionHistoryItem(req.params.queueId, buildUserContext(req));
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -140,7 +145,7 @@ class VideoPipelineController {
   });
 
   static deleteProductionHistoryItem = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.deleteProductionHistoryItem(req.params.queueId);
+    const result = await videoPipelineService.deleteProductionHistoryItem(req.params.queueId, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -148,7 +153,23 @@ class VideoPipelineController {
   });
 
   static remashupJob = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.remashupJob(req.params.queueId, req.body || {});
+    const userId = req.user?._id?.toString?.() || req.user?.id || 'unknown';
+    const role = req.user?.role || 'unknown';
+    const payload = req.body || {};
+    console.log('[video-pipeline] remashup request', {
+      queueId: req.params.queueId,
+      userId,
+      role,
+      templateStrategy: payload.templateStrategy,
+      templateName: payload.templateName,
+      manualSubVideo: payload.manualSubVideo?.assetId || payload.manualSubVideo?.id || null,
+      subtitleMode: payload.subtitleMode,
+      capcutAutoCaption: payload.capcutAutoCaption,
+      watermarkEnabled: payload.watermarkEnabled,
+      voiceoverEnabled: payload.voiceoverEnabled,
+      startImmediately: payload.startImmediately,
+    });
+    const result = await videoPipelineService.remashupJob(req.params.queueId, req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -156,7 +177,7 @@ class VideoPipelineController {
   });
 
   static runMassProduction = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.runMassProduction(req.body || {});
+    const result = await videoPipelineService.runMassProduction(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -164,20 +185,27 @@ class VideoPipelineController {
   });
 
   static getQueueRuntime = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getQueueRuntime(req.query?.timeoutMinutes || 30);
+    const result = await videoPipelineService.getQueueRuntime(req.query?.timeoutMinutes || 30, buildUserContext(req));
     res.json(result);
   });
 
   static retryFailedJobs = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.retryFailedJobs(req.body?.maxRetries || req.query?.maxRetries || 3);
+    const result = await videoPipelineService.retryFailedJobs(req.body?.maxRetries || req.query?.maxRetries || 3, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
     res.json(result);
   });
 
+  static forceRetryJob = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.forceRetryJob(req.params.queueId, req.body || {}, buildUserContext(req));
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
   static releaseStaleJobs = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.releaseStaleJobs(req.body?.timeoutMinutes || req.query?.timeoutMinutes || 30);
+    const result = await videoPipelineService.releaseStaleJobs(req.body?.timeoutMinutes || req.query?.timeoutMinutes || 30, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -185,7 +213,7 @@ class VideoPipelineController {
   });
 
   static clearQueueJobs = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.clearQueueJobs(req.body || req.query || {});
+    const result = await videoPipelineService.clearQueueJobs(req.body || req.query || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -193,7 +221,7 @@ class VideoPipelineController {
   });
 
   static getJobLogs = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getJobLogs(req.params.queueId);
+    const result = await videoPipelineService.getJobLogs(req.params.queueId, buildUserContext(req));
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -205,7 +233,7 @@ class VideoPipelineController {
    * begin immediately without waiting for the scheduler loop.
    */
   static startJob = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.startJob(req.params.queueId);
+    const result = await videoPipelineService.startJob(req.params.queueId, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -213,7 +241,7 @@ class VideoPipelineController {
   });
 
   static publishJob = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.publishJob(req.params.queueId, req.body || {});
+    const result = await videoPipelineService.publishJob(req.params.queueId, req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -221,17 +249,17 @@ class VideoPipelineController {
   });
 
   static triggerPublishSchedulerNow = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.triggerPublishSchedulerNow();
+    const result = await videoPipelineService.triggerPublishSchedulerNow(buildUserContext(req));
     res.json(result);
   });
 
-  static getConnections = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.getConnections();
+  static getConnections = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getConnections(buildUserContext(req));
     res.json(result);
   });
 
   static addConnection = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.addConnection(req.body || {});
+    const result = await videoPipelineService.addConnection(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -239,7 +267,7 @@ class VideoPipelineController {
   });
 
   static verifyConnection = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.verifyConnection(req.params.accountId);
+    const result = await videoPipelineService.verifyConnection(req.params.accountId, buildUserContext(req));
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -247,7 +275,7 @@ class VideoPipelineController {
   });
 
   static deleteConnection = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.deleteConnection(req.params.accountId);
+    const result = await videoPipelineService.deleteConnection(req.params.accountId, buildUserContext(req));
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -255,25 +283,25 @@ class VideoPipelineController {
   });
 
   static analyzePublicSubVideoDriveFolder = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.analyzePublicSubVideoDriveFolder(req.body || req.query || {});
+    const result = await videoPipelineService.analyzePublicSubVideoDriveFolder(req.body || req.query || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }
     res.json(result);
   });
 
-  static getSettings = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.getSettings();
+  static getSettings = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getSettings(buildUserContext(req));
     res.json(result);
   });
 
-  static getSchedulerRuntimeStatus = asyncHandler(async (_req, res) => {
-    const result = await videoPipelineService.getSchedulerRuntimeStatus();
+  static getSchedulerRuntimeStatus = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.getSchedulerRuntimeStatus(buildUserContext(req));
     res.json(result);
   });
 
   static saveSettings = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.saveSettings(req.body || {});
+    const result = await videoPipelineService.saveSettings(req.body || {}, buildUserContext(req));
     res.json(result);
   });
 
@@ -281,7 +309,7 @@ class VideoPipelineController {
    * Get all available publishing accounts (YouTube OAuth + legacy MultiAccountService)
    */
   static getPublishAccounts = asyncHandler(async (req, res) => {
-    const result = await videoPipelineService.getPublishAccounts();
+    const result = await videoPipelineService.getPublishAccounts(buildUserContext(req));
     res.json(result);
   });
 
@@ -291,7 +319,8 @@ class VideoPipelineController {
   static publishToYoutubeAccounts = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.publishToYoutubeAccounts(
       req.params.queueId,
-      req.body || {}
+      req.body || {},
+      buildUserContext(req)
     );
     if (!result.success) {
       return res.status(400).json(result);
@@ -305,7 +334,7 @@ class VideoPipelineController {
    */
   static getVideoTranscript = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
-    const result = await videoPipelineService.getVideoTranscript(videoId);
+    const result = await videoPipelineService.getVideoTranscript(videoId, buildUserContext(req));
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -314,4 +343,5 @@ class VideoPipelineController {
 }
 
 export default VideoPipelineController;
+
 

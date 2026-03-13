@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import PageHeaderBar from '../components/PageHeaderBar';
 import ModalPortal from '../components/ModalPortal';
+import { getAuthHeaders } from '../services/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -179,7 +180,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/generate-lock-prompt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ mode, styleDirection, improvementNotes })
       });
       const data = await response.json();
@@ -202,7 +203,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/generate-lock-images`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           imageCount,
           aspectRatio,
@@ -235,7 +236,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
       }
       const response = await fetch(`${API_BASE_URL}/prompt-options/${scene.category}/${scene.value}/prompt-assets`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           promptSuggestion,
           sceneLockedPrompt,
@@ -259,7 +260,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/select-lock-image`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ imageUrl, aspectRatio })
       });
       const data = await response.json();
@@ -276,7 +277,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/locked-images`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ imageUrl })
       });
       const data = await response.json();
@@ -624,7 +625,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
 
       {/* Image Modal */}
       {modalImageUrl && (
-        <div
+        <ModalPortal>
+          <div
           onClick={() => setModalImageUrl(null)}
           className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/80 p-4"
         >
@@ -637,7 +639,8 @@ function SceneDetailEditor({ scene, onRefresh }) {
             </button>
             <img src={modalImageUrl} alt={t('optionsManagement.previewFullscreen', 'Preview fullscreen')} className="max-w-full max-h-[90vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
           </div>
-        </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -656,7 +659,11 @@ export default function OptionsManagement() {
   const loadScenes = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`);
+      const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
       const data = await response.json();
       if (!data.success) throw new Error(data.message || t('optionsManagement.loadScenesFailed', 'Failed to load scenes'));
       const loadedScenes = data.data || [];
@@ -761,5 +768,8 @@ export default function OptionsManagement() {
     </div>
   );
 }
+
+
+
 
 

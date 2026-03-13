@@ -4,8 +4,17 @@ import PromptTemplate from '../models/PromptTemplate.js';
 import PromptOption from '../models/PromptOption.js';
 import { scanHardcodedPrompts } from '../utils/hardcodedPromptScanner.js';
 import { renderAssignedPromptTemplate, resolvePromptTemplate } from '../services/promptTemplateResolver.js';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
+router.use(requireMenuAccess('prompt-templates'));
 
 function parseBoolean(value, defaultValue = undefined) {
   if (value === undefined || value === null || value === '') return defaultValue;

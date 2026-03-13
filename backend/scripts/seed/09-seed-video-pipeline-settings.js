@@ -29,6 +29,7 @@ const SEEDED_COMPOSER_DEFAULTS = {
   clipExtractionEnabled: true,
   clipSegmentDuration: 20,
   clipMaxClips: 24,
+  encoder: 'auto',
 };
 
 const SEEDED_TEMPLATE_BROWSER_PREFERENCES = {

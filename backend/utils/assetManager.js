@@ -72,7 +72,7 @@ class AssetManager {
       fileSize,
       assetType,
       assetCategory,
-      userId = 'anonymous',
+      userId = null,
       sessionId,
       storage,
       cloudStorage,  // 💫 NEW
@@ -182,7 +182,7 @@ class AssetManager {
         fileSize,
         assetType,
         assetCategory,
-        userId,
+        userId: userId || 'anonymous',
         sessionId,
         storage,
         // 💫 NEW: Include hybrid storage fields
@@ -296,7 +296,7 @@ class AssetManager {
    */
   static async getAssetByFilename(filename, userId = 'anonymous') {
     try {
-      return await Asset.findOne({ filename, userId });
+      return await Asset.findOne({ filename, userId: userId || 'anonymous' });
     } catch (error) {
       console.error(`❌ Error getting asset: ${error.message}`);
       throw error;

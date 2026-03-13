@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Step 3 Enhanced - Style & Prompt (Merged)
  * Clean, straightforward layout with 3 functional sections
  */
@@ -16,6 +16,7 @@ import {
 } from '../utils/advancedPromptEngineering';
 import PromptLayeringDialog from './PromptLayeringDialog';
 import { generateAdvancedPrompt } from '../utils/advancedPromptBuilder';
+import ModalPortal from './ModalPortal';
 
 const getStep3SmartDefaults = (useCase, scene = 'studio') => {
   switch (useCase) {
@@ -122,9 +123,9 @@ const Step3EnhancedWithSessionComponent = ({
             productImageId: productImage?.id
           });
           if (result) {
-            console.log('âœ… Session synced to backend');
+            console.log('✅ Session synced to backend');
           } else {
-            console.log('ðŸ“± Working offline - session saved locally only');
+            console.log('📱 Working offline - session saved locally only');
           }
         }
       } catch (error) {
@@ -177,7 +178,7 @@ const Step3EnhancedWithSessionComponent = ({
       let optionsToUse = { ...selectedOptions };
       
       if (Object.keys(optionsToUse).length === 0) {
-        console.log('âš ï¸ No selected options, building defaults from analysis...');
+        console.log('⚠️ No selected options, building defaults from analysis...');
         
         // Try to extract recommendations from analysis
         if (analysis?.recommendations) {
@@ -196,24 +197,24 @@ const Step3EnhancedWithSessionComponent = ({
             optionsToUse[key] = rawChoice;
           });
           
-          console.log('âœ… Extracted defaults from analysis:', optionsToUse);
+          console.log('✅ Extracted defaults from analysis:', optionsToUse);
         }
         
         // If still empty after analysis, use sensible defaults
         if (Object.keys(optionsToUse).length === 0) {
-          console.log('âš ï¸ No analysis recommendations, using sensible defaults...');
+          console.log('⚠️ No analysis recommendations, using sensible defaults...');
           optionsToUse = getStep3SmartDefaults(useCase, selectedOptions?.scene || 'studio');
         }
       }
 
       try {
-        console.log('ðŸ“ Generating prompt with options:', optionsToUse);
-        console.log('ðŸ“ Character description:', characterDescription);
+        console.log('📝 Generating prompt with options:', optionsToUse);
+        console.log('📝 Character description:', characterDescription);
         
         // Extract product information from analysis
         const productDesc = getProductDescription();
         const productName = getProductName();
-        console.log('ðŸ·ï¸ Product info - Name:', productName, 'Description:', productDesc);
+        console.log('🏷️ Product info - Name:', productName, 'Description:', productDesc);
         
         let finalPositive = '';
         let finalNegative = '';
@@ -264,8 +265,8 @@ ${finalPositive}`;
 
         setPromptLayering(layering);
         
-        // âœ… Send back to parent component
-        console.log('ðŸ“¤ Sending prompt to parent via onPromptChange');
+        // ✅ Send back to parent component
+        console.log('📤 Sending prompt to parent via onPromptChange');
         onPromptChange({
           positive: finalPositive,
           negative: finalNegative
@@ -475,43 +476,48 @@ ${finalPositive}`;
       />
 
       {showOptimizerModal && (
-        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60">
-          <div className="apple-surface-panel w-full max-w-sm rounded-[1.75rem] p-5 mx-4">
-            <h3 className="text-lg font-bold text-white mb-4">Optimize Prompt</h3>
+        <ModalPortal>
+          <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/60">
+            <div className="apple-surface-panel w-full max-w-sm rounded-[1.75rem] p-5 mx-4">
+              <h3 className="text-lg font-bold text-white mb-4">Optimize Prompt</h3>
 
-            {!optimizedPrompt ? (
-              <button
-                onClick={handleOptimizePrompt}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2.5 rounded-lg text-sm font-semibold transition"
-              >
-                Run Optimization
-              </button>
-            ) : (
-              <>
-                <div className="mb-4 rounded-[1.25rem] bg-white/[0.04] p-4">
-                  <p className="text-sm text-gray-400 mb-2 font-semibold">Result</p>
-                  <p className="text-sm text-white mb-2 max-h-24 overflow-y-auto">{optimizedPrompt}</p>
-                  <p className="text-sm text-green-400">
-                    âœ“ Reduced by {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
-                  </p>
-                </div>
+              {!optimizedPrompt ? (
+                <button
+                  onClick={handleOptimizePrompt}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2.5 rounded-lg text-sm font-semibold transition"
+                >
+                  Run Optimization
+                </button>
+              ) : (
+                <>
+                  <div className="mb-4 rounded-[1.25rem] bg-white/[0.04] p-4">
+                    <p className="text-sm text-gray-400 mb-2 font-semibold">Result</p>
+                    <p className="text-sm text-white mb-2 max-h-24 overflow-y-auto">{optimizedPrompt}</p>
+                    <p className="text-sm text-green-400">
+                      ✓ Reduced by {Math.round((1 - optimizedPrompt.length / (promptLayering?.mainPrompt.length || 1)) * 100)}%
+                    </p>
+                  </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowOptimizerModal(false)}
-                    className="flex-1 px-3 py-2 text-gray-400 hover:text-white text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleApplyOptimized}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </>
-            )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowOptimizerModal(false)}
+                      className="flex-1 px-3 py-2 text-gray-400 hover:text-white text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleApplyOptimized}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold transition"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </ModalPortal>
+      )}
           </div>
         </div>
       )}
@@ -520,5 +526,6 @@ ${finalPositive}`;
 };
 
 export default forwardRef(Step3EnhancedWithSessionComponent);
+
 
 

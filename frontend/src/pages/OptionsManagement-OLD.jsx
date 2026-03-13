@@ -4,6 +4,7 @@ import {
   Lock, RefreshCw, Wand2, Sparkles, Image, Save, Check,
   Settings, Loader2, AlertCircle, ImagePlus, Layers, ChevronRight, ChevronLeft, X, Trash2
 } from 'lucide-react';
+import { getAuthHeaders } from '../services/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -207,7 +208,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/generate-lock-prompt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ mode, styleDirection, improvementNotes })
       });
       const data = await response.json();
@@ -230,7 +231,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/generate-lock-images`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           imageCount,
           aspectRatio,
@@ -264,7 +265,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
 
       const response = await fetch(`${API_BASE_URL}/prompt-options/${scene.category}/${scene.value}/prompt-assets`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           promptSuggestion,
           sceneLockedPrompt,
@@ -289,7 +290,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/select-lock-image`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ imageUrl, aspectRatio })
       });
       const data = await response.json();
@@ -306,7 +307,7 @@ function SceneDetailEditor({ scene, onRefresh }) {
     try {
       const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/${scene.value}/locked-images`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ imageUrl })
       });
       const data = await response.json();
@@ -885,7 +886,11 @@ export default function OptionsManagement() {
   const loadScenes = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`);
+      const response = await fetch(`${API_BASE_URL}/prompt-options/scenes/lock-manager`, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
       const data = await response.json();
       if (!data.success) throw new Error(data.message || 'Failed to load scenes');
       const loadedScenes = data.data || [];

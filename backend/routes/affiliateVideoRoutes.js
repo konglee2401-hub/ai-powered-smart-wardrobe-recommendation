@@ -3,6 +3,9 @@
  */
 
 import express from 'express';
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 import {
   createAffiliateProject,
   addProductsToBatch,
@@ -29,6 +32,10 @@ import {
 } from '../controllers/affiliateVideoController.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('video-pipeline'));
+router.use(requireApiAccess('video-pipeline'));
 
 // Project Management
 router.post('/projects', createAffiliateProject);

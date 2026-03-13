@@ -238,19 +238,14 @@ class CapCutAICaptionService extends BrowserService {
     await this._configureExportSettings({ resolution, fps });
 
     logStep('export-start', 'Starting export...');
+    const downloadStartedAt = Date.now();
     await this._startExport();
 
     logStep('export-wait', 'Waiting for export to complete...');
     await this._waitForExportReady(timeoutMs);
 
-    logStep('download', 'Downloading exported video...');
-    const downloadStartedAt = Date.now();
-    const downloadClicked = await this._clickDownloadExportedVideo();
-    if (!downloadClicked) {
-      throw new Error('Could not find Download button for exported video.');
-    }
-
-    const downloadedPath = await this._waitForNewFile(outputDirVideo, downloadStartedAt, timeoutMs, [
+    logStep('download', 'Waiting for auto download...');
+    let downloadedPath = await this._waitForNewFile(outputDirVideo, downloadStartedAt, timeoutMs, [
       '.mp4',
       '.mov',
       '.m4v',
@@ -258,7 +253,21 @@ class CapCutAICaptionService extends BrowserService {
       '.mkv',
     ]);
     if (!downloadedPath) {
-      throw new Error('Video download timed out.');
+      logStep('download-fallback', 'Auto download not detected. Clicking Download button...');
+      const downloadClicked = await this._clickDownloadExportedVideo();
+      if (!downloadClicked) {
+        throw new Error('Could not find Download button for exported video.');
+      }
+      downloadedPath = await this._waitForNewFile(outputDirVideo, Date.now(), timeoutMs, [
+        '.mp4',
+        '.mov',
+        '.m4v',
+        '.webm',
+        '.mkv',
+      ]);
+      if (!downloadedPath) {
+        throw new Error('Video download timed out.');
+      }
     }
 
     await this.saveSession({ reason: 'captioned-video', videoPath });
@@ -371,6 +380,16 @@ class CapCutAICaptionService extends BrowserService {
       await this.page.waitForTimeout(2000);
     }
 
+    const snapshot = await this.page.evaluate(() => ({
+      url: location.href,
+      hasTimeline: !!document.querySelector('[class*="timeline"], [data-testid*="timeline"]'),
+      hasProgress: !!document.querySelector('.ai-task-modal-generating-j13Asw, .ai-task-modal-hJtn9D, [class*="ai-task-modal"]'),
+      hasUploadArea: !!document.querySelector('.upload-area-wrapper-DpF4j3'),
+      hasEditUrl: location.pathname.includes('/magic-tools/ai-captions/edit/'),
+      bodySample: (document.body?.innerText || '').slice(0, 300),
+    }));
+    this._logStep('processing-timeout', `Processing timeout. url=${snapshot.url}`);
+    console.warn('[CapCut] Processing timeout snapshot:', snapshot);
     throw new Error('Upload processing timed out.');
   }
 
@@ -409,6 +428,16 @@ class CapCutAICaptionService extends BrowserService {
       if (isEdit) return true;
       await this.page.waitForTimeout(1000);
     }
+    const snapshot = await this.page.evaluate(() => ({
+      url: location.href,
+      urlOk: location.pathname.includes('/magic-tools/ai-captions/edit/'),
+      hasSubtitleTab: Array.from(document.querySelectorAll('.lv-tabs-header-title-text'))
+        .some((el) => (el.textContent || '').trim().toLowerCase() === 'subtitles'),
+      hasSubtitlePanel: !!document.querySelector('.subtitlesPanel-PRxhhb, [class*="subtitlesPanel"]'),
+      bodySample: (document.body?.innerText || '').slice(0, 300),
+    }));
+    this._logStep('edit-timeout', `Edit page not detected. url=${snapshot.url}`);
+    console.warn('[CapCut] Edit detect timeout snapshot:', snapshot);
     throw new Error('Edit page not detected.');
   }
 
@@ -442,6 +471,21 @@ class CapCutAICaptionService extends BrowserService {
 
       await this.page.waitForTimeout(1000);
     }
+    const snapshot = await this.page.evaluate(() => {
+      const totalTime = document.querySelector('.player-total-time-qH39jA, [class*="player-total-time"]');
+      const currentTime = document.querySelector('.player-current-time-LYBjmc, [class*="player-current-time"]');
+      return {
+        url: location.href,
+        hasPreview: !!document.querySelector('.previewWrapper-UBq_tm, [class*="previewWrapper"]'),
+        hasPlay: !!document.querySelector('.playerButton-o8RC3o, [class*="playerButton"]'),
+        totalText: (totalTime?.textContent || '').replace(/\s+/g, ''),
+        currentText: (currentTime?.textContent || '').replace(/\s+/g, ''),
+        hasCanvas: !!document.querySelector('#video-editor-canvas'),
+        bodySample: (document.body?.innerText || '').slice(0, 300),
+      };
+    });
+    this._logStep('preview-timeout', `Preview did not finish loading. url=${snapshot.url}`);
+    console.warn('[CapCut] Preview timeout snapshot:', snapshot);
     throw new Error('Preview did not finish loading in time.');
   }
 
@@ -534,8 +578,23 @@ class CapCutAICaptionService extends BrowserService {
 
   async _startExport() {
     this._logStep('export-confirm', 'Confirming export...');
+    const primary = await this.page.$('#export-confirm-button');
+    if (primary) {
+      await this.page.evaluate((el) => {
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+      }, primary);
+      const enabled = await this.page.evaluate((el) => !el.disabled && el.getAttribute('aria-disabled') !== 'true', primary);
+      if (enabled) {
+        await this.page.evaluate((el) => {
+          el.click();
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        }, primary);
+        return;
+      }
+    }
+
     const clicked = await this._clickBySelectorOrText(
-      ['#export-confirm-button', '.material-export-modal-footer-fG_c5x button', '.material-export-modal-content-HnAboT button'],
+      ['.material-export-modal-footer-fG_c5x button', '.material-export-modal-content-HnAboT button', 'button'],
       ['Export']
     );
     if (!clicked) {
@@ -561,10 +620,21 @@ class CapCutAICaptionService extends BrowserService {
   }
 
   async _clickDownloadExportedVideo() {
-    return this._clickBySelectorOrText(
-      ['.downloadBtn-duTN5c', '.downloadButton', '.downloadContainer button', 'button'],
+    const clicked = await this._clickBySelectorOrText(
+      ['.downloadBtn-duTN5c', '.downloadButton', '.downloadContainer button'],
       ['Download']
     );
+    if (clicked) return true;
+
+    const anchorClicked = await this.page.evaluate(() => {
+      const anchor = document.querySelector('.shadowAnchor-H_6edX, .downloadContainer a[download]');
+      if (anchor) {
+        anchor.click();
+        return true;
+      }
+      return false;
+    });
+    return Boolean(anchorClicked);
   }
 
   async _selectLanguage(language) {

@@ -6,11 +6,37 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    status: { type: String, enum: ['active', 'disabled'], default: 'active' },
+    authProviders: {
+      google: {
+        id: String,
+        email: String,
+        name: String,
+        picture: String,
+      },
+    },
+    permissions: {
+      menu: { type: [String], default: [] },
+      api: { type: [String], default: [] },
+      queue: { type: [String], default: [] },
+      job: { type: [String], default: [] },
+    },
+    access: {
+      aiProviders: { type: [String], default: [] },
+      browserAutomations: { type: [String], default: [] },
+    },
+    settings: {
+      generation: { type: mongoose.Schema.Types.Mixed, default: {} },
+      videoPipeline: { type: mongoose.Schema.Types.Mixed, default: {} },
+      scheduler: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
     preferences: {
       favoriteColors: [String],
       favoriteStyles: [String],
       bodyType: String,
     },
+    lastLoginAt: Date,
   },
   { timestamps: true }
 );

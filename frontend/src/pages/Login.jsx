@@ -1,199 +1,186 @@
-﻿/**
- * Login Page
- * User authentication
+/**
+ * Login Page - Glass / Apple style
  */
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import axios from 'axios';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import useAuthStore from '../stores/useAuthStore';
 import LogoKG from '../assets/Logo-KG.png';
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export default function Login() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const location = useLocation();
+  const { login, googleLogin } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
   const [error, setError] = useState('');
+  const googleButtonRef = useRef(null);
+
+  const nextUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('next') || '/dashboard';
+  }, [location.search]);
 
   useEffect(() => {
-    const testEmail = 'test@example.com';
-    const testPassword = 'password123';
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setEmail(testEmail);
-      setPassword(testPassword);
-
-      const autoLogin = async () => {
-        try {
-          // 1. Attempt initial login
-          const loginResponse = await axios.post('/api/auth/login', { email: testEmail, password: testPassword });
-          if (loginResponse.data.success) {
-            localStorage.setItem('token', loginResponse.data.data.token);
-            navigate('/dashboard');
-            return;
-          }
-        } catch (loginError) {
-          // If login failed, it might be due to incorrect password hash (e.g., manual db entry)
-          // Proceed to delete and re-register
-          console.log('Initial login failed for test user. Attempting to delete and re-register.');
-        }
-
-        try {
-          // 2. Try to delete the test user (in case of old, invalid password hash)
-          await axios.delete('/api/test/delete-test-user', { data: { email: testEmail } });
-          console.log('Test user deleted for re-registration.');
-        } catch (deleteError) {
-          if (deleteError.response && deleteError.response.status === 404) {
-            console.log('Test user not found, proceeding to register.');
-          } else {
-            console.error('Error during test user deletion:', deleteError);
-            // If deletion fails for other reasons, we might still proceed, but log it.
-          }
-        }
-
-        try {
-          // 3. Register the test user
-          await axios.post('/api/auth/register', { name: 'Test User', email: testEmail, password: testPassword });
-          console.log('Test user registered successfully.');
-
-          // 4. Attempt login again after successful registration
-          const finalLoginResponse = await axios.post('/api/auth/login', { email: testEmail, password: testPassword });
-          if (finalLoginResponse.data.success) {
-            localStorage.setItem('token', finalLoginResponse.data.data.token);
-            navigate('/dashboard');
-          } else {
-            setError(finalLoginResponse.data.message || 'Auto-login failed after re-registration.');
-          }
-        } catch (err) {
-          setError(err.response?.data?.message || 'Auto-login process failed.');
-          console.error('Auto-login process failed:', err);
-        }
-      };
-      autoLogin();
+    if (!googleClientId) return;
+    if (window.google?.accounts?.id) {
+      setGoogleReady(true);
+      return;
     }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!googleReady || !googleClientId || !googleButtonRef.current) return;
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: async (response) => {
+        setError('');
+        setLoading(true);
+        const result = await googleLogin(response.credential, rememberMe);
+        setLoading(false);
+        if (result.success) {
+          navigate(nextUrl, { replace: true });
+        } else {
+          setError(result.message || 'Google login failed');
+        }
+      },
+    });
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: 'outline',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'pill',
+      width: 320,
+    });
+  }, [googleReady, googleLogin, rememberMe, navigate, nextUrl]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      if (response.data.success) {
-        // Optionally store token or user info in local storage/context
-        localStorage.setItem('token', response.data.data.token);
-        navigate('/dashboard');
-      } else {
-        setError(response.data.message || 'Login failed.');
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
-      setError('Login failed. Please try again.');
-    } finally {
-      setLoading(false);
+    const result = await login(email, password, rememberMe);
+    setLoading(false);
+    if (result.success) {
+      navigate(nextUrl, { replace: true });
+      return;
     }
+    setError(result.message || 'Login failed. Please try again.');
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img src={LogoKG} alt="Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
-          <h1 className="text-3xl font-bold text-gray-800">{t('login.title')}</h1>
-          <p className="text-gray-600 mt-2">{t('login.subtitle')}</p>
-        </div>
+    <div className="auth-shell apple-typography">
+      <div className="auth-orb auth-orb-1" />
+      <div className="auth-orb auth-orb-2" />
+      <div className="auth-orb auth-orb-3" />
 
-        {/* Login Form */}
-        <div className="bg-white rounded-2xl shadow-lg p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg">
-                <AlertCircle className="w-5 h-5" />
-                {error}
-              </div>
-            )}
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('login.emailLabel')}
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t('login.emailPlaceholder')}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('login.passwordLabel')}
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t('login.passwordPlaceholder')}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? t('login.signingIn') : t('login.signIn')}
-            </button>
-          </form>
-
-          {/* Additional Links */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              {t('login.noAccount')}{' '}
-              <Link to="/register" className="text-purple-600 hover:text-purple-700 font-medium">
-                {t('login.signUp')}
-              </Link>
-            </p>
+      <div className="auth-card">
+        <div className="auth-brand">
+          <img src={LogoKG} alt="K-Creative Studio" className="auth-logo" />
+          <div>
+            <p className="auth-kicker">K-Creative Studio</p>
+            <h1 className="auth-title">Welcome back</h1>
+            <p className="auth-subtitle">Sign in to continue your creative flow.</p>
           </div>
         </div>
 
-        {/* Back to Home */}
-        <div className="text-center mt-6">
-          <Link to="/" className="text-gray-600 hover:text-gray-800">
-            {t('login.backToHome')}
+        <form onSubmit={handleSubmit} className="auth-form">
+          <label className="auth-field">
+            <span>Email</span>
+            <div className="auth-input">
+              <Mail className="auth-input-icon" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@studio.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+          </label>
+
+          <label className="auth-field">
+            <span>Password</span>
+            <div className="auth-input">
+              <Lock className="auth-input-icon" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="auth-input-action"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label="Toggle password"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
+
+          <div className="auth-row">
+            <label className="auth-checkbox">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Remember me</span>
+            </label>
+            <span className="auth-link muted">Forgot password?</span>
+          </div>
+
+          {error && (
+            <div className="auth-error">
+              {error}
+            </div>
+          )}
+
+          <button type="submit" className="auth-primary" disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+
+          <div className="auth-google">
+            <div ref={googleButtonRef} />
+            {!googleClientId && (
+              <p className="auth-hint">Add `VITE_GOOGLE_CLIENT_ID` to enable Google login.</p>
+            )}
+          </div>
+        </form>
+
+        <div className="auth-footer">
+          <span>New here?</span>
+          <Link to={`/register?next=${encodeURIComponent(nextUrl)}`} className="auth-link">
+            Create an account
           </Link>
         </div>
       </div>
     </div>
   );
 }
-

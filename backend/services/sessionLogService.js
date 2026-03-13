@@ -147,10 +147,20 @@ class SessionLogService {
   // Store artifacts
   async storeArtifacts(artifacts) {
     if (!this.sessionLog) return;
-    
+
+    const current = this.sessionLog.artifacts || {};
+    const mergeList = (left = [], right = []) => Array.from(new Set([
+      ...(Array.isArray(left) ? left : []),
+      ...(Array.isArray(right) ? right : []),
+    ].filter(Boolean)));
+
     this.sessionLog.artifacts = {
-      ...this.sessionLog.artifacts,
-      ...artifacts
+      ...current,
+      ...artifacts,
+      sourceVideoPaths: mergeList(current.sourceVideoPaths, artifacts?.sourceVideoPaths),
+      generatedImagePaths: mergeList(current.generatedImagePaths, artifacts?.generatedImagePaths),
+      videoSegmentPaths: mergeList(current.videoSegmentPaths, artifacts?.videoSegmentPaths),
+      audioPaths: mergeList(current.audioPaths, artifacts?.audioPaths),
     };
     await this.sessionLog.save();
   }
@@ -226,5 +236,6 @@ class SessionLogService {
 }
 
 export default SessionLogService;
+
 
 

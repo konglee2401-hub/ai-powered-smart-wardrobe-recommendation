@@ -5,13 +5,41 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import driveService from '../services/googleDriveOAuth.js';
 import multer from 'multer';
+import { protect, optionalAuth } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
+import { isAdmin } from '../services/accessControlService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const router = express.Router();
+
+// Proxy endpoint with optional auth (so <img src> and <video src> work)
+const proxyRouter = express.Router();
+proxyRouter.use(optionalAuth);
+
+// Protected routes with full permission checks
+const protectedRouter = express.Router();
+protectedRouter.use(protect);
+protectedRouter.use(requireActiveSubscription);
+protectedRouter.use(requireMenuAccess('generation'));
+protectedRouter.use(requireApiAccess('generation'));
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 const GALLERY_UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'gallery-assets');
+
+const resolveScopedUserId = (req, candidateUserId = null) => {
+  if (isAdmin(req.user)) {
+    return candidateUserId || null;
+  }
+  return req.user?._id?.toString?.() || req.user?.id || null;
+};
+
+const buildUserScope = (req, candidateUserId = null) => {
+  const scopedUserId = resolveScopedUserId(req, candidateUserId);
+  return scopedUserId ? { userId: scopedUserId } : {};
+};
 
 function sanitizeFilename(filename = 'asset') {
   const ext = path.extname(filename) || '';
@@ -55,13 +83,12 @@ async function uploadAssetBufferToDrive(buffer, filename, assetCategory, metadat
  * GET /api/assets/gallery
  * Get all assets for gallery (with filtering and pagination)
  */
-router.get('/gallery', async (req, res) => {
+protectedRouter.get('/gallery', async (req, res) => {
   try {
     const { userId, assetType = 'all', category = 'all', page = 1, limit = 20, storageLocation = 'all' } = req.query;
-    
-    // Build query - gallery shows assets from any user (shared gallery)
-    const query = { status: 'active' };
-    if (userId) query.userId = userId; // Optional: filter by userId if provided
+
+    // Build query - scoped by user unless admin
+    const query = { status: 'active', ...buildUserScope(req, userId) };
     if (assetType !== 'all') query.assetType = assetType;
     if (category !== 'all') query.assetCategory = category;
     
@@ -133,7 +160,7 @@ router.get('/gallery', async (req, res) => {
  * POST /api/assets/upload
  * Persist a real file locally, optionally upload to Google Drive, then create a valid asset record.
  */
-router.post('/upload', upload.single('file'), async (req, res) => {
+protectedRouter.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file provided' });
@@ -142,7 +169,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const {
       category = 'generated-image',
       sessionId = `session-${Date.now()}`,
-      userId = 'anonymous',
+      userId,
       metadata = '{}'
     } = req.body;
 
@@ -175,7 +202,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       fileSize: stat.size,
       assetType: req.file.mimetype?.startsWith('video') ? 'video' : req.file.mimetype?.startsWith('audio') ? 'audio' : 'image',
       assetCategory: category,
-      userId,
+      userId: resolveScopedUserId(req, userId),
       sessionId,
       status: 'active',
       metadata: parsedMetadata,
@@ -231,12 +258,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
  * Proxy endpoint to download Google Drive images and serve them with proper headers
  * Solves CORS issues and ensures images display correctly
  */
-router.get('/proxy/:assetId', async (req, res) => {
+proxyRouter.get('/proxy/:assetId', async (req, res) => {
   try {
     const { assetId } = req.params;
     
     // Find asset in database
-    const asset = await Asset.findOne({ assetId });
+    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
     if (!asset) {
       console.log(`❌ Asset not found: ${assetId}`);
       return res.status(404).json({ success: false, error: 'Asset not found' });
@@ -423,12 +450,12 @@ router.get('/proxy/:assetId', async (req, res) => {
  * Stream asset file - returns direct URLs for Google Drive, or streams local files
  * Works for both Google Drive and local storage assets
  */
-router.get('/stream/:assetId', async (req, res) => {
+protectedRouter.get('/stream/:assetId', async (req, res) => {
   try {
     const { assetId } = req.params;
     
     // Find asset in database
-    const asset = await Asset.findOne({ assetId });
+    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
     if (!asset) {
       console.log(`❌ Asset not found: ${assetId}`);
       return res.status(404).json({ success: false, error: 'Asset not found' });
@@ -498,11 +525,11 @@ router.get('/stream/:assetId', async (req, res) => {
  * GET /api/assets/by-session/:sessionId
  * Get all assets from a specific session
  */
-router.get('/by-session/:sessionId', async (req, res) => {
+protectedRouter.get('/by-session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     
-    const assets = await Asset.findBySession(sessionId);
+    const assets = await Asset.find({ sessionId, ...buildUserScope(req), status: 'active' }).sort({ createdAt: -1 }).lean();
     
     res.json({
       success: true,
@@ -519,12 +546,13 @@ router.get('/by-session/:sessionId', async (req, res) => {
  * GET /api/assets/by-category/:category
  * Get all assets in a specific category (e.g., character-image, generated-image)
  */
-router.get('/by-category/:category', async (req, res) => {
+protectedRouter.get('/by-category/:category', async (req, res) => {
   try {
     const { category } = req.params;
-    const { userId = 'anonymous', page = 1, limit = 20 } = req.query;
+    const { userId, page = 1, limit = 20 } = req.query;
     
-    const result = await Asset.findByCategory(userId, category, {
+    const scopedUserId = resolveScopedUserId(req, userId);
+    const result = await Asset.findByCategory(scopedUserId, category, {
       page: parseInt(page),
       limit: parseInt(limit)
     });
@@ -568,7 +596,7 @@ router.get('/by-category/:category', async (req, res) => {
  *   autoReplace: true  // If true, replace same filename; if false, error on duplicate
  * }
  */
-router.post('/create', async (req, res) => {
+protectedRouter.post('/create', async (req, res) => {
   try {
     const {
       filename,
@@ -576,7 +604,7 @@ router.post('/create', async (req, res) => {
       fileSize,
       assetType,
       assetCategory,
-      userId = 'anonymous',
+      userId,
       sessionId,
       storage,
       metadata = {},
@@ -607,7 +635,8 @@ router.post('/create', async (req, res) => {
     
     // Check 2: If not found by Drive ID, check by filename
     if (!existingAsset) {
-      existingAsset = await Asset.findOne({ filename: filename, userId: userId });
+      const scopedUserId = resolveScopedUserId(req, userId);
+      existingAsset = await Asset.findOne({ filename: filename, userId: scopedUserId });
       if (existingAsset) {
         isDuplicate = true;
         queryReason = `Filename: ${filename}`;
@@ -668,7 +697,7 @@ router.post('/create', async (req, res) => {
       fileSize,
       assetType,
       assetCategory,
-      userId,
+      userId: resolveScopedUserId(req, userId),
       sessionId,
       storage,
       metadata,
@@ -697,11 +726,11 @@ router.post('/create', async (req, res) => {
  * POST /api/assets/:assetId/increment-access
  * Increment access count for an asset
  */
-router.post('/:assetId/increment-access', async (req, res) => {
+protectedRouter.post('/:assetId/increment-access', async (req, res) => {
   try {
     const { assetId } = req.params;
     
-    const asset = await Asset.findOne({ assetId });
+    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
     if (!asset) {
       return res.status(404).json({ success: false, error: 'Asset not found' });
     }
@@ -719,11 +748,11 @@ router.post('/:assetId/increment-access', async (req, res) => {
  * POST /api/assets/:assetId/toggle-favorite
  * Toggle favorite status
  */
-router.post('/:assetId/toggle-favorite', async (req, res) => {
+protectedRouter.post('/:assetId/toggle-favorite', async (req, res) => {
   try {
     const { assetId } = req.params;
     
-    const asset = await Asset.findOne({ assetId });
+    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
     if (!asset) {
       return res.status(404).json({ success: false, error: 'Asset not found' });
     }
@@ -741,13 +770,13 @@ router.post('/:assetId/toggle-favorite', async (req, res) => {
  * PUT /api/assets/:assetId
  * Update asset metadata
  */
-router.put('/:assetId', async (req, res) => {
+protectedRouter.put('/:assetId', async (req, res) => {
   try {
     const { assetId } = req.params;
     const updates = req.body;
     
     const asset = await Asset.findOneAndUpdate(
-      { assetId },
+      { assetId, ...buildUserScope(req) },
       updates,
       { new: true }
     );
@@ -767,12 +796,12 @@ router.put('/:assetId', async (req, res) => {
  * DELETE /api/assets/:assetId
  * Soft delete an asset (mark as deleted, don't remove from DB)
  */
-router.delete('/:assetId', async (req, res) => {
+protectedRouter.delete('/:assetId', async (req, res) => {
   try {
     const { assetId } = req.params;
     const { deleteFile = false } = req.body;
     
-    const asset = await Asset.findOne({ assetId });
+    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
     if (!asset) {
       return res.status(404).json({ success: false, error: 'Asset not found' });
     }
@@ -800,12 +829,12 @@ router.delete('/:assetId', async (req, res) => {
  * GET /api/assets/search
  * Search assets by filename, tags, or metadata
  */
-router.get('/search', async (req, res) => {
+protectedRouter.get('/search', async (req, res) => {
   try {
-    const { userId = 'anonymous', query = '', tags = [], page = 1, limit = 20 } = req.query;
+    const { userId, query = '', tags = [], page = 1, limit = 20 } = req.query;
     
     const searchQuery = {
-      userId,
+      ...buildUserScope(req, userId),
       status: 'active',
       $or: [
         { filename: { $regex: query, $options: 'i' } },
@@ -842,7 +871,7 @@ router.get('/search', async (req, res) => {
  * POST /api/assets/cleanup-expired
  * Admin endpoint to clean up expired temporary files
  */
-router.post('/cleanup-expired', async (req, res) => {
+protectedRouter.post('/cleanup-expired', async (req, res) => {
   try {
     const now = new Date();
     
@@ -883,5 +912,9 @@ router.post('/cleanup-expired', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Attach routers to main router
+router.use(proxyRouter);
+router.use(protectedRouter);
 
 export default router;

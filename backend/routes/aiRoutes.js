@@ -5,8 +5,15 @@ import { protect } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { analyzeUnifiedEndpoint, buildPromptEndpoint, getProviderStatus, generateUnifiedEndpoint } from '../controllers/unifiedFlowController.js';
 import { executeAffiliateVideoTikTokEndpoint, generateVideoFromAnalysisEndpoint, generateVoiceoverEndpoint, finalizeAffiliateVideoEndpoint, getAffiliateVideoPreviewEndpoint, getAffiliateVideoSessionStatusEndpoint } from '../controllers/affiliateVideoTikTokController.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess, enforceAiProviderAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
+router.use(enforceAiProviderAccess());
 
 // Public routes
 router.get('/options', optionsController.getAllOptions);
@@ -38,17 +45,17 @@ router.post('/affiliate-video-tiktok', upload.fields([
   { name: 'characterImage', maxCount: 1 },
   { name: 'productImage', maxCount: 1 },
   { name: 'sceneImage', maxCount: 1 }  // 💫 NEW: Optional scene reference image
-]), executeAffiliateVideoTikTokEndpoint);
+]), consumeGeneration('image'), consumeGeneration('video'), consumeGeneration('voice'), executeAffiliateVideoTikTokEndpoint);
 
 // 💫 Get flow preview data (Step 2 images for real-time display)
 router.get('/affiliate-video-tiktok/preview/:flowId', getAffiliateVideoPreviewEndpoint);
 router.get('/affiliate-video-tiktok/session-status/:flowId', getAffiliateVideoSessionStatusEndpoint);
 
 // Generate video from analysis
-router.post('/affiliate-video-tiktok/generate-video', generateVideoFromAnalysisEndpoint);
+router.post('/affiliate-video-tiktok/generate-video', consumeGeneration('video'), generateVideoFromAnalysisEndpoint);
 
 // Generate voiceover
-router.post('/affiliate-video-tiktok/generate-voiceover', generateVoiceoverEndpoint);
+router.post('/affiliate-video-tiktok/generate-voiceover', consumeGeneration('voice'), generateVoiceoverEndpoint);
 
 // Finalize package
 router.post('/affiliate-video-tiktok/finalize', finalizeAffiliateVideoEndpoint);

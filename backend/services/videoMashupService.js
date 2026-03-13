@@ -94,6 +94,16 @@ class VideoMashupService {
         clipExtraction,
         additionalVideoPaths,
         contentType,
+        encoder,
+        nvencPreset,
+        nvencTune,
+        nvencProfile,
+        nvencRc,
+        nvencBitrate,
+        nvencMaxrate,
+        nvencBufsize,
+        targetFps,
+        gopSize,
         dryRun = false,
       } = config;
 
@@ -129,6 +139,16 @@ class VideoMashupService {
         clipExtraction,
         additionalVideoPaths,
         contentType, // Smart template selection
+        encoder,
+        nvencPreset,
+        nvencTune,
+        nvencProfile,
+        nvencRc,
+        nvencBitrate,
+        nvencMaxrate,
+        nvencBufsize,
+        targetFps,
+        gopSize,
         dryRun,
       });
 
@@ -181,6 +201,16 @@ class VideoMashupService {
       dryRun: config.dryRun,
       layout: config.layout,
       contentType: config.contentType, // Smart template selection
+      encoder: config.encoder,
+      nvencPreset: config.nvencPreset,
+      nvencTune: config.nvencTune,
+      nvencProfile: config.nvencProfile,
+      nvencRc: config.nvencRc,
+      nvencBitrate: config.nvencBitrate,
+      nvencMaxrate: config.nvencMaxrate,
+      nvencBufsize: config.nvencBufsize,
+      targetFps: config.targetFps,
+      gopSize: config.gopSize,
     });
   }
 
@@ -315,4 +345,3 @@ class VideoMashupService {
 }
 
 export default new VideoMashupService();
-

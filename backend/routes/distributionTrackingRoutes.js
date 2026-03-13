@@ -1,11 +1,16 @@
 import express from 'express';
 import * as distributionController from '../controllers/distributionTrackingController.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('video-pipeline'));
+router.use(requireApiAccess('video-pipeline'));
 
 // Distribution tracking CRUD routes
 router.get('/', distributionController.getAllDistributions);

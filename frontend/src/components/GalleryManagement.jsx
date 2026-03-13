@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
 import ModalPortal from './ModalPortal';
+import {
   AlertTriangle,
   Check,
   CheckCircle2,
@@ -515,7 +515,9 @@ export default function GalleryManagement({
 
       if (filters.search) params.append('query', filters.search);
 
-      const response = await fetch(`${API_BASE}/assets/gallery?${params}`);
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const response = await fetch(`${API_BASE}/assets/gallery?${params}`, { headers });
       if (!response.ok) throw new Error('Failed to fetch gallery items');
 
       const data = await response.json();

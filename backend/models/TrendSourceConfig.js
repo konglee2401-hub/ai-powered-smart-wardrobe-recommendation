@@ -25,11 +25,15 @@ const SourceCriteriaSchema = new mongoose.Schema({
  * a scraper decides whether a channel/video is worth storing.
  */
 const TrendSourceConfigSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   key: {
     type: String,
     required: true,
     trim: true,
-    unique: true,
     index: true,
   },
   name: {
@@ -130,13 +134,16 @@ const DEFAULT_SOURCE_CONFIGS = [
   },
 ];
 
-TrendSourceConfigSchema.statics.ensureDefaults = async function ensureDefaults() {
+TrendSourceConfigSchema.statics.ensureDefaults = async function ensureDefaults(userId = null) {
+  const baseFilter = userId ? { userId } : { userId: { $exists: false } };
+
   for (const item of DEFAULT_SOURCE_CONFIGS) {
     await this.findOneAndUpdate(
-      { key: item.key },
+      { key: item.key, ...baseFilter },
       {
         $set: {
           ...item,
+          userId: userId || undefined,
           isDefault: true,
           allowDelete: false,
           sortOrder: item.sortOrder,
@@ -146,8 +153,10 @@ TrendSourceConfigSchema.statics.ensureDefaults = async function ensureDefaults()
     );
   }
 
-  return this.find({}).sort({ sortOrder: 1, name: 1 }).lean();
+  return this.find(baseFilter).sort({ sortOrder: 1, name: 1 }).lean();
 };
+
+TrendSourceConfigSchema.index({ userId: 1, key: 1 }, { unique: true, sparse: true });
 
 const TrendSourceConfig =
   mongoose.models.TrendSourceConfig || mongoose.model('TrendSourceConfig', TrendSourceConfigSchema);

@@ -1,5 +1,6 @@
 ﻿import React, { useState } from 'react';
 import axios from 'axios';
+import { getAuthHeaders } from '../services/authHeaders';
 import { Upload, Film, Sparkles, Clock, CheckCircle, XCircle, Play, Download } from 'lucide-react';
 import Navbar from '../components/ui/Navbar';
 import ScenePickerModal from '../components/ScenePickerModal';
@@ -42,7 +43,11 @@ export default function VideoGeneration() {
   React.useEffect(() => {
     const loadScenes = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/prompt-options/scenes/lock-manager`, {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
         const data = await response.json();
         if (data?.success) {
           const scenes = data.data || [];

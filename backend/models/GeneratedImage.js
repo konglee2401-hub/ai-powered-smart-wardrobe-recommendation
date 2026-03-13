@@ -208,8 +208,12 @@ GeneratedImageSchema.statics.getUserHistory = async function(userId, options = {
 };
 
 // Static method: Get session images
-GeneratedImageSchema.statics.getSessionImages = async function(sessionId) {
-  return await this.find({ sessionId, isDeleted: false })
+GeneratedImageSchema.statics.getSessionImages = async function(sessionId, userId = null) {
+  const query = { sessionId, isDeleted: false };
+  if (userId) {
+    query.userId = userId;
+  }
+  return await this.find(query)
     .sort({ createdAt: 1 })
     .lean();
 };

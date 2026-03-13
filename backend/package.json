@@ -6,6 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
+    "dev:tunnel": "node scripts/dev/start-with-tunnel.js",
+    "dev:ngrok": "set TUNNEL_PROVIDER=ngrok&& set TUNNEL_DOMAIN=margarette-preservable-rayan.ngrok-free.dev&& node scripts/dev/start-with-tunnel.js",
     "start": "node server.js",
     "sync:models": "node scripts/maintenance/00-model-sync.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",

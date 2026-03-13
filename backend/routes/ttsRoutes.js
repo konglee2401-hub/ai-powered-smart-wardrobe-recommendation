@@ -5,7 +5,9 @@
 import express from 'express';
 import multer from 'multer';
 import TTSController from '../controllers/ttsController.js';
-
+import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -18,19 +20,24 @@ const upload = multer({
   },
 });
 
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
+
 /**
  * Generate TTS audio from text
  * POST /api/tts/generate
  * Body: { text, voiceName, language }
  */
-router.post('/generate', TTSController.generateAudio);
+router.post('/generate', consumeGeneration('voice'), TTSController.generateAudio);
 
 /**
  * Generate and save TTS audio file
  * POST /api/tts/generate-and-save
  * Body: { text, voiceName, language, fileName }
  */
-router.post('/generate-and-save', TTSController.generateAndSaveAudio);
+router.post('/generate-and-save', consumeGeneration('voice'), TTSController.generateAndSaveAudio);
 
 /**
  * Stream audio file

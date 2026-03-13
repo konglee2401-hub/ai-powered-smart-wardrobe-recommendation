@@ -1,4 +1,4 @@
-/**
+﻿/**
  * WorkflowStateService - Unified workflow state management for all flow types
  * 
  * Supports:
@@ -273,8 +273,31 @@ class WorkflowStateService {
 
   /**
    * Create resume response object
+   * Supports both legacy signature (sessionId, flowType, session)
+   * and object signature ({ sessionId, workflowState, resume, dbStatus, flowType }).
    */
   createResumeResponse(sessionId, flowType, session) {
+    if (sessionId && typeof sessionId === 'object' && sessionId.workflowState) {
+      const payload = sessionId;
+      const workflowState = this.cloneWorkflowState(payload.workflowState);
+      const resume = payload.resume || this.deriveResumeTarget(workflowState, payload.flowType || 'image-generation');
+
+      return {
+        success: true,
+        sessionId: payload.sessionId,
+        flowType: workflowState.flowType || payload.flowType || 'image-generation',
+        status: workflowState.status,
+        workflowState,
+        sessionStatus: payload.dbStatus || workflowState.status || 'in-progress',
+        error: workflowState.error || null,
+        updatedAt: workflowState.updatedAt || new Date().toISOString(),
+        nextStep: resume.nextStep,
+        canContinue: resume.canContinue,
+        shouldPoll: resume.shouldPoll,
+        reason: resume.reason
+      };
+    }
+
     const workflowState = this.cloneWorkflowState(session.workflowState);
     const resume = this.deriveResumeTarget(workflowState, flowType);
 

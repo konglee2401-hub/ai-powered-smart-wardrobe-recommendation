@@ -1,6 +1,8 @@
 import express from 'express';
 const router = express.Router();
 import { protect } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 import * as AIAnalyticsService from '../services/aiAnalyticsService.js';
 import * as RecommendationEngine from '../services/recommendationEngine.js';
 import * as ContentAnalysisService from '../services/contentAnalysisService.js';
@@ -11,6 +13,9 @@ import PromptTemplate from '../models/PromptOption.js';
 
 // Apply authentication to all routes
 router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 router.get('/marketing-dashboard', async (req, res) => {
   try {

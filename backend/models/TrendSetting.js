@@ -50,6 +50,7 @@ const ComposerDefaultsSchema = new mongoose.Schema({
   clipExtractionEnabled: { type: Boolean, default: false },
   clipSegmentDuration: { type: Number, default: 20 },
   clipMaxClips: { type: Number, default: 24 },
+  encoder: { type: String, default: 'auto' },
 }, { _id: false });
 
 const VideoPipelinePreferencesSchema = new mongoose.Schema({
@@ -104,6 +105,7 @@ const VideoPipelinePreferencesSchema = new mongoose.Schema({
         clipExtractionEnabled: false,
         clipSegmentDuration: 20,
         clipMaxClips: 24,
+        encoder: 'auto',
       }),
     },
     templateBrowserPreferences: {
@@ -154,9 +156,13 @@ const PlayboardConfigSchema = new mongoose.Schema({
 }, { _id: true });
 
 const TrendSettingSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   key: {
     type: String,
-    unique: true,
     default: 'default',
   },
   videoScriptScoringConfig: {
@@ -245,8 +251,9 @@ const DEFAULT_PLAYBOARD_CONFIGS = [
   { dimension: 'most-viewed', category: 'Entertainment', country: 'Worldwide', period: 'weekly', isActive: true, priority: 6 },
 ];
 
-TrendSettingSchema.statics.getOrCreateDefault = async function getOrCreateDefault() {
+TrendSettingSchema.statics.getOrCreateDefault = async function getOrCreateDefault(userId = null) {
   const defaults = {
+    userId: userId || undefined,
     key: 'default',
     videoScriptScoringConfig: null,
     keywords: {
@@ -259,7 +266,7 @@ TrendSettingSchema.statics.getOrCreateDefault = async function getOrCreateDefaul
   };
 
   const setting = await this.findOneAndUpdate(
-    { key: 'default' },
+    userId ? { key: 'default', userId } : { key: 'default', userId: { $exists: false } },
     { $setOnInsert: defaults },
     { new: true, upsert: true }
   );
@@ -275,6 +282,8 @@ TrendSettingSchema.statics.getPlayboardMetadata = function getPlayboardMetadata(
     periods: PLAYBOARD_PERIODS,
   };
 };
+
+TrendSettingSchema.index({ userId: 1, key: 1 }, { unique: true, sparse: true });
 
 const TrendSetting = mongoose.models.TrendSetting || mongoose.model('TrendSetting', TrendSettingSchema);
 

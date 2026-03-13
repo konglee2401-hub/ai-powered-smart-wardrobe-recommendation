@@ -7,8 +7,15 @@ import express from 'express';
 import SessionHistoryController from '../controllers/sessionHistoryController.js';
 import { protect } from '../middleware/auth.js';
 import SessionLog from '../models/SessionLog.js';
+import { requireActiveSubscription, consumeGeneration } from '../middleware/subscription.js';
+import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+
+router.use(protect);
+router.use(requireActiveSubscription);
+router.use(requireMenuAccess('generation'));
+router.use(requireApiAccess('generation'));
 
 /**
  * POST /api/sessions/create
@@ -18,6 +25,18 @@ const router = express.Router();
 router.post('/create', async (req, res) => {
   try {
     const { flowType = 'one-click', useCase } = req.body;
+
+    const map = {
+      'image-generation': 'image',
+      'video-generation': 'video',
+      'voice-generation': 'voice',
+      'one-click': 'oneClick',
+    };
+    const usageType = map[flowType];
+    if (usageType) {
+      await new Promise((resolve) => consumeGeneration(usageType)(req, res, resolve));
+      if (res.headersSent) return;
+    }
     
     // Generate unique session ID
     const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
