@@ -103,21 +103,39 @@ const DEFAULT_SETTINGS = {
     publishVisibility: 'public',
     publishAccountIds: [],
     templateSources: [],
-    composerDefaults: {
-      recipe: 'mashup',
-      platform: 'youtube',
-      duration: 30,
-      aspectRatio: '9:16',
-      layout: '2-3-1-3',
-      subtitleMode: 'auto',
-      watermarkEnabled: true,
-      voiceoverEnabled: false,
-      templateStrategy: 'random',
-      youtubePublishType: 'shorts',
-      encoder: 'auto',
+      composerDefaults: {
+        recipe: 'mashup',
+        platform: 'youtube',
+        duration: 30,
+        aspectRatio: '9:16',
+        layout: '2-3-1-3',
+        subtitleMode: 'auto',
+        watermarkEnabled: true,
+        voiceoverEnabled: false,
+        templateStrategy: 'random',
+        youtubePublishType: 'shorts',
+        encoder: 'auto',
+      },
+      voiceoverPipeline: {
+        enableTranscript: true,
+        enableVoiceover: true,
+        overlayVoiceoverOnVideo: true,
+        translateTarget: 'vi',
+        voiceName: 'vi-VN-HoaiMyNeural',
+        pipelineVersion: 'v1',
+        enableViralSelect: true,
+        clipMinSeconds: 12,
+        clipMaxSeconds: 25,
+        enableHook: true,
+        enableBroll: true,
+        enableVertical: true,
+        enableHookCaption: true,
+        hookCaptionPosition: 'top',
+        hookCaptionFontSize: 140,
+        keepOnlyFinal: false,
+      },
     },
-  },
-};
+  };
 
 const DEFAULT_CONNECTION = {
   platform: 'youtube',
@@ -173,6 +191,25 @@ const DEFAULT_MANUAL_DISCOVERY = {
   country: 'Worldwide',
   period: 'weekly',
 };
+
+const PEXELS_TAXONOMY_DEFAULT = [
+  'People',
+  'Nature',
+  'City',
+  'Food',
+  'Travel',
+  'Business',
+  'Fashion',
+  'Animals',
+  'Sports',
+  'Technology',
+  'Lifestyle',
+  'Music',
+  'Health',
+  'Education',
+  'Abstract',
+  'Misc',
+];
 
 const DEFAULT_PRODUCTION_BATCH = {
   sourceKey: '',
@@ -321,6 +358,14 @@ function queueActionLabel(job = {}, t = (key) => key) {
   return t('videoPipeline.view_details');
 }
 
+function recipeTone(recipe = '') {
+  const value = String(recipe || '').toLowerCase();
+  if (value === 'voiceover') return 'emerald';
+  if (value === 'mashup') return 'violet';
+  if (value === 'subtitle') return 'sky';
+  return 'slate';
+}
+
 export default function VideoPipeline() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
@@ -402,6 +447,7 @@ export default function VideoPipeline() {
   const publishScheduler = settings.production?.publishScheduler ?? DEFAULT_SETTINGS.production?.publishScheduler ?? {};
   const publishScheduleConfig = schedulerRuntime?.publishScheduler?.scheduleConfig || publishScheduler || {};
   const publishSchedulerRuntime = schedulerRuntime?.publishScheduler || { isRunning: false, lastRunAt: null, lastResult: null };
+  const composerDefaults = settings.production?.composerDefaults || DEFAULT_COMPOSER;
   const selectedPublishAccountIds = settings.production?.publishAccountIds || [];
   const selectedPublishAccountCount = selectedPublishAccountIds.length;
   const hasSelectedPublishAccounts = selectedPublishAccountCount > 0;
@@ -453,7 +499,7 @@ export default function VideoPipeline() {
   const ActiveSectionIcon = activeNavItem?.icon || Sparkles;
   const sourceRuntimeSummary = useMemo(() => {
     const discoverSourceToggles = scraperSettings?.discoverSources || {};
-    const manualDiscoverProviders = new Set(['playboard', 'dailyhaha', 'douyin']);
+    const manualDiscoverProviders = new Set(['playboard', 'dailyhaha', 'douyin', 'pexels', 'kuaishou']);
 
     return new Map(
       sources.map((item) => {
@@ -586,31 +632,33 @@ export default function VideoPipeline() {
     }
     if (actionKey.startsWith('manual-scan-')) return t('videoPipeline.manual_scan_channel');
     if (actionKey.startsWith('start-job-')) return t('videoPipeline.start_production_job');
-    return {
-      'queue-scanner-now': t('videoPipeline.queue_scan'),
-      'trigger-downloads': t('videoPipeline.trigger_downloads'),
-      'upload-pending': t('videoPipeline.upload_pending'),
-      'queue-folder': t('videoPipeline.queue_folder_ingest'),
-      'queue-videos': t('videoPipeline.queue_production_jobs'),
-      'mass-production': t('videoPipeline.mass_production'),
-      'publish-job': t('videoPipeline.publish_job'),
-      'scan-selected-channels': t('videoPipeline.scan_selected_channels'),
-      'upload-video': t('videoPipeline.sync_video_to_drive'),
-    }[actionKey] || actionKey || t('videoPipeline.processing_2');
+      return {
+        'queue-scanner-now': t('videoPipeline.queue_scan'),
+        'trigger-downloads': t('videoPipeline.trigger_downloads'),
+        'upload-pending': t('videoPipeline.upload_pending'),
+        'queue-folder': t('videoPipeline.queue_folder_ingest'),
+        'queue-videos': t('videoPipeline.queue_production_jobs'),
+        'mass-production': t('videoPipeline.mass_production'),
+        'voiceover-selected': t('videoPipeline.voiceover_selected'),
+        'publish-job': t('videoPipeline.publish_job'),
+        'scan-selected-channels': t('videoPipeline.scan_selected_channels'),
+        'upload-video': t('videoPipeline.sync_video_to_drive'),
+      }[actionKey] || actionKey || t('videoPipeline.processing_2');
   };
 
   const shouldShowProgress = (actionKey = '') => (
-    [
-      'queue-scanner-now',
-      'trigger-downloads',
-      'upload-pending',
-      'queue-folder',
-      'queue-videos',
-      'mass-production',
-      'publish-job',
-      'scan-selected-channels',
-      'upload-video',
-    ].includes(actionKey)
+      [
+        'queue-scanner-now',
+        'trigger-downloads',
+        'upload-pending',
+        'queue-folder',
+        'queue-videos',
+        'mass-production',
+        'voiceover-selected',
+        'publish-job',
+        'scan-selected-channels',
+        'upload-video',
+      ].includes(actionKey)
     || actionKey.startsWith('scraper-job-')
     || actionKey.startsWith('manual-scan-')
     || actionKey.startsWith('start-job-')
@@ -846,6 +894,17 @@ export default function VideoPipeline() {
     setSettings((prev) => ({ ...prev, [section]: { ...(prev[section] || {}), [key]: value } }));
   };
 
+  const updateScraperSettings = (key, value) => {
+    setScraperSettings((prev) => ({ ...(prev || {}), [key]: value }));
+  };
+
+  const updateScraperNested = (section, key, value) => {
+    setScraperSettings((prev) => ({
+      ...(prev || {}),
+      [section]: { ...((prev || {})[section] || {}), [key]: value },
+    }));
+  };
+
   const updatePublishFilter = (key, value) => {
     updateSettings('production', 'publishFilters', { ...publishFilters, [key]: value });
   };
@@ -1048,6 +1107,94 @@ export default function VideoPipeline() {
     });
   };
 
+  const syncSelectedVideos = async () => {
+    if (!selectedVideoIds.length) {
+      toast.error(t('videoPipeline.select_at_least_one_video'));
+      return;
+    }
+
+    await runAction('sync-selected', async () => {
+      const result = await videoPipelineApi.uploadSelectedVideos(selectedVideoIds);
+      toast.success(
+        t('videoPipeline.upload_summary', {
+          uploaded: result.uploaded || 0,
+          skipped: result.skipped || 0,
+          failed: result.failed || 0,
+        })
+      );
+      await Promise.allSettled([loadVideos(), loadDashboard()]);
+    });
+  };
+
+  const runVoiceoverSelected = async () => {
+    if (!selectedVideoIds.length) {
+      toast.error(t('videoPipeline.select_at_least_one_video'));
+      return;
+    }
+
+    const voiceoverConfig = settings.production?.voiceoverPipeline || {};
+    await runAction('voiceover-selected', async () => {
+      const result = await videoPipelineApi.runVoiceoverJobs({
+        videoIds: selectedVideoIds,
+        translateTarget: voiceoverConfig.translateTarget || 'vi',
+        voiceName: voiceoverConfig.voiceName || 'vi-VN-HoaiMyNeural',
+        overlayVideo: voiceoverConfig.overlayVoiceoverOnVideo !== false,
+        enableTranscript: voiceoverConfig.enableTranscript !== false,
+        enableVoiceover: voiceoverConfig.enableVoiceover !== false,
+        pipelineVersion: voiceoverConfig.pipelineVersion || 'v1',
+        enableViralSelect: voiceoverConfig.enableViralSelect !== false,
+        clipMinSeconds: voiceoverConfig.clipMinSeconds ?? 12,
+        clipMaxSeconds: voiceoverConfig.clipMaxSeconds ?? 25,
+        enableHook: voiceoverConfig.enableHook !== false,
+        enableBroll: voiceoverConfig.enableBroll !== false,
+        enableVertical: voiceoverConfig.enableVertical !== false,
+        enableHookCaption: voiceoverConfig.enableHookCaption !== false,
+        hookCaptionPosition: voiceoverConfig.hookCaptionPosition || 'top',
+        hookCaptionFontSize: voiceoverConfig.hookCaptionFontSize ?? 96,
+        keepOnlyFinal: voiceoverConfig.keepOnlyFinal === true,
+      });
+      toast.success(
+        t('videoPipeline.voiceover_summary', {
+          processed: result.processed || 0,
+          failed: result.failed || 0,
+        })
+      );
+      await Promise.allSettled([loadVideos(), loadJobs()]);
+    });
+  };
+
+  const runVoiceoverForVideo = async (videoId) => {
+    const voiceoverConfig = settings.production?.voiceoverPipeline || {};
+    await runAction(`voiceover-${videoId}`, async () => {
+      const result = await videoPipelineApi.runVoiceoverJobs({
+        videoIds: [videoId],
+        translateTarget: voiceoverConfig.translateTarget || 'vi',
+        voiceName: voiceoverConfig.voiceName || 'vi-VN-HoaiMyNeural',
+        overlayVideo: voiceoverConfig.overlayVoiceoverOnVideo !== false,
+        enableTranscript: voiceoverConfig.enableTranscript !== false,
+        enableVoiceover: voiceoverConfig.enableVoiceover !== false,
+        pipelineVersion: voiceoverConfig.pipelineVersion || 'v1',
+        enableViralSelect: voiceoverConfig.enableViralSelect !== false,
+        clipMinSeconds: voiceoverConfig.clipMinSeconds ?? 12,
+        clipMaxSeconds: voiceoverConfig.clipMaxSeconds ?? 25,
+        enableHook: voiceoverConfig.enableHook !== false,
+        enableBroll: voiceoverConfig.enableBroll !== false,
+        enableVertical: voiceoverConfig.enableVertical !== false,
+        enableHookCaption: voiceoverConfig.enableHookCaption !== false,
+        hookCaptionPosition: voiceoverConfig.hookCaptionPosition || 'top',
+        hookCaptionFontSize: voiceoverConfig.hookCaptionFontSize ?? 96,
+        keepOnlyFinal: voiceoverConfig.keepOnlyFinal === true,
+      });
+      toast.success(
+        t('videoPipeline.voiceover_summary', {
+          processed: result.processed || 0,
+          failed: result.failed || 0,
+        })
+      );
+      await Promise.allSettled([loadVideos(), loadJobs()]);
+    });
+  };
+
   const runMassProduction = async () => {
     await runAction('mass-production', async () => {
       const result = await videoPipelineApi.runMassProduction({
@@ -1220,6 +1367,90 @@ export default function VideoPipeline() {
     });
   };
 
+  const runMassVoiceover = async () => {
+    const voiceoverConfig = settings.production?.voiceoverPipeline || {};
+    await runAction('mass-voiceover', async () => {
+      const result = await videoPipelineApi.runMassVoiceover({
+        sourceKey: productionBatch.sourceKey || undefined,
+        limit: Number(productionBatch.limit) || 5,
+        translateTarget: voiceoverConfig.translateTarget || 'vi',
+        voiceName: voiceoverConfig.voiceName || 'vi-VN-HoaiMyNeural',
+        overlayVideo: voiceoverConfig.overlayVoiceoverOnVideo !== false,
+        enableTranscript: voiceoverConfig.enableTranscript !== false,
+        enableVoiceover: voiceoverConfig.enableVoiceover !== false,
+        pipelineVersion: voiceoverConfig.pipelineVersion || 'v1',
+        enableViralSelect: voiceoverConfig.enableViralSelect !== false,
+        clipMinSeconds: voiceoverConfig.clipMinSeconds ?? 12,
+        clipMaxSeconds: voiceoverConfig.clipMaxSeconds ?? 25,
+        enableHook: voiceoverConfig.enableHook !== false,
+        enableBroll: voiceoverConfig.enableBroll !== false,
+        enableVertical: voiceoverConfig.enableVertical !== false,
+        enableHookCaption: voiceoverConfig.enableHookCaption !== false,
+        hookCaptionPosition: voiceoverConfig.hookCaptionPosition || 'top',
+        hookCaptionFontSize: voiceoverConfig.hookCaptionFontSize ?? 96,
+        keepOnlyFinal: voiceoverConfig.keepOnlyFinal === true,
+      });
+      toast.success(
+        t('videoPipeline.voiceover_summary', {
+          processed: result.processed || 0,
+          failed: result.failed || 0,
+        })
+      );
+      await Promise.allSettled([loadVideos(), loadJobs(), loadQueueRuntime(), loadDashboard()]);
+    });
+  };
+
+  const queueMashupFromJob = async (job) => {
+    const sourceVideoId = job?.metadata?.sourceVideoId || job?.videoConfig?.sourceVideoId;
+    if (!sourceVideoId) {
+      toast.error(t('videoPipeline.missing_source_video_for_job'));
+      return;
+    }
+    await runAction(`queue-mashup-${job.queueId}`, async () => {
+      const result = await videoPipelineApi.queueVideos({
+        videoIds: [sourceVideoId],
+        recipe: 'mashup',
+        platform: composer.platform,
+        productionConfig: {
+          duration: Number(composer.duration) || 30,
+          aspectRatio: composer.aspectRatio,
+          layout: composer.layout,
+          subtitleMode: composer.subtitleMode,
+          watermarkEnabled: composer.watermarkEnabled,
+          voiceoverEnabled: composer.voiceoverEnabled,
+          templateStrategy: composer.templateStrategy,
+          youtubePublishType: composer.youtubePublishType,
+          encoder: composer.encoder,
+        },
+      });
+      toast.success(t('videoPipeline.queued_jobs', { count: result.totalQueued || 0 }));
+      await Promise.allSettled([loadJobs(), loadQueueRuntime(), loadDashboard(), loadProductionOverview()]);
+    });
+  };
+
+  const queueVoiceoverFromJob = async (job) => {
+    const sourceVideoId = job?.metadata?.sourceVideoId || job?.videoConfig?.sourceVideoId;
+    if (!sourceVideoId) {
+      toast.error(t('videoPipeline.missing_source_video_for_job'));
+      return;
+    }
+    await runVoiceoverForVideo(sourceVideoId);
+  };
+
+  const saveScraperSettings = async () => {
+    await runAction('save-scraper-settings', async () => {
+      const payload = {
+        discoverSources: scraperSettings?.discoverSources || {},
+        pexelsSettings: scraperSettings?.pexelsSettings || {},
+        cronTimes: scraperSettings?.cronTimes || {},
+      };
+      const result = await videoPipelineApi.saveScraperSettings(payload);
+      setScraperSettings(result || payload);
+      toast.success(t('videoPipeline.scraper_settings_saved'));
+      await Promise.allSettled([loadScraperSettings(), loadScraperOverview()]);
+    });
+  };
+
   const retryFailedQueueJobs = async () => {
     await runAction('retry-failed-jobs', async () => {
       const result = await videoPipelineApi.retryFailedJobs({ maxRetries: 3 });
@@ -1301,6 +1532,10 @@ export default function VideoPipeline() {
         result = await videoPipelineApi.manualDiscoverDailyhaha();
       } else if (config.source === 'douyin') {
         result = await videoPipelineApi.manualDiscoverDouyin();
+      } else if (config.source === 'kuaishou') {
+        result = await videoPipelineApi.manualDiscoverKuaishou();
+      } else if (config.source === 'pexels') {
+        result = await videoPipelineApi.manualDiscoverPexels();
       } else {
         result = await videoPipelineApi.manualDiscoverPlayboard({
           dimension: config.dimension,
@@ -1595,8 +1830,9 @@ export default function VideoPipeline() {
             <MetricCard title={t('videoPipeline.videos_3')} value={dashboard?.metrics?.totalVideos || 0} helper={t('videoPipeline.discovered_inventory')} icon={Video} tone="amber" />
             <MetricCard title={t('videoPipeline.drive_ready_2')} value={dashboard?.metrics?.driveReadyVideos || 0} helper={t('videoPipeline.uploaded_or_synced_successfully')} icon={HardDrive} tone="emerald" />
           </section>
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard title={t('videoPipeline.pending_download')} value={scraperOverview?.pending || 0} helper={t('videoPipeline.waiting_in_scraper_download_backlog')} icon={Download} tone="amber" />
+            <MetricCard title={t('videoPipeline.sub_videos')} value={scraperOverview?.pexelsSubVideos || 0} helper={t('videoPipeline.pexels_sub_videos')} icon={Video} tone="sky" />
             <MetricCard title={t('videoPipeline.queue_jobs')} value={dashboard?.metrics?.queueJobs || 0} helper={t('videoPipeline.production_jobs_in_mongo')} icon={Layers3} tone="violet" />
             <MetricCard title={t('videoPipeline.ready_to_publish_2')} value={dashboard?.metrics?.readyToPublish || 0} helper={t('videoPipeline.jobs_waiting_for_post_actions')} icon={Send} tone="amber" />
             <MetricCard title={t('videoPipeline.connections')} value={dashboard?.metrics?.connections || 0} helper={t('videoPipeline.saved_social_accounts')} icon={Users} tone="sky" />
@@ -1780,9 +2016,11 @@ export default function VideoPipeline() {
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <select value={manualDiscovery.source} onChange={(e) => setManualDiscovery((prev) => ({ ...prev, source: e.target.value }))} className={INPUT_CLASS}>
                   <option value="playboard">Playboard</option>
-                  <option value="dailyhaha">DailyHaha</option>
-                  <option value="douyin">Douyin</option>
-                </select>
+                    <option value="dailyhaha">DailyHaha</option>
+                    <option value="douyin">Douyin</option>
+                    <option value="pexels">Pexels</option>
+                    <option value="kuaishou">Kuaishou</option>
+                  </select>
                 {manualDiscovery.source === 'playboard' ? (
                   <>
                     <select value={manualDiscovery.dimension} onChange={(e) => setManualDiscovery((prev) => ({ ...prev, dimension: e.target.value }))} className={INPUT_CLASS}>
@@ -2071,18 +2309,34 @@ export default function VideoPipeline() {
                 >
                   {allPageVideosSelected ? t('videoPipeline.clear_page') : t('videoPipeline.select_page')}
                 </button>
-                <button
-                  onClick={redownloadFailedVideos}
-                  disabled={!videos.some((item) => item.downloadStatus === 'failed') || Boolean(busyAction)}
-                  className={getActionButtonClass('amber', 'px-4 text-sm h-[42px]')}
-                >
-                  {t('videoPipeline.re_download_failed')}
-                </button>
-                <button
-                  onClick={() => queueVideosToFolder()}
-                  disabled={!selectedVideoIds.length || Boolean(busyAction)}
-                  className={getActionButtonClass('violet', 'px-4 text-sm h-[42px]')}
-                >
+                  <button
+                    onClick={redownloadFailedVideos}
+                    disabled={!videos.some((item) => item.downloadStatus === 'failed') || Boolean(busyAction)}
+                    className={getActionButtonClass('amber', 'px-4 text-sm h-[42px]')}
+                  >
+                    {t('videoPipeline.re_download_failed')}
+                  </button>
+                  <button
+                    onClick={syncSelectedVideos}
+                    disabled={!selectedVideoIds.length || Boolean(busyAction)}
+                    className={getActionButtonClass('emerald', 'px-4 text-sm h-[42px]')}
+                  >
+                    <HardDrive className="h-3.5 w-3.5" />
+                    {t('videoPipeline.sync_selected')}
+                  </button>
+                  <button
+                    onClick={runVoiceoverSelected}
+                    disabled={!selectedVideoIds.length || Boolean(busyAction)}
+                    className={getActionButtonClass('sky', 'px-4 text-sm h-[42px]')}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {t('videoPipeline.voiceover_selected')}
+                  </button>
+                  <button
+                    onClick={() => queueVideosToFolder()}
+                    disabled={!selectedVideoIds.length || Boolean(busyAction)}
+                    className={getActionButtonClass('violet', 'px-4 text-sm h-[42px]')}
+                  >
                   <Layers3 className="h-3.5 w-3.5" />
                   {t('videoPipeline.add_to_queue_folder')}
                 </button>
@@ -2127,6 +2381,7 @@ export default function VideoPipeline() {
                     <th className="px-3 py-2.5">{t('videoPipeline.download_header')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.drive_header')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.mashup')}</th>
+                    <th className="px-3 py-2.5">{t('videoPipeline.voiceover')}</th>
                     <th className="px-3 py-2.5">{t('videoPipeline.actions_header')}</th>
                   </tr>
                 </thead>
@@ -2153,10 +2408,23 @@ export default function VideoPipeline() {
                         </StatusPill>
                       </td>
                       <td className="px-3 py-2.5">
+                        <StatusPill tone={toneFromStatus(item.voiceover?.status || 'idle')}>
+                          {item.voiceover?.status || 'idle'}
+                        </StatusPill>
+                      </td>
+                      <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => uploadVideo(item.id)} className={getActionButtonClass('emerald', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
                             <Upload className="h-3.5 w-3.5" />
                             {t('videoPipeline.sync_button')}
+                          </button>
+                          <button
+                            onClick={() => runVoiceoverForVideo(item.id)}
+                            className={getActionButtonClass('slate', 'px-3 py-2 text-xs')}
+                            disabled={item.downloadStatus !== 'done' || Boolean(busyAction)}
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            {item.voiceover?.status === 'done' ? t('videoPipeline.revoiceover') : t('videoPipeline.voiceover')}
                           </button>
                           <button
                             onClick={() => queueVideosToFolder([item.id])}
@@ -2202,54 +2470,65 @@ export default function VideoPipeline() {
             <SectionHeader
               title={t('videoPipeline.batch_production_lane')}
               subtitle={t('videoPipeline.run_mashup_in_batches_from_completed_source_videos_batch_run')}
-              actions={<button onClick={runMassProduction} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}><Clapperboard className="h-4 w-4" />{t('videoPipeline.run_batch')}</button>}
+              actions={(
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={runMassProduction} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                    <Clapperboard className="h-4 w-4" />
+                    {t('videoPipeline.run_batch')}
+                  </button>
+                  <button onClick={runMassVoiceover} className={getActionButtonClass('sky', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                    <Sparkles className="h-4 w-4" />
+                    {t('videoPipeline.run_batch_voiceover')}
+                  </button>
+                </div>
+              )}
             />
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <select value={productionBatch.sourceKey} onChange={(e) => updateProductionBatch('sourceKey', e.target.value)} className={INPUT_CLASS}>
-                <option value="">{t('videoPipeline.all_sources')}</option>
-                {sources.map((item) => (
-                  <option key={item.id} value={item.key}>{item.name || item.key}</option>
-                ))}
-              </select>
-              <input type="number" min="1" max="50" value={productionBatch.limit} onChange={(e) => updateProductionBatch('limit', Number(e.target.value) || 1)} className={INPUT_CLASS} placeholder={t('videoPipeline.number_of_videos')} />
-              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={Boolean(productionBatch.syncSourceToDrive)} onChange={(e) => updateProductionBatch('syncSourceToDrive', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.sync_source_videos_to_drive_first')}</label>
-              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={Boolean(productionBatch.startImmediately)} onChange={(e) => updateProductionBatch('startImmediately', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.render_immediately_after_queueing')}</label>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <StatusPill tone="sky">{`${t('videoPipeline.recipe')} ${composer.recipe}`}</StatusPill>
-              <StatusPill tone="violet">{`${t('videoPipeline.platform')} ${composer.platform}`}</StatusPill>
-              <StatusPill tone="amber">{`${t('videoPipeline.duration')} ${composer.duration}s`}</StatusPill>
-              <StatusPill tone="emerald">{`${t('videoPipeline.drive_ready_3')} ${productionOverview?.metrics?.driveReadySourceVideos || 0}`}</StatusPill>
-              <StatusPill tone="sky">{`${t('videoPipeline.sub_sources')} ${enabledSubVideoSources.length}`}</StatusPill>
+            <div className="mt-4 space-y-6">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <select value={productionBatch.sourceKey} onChange={(e) => updateProductionBatch('sourceKey', e.target.value)} className={INPUT_CLASS}>
+                  <option value="">{t('videoPipeline.all_sources')}</option>
+                  {sources.map((item) => (
+                    <option key={item.id} value={item.key}>{item.name || item.key}</option>
+                  ))}
+                </select>
+                <input type="number" min="1" max="50" value={productionBatch.limit} onChange={(e) => updateProductionBatch('limit', Number(e.target.value) || 1)} className={INPUT_CLASS} placeholder={t('videoPipeline.number_of_videos')} />
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={Boolean(productionBatch.syncSourceToDrive)} onChange={(e) => updateProductionBatch('syncSourceToDrive', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.sync_source_videos_to_drive_first')}</label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={Boolean(productionBatch.startImmediately)} onChange={(e) => updateProductionBatch('startImmediately', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.render_immediately_after_queueing')}</label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <StatusPill tone={recipeTone(composer.recipe)}>{`${t('videoPipeline.recipe')} ${composer.recipe}`}</StatusPill>
+                <StatusPill tone="violet">{`${t('videoPipeline.platform')} ${composer.platform}`}</StatusPill>
+                <StatusPill tone="amber">{`${t('videoPipeline.duration')} ${composer.duration}s`}</StatusPill>
+                <StatusPill tone="emerald">{`${t('videoPipeline.drive_ready_3')} ${productionOverview?.metrics?.driveReadySourceVideos || 0}`}</StatusPill>
+                <StatusPill tone="sky">{`${t('videoPipeline.sub_sources')} ${enabledSubVideoSources.length}`}</StatusPill>
+              </div>
+              <div className="border-t border-white/10 pt-5">
+                <p className="text-sm font-semibold text-white">{t('videoPipeline.compose_production_job')}</p>
+                <p className="mt-1 text-xs text-slate-400">{t('videoPipeline.mashup_subtitle_watermark_and_voiceover_stay_in_one_form_so_')}</p>
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <select value={composer.recipe} onChange={(e) => setComposer((prev) => ({ ...prev, recipe: e.target.value }))} className={INPUT_CLASS}><option value="mashup">{t('videoPipeline.mashup')}</option><option value="subtitle">{t('videoPipeline.auto_subtitle')}</option><option value="voiceover">{t('videoPipeline.voiceover')}</option></select>
+                  <select value={composer.platform} onChange={(e) => setComposer((prev) => ({ ...prev, platform: e.target.value }))} className={INPUT_CLASS}><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="tiktok">TikTok</option></select>
+                  <input type="number" value={composer.duration} onChange={(e) => setComposer((prev) => ({ ...prev, duration: Number(e.target.value) || 30 }))} className={INPUT_CLASS} placeholder={t('videoPipeline.duration_seconds')} />
+                  <select value={composer.aspectRatio} onChange={(e) => setComposer((prev) => ({ ...prev, aspectRatio: e.target.value }))} className={INPUT_CLASS}><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select>
+                  <select value={composer.layout} onChange={(e) => setComposer((prev) => ({ ...prev, layout: e.target.value }))} className={INPUT_CLASS}><option value="2-3-1-3">{t('videoPipeline.main_2_3_sub_1_3')}</option><option value="full-screen">{t('videoPipeline.full_screen')}</option></select>
+                  <select value={composer.subtitleMode} onChange={(e) => setComposer((prev) => ({ ...prev, subtitleMode: e.target.value }))} className={INPUT_CLASS}><option value="auto">{t('videoPipeline.auto_subtitle_2')}</option><option value="none">{t('videoPipeline.no_subtitle')}</option></select>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.watermarkEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, watermarkEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.watermark')}</label>
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.voiceoverEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, voiceoverEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.voiceover_2')}</label>
+                  <select value={composer.templateStrategy} onChange={(e) => setComposer((prev) => ({ ...prev, templateStrategy: e.target.value }))} className={INPUT_CLASS}><option value="random">{t('videoPipeline.random_template')}</option><option value="weighted">{t('videoPipeline.weighted_template')}</option><option value="ai_suggested">{t('videoPipeline.ai_suggested_template')}</option></select>
+                </div>
+                <div className="mt-4">
+                  <button onClick={queueSelectedVideos} className={getActionButtonClass('violet')} disabled={(!selectedVideoIds.length && !(manualSelections.main && manualSelections.sub)) || Boolean(busyAction)}>
+                    <Clapperboard className="h-4 w-4" />
+                    {t('videoPipeline.add_to_queue_source_videos', { count: selectedVideoIds.length || 0 })}
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <section className={`${SURFACE_CARD_CLASS} p-5`}>
-            <SectionHeader
-              title={t('videoPipeline.compose_production_job')}
-              subtitle={t('videoPipeline.mashup_subtitle_watermark_and_voiceover_stay_in_one_form_so_')}
-            />
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <select value={composer.recipe} onChange={(e) => setComposer((prev) => ({ ...prev, recipe: e.target.value }))} className={INPUT_CLASS}><option value="mashup">{t('videoPipeline.mashup')}</option><option value="subtitle">{t('videoPipeline.auto_subtitle')}</option><option value="voiceover">{t('videoPipeline.voiceover')}</option></select>
-              <select value={composer.platform} onChange={(e) => setComposer((prev) => ({ ...prev, platform: e.target.value }))} className={INPUT_CLASS}><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="tiktok">TikTok</option></select>
-              <input type="number" value={composer.duration} onChange={(e) => setComposer((prev) => ({ ...prev, duration: Number(e.target.value) || 30 }))} className={INPUT_CLASS} placeholder={t('videoPipeline.duration_seconds')} />
-              <select value={composer.aspectRatio} onChange={(e) => setComposer((prev) => ({ ...prev, aspectRatio: e.target.value }))} className={INPUT_CLASS}><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select>
-              <select value={composer.layout} onChange={(e) => setComposer((prev) => ({ ...prev, layout: e.target.value }))} className={INPUT_CLASS}><option value="2-3-1-3">{t('videoPipeline.main_2_3_sub_1_3')}</option><option value="full-screen">{t('videoPipeline.full_screen')}</option></select>
-              <select value={composer.subtitleMode} onChange={(e) => setComposer((prev) => ({ ...prev, subtitleMode: e.target.value }))} className={INPUT_CLASS}><option value="auto">{t('videoPipeline.auto_subtitle_2')}</option><option value="none">{t('videoPipeline.no_subtitle')}</option></select>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.watermarkEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, watermarkEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.watermark')}</label>
-              <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}><input type="checkbox" checked={composer.voiceoverEnabled} onChange={(e) => setComposer((prev) => ({ ...prev, voiceoverEnabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />{t('videoPipeline.voiceover_2')}</label>
-              <select value={composer.templateStrategy} onChange={(e) => setComposer((prev) => ({ ...prev, templateStrategy: e.target.value }))} className={INPUT_CLASS}><option value="random">{t('videoPipeline.random_template')}</option><option value="weighted">{t('videoPipeline.weighted_template')}</option><option value="ai_suggested">{t('videoPipeline.ai_suggested_template')}</option></select>
-            </div>
-            <div className="mt-4">
-              <button onClick={queueSelectedVideos} className={getActionButtonClass('violet')} disabled={(!selectedVideoIds.length && !(manualSelections.main && manualSelections.sub)) || Boolean(busyAction)}>
-                <Clapperboard className="h-4 w-4" />
-                {t('videoPipeline.add_to_queue_source_videos', { count: selectedVideoIds.length || 0 })}
-              </button>
-            </div>
-          </section>
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <section className={`${SURFACE_CARD_CLASS} p-5`}>
             <SectionHeader
               title={t('videoPipeline.recent_production_history')}
@@ -2270,6 +2549,7 @@ export default function VideoPipeline() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         <SourcePill source={item.sourcePlatform || 'source'} />
                         <StatusPill tone={toneFromStatus(item.status)}>{item.status}</StatusPill>
+                        <StatusPill tone={recipeTone(item.recipe || item.contentType)}>{item.recipe || item.contentType || 'mashup'}</StatusPill>
                         <StatusPill tone={toneFromStatus(item.completedDriveSync?.status || 'pending')}>{item.completedDriveSync?.status || 'pending-drive'}</StatusPill>
                         <StatusPill tone="sky">{item.executionState || 'idle'}</StatusPill>
                       </div>
@@ -2535,7 +2815,7 @@ export default function VideoPipeline() {
                     <p className="mt-1 break-all text-xs text-slate-500">{queueRuntime.runtime.oldestPending.queueId}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <StatusPill tone="amber">{queueRuntime.runtime.oldestPending.status}</StatusPill>
-                      <StatusPill tone="sky">{queueRuntime.runtime.oldestPending.contentType || 'job'}</StatusPill>
+                      <StatusPill tone={recipeTone(queueRuntime.runtime.oldestPending.contentType)}>{queueRuntime.runtime.oldestPending.contentType || 'job'}</StatusPill>
                       <StatusPill tone="violet">{formatDate(queueRuntime.runtime.oldestPending.createdAt)}</StatusPill>
                     </div>
                   </div>
@@ -2558,7 +2838,7 @@ export default function VideoPipeline() {
                         <p className="mt-1 break-all text-xs text-slate-500">{job.queueId}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <StatusPill tone="violet">{job.contentType || 'job'}</StatusPill>
+                        <StatusPill tone={recipeTone(job.contentType)}>{job.contentType || 'job'}</StatusPill>
                         <StatusPill tone="amber">{formatDate(job.updatedAt || job.startedAt || job.createdAt)}</StatusPill>
                       </div>
                     </div>
@@ -2639,7 +2919,7 @@ export default function VideoPipeline() {
                             <SourcePill source={job.sourcePlatform || job.platform} />
                             <StatusPill tone={toneFromStatus(job.status)}>{job.status}</StatusPill>
                             <StatusPill tone={queueExecutionTone(job)}>{queueExecutionLabel(job, t)}</StatusPill>
-                            <StatusPill tone="sky">{job.contentType}</StatusPill>
+                            <StatusPill tone={recipeTone(job.contentType)}>{job.contentType}</StatusPill>
                             {job.errorCount ? <StatusPill tone="amber">{t('videoPipeline.retry')} {job.errorCount}/{job.maxRetries || 0}</StatusPill> : null}
                           </div>
                           {job.queueControl?.lastFailureMessage ? <p className="mt-3 max-w-2xl break-words text-xs text-rose-200/80">{job.queueControl.lastFailureMessage}</p> : null}
@@ -2647,6 +2927,24 @@ export default function VideoPipeline() {
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => toggleLogs(job.queueId)} className={getActionButtonClass('sky', 'px-3 py-1.5 text-xs')}>{jobLogs[job.queueId] ? t('videoPipeline.hide_logs') : t('videoPipeline.view_logs')}</button>
                           <button onClick={() => navigate(sectionPath('production') + `?search=${encodeURIComponent(job.queueId)}`)} className={getActionButtonClass('violet', 'px-3 py-1.5 text-xs')}><ArchiveRestore className="h-3.5 w-3.5" />{t('videoPipeline.view_history')}</button>
+                          {job.contentType === 'mashup' ? (
+                            <button onClick={() => queueVoiceoverFromJob(job)} className={getActionButtonClass('slate', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
+                              <Sparkles className="h-3.5 w-3.5" />
+                              {t('videoPipeline.queue_voiceover')}
+                            </button>
+                          ) : null}
+                          {job.contentType === 'voiceover' ? (
+                            <>
+                              <button onClick={() => queueVoiceoverFromJob(job)} className={getActionButtonClass('slate', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                {t('videoPipeline.revoiceover')}
+                              </button>
+                              <button onClick={() => queueMashupFromJob(job)} className={getActionButtonClass('amber', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
+                                <Clapperboard className="h-3.5 w-3.5" />
+                                {t('videoPipeline.queue_mashup')}
+                              </button>
+                            </>
+                          ) : null}
                           {job.canManualStart ? (
                             <button onClick={() => startJob(job.queueId)} className={getActionButtonClass(job.queueControl?.executionState === 'manual-review' ? 'amber' : 'violet', 'px-3 py-1.5 text-xs')} disabled={Boolean(busyAction)}>
                               <Clapperboard className="h-3.5 w-3.5" />
@@ -2810,7 +3108,7 @@ export default function VideoPipeline() {
 
       {activeSection === 'settings' ? (
         <section className="space-y-4">
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
             <section className={`${SURFACE_CARD_CLASS} p-5`}>
               <SectionHeader
                 title={t('videoPipeline.discovery_settings')}
@@ -2823,12 +3121,96 @@ export default function VideoPipeline() {
                   </div>
                 )}
               />
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-6">
                 <ScheduleEditor title={t('videoPipeline.discover_run')} subtitle={t('videoPipeline.how_often_the_discovery_step_should_scan_source_definitions')} value={settings.discovery?.discoverSchedule} onChange={(value) => updateSettings('discovery', 'discoverSchedule', value)} />
                 <ScheduleEditor title={t('videoPipeline.scan_channels_videos')} subtitle={t('videoPipeline.how_often_saved_channels_should_be_revisited_for_new_videos')} value={settings.discovery?.scanSchedule} onChange={(value) => updateSettings('discovery', 'scanSchedule', value)} />
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <input type="number" value={settings.discovery?.maxConcurrentDownload || 3} onChange={(e) => updateSettings('discovery', 'maxConcurrentDownload', Number(e.target.value) || 1)} className={INPUT_CLASS} placeholder={t('videoPipeline.max_concurrent_downloads')} />
                   <input type="number" value={settings.discovery?.minViewsFilter || 0} onChange={(e) => updateSettings('discovery', 'minViewsFilter', Number(e.target.value) || 0)} className={INPUT_CLASS} placeholder={t('videoPipeline.default_minimum_views')} />
+                </div>
+                <div className="border-t border-white/10 pt-5">
+                  <SectionHeader
+                    title={t('videoPipeline.sub_video_scraper_settings')}
+                    subtitle={t('videoPipeline.sub_video_scraper_subtitle')}
+                    actions={(
+                      <div className="flex flex-wrap gap-2">
+                    <button onClick={saveScraperSettings} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                      {t('videoPipeline.save_scraper_settings')}
+                    </button>
+                    <button onClick={() => runManualDiscover({ source: 'pexels' })} className={getActionButtonClass('violet', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                      {t('videoPipeline.scrape_now')}
+                    </button>
+                  </div>
+                )}
+              />
+                  <div className="mt-4 space-y-4">
+                    <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(scraperSettings?.discoverSources?.pexels)}
+                        onChange={(e) =>
+                          updateScraperNested('discoverSources', 'pexels', e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                      />
+                      {t('videoPipeline.enable_pexels_discovery')}
+                    </label>
+                    <div className={`${SUBTLE_PANEL_CLASS} space-y-2`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        {t('videoPipeline.pexels_taxonomy_label')}
+                      </p>
+                      <p className="text-sm text-slate-200">
+                        {t('videoPipeline.pexels_taxonomy_default', { taxonomy: PEXELS_TAXONOMY_DEFAULT.join(', ') })}
+                      </p>
+                    </div>
+                    <label className="space-y-2 text-xs text-slate-400">
+                      <span>{t('videoPipeline.pexels_start_url')}</span>
+                      <input
+                        type="text"
+                        value={scraperSettings?.pexelsSettings?.startUrl || 'https://www.pexels.com/vi-vn/video/'}
+                        onChange={(e) => updateScraperNested('pexelsSettings', 'startUrl', e.target.value)}
+                        className={INPUT_CLASS}
+                        placeholder="https://www.pexels.com/vi-vn/video/"
+                      />
+                    </label>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <label className="space-y-2 text-xs text-slate-400">
+                        <span>{t('videoPipeline.pexels_max_items')}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="200"
+                          value={scraperSettings?.pexelsSettings?.maxItems ?? 60}
+                          onChange={(e) => updateScraperNested('pexelsSettings', 'maxItems', Number(e.target.value) || 1)}
+                          className={INPUT_CLASS}
+                          placeholder="60"
+                        />
+                      </label>
+                      <label className="space-y-2 text-xs text-slate-400">
+                        <span>{t('videoPipeline.pexels_scroll_times')}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={scraperSettings?.pexelsSettings?.scrollTimes ?? 6}
+                          onChange={(e) => updateScraperNested('pexelsSettings', 'scrollTimes', Number(e.target.value) || 1)}
+                          className={INPUT_CLASS}
+                          placeholder="6"
+                        />
+                      </label>
+                    </div>
+                    <label className="space-y-2 text-xs text-slate-400">
+                      <span>{t('videoPipeline.pexels_schedule')}</span>
+                      <input
+                        type="text"
+                        value={scraperSettings?.cronTimes?.pexels || '15 7 * * *'}
+                        onChange={(e) => updateScraperNested('cronTimes', 'pexels', e.target.value)}
+                        className={INPUT_CLASS}
+                        placeholder="15 7 * * *"
+                      />
+                      <p className="text-[11px] text-slate-500">{t('videoPipeline.cron_hint')}</p>
+                    </label>
+                  </div>
                 </div>
               </div>
             </section>
@@ -2847,6 +3229,38 @@ export default function VideoPipeline() {
               />
               <div className="mt-4 space-y-4">
                 <ScheduleEditor title={t('videoPipeline.queue_runner')} subtitle={t('videoPipeline.how_often_the_background_worker_should_read_queued_productio')} value={settings.production?.scheduler} onChange={(value) => updateSettings('production', 'scheduler', value)} />
+                
+                {/* ⚡ Batch Processing Settings */}
+                <div className={`${SUBTLE_PANEL_CLASS} space-y-4`}>
+                  <h4 className="text-sm font-semibold text-slate-200">⚡ Batch Processing</h4>
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.max_jobs_per_run') || 'Max jobs per run'}</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="5"
+                      value={settings.production?.scheduler?.maxJobsPerRun || 3}
+                      onChange={(e) => updateSettings('production', 'scheduler', { ...(settings.production?.scheduler || {}), maxJobsPerRun: Math.max(1, Math.min(5, Number(e.target.value) || 3)) })}
+                      className={INPUT_CLASS}
+                      placeholder="1-5 items per batch"
+                    />
+                    <p className="text-[11px] text-slate-500">Default: 3 items/batch (handles 3 mashups simultaneously). Max: 5</p>
+                  </label>
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.batch_delay_minutes') || 'Delay between batches (minutes)'}</span>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="30"
+                      value={settings.production?.scheduler?.batchDelayMinutes !== undefined ? settings.production.scheduler.batchDelayMinutes : 2}
+                      onChange={(e) => updateSettings('production', 'scheduler', { ...(settings.production?.scheduler || {}), batchDelayMinutes: Math.max(0, Math.min(30, Number(e.target.value) || 0)) })}
+                      className={INPUT_CLASS}
+                      placeholder="0-30 minutes"
+                    />
+                    <p className="text-[11px] text-slate-500">Wait time between batches. Min: 0 (no delay), Max: 30 minutes</p>
+                  </label>
+                </div>
+                
                 <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
                   <input type="checkbox" checked={Boolean(settings.production?.autoPublish)} onChange={(e) => updateSettings('production', 'autoPublish', e.target.checked)} className="h-4 w-4 rounded border-slate-400/70 bg-white/80" />
                   {t('videoPipeline.auto_publish_after_completion')}
@@ -2859,25 +3273,7 @@ export default function VideoPipeline() {
                   <span>{t('videoPipeline.youtube_publish_type')}</span>
                   <select value={settings.production?.youtubePublishType || 'shorts'} onChange={(e) => updateSettings('production', 'youtubePublishType', e.target.value)} className={INPUT_CLASS}><option value="shorts">YouTube Shorts</option><option value="video">YouTube Video</option></select>
                 </label>
-                <label className={`${CHECKBOX_PANEL_CLASS} flex items-start gap-3`}>
-                  <input
-                    type="checkbox"
-                    checked={(settings.production?.composerDefaults?.encoder || 'auto') !== 'libx264'}
-                    onChange={(e) => {
-                      const encoder = e.target.checked ? 'auto' : 'libx264';
-                      updateSettings('production', 'composerDefaults', {
-                        ...(settings.production?.composerDefaults || DEFAULT_COMPOSER),
-                        encoder,
-                      });
-                      setComposer((prev) => ({ ...prev, encoder }));
-                    }}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-400/70 bg-white/80"
-                  />
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-200">{t('videoPipeline.nvenc_encode')}</p>
-                    <p className="text-[11px] text-slate-400">{t('videoPipeline.nvenc_encode_hint')}</p>
-                  </div>
-                </label>
+                
                 <div className={`${SUBTLE_PANEL_CLASS} space-y-3`}>
                   <div className="flex flex-wrap gap-2 text-xs text-slate-400">
                     <StatusPill tone={schedulerRuntime?.scheduleConfig?.enabled ? 'emerald' : 'amber'}>{schedulerRuntime?.scheduleConfig?.enabled ? t('videoPipeline.scheduler_enabled_2') : t('videoPipeline.scheduler_disabled')}</StatusPill>
@@ -2891,6 +3287,435 @@ export default function VideoPipeline() {
                 </div>
               </div>
             </section>
+          </section>
+
+          <section className={`${SURFACE_CARD_CLASS} p-5`}>
+            <SectionHeader
+              title={t('videoPipeline.mashup_settings')}
+              subtitle={t('videoPipeline.mashup_settings_desc')}
+              actions={(
+                <button onClick={() => saveSettingsSection('mashup')} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                  {t('videoPipeline.save_mashup_settings')}
+                </button>
+              )}
+            />
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.recipe')}</span>
+                  <select
+                    value={composerDefaults.recipe}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, recipe: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, recipe: next.recipe }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="mashup">{t('videoPipeline.mashup')}</option>
+                    <option value="subtitle">{t('videoPipeline.auto_subtitle')}</option>
+                    <option value="voiceover">{t('videoPipeline.voiceover')}</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.platform')}</span>
+                  <select
+                    value={composerDefaults.platform}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, platform: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, platform: next.platform }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="youtube">YouTube</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="tiktok">TikTok</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.duration_seconds')}</span>
+                  <input
+                    type="number"
+                    min="5"
+                    value={composerDefaults.duration}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, duration: Number(e.target.value) || 30 };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, duration: next.duration }));
+                    }}
+                    className={INPUT_CLASS}
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.aspect_ratio')}</span>
+                  <select
+                    value={composerDefaults.aspectRatio}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, aspectRatio: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, aspectRatio: next.aspectRatio }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="9:16">9:16</option>
+                    <option value="16:9">16:9</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.layout')}</span>
+                  <select
+                    value={composerDefaults.layout}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, layout: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, layout: next.layout }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="2-3-1-3">{t('videoPipeline.main_2_3_sub_1_3')}</option>
+                    <option value="full-screen">{t('videoPipeline.full_screen')}</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.subtitle_mode')}</span>
+                  <select
+                    value={composerDefaults.subtitleMode}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, subtitleMode: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, subtitleMode: next.subtitleMode }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="auto">{t('videoPipeline.auto_subtitle_2')}</option>
+                    <option value="none">{t('videoPipeline.no_subtitle')}</option>
+                  </select>
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(composerDefaults.watermarkEnabled)}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, watermarkEnabled: e.target.checked };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, watermarkEnabled: next.watermarkEnabled }));
+                    }}
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.watermark')}
+                </label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(composerDefaults.voiceoverEnabled)}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, voiceoverEnabled: e.target.checked };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, voiceoverEnabled: next.voiceoverEnabled }));
+                    }}
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.voiceover_2')}
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.template_strategy')}</span>
+                  <select
+                    value={composerDefaults.templateStrategy}
+                    onChange={(e) => {
+                      const next = { ...composerDefaults, templateStrategy: e.target.value };
+                      updateSettings('production', 'composerDefaults', next);
+                      setComposer((prev) => ({ ...prev, templateStrategy: next.templateStrategy }));
+                    }}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="random">{t('videoPipeline.random_template')}</option>
+                    <option value="weighted">{t('videoPipeline.weighted_template')}</option>
+                    <option value="ai_suggested">{t('videoPipeline.ai_suggested_template')}</option>
+                  </select>
+                </label>
+              </div>
+              <label className={`${CHECKBOX_PANEL_CLASS} flex items-start gap-3`}>
+                <input
+                  type="checkbox"
+                  checked={(composerDefaults.encoder || 'auto') !== 'libx264'}
+                  onChange={(e) => {
+                    const encoder = e.target.checked ? 'auto' : 'libx264';
+                    const next = { ...composerDefaults, encoder };
+                    updateSettings('production', 'composerDefaults', next);
+                    setComposer((prev) => ({ ...prev, encoder }));
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                />
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-200">{t('videoPipeline.nvenc_encode')}</p>
+                  <p className="text-[11px] text-slate-400">{t('videoPipeline.nvenc_encode_hint')}</p>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <section className={`${SURFACE_CARD_CLASS} p-5`}>
+            <SectionHeader
+              title={t('videoPipeline.voiceover_settings')}
+              subtitle={t('videoPipeline.voiceover_settings_desc')}
+              actions={(
+                <button onClick={() => saveSettingsSection('voiceover')} className={getActionButtonClass('slate', 'px-3 py-2 text-xs')} disabled={Boolean(busyAction)}>
+                  {t('videoPipeline.save_voiceover_settings')}
+                </button>
+              )}
+            />
+            <div className="mt-4">
+              <div className={`${SUBTLE_PANEL_CLASS} space-y-3`}>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={settings.production?.voiceoverPipeline?.enableTranscript !== false}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        enableTranscript: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.enable_transcript')}
+                </label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={settings.production?.voiceoverPipeline?.enableVoiceover !== false}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        enableVoiceover: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.enable_voiceover')}
+                </label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={settings.production?.voiceoverPipeline?.overlayVoiceoverOnVideo !== false}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        overlayVoiceoverOnVideo: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.overlay_voiceover')}
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.voiceover_pipeline_version')}</span>
+                  <select
+                    value={settings.production?.voiceoverPipeline?.pipelineVersion || 'v1'}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        pipelineVersion: e.target.value,
+                      })
+                    }
+                    className={INPUT_CLASS}
+                  >
+                    <option value="v1">{t('videoPipeline.voiceover_pipeline_v1_label')}</option>
+                    <option value="v2">{t('videoPipeline.voiceover_pipeline_v2_label')}</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.voiceover_translate_target')}</span>
+                  <input
+                    type="text"
+                    value={settings.production?.voiceoverPipeline?.translateTarget || 'vi'}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        translateTarget: e.target.value,
+                      })
+                    }
+                    className={INPUT_CLASS}
+                    placeholder="vi"
+                  />
+                </label>
+                <label className="space-y-2 text-xs text-slate-400">
+                  <span>{t('videoPipeline.voiceover_voice_name')}</span>
+                  <input
+                    type="text"
+                    value={settings.production?.voiceoverPipeline?.voiceName || 'vi-VN-HoaiMyNeural'}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        voiceName: e.target.value,
+                      })
+                    }
+                    className={INPUT_CLASS}
+                    placeholder="vi-VN-HoaiMyNeural"
+                  />
+                </label>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={settings.production?.voiceoverPipeline?.enableViralSelect !== false}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        enableViralSelect: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.voiceover_enable_viral_select')}
+                </label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.voiceover_clip_min')}</span>
+                    <input
+                      type="number"
+                      min="3"
+                      max="60"
+                      value={settings.production?.voiceoverPipeline?.clipMinSeconds ?? 12}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          clipMinSeconds: Number(e.target.value) || 12,
+                        })
+                      }
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.voiceover_clip_max')}</span>
+                    <input
+                      type="number"
+                      min="5"
+                      max="90"
+                      value={settings.production?.voiceoverPipeline?.clipMaxSeconds ?? 25}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          clipMaxSeconds: Number(e.target.value) || 25,
+                        })
+                      }
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                    <input
+                      type="checkbox"
+                      checked={settings.production?.voiceoverPipeline?.enableHook !== false}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          enableHook: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                    />
+                    {t('videoPipeline.voiceover_enable_hook')}
+                  </label>
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                    <input
+                      type="checkbox"
+                      checked={settings.production?.voiceoverPipeline?.enableHookCaption !== false}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          enableHookCaption: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                    />
+                    {t('videoPipeline.voiceover_enable_hook_caption')}
+                  </label>
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                    <input
+                      type="checkbox"
+                      checked={settings.production?.voiceoverPipeline?.enableBroll !== false}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          enableBroll: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                    />
+                    {t('videoPipeline.voiceover_enable_broll')}
+                  </label>
+                  <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                    <input
+                      type="checkbox"
+                      checked={settings.production?.voiceoverPipeline?.enableVertical !== false}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          enableVertical: e.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                    />
+                    {t('videoPipeline.voiceover_enable_vertical')}
+                  </label>
+                </div>
+                <label className={`${CHECKBOX_PANEL_CLASS} flex items-center gap-3`}>
+                  <input
+                    type="checkbox"
+                    checked={settings.production?.voiceoverPipeline?.keepOnlyFinal === true}
+                    onChange={(e) =>
+                      updateSettings('production', 'voiceoverPipeline', {
+                        ...(settings.production?.voiceoverPipeline || {}),
+                        keepOnlyFinal: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
+                  />
+                  {t('videoPipeline.voiceover_keep_only_final')}
+                </label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.voiceover_hook_position')}</span>
+                    <select
+                      value={settings.production?.voiceoverPipeline?.hookCaptionPosition || 'top'}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          hookCaptionPosition: e.target.value,
+                        })
+                      }
+                      className={INPUT_CLASS}
+                    >
+                      <option value="top">{t('videoPipeline.voiceover_hook_top')}</option>
+                      <option value="center">{t('videoPipeline.voiceover_hook_center')}</option>
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-xs text-slate-400">
+                    <span>{t('videoPipeline.voiceover_hook_font_size')}</span>
+                    <input
+                      type="number"
+                      min="48"
+                      max="200"
+                      value={settings.production?.voiceoverPipeline?.hookCaptionFontSize ?? 96}
+                      onChange={(e) =>
+                        updateSettings('production', 'voiceoverPipeline', {
+                          ...(settings.production?.voiceoverPipeline || {}),
+                          hookCaptionFontSize: Number(e.target.value) || 96,
+                        })
+                      }
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className={`${SURFACE_CARD_CLASS} p-5`}>

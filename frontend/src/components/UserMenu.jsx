@@ -7,7 +7,10 @@ export default function UserMenu({ compact = false }) {
   const { user, logout } = useAuthStore();
   const access = useAuthStore((state) => state.access);
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState(null);
   const menuRef = useRef(null);
+  const buttonRef = useRef(null);
+  const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,6 +30,45 @@ export default function UserMenu({ compact = false }) {
     navigate('/login');
   };
 
+  const updateMenuPosition = () => {
+    const buttonEl = buttonRef.current;
+    if (!buttonEl) return;
+    const rect = buttonEl.getBoundingClientRect();
+    const dropdownEl = dropdownRef.current;
+    const menuWidth = dropdownEl?.offsetWidth || 240;
+    const menuHeight = dropdownEl?.offsetHeight || 260;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const left = Math.min(Math.max(12, rect.left), Math.max(12, viewportWidth - menuWidth - 12));
+    let top = rect.top - menuHeight - 12;
+    if (top < 8) {
+      top = rect.bottom + 12;
+      if (top + menuHeight > viewportHeight - 8) {
+        top = Math.max(8, viewportHeight - menuHeight - 8);
+      }
+    }
+    setMenuStyle({
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${menuWidth}px`,
+      zIndex: 9999,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => updateMenuPosition());
+    const handleResize = () => updateMenuPosition();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleResize, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleResize, true);
+    };
+  }, [open]);
+
   const planLabel =
     user?.subscription?.plan
     || user?.subscription?.tier
@@ -39,6 +81,8 @@ export default function UserMenu({ compact = false }) {
   return (
     <div ref={menuRef} className="relative user-menu">
       <button
+        type="button"
+        ref={buttonRef}
         onClick={() => setOpen((prev) => !prev)}
         className={`user-menu-button flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-sm text-slate-200 shadow-[0_10px_24px_rgba(8,18,34,0.25)] backdrop-blur-xl transition hover:bg-white/[0.14] ${
           compact ? 'user-menu-compact p-0 shadow-none border-transparent bg-transparent hover:bg-transparent' : ''
@@ -60,7 +104,11 @@ export default function UserMenu({ compact = false }) {
       </button>
 
       {open && (
-        <div className="user-menu-dropdown absolute right-0 mt-3 w-60 rounded-[1.2rem] border border-white/10 bg-slate-950/90 p-2 text-sm text-slate-200 shadow-[0_18px_40px_rgba(2,6,23,0.35)] backdrop-blur-2xl">
+        <div
+          className="user-menu-dropdown rounded-[1.2rem] border border-white/10 bg-slate-950/90 p-2 text-sm text-slate-200 shadow-[0_18px_40px_rgba(2,6,23,0.35)] backdrop-blur-2xl"
+          style={menuStyle || undefined}
+          ref={dropdownRef}
+        >
           <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
             <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Signed in</p>
             <p className="mt-1 truncate text-sm font-semibold text-white">{user.email}</p>

@@ -53,6 +53,8 @@ export const videoPipelineApi = {
   uploadVideo: (videoId) => unwrap(apiClient.post(`${PIPELINE_BASE}/videos/${videoId}/upload`)),
   deleteVideo: (videoId) => unwrap(apiClient.delete(`${PIPELINE_BASE}/videos/${videoId}`)),
   uploadPendingVideos: (limit = 30) => unwrap(apiClient.post(`${PIPELINE_BASE}/videos/upload-pending`, { limit })),
+  uploadSelectedVideos: (videoIds = []) => unwrap(apiClient.post(`${PIPELINE_BASE}/videos/upload-selected`, { videoIds })),
+  runVoiceoverJobs: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/videos/voiceover`, payload)),
   triggerPendingDownloads: (limit = 200) =>
     unwrap(apiClient.post(`${PIPELINE_BASE}/videos/trigger-pending-downloads`, { limit })),
   getProductionOverview: (params = {}) => unwrap(apiClient.get(`${PIPELINE_BASE}/production/overview`, { params })),
@@ -61,6 +63,7 @@ export const videoPipelineApi = {
   deleteProductionHistoryItem: (queueId) => unwrap(apiClient.delete(`${PIPELINE_BASE}/production/history/${queueId}`)),
   remashupJob: (queueId, payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/production/history/${queueId}/remashup`, payload)),
   runMassProduction: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/production/mass-produce`, payload)),
+  runMassVoiceover: (payload = {}) => unwrap(apiClient.post(`${PIPELINE_BASE}/production/mass-voiceover`, payload)),
 
   getJobs: (params = {}) => unwrap(apiClient.get(`${PIPELINE_BASE}/jobs`, { params })),
   getQueueRuntime: (params = {}) => unwrap(apiClient.get(`${PIPELINE_BASE}/jobs/runtime`, { params })),
@@ -89,6 +92,7 @@ export const videoPipelineApi = {
 
   getScraperOverview: () => unwrap(apiClient.get(`${SCRAPER_BASE}/stats/overview`)),
   getScraperSettings: () => unwrap(apiClient.get(`${SCRAPER_BASE}/settings`)),
+  saveScraperSettings: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/settings`, payload)),
   getPlayboardMetadata: () => unwrap(apiClient.get(`${SCRAPER_BASE}/playboard/metadata`)),
   getPlayboardConfigs: () => unwrap(apiClient.get(`${SCRAPER_BASE}/playboard/configs`)),
   triggerScraperJob: (type, filters = {}) =>
@@ -97,6 +101,8 @@ export const videoPipelineApi = {
     unwrap(apiClient.post(`${SCRAPER_BASE}/playboard/manual-discover`, wrapPlayboardManualDiscoverPayload(payload))),
   manualDiscoverDailyhaha: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/dailyhaha/manual-discover`, payload)),
   manualDiscoverDouyin: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/douyin/manual-discover`, payload)),
+  manualDiscoverPexels: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/pexels/manual-discover`, payload)),
+  manualDiscoverKuaishou: (payload = {}) => unwrap(apiClient.post(`${SCRAPER_BASE}/kuaishou/manual-discover`, payload)),
   manualScanChannel: (channelId) => unwrap(apiClient.post(`${SCRAPER_BASE}/channels/${channelId}/manual-scan`)),
   redownloadVideo: (videoId) => unwrap(apiClient.post(`${SCRAPER_BASE}/videos/${videoId}/re-download`)),
   getScraperLogs: (params = {}) => unwrap(apiClient.get(`${SCRAPER_BASE}/logs`, { params })),

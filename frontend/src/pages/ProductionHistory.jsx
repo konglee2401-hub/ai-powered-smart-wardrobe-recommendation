@@ -61,7 +61,6 @@ const DEFAULT_REMASHUP_CONFIG = {
   templateName: '',
   manualSubVideo: null,
   subtitleMode: 'auto',
-  capcutAutoCaption: true,
   watermarkEnabled: true,
   voiceoverEnabled: false,
   startImmediately: true,
@@ -124,6 +123,8 @@ export default function ProductionHistory() {
   const [previewItem, setPreviewItem] = useState(null);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
   const [publishTargets, setPublishTargets] = useState([]);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, active: false, cancelled: false });
+  const [batchErrors, setBatchErrors] = useState([]);
 
   const navItems = useMemo(() => {
     const labels = {
@@ -157,6 +158,52 @@ export default function ProductionHistory() {
     const options = buildTemplateOptions(templates);
     return options.length ? options : DEFAULT_TEMPLATES;
   }, [templates]);
+
+  // ⚡ Batch Processing Helper - xử lý item theo batch để tránh quá tải
+  const processBatch = async (items, processFn, batchSize = 3, onProgress = null, maxRetries = 2) => {
+    const results = { success: [], failed: [] };
+    
+    for (let i = 0; i < items.length; i += batchSize) {
+      if (batchProgress.cancelled) {
+        results.cancelled = true;
+        break;
+      }
+      
+      const batch = items.slice(i, i + batchSize);
+      const promises = batch.map(async (item) => {
+        let lastError = null;
+        
+        // Retry logic - thử lại tối đa maxRetries lần
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            await processFn(item);
+            results.success.push(item.queueId);
+            onProgress?.({ success: results.success.length, failed: results.failed.length });
+            return;
+          } catch (error) {
+            lastError = error;
+            if (attempt < maxRetries) {
+              // Chờ 1-2 giây trước khi retry
+              await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+            }
+          }
+        }
+        
+        results.failed.push({ queueId: item.queueId, error: lastError?.message || 'Unknown error' });
+        onProgress?.({ success: results.success.length, failed: results.failed.length });
+      });
+      
+      await Promise.all(promises);
+      
+      // Update progress bar
+      setBatchProgress(prev => ({
+        ...prev,
+        current: Math.min(i + batchSize, items.length),
+      }));
+    }
+    
+    return results;
+  };
 
   const loadHistory = async (page = pagination.page) => {
     setLoading(true);
@@ -210,7 +257,6 @@ export default function ProductionHistory() {
       templateName,
       templateStrategy,
       subtitleMode: mashupLog?.subtitleMode || productionConfig?.subtitleMode || DEFAULT_REMASHUP_CONFIG.subtitleMode,
-      capcutAutoCaption: mashupLog?.capcutAutoCaption ?? productionConfig?.capcutAutoCaption ?? DEFAULT_REMASHUP_CONFIG.capcutAutoCaption,
       watermarkEnabled: mashupLog?.watermarkEnabled ?? productionConfig?.watermarkEnabled ?? DEFAULT_REMASHUP_CONFIG.watermarkEnabled,
       voiceoverEnabled: mashupLog?.voiceoverEnabled ?? productionConfig?.voiceoverEnabled ?? DEFAULT_REMASHUP_CONFIG.voiceoverEnabled,
     });
@@ -230,7 +276,7 @@ export default function ProductionHistory() {
         templateName: remashupConfig.templateStrategy === 'specific' ? remashupConfig.templateName || undefined : undefined,
         manualSubVideo: remashupConfig.manualSubVideo || null,
         subtitleMode: remashupConfig.subtitleMode,
-        capcutAutoCaption: remashupConfig.subtitleMode === 'none' ? false : remashupConfig.capcutAutoCaption,
+        capcutAutoCaption: false,
         watermarkEnabled: remashupConfig.watermarkEnabled,
         voiceoverEnabled: remashupConfig.voiceoverEnabled,
         startImmediately: remashupConfig.startImmediately,
@@ -306,24 +352,51 @@ export default function ProductionHistory() {
       toast.error(t('messages.selectAtLeastOne'));
       return;
     }
+
+    // 🎬 Batch processing setup
+    const BATCH_SIZE = 3; // Xử lý 3 cái cùng lúc
+    const MAX_RETRIES = 2;
+    
     setBusyAction('remashup-selection');
+    setBatchProgress({ current: 0, total: selected.length, active: true, cancelled: false });
+    setBatchErrors([]);
+    
     try {
-      await Promise.all(
-        selected.map((item) =>
-          videoPipelineApi.remashupJob(item.queueId, {
-            templateName: undefined,
-            manualSubVideo: null,
-            startImmediately: true,
-          })
-        )
-      );
-      toast.success(t('messages.remashupStarted'));
+      const remashupFn = async (item) => {
+        await videoPipelineApi.remashupJob(item.queueId, {
+          templateStrategy: DEFAULT_REMASHUP_CONFIG.templateStrategy,
+          templateName: undefined,
+          manualSubVideo: null,
+          subtitleMode: DEFAULT_REMASHUP_CONFIG.subtitleMode,
+          capcutAutoCaption: false,
+          watermarkEnabled: DEFAULT_REMASHUP_CONFIG.watermarkEnabled,
+          voiceoverEnabled: DEFAULT_REMASHUP_CONFIG.voiceoverEnabled,
+          startImmediately: true,
+        });
+      };
+
+      const results = await processBatch(selected, remashupFn, BATCH_SIZE, null, MAX_RETRIES);
+
+      // Show results
+      if (results.success.length > 0) {
+        toast.success(`✅ ${results.success.length} mashup remashup started`);
+      }
+      if (results.failed.length > 0) {
+        setBatchErrors(results.failed);
+        toast.error(`⚠️ ${results.failed.length} mashup failed - check errors below`);
+      }
+      if (results.cancelled) {
+        toast.error('Remashup cancelled by user');
+      }
+
       setSelectedQueueIds([]);
-      loadHistory();
+      setTimeout(() => loadHistory(), 1000);
     } catch (error) {
       toast.error(error.message || 'Cannot re-mashup');
+      setBatchErrors([{ queueId: 'batch', error: error.message }]);
     } finally {
       setBusyAction('');
+      setBatchProgress({ current: 0, total: 0, active: false, cancelled: false });
     }
   };
 
@@ -840,16 +913,6 @@ export default function ProductionHistory() {
                   <label className="flex items-center gap-3 text-sm text-slate-200">
                     <input
                       type="checkbox"
-                      checked={remashupConfig.capcutAutoCaption}
-                      onChange={(event) => setRemashupConfig((prev) => ({ ...prev, capcutAutoCaption: event.target.checked }))}
-                      className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
-                      disabled={remashupConfig.subtitleMode === 'none'}
-                    />
-                    {t('modals.capcutAutoCaption')}
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-slate-200">
-                    <input
-                      type="checkbox"
                       checked={remashupConfig.watermarkEnabled}
                       onChange={(event) => setRemashupConfig((prev) => ({ ...prev, watermarkEnabled: event.target.checked }))}
                       className="h-4 w-4 rounded border-slate-400/70 bg-white/80"
@@ -982,6 +1045,52 @@ export default function ProductionHistory() {
           </div>
         </ModalPortal>
       ) : null}
+      {batchProgress.active ? (
+        <ModalPortal onClose={() => {}}>
+          <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+            <div className={`${SURFACE_CARD_CLASS} max-w-md space-y-4`}>
+              <div>
+                <h3 className="text-lg font-semibold text-white">🎬 Batch Remashup Processing</h3>
+                <p className="mt-1 text-sm text-slate-400">Xử lý tuần tự để tránh quá tải server...</p>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>{batchProgress.current} / {batchProgress.total}</span>
+                  <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                  <div
+                    className="h-full bg-gradient-to-r from-violet-500 to-cyan-500 transition-all duration-300"
+                    style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Error list */}
+              {batchErrors.length > 0 ? (
+                <div className={`${SUBTLE_PANEL_CLASS} max-h-48 space-y-2 overflow-y-auto`}>
+                  <p className="text-xs font-semibold text-red-400">⚠️ Errors ({batchErrors.length})</p>
+                  {batchErrors.map((err, idx) => (
+                    <div key={idx} className="text-xs text-slate-400">
+                      <p className="font-mono">{err.queueId}</p>
+                      <p className="text-red-500">{err.error}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* Info */}
+              <div className={SUBTLE_PANEL_CLASS}>
+                <p className="text-xs text-slate-400">
+                  💡 Batch size: 3 items/batch | Auto-retry: 2 attempts
+                </p>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      ) : null}
       <GalleryPicker
         isOpen={galleryPickerOpen}
         onClose={() => setGalleryPickerOpen(false)}
@@ -1012,9 +1121,6 @@ export default function ProductionHistory() {
 
   );
 }
-
-
-
 
 
 

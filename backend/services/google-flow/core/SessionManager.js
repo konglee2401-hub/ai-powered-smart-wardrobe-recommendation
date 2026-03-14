@@ -39,17 +39,19 @@ class SessionManager {
     // 🔐 Support flowId for flow-specific Chrome profile isolation
     // This prevents "profile locked by another process" errors when flows run in parallel
     const flowId = options.flowId || 'default';
-    const profileDir = path.join(GOOGLE_FLOW_PROFILE_BASE, flowId);  // Per-flow Chrome profile dir
+    const profileKey = options.profileKey || flowId;
+    const profileDir = path.join(GOOGLE_FLOW_PROFILE_BASE, profileKey);  // Per-profile Chrome dir
     
     this.flowId = flowId;
+    this.profileKey = profileKey;
     this.profileDir = profileDir;
     
     this.options = {
       headless: false,
       userDataDir: profileDir,  // 💫 Use persistent Chrome profile for each flow
-      sessionFilePath: options.sessionFilePath || GOOGLE_FLOW_DEFAULT_SESSION,  // 💫 Shared session file
+      sessionFilePath: options.sessionFilePath || path.join(profileDir, 'session.json'),
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
-      projectId: options.projectId || '87b78b0e-8b5a-40fc-9142-cdeda1419be7',
+      projectId: options.projectId || null,
       outputDir: options.outputDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'uploads/generated-images'),
       timeouts: {
         pageLoad: 60000,
@@ -272,8 +274,69 @@ class SessionManager {
     // Wait for page elements
     console.log('   ⏳ STEP 5: Waiting for page elements...');
     await this.waitForPageReady();
+    await this.ensureProjectSelected();
     
     console.log('✅ Google Flow loaded\n');
+  }
+
+  async ensureProjectSelected() {
+    try {
+      const alreadyInProject = await this.page.evaluate(() => location.pathname.includes('/project/'));
+      if (alreadyInProject) return true;
+
+      const clicked = await this.page.evaluate(() => {
+        const list = document.querySelector('[data-testid="virtuoso-item-list"]');
+        const firstProject = list?.querySelector('a[href*="/project/"]');
+        if (firstProject) {
+          firstProject.click();
+          return 'opened-first';
+        }
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const newProject = buttons.find(btn => /dự án mới|new project/i.test(btn.textContent || ''));
+        if (newProject) {
+          newProject.click();
+          return 'created-new';
+        }
+        return '';
+      });
+
+      if (clicked) {
+        await this.page.waitForTimeout(2000);
+        return true;
+      }
+    } catch (e) {
+      console.log(`   ⚠️  ensureProjectSelected error: ${e.message}`);
+    }
+    return false;
+  }
+
+  async getAccountSnapshot() {
+    try {
+      const info = await this.page.evaluate(() => {
+        const profileButton = document.querySelector('button.sc-e441891c-0, button img[alt*="Hình ảnh hồ sơ người dùng"], button img[alt*="profile" i]');
+        if (profileButton instanceof HTMLElement) {
+          profileButton.click();
+        }
+        const dialog = document.querySelector('[role="dialog"]');
+        const dialogText = dialog?.textContent || '';
+        const emailMatch = dialogText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        const creditMatch = dialogText.match(/(\d+)\s*(Tín dụng AI|AI credits)/i);
+        const nameEl = dialog?.querySelector('.sc-9a896d5b-4');
+        return {
+          email: emailMatch ? emailMatch[0] : '',
+          name: nameEl?.textContent || '',
+          credits: creditMatch ? Number(creditMatch[1]) : null,
+        };
+      });
+
+      if (info?.email) {
+        // close modal best-effort
+        await this.page.keyboard.press('Escape').catch(() => {});
+      }
+      return info || { email: '', name: '', credits: null };
+    } catch (e) {
+      return { email: '', name: '', credits: null };
+    }
   }
 
   /**
@@ -390,13 +453,20 @@ class SessionManager {
         return items;
       });
       
+      const accountSnapshot = await this.getAccountSnapshot();
       const sessionData = {
         cookies,
         localStorage,
         sessionStorage,
         timestamp: new Date().toISOString(),
         url: this.page.url(),
-        isAuthenticated: await this.isAuthenticated()
+        isAuthenticated: await this.isAuthenticated(),
+        metadata: {
+          email: accountSnapshot?.email || '',
+          name: accountSnapshot?.name || '',
+          credits: Number.isFinite(accountSnapshot?.credits) ? accountSnapshot.credits : null,
+          savedAt: new Date().toISOString(),
+        }
       };
       
       // 💾 Ensure session directory exists before saving

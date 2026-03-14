@@ -24,6 +24,13 @@ from .config import (
     PLAYBOARD_COOKIES_FILE,
     PLAYBOARD_USER_EMAIL,
     PLAYBOARD_USER_PASSWORD,
+    PEXELS_START_URL,
+    PEXELS_MAX_ITEMS,
+    PEXELS_SCROLL_TIMES,
+    KUAISHOU_START_URL,
+    KUAISHOU_MAX_ITEMS,
+    KUAISHOU_SCROLL_TIMES,
+    KUAISHOU_STORAGE_STATE,
     SCRAPER_ENGINE,
     SCRAPER_HEADLESS,
     SCRAPER_LOCALE,
@@ -61,6 +68,219 @@ DOUYIN_TOPIC_KEYWORDS = {
     "sexy dance": "热舞",
     "cooking": "美食",
 }
+
+PEXELS_CHANNEL_ID = "pexels-videos"
+PEXELS_CATEGORY_FOLDERS = {
+    'people': 'People',
+    'nature': 'Nature',
+    'city': 'City',
+    'food': 'Food',
+    'travel': 'Travel',
+    'business': 'Business',
+    'fashion': 'Fashion',
+    'animals': 'Animals',
+    'sports': 'Sports',
+    'technology': 'Technology',
+    'lifestyle': 'Lifestyle',
+    'music': 'Music',
+    'health': 'Health',
+    'education': 'Education',
+    'abstract': 'Abstract',
+    'misc': 'Misc',
+}
+
+PEXELS_CATEGORY_KEYWORDS = {
+    'people': [
+        'people', 'person', 'woman', 'women', 'man', 'men', 'girl', 'boy', 'child', 'kids', 'family', 'portrait',
+        'nguoi', 'phu nu', 'dan ong', 'tre em', 'gia dinh', 'chan dung',
+    ],
+    'nature': [
+        'nature', 'forest', 'mountain', 'river', 'sea', 'ocean', 'beach', 'sunset', 'sunrise', 'tree', 'flower',
+        'thien nhien', 'rung', 'nui', 'song', 'bien', 'ho', 'hoa', 'mat troi', 'hoang hon', 'binh minh',
+    ],
+    'city': [
+        'city', 'urban', 'street', 'downtown', 'building', 'architecture', 'road', 'traffic',
+        'thanh pho', 'duong pho', 'toa nha', 'kien truc', 'giao thong',
+    ],
+    'food': [
+        'food', 'cooking', 'cook', 'kitchen', 'meal', 'recipe', 'drink', 'coffee',
+        'do an', 'nau an', 'mon an', 'bep', 'cong thuc', 'ca phe', 'tra',
+    ],
+    'travel': [
+        'travel', 'tour', 'journey', 'adventure', 'vacation', 'trip', 'explore',
+        'du lich', 'hanh trinh', 'kham pha', 'chuyen di', 'phuot',
+    ],
+    'business': [
+        'business', 'office', 'meeting', 'team', 'work', 'cowork', 'startup', 'marketing', 'finance',
+        'cong viec', 'van phong', 'hop', 'nhom', 'tai chinh', 'marketing',
+    ],
+    'fashion': [
+        'fashion', 'style', 'outfit', 'model', 'beauty', 'makeup',
+        'thoi trang', 'phong cach', 'trang diem', 'nguoi mau', 'lam dep',
+    ],
+    'animals': [
+        'animal', 'animals', 'pet', 'cat', 'dog', 'bird', 'horse', 'wildlife',
+        'dong vat', 'thu cung', 'meo', 'cho', 'chim',
+    ],
+    'sports': [
+        'sport', 'sports', 'gym', 'fitness', 'run', 'running', 'workout', 'football', 'soccer', 'basketball',
+        'the thao', 'tap luyen', 'gym', 'bong da', 'bong ro', 'chay bo',
+    ],
+    'technology': [
+        'technology', 'tech', 'computer', 'laptop', 'phone', 'smartphone', 'ai', 'robot',
+        'cong nghe', 'may tinh', 'dien thoai', 'tri tue nhan tao', 'robot',
+    ],
+    'lifestyle': [
+        'lifestyle', 'home', 'interior', 'living', 'relax', 'self care',
+        'doi song', 'nha', 'noi that', 'thu gian', 'song',
+    ],
+    'music': [
+        'music', 'musician', 'guitar', 'piano', 'band', 'sing', 'singing',
+        'am nhac', 'nhac', 'hat', 'dan', 'piano',
+    ],
+    'health': [
+        'health', 'medical', 'doctor', 'hospital', 'yoga', 'wellness',
+        'suc khoe', 'y te', 'bac si', 'benh vien', 'yoga',
+    ],
+    'education': [
+        'education', 'school', 'classroom', 'teacher', 'student', 'study',
+        'giao duc', 'truong hoc', 'lop hoc', 'giao vien', 'hoc sinh',
+    ],
+    'abstract': [
+        'abstract', 'pattern', 'texture', 'background',
+        'truu tuong', 'hoa van', 'ket cau', 'nen',
+    ],
+}
+
+KUAISHOU_CHANNEL_ID = "kuaishou-brilliant"
+KUAISHOU_HOT_CHANNEL_ID = "00"
+KUAISHOU_GRAPHQL_QUERY = """
+fragment photoContent on PhotoEntity {
+  __typename
+  id
+  duration
+  caption
+  originCaption
+  likeCount
+  viewCount
+  commentCount
+  realLikeCount
+  coverUrl
+  photoUrl
+  photoH265Url
+  manifest
+  manifestH265
+  videoResource
+  coverUrls {
+    url
+    __typename
+  }
+  timestamp
+  expTag
+  animatedCoverUrl
+  distance
+  disableSensitivePhoto
+  videoRatio
+  liked
+  stereoType
+  profileUserTopPhoto
+  musicBlocked
+  riskTagContent
+  riskTagUrl
+}
+
+fragment recoPhotoFragment on recoPhotoEntity {
+  __typename
+  id
+  duration
+  caption
+  originCaption
+  likeCount
+  viewCount
+  commentCount
+  realLikeCount
+  coverUrl
+  photoUrl
+  photoH265Url
+  manifest
+  manifestH265
+  videoResource
+  coverUrls {
+    url
+    __typename
+  }
+  timestamp
+  expTag
+  animatedCoverUrl
+  distance
+  videoRatio
+  liked
+  stereoType
+  profileUserTopPhoto
+  musicBlocked
+  riskTagContent
+  riskTagUrl
+}
+
+fragment feedContent on Feed {
+  type
+  author {
+    id
+    name
+    headerUrl
+    following
+    headerUrls {
+      url
+      __typename
+    }
+    verifiedDetail {
+      description
+      iconType
+      newVerified
+      musicCompany
+      type
+      __typename
+    }
+    __typename
+  }
+  photo {
+    ...photoContent
+    ...recoPhotoFragment
+    __typename
+  }
+  canAddComment
+  llsid
+  status
+  currentPcursor
+  tags {
+    type
+    name
+    __typename
+  }
+  __typename
+}
+
+fragment photoResult on PhotoResult {
+  result
+  llsid
+  expTag
+  serverExpTag
+  pcursor
+  feeds {
+    ...feedContent
+    __typename
+  }
+  webPageArea
+  __typename
+}
+
+query brilliantTypeDataQuery($pcursor: String, $hotChannelId: String, $page: String, $webPageArea: String) {
+  brilliantTypeData(pcursor: $pcursor, hotChannelId: $hotChannelId, page: $page, webPageArea: $webPageArea) {
+    ...photoResult
+    __typename
+  }
+}
+""".strip()
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):
@@ -1020,6 +1240,583 @@ async def _collect_dailyhaha_cards() -> List[Dict]:
     return cards
 
 
+def _normalize_pexels_url(href: str) -> str:
+    if not href:
+        return ''
+    if href.startswith('http'):
+        return href
+    return f'https://www.pexels.com{href}'
+
+
+def _extract_pexels_video_id(url: str) -> str:
+    if not url:
+        return ''
+    match = re.search(r'-([0-9]+)(?:/|\\?|$)', url)
+    return match.group(1) if match else ''
+
+
+def _extract_kuaishou_video_url(photo: Dict) -> str:
+    if not photo:
+        return ''
+    url = str(photo.get('photoUrl') or '').strip()
+    if url:
+        return url
+    video_resource = photo.get('videoResource') or {}
+    for codec_key in ('h264', 'hevc'):
+        codec = video_resource.get(codec_key) or {}
+        adaptation = (codec.get('adaptationSet') or [{}])[0]
+        representation = (adaptation.get('representation') or [{}])[0]
+        rep_url = str(representation.get('url') or '').strip()
+        if rep_url:
+            return rep_url
+        backup = representation.get('backupUrl') or []
+        if backup:
+            return str(backup[0] or '').strip()
+    return ''
+
+
+def _extract_kuaishou_cover(photo: Dict) -> str:
+    if not photo:
+        return ''
+    cover = str(photo.get('coverUrl') or '').strip()
+    if cover:
+        return cover
+    for item in (photo.get('coverUrls') or []):
+        url = str(item.get('url') or '').strip()
+        if url:
+            return url
+    return ''
+
+
+def _normalize_text(value: str) -> str:
+    try:
+        import unicodedata
+
+        text = (value or '').lower()
+        text = unicodedata.normalize('NFKD', text)
+        text = ''.join([c for c in text if not unicodedata.combining(c)])
+        return text
+    except Exception:
+        return (value or '').lower()
+
+
+def _score_category(text: str) -> str:
+    normalized = _normalize_text(text)
+    best = 'misc'
+    best_score = 0
+    for category, keywords in PEXELS_CATEGORY_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            if kw and kw in normalized:
+                score += 1
+        if score > best_score:
+            best = category
+            best_score = score
+    return best
+
+
+def _category_from_tags_and_title(title: str, tags: List[str]) -> str:
+    combined = ' '.join([title or ''] + (tags or []))
+    return _score_category(combined)
+
+
+def _extract_json_ld(html: str) -> List[Dict]:
+    blocks = []
+    for match in re.finditer(r'<script[^>]+type=\"application/ld\\+json\"[^>]*>(.*?)</script>', html, flags=re.DOTALL | re.IGNORECASE):
+        raw = match.group(1).strip()
+        if not raw:
+            continue
+        try:
+            blocks.append(json.loads(raw))
+        except Exception:
+            continue
+    return blocks
+
+
+def _extract_next_data(html: str) -> Dict | None:
+    match = re.search(r'<script[^>]+id=\"__NEXT_DATA__\"[^>]*>(.*?)</script>', html, flags=re.DOTALL | re.IGNORECASE)
+    if not match:
+        return None
+    raw = match.group(1).strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _collect_tags_from_json(obj, tags: set):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key == 'tags' and isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str):
+                        tags.add(item)
+                    elif isinstance(item, dict):
+                        label = item.get('tag') or item.get('title') or item.get('name')
+                        if label:
+                            tags.add(str(label))
+            else:
+                _collect_tags_from_json(value, tags)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_tags_from_json(item, tags)
+
+
+def _extract_detail_from_html(html: str) -> Dict:
+    title = ''
+    tags: List[str] = []
+
+    next_data = _extract_next_data(html)
+    if next_data:
+        tag_set: set = set()
+        _collect_tags_from_json(next_data, tag_set)
+        if tag_set:
+            tags = sorted(tag_set)
+
+        # Try common title fields in Next.js payload
+        try:
+            page_props = next_data.get('props', {}).get('pageProps', {})
+            media = page_props.get('media') or page_props.get('video') or {}
+            title = media.get('title') or media.get('description') or ''
+        except Exception:
+            pass
+
+    if not tags:
+        for block in _extract_json_ld(html):
+            if isinstance(block, dict):
+                keywords = block.get('keywords') or block.get('tags')
+                if isinstance(keywords, str):
+                    tags = [x.strip() for x in keywords.split(',') if x.strip()]
+                elif isinstance(keywords, list):
+                    tags = [str(x).strip() for x in keywords if str(x).strip()]
+            if tags:
+                break
+
+    if not title:
+        m = re.search(r'<h1[^>]*>(.*?)</h1>', html, flags=re.DOTALL | re.IGNORECASE)
+        if m:
+            title = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+
+    return {
+        'title': title,
+        'tags': tags,
+    }
+
+
+async def _enrich_pexels_card(card: Dict) -> Dict:
+    page_url = card.get('page_url') or ''
+    if not page_url:
+        return card
+    try:
+        html = await _fetch_html(page_url, timeout_sec=25)
+    except Exception as ex:
+        print(f'[pexels] fetch detail failed: {page_url} -> {ex}')
+        return card
+
+    detail = _extract_detail_from_html(html)
+    title = detail.get('title') or card.get('title') or ''
+    tags = detail.get('tags') or []
+    category = _category_from_tags_and_title(title, tags)
+
+    card['title'] = title[:180] if title else card.get('title', '')
+    card['tags'] = tags[:50] if isinstance(tags, list) else []
+    card['category'] = category
+    card['detail_url'] = page_url
+    return card
+
+
+async def _collect_pexels_cards() -> List[Dict]:
+    setting = get_or_create_settings()
+    pexels_cfg = setting.get('pexelsSettings', {}) or {}
+    start_url = (pexels_cfg.get('startUrl') or PEXELS_START_URL or 'https://www.pexels.com/vi-vn/video/').strip()
+    max_items = int(pexels_cfg.get('maxItems') or PEXELS_MAX_ITEMS or 60)
+    scroll_times = int(pexels_cfg.get('scrollTimes') or PEXELS_SCROLL_TIMES or 6)
+
+    cards: List[Dict] = []
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+
+    for i in range(attempts):
+        timeout_ms = FAIL_FAST_TIMEOUTS_MS[min(i, len(FAIL_FAST_TIMEOUTS_MS) - 1)]
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[pexels] no healthy proxy available')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy) if proxy else None
+
+        try:
+            async with async_playwright() as p:
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context = await browser.new_context(
+                    user_agent=random.choice(UA),
+                    locale=SCRAPER_LOCALE,
+                    timezone_id=SCRAPER_TIMEZONE,
+                    viewport={'width': 1366, 'height': 920},
+                )
+                page = await context.new_page()
+
+                try:
+                    await page.goto(start_url, wait_until='domcontentloaded', timeout=timeout_ms)
+                    await asyncio.sleep(2)
+
+                    await human_scroll(page, max(1, scroll_times))
+
+                    raw_cards = await page.evaluate(
+                        f"""() => {{
+                            const normalize = (href) => {{
+                                if (!href) return '';
+                                if (href.startsWith('http')) return href;
+                                return `https://www.pexels.com${{href}}`;
+                            }};
+
+                            const out = [];
+                            const seen = new Set();
+                            const links = Array.from(document.querySelectorAll('a[href*=\"/video/\"]'));
+
+                            for (const link of links) {{
+                                const href = link.getAttribute('href') || '';
+                                if (!href.includes('/video/')) continue;
+                                const full = normalize(href);
+                                const match = full.match(/-([0-9]+)(?:\\/|\\?|$)/);
+                                if (!match) continue;
+                                const id = match[1];
+                                if (seen.has(id)) continue;
+                                seen.add(id);
+
+                                const card = link.closest('article, li, div');
+                                const img = card?.querySelector('img');
+                                const title =
+                                    (link.getAttribute('aria-label')
+                                        || link.getAttribute('title')
+                                        || img?.getAttribute('alt')
+                                        || card?.textContent
+                                        || '')
+                                        .trim();
+                                const thumb = img?.getAttribute('src') || img?.getAttribute('data-src') || '';
+
+                                out.push({{
+                                    video_id: id,
+                                    page_url: full,
+                                    title: title.slice(0, 180),
+                                    thumbnail: thumb,
+                                }});
+
+                                if (out.length >= {max_items}) break;
+                            }}
+
+                            return out;
+                        }}"""
+                    )
+
+                    for item in raw_cards or []:
+                        page_url = str(item.get('page_url') or '').strip()
+                        video_id = _extract_pexels_video_id(page_url)
+                        if not video_id:
+                            continue
+
+                        cards.append({
+                            'video_id': video_id,
+                            'url': f'https://www.pexels.com/download/video/{video_id}/',
+                            'page_url': page_url,
+                            'title': str(item.get('title') or '').strip() or f'Pexels video {video_id}',
+                            'views': 0,
+                            'thumbnail': str(item.get('thumbnail') or '').strip(),
+                            'category': 'misc',
+                        })
+
+                    print(f'[pexels] collected {len(cards)} cards from {start_url}')
+                finally:
+                    await context.close()
+                    await browser.close()
+
+                if cards:
+                    break
+
+        except PlaywrightTimeoutError:
+            print(f'[pexels] goto timeout {timeout_ms}ms with proxy {_mask_proxy(proxy)} -> retry next proxy')
+            continue
+        except Exception as e:
+            print(f'[pexels] scrape failed with proxy {_mask_proxy(proxy)}: {e}')
+            continue
+
+    return cards
+
+
+async def _fetch_kuaishou_page(page, pcursor: str = '') -> Dict:
+    variables = {
+        'hotChannelId': KUAISHOU_HOT_CHANNEL_ID,
+        'page': 'brilliant',
+    }
+    if pcursor:
+        variables['pcursor'] = pcursor
+    payload = {
+        'operationName': 'brilliantTypeDataQuery',
+        'variables': variables,
+        'query': KUAISHOU_GRAPHQL_QUERY,
+    }
+    return await page.evaluate(
+        """async (payload) => {
+            const res = await fetch('/graphql', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            return await res.json();
+        }""",
+        payload,
+    )
+
+
+async def _kuaishou_has_captcha(page) -> bool:
+    try:
+        detected = await page.evaluate(
+            """() => {
+                const selectors = [
+                    'iframe[src*="captcha"]',
+                    '.captcha',
+                    '[class*="captcha"]',
+                    '[id*="captcha"]',
+                ];
+                for (const sel of selectors) {
+                    if (document.querySelector(sel)) return true;
+                }
+                const text = (document.body?.innerText || '').toLowerCase();
+                return text.includes('captcha') || text.includes('验证') || text.includes('安全验证');
+            }"""
+        )
+        return bool(detected)
+    except Exception:
+        return False
+
+
+def _log_kuaishou_captcha_event(url: str, reason: str = '') -> None:
+    log_job(
+        'captcha',
+        'paused_captcha',
+        platform='kuaishou',
+        topic='brilliant',
+        error=reason or 'kuaishou captcha detected',
+        source='kuaishou-brilliant',
+        targetUrl=url,
+        resolved=False,
+        resolvedAt=None,
+    )
+
+
+async def _collect_kuaishou_cards() -> List[Dict]:
+    setting = get_or_create_settings()
+    kuaishou_cfg = setting.get('kuaishouSettings', {}) or {}
+    start_url = (kuaishou_cfg.get('startUrl') or KUAISHOU_START_URL or 'https://www.kuaishou.com/brilliant').strip()
+    max_items = int(kuaishou_cfg.get('maxItems') or KUAISHOU_MAX_ITEMS or 60)
+    scroll_times = int(kuaishou_cfg.get('scrollTimes') or KUAISHOU_SCROLL_TIMES or 4)
+
+    cards: List[Dict] = []
+    pool = _proxy_pool()
+    attempts = max(len(pool), 1)
+
+    for _ in range(attempts):
+        proxy = await _next_healthy_proxy() if pool else None
+        if pool and not proxy:
+            print('[kuaishou] no healthy proxy available')
+            break
+
+        proxy_cfg = _proxy_for_playwright(proxy) if proxy else None
+
+        try:
+            async with async_playwright() as p:
+                launch_kwargs = {'headless': SCRAPER_HEADLESS, 'args': ['--no-default-browser-check']}
+                if proxy_cfg:
+                    launch_kwargs['proxy'] = proxy_cfg
+
+                browser = await p.chromium.launch(**launch_kwargs)
+                context_kwargs = {
+                    'user_agent': random.choice(UA),
+                    'locale': SCRAPER_LOCALE,
+                    'timezone_id': SCRAPER_TIMEZONE,
+                    'viewport': {'width': 1366, 'height': 920},
+                }
+                if KUAISHOU_STORAGE_STATE and os.path.exists(KUAISHOU_STORAGE_STATE):
+                    context_kwargs['storage_state'] = KUAISHOU_STORAGE_STATE
+                context = await browser.new_context(**context_kwargs)
+                page = await context.new_page()
+
+                try:
+                    await page.goto(start_url, wait_until='domcontentloaded', timeout=45000)
+                    await asyncio.sleep(3)
+
+                    if await _kuaishou_has_captcha(page):
+                        _log_kuaishou_captcha_event(start_url, 'captcha detected at page load')
+                        print('[kuaishou] captcha detected at page load; waiting for manual resolve')
+                        return []
+
+                    pcursor = ''
+                    for _ in range(max(1, scroll_times)):
+                        data = await _fetch_kuaishou_page(page, pcursor)
+                        payload = (data or {}).get('data', {}).get('brilliantTypeData', {}) or {}
+                        feeds = payload.get('feeds') or []
+                        pcursor = str(payload.get('pcursor') or '').strip()
+
+                        if await _kuaishou_has_captcha(page):
+                            _log_kuaishou_captcha_event(start_url, 'captcha detected during pagination')
+                            print('[kuaishou] captcha detected during pagination; waiting for manual resolve')
+                            break
+
+                        for feed in feeds:
+                            photo = feed.get('photo') or {}
+                            video_id = str(photo.get('id') or '').strip()
+                            if not video_id:
+                                continue
+                            url = _extract_kuaishou_video_url(photo)
+                            if not url:
+                                continue
+
+                            caption = str(photo.get('caption') or photo.get('originCaption') or '').strip()
+                            tags = [str(t.get('name') or '').strip() for t in (feed.get('tags') or []) if t.get('name')]
+                            cards.append({
+                                'video_id': video_id,
+                                'url': url,
+                                'page_url': f'https://www.kuaishou.com/short-video/{video_id}',
+                                'title': caption or f'Kuaishou video {video_id}',
+                                'views': int(photo.get('viewCount') or photo.get('likeCount') or 0),
+                                'thumbnail': _extract_kuaishou_cover(photo),
+                                'tags': tags,
+                                'category': tags[0] if tags else 'brilliant',
+                            })
+
+                            if len(cards) >= max_items:
+                                break
+
+                        if len(cards) >= max_items or not pcursor:
+                            break
+
+                        await asyncio.sleep(2.5)
+
+                    print(f'[kuaishou] collected {len(cards)} cards from {start_url}')
+                finally:
+                    await context.close()
+                    await browser.close()
+            break
+        except PlaywrightTimeoutError:
+            print(f'[kuaishou] goto timeout with proxy {_mask_proxy(proxy)} -> retry next proxy')
+            continue
+        except Exception as e:
+            print(f'[kuaishou] scrape failed with proxy {_mask_proxy(proxy)}: {e}')
+            continue
+
+    return cards
+
+
+async def discover_pexels():
+    started = time.time()
+    setting = get_or_create_settings()
+    discover_sources = setting.get('discoverSources', {}) or {}
+    if not discover_sources.get('pexels', True):
+        return {'skipped': True}
+    pexels_cfg = setting.get('pexelsSettings', {}) or {}
+    if not pexels_cfg.get('isEnabled', True):
+        return {'skipped': True}
+
+    cards = await _collect_pexels_cards()
+    found = 0
+
+    for card in cards:
+        video_id = card.get('video_id', '')
+        if not video_id:
+            continue
+
+        existing = videos.find_one({'platform': 'pexels', 'videoId': video_id})
+        if existing:
+            continue
+
+        if not card.get('tags') or not card.get('category') or card.get('category') == 'misc':
+            card = await _enrich_pexels_card(card)
+
+        channel = upsert_channel('pexels', PEXELS_CHANNEL_ID, 'Pexels', 'sub-video')
+        category = card.get('category') or 'misc'
+        tags = card.get('tags') or []
+        v = upsert_video(
+            {
+                'platform': 'pexels',
+                'videoId': video_id,
+                'title': card.get('title', f'Pexels video {video_id}')[:200],
+                'views': int(card.get('views', 0) or 0),
+                'url': card.get('url'),
+                'topic': category,
+                'thumbnail': card.get('thumbnail') or '',
+                'channelId': channel['_id'],
+                'category': category,
+                'tags': tags,
+                'detailUrl': card.get('detail_url') or card.get('page_url'),
+            }
+        )
+        await enqueue(v['_id'], 5)
+        found += 1
+
+    duration = int((time.time() - started) * 1000)
+    log_job('discover', 'success', platform='pexels', itemsFound=found, duration=duration)
+
+    print(f'[Pexels] -> queued {found} videos')
+    return {'success': True, 'itemsFound': found}
+
+
+async def discover_kuaishou():
+    started = time.time()
+    setting = get_or_create_settings()
+    discover_sources = setting.get('discoverSources', {}) or {}
+    if not discover_sources.get('kuaishou', True):
+        return {'skipped': True}
+    kuaishou_cfg = setting.get('kuaishouSettings', {}) or {}
+    if not kuaishou_cfg.get('isEnabled', True):
+        return {'skipped': True}
+
+    cards = await _collect_kuaishou_cards()
+    found = 0
+
+    for card in cards:
+        video_id = card.get('video_id', '')
+        if not video_id:
+            continue
+
+        existing = videos.find_one({'platform': 'kuaishou', 'videoId': video_id})
+        if existing:
+            continue
+
+        channel = upsert_channel('kuaishou', KUAISHOU_CHANNEL_ID, 'Kuaishou Brilliant', 'kuaishou')
+        tags = card.get('tags') or []
+        category = card.get('category') or 'brilliant'
+        topic = tags[0] if tags else 'kuaishou'
+
+        v = upsert_video(
+            {
+                'platform': 'kuaishou',
+                'videoId': video_id,
+                'title': card.get('title', f'Kuaishou video {video_id}')[:200],
+                'views': int(card.get('views', 0) or 0),
+                'url': card.get('url'),
+                'topic': topic,
+                'thumbnail': card.get('thumbnail') or '',
+                'channelId': channel['_id'],
+                'category': category,
+                'tags': tags,
+                'detailUrl': card.get('page_url'),
+            }
+        )
+        await enqueue(v['_id'], 5)
+        found += 1
+
+    duration = int((time.time() - started) * 1000)
+    log_job('discover', 'success', platform='kuaishou', itemsFound=found, duration=duration)
+
+    print(f'[Kuaishou] -> queued {found} videos')
+    return {'success': True, 'itemsFound': found}
+
 async def discover_dailyhaha(topic: str):
     setting = get_or_create_settings()
     keywords = setting.get('keywords', {}).get(topic, [topic])
@@ -1387,6 +2184,7 @@ async def discover_all():
         use_youtube = discover_sources.get('youtube', True)
         use_dailyhaha = discover_sources.get('dailyhaha', True)
         use_douyin = discover_sources.get('douyin', False)
+        use_kuaishou = discover_sources.get('kuaishou', True)
 
         # Get active configs sorted by priority
         configs = setting.get('playboardConfigs', [])
@@ -1404,7 +2202,7 @@ async def discover_all():
         print(
             '[DEBUG] Running discover with '
             f'{len(active_configs)} active configs '
-            f'| sources: playboard={use_playboard}, youtube={use_youtube}, dailyhaha={use_dailyhaha}, douyin={use_douyin}'
+            f'| sources: playboard={use_playboard}, youtube={use_youtube}, dailyhaha={use_dailyhaha}, douyin={use_douyin}, kuaishou={use_kuaishou}'
         )
 
         # 1) Playboard: chạy theo từng config (category/country/period), không loop theo từng topic
@@ -1420,6 +2218,14 @@ async def discover_all():
                     found += int(result.get('itemsFound', 0))
                 except Exception as e:
                     print(f"[DEBUG] discover_playboard failed: {e}")
+
+        if use_kuaishou:
+            try:
+                await asyncio.sleep(6 + random.random() * 3)
+                result = await discover_kuaishou()
+                found += int(result.get('itemsFound', 0))
+            except Exception as e:
+                print(f"[DEBUG] discover_kuaishou failed: {e}")
 
         # 2) Các nguồn khác vẫn loop theo TOPICS
         for topic in TOPICS:
@@ -1598,7 +2404,24 @@ async def scan_all_channels(use_proxy: bool = True, headless_override: bool | No
 
 def build_download_path(video):
     d = datetime.utcnow().strftime('%Y-%m-%d')
+    platform = (video.get('platform') or '').lower()
+    if platform == 'pexels':
+        return os.path.join(DOWNLOAD_ROOT, 'pexels', d, f"{video['videoId']}.mp4")
+    if platform == 'kuaishou':
+        return os.path.join(DOWNLOAD_ROOT, 'kuaishou', d, f"{video['videoId']}.mp4")
     return os.path.join(DOWNLOAD_ROOT, video['platform'], video.get('topics', 'misc'), d, f"{video['videoId']}.mp4")
+
+
+def _download_direct_sync(url: str, out_path: str, timeout_sec: int = 120) -> None:
+    if not url:
+        raise RuntimeError('missing url')
+    req = Request(url, headers={'User-Agent': random.choice(UA)})
+    with urlopen(req, timeout=timeout_sec) as resp, open(out_path, 'wb') as f:
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
 
 
 def _is_valid_download_target(doc: Dict) -> tuple[bool, str]:
@@ -1757,58 +2580,62 @@ async def process_download(video_id, attempts):
         )
         out = build_download_path(doc)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        format_candidates = [
-            'bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]',
-            'bv*+ba/b/best',
-            'best',
-        ]
-        last_reason = ''
-
-        for format_selector in format_candidates:
-            cmd = [
-                'yt-dlp',
-                doc['url'],
-                '-f',
-                format_selector,
-                '-o',
-                out,
-                '--no-warnings',
-                '--no-playlist',
-                '--socket-timeout',
-                '20',
-                '--retries',
-                '1',
-                '--fragment-retries',
-                '1',
-                '--write-thumbnail',
-                '--write-description',
+        platform = (doc.get('platform') or '').lower()
+        if platform in {'pexels', 'kuaishou'}:
+            await asyncio.to_thread(_download_direct_sync, doc['url'], out, YTDLP_TIMEOUT_SEC)
+        else:
+            format_candidates = [
+                'bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]',
+                'bv*+ba/b/best',
+                'best',
             ]
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            last_reason = ''
 
-            try:
-                out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT_SEC)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.communicate()
-                raise RuntimeError(f'yt-dlp timeout after {YTDLP_TIMEOUT_SEC}s')
+            for format_selector in format_candidates:
+                cmd = [
+                    'yt-dlp',
+                    doc['url'],
+                    '-f',
+                    format_selector,
+                    '-o',
+                    out,
+                    '--no-warnings',
+                    '--no-playlist',
+                    '--socket-timeout',
+                    '20',
+                    '--retries',
+                    '1',
+                    '--fragment-retries',
+                    '1',
+                    '--write-thumbnail',
+                    '--write-description',
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
 
-            if proc.returncode == 0:
-                last_reason = ''
-                break
+                try:
+                    out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT_SEC)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.communicate()
+                    raise RuntimeError(f'yt-dlp timeout after {YTDLP_TIMEOUT_SEC}s')
 
-            err_text = (err_bytes or b'').decode('utf-8', errors='ignore').strip()
-            out_text = (out_bytes or b'').decode('utf-8', errors='ignore').strip()
-            last_reason = (err_text or out_text or f'yt-dlp code {proc.returncode}')[-2000:]
-            format_unavailable = 'Requested format is not available' in last_reason
-            if not format_unavailable:
-                break
+                if proc.returncode == 0:
+                    last_reason = ''
+                    break
 
-        if last_reason:
-            raise RuntimeError(last_reason)
+                err_text = (err_bytes or b'').decode('utf-8', errors='ignore').strip()
+                out_text = (out_bytes or b'').decode('utf-8', errors='ignore').strip()
+                last_reason = (err_text or out_text or f'yt-dlp code {proc.returncode}')[-2000:]
+                format_unavailable = 'Requested format is not available' in last_reason
+                if not format_unavailable:
+                    break
+
+            if last_reason:
+                raise RuntimeError(last_reason)
 
         videos.update_one(
             {'_id': doc['_id']},

@@ -36,6 +36,8 @@ router.post('/videos/queue-folder', VideoPipelineController.queueVideosToFolder)
 // Operator upload for manual main/sub composition inputs.
 router.post('/videos/manual-upload', upload.single('file'), VideoPipelineController.uploadOperatorVideo);
 router.post('/videos/upload-pending', VideoPipelineController.uploadPendingVideos);
+router.post('/videos/upload-selected', VideoPipelineController.uploadSelectedVideos);
+router.post('/videos/voiceover', VideoPipelineController.runVoiceoverJobs);
 router.post('/videos/trigger-pending-downloads', VideoPipelineController.triggerPendingDownloads);
 router.post('/videos/:videoId/upload', VideoPipelineController.uploadVideo);
 router.delete('/videos/:videoId', VideoPipelineController.deleteVideo);
@@ -49,6 +51,7 @@ router.get('/production/history/:queueId', VideoPipelineController.getProduction
 router.post('/production/history/:queueId/remashup', VideoPipelineController.remashupJob);
 router.delete('/production/history/:queueId', VideoPipelineController.deleteProductionHistoryItem);
 router.post('/production/mass-produce', enforceMashupConcurrency(), VideoPipelineController.runMassProduction);
+router.post('/production/mass-voiceover', VideoPipelineController.runMassVoiceover);
 router.get('/jobs', VideoPipelineController.listJobs);
 router.get('/jobs/runtime', VideoPipelineController.getQueueRuntime);
 router.post('/jobs/retry-failed', VideoPipelineController.retryFailedJobs);

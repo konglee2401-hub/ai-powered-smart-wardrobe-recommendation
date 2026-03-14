@@ -402,6 +402,27 @@ function normalizeComposerDefaults(input = {}) {
   };
 }
 
+function normalizeVoiceoverPipeline(input = {}) {
+  return {
+    enableTranscript: input?.enableTranscript !== false,
+    enableVoiceover: input?.enableVoiceover !== false,
+    overlayVoiceoverOnVideo: input?.overlayVoiceoverOnVideo !== false,
+    translateTarget: input?.translateTarget || 'vi',
+    voiceName: input?.voiceName || 'vi-VN-HoaiMyNeural',
+    pipelineVersion: String(input?.pipelineVersion || 'v1'),
+    enableViralSelect: input?.enableViralSelect !== false,
+    clipMinSeconds: Number.isFinite(Number(input?.clipMinSeconds)) ? Number(input?.clipMinSeconds) : 12,
+    clipMaxSeconds: Number.isFinite(Number(input?.clipMaxSeconds)) ? Number(input?.clipMaxSeconds) : 25,
+    enableHook: input?.enableHook !== false,
+    enableBroll: input?.enableBroll !== false,
+    enableVertical: input?.enableVertical !== false,
+    enableHookCaption: input?.enableHookCaption !== false,
+    hookCaptionPosition: input?.hookCaptionPosition || 'top',
+    hookCaptionFontSize: Number.isFinite(Number(input?.hookCaptionFontSize)) ? Number(input?.hookCaptionFontSize) : 140,
+    keepOnlyFinal: input?.keepOnlyFinal === true,
+  };
+}
+
 function normalizeTemplateLibrary(input = {}) {
   const clamp = (items = [], limit = 24) => Array.from(new Set((Array.isArray(items) ? items : [])
     .map((item) => String(item || '').trim())
@@ -417,13 +438,14 @@ function normalizeTemplateLibrary(input = {}) {
 
 function sourceUploadMethod(sourceKey = '') {
   const normalized = String(sourceKey || '').toLowerCase();
-  return {
-    playboard: 'uploadPlayboardScrapedVideo',
-    youtube: 'uploadYoutubeScrapedVideo',
-    dailyhaha: 'uploadDailyhahaScrapedVideo',
-    douyin: 'uploadDouyinScrapedVideo',
-  }[normalized] || 'uploadSourceScrapedVideo';
-}
+    return {
+      playboard: 'uploadPlayboardScrapedVideo',
+      youtube: 'uploadYoutubeScrapedVideo',
+      dailyhaha: 'uploadDailyhahaScrapedVideo',
+      douyin: 'uploadDouyinScrapedVideo',
+      kuaishou: 'uploadKuaishouScrapedVideo',
+    }[normalized] || 'uploadSourceScrapedVideo';
+  }
 
 async function uploadVideoFileToDrive(video) {
   if (!video?.localPath) {
@@ -782,12 +804,20 @@ async function upsertGeneratedVideoAsset(payload = {}, context = {}) {
     return { success: false, error: 'queueId and outputPath are required' };
   }
 
-  const stats = await fs.stat(outputPath);
-  const relativePath = path.relative(BACKEND_ROOT, outputPath).replace(/\\/g, '/');
-  const filename = path.basename(outputPath);
-  const assetId = `video_pipeline_generated_${queueId}`;
-  const synced = Boolean(driveSync?.driveFileId);
-  const now = new Date();
+  try {
+    const stats = await fs.stat(outputPath);
+    const relativePath = path.relative(BACKEND_ROOT, outputPath).replace(/\\/g, '/');
+    const filename = path.basename(outputPath);
+    const assetId = `video_pipeline_generated_${queueId}`;
+    const synced = Boolean(driveSync?.driveFileId);
+    const now = new Date();
+
+    console.log(`💾 [Asset] Creating/updating asset for queueId: ${queueId}`);
+    console.log(`   assetId: ${assetId}`);
+    console.log(`   outputPath: ${outputPath}`);
+    console.log(`   fileSize: ${stats.size} bytes`);
+    console.log(`   driveSync.status: ${driveSync.status}`);
+    console.log(`   driveFileId: ${driveSync.driveFileId || 'none'}`);
 
   const assetPayload = {
     assetId,
@@ -844,15 +874,32 @@ async function upsertGeneratedVideoAsset(payload = {}, context = {}) {
     status: 'active',
   };
 
+  const resolvedContext = resolveUserContext(context);
+  console.log(`   🔍 Searching for existing asset:`, {
+    assetId,
+    contextUserId: resolvedContext.userId,
+    isAdmin: resolvedContext.isAdmin,
+  });
+
   const existing = await Asset.findOne(scopeQuery({ assetId }, context));
   if (existing) {
+    console.log(`   ♻️  Asset already exists, updating...`);
+    console.log(`      Existing userId: ${existing.userId}`);
     Object.assign(existing, assetPayload);
     await existing.save();
+    console.log(`   ✅ Asset updated successfully`);
     return { success: true, item: existing };
   }
 
+  console.log(`   ➕ Creating new asset...`);
   const asset = await Asset.create(assetPayload);
+  console.log(`   ✅ Asset created: ${asset._id}`);
   return { success: true, item: asset };
+  } catch (error) {
+    console.error(`   ❌ Asset creation/update failed: ${error.message}`);
+    console.error(`   Stack:`, error.stack);
+    return { success: false, error: error.message, details: error };
+  }
 }
 
 class VideoPipelineService {
@@ -1148,6 +1195,10 @@ class VideoPipelineService {
     const { source = '', platform = '', search = '', status = '', limit = 100 } = filters;
 
     const query = scopeQuery({}, context);
+    query.$and = [
+      ...(query.$and || []),
+      { $nor: [{ sourceKey: 'pexels' }, { platform: 'pexels' }] },
+    ];
     if (platform) query.platform = platform;
     if (source) {
       query.$or = [
@@ -1234,6 +1285,10 @@ class VideoPipelineService {
     } = filters;
 
     const query = scopeQuery({}, context);
+    query.$and = [
+      ...(query.$and || []),
+      { $nor: [{ source: 'pexels' }, { platform: 'pexels' }] },
+    ];
     if (platform) query.platform = platform;
     if (source) {
       if (source.toLowerCase() === 'playboard') {
@@ -1370,15 +1425,211 @@ class VideoPipelineService {
       results.push(await this.uploadSourceVideo(video._id));
     }
 
-    return {
-      success: true,
-      total: results.length,
-      uploaded: results.filter((item) => item.uploaded).length,
-      skipped: results.filter((item) => item.success && !item.uploaded).length,
-      failed: results.filter((item) => !item.success).length,
-      results,
-    };
-  }
+      return {
+        success: true,
+        total: results.length,
+        uploaded: results.filter((item) => item.uploaded).length,
+        skipped: results.filter((item) => item.success && !item.uploaded).length,
+        failed: results.filter((item) => !item.success).length,
+        results,
+      };
+    }
+
+    /**
+     * Upload selected source videos to Drive when not already synced.
+     */
+  async uploadSelectedSourceVideos(videoIds = [], context = {}) {
+      if (!Array.isArray(videoIds) || !videoIds.length) {
+        return { success: false, error: 'videoIds is required' };
+      }
+
+      const { userId, isAdmin } = resolveUserContext(context);
+      const scopedQuery = scopeQuery({ _id: { $in: videoIds } }, { userId, isAdmin });
+      const videos = await TrendVideo.find(scopedQuery).lean();
+      const videoMap = new Map(videos.map((item) => [String(item._id), item]));
+
+      const results = [];
+      for (const id of videoIds) {
+        const video = videoMap.get(String(id));
+        if (!video) {
+          results.push({ success: false, uploaded: false, error: 'Video not found', id: String(id) });
+          continue;
+        }
+        if (video.downloadStatus !== 'done') {
+          results.push({
+            success: true,
+            uploaded: false,
+            message: 'Video not downloaded yet',
+            id: String(video._id),
+          });
+          continue;
+        }
+        if (video.driveSync?.status === 'uploaded') {
+          results.push({
+            success: true,
+            uploaded: false,
+            message: 'Already uploaded',
+            id: String(video._id),
+          });
+          continue;
+        }
+
+        results.push(await this.uploadSourceVideo(video._id, context));
+      }
+
+      return {
+        success: true,
+        total: results.length,
+        uploaded: results.filter((item) => item.uploaded).length,
+        skipped: results.filter((item) => item.success && !item.uploaded).length,
+        failed: results.filter((item) => !item.success).length,
+        results,
+      };
+    }
+
+    /**
+     * Run manual voiceover/transcript pipeline for selected videos.
+     */
+    async runVoiceoverJobs(payload = {}, context = {}) {
+      const {
+        videoIds = [],
+        translateTarget = 'vi',
+        voiceName = 'vi-VN-HoaiMyNeural',
+        overlayVideo = true,
+        pipelineVersion = 'v1',
+      } = payload;
+
+      if (!Array.isArray(videoIds) || !videoIds.length) {
+        return { success: false, error: 'Select at least one video to process' };
+      }
+
+      const { userId, isAdmin } = resolveUserContext(context);
+      const videos = await TrendVideo.find(scopeQuery({ _id: { $in: videoIds } }, context)).lean();
+      const videoMap = new Map(videos.map((item) => [String(item._id), item]));
+
+      const jobEntries = [];
+      const results = [];
+
+      for (const id of videoIds) {
+        const video = videoMap.get(String(id));
+        if (!video) {
+          results.push({ success: false, error: 'Video not found', id: String(id) });
+          continue;
+        }
+
+        const queueResult = await VideoQueueService.addToQueue({
+          userId: userId || undefined,
+          videoConfig: {
+            sourceVideoId: String(video._id),
+            sourceTitle: video.title || video.videoId,
+            sourcePlatform: video.platform || video.source || 'other',
+            sourcePath: video.localPath || '',
+            outputPath: '',
+          },
+          platform: 'all',
+          contentType: 'voiceover',
+          priority: 'normal',
+          metadata: {
+            sourceVideoId: String(video._id),
+            sourceKey: video.source || video.platform || 'other',
+            sourcePlatform: video.platform || video.source || 'other',
+          },
+        });
+
+        if (!queueResult.success) {
+          results.push({ success: false, error: queueResult.error || 'Queue add failed', id: String(video._id) });
+          continue;
+        }
+
+        await VideoQueueService.updateQueueStatus(queueResult.queueId, 'processing');
+        jobEntries.push({
+          queueId: queueResult.queueId,
+          videoId: String(video._id),
+        });
+      }
+
+      if (!jobEntries.length) {
+        return {
+          success: true,
+          total: results.length,
+          processed: 0,
+          failed: results.filter((item) => !item.success).length,
+          results,
+        };
+      }
+
+      let pipelineResponse = null;
+      try {
+        pipelineResponse = await axios.post(
+          `${PY_SERVICE_BASE}/api/shorts-reels/videos/voiceover`,
+          {
+            videoIds: jobEntries.map((entry) => entry.videoId),
+            translateTarget,
+            voiceName,
+            overlayVideo,
+            pipelineVersion,
+            enableViralSelect: payload.enableViralSelect !== false,
+            clipMinSeconds: payload.clipMinSeconds ?? 12,
+            clipMaxSeconds: payload.clipMaxSeconds ?? 25,
+            enableHook: payload.enableHook !== false,
+            enableBroll: payload.enableBroll !== false,
+            enableVertical: payload.enableVertical !== false,
+            enableHookCaption: payload.enableHookCaption !== false,
+            hookCaptionPosition: payload.hookCaptionPosition || 'top',
+            hookCaptionFontSize: payload.hookCaptionFontSize ?? 96,
+            keepOnlyFinal: payload.keepOnlyFinal === true,
+            enableTranscript: payload.enableTranscript !== false,
+            enableVoiceover: payload.enableVoiceover !== false,
+          },
+          { timeout: 1000 * 60 * 20 }
+        );
+      } catch (error) {
+        const message = error?.response?.data?.detail || error.message || 'Pipeline request failed';
+        for (const entry of jobEntries) {
+          await VideoQueueService.recordError(entry.queueId, new Error(message), 'voiceover');
+        }
+        return {
+          success: false,
+          error: message,
+        };
+      }
+
+      const pipelineResults = pipelineResponse?.data?.results || [];
+      const pipelineMap = new Map(pipelineResults.map((item) => [String(item.videoId), item]));
+
+      for (const entry of jobEntries) {
+        const item = pipelineMap.get(String(entry.videoId));
+        if (!item || !item.success) {
+          const err = item?.error || 'Pipeline failed';
+          await VideoQueueService.recordError(entry.queueId, new Error(err), 'voiceover');
+          results.push({ success: false, error: err, id: entry.videoId });
+          continue;
+        }
+
+        const assets = item.assets || {};
+        await VideoPipelineJob.updateOne(
+          { queueId: entry.queueId },
+          {
+            $set: {
+              'videoConfig.outputPath': assets.outputVideoPath || '',
+              'metadata.voiceoverAssets': assets,
+            },
+          }
+        );
+        await VideoQueueService.updateQueueStatus(entry.queueId, 'ready', {
+          uploadUrl: assets.outputVideoPath || '',
+        });
+        results.push({ success: true, id: entry.videoId, assets });
+      }
+
+      return {
+        success: true,
+        total: results.length,
+        processed: results.filter((item) => item.success).length,
+        failed: results.filter((item) => !item.success).length,
+        results,
+      };
+    }
 
   /**
    * Scraper triggering remains an upstream concern, but the UI now calls this
@@ -1835,6 +2086,8 @@ class VideoPipelineService {
         templateGroup: mashupLog?.templateGroup || resolveTemplateGroup(job.videoConfig?.productionConfig?.templateName || 'reaction'),
         selectionMethod: mashupLog?.subVideo?.selectionMethod || (job.videoConfig?.subVideo?.autoSelected ? 'auto' : 'manual'),
         publishMetadata,
+        generatedAsset: job.videoConfig?.generatedAsset || null,
+        videoConfig: job.videoConfig || {},
       };
     });
 
@@ -1925,6 +2178,10 @@ class VideoPipelineService {
       return { success: false, error: 'Only mashup jobs can be re-rendered' };
     }
 
+    // 💫 Mark this job as the current active one for tracking (don't kill previous, just mark new)
+    const remashupId = `remashup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`🔄 [${remashupId}] Starting remashup for queueId: ${queueId}`);
+
     const outputPath = job.videoConfig?.outputPath || job.videoConfig?.videoPath || '';
     const driveFileId = job.videoConfig?.completedDriveSync?.driveFileId || job.metadata?.completedDriveSync?.driveFileId || '';
     const assetId = job.videoConfig?.generatedAsset?.assetId || `video_pipeline_generated_${queueId}`;
@@ -1996,6 +2253,7 @@ class VideoPipelineService {
     job.uploadedAt = null;
     job.uploadUrl = '';
     job.lastRetryAt = null;
+    job.processInfo = null; // 💫 Clear old process info when remashing
     job.metadata = {
       ...(job.metadata || {}),
       completedDriveSync: null,
@@ -2038,7 +2296,7 @@ class VideoPipelineService {
     });
 
     if (payload.startImmediately !== false) {
-      return this.startJob(queueId);
+      return this.startJob(queueId, context);
     }
 
     return {
@@ -2049,7 +2307,7 @@ class VideoPipelineService {
     };
   }
 
-  async runMassProduction(payload = {}) {
+  async runMassProduction(payload = {}, context = {}) {
     const limit = Math.min(50, Math.max(1, Number(payload.limit) || 5));
     const sourceKey = String(payload.sourceKey || '').trim();
     const syncSourceToDrive = payload.syncSourceToDrive !== false;
@@ -2163,7 +2421,7 @@ class VideoPipelineService {
       itemResult.status = startImmediately ? 'queued' : 'pending';
 
       if (startImmediately && itemResult.queueId) {
-        const startResult = await this.startJob(itemResult.queueId);
+        const startResult = await this.startJob(itemResult.queueId, context);
         if (!startResult.success) {
           itemResult.status = 'failed';
           itemResult.error = startResult.error || 'Inline render failed';
@@ -2194,6 +2452,99 @@ class VideoPipelineService {
       summary,
       skipped,
       results,
+    };
+  }
+
+  async runMassVoiceover(payload = {}, context = {}) {
+    const limit = Math.min(50, Math.max(1, Number(payload.limit) || 5));
+    const sourceKey = String(payload.sourceKey || '').trim();
+    const sourceQuery = buildSourceVideoQuery(sourceKey);
+    const candidateQuery = Object.keys(sourceQuery).length
+      ? {
+          downloadStatus: 'done',
+          localPath: { $exists: true, $ne: '' },
+          $and: [
+            sourceQuery,
+            {
+              $or: [
+                { 'voiceover.status': { $exists: false } },
+                { 'voiceover.status': { $in: ['idle', 'failed', null, ''] } },
+              ],
+            },
+          ],
+        }
+      : {
+          downloadStatus: 'done',
+          localPath: { $exists: true, $ne: '' },
+          $or: [
+            { 'voiceover.status': { $exists: false } },
+            { 'voiceover.status': { $in: ['idle', 'failed', null, ''] } },
+          ],
+        };
+
+    const candidates = await TrendVideo.find(candidateQuery)
+      .sort({ downloadedAt: 1, discoveredAt: 1, createdAt: 1 })
+      .limit(limit * 4);
+
+    const picked = [];
+    const skipped = [];
+
+    for (const video of candidates) {
+      if (picked.length >= limit) break;
+
+      const activeJob = await VideoPipelineJob.exists({
+        'metadata.sourceVideoId': String(video._id),
+        contentType: 'voiceover',
+        status: { $in: ['pending', 'processing', 'ready'] },
+      });
+
+      if (activeJob) {
+        skipped.push({
+          videoId: String(video._id),
+          title: video.title,
+          reason: 'active-voiceover-job-exists',
+        });
+        continue;
+      }
+
+      picked.push(video);
+    }
+
+    if (!picked.length) {
+      return {
+        success: true,
+        total: 0,
+        processed: 0,
+        failed: 0,
+        results: [],
+        skipped,
+      };
+    }
+
+    const voiceoverPayload = {
+      videoIds: picked.map((video) => String(video._id)),
+      translateTarget: payload.translateTarget || 'vi',
+      voiceName: payload.voiceName || 'vi-VN-HoaiMyNeural',
+      overlayVideo: payload.overlayVideo !== false,
+      enableTranscript: payload.enableTranscript !== false,
+      enableVoiceover: payload.enableVoiceover !== false,
+      pipelineVersion: payload.pipelineVersion || 'v1',
+      enableViralSelect: payload.enableViralSelect !== false,
+      clipMinSeconds: payload.clipMinSeconds ?? 12,
+      clipMaxSeconds: payload.clipMaxSeconds ?? 25,
+      enableHook: payload.enableHook !== false,
+      enableBroll: payload.enableBroll !== false,
+      enableVertical: payload.enableVertical !== false,
+      enableHookCaption: payload.enableHookCaption !== false,
+      hookCaptionPosition: payload.hookCaptionPosition || 'top',
+      hookCaptionFontSize: payload.hookCaptionFontSize ?? 96,
+      keepOnlyFinal: payload.keepOnlyFinal === true,
+    };
+
+    const result = await this.runVoiceoverJobs(voiceoverPayload, context);
+    return {
+      ...result,
+      skipped,
     };
   }
 
@@ -2432,7 +2783,8 @@ class VideoPipelineService {
           templateLibrary: normalizeTemplateLibrary(trendSetting.videoPipelinePreferences?.production?.templateLibrary),
           subVideoLibrarySources: normalizeSubVideoLibrarySources(trendSetting.videoPipelinePreferences?.production?.subVideoLibrarySources),
           composerDefaults: normalizeComposerDefaults(trendSetting.videoPipelinePreferences?.production?.composerDefaults),
-          templateBrowserPreferences: normalizeTemplateBrowserPreferences(trendSetting.videoPipelinePreferences?.production?.templateBrowserPreferences),
+            templateBrowserPreferences: normalizeTemplateBrowserPreferences(trendSetting.videoPipelinePreferences?.production?.templateBrowserPreferences),
+            voiceoverPipeline: normalizeVoiceoverPipeline(trendSetting.videoPipelinePreferences?.production?.voiceoverPipeline),
         },
       },
     };
@@ -2486,6 +2838,9 @@ class VideoPipelineService {
     const templateBrowserPreferencesPayload = production.templateBrowserPreferences === undefined
       ? trendSetting.videoPipelinePreferences?.production?.templateBrowserPreferences
       : production.templateBrowserPreferences;
+    const voiceoverPipelinePayload = production.voiceoverPipeline === undefined
+      ? trendSetting.videoPipelinePreferences?.production?.voiceoverPipeline
+      : production.voiceoverPipeline;
 
     trendSetting.videoPipelinePreferences = {
       ...(trendSetting.videoPipelinePreferences?.toObject ? trendSetting.videoPipelinePreferences.toObject() : trendSetting.videoPipelinePreferences || {}),
@@ -2495,6 +2850,7 @@ class VideoPipelineService {
         subVideoLibrarySources: normalizeSubVideoLibrarySources(subVideoLibrarySourcesPayload),
         composerDefaults: normalizeComposerDefaults(composerDefaultsPayload),
         templateBrowserPreferences: normalizeTemplateBrowserPreferences(templateBrowserPreferencesPayload),
+        voiceoverPipeline: normalizeVoiceoverPipeline(voiceoverPipelinePayload),
       },
     };
     await trendSetting.save();
@@ -3193,8 +3549,11 @@ class VideoPipelineService {
         status: 'processing',
         message: 'Resolving auto sub video',
       });
+      console.log(`📺 Resolving automatic sub-video for queueId: ${queueId}`);
+      
       const autoSubVideoResult = await this.resolveAutomaticSubVideoInput(queueItem);
       if (!autoSubVideoResult.success) {
+        console.error(`❌ Auto sub-video resolution failed:`, autoSubVideoResult.error);
         const autoSubError = new Error(autoSubVideoResult.error || 'Automatic sub-video selection failed');
         await VideoQueueService.recordError(queueId, autoSubError, 'auto-sub-video', {
           retryEligible: false,
@@ -3213,6 +3572,13 @@ class VideoPipelineService {
           error: autoSubError.message,
         };
       }
+
+      console.log(`✅ Selected sub-video:`, {
+        assetId: autoSubVideoResult.item?.assetId,
+        name: autoSubVideoResult.item?.name,
+        theme: autoSubVideoResult.item?.theme,
+        sourceKey: autoSubVideoResult.source?.key,
+      });
 
       subVideo = {
         assetId: autoSubVideoResult.item?.assetId,
@@ -3250,8 +3616,9 @@ class VideoPipelineService {
       const originalMainVideoPath = mainVideoPath;
       let captionedVideoPath = '';
       let capcutSubtitleResult = null;
+      let shouldUseCapCut = false; // 💫 Declare outside try-catch for catch block access
       try {
-        const shouldUseCapCut = await shouldUseCapCutCaptions({
+        shouldUseCapCut = await shouldUseCapCutCaptions({
           productionConfig,
           queueItem,
           sourceVideoId,
@@ -3300,6 +3667,11 @@ class VideoPipelineService {
           status: 'failed',
           message: error.message || 'CapCut caption generation failed',
         });
+        
+        // 💫 Subtitle generation is optional feature - if CapCut fails, continue with uncaptioned video
+        // Main mashup rendering is the primary goal, not captions
+        console.log(`⚠️  CapCut caption generation failed (non-fatal): ${error.message}`);
+        console.log('📽️  Continuing mashup rendering without captions...');
       }
 
       const templateName = productionConfig.templateName || 'reaction';
@@ -3520,7 +3892,13 @@ class VideoPipelineService {
         sourceVideoId,
         recipe,
         sourceTitle: queueItem.videoConfig?.sourceTitle || '',
-      }, { userId: queueItem.userId });
+      }, { userId: resolveUserContext(context).userId || queueItem.userId, isAdmin: resolveUserContext(context).isAdmin });
+
+      if (!assetResult.success) {
+        console.error(`⚠️  Asset creation failed:`, assetResult.error);
+      } else {
+        console.log(`✅ Asset created/updated: assetId=${assetResult.item?.assetId}, _id=${assetResult.item?._id}, userId=${assetResult.item?.userId}`);
+      }
 
       const publishMetadata = buildPublishMetadata({
         sourceTitle: queueItem.videoConfig?.sourceTitle || queueItem.title || queueId,

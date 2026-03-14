@@ -1,5 +1,6 @@
 import BrowserService from './browserService.js';
 import CapCutSessionManager from './capcutSessionManager.js';
+import AccountSessionRegistry from './accountSessionRegistry.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,9 +17,19 @@ const DEFAULT_CAPCUT_URL =
 class CapCutAICaptionService extends BrowserService {
   constructor(options = {}) {
     const flowId = options.flowId || 'default';
-    const profileDir = options.sharedProfile === false
-      ? path.join(CAPCUT_PROFILE_BASE, flowId)
-      : CAPCUT_SHARED_PROFILE;
+    const sessionRegistry = new AccountSessionRegistry('capcut', { baseDir: CAPCUT_PROFILE_BASE });
+    const preferredEmail = String(options.accountEmail || process.env.CAPCUT_ACCOUNT_EMAIL || '').trim();
+    const preferredKey = String(options.accountKey || options.profileKey || process.env.CAPCUT_PROFILE_KEY || '').trim();
+    let selectedAccount = (preferredEmail || preferredKey)
+      ? sessionRegistry.ensureAccount({ email: preferredEmail, accountKey: preferredKey, label: options.accountLabel })
+      : sessionRegistry.selectAccount({ preferEmail: preferredEmail, preferKey: preferredKey }) || null;
+    const resolvedProfileKey = selectedAccount?.accountKey || preferredKey || 'default';
+    if (!selectedAccount) {
+      selectedAccount = sessionRegistry.ensureAccount({ accountKey: resolvedProfileKey, label: options.accountLabel });
+    }
+    const profileDir = selectedAccount?.profileDir
+      ? selectedAccount.profileDir
+      : (options.sharedProfile === false ? path.join(CAPCUT_PROFILE_BASE, flowId) : CAPCUT_SHARED_PROFILE);
 
     super({
       ...options,
@@ -30,9 +41,13 @@ class CapCutAICaptionService extends BrowserService {
     this.flowId = flowId;
     this.profileDir = profileDir;
     this._stepLogger = null;
+    this.accountEmail = selectedAccount?.email || preferredEmail || '';
+    this.accountKey = selectedAccount?.accountKey || resolvedProfileKey || '';
+    this.accountLabel = selectedAccount?.label || options.accountLabel || '';
+    this.sessionRegistry = sessionRegistry;
 
     this.sessionManager = new CapCutSessionManager({
-      sessionPath: options.sessionPath || CAPCUT_SHARED_SESSION,
+      sessionPath: options.sessionPath || selectedAccount?.sessionPath || CAPCUT_SHARED_SESSION,
       sessionDir: options.sessionDir,
       sessionFile: options.sessionFile,
     });
@@ -146,7 +161,11 @@ class CapCutAICaptionService extends BrowserService {
   }
 
   async saveSession(metadata = {}) {
-    return this.sessionManager.saveSession(this.page, metadata);
+    const enriched = {
+      ...metadata,
+      email: this.accountEmail || metadata.email || '',
+    };
+    return this.sessionManager.saveSession(this.page, enriched);
   }
 
   async close() {
@@ -171,7 +190,7 @@ class CapCutAICaptionService extends BrowserService {
       videoPath,
       outputDirVideo = path.join(path.dirname(path.dirname(__dirname)), 'media', 'temp', 'capcut-exports'),
       language = 'auto',
-      timeoutMs = 10 * 60 * 1000,
+      timeoutMs = 20 * 60 * 1000, // 💫 Increased from 10 to 20 minutes for reliable CapCut AI processing
       applyStyle = true,
       resolution = '1080p',
       fps = '60fps',
@@ -195,6 +214,21 @@ class CapCutAICaptionService extends BrowserService {
     const authed = await this.ensureAuthenticated();
     if (!authed) {
       throw new Error('CapCut authentication required.');
+    }
+
+    if (!this.accountEmail) {
+      this.accountEmail = await this._detectAccountEmail();
+      if (this.accountEmail) {
+        if (this.accountKey) {
+          this.sessionRegistry.updateAccount({ accountKey: this.accountKey }, { email: this.accountEmail });
+        } else {
+          const ensured = this.sessionRegistry.ensureAccount({ email: this.accountEmail, label: this.accountLabel });
+          this.accountKey = ensured?.accountKey || this.accountKey;
+        }
+      }
+    }
+    if (this.accountEmail) {
+      this.sessionRegistry.markUsed({ accountKey: this.accountKey, email: this.accountEmail });
     }
 
     logStep('open-tool', 'Opening CapCut AI captions tool...');
@@ -352,21 +386,39 @@ class CapCutAICaptionService extends BrowserService {
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
+      // 💫 Check if browser page was closed by user
+      if (this.page.isClosed?.()) {
+        throw new Error('CapCut browser window closed by user - upload cancelled');
+      }
+
       const ready = await this.page.evaluate(() => {
         const text = document.body?.innerText || '';
+        const errorModal = document.querySelector('.ai-task-modal-hJtn9D, [class*="ai-task-modal"]');
+        const errorText = errorModal?.textContent || '';
         const hasTimeline = document.querySelector('[class*="timeline"], [data-testid*="timeline"]');
         const hasProgress = document.querySelector('.ai-task-modal-generating-j13Asw, .ai-task-modal-hJtn9D, [class*="ai-task-modal"]');
         const hasUploadArea = document.querySelector('.upload-area-wrapper-DpF4j3');
         const hasEditUrl = location.pathname.includes('/magic-tools/ai-captions/edit/');
         const hasTranscribing = /transcrib|caption|subtitle|processing/i.test(text);
+        const hasRateLimit = /captions couldn['’]t be generated|try again|rate limit|limit/i.test(errorText);
         return {
           hasTimeline: !!hasTimeline,
           hasProgress: !!hasProgress,
           hasUploadArea: !!hasUploadArea,
           hasEditUrl,
           hasTranscribing,
+          hasRateLimit,
+          errorText,
         };
       });
+
+      if (ready.hasRateLimit) {
+        const message = ready.errorText || 'CapCut rate limit detected';
+        if (this.accountEmail) {
+          this.sessionRegistry.markRateLimited(this.accountEmail, message);
+        }
+        throw new Error(`CAPCUT_RATE_LIMIT:${message}`);
+      }
 
       if (ready.hasEditUrl || (ready.hasTimeline && !ready.hasProgress)) {
         console.log('Processing done, edit page ready.');
@@ -391,6 +443,19 @@ class CapCutAICaptionService extends BrowserService {
     this._logStep('processing-timeout', `Processing timeout. url=${snapshot.url}`);
     console.warn('[CapCut] Processing timeout snapshot:', snapshot);
     throw new Error('Upload processing timed out.');
+  }
+
+  async _detectAccountEmail() {
+    try {
+      const email = await this.page.evaluate(() => {
+        const text = document.body?.innerText || '';
+        const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        return match ? match[0] : '';
+      });
+      return String(email || '').trim();
+    } catch {
+      return '';
+    }
   }
 
   async _triggerAutoCaptions(language = 'auto') {
@@ -570,6 +635,18 @@ class CapCutAICaptionService extends BrowserService {
   }
 
   async _configureExportSettings({ resolution = '1080p', fps = '60fps' }) {
+    // 💫 Wait for form container to ensure Download button already triggered the form render
+    // Settings modal might still be animating, so wait for actual form elements
+    this._logStep('export-form-wait', 'Waiting for export form elements to fully render...');
+    await this.page.waitForSelector('.material-export-modal-form-ggCsVg', { timeout: 10000 }).catch(() => null);
+    await this.page.waitForTimeout(2000); // Wait for React form state to settle
+    
+    // Verify form controls exist before interacting
+    const hasFormDefinition = await this.page.$('#form-definition');
+    if (!hasFormDefinition) {
+      throw new Error('Export form resolution control not found after waiting');
+    }
+    
     this._logStep('export-resolution', `Selecting resolution ${resolution}...`);
     await this._selectComboboxOption('#form-definition', resolution);
     this._logStep('export-fps', `Selecting frame rate ${fps}...`);

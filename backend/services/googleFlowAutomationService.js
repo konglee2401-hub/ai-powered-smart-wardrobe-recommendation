@@ -34,9 +34,11 @@ import GenerationMonitor from './google-flow/generation/GenerationMonitor.js';
 import GenerationDownloader from './google-flow/generation/GenerationDownloader.js';
 import ErrorRecoveryManager from './google-flow/error-handling/ErrorRecoveryManager.js';
 import VirtuosoQueryHelper from './google-flow/dom-queries/VirtuosoQueryHelper.js';
+import AccountSessionRegistry from './browser/accountSessionRegistry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 puppeteer.use(StealthPlugin());
+const GOOGLE_FLOW_PROFILE_BASE = path.join(__dirname, '..', 'data', 'google-flow-profiles');
 
 class GoogleFlowAutomationService {
   constructor(options = {}) {
@@ -68,13 +70,28 @@ class GoogleFlowAutomationService {
     // This prevents "profile locked by another process" errors when flows run in parallel
     const flowId = options.flowId || `flow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    this.accountRegistry = new AccountSessionRegistry('google-flow', { baseDir: GOOGLE_FLOW_PROFILE_BASE });
+    const preferredEmail = String(options.accountEmail || process.env.GOOGLE_FLOW_ACCOUNT_EMAIL || '').trim();
+    const preferredKey = String(options.accountKey || options.profileKey || process.env.GOOGLE_FLOW_PROFILE_KEY || '').trim();
+    const ensured = (preferredEmail || preferredKey)
+      ? this.accountRegistry.ensureAccount({ email: preferredEmail, accountKey: preferredKey, label: options.accountLabel })
+      : null;
+    let selectedAccount = ensured || this.accountRegistry.selectAccount({ preferEmail: preferredEmail, preferKey: preferredKey, minCredits: 20 });
+    const resolvedProfileKey = selectedAccount?.accountKey || preferredKey || 'default';
+    if (!selectedAccount) {
+      selectedAccount = this.accountRegistry.ensureAccount({ accountKey: resolvedProfileKey, label: options.accountLabel });
+    }
+    this.accountEmail = selectedAccount?.email || preferredEmail || '';
+    this.accountKey = selectedAccount?.accountKey || resolvedProfileKey || '';
     this.options = {
       headless: false,
       flowId: flowId,  // ✅ Pass flowId for per-flow Chrome profile
       // 💫 FIX: Don't override sessionFilePath - use SessionManager's shared profile default
       // sessionFilePath will default to: data/google-flow-profiles/default/session.json
       baseUrl: 'https://labs.google/fx/vi/tools/flow',
-      projectId: options.projectId || '87b78b0e-8b5a-40fc-9142-cdeda1419be7',
+      projectId: options.projectId || null,
+      profileKey: resolvedProfileKey,
+      sessionFilePath: selectedAccount?.sessionPath || options.sessionFilePath,
       aspectRatio: options.aspectRatio || '9:16',
       imageCount: this.type === 'image' ? (options.imageCount || 1) : undefined,
       videoCount: this.type === 'video' ? (options.videoCount || 1) : undefined,
@@ -266,6 +283,23 @@ class GoogleFlowAutomationService {
     
     // Check & refresh tokens after navigation
     await this.tokenManager.ensureFreshTokens();
+
+    const accountSnapshot = await this.sessionManager.getAccountSnapshot();
+    if (accountSnapshot?.email) {
+      this.accountEmail = accountSnapshot.email;
+      if (this.accountKey) {
+        this.accountRegistry.updateAccount({ accountKey: this.accountKey }, { email: accountSnapshot.email, label: accountSnapshot.name });
+      } else {
+        const ensuredAccount = this.accountRegistry.ensureAccount({ email: accountSnapshot.email, label: accountSnapshot.name });
+        this.accountKey = ensuredAccount?.accountKey || this.accountKey;
+      }
+      this.accountRegistry.updateCredits({ accountKey: this.accountKey, email: accountSnapshot.email }, accountSnapshot.credits);
+      this.accountRegistry.markUsed({ accountKey: this.accountKey, email: accountSnapshot.email });
+      if (Number.isFinite(accountSnapshot.credits) && accountSnapshot.credits < 20) {
+        this.accountRegistry.markRateLimited({ accountKey: this.accountKey, email: accountSnapshot.email }, 'low-credits', 12 * 60);
+        throw new Error('FLOW_CREDITS_LOW: Google Flow credits below 20');
+      }
+    }
     
     console.log('✅ Google Flow loaded and logged in\n');
   }
@@ -2102,4 +2136,3 @@ class GoogleFlowAutomationService {
 }
 
 export default GoogleFlowAutomationService;
-

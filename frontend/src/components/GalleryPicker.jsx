@@ -484,7 +484,7 @@ const GalleryPicker = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 20000,
+      zIndex: 999999,
       backdropFilter: isLightTheme ? 'blur(14px)' : 'none'
     }}>
       <div style={{

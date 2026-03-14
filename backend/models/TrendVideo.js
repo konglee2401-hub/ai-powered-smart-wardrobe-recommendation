@@ -16,7 +16,7 @@ const TrendVideoSchema = new mongoose.Schema({
   },
   platform: {
     type: String,
-    enum: ['youtube', 'facebook', 'dailyhaha', 'douyin', 'playboard', 'other'],
+      enum: ['youtube', 'facebook', 'dailyhaha', 'douyin', 'playboard', 'kuaishou', 'other'],
     required: true,
     index: true,
   },

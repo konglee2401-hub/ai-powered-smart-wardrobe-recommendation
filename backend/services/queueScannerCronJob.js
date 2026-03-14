@@ -45,6 +45,7 @@ class QueueScannerCronJob {
       enabled: false,
     };
     this.settingsLoaded = false;
+    this.subVideoFolderHistory = new Map();
     this.ensureDirectories();
   }
 
@@ -287,6 +288,7 @@ class QueueScannerCronJob {
     }
 
     this.isRunning = true;
+    this.subVideoFolderHistory.clear();
     console.log('\n🔍 Starting Queue scan...');
 
     try {
@@ -314,386 +316,451 @@ class QueueScannerCronJob {
         };
       }
 
+      // ⚡ Load batch processing settings
+      const settings = await QueueScannerSettings.findOne({ key: 'default' }).lean() || {};
+      const maxJobsPerRun = Math.max(1, Math.min(5, settings.maxJobsPerRun || 3));
+      const batchDelaySeconds = Math.max(0, Math.min(1800, (settings.batchDelayMinutes || 0) * 60));
+
+      console.log(`⚡ Batch Processing Config: maxJobs=${maxJobsPerRun}, delay=${batchDelaySeconds}s`);
+
       const results = [];
-      for (const queueVideo of queueVideos) {
-        console.log(`\n📹 Processing: ${queueVideo.name}`);
+      const totalBatches = Math.ceil(queueVideos.length / maxJobsPerRun);
+      
+      // Process in batches
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * maxJobsPerRun;
+        const endIdx = Math.min(startIdx + maxJobsPerRun, queueVideos.length);
+        const batch = queueVideos.slice(startIdx, endIdx);
+
+        console.log(`\n🎬 Processing Batch ${batchIndex + 1}/${totalBatches} (${batch.length} items)`);
+
+        // Process batch items in parallel
+        const batchPromises = batch.map(queueVideo => this.processQueueVideo(queueVideo, options));
+        const batchResults = await Promise.all(batchPromises.map(p => p.catch(err => ({ success: false, error: err.message }))));
         
-        try {
-          const metadata = this.readQueueMetadata(queueVideo.path) || {};
-          const enrichedMetadata = {
-            ...metadata,
-            driveFileId: queueVideo.driveFileId || metadata.driveFileId || '',
-            driveWebViewLink: queueVideo.driveMeta?.webViewLink || metadata.driveWebViewLink || '',
-            driveThumbnail: queueVideo.driveMeta?.thumbnailLink || metadata.driveThumbnail || '',
-            sourceKey: metadata.sourceKey || metadata.sourcePlatform || 'other',
-            sourcePlatform: metadata.sourcePlatform || metadata.sourceKey || 'other',
-          };
-          const sourceAsset = await this.ensureSourceAsset(queueVideo, enrichedMetadata);
-          const sourceVideo = await this.ensureSourceVideo(queueVideo, enrichedMetadata, sourceAsset);
+        results.push(...batchResults);
 
-          // 1. Resolve sub-video from library sources (Drive/public) first, fallback to local sub-videos
-          let subVideo = null;
-          let subVideoMeta = {
-            selectionMethod: 'random',
-            sourceKey: 'local-sub',
-            sourceType: 'local-folder',
-            sourceName: 'local sub-videos',
-          };
-
-          try {
-            const trendSetting = await TrendSetting.getOrCreateDefault(null);
-            const productionPrefs = trendSetting?.videoPipelinePreferences?.production || {};
-            const sources = normalizeSubVideoLibrarySources(productionPrefs.subVideoLibrarySources)
-              .filter((item) => item.enabled !== false);
-
-            if (sources.length) {
-              const selectionContext = {
-                templateName: 'reaction',
-                aspectRatio: '9:16',
-                sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-                subtitleContext: '',
-                affiliateKeywords: [],
-              };
-
-              const orderedSources = [...sources].sort((left, right) => Number(right.isDefault === true) - Number(left.isDefault === true));
-              for (const source of orderedSources) {
-                const resolved = await publicDriveFolderIngestService.resolveSubVideoFromSource(source, selectionContext);
-                if (resolved?.success && resolved?.item?.localPath) {
-                  subVideo = {
-                    name: resolved.item.name,
-                    path: resolved.item.localPath,
-                  };
-                  subVideoMeta = {
-                    selectionMethod: 'library',
-                    sourceKey: source.key || source.folderId || 'public-drive',
-                    sourceType: source.sourceType || 'public-drive-folder',
-                    sourceName: source.name || source.key || 'Public library',
-                    assetId: resolved.item.assetId || '',
-                    theme: resolved.item.theme || '',
-                    recommendedTemplateGroups: resolved.item.recommendedTemplateGroups || [],
-                    selection: resolved.selection || null,
-                  };
-                  console.log(`✓ Selected sub-video from library: ${subVideo.name}`);
-                  break;
-                }
-              }
-            }
-          } catch (error) {
-            console.warn(`⚠️ Library sub-video selection failed: ${error.message}`);
-          }
-
-          if (!subVideo) {
-            const subVideoResult = await googleDriveIntegration.getRandomSubVideo();
-            if (!subVideoResult.success) {
-              throw new Error('No sub-videos available');
-            }
-            subVideo = subVideoResult.file;
-            console.log(`✓ Selected sub-video (local fallback): ${subVideo.name}`);
-          }
-
-          // 2. Generate mashup
-          const mashupResult = await videoMashupGenerator.generateMashup(
-            queueVideo.path,
-            subVideo.path,
-            {
-              duration: 30,
-              quality: 'high',
-              aspectRatio: '9:16', // YouTube Shorts
-              contentType: enrichedMetadata.contentType || 'general', // Smart template selection
-            }
-          );
-
-          if (!mashupResult.success) {
-            throw new Error(`Mashup generation failed: ${mashupResult.error}`);
-          }
-
-          const { mashupId, outputPath, thumbPath, metadata: mashupMetadata } = mashupResult;
-          console.log(`✓ Mashup generated: ${mashupId}`);
-
-          // 3. Move mashup to Completed folder
-          const moveResult = await googleDriveIntegration.moveToCompletedFolder(
-            outputPath,
-            `${mashupId}.mp4`
-          );
-
-          if (!moveResult.success) {
-            throw new Error(`Failed to move to completed: ${moveResult.error}`);
-          }
-
-          console.log(`✓ Moved to completed folder`);
-
-          // 4. Update queue item status
-          // Create queue record
-          const mashupLog = {
-            recipe: 'mashup',
-            templateName: 'reaction',
-            templateGroup: 'reaction',
-            layout: '2-3-1-3',
-            duration: 30,
-            aspectRatio: '9:16',
-            audioSource: 'main',
-            subtitleMode: 'none',
-            subtitleText: '',
-            subtitleContext: '',
-            mainVideo: {
-              sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
-              title: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-              path: queueVideo.path,
-              url: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
-            },
-            subVideo: {
-              selectionMethod: subVideoMeta.selectionMethod || 'random',
-              assetId: subVideoMeta.assetId || '',
-              name: subVideo?.name || '',
-              path: subVideo?.path || '',
-              sourceKey: subVideoMeta.sourceKey || 'local-sub',
-              sourceType: subVideoMeta.sourceType || 'local',
-              theme: subVideoMeta.theme || '',
-            },
-            selection: {
-              method: subVideoMeta.selectionMethod || 'random',
-              sourceKey: subVideoMeta.sourceKey || 'local-sub',
-              sourceType: subVideoMeta.sourceType || 'local-folder',
-              sourceName: subVideoMeta.sourceName || 'local sub-videos',
-              templateGroup: 'reaction',
-              desiredThemes: subVideoMeta.selection?.desiredThemes || [],
-              score: subVideoMeta.selection?.score ?? null,
-              candidates: subVideoMeta.selection?.candidates || [],
-            },
-          };
-          const queueResult = await VideoQueueService.addToQueue({
-            videoConfig: {
-              layout: '2-3-1-3',
-              duration: 30,
-              platform: 'youtube',
-              mainVideoPath: queueVideo.path,
-              subVideoPath: subVideo.path,
-              mashupId,
-              outputPath: moveResult.filePath,
-              metadata: mashupMetadata,
-              sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-              sourceUrl: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
-              sourceThumbnail: sourceVideo?.thumbnail || enrichedMetadata.sourceThumbnail || '',
-              sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
-              mashupLog,
-              publishMetadata: buildPublishMetadata({
-                sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-                templateName: mashupLog.templateName,
-                templateGroup: mashupLog.templateGroup,
-                sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
-                sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
-                subtitleText: mashupLog.subtitleText || '',
-                subtitleContext: mashupLog.subtitleContext || '',
-                subVideoName: subVideo?.name || '',
-              }),
-            },
-            platform: options.platform || 'youtube',
-            contentType: 'mashup',
-            priority: 'high',
-            accountIds: options.accountIds || [],
-            metadata: {
-              sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
-              sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
-              sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
-              sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || '',
-              sourceUrl: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
-              sourceThumbnail: sourceVideo?.thumbnail || enrichedMetadata.sourceThumbnail || '',
-              mashupLog,
-              publishMetadata: buildPublishMetadata({
-                sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-                templateName: mashupLog.templateName,
-                templateGroup: mashupLog.templateGroup,
-                sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
-                sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
-                subtitleText: mashupLog.subtitleText || '',
-                subtitleContext: mashupLog.subtitleContext || '',
-                subVideoName: subVideo?.name || '',
-              }),
-            },
-          });
-          if (!queueResult.success) {
-            throw new Error(queueResult.error || 'Queue item creation failed');
-          }
-          const publishMetadata = queueResult.queueItem?.videoConfig?.publishMetadata
-            || queueResult.queueItem?.metadata?.publishMetadata
-            || buildPublishMetadata({
-              sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
-              templateName: mashupLog.templateName,
-              templateGroup: mashupLog.templateGroup,
-              sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
-              sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
-              subtitleText: mashupLog.subtitleText || '',
-              subtitleContext: mashupLog.subtitleContext || '',
-              subVideoName: subVideo?.name || '',
-            });
-
-          let completedDriveSync = {
-            status: 'skipped',
-            message: 'Completed video kept on local storage only',
-          };
-
-          try {
-            const outputBuffer = fs.readFileSync(moveResult.filePath);
-            const driveResult = await driveService.uploadGeneratedVideo(outputBuffer, path.basename(moveResult.filePath), {
-              description: `Completed mashup for queue ${queueResult.queueId}`,
-              properties: {
-                queueId: queueResult.queueId,
-                recipe: 'mashup',
-              },
-            });
-
-            completedDriveSync = {
-              status: driveResult?.id ? 'uploaded' : 'skipped',
-              driveFileId: driveResult?.id || '',
-              webViewLink: driveResult?.webViewLink || '',
-              name: driveResult?.name || path.basename(moveResult.filePath),
-            };
-          } catch (driveError) {
-            completedDriveSync = {
-              status: 'failed',
-              error: driveError.message,
-            };
-          }
-
-          const generatedAsset = await this.upsertGeneratedAsset(
-            queueResult.queueId,
-            moveResult.filePath,
-            completedDriveSync,
-            sourceVideo?._id ? String(sourceVideo._id) : ''
-          );
-
-          if (queueResult.success) {
-            await VideoQueueService.updateQueueStatus(queueResult.queueId, 'ready', {
-              videoConfig: {
-                ...(queueResult.queueItem?.videoConfig || {}),
-                outputPath: moveResult.filePath,
-                videoPath: moveResult.filePath,
-                completedDriveSync,
-                publishMetadata,
-                generatedAsset: generatedAsset ? {
-                  assetId: generatedAsset.assetId || '',
-                  id: generatedAsset._id ? String(generatedAsset._id) : '',
-                } : null,
-              },
-              metadata: {
-                ...(queueResult.queueItem?.metadata || {}),
-                completedDriveSync,
-                publishMetadata,
-              },
-              uploadUrl: completedDriveSync.webViewLink || '',
-            });
-          }
-
-          if (sourceVideo) {
-            sourceVideo.production = {
-              queueStatus: 'completed',
-              queueId: queueResult.queueId,
-              recipe: 'mashup',
-              completedVideoPath: moveResult.filePath,
-              completedDriveFileId: completedDriveSync.driveFileId || '',
-              completedAt: new Date(),
-              lastError: '',
-            };
-            await sourceVideo.save();
-          }
-          console.log(`✓ Queue item created: ${queueResult.queueId}`);
-
-          let autoPublishResults = [];
-          if (options.autoPublish && queueResult.success && Array.isArray(options.accountIds) && options.accountIds.length) {
-            for (const accountId of options.accountIds) {
-              const account = MultiAccountService.getRawAccount(accountId);
-              if (!account) {
-                autoPublishResults.push({ accountId, success: false, error: 'Account not found' });
-                continue;
-              }
-
-              const uploadConfig = account.platform === 'youtube'
-                ? mergePublishUploadConfig(
-                  { youtubePublishType: String(options.youtubePublishType || 'shorts').toLowerCase() },
-                  publishMetadata
-                )
-                : {};
-
-              const upload = AutoUploadService.registerUpload({
-                queueId: queueResult.queueId,
-                videoPath: moveResult.filePath,
-                platform: account.platform,
-                accountId,
-                uploadConfig
-              });
-
-              if (!upload.success) {
-                autoPublishResults.push({ accountId, success: false, error: upload.error || 'Register upload failed' });
-                continue;
-              }
-
-              const executed = await AutoUploadService.executeUpload(upload.uploadId, account);
-              if (executed.success) {
-                MultiAccountService.recordPost(accountId);
-              } else {
-                MultiAccountService.recordError(accountId, executed.error || 'Upload failed');
-              }
-
-              autoPublishResults.push({ accountId, ...executed });
-            }
-
-            if (autoPublishResults.some(r => r.success)) {
-              await VideoQueueService.updateQueueStatus(queueResult.queueId, 'uploaded');
-            }
-          }
-
-          // 5. Mark queue video as processed
-          const processedPath = path.join(this.processedDir, queueVideo.name);
-          fs.copyFileSync(queueVideo.path, processedPath);
-          fs.unlinkSync(queueVideo.path); // Delete from queue
-          const metadataPath = this.getQueueMetadataPath(queueVideo.path);
-          if (metadataPath && fs.existsSync(metadataPath)) {
-            fs.unlinkSync(metadataPath);
-          }
-          if (queueVideo.driveFileId) {
-            try {
-              await driveService.deleteFile(queueVideo.driveFileId);
-            } catch (driveError) {
-              console.warn('⚠️ Failed to delete Drive queue file:', driveError.message);
-            }
-          }
-          console.log(`✓ Marked as processed`);
-
-          results.push({
-            queueVideo: queueVideo.name,
-            subVideo: subVideo.name,
-            mashupId,
-            status: 'success',
-            outputPath: moveResult.filePath,
-            generatedAssetId: generatedAsset?.assetId || '',
-            autoPublished: !!options.autoPublish,
-            autoPublishResults
-          });
-
-        } catch (error) {
-          console.error(`❌ Error processing ${queueVideo.name}:`, error.message);
-          results.push({
-            queueVideo: queueVideo.name,
-            status: 'failed',
-            error: error.message
-          });
+        // Delay between batches (except after last batch)
+        if (batchIndex < totalBatches - 1 && batchDelaySeconds > 0) {
+          console.log(`⏸️  Waiting ${batchDelaySeconds}s before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, batchDelaySeconds * 1000));
         }
       }
 
-      this.isRunning = false;
+      // Summary
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
 
+      console.log(`\n✅ Queue processing complete: ${successful} succeeded, ${failed} failed`);
+
+      this.isRunning = false;
       return {
         success: true,
-        message: 'Queue scan completed',
-        processed: results.length,
+        message: `Processed ${queueVideos.length} videos`,
+        processed: successful,
+        failed,
         results
       };
-
     } catch (error) {
-      console.error('❌ Queue scan failed:', error);
+      console.error('❌ Queue scan error:', error.message);
       this.isRunning = false;
       return {
         success: false,
+        error: error.message || 'Queue scan failed'
+      };
+    }
+  }
+
+  async processQueueVideo(queueVideo, options = {}) {
+    console.log(`\n📹 Processing: ${queueVideo.name}`);
+    
+    try {
+      const metadata = this.readQueueMetadata(queueVideo.path) || {};
+      const enrichedMetadata = {
+        ...metadata,
+        driveFileId: queueVideo.driveFileId || metadata.driveFileId || '',
+        driveWebViewLink: queueVideo.driveMeta?.webViewLink || metadata.driveWebViewLink || '',
+        driveThumbnail: queueVideo.driveMeta?.thumbnailLink || metadata.driveThumbnail || '',
+        sourceKey: metadata.sourceKey || metadata.sourcePlatform || 'other',
+        sourcePlatform: metadata.sourcePlatform || metadata.sourceKey || 'other',
+      };
+      const sourceAsset = await this.ensureSourceAsset(queueVideo, enrichedMetadata);
+      const sourceVideo = await this.ensureSourceVideo(queueVideo, enrichedMetadata, sourceAsset);
+
+      // 1. Resolve sub-video from library sources (Drive/public) first, fallback to local sub-videos
+      let subVideo = null;
+      let subVideoMeta = {
+        selectionMethod: 'random',
+        sourceKey: 'local-sub',
+        sourceType: 'local-folder',
+        sourceName: 'local sub-videos',
+      };
+
+      const hashString = (value = '') => {
+        let hash = 0;
+        for (let i = 0; i < value.length; i += 1) {
+          hash = ((hash << 5) - hash) + value.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      };
+
+      try {
+        const trendSetting = await TrendSetting.getOrCreateDefault(null);
+        const productionPrefs = trendSetting?.videoPipelinePreferences?.production || {};
+        const sources = normalizeSubVideoLibrarySources(productionPrefs.subVideoLibrarySources)
+          .filter((item) => item.enabled !== false);
+
+        if (sources.length) {
+          const templateStrategy = productionPrefs?.composerDefaults?.templateStrategy || 'weighted';
+          const defaultTemplateName = productionPrefs?.composerDefaults?.templateName || '';
+          const selectionContext = {
+            templateName: templateStrategy === 'specific' ? defaultTemplateName : '',
+            templateStrategy,
+            aspectRatio: '9:16',
+            sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+            subtitleContext: '',
+            affiliateKeywords: [],
+          };
+
+          const rotationSeed = hashString(sourceVideo?._id ? String(sourceVideo._id) : queueVideo.name || '');
+          const startIdx = sources.length > 1 ? rotationSeed % sources.length : 0;
+          const rotatedSources = sources.length > 1
+            ? [...sources.slice(startIdx), ...sources.slice(0, startIdx)]
+            : [...sources];
+
+          const orderedSources = rotatedSources.sort((left, right) => Number(right.isDefault === true) - Number(left.isDefault === true));
+          for (const source of orderedSources) {
+            const sourceKey = source.key || source.folderId || source.url || 'public-drive';
+            const seenFolders = this.subVideoFolderHistory.get(sourceKey);
+            const resolved = await publicDriveFolderIngestService.resolveSubVideoFromSource(source, {
+              ...selectionContext,
+              avoidFolders: seenFolders ? Array.from(seenFolders) : [],
+            });
+            if (resolved?.success && resolved?.item?.localPath) {
+              subVideo = {
+                name: resolved.item.name,
+                path: resolved.item.localPath,
+              };
+              subVideoMeta = {
+                selectionMethod: 'library',
+                sourceKey,
+                sourceType: source.sourceType || 'public-drive-folder',
+                sourceName: source.name || source.key || 'Public library',
+                assetId: resolved.item.assetId || '',
+                theme: resolved.item.theme || '',
+                recommendedTemplateGroups: resolved.item.recommendedTemplateGroups || [],
+                selection: resolved.selection || null,
+              };
+              const selectedFolder = resolved.selection?.selectedFolder;
+              if (selectedFolder) {
+                const updated = seenFolders || new Set();
+                updated.add(selectedFolder);
+                this.subVideoFolderHistory.set(sourceKey, updated);
+              }
+              console.log(`✓ Selected sub-video from library: ${subVideo.name}`);
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Library sub-video selection failed: ${error.message}`);
+      }
+
+      if (!subVideo) {
+        const subVideoResult = await googleDriveIntegration.getRandomSubVideo();
+        if (!subVideoResult.success) {
+          throw new Error('No sub-videos available');
+        }
+        subVideo = subVideoResult.file;
+        console.log(`✓ Selected sub-video (local fallback): ${subVideo.name}`);
+      }
+
+      // 2. Generate mashup
+      const mashupResult = await videoMashupGenerator.generateMashup(
+        queueVideo.path,
+        subVideo.path,
+        {
+          duration: 30,
+          quality: 'high',
+          aspectRatio: '9:16', // YouTube Shorts
+          contentType: enrichedMetadata.contentType || 'general', // Smart template selection
+        }
+      );
+
+      if (!mashupResult.success) {
+        throw new Error(`Mashup generation failed: ${mashupResult.error}`);
+      }
+
+      const { mashupId, outputPath, thumbPath, metadata: mashupMetadata } = mashupResult;
+      console.log(`✓ Mashup generated: ${mashupId}`);
+
+      // 3. Move mashup to Completed folder
+      const moveResult = await googleDriveIntegration.moveToCompletedFolder(
+        outputPath,
+        `${mashupId}.mp4`
+      );
+
+      if (!moveResult.success) {
+        throw new Error(`Failed to move to completed: ${moveResult.error}`);
+      }
+
+      console.log(`✓ Moved to completed folder`);
+
+      // 4. Update queue item status
+      // Create queue record
+      const mashupLog = {
+        recipe: 'mashup',
+        templateName: 'reaction',
+        templateGroup: 'reaction',
+        layout: '2-3-1-3',
+        duration: 30,
+        aspectRatio: '9:16',
+        audioSource: 'main',
+        subtitleMode: 'none',
+        subtitleText: '',
+        subtitleContext: '',
+        mainVideo: {
+          sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
+          title: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+          path: queueVideo.path,
+          url: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
+        },
+        subVideo: {
+          selectionMethod: subVideoMeta.selectionMethod || 'random',
+          assetId: subVideoMeta.assetId || '',
+          name: subVideo?.name || '',
+          path: subVideo?.path || '',
+          sourceKey: subVideoMeta.sourceKey || 'local-sub',
+          sourceType: subVideoMeta.sourceType || 'local',
+          theme: subVideoMeta.theme || '',
+        },
+        selection: {
+          method: subVideoMeta.selectionMethod || 'random',
+          sourceKey: subVideoMeta.sourceKey || 'local-sub',
+          sourceType: subVideoMeta.sourceType || 'local-folder',
+          sourceName: subVideoMeta.sourceName || 'local sub-videos',
+          templateGroup: 'reaction',
+          desiredThemes: subVideoMeta.selection?.desiredThemes || [],
+          score: subVideoMeta.selection?.score ?? null,
+          candidates: subVideoMeta.selection?.candidates || [],
+        },
+      };
+      const queueResult = await VideoQueueService.addToQueue({
+        videoConfig: {
+          layout: '2-3-1-3',
+          duration: 30,
+          platform: 'youtube',
+          mainVideoPath: queueVideo.path,
+          subVideoPath: subVideo.path,
+          mashupId,
+          outputPath: moveResult.filePath,
+          metadata: mashupMetadata,
+          sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+          sourceUrl: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
+          sourceThumbnail: sourceVideo?.thumbnail || enrichedMetadata.sourceThumbnail || '',
+          sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
+          mashupLog,
+          publishMetadata: buildPublishMetadata({
+            sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+            templateName: mashupLog.templateName,
+            templateGroup: mashupLog.templateGroup,
+            sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
+            sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
+            subtitleText: mashupLog.subtitleText || '',
+            subtitleContext: mashupLog.subtitleContext || '',
+            subVideoName: subVideo?.name || '',
+          }),
+        },
+        platform: options.platform || 'youtube',
+        contentType: 'mashup',
+        priority: 'high',
+        accountIds: options.accountIds || [],
+        metadata: {
+          sourceVideoId: sourceVideo?._id ? String(sourceVideo._id) : '',
+          sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
+          sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
+          sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || '',
+          sourceUrl: sourceVideo?.url || enrichedMetadata.sourceUrl || '',
+          sourceThumbnail: sourceVideo?.thumbnail || enrichedMetadata.sourceThumbnail || '',
+          mashupLog,
+          publishMetadata: buildPublishMetadata({
+            sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+            templateName: mashupLog.templateName,
+            templateGroup: mashupLog.templateGroup,
+            sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
+            sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
+            subtitleText: mashupLog.subtitleText || '',
+            subtitleContext: mashupLog.subtitleContext || '',
+            subVideoName: subVideo?.name || '',
+          }),
+        },
+      });
+      if (!queueResult.success) {
+        throw new Error(queueResult.error || 'Queue item creation failed');
+      }
+      const publishMetadata = queueResult.queueItem?.videoConfig?.publishMetadata
+        || queueResult.queueItem?.metadata?.publishMetadata
+        || buildPublishMetadata({
+          sourceTitle: sourceVideo?.title || enrichedMetadata.sourceTitle || queueVideo.name,
+          templateName: mashupLog.templateName,
+          templateGroup: mashupLog.templateGroup,
+          sourceKey: enrichedMetadata.sourceKey || sourceVideo?.source || 'other',
+          sourcePlatform: enrichedMetadata.sourcePlatform || sourceVideo?.platform || 'other',
+          subtitleText: mashupLog.subtitleText || '',
+          subtitleContext: mashupLog.subtitleContext || '',
+          subVideoName: subVideo?.name || '',
+        });
+
+      let completedDriveSync = {
+        status: 'skipped',
+        message: 'Completed video kept on local storage only',
+      };
+
+      try {
+        const outputBuffer = fs.readFileSync(moveResult.filePath);
+        const driveResult = await driveService.uploadGeneratedVideo(outputBuffer, path.basename(moveResult.filePath), {
+          description: `Completed mashup for queue ${queueResult.queueId}`,
+          properties: {
+            queueId: queueResult.queueId,
+            recipe: 'mashup',
+          },
+        });
+
+        completedDriveSync = {
+          status: driveResult?.id ? 'uploaded' : 'skipped',
+          driveFileId: driveResult?.id || '',
+          webViewLink: driveResult?.webViewLink || '',
+          name: driveResult?.name || path.basename(moveResult.filePath),
+        };
+      } catch (driveError) {
+        completedDriveSync = {
+          status: 'failed',
+          error: driveError.message,
+        };
+      }
+
+      const generatedAsset = await this.upsertGeneratedAsset(
+        queueResult.queueId,
+        moveResult.filePath,
+        completedDriveSync,
+        sourceVideo?._id ? String(sourceVideo._id) : ''
+      );
+
+      if (queueResult.success) {
+        await VideoQueueService.updateQueueStatus(queueResult.queueId, 'ready', {
+          videoConfig: {
+            ...(queueResult.queueItem?.videoConfig || {}),
+            outputPath: moveResult.filePath,
+            videoPath: moveResult.filePath,
+            completedDriveSync,
+            publishMetadata,
+            generatedAsset: generatedAsset ? {
+              assetId: generatedAsset.assetId || '',
+              id: generatedAsset._id ? String(generatedAsset._id) : '',
+            } : null,
+          },
+          metadata: {
+            ...(queueResult.queueItem?.metadata || {}),
+            completedDriveSync,
+            publishMetadata,
+          },
+          uploadUrl: completedDriveSync.webViewLink || '',
+        });
+      }
+
+      if (sourceVideo) {
+        sourceVideo.production = {
+          queueStatus: 'completed',
+          queueId: queueResult.queueId,
+          recipe: 'mashup',
+          completedVideoPath: moveResult.filePath,
+          completedDriveFileId: completedDriveSync.driveFileId || '',
+          completedAt: new Date(),
+          lastError: '',
+        };
+        await sourceVideo.save();
+      }
+      console.log(`✓ Queue item created: ${queueResult.queueId}`);
+
+      let autoPublishResults = [];
+      if (options.autoPublish && queueResult.success && Array.isArray(options.accountIds) && options.accountIds.length) {
+        for (const accountId of options.accountIds) {
+          const account = MultiAccountService.getRawAccount(accountId);
+          if (!account) {
+            autoPublishResults.push({ accountId, success: false, error: 'Account not found' });
+            continue;
+          }
+
+          const uploadConfig = account.platform === 'youtube'
+            ? mergePublishUploadConfig(
+              { youtubePublishType: String(options.youtubePublishType || 'shorts').toLowerCase() },
+              publishMetadata
+            )
+            : {};
+
+          const upload = AutoUploadService.registerUpload({
+            queueId: queueResult.queueId,
+            videoPath: moveResult.filePath,
+            platform: account.platform,
+            accountId,
+            uploadConfig
+          });
+
+          if (!upload.success) {
+            autoPublishResults.push({ accountId, success: false, error: upload.error || 'Register upload failed' });
+            continue;
+          }
+
+          const executed = await AutoUploadService.executeUpload(upload.uploadId, account);
+          if (executed.success) {
+            MultiAccountService.recordPost(accountId);
+          } else {
+            MultiAccountService.recordError(accountId, executed.error || 'Upload failed');
+          }
+
+          autoPublishResults.push({ accountId, ...executed });
+        }
+
+        if (autoPublishResults.some(r => r.success)) {
+          await VideoQueueService.updateQueueStatus(queueResult.queueId, 'uploaded');
+        }
+      }
+
+      // 5. Mark queue video as processed
+      const processedPath = path.join(this.processedDir, queueVideo.name);
+      fs.copyFileSync(queueVideo.path, processedPath);
+      fs.unlinkSync(queueVideo.path); // Delete from queue
+      const metadataPath = this.getQueueMetadataPath(queueVideo.path);
+      if (metadataPath && fs.existsSync(metadataPath)) {
+        fs.unlinkSync(metadataPath);
+      }
+      if (queueVideo.driveFileId) {
+        try {
+          await driveService.deleteFile(queueVideo.driveFileId);
+        } catch (driveError) {
+          console.warn('⚠️ Failed to delete Drive queue file:', driveError.message);
+        }
+      }
+      console.log(`✓ Marked as processed`);
+
+      // Return success result
+      return {
+        success: true,
+        queueVideo: queueVideo.name,
+        subVideo: subVideo.name,
+        mashupId,
+        outputPath: moveResult.filePath,
+        generatedAssetId: generatedAsset?.assetId || '',
+        autoPublished: !!options.autoPublish,
+        autoPublishResults
+      };
+
+    } catch (error) {
+      console.error(`❌ Error processing ${queueVideo.name}:`, error.message);
+      return {
+        success: false,
+        queueVideo: queueVideo.name,
         error: error.message
       };
     }

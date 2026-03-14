@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import random
 from datetime import datetime
@@ -7,11 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bson import ObjectId
 
-from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT
+from .config import PORT, ENABLE_SCHEDULER, AUTO_ENQUEUE_PENDING_ON_STARTUP, STARTUP_PENDING_ENQUEUE_LIMIT, VOICEOVER_OUTPUT_ROOT
 from .db import ensure_indexes, channels, videos, logs
 from .store import get_or_create_settings, update_settings, normalize, log_job
-from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records, reset_orphaned_downloads
+from .automation import discover_all, discover_playboard, discover_dailyhaha, discover_douyin, discover_pexels, discover_kuaishou, scan_all_channels, scan_single_channel, enqueue, queue_stats, start_worker, cleanup_invalid_youtube_records, reset_orphaned_downloads
 from .transcriptService import TranscriptService
+from .voiceover_pipeline import run_voiceover_pipeline
+from .pipeline_v2 import run_pipeline_v2
 
 
 app = FastAPI(title='Shorts/Reels Python Automation Service')
@@ -71,6 +74,7 @@ async def reload_scheduler():
     s = get_or_create_settings()
     scheduler.add_job(discover_all, 'cron', **cron_to_args(s.get('cronTimes', {}).get('discover', '0 7 * * *')), id='discover')
     scheduler.add_job(scan_all_channels, 'cron', **cron_to_args(s.get('cronTimes', {}).get('scan', '30 8 * * *')), id='scan')
+    scheduler.add_job(discover_pexels, 'cron', **cron_to_args(s.get('cronTimes', {}).get('pexels', '15 7 * * *')), id='discover-pexels')
     if not scheduler.running:
         scheduler.start()
 
@@ -106,6 +110,7 @@ async def stats_overview():
     return {
         'channels': channels.count_documents({}),
         'videos': videos.count_documents({}),
+        'pexelsSubVideos': videos.count_documents({'platform': 'pexels'}),
         'pending': videos.count_documents({'downloadStatus': 'pending'}),
         'failed': videos.count_documents({'downloadStatus': 'failed'}),
         'done': videos.count_documents({'downloadStatus': 'done'}),
@@ -197,6 +202,109 @@ async def trigger_pending_downloads(limit: int = Query(default=200, ge=1, le=200
             if queue_result.get('queued', 0) == 0
             else f"Queued {queue_result.get('queued', 0)} pending videos"
         )
+    }
+
+
+@app.post('/api/shorts-reels/videos/voiceover')
+async def run_voiceover(payload: dict):
+    video_ids = payload.get('videoIds', []) if isinstance(payload, dict) else []
+    translate_target = payload.get('translateTarget', 'vi')
+    voice_name = payload.get('voiceName', 'vi-VN-HoaiMyNeural')
+    overlay_video = payload.get('overlayVideo', True)
+    enable_transcript = payload.get('enableTranscript', True)
+    enable_voiceover = payload.get('enableVoiceover', True)
+    pipeline_version = str(payload.get('pipelineVersion', 'v1')).lower()
+    enable_viral_select = payload.get('enableViralSelect', True)
+    clip_min_seconds = float(payload.get('clipMinSeconds', 12) or 12)
+    clip_max_seconds = float(payload.get('clipMaxSeconds', 25) or 25)
+    enable_hook = payload.get('enableHook', True)
+    enable_broll = payload.get('enableBroll', True)
+    enable_vertical = payload.get('enableVertical', True)
+    enable_hook_caption = payload.get('enableHookCaption', True)
+    hook_caption_position = payload.get('hookCaptionPosition', 'top')
+    hook_caption_font_size = int(payload.get('hookCaptionFontSize', 96) or 96)
+    keep_only_final = payload.get('keepOnlyFinal', False)
+
+    if not isinstance(video_ids, list) or not video_ids:
+        raise HTTPException(status_code=400, detail='videoIds is required')
+
+    results = []
+    for vid in video_ids:
+        try:
+            doc = videos.find_one({'_id': ObjectId(vid)})
+            if not doc:
+                results.append({'videoId': str(vid), 'success': False, 'error': 'Video not found'})
+                continue
+
+            local_path = doc.get('localPath') or ''
+            if not local_path:
+                results.append({'videoId': str(vid), 'success': False, 'error': 'Missing localPath'})
+                continue
+
+            if not os.path.isabs(local_path):
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                local_path = os.path.abspath(os.path.join(base_dir, local_path))
+
+            if not os.path.exists(local_path):
+                results.append({'videoId': str(vid), 'success': False, 'error': 'Local file not found'})
+                continue
+
+            output_dir = os.path.join(VOICEOVER_OUTPUT_ROOT, str(vid))
+            if pipeline_version == 'v2':
+                output_dir = os.path.join(output_dir, 'v2')
+                assets = await run_pipeline_v2(
+                    local_path,
+                    output_dir,
+                    translate_target=translate_target,
+                    voice=voice_name,
+                    enable_transcript=enable_transcript,
+                    enable_voiceover=enable_voiceover,
+                    enable_viral_select=bool(enable_viral_select),
+                    clip_min_seconds=clip_min_seconds,
+                    clip_max_seconds=clip_max_seconds,
+                    enable_hook=bool(enable_hook),
+                    enable_broll=bool(enable_broll),
+                    enable_vertical=bool(enable_vertical),
+                    enable_hook_caption=bool(enable_hook_caption),
+                    hook_caption_position=hook_caption_position,
+                    hook_caption_font_size=hook_caption_font_size,
+                    keep_only_final=bool(keep_only_final),
+                )
+            else:
+                assets = await run_voiceover_pipeline(
+                    local_path,
+                    output_dir,
+                    translate_target=translate_target,
+                    voice=voice_name,
+                    overlay_video=overlay_video,
+                    enable_transcript=enable_transcript,
+                    enable_voiceover=enable_voiceover,
+                )
+
+            videos.update_one(
+                {'_id': doc['_id']},
+                {
+                    '$set': {
+                        'voiceover': {
+                            'status': 'done',
+                            'outputVideoPath': assets.get('outputVideoPath', ''),
+                            'audioPath': assets.get('voicePath', ''),
+                            'subtitlePath': assets.get('subtitlePath', ''),
+                            'transcriptPath': assets.get('transcriptPath', ''),
+                            'translatedPath': assets.get('translatedPath', ''),
+                            'updatedAt': datetime.utcnow(),
+                        }
+                    }
+                }
+            )
+
+            results.append({'videoId': str(vid), 'success': True, 'assets': assets})
+        except Exception as e:
+            results.append({'videoId': str(vid), 'success': False, 'error': str(e)})
+
+    return {
+        'success': True,
+        'results': results,
     }
 
 
@@ -503,6 +611,49 @@ async def manual_discover_douyin(payload: dict | None = None):
 
 
 
+
+@app.post('/api/shorts-reels/pexels/manual-discover')
+async def manual_discover_pexels():
+    started = time.time()
+    found = 0
+    try:
+        result = await discover_pexels()
+        found = int(result.get('itemsFound', 0))
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'success', isManual=True, platform='pexels', itemsFound=found, duration=duration)
+
+        return {
+            'success': True,
+            'itemsFound': found,
+            'duration': duration,
+            'topicsProcessed': 1
+        }
+    except Exception as ex:
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'failed', isManual=True, platform='pexels', itemsFound=found, error=str(ex), duration=duration)
+        raise HTTPException(status_code=500, detail=f'Manual Pexels discovery failed: {str(ex)}')
+
+
+@app.post('/api/shorts-reels/kuaishou/manual-discover')
+async def manual_discover_kuaishou():
+    started = time.time()
+    found = 0
+    try:
+        result = await discover_kuaishou()
+        found = int(result.get('itemsFound', 0))
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'success', isManual=True, platform='kuaishou', itemsFound=found, duration=duration)
+
+        return {
+            'success': True,
+            'itemsFound': found,
+            'duration': duration,
+            'topicsProcessed': 1
+        }
+    except Exception as ex:
+        duration = int((time.time() - started) * 1000)
+        log_job('discover', 'failed', isManual=True, platform='kuaishou', itemsFound=found, error=str(ex), duration=duration)
+        raise HTTPException(status_code=500, detail=f'Manual Kuaishou discovery failed: {str(ex)}')
 
 @app.get('/api/shorts-reels/captcha/jobs')
 async def get_captcha_jobs(limit: int = Query(default=50, ge=1, le=500)):

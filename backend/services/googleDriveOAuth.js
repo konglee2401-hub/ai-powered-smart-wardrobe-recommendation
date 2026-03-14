@@ -61,6 +61,7 @@ class GoogleDriveOAuthService {
       videosPlayboard: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Playboard'] || null,
       videosDailyhaha: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Dailyhaha'] || null,
       videosDouyin: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Douyin'] || null,
+      videosKuaishou: this.loadedFolderStructure?.folders?.['Affiliate AI/Videos/Downloaded/Kuaishou'] || null,
     };
 
     this.drive = null;
@@ -1212,6 +1213,68 @@ class GoogleDriveOAuthService {
     }
   }
 
+  saveFolderStructure() {
+    try {
+      if (!this.folderStructurePath || !this.loadedFolderStructure) return;
+      this.loadedFolderStructure.timestamp = new Date().toISOString();
+      fs.writeFileSync(
+        this.folderStructurePath,
+        JSON.stringify(this.loadedFolderStructure, null, 2)
+      );
+    } catch (error) {
+      console.warn(`⚠️  Could not persist folder structure: ${error.message}`);
+    }
+  }
+
+  upsertFolderTreeNode(folderPath, folderId) {
+    if (!this.loadedFolderStructure?.tree || !folderPath || !folderId) return;
+    const segments = String(folderPath).split('/').filter(Boolean);
+    if (!segments.length) return;
+
+    const root = this.loadedFolderStructure.tree;
+    if (root.name !== segments[0]) return;
+
+    let node = root;
+    node.children = Array.isArray(node.children) ? node.children : [];
+
+    for (let i = 1; i < segments.length; i += 1) {
+      const name = segments[i];
+      let child = node.children.find((item) => item.name === name);
+      if (!child) {
+        child = {
+          name,
+          id: i === segments.length - 1 ? folderId : null,
+          children: [],
+        };
+        node.children.push(child);
+      }
+      if (i === segments.length - 1) {
+        child.id = folderId;
+      }
+      child.children = Array.isArray(child.children) ? child.children : [];
+      node = child;
+    }
+  }
+
+  updateFolderStructureEntry(folderPath, folderId) {
+    if (!folderPath || !folderId || !this.loadedFolderStructure) return;
+    this.loadedFolderStructure.folders = this.loadedFolderStructure.folders || {};
+    if (this.loadedFolderStructure.folders[folderPath] === folderId) return;
+
+    this.loadedFolderStructure.folders[folderPath] = folderId;
+    this.upsertFolderTreeNode(folderPath, folderId);
+    this.saveFolderStructure();
+  }
+
+  async getOrCreateFolder(folderName, parentFolderId) {
+    const existing = await this.findFolderByName(folderName, parentFolderId);
+    if (existing?.id) {
+      return existing.id;
+    }
+    const created = await this.createFolder(folderName, parentFolderId);
+    return created?.id || null;
+  }
+
   /**
    * Create a new folder in parent folder
    */
@@ -1386,21 +1449,44 @@ class GoogleDriveOAuthService {
    * 💫 Upload douyin scraped video
    * Auto-saves to: Videos/Downloaded/Douyin
    */
-  async uploadDouyinScrapedVideo(buffer, fileName, options = {}) {
-    return this.uploadBuffer(buffer, fileName, {
-      ...options,
-      folderId: this.folderIds.videosDouyin || this.folderIds.videosDownloaded || this.folderIds.videos,
-      description: options.description || 'douyin video downloaded for repurposing',
-      properties: {
-        ...(options.properties || {}),
-        videoType: 'scraped',
-        source: 'douyin',
-        category: 'scraped-video',
-      }
-    });
-  }
+    async uploadDouyinScrapedVideo(buffer, fileName, options = {}) {
+      return this.uploadBuffer(buffer, fileName, {
+        ...options,
+        folderId: this.folderIds.videosDouyin || this.folderIds.videosDownloaded || this.folderIds.videos,
+        description: options.description || 'douyin video downloaded for repurposing',
+        properties: {
+          ...(options.properties || {}),
+          videoType: 'scraped',
+          source: 'douyin',
+          category: 'scraped-video',
+        }
+      });
+    }
 
-}
+    /**
+     * 🎥 Upload Kuaishou scraped video
+     * Auto-saves to: Videos/Downloaded/Kuaishou
+     */
+    async uploadKuaishouScrapedVideo(buffer, fileName, options = {}) {
+      const folderId = this.folderIds.videosKuaishou
+        || await this.getOrCreateFolder('Kuaishou', this.folderIds.videosDownloaded || this.folderIds.videos);
+      this.folderIds.videosKuaishou = folderId;
+      this.updateFolderStructureEntry('Affiliate AI/Videos/Downloaded/Kuaishou', folderId);
+
+      return this.uploadBuffer(buffer, fileName, {
+        ...options,
+        folderId,
+        description: options.description || 'kuaishou video downloaded for repurposing',
+        properties: {
+          ...(options.properties || {}),
+          videoType: 'scraped',
+          source: 'kuaishou',
+          category: 'scraped-video',
+        }
+      });
+    }
+  
+  }
 
 // Export singleton instance
 const driveService = new GoogleDriveOAuthService();

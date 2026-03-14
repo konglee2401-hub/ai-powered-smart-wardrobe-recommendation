@@ -42,100 +42,46 @@ function formatLabel(key = '') {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function GenerationLoadingSkeleton() {
+function GenerationLoadingSkeleton({ expectedCount = 2 }) {
+  const safeCount = Math.max(1, Math.min(4, Number(expectedCount) || 2));
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(240px,0.58fr),minmax(620px,1.42fr)]">
-      <div className="space-y-4">
-        <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_40px_rgba(2,6,23,0.2)]">
-          <div className="h-3 w-28 animate-pulse rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(226,239,250,0.28))]" />
-          <div className="mt-3 h-7 w-52 animate-pulse rounded-2xl bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(226,239,250,0.24))]" />
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="h-7 w-24 animate-pulse rounded-full bg-white/[0.08]" />
-            <div className="h-7 w-32 animate-pulse rounded-full bg-white/[0.08]" />
-            <div className="h-7 w-20 animate-pulse rounded-full bg-white/[0.08]" />
-          </div>
-          <div className="mt-4 grid gap-2">
-            <div className="h-11 animate-pulse rounded-2xl bg-emerald-500/10" />
-            <div className="h-11 animate-pulse rounded-2xl bg-white/[0.06]" />
-          </div>
-        </section>
+    <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.7fr),minmax(420px,1.3fr)]">
+      <section className="rounded-[1.5rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_16px_36px_rgba(2,6,23,0.2)]">
+        <div className="h-3 w-24 animate-pulse rounded-full bg-white/[0.08]" />
+        <div className="mt-3 h-6 w-40 animate-pulse rounded-2xl bg-white/[0.08]" />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-white/[0.08]" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-white/[0.08]" />
+        </div>
+        <div className="mt-4 h-10 animate-pulse rounded-2xl bg-white/[0.06]" />
+      </section>
 
-        <section className="rounded-[1.6rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
-          <div className="h-3 w-24 animate-pulse rounded-full bg-white/[0.08]" />
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
-              <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="mt-2 aspect-[4/5]">
-                <AIImage className="h-full w-full rounded-[1rem]" />
-              </div>
-            </div>
-            <div className="rounded-[1.2rem] bg-white/[0.03] p-2">
-              <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="mt-2 aspect-[4/5]">
-                <AIImage className="h-full w-full rounded-[1rem]" />
-              </div>
-            </div>
+      <section className="rounded-[1.7rem] bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.12),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_22px_56px_rgba(2,6,23,0.24)]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
+            <div className="mt-2 h-6 w-36 animate-pulse rounded-2xl bg-white/[0.08]" />
           </div>
-        </section>
-
-        <section className="rounded-[1.6rem] bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.14),transparent_46%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_16px_32px_rgba(2,6,23,0.16)]">
-          <div className="flex items-center justify-between gap-3">
-            <div className="h-3 w-28 animate-pulse rounded-full bg-white/[0.08]" />
-            <div className="flex gap-2">
-              <div className="h-8 w-8 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="h-8 w-8 animate-pulse rounded-full bg-white/[0.08]" />
-            </div>
+          <div className="h-8 w-20 animate-pulse rounded-full bg-white/[0.08]" />
+        </div>
+        <div className="overflow-hidden rounded-[1.25rem] bg-slate-950/60">
+          <div className="aspect-[4/5] w-full">
+            <AIImage className="h-full w-full rounded-[1rem]" />
           </div>
-          <div className="mt-3 space-y-2">
-            <div className="h-3 w-full animate-pulse rounded-full bg-white/[0.08]" />
-            <div className="h-3 w-[92%] animate-pulse rounded-full bg-white/[0.08]" />
-            <div className="h-3 w-[78%] animate-pulse rounded-full bg-white/[0.08]" />
-          </div>
-        </section>
-      </div>
-
-      <div className="xl:sticky xl:top-4 xl:self-start">
-        <section className="rounded-[1.85rem] bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.12),transparent_34%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.014))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_24px_64px_rgba(2,6,23,0.28)]">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.08]" />
-              <div className="mt-2 h-6 w-40 animate-pulse rounded-2xl bg-white/[0.08]" />
-            </div>
-            <div className="h-8 w-24 animate-pulse rounded-full bg-white/[0.08]" />
-          </div>
-          <div className="overflow-hidden rounded-[1.4rem] bg-slate-950/60">
-            <div className="aspect-[4/5] w-full">
-              <AIImage className="h-full w-full rounded-[1rem]" />
-            </div>
-          </div>
-          <div className="mt-3 rounded-[1.25rem] bg-white/[0.04] p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="h-4 w-40 animate-pulse rounded-full bg-white/[0.08]" />
-                <div className="mt-2 h-3 w-28 animate-pulse rounded-full bg-white/[0.08]" />
-              </div>
-              <div className="h-10 w-28 animate-pulse rounded-2xl bg-violet-500/14" />
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="rounded-[1.2rem] bg-white/[0.03] p-2">
-                <div className="overflow-hidden rounded-[1rem] bg-slate-950/60">
-                  <div className="aspect-[4/5] w-full">
-              <AIImage className="h-full w-full rounded-[1rem]" />
-            </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: safeCount }).map((_, index) => (
+            <div key={index} className="rounded-[1.1rem] bg-white/[0.03] p-2">
+              <div className="overflow-hidden rounded-[0.9rem] bg-slate-950/60">
+                <div className="aspect-[4/5] w-full">
+                  <AIImage className="h-full w-full rounded-[0.9rem]" />
                 </div>
-                <div className="mt-2 flex items-start justify-between gap-2">
-                  <div className="h-3 w-24 animate-pulse rounded-full bg-white/[0.08]" />
-                  <div className="h-7 w-7 animate-pulse rounded-full bg-white/[0.08]" />
-                </div>
-                <div className="mt-2 h-10 animate-pulse rounded-2xl bg-sky-500/12" />
               </div>
-            ))}
-          </div>
-          <div className="mt-4 h-12 animate-pulse rounded-2xl bg-white/[0.06]" />
-        </section>
-      </div>
+              <div className="mt-2 h-8 animate-pulse rounded-2xl bg-white/[0.06]" />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -155,6 +101,7 @@ export default function GenerationResult({
   generationProvider = null,
   uploadToDrive = false,
   driveUploadStatus = null,
+  expectedCount = 2,
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -236,7 +183,7 @@ export default function GenerationResult({
   };
 
   if (isGenerating) {
-    return <GenerationLoadingSkeleton />;
+    return <GenerationLoadingSkeleton expectedCount={expectedCount} />;
   }
 
   if (normalizedImages.length === 0) {
@@ -496,8 +443,8 @@ export default function GenerationResult({
       </div>
 
       {showModal && normalizedImages.length > 0 && (
-        <div className="fixed inset-0 app-layer-modal flex items-center justify-center bg-black/80 p-4">
-          <div className="relative flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-[1.6rem] bg-slate-950/95 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.6)]">
+        <div className="fixed inset-0 app-layer-modal z-[10000] flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md">
+          <div className="relative flex h-full max-h-[90vh] w-full max-w-[1100px] flex-col rounded-[1.6rem] bg-slate-950/95 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.6)]">
             <button
               type="button"
               onClick={() => setShowModal(false)}
@@ -510,7 +457,7 @@ export default function GenerationResult({
               <img
                 src={normalizedImages[modalImageIndex]?.url}
                 alt={normalizedImages[modalImageIndex]?.filename}
-                className="max-h-full max-w-full object-contain"
+                className="max-h-[72vh] w-full max-w-full rounded-[1.2rem] bg-black/40 object-contain p-3"
               />
             </div>
 

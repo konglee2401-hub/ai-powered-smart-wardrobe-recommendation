@@ -90,6 +90,24 @@
     },
     managedBy: 'video-factory',
   },
+  'grid-2': {
+    name: 'grid-2',
+    type: 'grid',
+    layout: 'split',
+    description: 'Two-up grid with 2/3 main video and 1/3 sub video.',
+    canvas: {
+      safeMargin: 32,
+      subtitleMarginBottom: 180,
+    },
+    split: {
+      mainRatio: 0.67,
+      direction: 'horizontal',
+    },
+    overlay: {
+      enabled: false,
+    },
+    managedBy: 'video-factory',
+  },
 };
 
 const GROUPS = {

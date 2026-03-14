@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Settings, RefreshCw, CheckCircle, AlertCircle, Shield, Save, Link as LinkIcon, Play, FileText } from 'lucide-react';
+import { Settings, RefreshCw, CheckCircle, AlertCircle, Shield, Save, Link as LinkIcon, FileText } from 'lucide-react';
 import axiosInstance from '../services/axios';
 import { useTranslation } from 'react-i18next';
 import LogViewer from '../components/LogViewer';
@@ -25,10 +25,7 @@ const SectionCard = ({ title, description, active, onClick }) => (
 
 export default function SetupAuthentication() {
   const { t } = useTranslation();
-  const [active, setActive] = useState('google-flow');
-  const [gfStatus, setGfStatus] = useState(null);
-  const [cgptStatus, setCgptStatus] = useState(null);
-  const [grokStatus, setGrokStatus] = useState(null);
+  const [active, setActive] = useState('ai-accounts');
   const [gdCreds, setGdCreds] = useState({ clientId: '', clientSecret: '', redirectUri: '' });
   const [ytCreds, setYtCreds] = useState({ clientId: '', clientSecret: '', redirectUri: '' });
   const [saving, setSaving] = useState(false);
@@ -37,21 +34,15 @@ export default function SetupAuthentication() {
   const [loadingDriveConfig, setLoadingDriveConfig] = useState(false);
   const [scraperConfig, setScraperConfig] = useState(null);
   const [savingScraperConfig, setSavingScraperConfig] = useState(false);
+  const [aiAccounts, setAiAccounts] = useState({});
+  const [loadingAiAccounts, setLoadingAiAccounts] = useState(false);
+  const [updatingAiAccount, setUpdatingAiAccount] = useState(null);
+  const [creatingAiAccount, setCreatingAiAccount] = useState(false);
+  const [newAccountProvider, setNewAccountProvider] = useState('google-flow');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [runningAiAction, setRunningAiAction] = useState(null);
   const [logViewerVisible, setLogViewerVisible] = useState(false);
   const [logSessionId, setLogSessionId] = useState(null);
-
-  const loadStatuses = async () => {
-    try {
-      const [gf, cg, gr] = await Promise.all([
-        axiosInstance.get('/auth-setup/status/google-flow-session'),
-        axiosInstance.get('/auth-setup/status/chatgpt-session'),
-        axiosInstance.get('/auth-setup/status/grok-session'),
-      ]);
-      setGfStatus(gf.data);
-      setCgptStatus(cg.data);
-      setGrokStatus(gr.data);
-    } catch {}
-  };
 
   const loadStoredCreds = async () => {
     try {
@@ -91,6 +82,78 @@ export default function SetupAuthentication() {
     }
   };
 
+  const loadAiAccounts = async () => {
+    setLoadingAiAccounts(true);
+    try {
+      const { data } = await axiosInstance.get('/auth-setup/ai-service-accounts');
+      if (data?.success) {
+        setAiAccounts(data.providers || {});
+      }
+    } catch (e) {
+      setMessage('Failed to load AI service accounts: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setLoadingAiAccounts(false);
+    }
+  };
+
+  const updateAiAccount = async ({ provider, email, accountKey, action, value }) => {
+    const identity = accountKey || email || 'unknown';
+    setUpdatingAiAccount(`${provider}:${identity}:${action}`);
+    try {
+      await axiosInstance.post('/auth-setup/ai-service-accounts', { provider, email, accountKey, action, value });
+      await loadAiAccounts();
+    } catch (e) {
+      setMessage('Failed to update AI service account: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setUpdatingAiAccount(null);
+    }
+  };
+
+  const createAiAccount = async () => {
+    const label = newAccountName.trim();
+    if (!label) {
+      setMessage('Please enter a profile name.');
+      return;
+    }
+    setCreatingAiAccount(true);
+    try {
+      await axiosInstance.post('/auth-setup/ai-service-accounts', {
+        provider: newAccountProvider,
+        label,
+        action: 'create'
+      });
+      setNewAccountName('');
+      await loadAiAccounts();
+    } catch (e) {
+      setMessage('Failed to create AI service account: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setCreatingAiAccount(false);
+    }
+  };
+
+  const runAiAccountAction = async ({ provider, accountKey, action }) => {
+    setRunningAiAction(`${provider}:${accountKey}:${action}`);
+    try {
+      const { data } = await axiosInstance.post('/auth-setup/ai-service-accounts/run', {
+        provider,
+        accountKey,
+        action
+      });
+      if (data?.sessionId) {
+        setLogSessionId(data.sessionId);
+        setLogViewerVisible(true);
+        setMessage('📋 Log viewer opened - monitoring account action...');
+      } else {
+        setMessage('Action started.');
+      }
+      await loadAiAccounts();
+    } catch (e) {
+      setMessage('Failed to run account action: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setRunningAiAction(null);
+    }
+  };
+
   const saveScraperConfig = async () => {
     setSavingScraperConfig(true);
     try {
@@ -106,7 +169,6 @@ export default function SetupAuthentication() {
   };
 
   useEffect(() => {
-    loadStatuses();
     loadStoredCreds();
   }, []);
 
@@ -115,69 +177,10 @@ export default function SetupAuthentication() {
       loadDriveConfig();
     } else if (active === 'scraper-videos') {
       loadScraperConfig();
+    } else if (active === 'ai-accounts') {
+      loadAiAccounts();
     }
   }, [active]);
-
-  const runGoogleFlowRefresh = async () => {
-    setMessage('');
-    try {
-      const response = await axiosInstance.post('/auth-setup/run/refresh-google-flow');
-      if (response.data?.sessionId) {
-        // Show log viewer with the session ID
-        setLogSessionId(response.data.sessionId);
-        setLogViewerVisible(true);
-        setMessage('ðŸ“‹ Log viewer opened - monitoring refresh process...');
-        // Check status after refresh completes
-        setTimeout(loadStatuses, 5000);
-      } else {
-        setMessage(t('authSetup.messages.startedGoogleFlow'));
-        setTimeout(loadStatuses, 4000);
-      }
-    } catch (error) {
-      setMessage('Error starting refresh: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const runChatGPTLogin = async (mode) => {
-    setMessage('');
-    try {
-      const response = await axiosInstance.post(`/auth-setup/run/chatgpt-auto-login?mode=${mode || ''}`);
-      if (response.data?.sessionId) {
-        // Show log viewer with the session ID
-        setLogSessionId(response.data.sessionId);
-        setLogViewerVisible(true);
-        setMessage('📋 Log viewer opened - monitoring auto-login process...');
-        // Check status after auto-login completes
-        setTimeout(loadStatuses, 5000);
-      } else {
-        setMessage(t('authSetup.messages.startedChatGPTLogin'));
-        setTimeout(loadStatuses, 4000);
-      }
-    } catch (error) {
-      setMessage('Error starting auto-login: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const runGrokLogin = async (mode, usePlaywright = false) => {
-    setMessage('');
-    try {
-      const url = `/auth-setup/run/grok-auto-login?mode=${mode || ''}${usePlaywright ? '&playwright=true' : ''}`;
-      const response = await axiosInstance.post(url);
-      if (response.data?.sessionId) {
-        // Show log viewer with the session ID
-        setLogSessionId(response.data.sessionId);
-        setLogViewerVisible(true);
-        setMessage(`📋 Log viewer opened - monitoring Grok process ${usePlaywright ? '(Playwright)' : '(Puppeteer)'}...`);
-        // Check status after process completes
-        setTimeout(loadStatuses, 5000);
-      } else {
-        setMessage('Grok process started');
-        setTimeout(loadStatuses, 4000);
-      }
-    } catch (error) {
-      setMessage('Error starting Grok process: ' + (error.response?.data?.error || error.message));
-    }
-  };
 
   const saveCreds = async (provider, creds) => {
     setSaving(true);
@@ -236,22 +239,10 @@ export default function SetupAuthentication() {
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 md:col-span-3 space-y-3">
             <SectionCard
-              title={t('authSetup.sections.googleFlow.title')}
-              description={t('authSetup.sections.googleFlow.desc')}
-              active={active === 'google-flow'}
-              onClick={() => setActive('google-flow')}
-            />
-            <SectionCard
-              title={t('authSetup.sections.chatgpt.title')}
-              description={t('authSetup.sections.chatgpt.desc')}
-              active={active === 'chatgpt'}
-              onClick={() => setActive('chatgpt')}
-            />
-            <SectionCard
-              title="Grok AI"
-              description="Auto-login & session management"
-              active={active === 'grok'}
-              onClick={() => setActive('grok')}
+              title="AI Service Accounts"
+              description="Manage AI provider sessions"
+              active={active === 'ai-accounts'}
+              onClick={() => setActive('ai-accounts')}
             />
             <SectionCard
               title={t('authSetup.sections.drive.title')}
@@ -288,109 +279,171 @@ export default function SetupAuthentication() {
                 </div>
               )}
 
-              {active === 'google-flow' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-lg font-semibold">{t('authSetup.sections.googleFlow.title')}</div>
-                    <div className="flex gap-2">
-                      <button onClick={runGoogleFlowRefresh} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs flex items-center gap-1">
-                        <RefreshCw className="w-4 h-4" /> {t('authSetup.buttons.refreshSession')}
-                      </button>
+              {active === 'ai-accounts' && (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold">AI Service Accounts</div>
+                      <div className="text-sm text-slate-400">Create profiles per provider, then login, validate, or refresh sessions.</div>
                     </div>
+                    <button onClick={loadAiAccounts} disabled={loadingAiAccounts} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs flex items-center gap-1 disabled:opacity-50">
+                      <RefreshCw className="w-4 h-4" /> {loadingAiAccounts ? 'Loading...' : 'Refresh'}
+                    </button>
                   </div>
-                  <div className="text-sm text-gray-300">{t('authSetup.googleFlow.instructions')}</div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span>{t('authSetup.status.label')}</span>
-                    {gfStatus?.exists ? (
-                      <span className="flex items-center gap-1 text-green-400"><CheckCircle className="w-4 h-4" /> {t('authSetup.status.sessionPresent')}</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-400"><AlertCircle className="w-4 h-4" /> {t('authSetup.status.sessionMissing')}</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-400">{t('authSetup.googleFlow.verifyNote')} {gfStatus?.path || 'backend/.sessions/google-flow-session-complete.json'}</div>
-                </div>
-              )}
 
-              {active === 'chatgpt' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-lg font-semibold">{t('authSetup.sections.chatgpt.title')}</div>
-                    <div className="flex gap-2">
-                      <button onClick={() => runChatGPTLogin()} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs flex items-center gap-1">
-                        <Play className="w-4 h-4" /> {t('authSetup.buttons.autoLogin')}
-                      </button>
-                      <button onClick={() => runChatGPTLogin('refresh')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">
-                        {t('authSetup.buttons.refresh')}
-                      </button>
-                      <button onClick={() => runChatGPTLogin('validate')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">
-                        {t('authSetup.buttons.validate')}
-                      </button>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-sm font-semibold text-white">Create new profile</div>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-400">Provider</label>
+                        <select
+                          value={newAccountProvider}
+                          onChange={(e) => setNewAccountProvider(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                        >
+                          <option value="google-flow">Google Flow</option>
+                          <option value="chatgpt">ChatGPT</option>
+                          <option value="grok">Grok</option>
+                          <option value="capcut">CapCut</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs text-slate-400">Profile name</label>
+                        <div className="mt-1 flex gap-2">
+                          <input
+                            value={newAccountName}
+                            onChange={(e) => setNewAccountName(e.target.value)}
+                            className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white"
+                            placeholder="leecris-flow"
+                          />
+                          <button
+                            onClick={createAiAccount}
+                            disabled={creatingAiAccount}
+                            className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white disabled:opacity-50"
+                          >
+                            {creatingAiAccount ? 'Creating...' : 'Create'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
+                    <div className="mt-2 text-xs text-slate-500">Profile name becomes the folder key under `backend/data/&lt;provider&gt;-profiles`.</div>
                   </div>
-                  <div className="text-sm text-gray-300">{t('authSetup.chatgpt.instructions')}</div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span>{t('authSetup.status.label')}</span>
-                    {cgptStatus?.exists ? (
-                      <span className="flex items-center gap-1 text-green-400"><CheckCircle className="w-4 h-4" /> {t('authSetup.status.sessionPresent')}</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-400"><AlertCircle className="w-4 h-4" /> {t('authSetup.status.sessionMissing')}</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-400">{t('authSetup.chatgpt.verifyNote')} {cgptStatus?.path || 'backend/data/chatgpt-profiles/default/session.json'}</div>
-                </div>
-              )}
 
-              {active === 'grok' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-lg font-semibold">🤖 Grok AI Authentication</div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => runGrokLogin()} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs flex items-center gap-1">
-                        <Play className="w-4 h-4" /> Auto-Login
-                      </button>
-                      <button onClick={() => runGrokLogin('refresh')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1">
-                        <RefreshCw className="w-4 h-4" /> Refresh
-                      </button>
-                      <button onClick={() => runGrokLogin('validate')} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs">
-                        Validate
-                      </button>
-                      <button onClick={() => runGrokLogin('capture')} className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 rounded text-xs">
-                        Capture (Puppeteer)
-                      </button>
-                      <button onClick={() => runGrokLogin('capture', true)} className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-xs" title="Better Cloudflare handling">
-                        🎭 Capture (Playwright)
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-300">
-                    Manage Grok AI authentication, sessions, and browser automation. Use capture to initiate manual login through browser, auto-login to restore from saved session.
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span>Session Status:</span>
-                    {grokStatus?.exists ? (
-                      <span className="flex items-center gap-1 text-green-400">
-                        <CheckCircle className="w-4 h-4" /> Session Present
-                        {grokStatus?.meta?.mtime && <span className="text-xs text-gray-400 ml-2">({new Date(grokStatus.meta.mtime).toLocaleDateString()})</span>}
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-400"><AlertCircle className="w-4 h-4" /> No Session</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    Session file: {grokStatus?.path || 'backend/.sessions/grok-session-complete.json'}
-                  </div>
-                  
-                  <div className="p-3 bg-blue-900/30 border border-blue-700/30 rounded text-sm">
-                    <div className="font-semibold text-blue-300 mb-2">💡 How it works:</div>
-                    <ul className="list-disc list-inside text-blue-300 space-y-1 text-xs">
-                      <li><strong>Capture:</strong> Open browser and perform manual login - session will be auto-saved</li>
-                      <li><strong>Capture (Playwright):</strong> Better for Cloudflare bypass - use if Puppeteer fails</li>
-                      <li><strong>Auto-Login:</strong> Restore saved session automatically (fastest)</li>
-                      <li><strong>Refresh:</strong> Update/refresh existing session tokens</li>
-                      <li><strong>Validate:</strong> Check if current session is valid and working</li>
-                      <li>All operations show real-time progress in the log viewer</li>
-                    </ul>
-                  </div>
+                  {Object.keys(aiAccounts || {}).length === 0 && !loadingAiAccounts && (
+                    <div className="text-sm text-gray-300">No AI service accounts found yet. Create a profile and login to save sessions.</div>
+                  )}
+
+                  {['google-flow', 'chatgpt', 'grok', 'capcut'].map((provider) => {
+                    const accounts = aiAccounts?.[provider] || [];
+                    const providerLabel = provider === 'google-flow' ? 'Google Flow' : provider === 'chatgpt' ? 'ChatGPT' : provider === 'grok' ? 'Grok' : 'CapCut';
+                    return (
+                      <div key={provider} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">{providerLabel}</div>
+                          <div className="text-xs text-slate-500">{accounts.length} profile(s)</div>
+                        </div>
+                        {accounts.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-white/10 bg-white/5 p-4 text-sm text-slate-400">
+                            No profiles yet.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {accounts.map((account) => {
+                              const displayName = account.label || account.email || account.accountKey || 'Unnamed profile';
+                              const busy =
+                                updatingAiAccount === `${provider}:${account.accountKey || account.email}:set-preferred` ||
+                                updatingAiAccount === `${provider}:${account.accountKey || account.email}:clear-rate-limit` ||
+                                updatingAiAccount === `${provider}:${account.accountKey || account.email}:set-active`;
+                              const running =
+                                runningAiAction === `${provider}:${account.accountKey}:${'login'}` ||
+                                runningAiAction === `${provider}:${account.accountKey}:${'validate'}` ||
+                                runningAiAction === `${provider}:${account.accountKey}:${'refresh'}`;
+                              const rateLimited = account.disabledUntil && new Date(account.disabledUntil) > new Date();
+                              return (
+                                <div key={`${provider}-${account.accountKey || account.email}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-white">{displayName}</div>
+                                      {account.email && <div className="text-xs text-slate-400 mt-1">{account.email}</div>}
+                                      <div className="text-xs text-slate-500 mt-1">
+                                        Credits: {Number.isFinite(account.lastCredits) ? account.lastCredits : 'unknown'}
+                                      </div>
+                                      <div className="text-xs text-slate-500 mt-1">
+                                        Last used: {account.lastUsedAt ? new Date(account.lastUsedAt).toLocaleString() : 'never'}
+                                      </div>
+                                      {rateLimited && (
+                                        <div className="text-xs text-rose-300 mt-1">
+                                          Rate limit until {new Date(account.disabledUntil).toLocaleString()}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                      {rateLimited && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300">Rate limited</span>
+                                      )}
+                                      {account.isActive && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-200">Active</span>
+                                      )}
+                                      {account.isPreferred && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">Preferred</span>
+                                      )}
+                                      {!account.isActive && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-300">Disabled</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                                    <button
+                                      disabled={running}
+                                      onClick={() => runAiAccountAction({ provider, accountKey: account.accountKey, action: 'login' })}
+                                      className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+                                    >
+                                      Login
+                                    </button>
+                                    <button
+                                      disabled={running}
+                                      onClick={() => runAiAccountAction({ provider, accountKey: account.accountKey, action: 'validate' })}
+                                      className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+                                    >
+                                      Validate
+                                    </button>
+                                    <button
+                                      disabled={running}
+                                      onClick={() => runAiAccountAction({ provider, accountKey: account.accountKey, action: 'refresh' })}
+                                      className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+                                    >
+                                      Refresh
+                                    </button>
+                                    <button
+                                      disabled={busy}
+                                      onClick={() => updateAiAccount({ provider, accountKey: account.accountKey, email: account.email, action: 'set-preferred', value: true })}
+                                      className="px-2.5 py-1 rounded bg-emerald-600/80 hover:bg-emerald-600 text-white disabled:opacity-50"
+                                    >
+                                      Prefer
+                                    </button>
+                                    <button
+                                      disabled={busy}
+                                      onClick={() => updateAiAccount({ provider, accountKey: account.accountKey, email: account.email, action: 'clear-rate-limit' })}
+                                      className="px-2.5 py-1 rounded bg-amber-600/80 hover:bg-amber-600 text-white disabled:opacity-50"
+                                    >
+                                      Clear limit
+                                    </button>
+                                    <button
+                                      disabled={busy}
+                                      onClick={() => updateAiAccount({ provider, accountKey: account.accountKey, email: account.email, action: 'set-active', value: !account.isActive })}
+                                      className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+                                    >
+                                      {account.isActive ? 'Disable' : 'Enable'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

@@ -30,6 +30,7 @@ backend/test-videos/
 backend/test-results/
 backend/test-affiliate/
 scraper_service/downloads
+scraper_service/data/
 .playwright-cli/
 
 # Authentication and sensitive data

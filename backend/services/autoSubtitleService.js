@@ -11,7 +11,7 @@ import subtitleDictionaryService from './subtitleDictionaryService.js';
 
 class AutoSubtitleService {
   constructor() {
-    this.disabled = !process.env.ANTHROPIC_API_KEY;
+    this.disabled = !process.env.ANTHROPIC_API_KEY || process.env.DISABLE_SUBTITLE_AI === 'true';
     this.client = this.disabled ? null : new Anthropic();
     this.model = 'claude-3-5-sonnet-20241022';
   }
@@ -84,11 +84,23 @@ class AutoSubtitleService {
         }
       };
     } catch (error) {
-      console.error(`❌ Subtitle generation failed: ${error.message}`);
+      const message = error?.message || "Unknown subtitle error";
+      console.error(`❌ Subtitle generation failed: ${message}`);
+      if (/401|invalid x-api-key|authentication_error/i.test(message)) {
+        this.disabled = true;
+      }
+      const fallback = this._generateFallbackSubtitles(videoContext, options);
       return {
-        success: false,
-        error: error.message,
-        subtitles: this._generateFallbackSubtitles(videoContext, options)
+        success: true,
+        subtitles: fallback,
+        format: 'json',
+        duration: options.duration || 15,
+        platform: options.platform || 'youtube-shorts',
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          provider: 'fallback',
+          reason: 'anthropic-error',
+        },
       };
     }
   }
@@ -407,3 +419,4 @@ Generate compelling captions that maximize conversion for affiliate marketing.`;
 }
 
 export default AutoSubtitleService;
+

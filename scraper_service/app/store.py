@@ -26,7 +26,7 @@ def get_or_create_settings():
             'dance': ['dance', 'nhảy', 'choreography'],
             'cooking': ['cooking', 'nấu ăn', 'recipe'],
         },
-        'cronTimes': {'discover': '0 7 * * *', 'scan': '30 8 * * *'},
+        'cronTimes': {'discover': '0 7 * * *', 'scan': '30 8 * * *', 'pexels': '15 7 * * *'},
         'maxConcurrentDownload': 3,
         'minViewsFilter': 100000,
         'proxyList': [],
@@ -37,6 +37,21 @@ def get_or_create_settings():
             'youtube': True,
             'dailyhaha': True,
             'douyin': False,
+            'pexels': True,
+            'kuaishou': True,
+        },
+        'pexelsSettings': {
+            'isEnabled': True,
+            'startUrl': 'https://www.pexels.com/vi-vn/video/',
+            'maxItems': 100,
+            'scrollTimes': 6,
+            'taxonomy': 'default',
+        },
+        'kuaishouSettings': {
+            'isEnabled': True,
+            'startUrl': 'https://www.kuaishou.com/brilliant',
+            'maxItems': 120,
+            'scrollTimes': 4,
         },
         'playboardConfigs': DEFAULT_PLAYBOARD_CONFIGS,
     }
@@ -103,6 +118,12 @@ def upsert_video(payload):
         'channel': oid(payload['channelId']),
         'updatedAt': now_utc(),
     }
+    if payload.get('category'):
+        set_doc['category'] = payload.get('category')
+    if payload.get('tags'):
+        set_doc['tags'] = payload.get('tags')
+    if payload.get('detailUrl'):
+        set_doc['detailUrl'] = payload.get('detailUrl')
     if thumbnail_value:
         set_doc['thumbnail'] = thumbnail_value
 

@@ -284,13 +284,25 @@ io.on('connection', (socket) => {
       const logsCount = LogStreamingService.registerClient(sessionId, {
         readyState: 1,
         send: (message) => {
-          socket.emit('log', JSON.parse(message));
+          const data = JSON.parse(message);
+          
+          // 💫 Route different message types to correct events
+          if (data.type === 'history') {
+            socket.emit('log-history', data);
+          } else if (data.type === 'session-end') {
+            socket.emit('log-session-end', data);
+          } else {
+            socket.emit('log', data);
+          }
         }
       });
       socket.join(`logs-${sessionId}`);
       console.log(`📋 Client ${socket.id} joined log session ${sessionId} (${logsCount} historical logs)`);
+      socket.emit('log-session-joined', { success: true, sessionId, logsCount });
     } catch (error) {
-      console.error(`Error joining log session: ${error.message}`);
+      console.warn(`⚠️ Client ${socket.id} tried to join non-existent session ${sessionId}`);
+      // Don't throw - client will fall back to polling
+      socket.emit('log-session-error', { success: false, error: 'Session not ready yet. Using polling fallback.' });
     }
   });
 

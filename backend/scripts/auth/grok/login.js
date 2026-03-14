@@ -39,7 +39,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SESSION_FILE = path.join(__dirname, '../.sessions/grok-session-complete.json');
+const GROK_PROFILE_BASE = path.join(__dirname, '../../../data/grok-profiles');
+
+const resolveProfileKey = (options = {}) => {
+  const profileArgIndex = process.argv.indexOf('--profile');
+  const fromArgs = profileArgIndex >= 0 ? process.argv[profileArgIndex + 1] : '';
+  return String(options.profileKey || fromArgs || process.env.GROK_PROFILE_KEY || 'default').trim() || 'default';
+};
+
+const resolveSessionFile = (options = {}) =>
+  options.sessionFilePath || path.join(GROK_PROFILE_BASE, resolveProfileKey(options), 'session.json');
 
 /**
  * Restore Grok session from saved file
@@ -57,15 +66,16 @@ const SESSION_FILE = path.join(__dirname, '../.sessions/grok-session-complete.js
  */
 export async function restoreGrokSession(page, options = {}) {
   try {
+    const sessionFile = resolveSessionFile(options);
     // 1. Load session file
-    if (!fs.existsSync(SESSION_FILE)) {
+    if (!fs.existsSync(sessionFile)) {
       console.log('⚠️  No saved session found. Skipping auto-login.');
       return false;
     }
 
     let sessionData;
     try {
-      sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+      sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
     } catch (e) {
       console.log('⚠️  Invalid session file. Skipping auto-login.');
       return false;
@@ -243,12 +253,13 @@ export async function verifyGrokLogin(page) {
  * @returns {Object} - Session metadata
  */
 export function getSessionInfo() {
-  if (!fs.existsSync(SESSION_FILE)) {
+  const sessionFile = resolveSessionFile();
+  if (!fs.existsSync(sessionFile)) {
     return { exists: false };
   }
 
   try {
-    const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
     const expiresAt = new Date(sessionData.expiresAt);
     const isValid = new Date() < expiresAt;
 

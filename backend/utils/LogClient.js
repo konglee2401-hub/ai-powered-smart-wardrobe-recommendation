@@ -17,9 +17,6 @@ class LogClient {
     }
   }
 
-  /**
-   * Send a log message to the server
-   */
   async log(message, level = 'info') {
     if (!this.enabled) {
       // If logging not configured, just log to console
@@ -41,11 +38,11 @@ class LogClient {
       );
 
       if (!response.data?.success) {
-        console.warn(`⚠️  LogClient: Server returned error for log message`);
+        console.warn(`⚠️  LogClient: Server returned error for log message: ${message.substring(0, 50)}...`);
       }
     } catch (error) {
       // Fail silently - don't interrupt the main process
-      console.warn(`⚠️  LogClient: Failed to send log - ${error.message}`);
+      console.warn(`⚠️  LogClient: Failed to send log to ${this.serverUrl} - ${error.message}`);
     }
   }
 

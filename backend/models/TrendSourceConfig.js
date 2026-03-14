@@ -132,6 +132,19 @@ const DEFAULT_SOURCE_CONFIGS = [
     videoCriteria: { minViews: 20000 },
     channelCriteria: { minSubscribers: 0, minTotalVideos: 3 },
   },
+  {
+    key: 'kuaishou',
+    name: 'Kuaishou',
+    provider: 'kuaishou',
+    description: 'Short-form discovery source from Kuaishou brilliant feed.',
+    defaultUrl: 'https://www.kuaishou.com/brilliant',
+    enabled: true,
+    isDefault: true,
+    allowDelete: false,
+    sortOrder: 40,
+    videoCriteria: { minViews: 0 },
+    channelCriteria: { minSubscribers: 0, minTotalVideos: 0 },
+  },
 ];
 
 TrendSourceConfigSchema.statics.ensureDefaults = async function ensureDefaults(userId = null) {

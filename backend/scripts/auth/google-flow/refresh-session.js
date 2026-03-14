@@ -31,7 +31,17 @@ puppeteer.use(StealthPlugin());
 // Target: backend/data/google-flow-profiles/default/session.json
 // Go up 3 levels from google-flow → backend, then into data/
 const GOOGLE_FLOW_PROFILE_BASE = path.join(__dirname, '../../../data/google-flow-profiles');
-const GOOGLE_FLOW_DEFAULT_SESSION = path.join(GOOGLE_FLOW_PROFILE_BASE, 'default', 'session.json');
+const DEFAULT_PROFILE_KEY = String(process.env.GOOGLE_FLOW_PROFILE_KEY || 'default').trim() || 'default';
+const GOOGLE_FLOW_DEFAULT_SESSION = path.join(GOOGLE_FLOW_PROFILE_BASE, DEFAULT_PROFILE_KEY, 'session.json');
+
+const resolveProfileKey = () => {
+  const args = process.argv.slice(2);
+  const idx = args.indexOf('--profile');
+  if (idx >= 0 && args[idx + 1]) {
+    return String(args[idx + 1]).trim() || DEFAULT_PROFILE_KEY;
+  }
+  return DEFAULT_PROFILE_KEY;
+};
 
 async function refreshSession() {
   console.log('======================================================================');
@@ -49,7 +59,8 @@ async function refreshSession() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
 
-    const sessionPath = GOOGLE_FLOW_DEFAULT_SESSION;  // 💫 Use SHARED profile path
+    const profileKey = resolveProfileKey();
+    const sessionPath = path.join(GOOGLE_FLOW_PROFILE_BASE, profileKey, 'session.json');  // 💫 Use selected profile path
 
     console.log('📝 INSTRUCTIONS:\n');
     console.log('   The browser will open Google Flow.');

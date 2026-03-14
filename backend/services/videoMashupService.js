@@ -114,6 +114,17 @@ class VideoMashupService {
         return { success: false, error: `Template video not found: ${templateVideoPath}` };
       }
 
+      // 💫 Log ffmpeg render start
+      console.log(`🎬 [ffmpeg] Starting mashup render:`, {
+        main: mainVideoPath,
+        template: templateVideoPath,
+        output: outputPath,
+        duration: videoDuration,
+        aspectRatio,
+        templateName,
+        audioSource: audioFromMain ? 'main' : 'sub',
+      });
+
       const result = await videoMashupGenerator.generateMashup(mainVideoPath, templateVideoPath, {
         duration: videoDuration,
         quality,
@@ -153,8 +164,15 @@ class VideoMashupService {
       });
 
       if (!result.success) {
+        console.error(`❌ [ffmpeg] Render failed:`, result.error);
         return result;
       }
+
+      console.log(`✅ [ffmpeg] Render completed:`, {
+        outputPath: outputPath || result.outputPath,
+        fileSize: fs.existsSync(outputPath || result.outputPath) ? fs.statSync(outputPath || result.outputPath).size : 0,
+        duration: videoDuration,
+      });
 
       return {
         success: true,
@@ -167,6 +185,7 @@ class VideoMashupService {
         dryRun,
       };
     } catch (error) {
+      console.error(`❌ [ffmpeg] Exception during render:`, error.message);
       return { success: false, error: error.message };
     }
   }

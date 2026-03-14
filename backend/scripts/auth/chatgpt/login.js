@@ -27,17 +27,18 @@ puppeteer.use(StealthPlugin());
 
 // 💫 Use same path as ChatGPTService for session sharing
 const CHATGPT_PROFILE_BASE = path.join(path.dirname(__dirname), 'data', 'chatgpt-profiles');
-const SESSION_PATH = path.join(CHATGPT_PROFILE_BASE, 'default', 'session.json');
-const CHATGPT_PROFILE_DIR = path.join(CHATGPT_PROFILE_BASE, 'default');  // Shared default profile
-const DATA_DIR = path.dirname(SESSION_PATH);
+const DEFAULT_PROFILE_KEY = String(process.env.CHATGPT_PROFILE_KEY || 'default').trim() || 'default';
+const DEFAULT_PROFILE_DIR = path.join(CHATGPT_PROFILE_BASE, DEFAULT_PROFILE_KEY);
+const DEFAULT_SESSION_PATH = path.join(DEFAULT_PROFILE_DIR, 'session.json');
+const DEFAULT_DATA_DIR = DEFAULT_PROFILE_DIR;
 
 // Ensure all directories exist
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DEFAULT_DATA_DIR)) {
+  fs.mkdirSync(DEFAULT_DATA_DIR, { recursive: true });
 }
 
-if (!fs.existsSync(CHATGPT_PROFILE_DIR)) {
-  fs.mkdirSync(CHATGPT_PROFILE_DIR, { recursive: true });
+if (!fs.existsSync(DEFAULT_PROFILE_DIR)) {
+  fs.mkdirSync(DEFAULT_PROFILE_DIR, { recursive: true });
 }
 
 class ChatGPTSessionManager {
@@ -46,7 +47,8 @@ class ChatGPTSessionManager {
     this.password = options.password;
     this.browser = null;
     this.page = null;
-    this.sessionPath = options.sessionPath || SESSION_PATH;
+    this.profileDir = options.profileDir || DEFAULT_PROFILE_DIR;
+    this.sessionPath = options.sessionPath || DEFAULT_SESSION_PATH;
     this.logClient = options.logClient || new LogClient(); // 💫 Default LogClient if not provided
   }
 
@@ -135,14 +137,14 @@ class ChatGPTSessionManager {
     console.log('🚀 Launching browser...');
     
     // Use dedicated ChatGPT profile directory to persist session
-    console.log(`📁 Using ChatGPT profile: ${CHATGPT_PROFILE_DIR}`);
+    console.log(`📁 Using ChatGPT profile: ${this.profileDir}`);
 
     try {
       this.browser = await puppeteer.launch({
         channel: 'chrome',
         headless: false,
         args: [
-          `--user-data-dir=${CHATGPT_PROFILE_DIR}`,
+          `--user-data-dir=${this.profileDir}`,
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-blink-features=AutomationControlled',
@@ -626,6 +628,7 @@ async function main() {
   const options = {};
   let logSessionId = null;
   let logServerUrl = 'http://localhost:5000';
+  let profileKey = '';
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
@@ -633,6 +636,8 @@ async function main() {
       options.email = args[++i];
     } else if (args[i] === '--password' && args[i + 1]) {
       options.password = args[++i];
+    } else if (args[i] === '--profile' && args[i + 1]) {
+      profileKey = args[++i];
     } else if (args[i] === '--log-session' && args[i + 1]) {
       logSessionId = args[++i];
     } else if (args[i] === '--log-server' && args[i + 1]) {
@@ -640,9 +645,22 @@ async function main() {
     }
   }
 
+  const resolvedProfileKey = String(profileKey || process.env.CHATGPT_PROFILE_KEY || DEFAULT_PROFILE_KEY).trim() || 'default';
+  const resolvedProfileDir = path.join(CHATGPT_PROFILE_BASE, resolvedProfileKey);
+  const resolvedSessionPath = path.join(resolvedProfileDir, 'session.json');
+  options.profileDir = resolvedProfileDir;
+  options.sessionPath = resolvedSessionPath;
+
+  if (!fs.existsSync(resolvedProfileDir)) {
+    fs.mkdirSync(resolvedProfileDir, { recursive: true });
+  }
+
   // 💫 Create LogClient if session ID is provided
   if (logSessionId) {
     options.logClient = new LogClient(logSessionId, logServerUrl);
+    console.log(`✅ LogClient initialized: sessionId=${logSessionId}, server=${logServerUrl}`);
+  } else {
+    console.log('⚠️  No logSessionId provided - logging will go to console only');
   }
 
   const manager = new ChatGPTSessionManager(options);

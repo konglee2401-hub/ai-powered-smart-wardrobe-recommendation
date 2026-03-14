@@ -2,6 +2,7 @@
 import { X, Download, Copy } from 'lucide-react';
 import io from 'socket.io-client';
 import ModalPortal from './ModalPortal';
+import axiosInstance from '../services/axios';
 
 /**
  * Real-time Log Viewer using Socket.io
@@ -51,6 +52,24 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
       reconnectionAttempts: 5
     });
 
+    // Connection lifecycle events
+    socketRef.current.on('connect', () => {
+      console.log(`Socket.IO connected, joining log session: ${activeSession}`);
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.error('Socket.IO connection error:', error);
+    });
+
+    // Handle log session join responses
+    socketRef.current.on('log-session-joined', (data) => {
+      console.log(`✅ Successfully joined log session with ${data.logsCount} existing logs`);
+    });
+
+    socketRef.current.on('log-session-error', (data) => {
+      console.log(`📋 Session not ready yet - using polling fallback`);
+    });
+
     // Join log session
     socketRef.current.emit('join-log-session', activeSession);
 
@@ -67,8 +86,9 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
 
     // Receive historical logs (for newly connected clients)
     socketRef.current.on('log-history', (message) => {
+      console.log('Received log-history event:', message);
       if (message.logs) {
-        console.log(`ðŸ“š Received ${message.logs.length} historical logs`);
+        console.log(`Loading ${message.logs.length} historical logs`);
         setLogs(message.logs);
         if (message.status && message.status !== 'running') {
           setStatus(message.status);
@@ -106,10 +126,9 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
     // FallBack: Poll for logs every 2 seconds (in case WebSocket doesn't work)
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/auth-setup/logs/${activeSession}`);
-        const data = await response.json();
-        if (data.success && data.logs.length > 0) {
-          setLogs(data.logs);
+        const response = await axiosInstance.get(`/auth-setup/logs/${activeSession}`);
+        if (response.data?.success && response.data?.logs?.length > 0) {
+          setLogs(response.data.logs);
         }
       } catch (error) {
         console.error('Error polling logs:', error);
@@ -135,13 +154,11 @@ export default function LogViewer({ sessionId, onClose, isOpen }) {
 
     const poll = async () => {
       try {
-        const r = await fetch(`/api/auth-setup/session-process/${activeSession}`);
-        if (!r.ok) return;
-        const j = await r.json();
+        const r = await axiosInstance.get(`/auth-setup/session-process/${activeSession}`);
         if (!mounted) return;
-        if (j.success && j.exists) {
+        if (r.data?.success && r.data?.exists) {
           setProcessRunning(true);
-          setProcessInfo({ pid: j.pid || null, scriptName: j.scriptName || null });
+          setProcessInfo({ pid: r.data.pid || null, scriptName: r.data.scriptName || null });
         } else {
           setProcessRunning(false);
           setProcessInfo(null);

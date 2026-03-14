@@ -11,6 +11,7 @@ import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.j
 import { isAdmin } from '../services/accessControlService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BACKEND_ROOT = path.join(__dirname, '..');
 
 const router = express.Router();
 
@@ -46,6 +47,86 @@ function sanitizeFilename(filename = 'asset') {
   const base = path.basename(filename, ext).replace(/[^a-zA-Z0-9-_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   return `${base || 'asset'}${ext}`;
 }
+
+const normalizeLocalPath = (candidate) => {
+  if (!candidate || typeof candidate !== 'string') {
+    return null;
+  }
+  if (path.isAbsolute(candidate)) {
+    return path.relative(process.cwd(), candidate).replace(/\\/g, '/');
+  }
+  return candidate.replace(/\\/g, '/');
+};
+
+const resolveAbsolutePath = (localPath) => {
+  if (!localPath) return null;
+  return path.isAbsolute(localPath) ? localPath : path.join(process.cwd(), localPath);
+};
+
+const tryServeMashupFromDisk = async (assetId, res) => {
+  const timestampMatch = assetId.match(/video_pipeline_generated_queue-(\d+)/);
+  if (!timestampMatch) return false;
+
+  const timestamp = parseInt(timestampMatch[1]);
+  const now = new Date().toISOString();
+  console.log(`   🔍 [${now}] Fallback disk search for mashup: ${assetId}`);
+
+  try {
+    const mashupDir = path.join(BACKEND_ROOT, 'media', 'mashups');
+    const files = fs.readdirSync(mashupDir).filter(f => f.endsWith('.mp4') && !f.includes('-thumb'));
+
+    const queueIdMatch = assetId.match(/video_pipeline_generated_(queue-.+)$/);
+    if (queueIdMatch) {
+      const queueId = queueIdMatch[1];
+      const directFile = files.find(f => f === `${queueId}.mp4`);
+      if (directFile) {
+        const filePath = path.join(mashupDir, directFile);
+        const stats = fs.statSync(filePath);
+        console.log(`   ✅ Found file on disk (direct match): ${directFile} (${stats.size} bytes)`);
+
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', stats.size);
+        res.setHeader('Content-Disposition', `inline; filename="${directFile}"`);
+        fs.createReadStream(filePath).pipe(res);
+        return true;
+      }
+    }
+
+    let closestFile = null;
+    let minDiff = 3;
+    for (const filename of files) {
+      const fileTimestampMatch = filename.match(/-(\d{13})\.mp4$/);
+      if (fileTimestampMatch) {
+        const fileTimestamp = parseInt(fileTimestampMatch[1]);
+        const diff = Math.abs(fileTimestamp - timestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestFile = filename;
+        }
+      }
+    }
+
+    if (closestFile) {
+      const filePath = path.join(mashupDir, closestFile);
+      const stats = fs.statSync(filePath);
+      console.log(`   ✅ Found file on disk (timestamp diff: ${minDiff}ms): ${closestFile} (${stats.size} bytes)`);
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Length', stats.size);
+      res.setHeader('Content-Disposition', `inline; filename="${closestFile}"`);
+      fs.createReadStream(filePath).pipe(res);
+      return true;
+    }
+  } catch (err) {
+    console.warn(`   ⚠️ Failed disk fallback for mashup: ${err.message}`);
+  }
+
+  return false;
+};
 
 async function uploadAssetBufferToDrive(buffer, filename, assetCategory, metadata = {}) {
   const authResult = await driveService.authenticate();
@@ -262,11 +343,72 @@ proxyRouter.get('/proxy/:assetId', async (req, res) => {
   try {
     const { assetId } = req.params;
     
-    // Find asset in database
-    const asset = await Asset.findOne({ assetId, ...buildUserScope(req) });
+    // v2 - NEW CODE VERSION WITH FUZZY MATCHING
+    // Find asset in database with proper scope (admin can see all, users see their own)
+    const isUserAdmin = isAdmin(req.user);
+    const userIdForSearch = req.user?._id?.toString?.() || req.user?.id;
+    const scopedQuery = isUserAdmin || !userIdForSearch
+      ? { assetId }
+      : { assetId, userId: userIdForSearch };
+    
+    console.log(`🔍 [Proxy v2] Searching for asset:`, {
+      assetId,
+      isAdmin: isUserAdmin,
+      searchUserId: userIdForSearch,
+    });
+    
+    let asset = await Asset.findOne(scopedQuery);
+    
+    // Fallback: if not found with userId, try without userId (for old assets or shared assets)
+    if (!asset && !isUserAdmin && userIdForSearch) {
+      console.log(`   ⚠️  Asset not found with userId filter, trying without filter...`);
+      asset = await Asset.findOne({ assetId });
+    }
+    
     if (!asset) {
-      console.log(`❌ Asset not found: ${assetId}`);
-      return res.status(404).json({ success: false, error: 'Asset not found' });
+      console.log(`❌ Asset not found in DB: ${assetId}`);
+      
+      // Fallback 1: Try without suffix (for assetId with format: video_pipeline_generated_queue-{timestamp}-{suffix})
+      const suffixMatch = assetId.match(/^(video_pipeline_generated_queue-\d+)-.+$/);
+      if (suffixMatch) {
+        const assetIdWithoutSuffix = suffixMatch[1];
+        console.log(`   🔍 Trying without suffix: ${assetIdWithoutSuffix}`);
+        asset = await Asset.findOne({ assetId: assetIdWithoutSuffix });
+        if (asset) {
+          console.log(`   ✅ Found asset without suffix`);
+        }
+      }
+
+      // Fallback 2: Extract timestamps and try multiple variations
+      if (!asset) {
+        const timestampMatches = assetId.match(/(\d+)/g) || [];
+        console.log(`   🔍 Trying timestamp variations: ${timestampMatches.join(', ')}`);
+        
+        for (const timestamp of timestampMatches) {
+          if (timestamp.length === 13) { // JS timestamp is typically 13 digits
+            const possibleAssetId = `video_pipeline_generated_queue-${timestamp}`;
+            asset = await Asset.findOne({ assetId: possibleAssetId });
+            if (asset) {
+              console.log(`   ✅ Found asset by timestamp: ${possibleAssetId}`);
+              break;
+            }
+          }
+        }
+      }
+
+      // Fallback 3: Search disk by timestamp from assetId
+      if (!asset) {
+        if (await tryServeMashupFromDisk(assetId, res)) {
+          return;
+        }
+      }
+
+      if (asset) {
+        console.log(`🖼️ Proxying asset: ${asset.filename}`);
+      } else {
+        console.log(`❌ Asset still not found after all fallback attempts: ${assetId}`);
+        return res.status(404).json({ success: false, error: 'Asset not found' });
+      }
     }
     
     console.log(`🖼️ Proxying asset: ${asset.filename}`);
@@ -329,9 +471,9 @@ proxyRouter.get('/proxy/:assetId', async (req, res) => {
     let localPathToTry = asset.localStorage?.path || asset.storage?.localPath;
     
     if (localPathToTry) {
-      // If it's a relative path, make it absolute
+      // If it's a relative path, make it absolute using BACKEND_ROOT
       if (!path.isAbsolute(localPathToTry)) {
-        localPathToTry = path.join(process.cwd(), localPathToTry);
+        localPathToTry = path.join(BACKEND_ROOT, localPathToTry);
       }
       
       console.log(`   🔍 Checking local storage: ${localPathToTry}`);
@@ -396,6 +538,11 @@ proxyRouter.get('/proxy/:assetId', async (req, res) => {
           console.error(`   ❌ Error with URL path: ${err.message}`);
         }
       }
+    }
+
+    // STEP 4: Fallback disk search for mashups when asset exists but storage is missing
+    if (await tryServeMashupFromDisk(assetId, res)) {
+      return;
     }
 
     // STEP 5: No valid storage location found - return 503 Service Unavailable for pending/syncing assets
@@ -616,6 +763,26 @@ protectedRouter.post('/create', async (req, res) => {
     if (!filename || !assetType || !assetCategory || !storage) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
+
+    const normalizedLocalPath = normalizeLocalPath(storage?.localPath);
+    if (normalizedLocalPath) {
+      storage.localPath = normalizedLocalPath;
+      storage.location = storage.location || 'local';
+    }
+
+    const localStoragePayload = normalizedLocalPath
+      ? (() => {
+          const absolutePath = resolveAbsolutePath(normalizedLocalPath);
+          const verified = absolutePath ? fs.existsSync(absolutePath) : false;
+          return {
+            location: 'local',
+            path: normalizedLocalPath,
+            fileSize: fileSize || 0,
+            savedAt: new Date(),
+            verified
+          };
+        })()
+      : null;
     
     // ===============================================
     // CHECK FOR DUPLICATE FILES
@@ -667,6 +834,9 @@ protectedRouter.post('/create', async (req, res) => {
       existingAsset.storage = storage;
       existingAsset.metadata = metadata;
       existingAsset.tags = [...new Set([...existingAsset.tags, ...tags])]; // Merge tags
+      if (localStoragePayload) {
+        existingAsset.localStorage = localStoragePayload;
+      }
       
       // Update update timestamp
       existingAsset.updatedAt = new Date();
@@ -700,6 +870,7 @@ protectedRouter.post('/create', async (req, res) => {
       userId: resolveScopedUserId(req, userId),
       sessionId,
       storage,
+      ...(localStoragePayload ? { localStorage: localStoragePayload } : {}),
       metadata,
       tags,
       generation,
@@ -918,3 +1089,6 @@ router.use(proxyRouter);
 router.use(protectedRouter);
 
 export default router;
+
+
+

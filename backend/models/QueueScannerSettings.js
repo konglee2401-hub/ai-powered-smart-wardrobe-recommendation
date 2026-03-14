@@ -69,6 +69,20 @@ const queueScannerSettingsSchema = new mongoose.Schema({
     enum: ['shorts', 'video'],
     default: 'shorts'
   },
+  maxJobsPerRun: {
+    type: Number,
+    default: 3,
+    min: 1,
+    max: 5,
+    description: 'Maximum number of jobs to process in one batch run'
+  },
+  batchDelayMinutes: {
+    type: Number,
+    default: 2,
+    min: 0,
+    max: 30,
+    description: 'Delay in minutes between batch processing (0 = no delay)'
+  },
   publishEnabled: {
     type: Boolean,
     default: false

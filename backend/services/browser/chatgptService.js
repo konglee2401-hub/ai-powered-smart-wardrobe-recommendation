@@ -2,6 +2,7 @@ import BrowserService from './browserService.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import AccountSessionRegistry from './accountSessionRegistry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +27,18 @@ class ChatGPTService extends BrowserService {
     // 🔐 Support flowId for flow-specific Chrome profile isolation
     // This prevents "profile locked by another process" errors when flows run in parallel
     const flowId = options.flowId || 'default';
-    const profileDir = path.join(CHATGPT_PROFILE_BASE, flowId);  // Per-flow Chrome profile dir
+    const accountRegistry = new AccountSessionRegistry('chatgpt', { baseDir: CHATGPT_PROFILE_BASE });
+    const preferredEmail = String(options.accountEmail || process.env.CHATGPT_ACCOUNT_EMAIL || '').trim();
+    const preferredKey = String(options.accountKey || options.profileKey || process.env.CHATGPT_PROFILE_KEY || flowId || '').trim();
+    const ensured = (preferredEmail || preferredKey)
+      ? accountRegistry.ensureAccount({ email: preferredEmail, accountKey: preferredKey, label: options.accountLabel })
+      : null;
+    let selectedAccount = ensured || accountRegistry.selectAccount({ preferEmail: preferredEmail, preferKey: preferredKey });
+    const profileKey = selectedAccount?.accountKey || preferredKey || flowId || 'default';
+    if (!selectedAccount) {
+      selectedAccount = accountRegistry.ensureAccount({ accountKey: profileKey, label: options.accountLabel });
+    }
+    const profileDir = selectedAccount?.profileDir || path.join(CHATGPT_PROFILE_BASE, profileKey);
     
     // Pass userDataDir to parent class for persistent session
     super({
@@ -37,10 +49,15 @@ class ChatGPTService extends BrowserService {
     this.baseUrl = 'https://chatgpt.com';
     this.debug = options.debug || false; // Enable debug mode to save screenshots/HTML
     this.flowId = flowId;
+    this.profileKey = profileKey;
     this.profileDir = profileDir;
-    // 💫 FIX: Use SHARED session file, not per-flow
-    // This ensures all flows load the latest auth tokens from previous run
-    this.sessionPath = CHATGPT_DEFAULT_SESSION;
+    this.accountRegistry = accountRegistry;
+    this.accountKey = selectedAccount?.accountKey || profileKey || '';
+    this.accountEmail = selectedAccount?.email || preferredEmail || '';
+    this.accountLabel = selectedAccount?.label || options.accountLabel || '';
+    // 💫 Allow per-profile session when profileKey is provided
+    this.sessionPath = options.sessionPath
+      || (selectedAccount?.sessionPath ? selectedAccount.sessionPath : (profileKey ? path.join(CHATGPT_PROFILE_BASE, profileKey, 'session.json') : CHATGPT_DEFAULT_SESSION));
   }
 
   /**
@@ -2054,6 +2071,10 @@ class ChatGPTService extends BrowserService {
       console.log(`      - SessionStorage items: ${Object.keys(sessionStorage).length}`);
       console.log(`      - Authenticated: ${isAuthed ? '✅' : '❌'}`);
       console.log(`      - Saved to: ${this.sessionPath}`);
+
+      if (this.accountRegistry) {
+        this.accountRegistry.markUsed({ accountKey: this.accountKey, email: this.accountEmail });
+      }
       
       return true;
     } catch (error) {

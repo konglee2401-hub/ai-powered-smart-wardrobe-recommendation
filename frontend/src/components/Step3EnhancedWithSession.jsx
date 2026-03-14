@@ -518,9 +518,6 @@ ${finalPositive}`;
           </div>
         </ModalPortal>
       )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

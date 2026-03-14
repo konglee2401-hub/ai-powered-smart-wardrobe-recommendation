@@ -15,6 +15,8 @@ const SubVideoLibrarySourceSchema = new mongoose.Schema({
   enabled: { type: Boolean, default: true },
   isDefault: { type: Boolean, default: false },
   maxDepth: { type: Number, default: 3 },
+  maxFolders: { type: Number, default: 60 },
+  cacheTtlHours: { type: Number, default: 24 },
   visibility: { type: String, default: 'public-web' },
   themeHints: [{ type: String }],
   recommendedTemplateGroups: [{ type: String }],
@@ -53,6 +55,14 @@ const ComposerDefaultsSchema = new mongoose.Schema({
   encoder: { type: String, default: 'auto' },
 }, { _id: false });
 
+const VoiceoverPipelineSchema = new mongoose.Schema({
+  enableTranscript: { type: Boolean, default: true },
+  enableVoiceover: { type: Boolean, default: true },
+  overlayVoiceoverOnVideo: { type: Boolean, default: true },
+  translateTarget: { type: String, default: 'vi' },
+  voiceName: { type: String, default: 'vi-VN-HoaiMyNeural' },
+}, { _id: false });
+
 const VideoPipelinePreferencesSchema = new mongoose.Schema({
   production: {
     templateLibrary: {
@@ -74,6 +84,19 @@ const VideoPipelinePreferencesSchema = new mongoose.Schema({
         themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'],
         recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'],
         notes: 'Default public sub-video library source for mashup and shorts automation.',
+      }, {
+        key: 'pexels-sub-library',
+        name: 'Pexels Sub Library',
+        sourceType: 'public-drive-folder',
+        url: 'https://drive.google.com/drive/folders/17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC',
+        folderId: '17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC',
+        enabled: true,
+        isDefault: false,
+        maxDepth: 3,
+        visibility: 'public-web',
+        themeHints: ['product', 'fitness', 'health', 'luxury', 'viral', 'general'],
+        recommendedTemplateGroups: ['shorts', 'reaction', 'highlight', 'marketing', 'cinematic'],
+        notes: 'Pexels sub-video library auto-ingested from scraper uploads.',
       }]),
     },
     subtitleDictionary: {
@@ -115,6 +138,16 @@ const VideoPipelinePreferencesSchema = new mongoose.Schema({
         groupKey: 'all',
         showOnlySuggested: false,
         suggestionLimit: 6,
+      }),
+    },
+    voiceoverPipeline: {
+      type: VoiceoverPipelineSchema,
+      default: () => ({
+        enableTranscript: true,
+        enableVoiceover: true,
+        overlayVoiceoverOnVideo: true,
+        translateTarget: 'vi',
+        voiceName: 'vi-VN-HoaiMyNeural',
       }),
     },
   },
@@ -197,7 +230,7 @@ const TrendSettingSchema = new mongoose.Schema({
   playboardConfigs: [PlayboardConfigSchema],
   videoPipelinePreferences: {
     type: VideoPipelinePreferencesSchema,
-    default: () => ({ production: { templateLibrary: { favorites: [], pinned: [], recent: [] }, subVideoLibrarySources: [{ key: 'public-video-reels', name: 'Public Video Reels Library', sourceType: 'public-drive-folder', url: 'https://drive.google.com/drive/folders/1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', folderId: '1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', enabled: true, isDefault: true, maxDepth: 3, visibility: 'public-web', themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'], recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'], notes: 'Default public sub-video library source for mashup and shorts automation.' }] } }),
+    default: () => ({ production: { templateLibrary: { favorites: [], pinned: [], recent: [] }, subVideoLibrarySources: [{ key: 'public-video-reels', name: 'Public Video Reels Library', sourceType: 'public-drive-folder', url: 'https://drive.google.com/drive/folders/1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', folderId: '1PlCs1HxhzulF8tzO80wiJSVM2fzAhI7A', enabled: true, isDefault: true, maxDepth: 3, visibility: 'public-web', themeHints: ['motivation', 'luxury', 'motherhood', 'health', 'funny-animal', 'product'], recommendedTemplateGroups: ['shorts', 'highlight', 'reaction', 'cinematic', 'marketing', 'viral'], notes: 'Default public sub-video library source for mashup and shorts automation.' }, { key: 'pexels-sub-library', name: 'Pexels Sub Library', sourceType: 'public-drive-folder', url: 'https://drive.google.com/drive/folders/17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC', folderId: '17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC', enabled: true, isDefault: false, maxDepth: 3, visibility: 'public-web', themeHints: ['product', 'fitness', 'health', 'luxury', 'viral', 'general'], recommendedTemplateGroups: ['shorts', 'reaction', 'highlight', 'marketing', 'cinematic'], notes: 'Pexels sub-video library auto-ingested from scraper uploads.' }] } }),
   },
 }, { timestamps: true });
 

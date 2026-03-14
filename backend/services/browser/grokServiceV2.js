@@ -11,12 +11,13 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
+import AccountSessionRegistry from './accountSessionRegistry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Define Grok persistent profile directory (to avoid repeated Cloudflare challenges)
-const GROK_PROFILE_DIR = path.join(path.dirname(path.dirname(__dirname)), 'data', 'grok-profile');
+const GROK_PROFILE_BASE = path.join(path.dirname(path.dirname(__dirname)), 'data', 'grok-profiles');
 
 /**
  * Grok Service V2 - Full Automation with Cloudflare Bypass
@@ -27,12 +28,24 @@ class GrokServiceV2 extends BrowserService {
   constructor(options = {}) {
     // Create session manager for Grok
     const sessionManager = new SessionManager('grok');
+    const accountRegistry = new AccountSessionRegistry('grok', { baseDir: GROK_PROFILE_BASE });
+    const preferredEmail = String(options.accountEmail || process.env.GROK_ACCOUNT_EMAIL || '').trim();
+    const preferredKey = String(options.accountKey || options.profileKey || process.env.GROK_PROFILE_KEY || '').trim();
+    const ensured = (preferredEmail || preferredKey)
+      ? accountRegistry.ensureAccount({ email: preferredEmail, accountKey: preferredKey, label: options.accountLabel })
+      : null;
+    let selectedAccount = ensured || accountRegistry.selectAccount({ preferEmail: preferredEmail, preferKey: preferredKey });
+    const profileKey = selectedAccount?.accountKey || preferredKey || 'default';
+    if (!selectedAccount) {
+      selectedAccount = accountRegistry.ensureAccount({ accountKey: profileKey, label: options.accountLabel });
+    }
+    const profileDir = selectedAccount?.profileDir || path.join(GROK_PROFILE_BASE, profileKey);
     
     // Pass session manager and persistent profile to parent
     super({ 
       ...options, 
       sessionManager,
-      userDataDir: options.userDataDir || GROK_PROFILE_DIR
+      userDataDir: options.userDataDir || profileDir
     });
     this.baseUrl = 'https://grok.com';
     
@@ -59,6 +72,10 @@ class GrokServiceV2 extends BrowserService {
     this.projectUrl = projectUrl;
     
     this.sessionManager = sessionManager;
+    this.accountRegistry = accountRegistry;
+    this.accountKey = profileKey;
+    this.accountEmail = selectedAccount?.email || preferredEmail || '';
+    this.accountLabel = selectedAccount?.label || options.accountLabel || '';
   }
 
   /**
@@ -125,12 +142,17 @@ class GrokServiceV2 extends BrowserService {
     console.log('🔐 Restoring Grok session with Cloudflare bypass...\n');
     console.log(`📍 Project URL: ${this.navigationUrl}\n`);
     const sessionRestored = await restoreGrokSession(this.page, { 
-      url: this.navigationUrl 
+      url: this.navigationUrl,
+      profileKey: this.accountKey
     });
     
     if (!sessionRestored) {
       console.log('⚠️  Could not restore session - continuing anyway...\n');
       // Continue - sometimes login doesn't need restoration
+    }
+
+    if (this.accountRegistry) {
+      this.accountRegistry.markUsed({ accountKey: this.accountKey, email: this.accountEmail });
     }
     
     // STEP 7: Navigate to a conversation page (to access file input)

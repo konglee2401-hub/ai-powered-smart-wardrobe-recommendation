@@ -1,4 +1,4 @@
-﻿{
+{
   "navbar": {
     "generate": "Táº¡o",
     "image": "HÃ¬nh áº£nh",
@@ -23,7 +23,7 @@
     "customization": "TÃ¹y chá»‰nh",
     "aiProviders": "NhÃ  cung cáº¥p AI",
     "options": "TÃ¹y chá»n",
-    "setupAuthentication": "Thiáº¿t láº­p XÃ¡c thá»±c"
+    "setupAuthentication": "Tài khoản dịch vụ AI"
   },
   "dashboard": {
     "title": "Báº£ng Ä‘iá»u khiá»ƒn",
@@ -753,7 +753,7 @@
     }
   },
   "authSetup": {
-    "title": "Thiáº¿t láº­p XÃ¡c thá»±c",
+    "title": "Tài khoản dịch vụ AI",
     "sections": {
       "googleFlow": {
         "title": "Google Flow",
@@ -1165,6 +1165,8 @@
     "uploaded_or_synced_successfully": "Upload hoáº·c Ä‘á»“ng bá»™ thÃ nh cÃ´ng",
     "pending_download": "Táº£i Äang chá»",
     "waiting_in_scraper_download_backlog": "Chá» trong backlog táº£i scraper",
+    "sub_videos": "Video sub",
+    "pexels_sub_videos": "Video sub cÃ o tá»« Pexels",
     "queue_jobs": "CÃ´ng viá»‡c HÃ ng chá»",
     "production_jobs_in_mongo": "CÃ´ng viá»‡c sáº£n xuáº¥t trong Mongo",
     "ready_to_publish_2": "Sáºµn sÃ ng Xuáº¥t báº£n",
@@ -1221,7 +1223,7 @@
     "not_yet": "ChÆ°a",
     "add_to_queue": "ThÃªm vÃ o HÃ ng chá»",
     "compose": "Soáº¡n",
-    "delete": "Xóa",
+    "delete": "XÃ³a",
     "delete_video_and_all_related_data": "XÃ³a video vÃ  táº¥t cáº£ dá»¯ liá»‡u liÃªn quan",
     "eligible": "Äá»§ Ä‘iá»u kiá»‡n",
     "downloaded_source_videos_available_for_production": "Video nguá»“n Ä‘Ã£ táº£i cÃ³ sáºµn cho sáº£n xuáº¥t",
@@ -1466,6 +1468,7 @@
     "requeued_videos": "Xáº¿p láº¡i {{successful}} video.",
     "open_production": "Má»Ÿ Sáº£n xuáº¥t ({{count}})",
     "selected_count": "ÄÃ£ chá»n {{count}}",
+    "sync_selected": "Dong bo muc da chon",
     "add_to_queue_source_videos": "ThÃªm vÃ o hÃ ng chá» ({{count}} video nguá»“n)",
     "previous": "â† TrÆ°á»›c",
     "next": "Tiáº¿p â†’",
@@ -1480,7 +1483,6 @@
     "na": "N/A",
     "sync_button": "Äá»“ng bá»™",
     "re_download_button": "Táº£i láº¡i",
-    "delete": "XÃ³a",
     "production_history": "Lá»‹ch sá»­ Sáº£n xuáº¥t",
     "manage_social_accounts": "Quáº£n lÃ½ social accounts",
     "manage_social_accounts_from_settings": "Social accounts Ä‘Æ°á»£c quáº£n lÃ½ trong pháº§n CÃ i Ä‘áº·t.",
@@ -1496,6 +1498,19 @@
     "publish_guidance_step_1": "1) Chá»n cÃ¡c account Ä‘Æ°á»£c phÃ©p publish.",
     "publish_guidance_step_2": "2) Kiá»ƒm tra bá»™ lá»c, khoáº£ng cÃ¡ch phÃºt vÃ  giá»›i háº¡n má»—i láº§n cháº¡y trong Settings.",
     "publish_guidance_step_3": "3) Báº¥m Publish now Ä‘á»ƒ Ä‘Æ°a cÃ¡c video ready phÃ¹ há»£p vÃ o hÃ ng chá».",
+    "sub_video_scraper_settings": "CÃ o video phá»¥",
+    "sub_video_scraper_subtitle": "Cáº¥u hÃ¬nh cÃ o video phá»¥ Pexels vÃ  báº­t/táº¯t nguá»“n.",
+    "save_scraper_settings": "LÆ°u cÃ i Ä‘áº·t cÃ o",
+    "scraper_settings_saved": "ÄÃ£ lÆ°u cÃ i Ä‘áº·t cÃ o.",
+    "enable_pexels_discovery": "Báº­t cÃ o Pexels",
+    "pexels_start_url": "URL báº¯t Ä‘áº§u Pexels",
+    "pexels_max_items": "Sá»‘ lÆ°á»£ng tá»‘i Ä‘a má»—i lÆ°á»£t",
+    "pexels_scroll_times": "Sá»‘ láº§n cuá»™n",
+    "pexels_schedule": "Lá»‹ch Pexels (cron)",
+    "pexels_taxonomy_label": "Taxonomy",
+    "pexels_taxonomy_default": "Taxonomy mặc định: {{taxonomy}}",
+    "cron_hint": "Äá»‹nh dáº¡ng cron: phÃºt giá» ngÃ y thÃ¡ng thá»© (vd: 15 7 * * *)",
+    "scrape_now": "CÃ o ngay",
     "last_post": "Láº§n Ä‘Äƒng gáº§n nháº¥t",
     "no_publish_accounts_available": "ChÆ°a cÃ³ account publish. HÃ£y káº¿t ná»‘i á»Ÿ Social Accounts.",
     "failed_to_save_settings": "LÆ°u cÃ i Ä‘áº·t tháº¥t báº¡i.",
@@ -1512,7 +1527,45 @@
     "publish_filter_source": "Lá»c theo nguá»“n",
     "publish_filter_recipe": "Lá»c theo recipe",
     "publish_filter_channel": "KÃªnh chá»©a",
-    "publish_filter_min_views": "LÆ°á»£t xem tá»‘i thiá»ƒu"
+    "publish_filter_min_views": "LÆ°á»£t xem tá»‘i thiá»ƒu",
+    "select_at_least_one_video": "Chon it nhat 1 video.",
+    "voiceover_selected": "Chep loi da chon",
+    "voiceover_summary": "Voiceover: {{processed}} xong, {{failed}} loi.",
+    "mashup_settings": "Cau hinh mashup mac dinh",
+    "mashup_settings_desc": "Cai dat recipe, layout, subtitle va encoder mac dinh cho job san xuat.",
+    "save_mashup_settings": "Luu mashup settings",
+    "voiceover_settings": "Transcript & Voiceover",
+    "voiceover_settings_desc": "Cai dat transcript, voiceover, hook va viral cho job subtitle.",
+    "save_voiceover_settings": "Luu voiceover settings",
+    "subtitle_mode": "Che do subtitle",
+    "template_strategy": "Chien luoc template",
+    "aspect_ratio": "Ti le khung hinh",
+    "layout": "Layout",
+    "enable_transcript": "Tao transcript",
+    "enable_voiceover": "Tao voiceover",
+    "overlay_voiceover": "Op voiceover len video",
+    "voiceover_translate_target": "Ngon ngu dich",
+    "voiceover_voice_name": "Ten giong doc",
+    "voiceover_pipeline_version": "Phien ban pipeline",
+    "voiceover_pipeline_v1_label": "v1 - caption + voiceover",
+    "voiceover_pipeline_v2_label": "v2 - hook + viral + voiceover + caption",
+    "voiceover_enable_viral_select": "Bat chon doan viral",
+    "voiceover_clip_min": "Clip toi thieu (giay)",
+    "voiceover_clip_max": "Clip toi da (giay)",
+    "voiceover_enable_hook": "Them hook 3s",
+    "voiceover_enable_hook_caption": "Hien caption cho hook",
+    "voiceover_hook_position": "Vi tri caption hook",
+    "voiceover_hook_top": "Tren",
+    "voiceover_hook_center": "Giua",
+    "voiceover_hook_font_size": "Co chu hook",
+    "voiceover_keep_only_final": "Chi giu final MP4",
+    "voiceover_enable_broll": "Them B-roll",
+    "voiceover_enable_vertical": "Ep ty le doc",
+    "run_batch_voiceover": "Chay batch voiceover",
+    "queue_voiceover": "Them vao queue voiceover",
+    "queue_mashup": "Them vao queue mashup",
+    "revoiceover": "Re-voiceover",
+    "missing_source_video_for_job": "Khong tim thay video goc cho job nay."
   },
   "productionHistory": {
     "pageTitle": "Lá»‹ch sá»­ production",
@@ -1638,7 +1691,3 @@
     }
   }
 }
-
-
-
-

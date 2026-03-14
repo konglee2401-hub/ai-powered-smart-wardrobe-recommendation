@@ -15,6 +15,26 @@ export const DEFAULT_SUB_VIDEO_LIBRARY_SOURCE = Object.freeze({
   notes: 'Default public sub-video library source for mashup and shorts automation.',
 });
 
+export const PEXELS_SUB_VIDEO_LIBRARY_SOURCE = Object.freeze({
+  key: 'pexels-sub-library',
+  name: 'Pexels Sub Library',
+  sourceType: 'public-drive-folder',
+  url: 'https://drive.google.com/drive/folders/17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC',
+  folderId: '17szLdP2uhj4Qco4FQXIcoZWTpaHI43zC',
+  enabled: true,
+  isDefault: false,
+  maxDepth: 3,
+  visibility: 'public-web',
+  themeHints: ['product', 'fitness', 'health', 'luxury', 'viral', 'general'],
+  recommendedTemplateGroups: ['shorts', 'reaction', 'highlight', 'marketing', 'cinematic'],
+  notes: 'Pexels sub-video library auto-ingested from scraper uploads.',
+});
+
+const DEFAULT_LIBRARY_SOURCES = [
+  DEFAULT_SUB_VIDEO_LIBRARY_SOURCE,
+  PEXELS_SUB_VIDEO_LIBRARY_SOURCE,
+];
+
 export function normalizeSubVideoLibrarySources(input = []) {
   const items = Array.isArray(input) ? input : [];
   const normalized = [];
@@ -52,10 +72,17 @@ export function normalizeSubVideoLibrarySources(input = []) {
     });
   }
 
-  const withDefault = normalized.length ? normalized : [{ ...DEFAULT_SUB_VIDEO_LIBRARY_SOURCE }];
-  const hasDefault = withDefault.some((item) => item.isDefault && item.enabled !== false);
+  const withDefault = normalized.length ? normalized : DEFAULT_LIBRARY_SOURCES.map((item) => ({ ...item }));
+  const ensured = DEFAULT_LIBRARY_SOURCES.reduce((acc, source) => {
+    const key = source.key;
+    if (!acc.some((item) => item.key === key || item.folderId === source.folderId)) {
+      acc.push({ ...source });
+    }
+    return acc;
+  }, [...withDefault]);
+  const hasDefault = ensured.some((item) => item.isDefault && item.enabled !== false);
 
-  return withDefault.map((item, index) => ({
+  return ensured.map((item, index) => ({
     ...item,
     isDefault: hasDefault ? item.isDefault === true : index === 0,
   }));

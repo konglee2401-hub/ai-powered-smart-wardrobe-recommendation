@@ -38,6 +38,7 @@ import Step3EnhancedWithSession from '../components/Step3EnhancedWithSession';
 import ImagePromptWithTemplates from '../components/ImagePromptWithTemplates';
 import GalleryPicker from '../components/GalleryPicker';
 import SessionLogModal from '../components/SessionLogModal';
+import ModalPortal from '../components/ModalPortal';
 import ScenePickerModal from '../components/ScenePickerModal';
 import CharacterSelectorModal from '../components/CharacterSelectorModal';
 import PageHeaderBar from '../components/PageHeaderBar';
@@ -198,33 +199,7 @@ function ProviderGlyph({ providerId }) {
   const glyphClass = 'h-[18px] w-[18px]';
 
   if (providerId === 'google-flow') {
-    const handleQuickResume = async (session) => {
-    if (!session?.sessionId) return;
-
-    setRecentResumeId(session.sessionId);
-    try {
-      const response = await resumeSession(session.sessionId, 'image-generation');
-      if (!response?.success) {
-        return;
-      }
-
-      const workflowState = response.workflowState;
-      setSelectedFlowId(response.sessionId || session.sessionId);
-      applyResumeWorkflowState(workflowState, response);
-
-      if (workflowState?.inputs) {
-        await hydrateStoredImages(workflowState.inputs);
-      }
-
-      autoResumeRef.current = { nextStep: response.nextStep };
-    } catch (error) {
-      console.error('?? Quick resume failed:', error);
-    } finally {
-      setRecentResumeId(null);
-    }
-  };
-
-  return (
+    return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={glyphClass}>
         <path d="M5 12c0-3.5 2.4-6 6-6 1.8 0 3.3.6 4.5 1.8" />
         <path d="M19 12c0 3.5-2.4 6-6 6-1.8 0-3.3-.6-4.5-1.8" />
@@ -683,6 +658,7 @@ export default function ImageGenerationPage() {
   const [recentSessions, setRecentSessions] = useState([]);
   const [recentSessionsLoading, setRecentSessionsLoading] = useState(false);
   const [recentResumeId, setRecentResumeId] = useState(null);
+  const [recentPreview, setRecentPreview] = useState(null);
   const autoResumeRef = useRef(null);
 
 
@@ -1166,6 +1142,32 @@ export default function ImageGenerationPage() {
 
     setCurrentStep(resumeStep);
   }, [setSelectedOptions, setAnalysis, setAnalysisRaw, setGeneratedPrompt, setGeneratedImages, setCharacterDescription, setCurrentStep]);
+
+  const handleQuickResume = async (session) => {
+    if (!session?.sessionId) return;
+
+    setRecentResumeId(session.sessionId);
+    try {
+      const response = await resumeSession(session.sessionId, 'image-generation');
+      if (!response?.success) {
+        return;
+      }
+
+      const workflowState = response.workflowState;
+      setSelectedFlowId(response.sessionId || session.sessionId);
+      applyResumeWorkflowState(workflowState, response);
+
+      if (workflowState?.inputs) {
+        await hydrateStoredImages(workflowState.inputs);
+      }
+
+      autoResumeRef.current = { nextStep: response.nextStep };
+    } catch (error) {
+      console.error('?? Quick resume failed:', error);
+    } finally {
+      setRecentResumeId(null);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2042,11 +2044,13 @@ export default function ImageGenerationPage() {
         try {
           const sessionId = 'session-' + Date.now();
           console.log('?? Saving generated images as gallery assets...');
+          const generatedPaths = response.data?.filePaths?.generatedImages || [];
           
           for (let i = 0; i < response.data.generatedImages.length; i++) {
             const img = response.data.generatedImages[i];
             const imageUrl = typeof img === 'string' ? img : img.url;
             const filename = img.filename || `generated-image-${i + 1}.png`;
+            const localPath = generatedPaths[i] || (typeof img === 'object' ? (img.path || img.localPath) : null);
             
             try {
               // ?? FIXED: Convert prompt object to string for MongoDB schema
@@ -2063,7 +2067,8 @@ export default function ImageGenerationPage() {
                   model: 'google-flow',
                   imageCount,
                   aspectRatio,
-                  generationIndex: i + 1
+                  generationIndex: i + 1,
+                  localPath
                 }
               );
               console.log(`? Generated image ${i + 1} saved as asset:`, asset);
@@ -2405,7 +2410,7 @@ export default function ImageGenerationPage() {
           </div>
 
           {/* ==================== LEFT SIDEBAR: Options ==================== */}
-          <div className={`${currentStep === 2 ? 'w-[184px] xl:w-[198px]' : currentStep === 3 ? 'w-[198px]' : 'w-[360px] xl:w-[420px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} generation-content-plain flex min-h-0 flex-col flex-shrink-0 overflow-hidden transition-all duration-300`}>
+          <div className={`${currentStep === 2 ? 'w-[184px] xl:w-[198px]' : currentStep === 3 ? 'w-[198px]' : currentStep === 4 ? 'w-[250px] xl:w-[280px]' : 'w-[360px] xl:w-[420px]'} ${currentStep === 1 ? 'step1-responsive-sidebar step1-sidebar-panel' : ''} generation-content-plain flex min-h-0 flex-col flex-shrink-0 overflow-hidden transition-all duration-300`}>
           <div className={`step1-sidebar-scroll min-h-0 flex-1 space-y-3 ${currentStep === 1 ? 'overflow-y-auto overflow-x-hidden' : 'overflow-y-auto'}`}>
             {/* Step 1: Use Case & Focus */}
             {currentStep === 1 && (
@@ -2503,14 +2508,27 @@ export default function ImageGenerationPage() {
                           <div className="mt-2 flex items-center gap-1">
                             {previewItems.length ? (
                               previewItems.map((item, index) => (
-                                <div key={index} className="relative h-9 w-9 overflow-hidden rounded-lg border border-slate-800/80 bg-black/40">
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!item.url) return;
+                                    setRecentPreview({
+                                      url: item.url,
+                                      label: item.type === 'output' ? 'Output' : 'Input',
+                                      sessionId: session.sessionId
+                                    });
+                                  }}
+                                  className="relative h-9 w-9 overflow-hidden rounded-lg border border-slate-800/80 bg-black/40 transition hover:border-sky-400/50 hover:ring-2 hover:ring-sky-400/30"
+                                  title={item.type === 'output' ? 'Preview output image' : 'Preview input image'}
+                                >
                                   {item.url ? (
                                     <img src={item.url} alt="preview" className="h-full w-full object-cover" />
                                   ) : (
                                     <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-500">N/A</div>
                                   )}
                                   <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/60 px-1 text-[8px] text-slate-200">{item.type === 'output' ? 'OUT' : 'IN'}</span>
-                                </div>
+                                </button>
                               ))
                             ) : (
                               <div className="text-[10px] text-slate-500">No preview</div>
@@ -2738,7 +2756,7 @@ export default function ImageGenerationPage() {
               )}
 
               <div className={`${currentStep === 1 ? 'step1-center-scroll' : ''} flex-1 overflow-y-auto`}>
-                <div className={`${currentStep === 1 ? 'step1-center-shell flex h-full min-h-0 flex-col' : ''} relative mx-auto max-w-6xl`}>
+                <div className={`${currentStep === 1 ? 'step1-center-shell flex h-full min-h-0 flex-col' : ''} relative w-full max-w-none`}>
                   {/* Step 1: Upload */}
                   {currentStep === 1 && (
                     <div className="step1-upload-stage flex h-full min-h-0 flex-col gap-3">
@@ -3093,6 +3111,7 @@ export default function ImageGenerationPage() {
                         generationProvider={generationProvider}
                         uploadToDrive={uploadToDrive}
                         driveUploadStatus={driveUploadStatus}
+                        expectedCount={imageCount}
                       />
                     </>
                   )}
@@ -3386,6 +3405,40 @@ export default function ImageGenerationPage() {
         sessionId={selectedFlowId}
         flowId={selectedFlowId}
       />
+
+      {recentPreview && (
+        <ModalPortal>
+          <div
+            className="image-generation-preview-modal fixed inset-0 app-layer-modal z-[10000] flex items-center justify-center p-4 backdrop-blur-md"
+            onClick={() => setRecentPreview(null)}
+          >
+            <div
+              className="image-generation-preview-surface relative w-fit max-w-[92vw] overflow-hidden rounded-2xl border border-white/10 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setRecentPreview(null)}
+                className="absolute right-3 top-3 rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:bg-white/10"
+                aria-label="Close preview"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="image-generation-preview-frame inline-flex items-center justify-center overflow-hidden rounded-xl p-3">
+                <img
+                  src={recentPreview.url}
+                  alt="Recent session preview"
+                  className="max-h-[72vh] max-w-[85vw] object-contain"
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-300">
+                <span>{recentPreview.label}</span>
+                <span className="text-slate-500">{recentPreview.sessionId}</span>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }

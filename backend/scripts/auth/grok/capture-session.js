@@ -37,8 +37,20 @@ import readline from 'readline';
 puppeteer.use(StealthPlugin());
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SESSION_FILE = path.join(__dirname, '../.sessions/grok-session-complete.json');
-const BACKUP_FILE = path.join(__dirname, '../.sessions/grok-session-backup.json');
+const GROK_PROFILE_BASE = path.join(__dirname, '../../../data/grok-profiles');
+const profileArgIndex = process.argv.indexOf('--profile');
+const PROFILE_KEY = String(
+  (profileArgIndex >= 0 ? process.argv[profileArgIndex + 1] : '') ||
+  process.env.GROK_PROFILE_KEY ||
+  'default'
+).trim() || 'default';
+const PROFILE_DIR = path.join(GROK_PROFILE_BASE, PROFILE_KEY);
+const SESSION_FILE = path.join(PROFILE_DIR, 'session.json');
+const BACKUP_FILE = path.join(PROFILE_DIR, 'session.backup.json');
+
+if (!fs.existsSync(PROFILE_DIR)) {
+  fs.mkdirSync(PROFILE_DIR, { recursive: true });
+}
 
 class GrokSessionCapture {
   constructor() {

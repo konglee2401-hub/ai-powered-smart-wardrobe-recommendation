@@ -11,10 +11,16 @@ import CapCutAICaptionService from '../../../services/browser/capcutAICaptionSer
 import readline from 'readline';
 
 async function run() {
+  const args = process.argv.slice(2);
+  const profileIndex = args.indexOf('--profile');
+  const profileKey = profileIndex >= 0 ? String(args[profileIndex + 1] || '').trim() : '';
+
   const service = new CapCutAICaptionService({
     headless: false,
     flowId: 'capcut-session',
     baseUrl: 'https://www.capcut.com',
+    accountKey: profileKey || process.env.CAPCUT_PROFILE_KEY || '',
+    accountLabel: profileKey || '',
   });
 
   let saved = false;

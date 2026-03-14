@@ -10,6 +10,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import driveService from '../services/googleDriveOAuth.js';
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -18,6 +20,24 @@ import { requireActiveSubscription } from '../middleware/subscription.js';
 import { requireMenuAccess, requireApiAccess } from '../middleware/permissions.js';
 
 const router = express.Router();
+
+// Allow internal scraper token (admin JWT) to bypass auth middleware
+const scraperInternalAuth = async (req, res, next) => {
+  const token = req.headers['x-scraper-token'] || req.headers['x-admin-token'];
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    if (user && user.status === 'active' && user.role === 'admin') {
+      req.headers.authorization = `Bearer ${token}`;
+      req.user = user;
+      return next();
+    }
+    return res.status(401).json({ success: false, message: 'Not authorized (scraper token)' });
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Not authorized (scraper token)', error: error.message });
+  }
+};
 
 // Setup multer for file uploads
 const upload = multer({
@@ -192,6 +212,7 @@ router.post('/auth-callback', async (req, res) => {
 });
 
 // Protected routes below
+router.use(scraperInternalAuth);
 router.use(protect);
 router.use(requireActiveSubscription);
 router.use(requireMenuAccess('generation'));
@@ -464,28 +485,43 @@ router.post('/files/upload-with-metadata', upload.single('file'), async (req, re
 
     let uploadResult;
     const uploadOptions = { ...metadata };
+    const subfolder = req.body.subfolder || metadata.category;
 
     // Call appropriate platform upload method
     if (parentFolderId) {
       // Direct folder ID provided - use generic uploadBuffer with parentFolderId
       console.log(`📤 Uploading to folder: ${parentFolderId}`);
+      let resolvedFolderId = parentFolderId;
+      if (subfolder) {
+        const folderName = String(subfolder).trim();
+        if (folderName) {
+          try {
+            resolvedFolderId = await driveService.getOrCreateFolder(folderName, parentFolderId);
+            console.log(`📁 Using subfolder ${folderName} (${resolvedFolderId})`);
+          } catch (err) {
+            console.warn(`⚠️  Failed to ensure subfolder ${folderName}: ${err.message}`);
+            resolvedFolderId = parentFolderId;
+          }
+        }
+      }
       uploadResult = await driveService.uploadBuffer(fileBuffer, fileName, {
         ...uploadOptions,
-        parentFolderId,
+        folderId: resolvedFolderId,
       });
     } else {
       // Use platform-specific upload method
       const uploadMethod = `upload${platform.charAt(0).toUpperCase() + platform.slice(1).replace(/([A-Z])/g, '$1').toLowerCase().replace(/([a-z])([A-Z])/g, '$1$2')}ScrapedVideo`;
       
       // Map platform names to actual method names
-      const platformMethodMap = {
-        'youtube': 'uploadYoutubeScrapedVideo',
-        'playboard': 'uploadPlayboardScrapedVideo',
-        'dailyhaha': 'uploadDailyhahaScrapedVideo',
-        'douyin': 'uploadDouyinScrapedVideo',
-        'tiktok': 'uploadTikTokScrapedVideo',
-        'instagram': 'uploadReelsScrapedVideo',
-      };
+        const platformMethodMap = {
+          'youtube': 'uploadYoutubeScrapedVideo',
+          'playboard': 'uploadPlayboardScrapedVideo',
+          'dailyhaha': 'uploadDailyhahaScrapedVideo',
+          'douyin': 'uploadDouyinScrapedVideo',
+          'kuaishou': 'uploadKuaishouScrapedVideo',
+          'tiktok': 'uploadTikTokScrapedVideo',
+          'instagram': 'uploadReelsScrapedVideo',
+        };
 
       const method = platformMethodMap[platform];
       if (!method || typeof driveService[method] !== 'function') {

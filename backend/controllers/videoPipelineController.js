@@ -113,6 +113,22 @@ class VideoPipelineController {
     res.json(result);
   });
 
+  static uploadSelectedVideos = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.uploadSelectedSourceVideos(req.body?.videoIds || [], buildUserContext(req));
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  });
+
+  static runVoiceoverJobs = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.runVoiceoverJobs(req.body || {}, buildUserContext(req));
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  });
+
   static triggerPendingDownloads = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.triggerPendingDownloads(req.body?.limit || req.query?.limit || 200, buildUserContext(req));
     if (!result.success) {
@@ -178,6 +194,14 @@ class VideoPipelineController {
 
   static runMassProduction = asyncHandler(async (req, res) => {
     const result = await videoPipelineService.runMassProduction(req.body || {}, buildUserContext(req));
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  });
+
+  static runMassVoiceover = asyncHandler(async (req, res) => {
+    const result = await videoPipelineService.runMassVoiceover(req.body || {}, buildUserContext(req));
     if (!result.success) {
       return res.status(400).json(result);
     }

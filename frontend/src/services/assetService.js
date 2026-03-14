@@ -125,6 +125,8 @@ export const assetService = {
    */
   async saveGeneratedImageAsAsset(imageUrl, filename, sessionId, generationParams = {}) {
     try {
+      const localPath = generationParams.localPath || generationParams.localFile || null;
+      const storageLocation = generationParams.storageLocation || (localPath ? 'local' : 'local');
       const response = await fetch(`${ASSET_API_BASE}/create`, {
         method: 'POST',
         headers: {
@@ -134,14 +136,15 @@ export const assetService = {
         body: JSON.stringify({
           filename,
           mimeType: 'image/png',
-          fileSize: 0, // Will be updated later
+          fileSize: generationParams.fileSize || 0, // Will be updated later
           assetType: 'image',
           assetCategory: 'generated-image',
           userId: 'anonymous',
           sessionId,
           storage: {
-            location: 'local',
-            url: imageUrl
+            location: storageLocation,
+            url: imageUrl,
+            ...(localPath ? { localPath } : {})
           },
           metadata: {
             format: 'png',

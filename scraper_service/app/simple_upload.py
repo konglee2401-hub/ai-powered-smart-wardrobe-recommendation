@@ -5,14 +5,18 @@ Replaces complex drive_upload_service with direct API calls to Node.js backend
 
 import asyncio
 import os
+import json
 import aiohttp
 from datetime import datetime
 from typing import Optional, Dict, Any
 
+from .config import PEXELS_DRIVE_FOLDER_ID
+
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
+SCRAPER_ADMIN_TOKEN = os.getenv('SCRAPER_ADMIN_TOKEN', '').strip()
 
 
-async def upload_video_to_backend_api(file_path: str, platform: str, video_id: str) -> Optional[Dict[str, Any]]:
+async def upload_video_to_backend_api(file_path: str, platform: str, video_id: str, category: str = '', tags: list | None = None, title: str = '') -> Optional[Dict[str, Any]]:
     """
     Upload video file to Google Drive via backend API
     
@@ -43,11 +47,29 @@ async def upload_video_to_backend_api(file_path: str, platform: str, video_id: s
                 form.add_field('file', f, filename=file_name, content_type='video/mp4')
                 form.add_field('platform', platform)
                 form.add_field('source', platform)
+                if platform == 'pexels' and PEXELS_DRIVE_FOLDER_ID:
+                    form.add_field('parentFolderId', PEXELS_DRIVE_FOLDER_ID)
+                    if category:
+                        form.add_field('subfolder', category)
+
+                metadata = {
+                    'category': category,
+                    'tags': tags or [],
+                    'title': title,
+                    'videoId': video_id,
+                    'platform': platform,
+                }
+                form.add_field('metadata', json.dumps(metadata, ensure_ascii=False))
                 
                 try:
+                    headers = {}
+                    if SCRAPER_ADMIN_TOKEN:
+                        headers['X-Scraper-Token'] = SCRAPER_ADMIN_TOKEN
+
                     async with session.post(
                         f"{BACKEND_URL}/api/drive/files/upload-with-metadata",
                         data=form,
+                        headers=headers,
                         timeout=aiohttp.ClientTimeout(total=300)  # 5 minute timeout
                     ) as response:
                         if response.status == 200:
@@ -88,10 +110,17 @@ async def upload_video_after_download(video_id: str, file_path: str, platform: s
     
     try:
         # Call backend API for upload
+        video_doc = videos.find_one({'_id': video_id})
+        category = (video_doc or {}).get('category') or (video_doc or {}).get('topics') or ''
+        tags = (video_doc or {}).get('tags') or []
+
         upload_result = await upload_video_to_backend_api(
             file_path=file_path,
             platform=platform,
-            video_id=str(video_id)
+            video_id=str(video_id),
+            category=category,
+            tags=tags,
+            title=(video_doc or {}).get('title') or '',
         )
         
         if upload_result:

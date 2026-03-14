@@ -14,7 +14,7 @@ class TemplateSelectionEngine {
     // Funny/Animal content → Reaction focus
     'funny-animal': {
       primary: 'reaction',
-      alternatives: ['meme', 'grid'],
+      alternatives: ['meme', 'grid-2'],
       subtitleTheme: 'funny-animal',
       subtitlePhrase: ['😂 TOO FUNNY', '🤣 CAN\'T STOP LAUGHING', 'HILARIOUS']
     },
@@ -22,7 +22,7 @@ class TemplateSelectionEngine {
     // Product content → Marketing focus
     'product': {
       primary: 'highlight',
-      alternatives: ['marketing', 'grid'],
+      alternatives: ['marketing', 'grid-2'],
       subtitleTheme: 'product',
       subtitlePhrase: ['🛍️ GET YOURS NOW', '💎 MUST HAVE', 'LIMITED OFFER']
     },
@@ -30,7 +30,7 @@ class TemplateSelectionEngine {
     // Motivation/Fitness → Educational focus
     'motivation': {
       primary: 'highlight',
-      alternatives: ['cinematic', 'grid'],
+      alternatives: ['cinematic', 'grid-2'],
       subtitleTheme: 'motivation',
       subtitlePhrase: ['💪 YOU GOT THIS', '⚡ TRANSFORMATION', 'INCREDIBLE']
     },
@@ -45,8 +45,8 @@ class TemplateSelectionEngine {
     
     // Generic fallback
     'general': {
-      primary: 'grid',  // ← Changed from 'reaction' to 'grid' for variety
-      alternatives: ['highlight', 'reaction'],
+      primary: 'reaction',
+      alternatives: ['highlight', 'grid-2'],
       subtitleTheme: 'general',
       subtitlePhrase: ['✨ WATCH THIS', '🎬 CHECK IT OUT', 'AMAZING']
     }
@@ -71,8 +71,16 @@ class TemplateSelectionEngine {
       };
     }
 
+    const templateStrategy = String(config.templateStrategy || '').toLowerCase();
+    const candidates = [mapping.primary, ...(mapping.alternatives || [])].filter(Boolean);
+    const pickRandom = (list) => list[Math.floor(Math.random() * list.length)];
+    const shouldRandomize = !templateStrategy || templateStrategy === 'random' || templateStrategy === 'weighted';
+    const selectedTemplate = (shouldRandomize && candidates.length)
+      ? pickRandom(candidates)
+      : mapping.primary;
+
     return {
-      templateName: mapping.primary,
+      templateName: selectedTemplate,
       theme: mapping.subtitleTheme,
       subtitleTheme: mapping.subtitleTheme,
       alternatives: mapping.alternatives,
@@ -132,7 +140,7 @@ class TemplateSelectionEngine {
     }
 
     // Marketing templates should NOT use humor phrases
-    if (['marketing', 'highlight', 'grid'].includes(templateName)) {
+    if (['marketing', 'highlight', 'grid', 'grid-2'].includes(templateName)) {
       return [
         'HILARIOUS',
         'CAN\'T STOP LAUGHING',

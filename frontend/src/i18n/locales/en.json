@@ -23,7 +23,7 @@
     "customization": "Customization",
     "aiProviders": "AI Providers",
     "options": "Options",
-    "setupAuthentication": "Setup Authentication"
+    "setupAuthentication": "AI Service Accounts"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -861,7 +861,7 @@
     }
   },
   "authSetup": {
-    "title": "Setup Authentication",
+    "title": "AI Service Accounts",
     "sections": {
       "googleFlow": {
         "title": "Google Flow",
@@ -1236,6 +1236,7 @@
     "scraper_service_unavailable_2": "Scraper service unavailable.",
     "no_pending_videos_are_ready_to_upload": "No pending videos are ready to upload.",
     "select_at_least_one_video_or_provide_both_main_sub_videos": "Select at least one video or provide both main/sub videos.",
+    "select_at_least_one_video": "Select at least one video.",
     "select_at_least_one_video_to_add_to_the_queue_folder": "Select at least one video to add to the Queue folder.",
     "job_started_manually": "Job started manually.",
     "no_stale_processing_jobs_were_found": "No stale processing jobs were found.",
@@ -1273,6 +1274,8 @@
     "uploaded_or_synced_successfully": "Uploaded or synced successfully",
     "pending_download": "Pending Download",
     "waiting_in_scraper_download_backlog": "Waiting in scraper download backlog",
+    "sub_videos": "Sub videos",
+    "pexels_sub_videos": "Pexels sub videos scraped",
     "queue_jobs": "Queue Jobs",
     "production_jobs_in_mongo": "Production jobs in Mongo",
     "ready_to_publish_2": "Ready To Publish",
@@ -1576,6 +1579,44 @@
     "requeued_videos": "Re-queued {{successful}} video(s).",
     "open_production": "Open Production ({{count}})",
     "selected_count": "Selected {{count}}",
+    "sync_selected": "Sync selected",
+    "voiceover_selected": "Dub selected",
+    "voiceover_summary": "Voiceover jobs: {{processed}} done, {{failed}} failed.",
+    "mashup_settings": "Mashup defaults",
+    "mashup_settings_desc": "Set the default recipe, layout, subtitles, and encoder for production jobs.",
+    "save_mashup_settings": "Save mashup settings",
+    "voiceover_settings": "Transcript & Voiceover",
+    "voiceover_settings_desc": "Configure transcript, voiceover, hook, and viral options for subtitle jobs.",
+    "save_voiceover_settings": "Save voiceover settings",
+    "subtitle_mode": "Subtitle mode",
+    "template_strategy": "Template strategy",
+    "aspect_ratio": "Aspect ratio",
+    "layout": "Layout",
+    "enable_transcript": "Generate transcript",
+    "enable_voiceover": "Generate voiceover",
+    "overlay_voiceover": "Overlay voiceover on video",
+    "voiceover_translate_target": "Translate target",
+    "voiceover_voice_name": "Voice name",
+    "voiceover_pipeline_version": "Pipeline version",
+    "voiceover_pipeline_v1_label": "v1 - caption + voiceover",
+    "voiceover_pipeline_v2_label": "v2 - hook + viral + voiceover + caption",
+    "voiceover_enable_viral_select": "Enable viral clip selector",
+    "voiceover_clip_min": "Clip min (sec)",
+    "voiceover_clip_max": "Clip max (sec)",
+    "voiceover_enable_hook": "Add 3s hook",
+    "voiceover_enable_hook_caption": "Show hook caption",
+    "voiceover_hook_position": "Hook caption position",
+    "voiceover_hook_top": "Top",
+    "voiceover_hook_center": "Center",
+    "voiceover_hook_font_size": "Hook font size",
+    "voiceover_keep_only_final": "Keep only final MP4",
+    "voiceover_enable_broll": "Add B-roll overlay",
+    "voiceover_enable_vertical": "Force vertical encode",
+    "run_batch_voiceover": "Run batch voiceover",
+    "queue_voiceover": "Queue voiceover",
+    "queue_mashup": "Queue mashup",
+    "revoiceover": "Re-voiceover",
+    "missing_source_video_for_job": "Missing source video for this job.",
     "add_to_queue_source_videos": "Add to queue ({{count}} source videos)",
     "previous": "← Previous",
     "next": "Next →",
@@ -1604,6 +1645,19 @@
     "publish_guidance_step_1": "1) Select the accounts that are allowed to publish.",
     "publish_guidance_step_2": "2) Review filters, gap minutes, and max per run in Settings.",
     "publish_guidance_step_3": "3) Click Publish now to enqueue matching ready videos.",
+    "sub_video_scraper_settings": "Sub video scraper",
+    "sub_video_scraper_subtitle": "Configure Pexels sub video discovery settings and toggle the source.",
+    "save_scraper_settings": "Save scraper settings",
+    "scraper_settings_saved": "Scraper settings saved.",
+    "enable_pexels_discovery": "Enable Pexels discovery",
+    "pexels_start_url": "Pexels start URL",
+    "pexels_max_items": "Max items per run",
+    "pexels_scroll_times": "Scroll times",
+    "pexels_schedule": "Pexels schedule (cron)",
+    "pexels_taxonomy_label": "Taxonomy",
+    "pexels_taxonomy_default": "Default taxonomy: {{taxonomy}}",
+    "cron_hint": "Cron format: minute hour day month weekday (e.g. 15 7 * * *)",
+    "scrape_now": "Scrape now",
     "last_post": "Last post",
     "no_publish_accounts_available": "No publish accounts available yet. Connect one in Social Accounts.",
     "failed_to_save_settings": "Failed to save settings.",
@@ -1631,7 +1685,9 @@
     "save_publish_settings": "Save publish",
     "settings_saved_section": "Settings saved",
     "every_x_minutes": "Every X minutes",
-    "run_every_minutes": "Run every (minutes)"
+    "run_every_minutes": "Run every (minutes)",
+    "max_jobs_per_run": "Max jobs per run",
+    "batch_delay_minutes": "Delay between batches (minutes)"
   },
   "productionHistory": {
     "pageTitle": "Production history",
@@ -1757,4 +1813,5 @@
     }
   }
 }
+
 

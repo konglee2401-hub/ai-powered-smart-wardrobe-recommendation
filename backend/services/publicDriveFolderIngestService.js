@@ -121,6 +121,15 @@ function themeFromName(name = '') {
   if (/fitness|gym|workout|tập gym|thể hình/.test(normalized)) return 'fitness';
   if (/health|wellness|sức khỏe|y tế/.test(normalized)) return 'health';
   if (/product|winning|deal|sản phẩm|review/.test(normalized)) return 'product';
+  if (/sport|sports|athlete|soccer|football|basketball|tennis/.test(normalized)) return 'fitness';
+  if (/fashion|style|outfit|makeup|model|beauty/.test(normalized)) return 'luxury';
+  if (/business|office|meeting|startup|finance|marketing/.test(normalized)) return 'product';
+  if (/travel|vacation|journey|tour/.test(normalized)) return 'luxury';
+  if (/food|cooking|kitchen|recipe|coffee|drink/.test(normalized)) return 'product';
+  if (/music|song|band|guitar|piano|concert/.test(normalized)) return 'viral';
+  if (/technology|tech|computer|laptop|phone|ai|robot/.test(normalized)) return 'product';
+  if (/education|school|classroom|teacher|student|study/.test(normalized)) return 'motivation';
+  if (/lifestyle|interior|home|living|relax/.test(normalized)) return 'luxury';
   if (/ai-avatar|avatar/.test(normalized)) return 'ai-avatar';
   if (/luxury|lifestyle|car|xe|sang trọng/.test(normalized)) return 'luxury';
   if (/viral|trend|trending|shorts|reels/.test(normalized)) return 'viral';
@@ -237,6 +246,11 @@ function scoreFileCandidate(file, context = {}, sourceId = '', folderCounts = {}
     const folderSize = folderCounts[sourceFolder];
     const penalty = Math.min(10, Math.floor(Math.log10(folderSize + 1) * 4));
     score -= penalty;
+  }
+
+  // Avoid repeating same folder in a batch
+  if (sourceFolder && Array.isArray(context.avoidFolders) && context.avoidFolders.includes(sourceFolder)) {
+    score -= 60;
   }
 
   // Recent selection penalty - avoid picking same video too soon

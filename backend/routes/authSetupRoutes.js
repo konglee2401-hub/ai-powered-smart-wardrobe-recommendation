@@ -10,6 +10,7 @@ import { google } from 'googleapis';
 import LogStreamingService from '../services/logs/LogStreamingService.js';
 import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/permissions.js';
+import AccountSessionRegistry from '../services/browser/accountSessionRegistry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,6 +18,19 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 router.use(protect);
 router.use(requireRole('admin'));
+
+const AI_ACCOUNT_PROVIDERS = {
+  capcut: path.join(__dirname, '..', 'data', 'capcut-profiles'),
+  'google-flow': path.join(__dirname, '..', 'data', 'google-flow-profiles'),
+  chatgpt: path.join(__dirname, '..', 'data', 'chatgpt-profiles'),
+  grok: path.join(__dirname, '..', 'data', 'grok-profiles'),
+};
+
+const getRegistry = (provider) => {
+  const baseDir = AI_ACCOUNT_PROVIDERS[provider];
+  if (!baseDir) return null;
+  return new AccountSessionRegistry(provider, { baseDir });
+};
 
 // Helper: admin API key enforcement
 function checkAdminKey(req, res) {
@@ -66,6 +80,50 @@ function runNodeScript(scriptPath, args = []) {
     env: process.env,
     stdio: 'pipe',
   });
+}
+
+function spawnScriptWithLogs({ script, args = [], env = {} }) {
+  const sessionId = randomUUID();
+  LogStreamingService.createSession(sessionId);
+  LogStreamingService.addLog(sessionId, `Starting script: ${path.basename(script)}`, 'info');
+
+  const child = spawn(process.execPath, [script, ...args], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, ...env },
+    stdio: 'pipe'
+  });
+
+  try {
+    LogStreamingService.attachProcess(sessionId, child, path.basename(script));
+  } catch (e) {
+    console.warn('Failed to attach process to LogStreamingService', e.message || e);
+  }
+
+  child.stdout?.on('data', (data) => {
+    LogStreamingService.addLog(sessionId, data.toString().trim(), 'info');
+  });
+
+  child.stderr?.on('data', (data) => {
+    LogStreamingService.addLog(sessionId, data.toString().trim(), 'warn');
+  });
+
+  child.on('error', (error) => {
+    LogStreamingService.addLog(sessionId, `Process error: ${error.message}`, 'error');
+    LogStreamingService.endSession(sessionId, 'failed');
+  });
+
+  child.on('exit', (code) => {
+    if (code === 0) {
+      LogStreamingService.addLog(sessionId, 'Script completed successfully', 'success');
+      LogStreamingService.endSession(sessionId, 'completed');
+    } else {
+      LogStreamingService.addLog(sessionId, `Script exited with code ${code}`, 'error');
+      LogStreamingService.endSession(sessionId, 'failed');
+    }
+    try { LogStreamingService.detachProcess(sessionId); } catch (e) {}
+  });
+
+  return { sessionId, pid: child.pid };
 }
 
 router.post('/run/refresh-google-flow', (req, res) => {
@@ -251,6 +309,107 @@ router.get('/diagnostic/youtube', (req, res) => {
     const tokenPath = path.join(__dirname, '..', 'config', 'youtube-token.json');
     const exists = fs.existsSync(tokenPath);
     res.json({ success: true, tokenExists: exists, tokenPath });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/ai-service-accounts', (req, res) => {
+  try {
+    const provider = String(req.query?.provider || '').trim();
+    const providers = provider ? [provider] : Object.keys(AI_ACCOUNT_PROVIDERS);
+    const data = {};
+
+    for (const key of providers) {
+      const registry = getRegistry(key);
+      if (!registry) continue;
+      data[key] = registry.list();
+    }
+
+    res.json({ success: true, providers: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/ai-service-accounts', (req, res) => {
+  try {
+    const { provider, email, accountKey, label, action, value } = req.body || {};
+    const registry = getRegistry(String(provider || '').trim());
+    if (!registry) {
+      return res.status(400).json({ success: false, error: 'invalid_provider' });
+    }
+    const normalizedEmail = String(email || '').trim();
+    const normalizedKey = String(accountKey || '').trim();
+
+    switch (action) {
+      case 'create': {
+        const created = registry.ensureAccount({ email: normalizedEmail, accountKey: normalizedKey, label: String(label || '').trim() });
+        return res.json({ success: true, provider, account: created });
+      }
+      case 'clear-rate-limit':
+        registry.clearRateLimit({ email: normalizedEmail, accountKey: normalizedKey });
+        break;
+      case 'set-preferred':
+        registry.setPreferred({ email: normalizedEmail, accountKey: normalizedKey }, value !== false);
+        break;
+      case 'set-active':
+        registry.setActive({ email: normalizedEmail, accountKey: normalizedKey }, value !== false);
+        break;
+      default:
+        return res.status(400).json({ success: false, error: 'invalid_action' });
+    }
+
+    res.json({ success: true, provider, email: normalizedEmail, accountKey: normalizedKey, action });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/ai-service-accounts/run', (req, res) => {
+  try {
+    const { provider, action, accountKey, email } = req.body || {};
+    const normalizedProvider = String(provider || '').trim();
+    const normalizedKey = String(accountKey || '').trim();
+    const normalizedEmail = String(email || '').trim();
+
+    let script = null;
+    let args = [];
+    let env = {};
+
+    if (normalizedProvider === 'google-flow') {
+      script = path.join(__dirname, '..', 'scripts', 'auth', 'google-flow', 'refresh-session.js');
+      if (normalizedKey) args.push('--profile', normalizedKey);
+      if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
+    } else if (normalizedProvider === 'capcut') {
+      script = path.join(__dirname, '..', 'scripts', 'auth', 'capcut', 'capture-session.js');
+      if (normalizedKey) args.push('--profile', normalizedKey);
+      if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
+    } else if (normalizedProvider === 'chatgpt') {
+      script = path.join(__dirname, '..', 'scripts', 'auth', 'chatgpt', 'login.js');
+      if (normalizedKey) args.push('--profile', normalizedKey);
+      if (action === 'refresh') args.push('--refresh');
+      if (action === 'validate') args.push('--validate');
+      if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
+    } else if (normalizedProvider === 'grok') {
+      script = path.join(__dirname, '..', 'scripts', 'auth', 'grok', 'capture-session.js');
+      if (normalizedKey) args.push('--profile', normalizedKey);
+      const mode = action === 'refresh' ? 'refresh' : (action === 'validate' ? 'info' : 'capture');
+      args.push('--mode', mode);
+      if (!fs.existsSync(script)) return res.status(404).json({ success: false, error: 'script_not_found' });
+    } else {
+      return res.status(400).json({ success: false, error: 'invalid_provider' });
+    }
+
+    if (normalizedEmail) {
+      env = {
+        CAPCUT_ACCOUNT_EMAIL: normalizedProvider === 'capcut' ? normalizedEmail : process.env.CAPCUT_ACCOUNT_EMAIL,
+        GOOGLE_FLOW_ACCOUNT_EMAIL: normalizedProvider === 'google-flow' ? normalizedEmail : process.env.GOOGLE_FLOW_ACCOUNT_EMAIL,
+      };
+    }
+
+    const result = spawnScriptWithLogs({ script, args, env });
+    res.json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
